@@ -1,0 +1,278 @@
+"""Local runtime engine for executing workflows."""
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import networkx as nx
+
+from kailash.workflow import Workflow
+from kailash.nodes import Node
+from kailash.sdk_exceptions import RuntimeError, WorkflowExecutionError
+from kailash.tracking import TaskManager, TaskStatus
+
+
+class LocalRuntime:
+    """Local execution engine for workflows."""
+    
+    def __init__(self, debug: bool = False):
+        """Initialize the local runtime.
+        
+        Args:
+            debug: Whether to enable debug logging
+        """
+        self.debug = debug
+        self.logger = logging.getLogger("kailash.runtime.local")
+        
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+        else:
+            self.logger.setLevel(logging.INFO)
+    
+    def execute(self, workflow: Workflow, 
+                task_manager: Optional[TaskManager] = None,
+                parameters: Optional[Dict[str, Dict[str, Any]]] = None) -> Tuple[Dict[str, Any], Optional[str]]:
+        """Execute a workflow locally.
+        
+        Args:
+            workflow: Workflow to execute
+            task_manager: Optional task manager for tracking
+            parameters: Optional parameter overrides per node
+            
+        Returns:
+            Tuple of (results dict, run_id)
+        """
+        try:
+            # Validate workflow
+            workflow.validate()
+            
+            # Initialize tracking
+            run_id = None
+            if task_manager:
+                run_id = task_manager.create_run(
+                    workflow_name=workflow.metadata.name,
+                    metadata={
+                        "parameters": parameters,
+                        "debug": self.debug
+                    }
+                )
+            
+            # Execute workflow
+            results = self._execute_workflow(
+                workflow=workflow,
+                task_manager=task_manager,
+                run_id=run_id,
+                parameters=parameters or {}
+            )
+            
+            # Mark run as completed
+            if task_manager and run_id:
+                task_manager.update_run_status(run_id, "completed")
+            
+            return results, run_id
+            
+        except Exception as e:
+            # Mark run as failed
+            if task_manager and run_id:
+                task_manager.update_run_status(run_id, "failed", error=str(e))
+            raise RuntimeError(f"Workflow execution failed: {e}") from e
+    
+    def _execute_workflow(self, workflow: Workflow,
+                         task_manager: Optional[TaskManager],
+                         run_id: Optional[str],
+                         parameters: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Execute the workflow nodes in topological order.
+        
+        Args:
+            workflow: Workflow to execute
+            task_manager: Task manager for tracking
+            run_id: Run ID for tracking
+            parameters: Parameter overrides
+            
+        Returns:
+            Dictionary of node results
+        """
+        # Get execution order
+        execution_order = list(nx.topological_sort(workflow.graph))
+        self.logger.info(f"Execution order: {execution_order}")
+        
+        # Initialize results storage
+        results = {}
+        node_outputs = {}
+        
+        # Execute each node
+        for node_id in execution_order:
+            self.logger.info(f"Executing node: {node_id}")
+            
+            # Get node instance
+            node_instance = workflow._node_instances[node_id]
+            
+            # Start task tracking
+            task = None
+            if task_manager and run_id:
+                task = task_manager.create_task(
+                    run_id=run_id,
+                    node_id=node_id,
+                    node_type=node_instance.__class__.__name__,
+                    started_at=datetime.utcnow()
+                )
+            
+            try:
+                # Prepare inputs
+                inputs = self._prepare_node_inputs(
+                    workflow=workflow,
+                    node_id=node_id,
+                    node_instance=node_instance,
+                    node_outputs=node_outputs,
+                    parameters=parameters.get(node_id, {})
+                )
+                
+                if self.debug:
+                    self.logger.debug(f"Node {node_id} inputs: {inputs}")
+                
+                # Update task status
+                if task:
+                    task.update_status(TaskStatus.RUNNING)
+                
+                # Execute node
+                outputs = node_instance.execute(**inputs)
+                
+                # Store outputs
+                node_outputs[node_id] = outputs
+                results[node_id] = outputs
+                
+                if self.debug:
+                    self.logger.debug(f"Node {node_id} outputs: {outputs}")
+                
+                # Update task status
+                if task:
+                    task.update_status(
+                        TaskStatus.COMPLETED,
+                        result=outputs,
+                        ended_at=datetime.utcnow()
+                    )
+                
+                self.logger.info(f"Node {node_id} completed successfully")
+                
+            except Exception as e:
+                self.logger.error(f"Node {node_id} failed: {e}")
+                
+                # Update task status
+                if task:
+                    task.update_status(
+                        TaskStatus.FAILED,
+                        error=str(e),
+                        ended_at=datetime.utcnow()
+                    )
+                
+                # Determine if we should continue
+                if self._should_stop_on_error(workflow, node_id):
+                    raise WorkflowExecutionError(
+                        f"Node '{node_id}' failed: {e}"
+                    ) from e
+                else:
+                    # Continue execution but record error
+                    results[node_id] = {"error": str(e)}
+        
+        return results
+    
+    def _prepare_node_inputs(self, workflow: Workflow,
+                           node_id: str,
+                           node_instance: Node,
+                           node_outputs: Dict[str, Dict[str, Any]],
+                           parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare inputs for a node execution.
+        
+        Args:
+            workflow: The workflow being executed
+            node_id: Current node ID
+            node_instance: Current node instance
+            node_outputs: Outputs from previously executed nodes
+            parameters: Parameter overrides
+            
+        Returns:
+            Dictionary of inputs for the node
+        """
+        inputs = {}
+        
+        # Start with node configuration
+        inputs.update(node_instance.config)
+        
+        # Add connected inputs from other nodes
+        for edge in workflow.graph.in_edges(node_id, data=True):
+            source_node_id = edge[0]
+            mapping = edge[2].get('mapping', {})
+            
+            if source_node_id in node_outputs:
+                source_outputs = node_outputs[source_node_id]
+                
+                for source_key, target_key in mapping.items():
+                    if source_key in source_outputs:
+                        inputs[target_key] = source_outputs[source_key]
+                    else:
+                        self.logger.warning(
+                            f"Source output '{source_key}' not found in node '{source_node_id}'"
+                        )
+        
+        # Apply parameter overrides
+        inputs.update(parameters)
+        
+        return inputs
+    
+    def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
+        """Determine if execution should stop when a node fails.
+        
+        Args:
+            workflow: The workflow being executed
+            node_id: Failed node ID
+            
+        Returns:
+            Whether to stop execution
+        """
+        # For now, always stop on error
+        # Future: implement error handling policies
+        return True
+    
+    def validate_workflow(self, workflow: Workflow) -> List[str]:
+        """Validate a workflow before execution.
+        
+        Args:
+            workflow: Workflow to validate
+            
+        Returns:
+            List of validation warnings (empty if valid)
+        """
+        warnings = []
+        
+        try:
+            workflow.validate()
+        except Exception as e:
+            warnings.append(f"Workflow validation failed: {e}")
+            return warnings
+        
+        # Check for disconnected nodes
+        for node_id in workflow.graph.nodes():
+            if (workflow.graph.in_degree(node_id) == 0 and 
+                workflow.graph.out_degree(node_id) == 0 and
+                len(workflow.graph.nodes()) > 1):
+                warnings.append(f"Node '{node_id}' is disconnected")
+        
+        # Check for missing required parameters
+        for node_id, node_instance in workflow._node_instances.items():
+            params = node_instance.get_parameters()
+            
+            for param_name, param_def in params.items():
+                if param_def.required:
+                    # Check if provided in config or connected
+                    if param_name not in node_instance.config:
+                        # Check if connected from another node
+                        incoming_params = set()
+                        for _, _, data in workflow.graph.in_edges(node_id, data=True):
+                            mapping = data.get('mapping', {})
+                            incoming_params.update(mapping.values())
+                        
+                        if param_name not in incoming_params:
+                            warnings.append(
+                                f"Node '{node_id}' missing required parameter '{param_name}'"
+                            )
+        
+        return warnings

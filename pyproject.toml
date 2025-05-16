@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kailash"
+version = "0.1.0"
+description = "Python SDK for the Kailash container-node architecture"
+authors = [
+    {name = "Terrene Foundation", email = "info@terrene.foundation"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "networkx>=2.7",
+    "pydantic>=1.9",
+    "matplotlib>=3.5",
+    "pyyaml>=6.0",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+    "black>=22.0",
+    "isort>=5.10",
+    "mypy>=0.9",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/terrene-foundation/kailash-py"
+"Bug Tracker" = "https://github.com/terrene-foundation/kailash-py/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[project.scripts]
+kailash = "kailash.cli:main"
