@@ -252,36 +252,16 @@ class Workflow:
         
         return results, run_id
     
-    def export_to_kailash(self, output_path: str) -> None:
-        """Export workflow to Kailash-compatible YAML format.
+    def export_to_kailash(self, output_path: str, format: str = "yaml", **config) -> None:
+        """Export workflow to Kailash-compatible format.
         
         Args:
-            output_path: Path to write YAML file
+            output_path: Path to write file
+            format: Export format (yaml, json, manifest)
+            **config: Additional export configuration
         """
-        kailash_workflow = {
-            "metadata": self.metadata.model_dump(),
-            "nodes": {},
-            "connections": []
-        }
-        
-        # Export nodes
-        for node_id, node_instance in self.nodes.items():
-            kailash_workflow["nodes"][node_id] = {
-                "type": node_instance.node_type,
-                "config": node_instance.config,
-                "position": node_instance.position
-            }
-        
-        # Export connections
-        for connection in self.connections:
-            kailash_workflow["connections"].append({
-                "from": f"{connection.source_node}.{connection.source_output}",
-                "to": f"{connection.target_node}.{connection.target_input}"
-            })
-        
-        # Write YAML
-        with open(output_path, 'w') as f:
-            yaml.dump(kailash_workflow, f, default_flow_style=False)
+        from kailash.utils.export import export_workflow
+        export_workflow(self, format=format, output_path=output_path, **config)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert workflow to dictionary representation."""

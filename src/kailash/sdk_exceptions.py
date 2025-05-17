@@ -54,3 +54,8 @@ class StorageError(KailashError):
 class ExportError(KailashError):
     """Base exception for export-related errors."""
     pass
+
+
+class ManifestError(KailashError):
+    """Base exception for manifest-related errors."""
+    pass

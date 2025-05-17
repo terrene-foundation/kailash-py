@@ -16,6 +16,100 @@ class TemplateManager:
             "ml_pipeline": self._ml_pipeline_template,
             "api_workflow": self._api_workflow_template
         }
+        
+        # Export templates for workflow export
+        self.export_templates = {
+            "minimal": {
+                "yaml": True,
+                "json": False,
+                "manifest": False
+            },
+            "standard": {
+                "yaml": True,
+                "json": True,
+                "manifest": True
+            },
+            "kubernetes": {
+                "yaml": True,
+                "json": False,
+                "manifest": True,
+                "files": {
+                    "deploy.sh": """#!/bin/bash
+# Deploy workflow to Kubernetes
+kubectl apply -f {workflow_name}-manifest.yaml
+
+# Check deployment status
+kubectl get pods -n {namespace} -l workflow={workflow_name}
+""",
+                    "README.md": """# {workflow_name} Deployment
+
+This directory contains the Kubernetes deployment files for {workflow_name}.
+
+## Files
+- `{workflow_name}.yaml`: Workflow definition
+- `{workflow_name}-manifest.yaml`: Kubernetes manifest
+- `deploy.sh`: Deployment script
+
+## Deployment
+```bash
+./deploy.sh
+```
+
+## Namespace
+Deployed to: {namespace}
+"""
+                }
+            },
+            "docker": {
+                "yaml": True,
+                "json": True,
+                "manifest": False,
+                "files": {
+                    "Dockerfile": """FROM kailash/base:latest
+
+WORKDIR /app
+
+COPY {workflow_name}.yaml /app/
+COPY {workflow_name}.json /app/
+
+CMD ["kailash", "run", "/app/{workflow_name}.yaml"]
+""",
+                    "docker-compose.yml": """version: '3.8'
+
+services:
+  {workflow_name}:
+    build: .
+    environment:
+      - WORKFLOW_NAME={workflow_name}
+      - WORKFLOW_VERSION={workflow_version}
+    volumes:
+      - ./data:/data
+      - ./output:/output
+""",
+                    ".dockerignore": """*.log
+__pycache__/
+.git/
+.gitignore
+"""
+                }
+            }
+        }
+    
+    def get_template(self, template_name: str) -> Dict:
+        """Get an export template by name.
+        
+        Args:
+            template_name: Name of the template
+            
+        Returns:
+            Template dictionary
+            
+        Raises:
+            ValueError: If template not found
+        """
+        if template_name not in self.export_templates:
+            raise ValueError(f"Unknown export template: {template_name}")
+        return self.export_templates[template_name]
     
     def create_project(self, project_name: str, template: str = "basic", 
                       target_dir: Optional[str] = None) -> None:
