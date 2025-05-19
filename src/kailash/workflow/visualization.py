@@ -204,7 +204,7 @@ class WorkflowVisualizer:
                 # Create label from mapping
                 label_parts = []
                 for src, dst in mapping.items():
-                    label_parts.append(f"{src}�{dst}")
+                    label_parts.append(f"{src}'{dst}")
                 label = "\n".join(label_parts)
                 edge_labels[(source, target)] = label
         

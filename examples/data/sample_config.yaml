@@ -1,0 +1,36 @@
+# Sample configuration for Kailash workflows
+
+workflow:
+  name: sample_workflow
+  version: 1.0.0
+  description: Sample workflow configuration
+
+runtime:
+  type: local
+  parallel: true
+  max_workers: 4
+  timeout: 300
+
+data_sources:
+  customers:
+    type: csv
+    path: data/customers.csv
+    encoding: utf-8
+  
+  transactions:
+    type: json
+    path: data/transactions.json
+
+transformations:
+  - type: normalize
+    columns: [age, income]
+    method: standard
+  
+  - type: encode
+    columns: [category]
+    method: one_hot
+
+output:
+  format: csv
+  path: data/results.csv
+  include_timestamp: true

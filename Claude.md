@@ -12,7 +12,7 @@ The Kailash Python SDK is designed to solve a collaboration problem between AI B
 2. **Pythonic Style**: Write code that follows Python best practices and idioms.
 3. **Type Hints**: Use type hints throughout the codebase to enhance IDE support and documentation.
 4. **Documentation**: All classes, methods, and functions must have docstrings.
-5. **Error Handling**: Use explicit error handling with descriptive error messages.
+5. **Error Handling**: Use explicit e/rror handling with descriptive error messages.
 
 ### Style Guidelines
 
@@ -300,3 +300,44 @@ All significant architectural decisions should be documented using ADRs:
    - Use the Github Issues and Projects to track tasks and progress
    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD
    - Update the project board as tasks are completed
+
+## Notes
+
+### Comprehensive Docstring Expansion (2024-01-19)
+
+Expand all docstrings to include:
+1. **Design purpose and philosophy** - Explaining why each component exists
+2. **Upstream dependencies** - What components create/use this class
+3. **Downstream consumers** - What components depend on this class
+4. **Usage patterns** - Common ways the component is used
+5. **Implementation details** - How the component works internally
+6. **Error handling** - What exceptions are raised and when
+7. **Side effects** - Any state changes or external impacts
+8. **Examples** - Concrete usage examples where helpful
+
+### nodes/data - Comprehensive Docstring Expansion (2024-01-19)
+
+Expanded all docstrings in the data nodes directory (`src/kailash/nodes/data/`) including:
+
+1. **readers.py** - Data reader nodes:
+   - **CSVReader**: Enhanced with format detection, memory considerations, and usage patterns
+   - **JSONReader**: Documented structure preservation and type mappings
+   - **TextReader**: Added encoding support details and use cases
+
+2. **writers.py** - Data writer nodes:
+   - **CSVWriter**: Documented automatic format detection and header handling
+   - **JSONWriter**: Added serialization details and pretty printing
+   - **TextWriter**: Enhanced with append mode documentation and byte counting
+
+3. **__init__.py** - Package documentation:
+   - Overall design philosophy for data nodes
+   - Integration patterns with other components
+   - Example workflow usage
+
+Key improvements:
+- Added detailed upstream/downstream component relationships
+- Documented common usage patterns and workflows
+- Enhanced error handling documentation
+- Added memory and performance considerations
+- Included practical examples for each node
+- Explained design decisions and trade-offs
