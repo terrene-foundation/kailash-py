@@ -1,0 +1,37 @@
+[
+  {
+    "transaction_id": "T001",
+    "customer_id": "C001",
+    "amount": 250.00,
+    "date": "2023-01-15",
+    "category": "Electronics"
+  },
+  {
+    "transaction_id": "T002",
+    "customer_id": "C002",
+    "amount": 120.00,
+    "date": "2023-01-20",
+    "category": "Clothing"
+  },
+  {
+    "transaction_id": "T003",
+    "customer_id": "C003",
+    "amount": 500.00,
+    "date": "2023-01-25",
+    "category": "Electronics"
+  },
+  {
+    "transaction_id": "T004",
+    "customer_id": "C001",
+    "amount": 180.00,
+    "date": "2023-02-01",
+    "category": "Home"
+  },
+  {
+    "transaction_id": "T005",
+    "customer_id": "C004",
+    "amount": 320.00,
+    "date": "2023-02-05",
+    "category": "Electronics"
+  }
+]

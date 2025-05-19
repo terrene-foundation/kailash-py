@@ -1,0 +1,21 @@
+Subject: Unable to access my account
+
+Hello Support Team,
+
+I've been trying to log into my account for the past two days but keep getting an error message saying "Invalid credentials". I'm certain I'm using the correct password as I have it saved in my password manager.
+
+I've tried:
+1. Resetting my password through the forgot password link
+2. Clearing browser cookies and cache
+3. Using different browsers (Chrome, Firefox, Safari)
+4. Accessing from different devices
+
+None of these solutions have worked. This is quite urgent as I need to access my order history for tax purposes.
+
+My account email is: john.doe@example.com
+Customer ID: C001
+
+Please help me resolve this issue as soon as possible.
+
+Thank you,
+John Doe

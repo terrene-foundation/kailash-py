@@ -1,17 +1,27 @@
 """Export functionality for converting Kailash Python SDK workflows to Kailash-compatible formats."""
 import json
 import yaml
+import logging
 from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 from pathlib import Path
 import re
 from copy import deepcopy
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from kailash.workflow import Workflow
 from kailash.nodes import Node, NodeRegistry
-from kailash.sdk_exceptions import ExportError, NodeValidationError
+from kailash.sdk_exceptions import (
+    ExportException,
+    ImportException,
+    WorkflowValidationError,
+    NodeConfigurationError,
+    ConfigurationException
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResourceSpec(BaseModel):
@@ -49,9 +59,18 @@ class NodeMapper:
     """Maps Python nodes to Kailash containers."""
     
     def __init__(self):
-        """Initialize the node mapper with default mappings."""
-        self.mappings: Dict[str, ContainerMapping] = {}
-        self._initialize_default_mappings()
+        """Initialize the node mapper with default mappings.
+        
+        Raises:
+            ConfigurationException: If initialization fails
+        """
+        try:
+            self.mappings: Dict[str, ContainerMapping] = {}
+            self._initialize_default_mappings()
+        except Exception as e:
+            raise ConfigurationException(
+                f"Failed to initialize node mapper: {e}"
+            ) from e
     
     def _initialize_default_mappings(self):
         """Set up default mappings for common node types."""
@@ -108,8 +127,22 @@ class NodeMapper:
         
         Args:
             mapping: Container mapping to register
+            
+        Raises:
+            ConfigurationException: If mapping is invalid
         """
-        self.mappings[mapping.python_node] = mapping
+        try:
+            if not mapping.python_node:
+                raise ConfigurationException("Python node name is required")
+            if not mapping.container_image:
+                raise ConfigurationException("Container image is required")
+                
+            self.mappings[mapping.python_node] = mapping
+            logger.info(f"Registered mapping for node '{mapping.python_node}'")
+        except ValidationError as e:
+            raise ConfigurationException(
+                f"Invalid container mapping: {e}"
+            ) from e
     
     def get_mapping(self, node_type: str) -> ContainerMapping:
         """Get container mapping for a node type.
@@ -121,15 +154,24 @@ class NodeMapper:
             Container mapping
             
         Raises:
-            KeyError: If no mapping exists
+            ConfigurationException: If mapping cannot be created
         """
+        if not node_type:
+            raise ConfigurationException("Node type is required")
+            
         if node_type not in self.mappings:
-            # Try to create a default mapping
-            return ContainerMapping(
-                python_node=node_type,
-                container_image=f"kailash/{node_type.lower()}:latest",
-                command=["python", "-m", f"kailash.nodes.{node_type.lower()}"]
-            )
+            logger.warning(f"No mapping found for node type '{node_type}', creating default")
+            try:
+                # Try to create a default mapping
+                return ContainerMapping(
+                    python_node=node_type,
+                    container_image=f"kailash/{node_type.lower()}:latest",
+                    command=["python", "-m", f"kailash.nodes.{node_type.lower()}"]
+                )
+            except Exception as e:
+                raise ConfigurationException(
+                    f"Failed to create default mapping for node '{node_type}': {e}"
+                ) from e
         return self.mappings[node_type]
     
     def update_registry(self, registry_url: str):
@@ -160,41 +202,65 @@ class ExportValidator:
             True if valid
             
         Raises:
-            ExportError: If validation fails
+            ExportException: If validation fails
         """
+        if not isinstance(data, dict):
+            raise ExportException("Export data must be a dictionary")
+            
         required_fields = ["metadata", "nodes", "connections"]
         
         for field in required_fields:
             if field not in data:
-                raise ExportError(f"Missing required field: {field}")
+                raise ExportException(
+                    f"Missing required field: '{field}'. "
+                    f"Required fields: {required_fields}"
+                )
         
         # Validate metadata
         metadata = data["metadata"]
         if not isinstance(metadata, dict):
-            raise ExportError("Metadata must be a dictionary")
+            raise ExportException("Metadata must be a dictionary")
         
         if "name" not in metadata:
-            raise ExportError("Metadata must contain 'name' field")
+            raise ExportException("Metadata must contain 'name' field")
         
         # Validate nodes
         nodes = data["nodes"]
         if not isinstance(nodes, dict):
-            raise ExportError("Nodes must be a dictionary")
+            raise ExportException("Nodes must be a dictionary")
+        
+        if not nodes:
+            logger.warning("No nodes found in export data")
         
         for node_id, node_data in nodes.items():
+            if not isinstance(node_data, dict):
+                raise ExportException(f"Node '{node_id}' must be a dictionary")
+                
             if "type" not in node_data:
-                raise ExportError(f"Node '{node_id}' missing 'type' field")
+                raise ExportException(
+                    f"Node '{node_id}' missing 'type' field. "
+                    f"Available fields: {list(node_data.keys())}"
+                )
             if "config" not in node_data:
-                raise ExportError(f"Node '{node_id}' missing 'config' field")
+                raise ExportException(
+                    f"Node '{node_id}' missing 'config' field. "
+                    f"Available fields: {list(node_data.keys())}"
+                )
         
         # Validate connections
         connections = data["connections"]
         if not isinstance(connections, list):
-            raise ExportError("Connections must be a list")
+            raise ExportException("Connections must be a list")
         
         for i, conn in enumerate(connections):
+            if not isinstance(conn, dict):
+                raise ExportException(f"Connection {i} must be a dictionary")
+                
             if "from" not in conn or "to" not in conn:
-                raise ExportError(f"Connection {i} missing 'from' or 'to' field")
+                raise ExportException(
+                    f"Connection {i} missing 'from' or 'to' field. "
+                    f"Connection data: {conn}"
+                )
         
         return True
     
@@ -207,6 +273,9 @@ class ExportValidator:
             
         Returns:
             True if valid
+            
+        Raises:
+            ExportException: If validation fails
         """
         # JSON validation is the same as YAML for our purposes
         return ExportValidator.validate_yaml(data)
@@ -232,42 +301,55 @@ class ManifestGenerator:
             
         Returns:
             Deployment manifest
+            
+        Raises:
+            ExportException: If manifest generation fails
         """
-        manifest = {
-            "apiVersion": "kailash.io/v1",
-            "kind": "Workflow",
-            "metadata": {
-                "name": self._sanitize_name(workflow.metadata.name),
-                "namespace": self.config.namespace,
-                "labels": {
-                    "app": "kailash",
-                    "workflow": self._sanitize_name(workflow.metadata.name),
-                    "version": workflow.metadata.version
+        try:
+            manifest = {
+                "apiVersion": "kailash.io/v1",
+                "kind": "Workflow",
+                "metadata": {
+                    "name": self._sanitize_name(workflow.metadata.name),
+                    "namespace": self.config.namespace,
+                    "labels": {
+                        "app": "kailash",
+                        "workflow": self._sanitize_name(workflow.metadata.name),
+                        "version": workflow.metadata.version
+                    },
+                    "annotations": {
+                        "description": workflow.metadata.description,
+                        "author": workflow.metadata.author,
+                        "created_at": workflow.metadata.created_at.isoformat()
+                    }
                 },
-                "annotations": {
-                    "description": workflow.metadata.description,
-                    "author": workflow.metadata.author,
-                    "created_at": workflow.metadata.created_at.isoformat()
+                "spec": {
+                    "nodes": [],
+                    "edges": []
                 }
-            },
-            "spec": {
-                "nodes": [],
-                "edges": []
             }
-        }
+        except Exception as e:
+            raise ExportException(
+                f"Failed to create manifest structure: {e}"
+            ) from e
         
         # Add nodes
         for node_id, node_instance in workflow.nodes.items():
             if self.config.partial_export and node_id not in self.config.partial_export:
                 continue
                 
-            node_spec = self._generate_node_spec(
-                node_id, 
-                node_instance, 
-                workflow._node_instances[node_id],
-                node_mapper
-            )
-            manifest["spec"]["nodes"].append(node_spec)
+            try:
+                node_spec = self._generate_node_spec(
+                    node_id, 
+                    node_instance, 
+                    workflow._node_instances[node_id],
+                    node_mapper
+                )
+                manifest["spec"]["nodes"].append(node_spec)
+            except Exception as e:
+                raise ExportException(
+                    f"Failed to generate spec for node '{node_id}': {e}"
+                ) from e
         
         # Add connections
         for connection in workflow.connections:
@@ -296,8 +378,16 @@ class ManifestGenerator:
             
         Returns:
             Node specification
+            
+        Raises:
+            ExportException: If node spec generation fails
         """
-        mapping = node_mapper.get_mapping(node_instance.node_type)
+        try:
+            mapping = node_mapper.get_mapping(node_instance.node_type)
+        except Exception as e:
+            raise ExportException(
+                f"Failed to get mapping for node '{node_id}': {e}"
+            ) from e
         
         node_spec = {
             "name": node_id,
@@ -314,7 +404,7 @@ class ManifestGenerator:
         for key, value in mapping.env.items():
             node_spec["container"]["env"].append({
                 "name": key,
-                "value": value
+                "value": str(value)
             })
         
         # Add config as environment variables
@@ -364,6 +454,9 @@ class ManifestGenerator:
         Returns:
             Sanitized name
         """
+        if not name:
+            raise ExportException("Name cannot be empty")
+            
         # Replace non-alphanumeric characters with hyphens
         sanitized = re.sub(r'[^a-zA-Z0-9-]', '-', name.lower())
         # Remove leading/trailing hyphens
@@ -372,7 +465,12 @@ class ManifestGenerator:
         if sanitized and sanitized[0].isdigit():
             sanitized = f"w-{sanitized}"
         # Truncate to 63 characters (Kubernetes limit)
-        return sanitized[:63]
+        sanitized = sanitized[:63]
+        
+        if not sanitized:
+            raise ExportException(f"Name '{name}' cannot be sanitized to a valid Kubernetes name")
+            
+        return sanitized
 
 
 class WorkflowExporter:
@@ -383,15 +481,27 @@ class WorkflowExporter:
         
         Args:
             config: Export configuration
+            
+        Raises:
+            ConfigurationException: If initialization fails
         """
-        self.config = config or ExportConfig()
-        self.node_mapper = NodeMapper()
-        self.validator = ExportValidator()
-        self.manifest_generator = ManifestGenerator(self.config)
-        
-        # Update registry if provided
-        if self.config.container_registry:
-            self.node_mapper.update_registry(self.config.container_registry)
+        try:
+            self.config = config or ExportConfig()
+            self.node_mapper = NodeMapper()
+            self.validator = ExportValidator()
+            self.manifest_generator = ManifestGenerator(self.config)
+            
+            # Update registry if provided
+            if self.config.container_registry:
+                self.node_mapper.update_registry(self.config.container_registry)
+                
+            self.pre_export_hook = None
+            self.post_export_hook = None
+            
+        except Exception as e:
+            raise ConfigurationException(
+                f"Failed to initialize workflow exporter: {e}"
+            ) from e
     
     def to_yaml(self, workflow: Workflow, output_path: Optional[str] = None) -> str:
         """Export workflow to YAML format.
@@ -402,18 +512,44 @@ class WorkflowExporter:
             
         Returns:
             YAML string
+            
+        Raises:
+            ExportException: If export fails
         """
-        data = self._prepare_export_data(workflow)
-        
-        if self.config.validate_output:
-            self.validator.validate_yaml(data)
-        
-        yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-        
-        if output_path:
-            Path(output_path).write_text(yaml_str)
-        
-        return yaml_str
+        if not workflow:
+            raise ExportException("Workflow is required")
+            
+        try:
+            if self.pre_export_hook:
+                self.pre_export_hook(workflow, "yaml")
+                
+            data = self._prepare_export_data(workflow)
+            
+            if self.config.validate_output:
+                self.validator.validate_yaml(data)
+            
+            yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
+            
+            if output_path:
+                try:
+                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(output_path).write_text(yaml_str)
+                except Exception as e:
+                    raise ExportException(
+                        f"Failed to write YAML to '{output_path}': {e}"
+                    ) from e
+            
+            if self.post_export_hook:
+                self.post_export_hook(workflow, "yaml", yaml_str)
+                
+            return yaml_str
+            
+        except ExportException:
+            raise
+        except Exception as e:
+            raise ExportException(
+                f"Failed to export workflow to YAML: {e}"
+            ) from e
     
     def to_json(self, workflow: Workflow, output_path: Optional[str] = None) -> str:
         """Export workflow to JSON format.
@@ -424,18 +560,44 @@ class WorkflowExporter:
             
         Returns:
             JSON string
+            
+        Raises:
+            ExportException: If export fails
         """
-        data = self._prepare_export_data(workflow)
-        
-        if self.config.validate_output:
-            self.validator.validate_json(data)
-        
-        json_str = json.dumps(data, indent=2, default=str)
-        
-        if output_path:
-            Path(output_path).write_text(json_str)
-        
-        return json_str
+        if not workflow:
+            raise ExportException("Workflow is required")
+            
+        try:
+            if self.pre_export_hook:
+                self.pre_export_hook(workflow, "json")
+                
+            data = self._prepare_export_data(workflow)
+            
+            if self.config.validate_output:
+                self.validator.validate_json(data)
+            
+            json_str = json.dumps(data, indent=2, default=str)
+            
+            if output_path:
+                try:
+                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(output_path).write_text(json_str)
+                except Exception as e:
+                    raise ExportException(
+                        f"Failed to write JSON to '{output_path}': {e}"
+                    ) from e
+            
+            if self.post_export_hook:
+                self.post_export_hook(workflow, "json", json_str)
+                
+            return json_str
+            
+        except ExportException:
+            raise
+        except Exception as e:
+            raise ExportException(
+                f"Failed to export workflow to JSON: {e}"
+            ) from e
     
     def to_manifest(self, workflow: Workflow, output_path: Optional[str] = None) -> str:
         """Export workflow as deployment manifest.
@@ -446,15 +608,41 @@ class WorkflowExporter:
             
         Returns:
             Manifest YAML string
+            
+        Raises:
+            ExportException: If export fails
         """
-        manifest = self.manifest_generator.generate_manifest(workflow, self.node_mapper)
-        
-        yaml_str = yaml.dump(manifest, default_flow_style=False, sort_keys=False)
-        
-        if output_path:
-            Path(output_path).write_text(yaml_str)
-        
-        return yaml_str
+        if not workflow:
+            raise ExportException("Workflow is required")
+            
+        try:
+            if self.pre_export_hook:
+                self.pre_export_hook(workflow, "manifest")
+                
+            manifest = self.manifest_generator.generate_manifest(workflow, self.node_mapper)
+            
+            yaml_str = yaml.dump(manifest, default_flow_style=False, sort_keys=False)
+            
+            if output_path:
+                try:
+                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(output_path).write_text(yaml_str)
+                except Exception as e:
+                    raise ExportException(
+                        f"Failed to write manifest to '{output_path}': {e}"
+                    ) from e
+            
+            if self.post_export_hook:
+                self.post_export_hook(workflow, "manifest", yaml_str)
+                
+            return yaml_str
+            
+        except ExportException:
+            raise
+        except Exception as e:
+            raise ExportException(
+                f"Failed to export workflow manifest: {e}"
+            ) from e
     
     def export_with_templates(self, workflow: Workflow, template_name: str,
                            output_dir: str) -> Dict[str, str]:
@@ -467,14 +655,40 @@ class WorkflowExporter:
             
         Returns:
             Dictionary of file paths to content
+            
+        Raises:
+            ExportException: If export fails
+            ImportException: If template import fails
         """
-        from kailash.utils.templates import TemplateManager
+        if not workflow:
+            raise ExportException("Workflow is required")
+        if not template_name:
+            raise ExportException("Template name is required")
+        if not output_dir:
+            raise ExportException("Output directory is required")
+            
+        try:
+            from kailash.utils.templates import TemplateManager
+        except ImportError as e:
+            raise ImportException(
+                f"Failed to import template manager: {e}"
+            ) from e
         
-        template_manager = TemplateManager()
-        template = template_manager.get_template(template_name)
+        try:
+            template_manager = TemplateManager()
+            template = template_manager.get_template(template_name)
+        except Exception as e:
+            raise ExportException(
+                f"Failed to get template '{template_name}': {e}"
+            ) from e
         
         output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            raise ExportException(
+                f"Failed to create output directory '{output_dir}': {e}"
+            ) from e
         
         exports = {}
         
@@ -497,13 +711,16 @@ class WorkflowExporter:
         # Generate additional files from template
         for filename, content_template in template.get("files", {}).items():
             file_path = output_dir / filename
-            content = content_template.format(
-                workflow_name=workflow.metadata.name,
-                workflow_version=workflow.metadata.version,
-                namespace=self.config.namespace
-            )
-            file_path.write_text(content)
-            exports[str(file_path)] = content
+            try:
+                content = content_template.format(
+                    workflow_name=workflow.metadata.name,
+                    workflow_version=workflow.metadata.version,
+                    namespace=self.config.namespace
+                )
+                file_path.write_text(content)
+                exports[str(file_path)] = content
+            except Exception as e:
+                logger.warning(f"Failed to generate file '{filename}': {e}")
         
         return exports
     
@@ -515,6 +732,9 @@ class WorkflowExporter:
             
         Returns:
             Export data dictionary
+            
+        Raises:
+            ExportException: If preparation fails
         """
         data = {
             "version": self.config.version,
@@ -525,11 +745,16 @@ class WorkflowExporter:
         
         # Add metadata if enabled
         if self.config.include_metadata:
-            data["metadata"] = workflow.metadata.model_dump()
-            # Convert datetime to string
-            data["metadata"]["created_at"] = data["metadata"]["created_at"].isoformat()
-            # Convert set to list for JSON serialization
-            data["metadata"]["tags"] = list(data["metadata"]["tags"])
+            try:
+                data["metadata"] = workflow.metadata.model_dump()
+                # Convert datetime to string
+                data["metadata"]["created_at"] = data["metadata"]["created_at"].isoformat()
+                # Convert set to list for JSON serialization
+                data["metadata"]["tags"] = list(data["metadata"]["tags"])
+            except Exception as e:
+                raise ExportException(
+                    f"Failed to export metadata: {e}"
+                ) from e
         else:
             data["metadata"] = {"name": workflow.metadata.name}
         
@@ -538,31 +763,37 @@ class WorkflowExporter:
             if self.config.partial_export and node_id not in self.config.partial_export:
                 continue
                 
-            node_data = {
-                "type": node_instance.node_type,
-                "config": deepcopy(node_instance.config)
-            }
-            
-            # Add container info
-            mapping = self.node_mapper.get_mapping(node_instance.node_type)
-            node_data["container"] = {
-                "image": mapping.container_image,
-                "command": mapping.command,
-                "args": mapping.args,
-                "env": mapping.env
-            }
-            
-            # Add resources if enabled
-            if self.config.include_resources:
-                node_data["resources"] = mapping.resources.model_dump()
-            
-            # Add position for visualization
-            node_data["position"] = {
-                "x": node_instance.position[0],
-                "y": node_instance.position[1]
-            }
-            
-            data["nodes"][node_id] = node_data
+            try:
+                node_data = {
+                    "type": node_instance.node_type,
+                    "config": deepcopy(node_instance.config)
+                }
+                
+                # Add container info
+                mapping = self.node_mapper.get_mapping(node_instance.node_type)
+                node_data["container"] = {
+                    "image": mapping.container_image,
+                    "command": mapping.command,
+                    "args": mapping.args,
+                    "env": mapping.env
+                }
+                
+                # Add resources if enabled
+                if self.config.include_resources:
+                    node_data["resources"] = mapping.resources.model_dump()
+                
+                # Add position for visualization
+                node_data["position"] = {
+                    "x": node_instance.position[0],
+                    "y": node_instance.position[1]
+                }
+                
+                data["nodes"][node_id] = node_data
+                
+            except Exception as e:
+                raise ExportException(
+                    f"Failed to export node '{node_id}': {e}"
+                ) from e
         
         # Add connections
         for connection in workflow.connections:
@@ -570,12 +801,17 @@ class WorkflowExporter:
                 if (connection.source_node not in self.config.partial_export or 
                     connection.target_node not in self.config.partial_export):
                     continue
-                    
-            conn_data = {
-                "from": f"{connection.source_node}.{connection.source_output}",
-                "to": f"{connection.target_node}.{connection.target_input}"
-            }
-            data["connections"].append(conn_data)
+            
+            try:
+                conn_data = {
+                    "from": f"{connection.source_node}.{connection.source_output}",
+                    "to": f"{connection.target_node}.{connection.target_input}"
+                }
+                data["connections"].append(conn_data)
+            except Exception as e:
+                raise ExportException(
+                    f"Failed to export connection: {e}"
+                ) from e
         
         return data
     
@@ -587,13 +823,26 @@ class WorkflowExporter:
             node_type: Python node type name
             container_image: Docker container image
             **kwargs: Additional mapping configuration
+            
+        Raises:
+            ConfigurationException: If registration fails
         """
-        mapping = ContainerMapping(
-            python_node=node_type,
-            container_image=container_image,
-            **kwargs
-        )
-        self.node_mapper.register_mapping(mapping)
+        if not node_type:
+            raise ConfigurationException("Node type is required")
+        if not container_image:
+            raise ConfigurationException("Container image is required")
+            
+        try:
+            mapping = ContainerMapping(
+                python_node=node_type,
+                container_image=container_image,
+                **kwargs
+            )
+            self.node_mapper.register_mapping(mapping)
+        except Exception as e:
+            raise ConfigurationException(
+                f"Failed to register custom mapping: {e}"
+            ) from e
     
     def set_export_hooks(self, pre_export=None, post_export=None):
         """Set custom hooks for export process.
@@ -619,15 +868,34 @@ def export_workflow(workflow: Workflow, format: str = "yaml",
         
     Returns:
         Exported content as string
+        
+    Raises:
+        ExportException: If export fails
     """
-    export_config = ExportConfig(**config)
-    exporter = WorkflowExporter(export_config)
+    if not workflow:
+        raise ExportException("Workflow is required")
+        
+    supported_formats = ["yaml", "json", "manifest"]
+    if format not in supported_formats:
+        raise ExportException(
+            f"Unknown export format: '{format}'. "
+            f"Supported formats: {supported_formats}"
+        )
     
-    if format == "yaml":
-        return exporter.to_yaml(workflow, output_path)
-    elif format == "json":
-        return exporter.to_json(workflow, output_path)
-    elif format == "manifest":
-        return exporter.to_manifest(workflow, output_path)
-    else:
-        raise ValueError(f"Unknown export format: {format}")
+    try:
+        export_config = ExportConfig(**config)
+        exporter = WorkflowExporter(export_config)
+        
+        if format == "yaml":
+            return exporter.to_yaml(workflow, output_path)
+        elif format == "json":
+            return exporter.to_json(workflow, output_path)
+        elif format == "manifest":
+            return exporter.to_manifest(workflow, output_path)
+            
+    except Exception as e:
+        if isinstance(e, ExportException):
+            raise
+        raise ExportException(
+            f"Failed to export workflow: {e}"
+        ) from e
