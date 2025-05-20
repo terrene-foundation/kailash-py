@@ -8,7 +8,7 @@ from pathlib import Path
 from kailash import Workflow
 from kailash.nodes import PythonCodeNode
 from kailash.nodes.data import CSVReader, CSVWriter, JSONReader, JSONWriter
-from kailash.runtime import LocalRunner
+from kailash.runtime.local import LocalRuntime
 
 
 class TestPythonCodeNodeIntegration:
@@ -84,7 +84,7 @@ class TestPythonCodeNodeIntegration:
         writer.config = {'file_path': str(output_file)}
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         results = runner.run(workflow)
         
         # Verify results
@@ -151,7 +151,7 @@ class TestPythonCodeNodeIntegration:
         writer.config = {'file_path': str(output_file)}
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         results = runner.run(workflow)
         
         # Verify results
@@ -213,7 +213,7 @@ result = grouped
         writer.config = {'file_path': str(output_file)}
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         results = runner.run(workflow)
         
         # Verify results
@@ -267,7 +267,7 @@ result = grouped
         writer.config = {'file_path': str(output_file)}
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         results = runner.run(workflow)
         
         # Verify results
@@ -315,7 +315,7 @@ result = grouped
         writer.config = {'file_path': str(output_file)}
         
         # Execute workflow and expect failure
-        runner = LocalRunner()
+        runner = LocalRuntime()
         with pytest.raises(Exception, match="Too many rows"):
             runner.run(workflow)
         

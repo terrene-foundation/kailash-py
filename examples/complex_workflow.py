@@ -216,7 +216,7 @@ def main():
     
     # Initialize task manager
     print("Initializing task manager...")
-    storage = FileSystemStorage(path=str(data_dir / "tasks"))
+    storage = FileSystemStorage(base_path=str(data_dir / "tasks"))
     task_manager = TaskManager(storage_backend=storage)
     
     try:
@@ -255,8 +255,11 @@ def main():
             file_path=str(output_dir / "customer_segments.csv")
         )
         
+        # Note: JSONWriter expects data parameter, but in workflow mode
+        # data comes from connections, so we need to fix this usage
         report_writer = JSONWriter(
-            file_path=str(output_dir / "analysis_report.json")
+            file_path=str(output_dir / "analysis_report.json"),
+            data={}  # Placeholder, will be overridden by workflow
         )
         
         # Add nodes to workflow
@@ -290,14 +293,16 @@ def main():
         workflow.connect('analyzer', 'detailed_writer', {'data': 'data'})
         workflow.connect('reporter', 'report_writer', {'report': 'data'})
         
-        # Step 4: Create task
-        print("\nCreating task...")
-        task = task_manager.create_task(
-            name="Complex Customer Analysis",
-            description="Multi-source customer analysis workflow",
-            metadata={"workflow_name": workflow.metadata.name}
+        # Step 4: Create workflow run
+        print("\nCreating workflow run...")
+        run_id = task_manager.create_run(
+            workflow_name=workflow.metadata.name,
+            metadata={
+                "description": "Multi-source customer analysis workflow",
+                "nodes": len(workflow.nodes)
+            }
         )
-        print(f"Task created: {task.task_id}")
+        print(f"Run created: {run_id}")
         
         # Step 5: Validate workflow
         print("\nValidating workflow...")
@@ -319,19 +324,18 @@ def main():
         # Step 7: Execute workflow
         print("\nExecuting workflow...")
         runner = LocalRuntime(debug=True)
-        task_manager.update_task(task.task_id, status='running')
+        task_manager.update_run_status(run_id, status='running')
         
-        results, run_id = runner.execute(workflow)
+        results, exec_run_id = runner.execute(workflow, task_manager=task_manager)
         
         # Update task status
-        task_manager.update_task(
-            task.task_id,
-            status='completed',
-            result={'run_id': run_id, 'nodes_executed': len(results)}
+        task_manager.update_run_status(
+            run_id,
+            status='completed'
         )
         
         print(f"\n✓ Workflow completed successfully!")
-        print(f"  Run ID: {run_id}")
+        print(f"  Run ID: {exec_run_id}")
         print(f"  Nodes executed: {len(results)}")
         
         # Show outputs
@@ -355,9 +359,9 @@ def main():
         import traceback
         traceback.print_exc()
         
-        # Update task status if it exists
-        if 'task' in locals():
-            task_manager.update_task(task.task_id, status='failed', error=str(e))
+        # Update run status if it exists
+        if 'run_id' in locals():
+            task_manager.update_run_status(run_id, status='failed', error=str(e))
         return 1
     
     return 0

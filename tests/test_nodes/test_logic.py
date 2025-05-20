@@ -3,11 +3,7 @@
 import pytest
 from typing import Dict, Any
 
-from kailash.nodes.logic.operations import (
-    Conditional,
-    Aggregator,
-    Merge
-)
+from kailash.nodes.logic.operations import Merge
 from kailash.sdk_exceptions import NodeValidationError, NodeExecutionError
 
 

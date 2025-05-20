@@ -6,8 +6,9 @@ from typing import Dict, Any
 import time
 from concurrent.futures import Future
 
-from kailash.runtime.local import LocalRunner, ExecutionResult
-from kailash.workflow import Workflow, WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.base import Node
 from kailash.tracking.models import Task, TaskStatus
 from kailash.sdk_exceptions import KailashRuntimeError, KailashValidationError
@@ -39,12 +40,12 @@ class SlowNode(Node):
         return {"value": data.get("value", 0) + 1}
 
 
-class TestLocalRunner:
-    """Test LocalRunner class."""
+class TestLocalRuntime:
+    """Test LocalRuntime class."""
     
     def test_runner_creation(self, task_manager):
         """Test creating local runner."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         assert runner.task_manager == task_manager
         assert runner.executor is not None
@@ -52,13 +53,13 @@ class TestLocalRunner:
     
     def test_runner_with_custom_workers(self, task_manager):
         """Test runner with custom worker count."""
-        runner = LocalRunner(task_manager=task_manager, max_workers=8)
+        runner = LocalRuntime(task_manager=task_manager, max_workers=8)
         
         assert runner.max_workers == 8
     
     def test_run_simple_workflow(self, task_manager):
         """Test running simple workflow."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create simple workflow using builder
         builder = WorkflowBuilder()
@@ -89,7 +90,7 @@ class TestLocalRunner:
     
     def test_run_with_error_node(self, task_manager):
         """Test execution with error node."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         builder = WorkflowBuilder()
         error_id = builder.add_node("ErrorNode", "error")
@@ -108,7 +109,7 @@ class TestLocalRunner:
     
     def test_run_with_partial_success(self, task_manager):
         """Test execution with partial success."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create workflow with parallel branches
         builder = WorkflowBuilder()
@@ -144,7 +145,7 @@ class TestLocalRunner:
     
     def test_execute_node(self, task_manager):
         """Test executing single node."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         node = MockNode(node_id="test", name="Test Node")
         input_data = {"value": 7}
@@ -162,7 +163,7 @@ class TestLocalRunner:
     
     def test_execute_node_with_error(self, task_manager):
         """Test executing node that raises error."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         node = ErrorNode(node_id="error", name="Error Node")
         
@@ -177,7 +178,7 @@ class TestLocalRunner:
     
     def test_get_node_inputs(self, task_manager):
         """Test getting node inputs."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create workflow
         builder = WorkflowBuilder()
@@ -212,7 +213,7 @@ class TestLocalRunner:
     
     def test_wait_for_predecessors(self, task_manager):
         """Test waiting for predecessor nodes."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create futures for predecessor nodes
         future1 = Future()
@@ -234,7 +235,7 @@ class TestLocalRunner:
     
     def test_wait_for_predecessors_with_error(self, task_manager):
         """Test waiting for predecessors when one fails."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         future1 = Future()
         future2 = Future()
@@ -253,7 +254,7 @@ class TestLocalRunner:
     
     def test_parallel_execution(self, task_manager):
         """Test parallel execution of independent nodes."""
-        runner = LocalRunner(task_manager=task_manager, max_workers=3)
+        runner = LocalRuntime(task_manager=task_manager, max_workers=3)
         
         # Create workflow with parallel nodes
         builder = WorkflowBuilder()
@@ -312,7 +313,7 @@ class TestLocalRunner:
     
     def test_cleanup_on_error(self, task_manager):
         """Test that resources are cleaned up on error."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create workflow with error
         builder = WorkflowBuilder()
@@ -343,7 +344,7 @@ class TestLocalRunner:
     
     def test_empty_workflow(self, task_manager):
         """Test execution of empty workflow."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create empty workflow
         builder = WorkflowBuilder()
@@ -357,7 +358,7 @@ class TestLocalRunner:
     
     def test_single_node_workflow(self, task_manager):
         """Test workflow with single node."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create single node workflow
         builder = WorkflowBuilder()
@@ -379,7 +380,7 @@ class TestLocalRunner:
     
     def test_complex_dependency_chain(self, task_manager):
         """Test workflow with complex dependency chain."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create complex workflow: A -> B -> D
         #                              -> C -> D -> E

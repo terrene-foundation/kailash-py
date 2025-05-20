@@ -153,7 +153,8 @@ node.execute_code(
     inputs={
         'data': result_from_custom_csv_node['data'],
         'column_name': 'Total Claim Amount',
-        'threshold': 1000.0})
+        'threshold': 1000.0}
+)
 
 # We can also create a CustomNode with the python function under in run
 class FilterNode(Node):

@@ -1,0 +1,20 @@
+{
+  "run_id": "9947eea8-7541-4e2c-aa91-b611fc81b4f6",
+  "workflow_name": "complex_customer_analysis",
+  "status": "failed",
+  "started_at": "2025-05-19T02:34:40.365556",
+  "ended_at": "2025-05-19T02:34:40.377382",
+  "tasks": [
+    "28732f8e-b2f7-4059-88f7-4ec33c76fd45",
+    "f02ab5da-e3f1-446f-b57a-4ba710dff19f",
+    "ebaf50fc-4f4c-49fe-9b6e-d2f61a96cb40",
+    "2a0bc96b-a835-41fa-abbc-53d6e47cac74",
+    "0e5758d0-1028-4ac3-b8a5-877a3501dc86"
+  ],
+  "metadata": {
+    "parameters": null,
+    "debug": true,
+    "runtime": "local"
+  },
+  "error": "Node 'analyzer' failed: Function execution failed: You are trying to merge on int64 and object columns for key 'customer_id'. If you wish to proceed you should use pd.concat\nTraceback (most recent call last):\n  File \"./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py\", line 142, in execute_function\n    return func(**kwargs)\n           ^^^^^^^^^^^^^^\n  File \"./repos/projects/kailash_python_sdk/examples/complex_workflow.py\", line 135, in analyze_transactions\n    merged_df = pd.merge(\n                ^^^^^^^^^\n  File \"./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/pandas/core/reshape/merge.py\", line 170, in merge\n    op = _MergeOperation(\n         ^^^^^^^^^^^^^^^^\n  File \"./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/pandas/core/reshape/merge.py\", line 807, in __init__\n    self._maybe_coerce_merge_keys()\n  File \"./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/pandas/core/reshape/merge.py\", line 1508, in _maybe_coerce_merge_keys\n    raise ValueError(msg)\nValueError: You are trying to merge on int64 and object columns for key 'customer_id'. If you wish to proceed you should use pd.concat\n"
+}

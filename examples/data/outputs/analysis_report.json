@@ -1,0 +1,19 @@
+{
+  "total_customers": 10,
+  "segments": {
+    "high_value": 8,
+    "medium_value": 2
+  },
+  "revenue_by_segment": {
+    "high_value": 30500.0,
+    "medium_value": 1500.0
+  },
+  "transaction_metrics": {
+    "high_value": {
+      "count": 5,
+      "mean": 274.0,
+      "sum": 1370.0
+    }
+  },
+  "generated_at": "2025-05-20T09:03:38.574475"
+}

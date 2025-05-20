@@ -1,11 +1,6 @@
-customer_id,name,email,age,income,registration_date,category,purchase_total
-C001,John Doe,john@example.com,35,75000,2020-01-15,A,2500.00
-C002,Jane Smith,jane@example.com,28,45000,2020-03-20,B,1200.00
-C003,Mike Johnson,mike@example.com,45,95000,2019-11-10,A,5000.00
-C004,Sarah Williams,sarah@example.com,32,65000,2021-02-28,B,1800.00
-C005,David Brown,david@example.com,55,120000,2018-07-05,A,8500.00
-C006,Emily Davis,emily@example.com,26,35000,2021-06-15,C,600.00
-C007,Robert Wilson,robert@example.com,41,85000,2020-09-01,A,3200.00
-C008,Lisa Anderson,lisa@example.com,38,70000,2019-12-20,B,2100.00
-C009,James Taylor,james@example.com,29,50000,2021-01-10,C,900.00
-C010,Mary Thomas,mary@example.com,50,110000,2019-04-15,A,6200.00
+customer_id,name,email,tier
+cust1,Alice,alice@example.com,gold
+cust2,Bob,bob@example.com,silver
+cust3,Charlie,charlie@example.com,bronze
+cust4,Diana,diana@example.com,gold
+cust5,Evan,evan@example.com,silver

@@ -8,7 +8,7 @@ from typing import Dict, Any
 import pytest
 import pandas as pd
 
-from kailash.runtime.local import LocalRunner
+from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import Workflow, WorkflowBuilder
 from kailash.nodes.base import Node

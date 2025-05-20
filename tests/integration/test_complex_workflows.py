@@ -10,7 +10,7 @@ import pytest
 import pandas as pd
 import numpy as np
 
-from kailash.runtime.local import LocalRunner
+from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import WorkflowBuilder, Workflow
 from kailash.nodes.base import Node
@@ -142,7 +142,7 @@ class TestComplexWorkflows:
         workflow = builder.build("multi_source_multi_sink")
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         result = runner.run(workflow)
         
         # Verify outputs exist
@@ -225,7 +225,7 @@ class TestComplexWorkflows:
         workflow = builder.build("conditional_branching")
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         result = runner.run(workflow)
         
         # Since mock_result is True, should go to high_value branch
@@ -343,7 +343,7 @@ class TestComplexWorkflows:
         workflow = builder.build("parallel_processing")
         
         # Execute workflow with parallel execution
-        runner = LocalRunner(max_parallel_jobs=4)
+        runner = LocalRuntime(max_parallel_jobs=4)
         start_time = time.time()
         result = runner.run(workflow)
         execution_time = time.time() - start_time
@@ -424,7 +424,7 @@ class TestComplexWorkflows:
         workflow = builder.build("recursive_pattern")
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         result = runner.run(workflow)
         
         # Check that some intermediate files were created
@@ -534,7 +534,7 @@ class TestComplexWorkflows:
         workflow = builder.build("dynamic_workflow")
         
         # Execute workflow
-        runner = LocalRunner()
+        runner = LocalRuntime()
         result = runner.run(workflow)
         
         # Verify outputs
@@ -605,7 +605,7 @@ class TestComplexWorkflows:
         workflow = builder.build("error_handling_workflow")
         
         # Execute workflow with error handling
-        runner = LocalRunner(continue_on_error=True)
+        runner = LocalRuntime(continue_on_error=True)
         result = runner.run(workflow)
         
         # Check that workflow completed despite errors
@@ -691,7 +691,7 @@ class TestComplexWorkflows:
         workflow = builder.build("external_dependencies_workflow")
         
         # Execute with dependency management
-        runner = LocalRunner(
+        runner = LocalRuntime(
             task_manager=task_manager,
             dependency_timeout=30
         )
@@ -823,7 +823,7 @@ class TestComplexWorkflows:
         workflow = builder.build("ml_pipeline_workflow")
         
         # Execute ML pipeline
-        runner = LocalRunner()
+        runner = LocalRuntime()
         result = runner.run(workflow)
         
         # Verify outputs
@@ -922,7 +922,7 @@ class TestComplexWorkflows:
         workflow = builder.build("streaming_workflow")
         
         # Execute streaming workflow (with timeout for test)
-        runner = LocalRunner(streaming_mode=True)
+        runner = LocalRuntime(streaming_mode=True)
         
         # Run for a short time in test
         import threading

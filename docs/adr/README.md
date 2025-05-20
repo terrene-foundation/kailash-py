@@ -51,7 +51,13 @@ What becomes easier or more difficult to do because of this change?
 - [0005-local-execution-strategy.md](0005-local-execution-strategy.md) - Local Execution Strategy
 - [0006-task-tracking-architecture.md](0006-task-tracking-architecture.md) - Task Tracking Architecture
 - [0007-export-format.md](0007-export-format.md) - Export Format
+- [0008-docker-runtime-architecture.md](0008-docker-runtime-architecture.md) - Docker Runtime Architecture
 - [0009-src-layout-for-package.md](0009-src-layout-for-package.md) - Source Layout for Package
+- [0010-python-code-node.md](0010-python-code-node.md) - Python Code Node
+- [0011-workflow-execution-improvements.md](0011-workflow-execution-improvements.md) - Workflow Execution Improvements
+- [0012-workflow-conditional-routing.md](0012-workflow-conditional-routing.md) - Workflow Conditional Routing
+- [0013-simplify-conditional-logic-nodes.md](0013-simplify-conditional-logic-nodes.md) - Simplify Conditional Logic Nodes
+- [0014-async-node-execution.md](0014-async-node-execution.md) - Asynchronous Node Execution & Parallel Workflow Runtime
 
 ## References
 

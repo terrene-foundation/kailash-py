@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from kailash.sdk_exceptions import TaskStateError, TaskException
 
+# Metrics class definition
+class TaskMetrics(BaseModel):
+    """Metrics for task execution."""
+    duration: Optional[float] = None
+    memory_usage: Optional[float] = None
+    cpu_usage: Optional[float] = None
+
 
 class TaskStatus(str, Enum):
     """Status of a task execution."""
@@ -323,3 +330,6 @@ class RunSummary(BaseModel):
             raise TaskException(
                 f"Failed to create run summary: {e}"
             ) from e
+
+# Legacy compatibility aliases for backward compatibility
+Task = TaskRun  # For backward compatibility with tests and existing code

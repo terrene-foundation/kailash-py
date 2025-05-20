@@ -8,7 +8,7 @@ import pytest
 import pandas as pd
 from networkx import DiGraph
 
-from kailash.runtime.local import LocalRunner
+from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import Workflow
 from kailash.nodes.base import Node

@@ -51,7 +51,7 @@ pip install kailash[dev]
 from kailash.workflow import Workflow
 from kailash.nodes.data import CSVReader
 from kailash.nodes.code import PythonCodeNode
-from kailash.runtime.local import LocalRunner
+from kailash.runtime.local import LocalRuntime
 import pandas as pd
 
 # Create a workflow
@@ -78,8 +78,8 @@ workflow.add_node(analyzer, node_id="analyze")
 workflow.connect("read_customers", "analyze", {"data": "data"})
 
 # Run locally
-runner = LocalRunner()
-results, run_id = runner.execute(workflow)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow)
 print(f"Analysis complete! Results: {results}")
 
 # Export for production
@@ -177,8 +177,8 @@ from kailash.tracking import TaskManager
 task_manager = TaskManager(storage_type="filesystem")
 
 # Run workflow with tracking
-runner = LocalRunner(task_manager=task_manager)
-results, run_id = runner.execute(workflow)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, task_manager=task_manager)
 
 # Query execution history
 runs = task_manager.list_runs(status="completed", limit=10)
@@ -187,14 +187,14 @@ details = task_manager.get_run(run_id)
 
 #### Local Testing
 ```python
-from kailash.runtime import LocalRunner
+from kailash.runtime.local import LocalRuntime
 
-# Create test runner with debugging enabled
-runner = LocalRunner(debug=True)
+# Create test runtime with debugging enabled
+runtime = LocalRuntime(debug=True)
 
 # Execute with test data
 test_data = {"customers": [...]}
-results = runner.execute(workflow, inputs=test_data)
+results = runtime.execute(workflow, inputs=test_data)
 
 # Validate results
 assert results["node_id"]["output_key"] == expected_value
