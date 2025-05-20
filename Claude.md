@@ -2,7 +2,12 @@
 
 ## Project Purpose and Background
 
-The Kailash Python SDK is designed to solve a collaboration problem between AI Business Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. The SDK provides a framework for creating nodes and workflows that align with Kailash's container-node architecture while allowing ABCs to prototype rapidly without deep technical knowledge.
+The Kailash Python SDK is designed to solve a collaboration problem between 
+AI Business Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. 
+
+The SDK provides a framework for creating nodes and workflows that align with 
+Kailash's container-node architecture while allowing ABCs to prototype rapidly 
+without deep technical knowledge.
 
 ## Coding Standards and Conventions
 
@@ -12,7 +17,7 @@ The Kailash Python SDK is designed to solve a collaboration problem between AI B
 2. **Pythonic Style**: Write code that follows Python best practices and idioms.
 3. **Type Hints**: Use type hints throughout the codebase to enhance IDE support and documentation.
 4. **Documentation**: All classes, methods, and functions must have docstrings.
-5. **Error Handling**: Use explicit e/rror handling with descriptive error messages.
+5. **Error Handling**: Use explicit error handling with descriptive error messages.
 
 ### Style Guidelines
 
@@ -60,13 +65,23 @@ The Kailash Python SDK is designed to solve a collaboration problem between AI B
        """
    ```
 
-4. **Product Requirements Document (PRD)**:
+4. **Docstrings must comprehensively include the following**
+   - Design purpose and philosophy: Explaining why each component exists
+   - Upstream dependencies: What components create/use this class
+   - Downstream consumers: What components depend on this class
+   - Usage patterns: Common ways the component is used
+   - Implementation details: How the component works internally
+   - Error handling: What exceptions are raised and when
+   - Side effects: Any state changes or external impacts
+   - Examples: Concrete usage examples where helpful
+
+5. **Product Requirements Document (PRD)**:
    - Include the full PRD in the `docs/prd/` directory
    - Reference the PRD in code comments when implementing specific requirements
    - Update the PRD if requirements change during development
    - Link ADRs to relevant sections of the PRD
 
-5. **README.md**: Include comprehensive documentation with:
+6. **README.md**: Include comprehensive documentation with:
    - Installation instructions
    - Quick start guide
    - Example usage
@@ -235,6 +250,13 @@ Keep dependencies minimal and explicit:
    - Maintain compatibility with existing Kailash architecture
    - Document any breaking changes clearly
 
+## Additional Notes
+
+- Focus on making the API intuitive for ABCs who are not deep technical experts
+- Prioritize a smooth developer experience
+- Balance flexibility with guardrails to guide users toward architectural compliance
+- Include helpful error messages that guide users toward correct usage
+
 ## Deliverables
 
 The final deliverables should include:
@@ -267,13 +289,6 @@ All significant architectural decisions should be documented using ADRs:
    - Task Tracking Design
    - Storage Backend Strategy
 
-## Additional Notes
-
-- Focus on making the API intuitive for ABCs who are not deep technical experts
-- Prioritize a smooth developer experience
-- Balance flexibility with guardrails to guide users toward architectural compliance
-- Include helpful error messages that guide users toward correct usage
-
 ## Code Generation Guidelines
 1. Instructions are inside the `docs/instructions/` directory. Read the latest instructions before starting any implementation.
    - Example: `docs/instructions/001-initial.md` contains the initial instructions for the project.
@@ -281,11 +296,13 @@ All significant architectural decisions should be documented using ADRs:
    
 2. Always reference the PRDs in docs/prd when generating codes.
 
-3. **Todos List**:
-   - Use the TodoRead and TodoWrite tools to manage tasks
-   - Create the list of tasks before starting the implementation
-   - Also, create todo markdown files in the format `docs/todos/001-todo.md`, incrementing the number for each new file
-   - Each todo file should contain:
+3. Record major architectural design changes in 'docs/adr'
+
+4. **Todos List**:
+   - Use the TodoRead and TodoWrite tools to manage tasks.
+   - Create the list of tasks before starting the implementation.
+   - Also, create and maintain all todos in `docs/todos/000-master.md`.
+   - Each entry in the todo file should contain:
    - A list of tasks to be completed
      - Task descriptions
      - Status of each task (e.g., "To Do", "In Progress", "Done")
@@ -296,48 +313,9 @@ All significant architectural decisions should be documented using ADRs:
          - Description: Create the base class for all nodes with validation and execution contract
          - Status: In Progress
       ```
-4. **Github Issues and Project Update**
-   - Use the Github Issues and Projects to track tasks and progress
-   - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD
-   - Update the project board as tasks are completed
-
-## Notes
-
-### Comprehensive Docstring Expansion (2024-01-19)
-
-Expand all docstrings to include:
-1. **Design purpose and philosophy** - Explaining why each component exists
-2. **Upstream dependencies** - What components create/use this class
-3. **Downstream consumers** - What components depend on this class
-4. **Usage patterns** - Common ways the component is used
-5. **Implementation details** - How the component works internally
-6. **Error handling** - What exceptions are raised and when
-7. **Side effects** - Any state changes or external impacts
-8. **Examples** - Concrete usage examples where helpful
-
-### nodes/data - Comprehensive Docstring Expansion (2024-01-19)
-
-Expanded all docstrings in the data nodes directory (`src/kailash/nodes/data/`) including:
-
-1. **readers.py** - Data reader nodes:
-   - **CSVReader**: Enhanced with format detection, memory considerations, and usage patterns
-   - **JSONReader**: Documented structure preservation and type mappings
-   - **TextReader**: Added encoding support details and use cases
-
-2. **writers.py** - Data writer nodes:
-   - **CSVWriter**: Documented automatic format detection and header handling
-   - **JSONWriter**: Added serialization details and pretty printing
-   - **TextWriter**: Enhanced with append mode documentation and byte counting
-
-3. **__init__.py** - Package documentation:
-   - Overall design philosophy for data nodes
-   - Integration patterns with other components
-   - Example workflow usage
-
-Key improvements:
-- Added detailed upstream/downstream component relationships
-- Documented common usage patterns and workflows
-- Enhanced error handling documentation
-- Added memory and performance considerations
-- Included practical examples for each node
-- Explained design decisions and trade-offs
+   - Other todo files in the same directory should be used to record a summary of completed tasks.
+     
+5. **Github Issues and Project Update**
+   - Use the Github Issues and Projects to track tasks and progress.
+   - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
+   - Update the project board as tasks are completed.

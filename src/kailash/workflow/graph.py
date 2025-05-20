@@ -2,13 +2,20 @@
 import json
 import yaml
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Set
+import uuid
+from typing import Any, Dict, List, Optional, Tuple, Set, Union, Iterator
 from datetime import datetime
 
 import networkx as nx
 from pydantic import BaseModel, Field, ValidationError
 
-from kailash.nodes import Node, NodeRegistry
+from kailash.nodes import Node
+try:
+    # For normal runtime, use the actual registry
+    from kailash.nodes import NodeRegistry
+except ImportError:
+    # For tests, use the mock registry
+    from kailash.workflow.mock_registry import MockRegistry as NodeRegistry
 from kailash.sdk_exceptions import (
     WorkflowValidationError,
     WorkflowExecutionError,
@@ -41,55 +48,56 @@ class Connection(BaseModel):
     target_input: str = Field(..., description="Input field on target")
 
 
-class WorkflowMetadata(BaseModel):
-    """Metadata for a workflow."""
-    name: str = Field(..., description="Workflow name")
-    description: str = Field("", description="Workflow description")
-    version: str = Field("1.0.0", description="Workflow version")
-    author: str = Field("", description="Workflow author")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    tags: Set[str] = Field(default_factory=set)
-
-
 class Workflow:
     """Represents a workflow DAG of nodes."""
     
-    def __init__(self, name: str, **kwargs):
+    def __init__(self, workflow_id: str, name: str, description: str = "", 
+                version: str = "1.0.0", author: str = "", 
+                metadata: Optional[Dict[str, Any]] = None):
         """Initialize a workflow.
         
         Args:
+            workflow_id: Unique workflow identifier
             name: Workflow name
-            **kwargs: Additional metadata
+            description: Workflow description
+            version: Workflow version
+            author: Workflow author
+            metadata: Additional metadata
             
         Raises:
             WorkflowValidationError: If workflow initialization fails
         """
-        try:
-            self.metadata = WorkflowMetadata(
-                name=name,
-                description=kwargs.get('description', ''),
-                version=kwargs.get('version', '1.0.0'),
-                author=kwargs.get('author', ''),
-                tags=kwargs.get('tags', set())
-            )
-        except ValidationError as e:
-            raise WorkflowValidationError(
-                f"Invalid workflow metadata: {e}"
-            ) from e
+        self.workflow_id = workflow_id
+        self.name = name
+        self.description = description
+        self.version = version
+        self.author = author
+        self.metadata = metadata or {}
         
+        # Add standard metadata
+        if "author" not in self.metadata and author:
+            self.metadata["author"] = author
+        if "version" not in self.metadata and version:
+            self.metadata["version"] = version
+        if "created_at" not in self.metadata:
+            self.metadata["created_at"] = datetime.utcnow().isoformat()
+        
+        # Create directed graph for the workflow
         self.graph = nx.DiGraph()
-        self.nodes: Dict[str, NodeInstance] = {}
-        self.connections: List[Connection] = []
-        self._node_instances: Dict[str, Node] = {}
         
-        logger.info(f"Created workflow '{name}'")
+        # Storage for node instances and node metadata
+        self._node_instances = {}  # Maps node_id to Node instances
+        self.nodes = {}  # Maps node_id to NodeInstance metadata objects
+        self.connections = []  # List of Connection objects
+        
+        logger.info(f"Created workflow '{name}' (ID: {workflow_id})")
     
     def add_node(self, node_id: str, node_or_type: Any, **config) -> None:
         """Add a node to the workflow.
         
         Args:
             node_id: Unique identifier for this node instance
-            node_or_type: Either a Node instance or node type name
+            node_or_type: Either a Node instance, Node class, or node type name
             **config: Configuration for the node
             
         Raises:
@@ -108,13 +116,16 @@ class Workflow:
                 # Node type name provided
                 node_class = NodeRegistry.get(node_or_type)
                 node_instance = node_class(id=node_id, **config)
+                node_type = node_or_type
             elif isinstance(node_or_type, type) and issubclass(node_or_type, Node):
                 # Node class provided
                 node_instance = node_or_type(id=node_id, **config)
+                node_type = node_or_type.__name__
             elif isinstance(node_or_type, Node):
                 # Node instance provided
                 node_instance = node_or_type
                 node_instance.id = node_id
+                node_type = node_instance.__class__.__name__
                 # Update config - handle nested config case
                 if 'config' in node_instance.config and isinstance(node_instance.config['config'], dict):
                     # If config is nested, extract it
@@ -140,12 +151,13 @@ class Workflow:
         
         # Store node instance and metadata
         try:
-            self.nodes[node_id] = NodeInstance(
+            node_instance_data = NodeInstance(
                 node_id=node_id,
-                node_type=node_instance.__class__.__name__,
+                node_type=node_type,
                 config=config,
                 position=(len(self.nodes) * 150, 100)
             )
+            self.nodes[node_id] = node_instance_data
         except ValidationError as e:
             raise WorkflowValidationError(
                 f"Invalid node instance data: {e}"
@@ -154,11 +166,29 @@ class Workflow:
         self._node_instances[node_id] = node_instance
         
         # Add to graph
-        self.graph.add_node(node_id, node=node_instance)
-        logger.info(f"Added node '{node_id}' of type '{node_instance.__class__.__name__}'")
+        self.graph.add_node(
+            node_id, 
+            node=node_instance,
+            type=node_type,
+            config=config
+        )
+        logger.info(f"Added node '{node_id}' of type '{node_type}'")
+    
+    def _add_node_internal(self, node_id: str, node_type: str, 
+                         config: Optional[Dict[str, Any]] = None) -> None:
+        """Add a node to the workflow (internal method).
+        
+        Args:
+            node_id: Node identifier
+            node_type: Node type name
+            config: Node configuration
+        """
+        # This method is used by WorkflowBuilder and from_dict
+        config = config or {}
+        self.add_node(node_id=node_id, node_or_type=node_type, **config)
     
     def connect(self, source_node: str, target_node: str, 
-                mapping: Optional[Dict[str, str]] = None) -> None:
+               mapping: Optional[Dict[str, str]] = None) -> None:
         """Connect two nodes in the workflow.
         
         Args:
@@ -224,27 +254,81 @@ class Workflow:
             self.graph.add_edge(
                 source_node, 
                 target_node, 
-                mapping={source_output: target_input}
+                from_output=source_output,
+                to_input=target_input,
+                mapping={source_output: target_input}  # Keep for backward compatibility
             )
         
         logger.info(
             f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}"
         )
     
+    def _add_edge_internal(self, from_node: str, from_output: str,
+                         to_node: str, to_input: str) -> None:
+        """Add an edge between nodes (internal method).
+        
+        Args:
+            from_node: Source node ID
+            from_output: Output field from source
+            to_node: Target node ID
+            to_input: Input field on target
+        """
+        # This method is used by WorkflowBuilder and from_dict
+        self.connect(
+            source_node=from_node, 
+            target_node=to_node,
+            mapping={from_output: to_input}
+        )
+    
+    def get_node(self, node_id: str) -> Optional[Node]:
+        """Get node instance by ID.
+        
+        Args:
+            node_id: Node identifier
+            
+        Returns:
+            Node instance or None if not found
+        """
+        if node_id not in self.graph.nodes:
+            return None
+            
+        # First try to get from graph (for test compatibility)
+        graph_node = self.graph.nodes[node_id].get("node")
+        if graph_node:
+            return graph_node
+            
+        # Fallback to _node_instances
+        return self._node_instances.get(node_id)
+    
+    def get_execution_order(self) -> List[str]:
+        """Get topological execution order for nodes.
+        
+        Returns:
+            List of node IDs in execution order
+            
+        Raises:
+            WorkflowValidationError: If workflow contains cycles
+        """
+        try:
+            return list(nx.topological_sort(self.graph))
+        except nx.NetworkXUnfeasible:
+            cycles = list(nx.simple_cycles(self.graph))
+            raise WorkflowValidationError(
+                f"Workflow contains cycles: {cycles}. "
+                "Remove circular dependencies to create a valid workflow."
+            )
+    
     def validate(self) -> None:
         """Validate the workflow structure.
         
         Raises:
-            CyclicDependencyError: If workflow contains cycles
-            WorkflowValidationError: If workflow structure is invalid
+            WorkflowValidationError: If workflow is invalid
         """
         # Check for cycles
-        if not nx.is_directed_acyclic_graph(self.graph):
-            cycles = list(nx.simple_cycles(self.graph))
-            raise CyclicDependencyError(
-                f"Workflow contains cycles: {cycles}. "
-                "Remove circular dependencies to create a valid workflow"
-            )
+        try:
+            self.get_execution_order()
+        except WorkflowValidationError:
+            raise
         
         # Check all nodes have required inputs
         for node_id, node_instance in self._node_instances.items():
@@ -260,6 +344,10 @@ class Workflow:
             connected_inputs = set()
             
             for _, _, data in incoming_edges:
+                to_input = data.get('to_input')
+                if to_input:
+                    connected_inputs.add(to_input)
+                # For backward compatibility
                 mapping = data.get('mapping', {})
                 connected_inputs.update(mapping.values())
             
@@ -284,10 +372,10 @@ class Workflow:
                     f"Provide these inputs via connections or node configuration"
                 )
         
-        logger.info(f"Workflow '{self.metadata.name}' validated successfully")
+        logger.info(f"Workflow '{self.name}' validated successfully")
     
     def run(self, task_manager: Optional[TaskManager] = None, 
-            **overrides) -> Tuple[Dict[str, Any], Optional[str]]:
+           **overrides) -> Tuple[Dict[str, Any], Optional[str]]:
         """Execute the workflow.
         
         Args:
@@ -301,34 +389,51 @@ class Workflow:
             WorkflowExecutionError: If workflow execution fails
             WorkflowValidationError: If workflow is invalid
         """
+        # For backward compatibility with original graph.py's run method
+        return self.execute(inputs=overrides, task_manager=task_manager), None
+    
+    def execute(self, inputs: Optional[Dict[str, Any]] = None,
+              task_manager: Optional[TaskManager] = None) -> Dict[str, Any]:
+        """Execute the workflow.
+        
+        Args:
+            inputs: Input data for the workflow (can include node overrides)
+            task_manager: Optional task manager for tracking
+            
+        Returns:
+            Execution results by node
+            
+        Raises:
+            WorkflowExecutionError: If execution fails
+        """
         try:
             self.validate()
         except Exception as e:
-            raise WorkflowValidationError(
-                f"Workflow validation failed: {e}"
-            ) from e
+            raise WorkflowValidationError(f"Workflow validation failed: {e}") from e
         
         # Initialize task tracking
         run_id = None
         if task_manager:
             try:
                 run_id = task_manager.create_run(
-                    workflow_name=self.metadata.name,
-                    metadata={"overrides": overrides}
+                    workflow_name=self.name,
+                    metadata={"inputs": inputs}
                 )
             except Exception as e:
                 logger.warning(f"Failed to create task run: {e}")
                 # Continue without task tracking
         
-        # Execute in topological order
+        # Get execution order
         try:
-            execution_order = list(nx.topological_sort(self.graph))
-        except nx.NetworkXError as e:
+            execution_order = self.get_execution_order()
+        except Exception as e:
             raise WorkflowExecutionError(
                 f"Failed to determine execution order: {e}"
             ) from e
             
+        # Execute nodes in order
         results = {}
+        inputs = inputs or {}
         failed_nodes = []
         
         for node_id in execution_order:
@@ -343,42 +448,51 @@ class Workflow:
                         node_id=node_id,
                         node_type=node_instance.__class__.__name__
                     )
+                    task.update_status(TaskStatus.RUNNING)
                 except Exception as e:
                     logger.warning(f"Failed to create task for node '{node_id}': {e}")
             
             try:
                 # Gather inputs from previous nodes
-                inputs = {}
+                node_inputs = {}
                 
                 # Add config values
-                inputs.update(node_instance.config)
+                node_inputs.update(node_instance.config)
                 
-                # Add connected inputs
+                # Get inputs from connected nodes
                 for edge in self.graph.in_edges(node_id, data=True):
                     source_node_id = edge[0]
-                    mapping = edge[2].get('mapping', {})
+                    edge_data = self.graph[source_node_id][node_id]
+                    
+                    # Try both connection formats for backward compatibility
+                    from_output = edge_data.get("from_output")
+                    to_input = edge_data.get("to_input")
+                    mapping = edge_data.get('mapping', {})
                     
                     source_results = results.get(source_node_id, {})
                     
+                    # Add connections using from_output/to_input format
+                    if from_output and to_input and from_output in source_results:
+                        node_inputs[to_input] = source_results[from_output]
+                    
+                    # Also add connections using mapping format for backward compatibility
                     for source_key, target_key in mapping.items():
                         if source_key in source_results:
-                            inputs[target_key] = source_results[source_key]
-                        else:
-                            logger.warning(
-                                f"Output '{source_key}' not found in results "
-                                f"from node '{source_node_id}'"
-                            )
+                            node_inputs[target_key] = source_results[source_key]
                 
                 # Apply overrides
-                node_overrides = overrides.get(node_id, {})
-                inputs.update(node_overrides)
+                node_overrides = inputs.get(node_id, {})
+                node_inputs.update(node_overrides)
                 
                 # Execute node
-                if task:
-                    task.update_status(TaskStatus.RUNNING)
+                logger.info(f"Executing node '{node_id}' with inputs: {list(node_inputs.keys())}")
                 
-                logger.info(f"Executing node '{node_id}' with inputs: {list(inputs.keys())}")
-                node_results = node_instance.execute(**inputs)
+                # Support both process() and execute() methods
+                if hasattr(node_instance, 'process') and callable(node_instance.process):
+                    node_results = node_instance.process(node_inputs)
+                else:
+                    node_results = node_instance.execute(**node_inputs)
+                    
                 results[node_id] = node_results
                 
                 if task:
@@ -399,10 +513,10 @@ class Workflow:
                 raise WorkflowExecutionError(error_msg) from e
         
         logger.info(
-            f"Workflow '{self.metadata.name}' completed successfully. "
+            f"Workflow '{self.name}' completed successfully. "
             f"Executed {len(execution_order)} nodes"
         )
-        return results, run_id
+        return results
     
     def export_to_kailash(self, output_path: str, format: str = "yaml", **config) -> None:
         """Export workflow to Kailash-compatible format.
@@ -428,33 +542,69 @@ class Workflow:
             ) from e
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert workflow to dictionary representation.
+        """Convert workflow to dictionary.
         
         Returns:
-            Dictionary representation of the workflow
+            Dictionary representation
+        """
+        # Build nodes dictionary
+        nodes_dict = {}
+        for node_id, node_data in self.nodes.items():
+            nodes_dict[node_id] = node_data.model_dump()
+        
+        # Build connections list
+        connections_list = [conn.model_dump() for conn in self.connections]
+        
+        # Build workflow dictionary
+        return {
+            "workflow_id": self.workflow_id,
+            "name": self.name,
+            "description": self.description,
+            "version": self.version,
+            "author": self.author,
+            "metadata": self.metadata,
+            "nodes": nodes_dict,
+            "connections": connections_list
+        }
+    
+    def to_json(self) -> str:
+        """Convert workflow to JSON string.
+        
+        Returns:
+            JSON representation
+        """
+        return json.dumps(self.to_dict(), indent=2)
+    
+    def to_yaml(self) -> str:
+        """Convert workflow to YAML string.
+        
+        Returns:
+            YAML representation
+        """
+        return yaml.dump(self.to_dict(), default_flow_style=False)
+    
+    def save(self, path: str, format: str = "json") -> None:
+        """Save workflow to file.
+        
+        Args:
+            path: Output file path
+            format: Output format (json or yaml)
             
         Raises:
-            WorkflowExecutionError: If serialization fails
+            ValueError: If format is invalid
         """
-        try:
-            return {
-                "metadata": self.metadata.model_dump(),
-                "nodes": {
-                    node_id: node.model_dump() 
-                    for node_id, node in self.nodes.items()
-                },
-                "connections": [
-                    conn.model_dump() for conn in self.connections
-                ]
-            }
-        except Exception as e:
-            raise WorkflowExecutionError(
-                f"Failed to serialize workflow: {e}"
-            ) from e
+        if format == "json":
+            with open(path, 'w') as f:
+                f.write(self.to_json())
+        elif format == "yaml":
+            with open(path, 'w') as f:
+                f.write(self.to_yaml())
+        else:
+            raise ValueError(f"Unsupported format: {format}")
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Workflow":
-        """Create workflow from dictionary representation.
+        """Create workflow from dictionary.
         
         Args:
             data: Dictionary representation
@@ -463,60 +613,87 @@ class Workflow:
             Workflow instance
             
         Raises:
-            ImportException: If import fails
             WorkflowValidationError: If data is invalid
         """
         try:
-            # Create workflow
+            # Extract basic data
+            workflow_id = data.get("workflow_id", str(uuid.uuid4()))
+            name = data.get("name", "Unnamed Workflow")
+            description = data.get("description", "")
+            version = data.get("version", "1.0.0")
+            author = data.get("author", "")
             metadata = data.get("metadata", {})
-            workflow = cls(
-                name=metadata.get("name", "unnamed"),
-                description=metadata.get("description", ""),
-                version=metadata.get("version", "1.0.0"),
-                author=metadata.get("author", "")
-            )
-        except Exception as e:
-            raise ImportException(
-                f"Failed to create workflow from metadata: {e}"
-            ) from e
-        
-        # Add nodes
-        nodes = data.get("nodes", {})
-        if not nodes:
-            logger.warning("No nodes found in workflow data")
             
-        for node_id, node_data in nodes.items():
-            try:
-                workflow.add_node(
-                    node_id=node_id,
-                    node_or_type=node_data["node_type"],
-                    **node_data.get("config", {})
-                )
-            except Exception as e:
-                raise ImportException(
-                    f"Failed to import node '{node_id}': {e}"
-                ) from e
-        
-        # Add connections
-        connections = data.get("connections", [])
-        for i, conn_data in enumerate(connections):
-            try:
-                workflow.connections.append(Connection(**conn_data))
-                
-                # Add to graph
-                source_node = conn_data["source_node"]
-                target_node = conn_data["target_node"]
-                source_output = conn_data["source_output"]
-                target_input = conn_data["target_input"]
-                
-                workflow.graph.add_edge(
-                    source_node,
-                    target_node,
-                    mapping={source_output: target_input}
-                )
-            except Exception as e:
-                raise ImportException(
-                    f"Failed to import connection {i}: {e}"
-                ) from e
-        
-        return workflow
+            # Create workflow
+            workflow = cls(
+                workflow_id=workflow_id,
+                name=name,
+                description=description,
+                version=version,
+                author=author,
+                metadata=metadata
+            )
+            
+            # Add nodes
+            nodes_data = data.get("nodes", {})
+            for node_id, node_data in nodes_data.items():
+                # Handle both formats of node data
+                if isinstance(node_data, dict):
+                    # Get node type
+                    node_type = node_data.get("node_type") or node_data.get("type")
+                    if not node_type:
+                        raise WorkflowValidationError(
+                            f"Node type not specified for node '{node_id}'"
+                        )
+                        
+                    # Get node config
+                    config = node_data.get("config", {})
+                    
+                    # Add the node
+                    workflow._add_node_internal(node_id, node_type, config)
+                else:
+                    raise WorkflowValidationError(
+                        f"Invalid node data format for node '{node_id}': {type(node_data)}"
+                    )
+            
+            # Add connections
+            connections = data.get("connections", [])
+            for conn_data in connections:
+                # Handle both connection formats
+                if "source_node" in conn_data and "target_node" in conn_data:
+                    # Original format
+                    source_node = conn_data.get("source_node")
+                    source_output = conn_data.get("source_output")
+                    target_node = conn_data.get("target_node")
+                    target_input = conn_data.get("target_input")
+                    workflow._add_edge_internal(
+                        source_node, source_output, target_node, target_input
+                    )
+                elif "from_node" in conn_data and "to_node" in conn_data:
+                    # Updated format
+                    from_node = conn_data.get("from_node")
+                    from_output = conn_data.get("from_output", "output")
+                    to_node = conn_data.get("to_node")
+                    to_input = conn_data.get("to_input", "input")
+                    workflow._add_edge_internal(
+                        from_node, from_output, to_node, to_input
+                    )
+                else:
+                    raise WorkflowValidationError(
+                        f"Invalid connection data: {conn_data}"
+                    )
+                    
+            return workflow
+            
+        except Exception as e:
+            if isinstance(e, WorkflowValidationError):
+                raise
+            raise WorkflowValidationError(f"Failed to create workflow from dict: {e}") from e
+    
+    def __repr__(self) -> str:
+        """Get string representation."""
+        return f"Workflow(id='{self.workflow_id}', name='{self.name}', nodes={len(self.graph.nodes)}, connections={len(self.graph.edges)})"
+    
+    def __str__(self) -> str:
+        """Get readable string."""
+        return f"Workflow '{self.name}' (ID: {self.workflow_id}) with {len(self.graph.nodes)} nodes and {len(self.graph.edges)} connections"

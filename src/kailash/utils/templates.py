@@ -2,7 +2,181 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any
+
+from kailash.nodes.base import Node
+from kailash.sdk_exceptions import TemplateError
+
+
+class NodeTemplate:
+    """Template for creating node implementations."""
+    
+    def __init__(self, name: str, description: str, base_class: str = "Node"):
+        """Initialize node template.
+        
+        Args:
+            name: Node class name
+            description: Node description
+            base_class: Base class to inherit from
+        """
+        self.name = name
+        self.description = description
+        self.base_class = base_class
+        self.input_params = []
+        self.output_params = []
+        self.code_template = ""
+    
+    def add_input_parameter(self, name: str, param_type: str, required: bool = True, 
+                          description: str = "", default=None) -> "NodeTemplate":
+        """Add input parameter to template.
+        
+        Args:
+            name: Parameter name
+            param_type: Parameter type (str, int, dict, etc.)
+            required: Whether parameter is required
+            description: Parameter description
+            default: Default value
+            
+        Returns:
+            Self for chaining
+        """
+        self.input_params.append({
+            "name": name,
+            "type": param_type,
+            "required": required,
+            "description": description,
+            "default": default
+        })
+        return self
+    
+    def add_output_parameter(self, name: str, param_type: str, 
+                           description: str = "") -> "NodeTemplate":
+        """Add output parameter to template.
+        
+        Args:
+            name: Parameter name
+            param_type: Parameter type (str, int, dict, etc.)
+            description: Parameter description
+            
+        Returns:
+            Self for chaining
+        """
+        self.output_params.append({
+            "name": name,
+            "type": param_type,
+            "description": description
+        })
+        return self
+    
+    def set_code_template(self, code: str) -> "NodeTemplate":
+        """Set code template.
+        
+        Args:
+            code: Python code template
+            
+        Returns:
+            Self for chaining
+        """
+        self.code_template = code
+        return self
+    
+    def generate_code(self) -> str:
+        """Generate Python code for the node.
+        
+        Returns:
+            Generated code
+            
+        Raises:
+            TemplateError: If generation fails
+        """
+        try:
+            # Start with imports
+            code = f"""from typing import Dict, Any, Optional
+from kailash.nodes.base import Node, NodeParameter
+
+class {self.name}({self.base_class}):
+    \"""
+    {self.description}
+    \"""
+    
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        \"""Define node parameters.\"""
+        return {{
+"""
+            
+            # Add input parameters
+            for param in self.input_params:
+                default_str = ""
+                if param["default"] is not None:
+                    if isinstance(param["default"], str):
+                        default_str = f'default="{param["default"]}"'
+                    else:
+                        default_str = f"default={param['default']}"
+                        
+                code += f"""            "{param["name"]}": NodeParameter(
+                name="{param["name"]}",
+                type={param["type"]},
+                required={param["required"]},
+                description="{param["description"]}"{', ' + default_str if default_str else ''}
+            ),
+"""
+            
+            code += """        }
+    
+    def run(self, **kwargs) -> Dict[str, Any]:
+        \"""Process node logic.
+        
+        Args:
+            **kwargs: Input parameters
+            
+        Returns:
+            Output parameters
+        \"""
+"""
+            
+            # Add custom code if provided, otherwise use default implementation
+            if self.code_template:
+                code += f"\n{self.code_template}\n"
+            else:
+                code += """        # TODO: Implement node logic
+        # Access input parameters via kwargs
+        
+        # Return results as a dictionary
+        return {
+"""
+                # Add output parameters
+                for param in self.output_params:
+                    code += f'            "{param["name"]}": None,  # TODO: Set {param["name"]}\n'
+                    
+                code += "        }\n"
+            
+            return code
+            
+        except Exception as e:
+            raise TemplateError(f"Failed to generate node code: {e}") from e
+    
+    def save(self, output_path: str) -> None:
+        """Save generated code to file.
+        
+        Args:
+            output_path: Path to save file
+            
+        Raises:
+            TemplateError: If save fails
+        """
+        try:
+            code = self.generate_code()
+            
+            # Create parent directories if needed
+            path = Path(output_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write to file
+            with open(path, 'w') as f:
+                f.write(code)
+                
+        except Exception as e:
+            raise TemplateError(f"Failed to save node code: {e}") from e
 
 
 class TemplateManager:

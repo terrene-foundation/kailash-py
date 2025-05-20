@@ -1,37 +1,50 @@
 [
   {
-    "transaction_id": "T001",
-    "customer_id": "C001",
-    "amount": 250.00,
-    "date": "2023-01-15",
-    "category": "Electronics"
+    "id": "tx001",
+    "amount": 150.0,
+    "status": "completed",
+    "customer_id": "cust1"
   },
   {
-    "transaction_id": "T002",
-    "customer_id": "C002",
-    "amount": 120.00,
-    "date": "2023-01-20",
-    "category": "Clothing"
+    "id": "tx002",
+    "amount": 75.25,
+    "status": "pending",
+    "customer_id": "cust2"
   },
   {
-    "transaction_id": "T003",
-    "customer_id": "C003",
-    "amount": 500.00,
-    "date": "2023-01-25",
-    "category": "Electronics"
+    "id": "tx003",
+    "amount": 200.0,
+    "status": "failed",
+    "customer_id": "cust3"
   },
   {
-    "transaction_id": "T004",
-    "customer_id": "C001",
-    "amount": 180.00,
-    "date": "2023-02-01",
-    "category": "Home"
+    "id": "tx004",
+    "amount": 50.0,
+    "status": "completed",
+    "customer_id": "cust4"
   },
   {
-    "transaction_id": "T005",
-    "customer_id": "C004",
-    "amount": 320.00,
-    "date": "2023-02-05",
-    "category": "Electronics"
+    "id": "tx005",
+    "amount": 125.75,
+    "status": "pending",
+    "customer_id": "cust5"
+  },
+  {
+    "id": "tx006",
+    "amount": 300.0,
+    "status": "completed",
+    "customer_id": "cust1"
+  },
+  {
+    "id": "tx007",
+    "amount": 25.5,
+    "status": "failed",
+    "customer_id": "cust2"
+  },
+  {
+    "id": "tx008",
+    "amount": 175.0,
+    "status": "pending",
+    "customer_id": "cust3"
   }
 ]

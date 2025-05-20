@@ -1,5 +1,7 @@
 """Transform nodes for data processing."""
 from typing import Any, Dict, List, Callable, Union
+import ast
+import traceback
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -158,6 +160,137 @@ class Map(Node):
             return float(item_value) + float(op_value)
         else:
             raise ValueError(f"Unknown operation: {operation}")
+
+
+@register_node()
+class DataTransformer(Node):
+    """
+    Transforms data using custom transformation functions provided as strings.
+    
+    This node allows arbitrary data transformations by providing lambda functions 
+    or other Python code as strings. These are compiled and executed against the input data.
+    """
+    
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "data": NodeParameter(
+                name="data",
+                type=list,
+                required=False,
+                description="Primary input data to transform"
+            ),
+            "transformations": NodeParameter(
+                name="transformations",
+                type=list,
+                required=True,
+                description="List of transformation functions as strings"
+            ),
+            **{f"arg{i}": NodeParameter(
+                name=f"arg{i}",
+                type=Any,
+                required=False,
+                description=f"Additional argument {i}"
+            ) for i in range(1, 6)}  # Support for up to 5 additional arguments
+        }
+    
+    def run(self, **kwargs) -> Dict[str, Any]:
+        # Extract the transformation functions
+        transformations = kwargs.get("transformations", [])
+        if not transformations:
+            return {"result": kwargs.get("data", [])}
+        
+        # Get all input data
+        input_data = {}
+        for key, value in kwargs.items():
+            if key != "transformations":
+                input_data[key] = value
+        
+        # Execute the transformations
+        result = input_data.get("data", [])
+        
+        for transform_str in transformations:
+            try:
+                # Create a safe globals dictionary with basic functions
+                safe_globals = {
+                    'len': len,
+                    'sum': sum,
+                    'min': min,
+                    'max': max,
+                    'dict': dict,
+                    'list': list,
+                    'set': set,
+                    'str': str,
+                    'int': int,
+                    'float': float,
+                    'bool': bool,
+                    'sorted': sorted
+                }
+                
+                # For multi-line code blocks
+                if '\n' in transform_str.strip():
+                    # Prepare local context for execution
+                    local_vars = input_data.copy()
+                    local_vars['result'] = result
+                    
+                    # Execute the code block
+                    exec(transform_str, safe_globals, local_vars)
+                    
+                    # Extract the result from local context
+                    result = local_vars.get('result', result)
+                
+                # For single expressions or lambdas
+                else:
+                    # For lambda functions like: "lambda x: x * 2"
+                    if transform_str.strip().startswith('lambda'):
+                        # First, compile the lambda function
+                        lambda_func = eval(transform_str, safe_globals)
+                        
+                        # Apply the lambda function based on input data
+                        if isinstance(result, list):
+                            # If there are multiple arguments expected by the lambda
+                            if 'data' in input_data and lambda_func.__code__.co_argcount > 1:
+                                # For cases like "lambda tx, customers_dict: ..."
+                                arg_names = lambda_func.__code__.co_varnames[:lambda_func.__code__.co_argcount]
+                                
+                                # Apply the lambda to each item
+                                new_result = []
+                                for item in result:
+                                    args = {}
+                                    # First arg is the item itself
+                                    args[arg_names[0]] = item
+                                    # Other args come from input_data
+                                    self.logger.debug(f"Lambda expected args: {arg_names}")
+                                    self.logger.debug(f"Available input data keys: {input_data.keys()}")
+                                    for i, arg_name in enumerate(arg_names[1:], 1):
+                                        if arg_name in input_data:
+                                            args[arg_name] = input_data[arg_name]
+                                            self.logger.debug(f"Found {arg_name} in input_data")
+                                        else:
+                                            self.logger.error(f"Missing required argument {arg_name} for lambda function")
+                                    
+                                    # Apply function with the args
+                                    transformed = lambda_func(**args)
+                                    new_result.append(transformed)
+                                result = new_result
+                            else:
+                                # Simple map operation: lambda x: x * 2
+                                result = [lambda_func(item) for item in result]
+                        else:
+                            # Apply directly to a single value
+                            result = lambda_func(result)
+                    
+                    # For regular expressions like: "x * 2"
+                    else:
+                        local_vars = input_data.copy()
+                        local_vars['result'] = result
+                        result = eval(transform_str, safe_globals, local_vars)
+                
+            except Exception as e:
+                tb = traceback.format_exc()
+                self.logger.error(f"Error executing transformation: {e}")
+                raise RuntimeError(f"Error executing transformation '{transform_str}': {str(e)}\n{tb}")
+        
+        return {"result": result}
 
 
 @register_node()

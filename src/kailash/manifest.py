@@ -1,7 +1,7 @@
 """Workflow manifest generation for Kailash deployment."""
 import json
 import yaml
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +10,161 @@ from pydantic import BaseModel, Field
 from kailash.workflow import Workflow
 from kailash.nodes import Node, NodeRegistry
 from kailash.sdk_exceptions import ManifestError
+
+
+class KailashManifest(BaseModel):
+    """Represents a complete Kailash deployment manifest."""
+    
+    metadata: Dict[str, Any] = Field(..., description="Manifest metadata")
+    workflow: Optional[Workflow] = Field(None, description="Associated workflow")
+    resources: Optional[Dict[str, Any]] = Field(default_factory=dict, 
+                                             description="Additional deployment resources")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert manifest to dictionary.
+        
+        Returns:
+            Dictionary representation
+        """
+        result = {
+            "metadata": self.metadata
+        }
+        
+        if self.workflow:
+            result["workflow"] = self.workflow.to_dict()
+            
+        if self.resources:
+            result["resources"] = self.resources
+            
+        return result
+    
+    def to_yaml(self) -> str:
+        """Convert manifest to YAML string.
+        
+        Returns:
+            YAML representation
+        """
+        return yaml.dump(self.to_dict(), default_flow_style=False, sort_keys=False)
+    
+    def to_json(self) -> str:
+        """Convert manifest to JSON string.
+        
+        Returns:
+            JSON representation
+        """
+        return json.dumps(self.to_dict(), indent=2)
+    
+    def save(self, path: Union[str, Path], format: str = "yaml") -> None:
+        """Save manifest to file.
+        
+        Args:
+            path: File path
+            format: Output format (yaml or json)
+            
+        Raises:
+            ValueError: If format is invalid
+        """
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if format == "yaml":
+            with open(output_path, 'w') as f:
+                f.write(self.to_yaml())
+        elif format == "json":
+            with open(output_path, 'w') as f:
+                f.write(self.to_json())
+        else:
+            raise ValueError(f"Unknown format: {format}")
+    
+    @classmethod
+    def from_workflow(cls, workflow: Workflow, **metadata) -> "KailashManifest":
+        """Create manifest from workflow.
+        
+        Args:
+            workflow: Workflow to include
+            **metadata: Additional metadata
+            
+        Returns:
+            KailashManifest instance
+        """
+        # Default metadata
+        default_metadata = {
+            "id": workflow.metadata.name,
+            "name": workflow.metadata.name,
+            "version": workflow.metadata.version,
+            "author": workflow.metadata.author,
+            "description": workflow.metadata.description,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        # Override defaults with provided metadata
+        default_metadata.update(metadata)
+        
+        return cls(metadata=default_metadata, workflow=workflow)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "KailashManifest":
+        """Create manifest from dictionary.
+        
+        Args:
+            data: Dictionary representation
+            
+        Returns:
+            KailashManifest instance
+            
+        Raises:
+            ManifestError: If data is invalid
+        """
+        try:
+            metadata = data.get("metadata", {})
+            
+            workflow = None
+            if "workflow" in data:
+                from kailash.workflow import Workflow
+                workflow = Workflow.from_dict(data["workflow"])
+                
+            resources = data.get("resources", {})
+            
+            return cls(
+                metadata=metadata,
+                workflow=workflow,
+                resources=resources
+            )
+        except Exception as e:
+            raise ManifestError(f"Failed to create manifest from data: {e}") from e
+    
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "KailashManifest":
+        """Load manifest from file.
+        
+        Args:
+            path: File path
+            
+        Returns:
+            KailashManifest instance
+            
+        Raises:
+            ManifestError: If loading fails
+        """
+        try:
+            file_path = Path(path)
+            if not file_path.exists():
+                raise FileNotFoundError(f"File not found: {file_path}")
+                
+            with open(file_path, 'r') as f:
+                content = f.read()
+                
+            # Parse based on file extension
+            if file_path.suffix.lower() in ('.yaml', '.yml'):
+                data = yaml.safe_load(content)
+            elif file_path.suffix.lower() == '.json':
+                data = json.loads(content)
+            else:
+                raise ValueError(f"Unsupported file format: {file_path.suffix}")
+                
+            return cls.from_dict(data)
+        except Exception as e:
+            raise ManifestError(f"Failed to load manifest from {path}: {e}") from e
 
 
 class DeploymentConfig(BaseModel):

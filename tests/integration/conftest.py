@@ -11,7 +11,8 @@ from networkx import DiGraph
 
 from kailash.manifest import KailashManifest
 from kailash.tracking.manager import TaskManager
-from kailash.workflow import Workflow, WorkflowBuilder
+from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.fixture

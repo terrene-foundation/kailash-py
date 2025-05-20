@@ -4,7 +4,7 @@ metadata:
   description: Simple ETL workflow for customer data
   version: 1.0.0
   author: ''
-  created_at: '2025-05-19T00:50:07.574879'
+  created_at: '2025-05-19T02:31:39.627518'
   tags: []
 nodes:
   reader:

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import pytest
 import pandas as pd
 
-from kailash.runtime.local import LocalRunner
+from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import Workflow, WorkflowBuilder
 from kailash.nodes.base import Node
@@ -25,7 +25,7 @@ class TestTaskTrackingIntegration:
         self, simple_workflow: Workflow, task_manager: TaskManager
     ):
         """Test that all workflow nodes are tracked during execution."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Execute workflow with tracking
         result = runner.run(simple_workflow)
@@ -49,7 +49,7 @@ class TestTaskTrackingIntegration:
     
     def test_task_hierarchy_tracking(self, complex_workflow: Workflow, task_manager: TaskManager):
         """Test tracking of parent-child task relationships."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Create parent task for workflow
         workflow_task = task_manager.create_task(
@@ -74,7 +74,7 @@ class TestTaskTrackingIntegration:
     
     def test_failed_node_tracking(self, error_workflow: Workflow, task_manager: TaskManager):
         """Test that failed nodes are properly tracked."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Execute workflow that will fail
         try:
@@ -107,7 +107,7 @@ class TestTaskTrackingIntegration:
         
         workflow = builder.build("progress_tracking_test")
         
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Execute workflow
         result = runner.run(workflow)
@@ -124,7 +124,7 @@ class TestTaskTrackingIntegration:
         self, simple_workflow: Workflow, task_manager: TaskManager
     ):
         """Test tracking of multiple concurrent workflow executions."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         import threading
         from concurrent.futures import ThreadPoolExecutor
@@ -146,7 +146,7 @@ class TestTaskTrackingIntegration:
     
     def test_task_metadata_tracking(self, simple_workflow: Workflow, task_manager: TaskManager):
         """Test that task metadata is properly tracked."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Add custom metadata to nodes
         for node_id, node in simple_workflow.graph.nodes(data=True):
@@ -169,7 +169,7 @@ class TestTaskTrackingIntegration:
     
     def test_task_duration_tracking(self, simple_workflow: Workflow, task_manager: TaskManager):
         """Test accurate tracking of task execution duration."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Execute workflow
         start_time = datetime.now()
@@ -211,7 +211,7 @@ class TestTaskTrackingIntegration:
         
         workflow = builder.build("retry_tracking_test")
         
-        runner = LocalRunner(task_manager=task_manager, max_retries=3)
+        runner = LocalRuntime(task_manager=task_manager, max_retries=3)
         
         # Execute workflow with retries
         result = runner.run(workflow)
@@ -231,7 +231,7 @@ class TestTaskTrackingIntegration:
         self, complex_workflow: Workflow, task_manager: TaskManager
     ):
         """Test searching and filtering of tracked tasks."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Execute workflow
         result = runner.run(complex_workflow)
@@ -253,13 +253,13 @@ class TestTaskTrackingIntegration:
     
     def test_storage_backend_integration(self, simple_workflow: Workflow, temp_data_dir: Path):
         """Test task tracking with different storage backends."""
-        runner = LocalRunner()
+        runner = LocalRuntime()
         
         # Test with filesystem storage
         fs_storage = FileSystemStorage(temp_data_dir / "tasks_fs")
         fs_manager = TaskManager(storage=fs_storage)
         
-        runner = LocalRunner(task_manager=fs_manager)
+        runner = LocalRuntime(task_manager=fs_manager)
         result1 = runner.run(simple_workflow)
         fs_tasks = fs_manager.get_workflow_tasks(simple_workflow.workflow_id)
         assert len(fs_tasks) > 0
@@ -269,7 +269,7 @@ class TestTaskTrackingIntegration:
         db_storage = DatabaseStorage(f"sqlite:///{db_path}")
         db_manager = TaskManager(storage=db_storage)
         
-        runner = LocalRunner(task_manager=db_manager)
+        runner = LocalRuntime(task_manager=db_manager)
         result2 = runner.run(simple_workflow)
         db_tasks = db_manager.get_workflow_tasks(simple_workflow.workflow_id)
         assert len(db_tasks) > 0
@@ -279,7 +279,7 @@ class TestTaskTrackingIntegration:
     
     def test_task_lifecycle_events(self, simple_workflow: Workflow, task_manager: TaskManager):
         """Test tracking of task lifecycle events."""
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Track lifecycle events
         events = []
@@ -358,7 +358,7 @@ class TestTaskTrackingIntegration:
         
         workflow = builder.build("performance_test")
         
-        runner = LocalRunner(task_manager=task_manager)
+        runner = LocalRuntime(task_manager=task_manager)
         
         # Execute workflow
         result = runner.run(workflow)

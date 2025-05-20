@@ -124,7 +124,7 @@ class Node(ABC):
     - CLI/UI: Configures nodes based on user input
     
     Downstream usage:
-    - LocalRunner: Executes nodes in workflows
+    - LocalRuntime: Executes nodes in workflows
     - TaskManager: Tracks node execution status
     - WorkflowExporter: Serializes nodes for export
     """
@@ -327,7 +327,7 @@ class Node(ABC):
                               
         Called by:
             - execute(): Wraps with validation and error handling
-            - LocalRunner: During workflow execution
+            - LocalRuntime: During workflow execution
             - TestRunner: During unit testing
         """
         pass
@@ -640,7 +640,7 @@ class Node(ABC):
             NodeValidationError: If input/output validation fails
             
         Called by:
-            - LocalRunner: During workflow execution
+            - LocalRuntime: During workflow execution
             - TaskManager: With execution tracking
             - Unit tests: For node testing
             

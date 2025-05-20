@@ -1,0 +1,21 @@
+customer_id,name,email,purchase_total
+1,Customer 1,customer1@example.com,443.3096641878338
+2,Customer 2,customer2@example.com,249.62532320942265
+3,Customer 3,customer3@example.com,1663.8176304706003
+4,Customer 4,customer4@example.com,1796.1276229735145
+5,Customer 5,customer5@example.com,1774.7303983101774
+6,Customer 6,customer6@example.com,351.66338196361386
+7,Customer 7,customer7@example.com,1390.2384390754605
+8,Customer 8,customer8@example.com,299.64794437647623
+9,Customer 9,customer9@example.com,1159.1003309339346
+10,Customer 10,customer10@example.com,1138.1599922688235
+11,Customer 11,customer11@example.com,1393.620886568239
+12,Customer 12,customer12@example.com,1520.1221691642509
+13,Customer 13,customer13@example.com,1507.3803071612983
+14,Customer 14,customer14@example.com,1356.7272118832295
+15,Customer 15,customer15@example.com,824.4712709236493
+16,Customer 16,customer16@example.com,281.2901275132208
+17,Customer 17,customer17@example.com,1011.8567889978109
+18,Customer 18,customer18@example.com,333.093897703624
+19,Customer 19,customer19@example.com,1557.5216188984737
+20,Customer 20,customer20@example.com,804.1700124277913

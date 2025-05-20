@@ -101,6 +101,7 @@ class CSVReader(Node):
         1. file_path: Required for locating the data source
         2. headers: Optional with smart default (True)
         3. delimiter: Optional with standard default (',')
+        4. index_column: Optional column to use as dictionary key
         
         The parameters are designed to handle common CSV variants while
         keeping the interface simple for typical use cases.
@@ -132,6 +133,12 @@ class CSVReader(Node):
                 required=False,
                 default=",",
                 description="CSV delimiter character"
+            ),
+            "index_column": NodeParameter(
+                name="index_column",
+                type=str,
+                required=False,
+                description="Column to use as index for creating a dictionary"
             )
         }
     
@@ -157,6 +164,7 @@ class CSVReader(Node):
         Output Format:
         - With headers: List of dictionaries
         - Without headers: List of lists
+        - With index_column: Also returns dictionary indexed by the column
         - Always wrapped in {"data": ...} for consistency
         
         Args:
@@ -164,39 +172,62 @@ class CSVReader(Node):
                 - file_path: Path to CSV file
                 - headers: Whether to treat first row as headers
                 - delimiter: Character separating values
+                - index_column: Column to use as key for indexed dictionary
         
         Returns:
-            Dictionary with 'data' key containing:
-            - List of dicts (if headers=True)
-            - List of lists (if headers=False)
+            Dictionary with:
+            - 'data' key containing list of dicts or lists
+            - 'data_indexed' key (if index_column provided) containing dict
         
         Raises:
             FileNotFoundError: If file doesn't exist
             PermissionError: If file can't be read
             UnicodeDecodeError: If encoding is wrong
+            KeyError: If index_column doesn't exist in headers
             
         Downstream usage:
             - Transform nodes expect consistent data structure
             - Writers can directly output the data
             - Analyzers can process row-by-row
+            - data_indexed is useful for lookups and joins
         """
         file_path = kwargs["file_path"]
         headers = kwargs.get("headers", True)
         delimiter = kwargs.get("delimiter", ",")
+        index_column = kwargs.get("index_column")
         
         data = []
+        data_indexed = {}
+        
         with open(file_path, 'r', encoding='utf-8') as f:
             reader = csv.reader(f, delimiter=delimiter)
             
             if headers:
                 header_row = next(reader)
+                
+                # Verify index_column exists if specified
+                if index_column and index_column not in header_row:
+                    raise KeyError(f"Index column '{index_column}' not found in headers: {header_row}")
+                
+                index_pos = header_row.index(index_column) if index_column else None
+                
                 for row in reader:
-                    data.append(dict(zip(header_row, row)))
+                    row_dict = dict(zip(header_row, row))
+                    data.append(row_dict)
+                    
+                    # If index column specified, add to indexed dictionary
+                    if index_column and index_pos < len(row):
+                        key = row[index_pos]
+                        data_indexed[key] = row_dict
             else:
                 for row in reader:
                     data.append(row)
         
-        return {"data": data}
+        result = {"data": data}
+        if index_column:
+            result["data_indexed"] = data_indexed
+            
+        return result
 
 
 @register_node()

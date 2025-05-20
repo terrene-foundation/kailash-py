@@ -1,0 +1,13 @@
+{
+  "run_id": "65c805c3-6b62-41cc-b32b-4b11dd034616",
+  "workflow_name": "complex_customer_analysis",
+  "status": "completed",
+  "started_at": "2025-05-20T01:03:38.561518",
+  "ended_at": "2025-05-20T01:03:38.576142",
+  "tasks": [],
+  "metadata": {
+    "description": "Multi-source customer analysis workflow",
+    "nodes": 9
+  },
+  "error": null
+}

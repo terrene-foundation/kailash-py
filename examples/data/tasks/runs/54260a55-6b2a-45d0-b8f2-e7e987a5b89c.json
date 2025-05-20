@@ -1,0 +1,24 @@
+{
+  "run_id": "54260a55-6b2a-45d0-b8f2-e7e987a5b89c",
+  "workflow_name": "complex_customer_analysis",
+  "status": "completed",
+  "started_at": "2025-05-20T01:03:38.564358",
+  "ended_at": "2025-05-20T01:03:38.575830",
+  "tasks": [
+    "d329dbca-9ff1-4cd2-83bf-d0c16b318a13",
+    "24e50031-df32-43f5-98aa-7ce03a734140",
+    "19d2617f-52c0-4e38-aa04-cb79185e8424",
+    "3432a5db-179e-43ed-8346-f3801786a979",
+    "cb5bf866-3e26-455d-997f-b78d96f019dc",
+    "920784c2-af43-472a-ad48-214cace136e8",
+    "f47a0d6c-a143-46b4-a553-f419f2f78834",
+    "4bad2373-4950-4b8b-8a14-d2f19488265c",
+    "8753044d-591b-45bb-b80a-b4c985c8d81d"
+  ],
+  "metadata": {
+    "parameters": null,
+    "debug": true,
+    "runtime": "local"
+  },
+  "error": null
+}

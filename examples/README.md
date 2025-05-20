@@ -162,6 +162,12 @@ chmod +x run_all_examples.sh
 ./run_all_examples.sh
 ```
 
+The script will:
+1. Test all examples to ensure they import correctly
+2. Run basic examples that are fully functional
+3. Run export examples that generate output files
+4. List demonstration examples that require more setup
+
 ## Environment Variables
 
 Some examples use environment variables for configuration:

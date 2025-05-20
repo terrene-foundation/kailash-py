@@ -219,3 +219,8 @@ class TemplateError(KailashException):
     - Variable substitution fails
     """
     pass
+
+
+# Legacy exception name compatibility for tests and backwards compatibility
+KailashRuntimeError = RuntimeExecutionError
+KailashValidationError = NodeValidationError

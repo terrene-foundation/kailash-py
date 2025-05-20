@@ -1,0 +1,208 @@
+version: '1.0'
+metadata:
+  name: complex_customer_analysis
+  description: Multi-branch customer analysis workflow
+  version: 1.0.0
+  author: ''
+  created_at: '2025-05-20T01:03:38.561183'
+  tags: []
+nodes:
+  customer_reader:
+    type: CSVReader
+    config: {}
+    container:
+      image: kailash/csv-reader:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.data.csv_reader
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 512Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 0.0
+      y: 100.0
+  transaction_reader:
+    type: JSONReader
+    config: {}
+    container:
+      image: kailash/jsonreader:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.jsonreader
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 150.0
+      y: 100.0
+  validator:
+    type: PythonCodeNode
+    config: {}
+    container:
+      image: kailash/pythoncodenode:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.pythoncodenode
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 300.0
+      y: 100.0
+  segmenter:
+    type: PythonCodeNode
+    config: {}
+    container:
+      image: kailash/pythoncodenode:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.pythoncodenode
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 450.0
+      y: 100.0
+  analyzer:
+    type: PythonCodeNode
+    config: {}
+    container:
+      image: kailash/pythoncodenode:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.pythoncodenode
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 600.0
+      y: 100.0
+  reporter:
+    type: PythonCodeNode
+    config: {}
+    container:
+      image: kailash/pythoncodenode:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.pythoncodenode
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 750.0
+      y: 100.0
+  detailed_writer:
+    type: CSVWriter
+    config: {}
+    container:
+      image: kailash/csvwriter:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.csvwriter
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 900.0
+      y: 100.0
+  segment_writer:
+    type: CSVWriter
+    config: {}
+    container:
+      image: kailash/csvwriter:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.csvwriter
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 1050.0
+      y: 100.0
+  report_writer:
+    type: JSONWriter
+    config: {}
+    container:
+      image: kailash/jsonwriter:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.jsonwriter
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 1200.0
+      y: 100.0
+connections:
+- from: customer_reader.data
+  to: validator.data
+- from: validator.data
+  to: segmenter.data
+- from: transaction_reader.data
+  to: analyzer.data
+- from: segmenter.data
+  to: analyzer.customer_data
+- from: segmenter.data
+  to: reporter.customer_data
+- from: analyzer.metrics
+  to: reporter.transaction_metrics
+- from: segmenter.data
+  to: segment_writer.data
+- from: analyzer.data
+  to: detailed_writer.data
+- from: reporter.report
+  to: report_writer.data

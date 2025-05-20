@@ -303,7 +303,7 @@ class JSONWriter(Node):
             "data": NodeParameter(
                 name="data",
                 type=Any,
-                required=True,
+                required=False,  # Not required at initialization for workflow usage
                 description="Data to write (must be JSON-serializable)"
             ),
             "indent": NodeParameter(
