@@ -169,6 +169,30 @@ workflow.connect("validate", "process_valid", condition="is_valid")
 workflow.connect("validate", "handle_errors", condition="has_errors")
 ```
 
+#### Immutable State Management
+```python
+from kailash.workflow.state import WorkflowStateWrapper
+
+# Create and wrap state object
+state = MyStateModel()
+state_wrapper = workflow.create_state_wrapper(state)
+
+# Single path-based update
+updated_wrapper = state_wrapper.update_in(
+    ["nested", "field"], 
+    new_value
+)
+
+# Batch update multiple fields atomically
+updated_wrapper = state_wrapper.batch_update([
+    (["field1"], value1),
+    (["nested", "field2"], value2)
+])
+
+# Execute workflow with state management
+final_state, results = workflow.execute_with_state(state_model=state)
+```
+
 #### Task Tracking
 ```python
 from kailash.tracking import TaskManager
@@ -350,6 +374,7 @@ make quality
 - Task tracking
 - Export functionality
 - CLI interface
+- Immutable state management
 - Unit tests
 - Integration tests
 - Example workflows

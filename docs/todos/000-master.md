@@ -246,19 +246,33 @@ This document serves as the master todo list for the Kailash Python SDK, trackin
     - Description: Add support for asynchronous operations and parallel execution
     - Details: Created AsyncNode base class, AsyncMerge, AsyncSwitch nodes, and ParallelRuntime for concurrent execution
 
-42. **Add performance optimization for large workflows**
+42. **Implement immutable state management**
+    - Status: ✅ Completed
+    - Date: 2025-05-21
+    - Priority: High
+    - Description: Create robust state management system with immutable updates
+    - Details: Implemented StateManager, WorkflowStateWrapper, path-based updates, and batch updates
+
+43. **Implement API integration nodes**
+    - Status: ✅ Completed
+    - Date: 2025-05-21
+    - Priority: High
+    - Description: Add comprehensive API integration support
+    - Details: Implemented HTTP, REST, and GraphQL nodes with authentication support and async capabilities (see 018-api-integration.md)
+
+44. **Add performance optimization for large workflows**
     - Status: 🔄 To Do
     - Priority: Low
     - Description: Further optimize execution for workflows with many nodes
     - Details: Add caching mechanisms, improve memory management
 
-43. **Create visual workflow editor**
+45. **Create visual workflow editor**
     - Status: 🔄 To Do
     - Priority: Low
     - Description: Implement web-based visual editor for workflow creation
     - Details: Add UI for node placement, connection, configuration
 
-44. **Add tests for conditional workflow with Switch/Merge**
+46. **Add tests for conditional workflow with Switch/Merge**
     - Status: 🔄 To Do
     - Priority: Low
     - Description: Create tests for conditional workflow features
@@ -267,6 +281,7 @@ This document serves as the master todo list for the Kailash Python SDK, trackin
 ## Future Enhancements
 
 - ~~Async execution support for PythonCodeNode~~ (Implemented in Task #41)
+- ~~API integration nodes~~ (Implemented in Task #46)
 - Additional async-optimized node types
 - Better type inference for complex types
 - Jupyter notebook integration

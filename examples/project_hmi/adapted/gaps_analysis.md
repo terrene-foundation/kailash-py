@@ -2,7 +2,7 @@
 
 This document outlines the key gaps and potential improvements in the Kailash SDK that were identified during the adaptation of the HMI project.
 
-## 1. Conditional Routing in Workflows
+## 1. Conditional Routing in Workflows (completed)
 
 **Gap:** The current Kailash workflow system lacks native support for conditional routing based on node outputs. In the HMI implementation, we needed to route differently based on whether a slot was found or not (the `no_hmi_slot` flag).
 
@@ -24,7 +24,7 @@ workflow.connect_conditional(
 )
 ```
 
-## 2. Asynchronous Node Execution
+## 2. Asynchronous Node Execution (completed)
 
 **Gap:** The Kailash SDK nodes are designed with synchronous execution in mind (the `run()` method), but many operations in the HMI workflow are naturally asynchronous, such as API calls and LLM invocations.
 
@@ -32,7 +32,7 @@ workflow.connect_conditional(
 
 **Suggestion:** Add support for asynchronous node execution, perhaps through an optional `async_run()` method that would be used if available, falling back to the synchronous `run()` if not. The workflow execution engine would need to support this as well.
 
-## 3. State Management and Immutability
+## 3. State Management and Immutability (completed)
 
 **Gap:** The current approach to state management involves passing the entire state object between nodes and having each node create a copy with updates. This is cumbersome and error-prone.
 
