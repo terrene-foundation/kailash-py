@@ -95,6 +95,7 @@ exporter.export_to_kailash(workflow, "customer_analysis.yaml")
 | 📖 [User Guide](docs/user-guide.md) | Comprehensive guide for using the SDK |
 | 🏛️ [Architecture](docs/adr/) | Architecture Decision Records |
 | 📋 [API Reference](docs/api/) | Detailed API documentation |
+| 🌐 [API Integration Guide](examples/API_INTEGRATION_README.md) | Complete API integration documentation |
 | 🎓 [Examples](examples/) | Working examples and tutorials |
 | 🤝 [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 
@@ -139,8 +140,14 @@ The SDK includes a rich set of pre-built nodes for common operations:
 </td>
 <td width="50%">
 
-**Integration Nodes**
+**API Integration Nodes**
 - `HTTPRequestNode` - HTTP requests
+- `RESTAPIClientNode` - REST API client
+- `GraphQLClientNode` - GraphQL queries
+- `OAuth2AuthNode` - OAuth 2.0 authentication
+- `RateLimitedAPINode` - Rate-limited API calls
+
+**Other Integration Nodes**
 - `KafkaConsumerNode` - Kafka streaming
 - `WebSocketNode` - WebSocket connections
 - `EmailNode` - Send emails
@@ -222,6 +229,40 @@ results = runtime.execute(workflow, inputs=test_data)
 
 # Validate results
 assert results["node_id"]["output_key"] == expected_value
+```
+
+#### API Integration
+```python
+from kailash.nodes.api import (
+    RESTAPIClientNode, 
+    OAuth2AuthNode, 
+    RateLimitedAPINode,
+    RateLimitConfig
+)
+
+# OAuth 2.0 authentication
+auth_node = OAuth2AuthNode(
+    client_id="your_client_id",
+    client_secret="your_client_secret",
+    token_url="https://api.example.com/oauth/token"
+)
+
+# Rate-limited API client
+rate_config = RateLimitConfig(
+    max_requests=100,
+    time_window=60.0,
+    strategy="token_bucket"
+)
+
+api_client = RESTAPIClientNode(
+    base_url="https://api.example.com",
+    auth_node=auth_node
+)
+
+rate_limited_client = RateLimitedAPINode(
+    wrapped_node=api_client,
+    rate_limit_config=rate_config
+)
 ```
 
 #### Export Formats
@@ -375,6 +416,8 @@ make quality
 - Export functionality
 - CLI interface
 - Immutable state management
+- API integration with rate limiting
+- OAuth 2.0 authentication
 - Unit tests
 - Integration tests
 - Example workflows

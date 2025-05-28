@@ -1,110 +1,137 @@
-# 0015. API Integration Architecture
+# ADR-0015: API Integration Architecture
 
-Date: 2025-05-21
+Date: 2025-05-28
 Status: Accepted
 Author: Kailash SDK Team
 
 ## Context
 
-The Kailash SDK needs to support integration with external APIs to enable workflows that interact with external services, fetch data from REST endpoints, query GraphQL APIs, and more. This requires a robust, flexible approach to API integration that supports both synchronous and asynchronous operations, various authentication mechanisms, and different API styles.
+Following the gaps analysis from the HMI project implementation, the Kailash SDK needed comprehensive built-in support for API integrations. The original SDK lacked standardized patterns for:
 
-The architecture decision needs to address:
-- How to support different API styles (HTTP, REST, GraphQL)
-- How to handle authentication consistently
-- How to enable both synchronous and asynchronous operations
-- How to structure API-related nodes within the existing node system
+- REST API client integration with authentication and retry logic
+- GraphQL API support  
+- OAuth 2.0 authentication flows
+- **Rate limiting and throttling for API calls** (key missing piece identified)
+- Comprehensive error handling for external service integration
+
+The gaps analysis identified that users were implementing custom API wrappers (like `HmiMcpWrapper`) because the SDK didn't provide standardized API integration patterns, particularly for rate limiting which is essential for production API usage.
 
 ## Decision
 
-We will implement a set of API integration nodes with the following architecture:
+We have implemented a comprehensive API integration architecture that provides:
 
-1. **Layered API Node Hierarchy**:
-   - Base HTTP nodes (`HTTPRequestNode`, `AsyncHTTPRequestNode`) for low-level HTTP operations
-   - Specialized client nodes (`RESTClientNode`, `GraphQLClientNode`) for higher-level protocols
-   - All with both synchronous and asynchronous implementations
+### 1. Layered API Node Hierarchy
+- Base HTTP nodes (`HTTPRequestNode`, `AsyncHTTPRequestNode`) for low-level HTTP operations
+- Specialized client nodes (`RESTClientNode`, `GraphQLClientNode`) for higher-level protocols
+- All with both synchronous and asynchronous implementations
 
-2. **Separate Authentication Nodes**:
-   - Authentication nodes (`BasicAuthNode`, `OAuth2Node`, `APIKeyNode`) that output auth headers/credentials
-   - These can be connected to API request nodes via workflow connections
-   - This separation allows reusing auth across multiple API operations
+### 2. Authentication Infrastructure
+- `BasicAuthNode` for username/password authentication
+- `OAuth2Node` for OAuth 2.0 flows (client credentials, password, refresh token)
+- `APIKeyNode` for API key authentication (header, query, body placement)
+- Token caching and automatic refresh for OAuth
+- Separation allows reusing auth across multiple API operations
 
-3. **Asynchronous Support**:
-   - Leverage the existing `AsyncNode` base class for async operations
-   - Provide both synchronous and asynchronous versions of all API nodes
-   - Allow mixing sync and async nodes in workflows based on performance needs
+### 3. Rate Limiting and Throttling System
+- `RateLimitConfig` for configurable rate limiting policies
+- `TokenBucketRateLimiter` for burst-friendly rate limiting
+- `SlidingWindowRateLimiter` for precise rate limiting
+- `RateLimitedAPINode` and `AsyncRateLimitedAPINode` wrapper nodes
+- Configurable backoff strategies and maximum wait times
+- Thread-safe implementation for concurrent use
 
-4. **Consistent Error Handling**:
-   - Transport-level errors (connection failures, timeouts)
-   - HTTP-level errors (4xx, 5xx status codes)
-   - API-level errors (error responses with valid HTTP status)
-   - Standardized error response formats across protocols
+### 4. Comprehensive Error Handling
+- Transport-level errors (connection failures, timeouts)
+- HTTP-level errors (4xx, 5xx status codes)  
+- API-level errors (error responses with valid HTTP status)
+- Retry logic with exponential backoff
+- Rate limit detection and automatic waiting
 
-5. **Response Processing**:
-   - Content-type aware response handling
-   - Automatic parsing of common formats (JSON, text, binary)
-   - Protocol-specific response validation (GraphQL errors, REST pagination)
+### 5. Response Processing and Protocol Support
+- Content-type aware response handling
+- Automatic parsing of common formats (JSON, text, binary)
+- Protocol-specific response validation (GraphQL errors, REST pagination)
+- Resource-based URL patterns with path parameter substitution
 
 ## Consequences
 
 ### Positive
 
-- **Flexibility**: Users can choose the appropriate node type for their API integration needs
-- **Reusability**: Authentication and request nodes can be reused across workflows
-- **Performance**: Asynchronous nodes enable high-throughput API operations
-- **Consistency**: Standardized error handling and response processing
-- **Protocol Support**: Native support for HTTP, REST, and GraphQL APIs
+- **Production Ready**: Built-in rate limiting, error handling, and authentication for enterprise use
+- **Comprehensive Coverage**: Addresses all gaps identified in the HMI analysis
+- **Flexible Architecture**: Can handle simple HTTP calls or complex OAuth workflows
+- **Performance Optimized**: Async support for high-throughput scenarios
+- **Reusability**: Authentication and rate limiting can be reused across workflows
+- **Standardized Patterns**: Consistent approach to API integration across projects
 
 ### Negative
 
-- **Complexity**: More node types to document and maintain
-- **Learning Curve**: Users need to understand the appropriate node type for their needs
-- **Versioning**: API endpoints may change and require versioning support
+- **Increased Complexity**: More node types and configuration options to learn
+- **Memory Overhead**: Rate limiting state and token caching consume memory
+- **Dependency Growth**: Additional dependencies for HTTP clients (requests, aiohttp)
 
 ### Neutral
 
-- **Dependency on HTTP Libraries**: Relies on requests/aiohttp for HTTP operations
-- **Authentication Management**: Separate nodes for auth requires more connections
+- **Breaking Changes**: None - this is additive to existing functionality
+- **Migration Path**: Existing code continues to work, new projects can adopt API nodes
 
 ## Implementation Details
 
-The implementation includes:
+### 1. Package Structure
+```
+nodes/api/
+├── __init__.py              # Public API exports
+├── http.py                  # Basic HTTP client nodes  
+├── rest.py                  # REST API client nodes
+├── graphql.py              # GraphQL client nodes
+├── auth.py                 # Authentication nodes
+└── rate_limiting.py        # Rate limiting utilities
+```
 
-1. **API Package Structure**:
-   ```
-   nodes/api/
-     ├── __init__.py
-     ├── http.py        # HTTP request nodes
-     ├── rest.py        # REST client nodes
-     ├── graphql.py     # GraphQL client nodes
-     └── auth.py        # Authentication nodes
-   ```
+### 2. Rate Limiting Architecture
+Uses decorator pattern where any API node can be wrapped:
 
-2. **Node Classes**:
-   - `HTTPRequestNode` & `AsyncHTTPRequestNode`
-   - `RESTClientNode` & `AsyncRESTClientNode`
-   - `GraphQLClientNode` & `AsyncGraphQLClientNode`
-   - `BasicAuthNode`, `OAuth2Node`, `APIKeyNode`
+```python
+rate_config = RateLimitConfig(
+    max_requests=100,
+    time_window=60.0,
+    strategy="token_bucket",
+    burst_limit=120
+)
 
-3. **Request/Response Models**:
-   - `HTTPResponse` for standardized response structure
-   - Enum types for HTTP methods, response formats, etc.
+rate_limited_node = RateLimitedAPINode(
+    wrapped_node=api_node,
+    rate_limit_config=rate_config
+)
+```
+
+### 3. Node Classes Implemented
+- **HTTP**: `HTTPRequestNode` & `AsyncHTTPRequestNode`
+- **REST**: `RESTClientNode` & `AsyncRESTClientNode`  
+- **GraphQL**: `GraphQLClientNode` & `AsyncGraphQLClientNode`
+- **Auth**: `BasicAuthNode`, `OAuth2Node`, `APIKeyNode`
+- **Rate Limiting**: `RateLimitedAPINode` & `AsyncRateLimitedAPINode`
+
+### 4. Examples and Testing
+- `api_integration_examples.py` - Comprehensive integration patterns
+- `hmi_style_api_example.py` - Real-world healthcare API workflow
+- `simple_api_test.py` - Validation tests for core functionality
 
 ## Alternatives Considered
 
-### Single Unified API Node
+### Library-Based Approach
+We considered using existing API client libraries (like httpx) directly rather than building nodes. However, this would not integrate with the Kailash workflow system and would require users to handle their own rate limiting and error handling.
 
-We considered implementing a single unified API node that could handle all API types, but this would create a complex, difficult-to-maintain node with many configuration options. The layered approach provides better separation of concerns and more flexibility.
+### Built-in Rate Limiting Only
+We considered only implementing rate limiting without the full API integration suite. However, the gaps analysis showed users needed comprehensive API support, not just rate limiting.
 
-### Client-Only Authentication
-
-We considered building authentication directly into the API nodes rather than using separate authentication nodes. While this would simplify the workflow, it would limit reusability of authentication across multiple API calls and make authentication less transparent in the workflow.
-
-### Protocol-Specific Base Classes
-
-We considered creating separate inheritance hierarchies for each protocol instead of building on the HTTP nodes. This would provide cleaner abstractions but would lead to code duplication for common HTTP functionality.
+### Different Rate Limiting Algorithms
+We evaluated various algorithms (fixed window, leaky bucket, etc.) and chose token bucket and sliding window as they provide the best balance of accuracy and performance for typical API usage patterns.
 
 ## References
 
-- [RESTful API Best Practices](https://docs.microsoft.com/en-us/azure/architecture/best-practices/api-design)
+- Gaps Analysis: HMI Project Implementation
+- [OAuth 2.0 RFC 6749](https://tools.ietf.org/html/rfc6749)
+- [HTTP/1.1 RFC 7231](https://tools.ietf.org/html/rfc7231)
 - [GraphQL Specification](https://spec.graphql.org/)
-- [OAuth 2.0 Specification](https://oauth.net/2/)
+- [Token Bucket Algorithm](https://en.wikipedia.org/wiki/Token_bucket)

@@ -22,6 +22,15 @@ from .http import HTTPRequestNode, AsyncHTTPRequestNode
 from .rest import RESTClientNode, AsyncRESTClientNode
 from .graphql import GraphQLClientNode, AsyncGraphQLClientNode
 from .auth import BasicAuthNode, OAuth2Node, APIKeyNode
+from .rate_limiting import (
+    RateLimitConfig,
+    RateLimiter,
+    TokenBucketRateLimiter,
+    SlidingWindowRateLimiter,
+    RateLimitedAPINode,
+    AsyncRateLimitedAPINode,
+    create_rate_limiter,
+)
 
 __all__ = [
     "HTTPRequestNode",
@@ -33,4 +42,11 @@ __all__ = [
     "BasicAuthNode",
     "OAuth2Node",
     "APIKeyNode",
+    "RateLimitConfig",
+    "RateLimiter",
+    "TokenBucketRateLimiter",
+    "SlidingWindowRateLimiter",
+    "RateLimitedAPINode",
+    "AsyncRateLimitedAPINode",
+    "create_rate_limiter",
 ]

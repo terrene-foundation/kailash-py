@@ -253,12 +253,12 @@ This document serves as the master todo list for the Kailash Python SDK, trackin
     - Description: Create robust state management system with immutable updates
     - Details: Implemented StateManager, WorkflowStateWrapper, path-based updates, and batch updates
 
-43. **Implement API integration nodes**
+43. **Implement API integration nodes with rate limiting**
     - Status: ✅ Completed
-    - Date: 2025-05-21
+    - Date: 2025-05-28
     - Priority: High
-    - Description: Add comprehensive API integration support
-    - Details: Implemented HTTP, REST, and GraphQL nodes with authentication support and async capabilities (see 018-api-integration.md)
+    - Description: Add comprehensive API integration support addressing gaps analysis requirements
+    - Details: Implemented HTTP, REST, GraphQL nodes with authentication, rate limiting (Token Bucket & Sliding Window), OAuth 2.0, retry logic, and comprehensive examples (see ADR-0015)
 
 44. **Add performance optimization for large workflows**
     - Status: 🔄 To Do

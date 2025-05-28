@@ -221,6 +221,29 @@ class TemplateError(KailashException):
     pass
 
 
+# Code execution exceptions
+class SafetyViolationError(NodeException):
+    """Raised when code execution violates safety rules.
+    
+    This typically occurs when:
+    - Potentially dangerous operations are attempted
+    - Resource limits are exceeded
+    - Security policies are violated
+    """
+    pass
+
+
+class CodeExecutionError(NodeException):
+    """Raised when code execution fails.
+    
+    This typically occurs when:
+    - Syntax errors in user code
+    - Runtime errors during execution
+    - Import or dependency issues
+    """
+    pass
+
+
 # Legacy exception name compatibility for tests and backwards compatibility
 KailashRuntimeError = RuntimeExecutionError
 KailashValidationError = NodeValidationError
