@@ -313,9 +313,20 @@ All significant architectural decisions should be documented using ADRs:
          - Description: Create the base class for all nodes with validation and execution contract
          - Status: In Progress
       ```
-   - Other todo files in the same directory should be used to record a summary of completed tasks.
-     
-5. **Github Issues and Project Update**
+   - Other todo files in the same directory should be used to record a summary of completed tasks. 
+
+5. **Examples**:
+   - Always create example nodes and workflows in the `examples/` directory.
+   - Ensure examples demonstrate best practices and common usage patterns.
+   - Test examples to ensure they work as expected.
+
+6. **Tests**:
+   - Write unit tests for all components in the `tests/` directory.
+   - Use pytest for testing framework.
+   - Ensure tests cover all public methods and critical paths.
+   - Maintain high code coverage (aim for >80%).
+   
+7. **Github Issues and Project Update**
    - Use the Github Issues and Projects to track tasks and progress.
    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
    - Update the project board as tasks are completed.

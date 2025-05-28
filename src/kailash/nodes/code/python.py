@@ -17,6 +17,7 @@ Components:
 - CodeExecutor: Safe code execution environment
 - FunctionWrapper: Converts functions to nodes
 - ClassWrapper: Converts classes to nodes
+- SafeCodeChecker: AST-based security validation
 """
 
 import ast
@@ -30,11 +31,66 @@ from pathlib import Path
 import tempfile
 import textwrap
 
-from kailash.nodes.base import Node, NodeMetadata
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import (
-    NodeValidationError, NodeExecutionError, NodeConfigurationError)
+    NodeValidationError, NodeExecutionError, NodeConfigurationError, SafetyViolationError)
 
 logger = logging.getLogger(__name__)
+
+# Module whitelist for safety
+ALLOWED_MODULES = {
+    'math', 'statistics', 'datetime', 'json', 'random', 'itertools',
+    'collections', 'functools', 'string', 're', 'pandas', 'numpy',
+    'scipy', 'sklearn', 'matplotlib', 'seaborn', 'plotly'
+}
+
+
+class SafeCodeChecker(ast.NodeVisitor):
+    """AST visitor to check code safety.
+    
+    This class analyzes Python code to detect potentially dangerous operations
+    before execution. It helps prevent security vulnerabilities and system abuse.
+    """
+    
+    def __init__(self):
+        self.violations = []
+    
+    def visit_Import(self, node):
+        """Check import statements."""
+        for alias in node.names:
+            module_name = alias.name.split('.')[0]
+            if module_name not in ALLOWED_MODULES:
+                self.violations.append(
+                    f"Import of module '{module_name}' is not allowed"
+                )
+        self.generic_visit(node)
+    
+    def visit_ImportFrom(self, node):
+        """Check from imports."""
+        if node.module:
+            module_name = node.module.split('.')[0]
+            if module_name not in ALLOWED_MODULES:
+                self.violations.append(
+                    f"Import from module '{module_name}' is not allowed"
+                )
+        self.generic_visit(node)
+    
+    def visit_Call(self, node):
+        """Check function calls."""
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+            # Check for dangerous built-in functions
+            if func_name in {'eval', 'exec', 'compile', '__import__'}:
+                self.violations.append(
+                    f"Call to '{func_name}' is not allowed"
+                )
+        elif isinstance(node.func, ast.Attribute):
+            # Check for dangerous method calls
+            if node.func.attr in {'system', 'popen'}:
+                self.violations.append(
+                    f"Call to method '{node.func.attr}' is not allowed"
+                )
+        self.generic_visit(node)
 
 
 class CodeExecutor:
@@ -52,6 +108,8 @@ class CodeExecutor:
     
     Security Considerations:
     - Limited module imports (configurable whitelist)
+    - AST-based code safety checking
+    - Restricted built-in functions
     - Execution timeout (future enhancement)
     - Memory limits (future enhancement)
     """
@@ -63,11 +121,35 @@ class CodeExecutor:
             allowed_modules: List of module names allowed for import.
                            Defaults to common data processing modules.
         """
-        self.allowed_modules = allowed_modules or [
-            'pandas', 'numpy', 'json', 'datetime', 'math', 're',
-            'collections', 'itertools', 'functools', 'statistics'
-        ]
+        self.allowed_modules = set(allowed_modules or ALLOWED_MODULES)
+        self.allowed_builtins = {
+            'abs', 'all', 'any', 'bool', 'dict', 'enumerate', 'filter',
+            'float', 'int', 'len', 'list', 'map', 'max', 'min', 'range',
+            'round', 'sorted', 'str', 'sum', 'tuple', 'type', 'zip',
+            'print'  # Allow print for debugging
+        }
         self._execution_namespace = {}
+    
+    def check_code_safety(self, code: str) -> None:
+        """Check if code is safe to execute.
+        
+        Args:
+            code: Python code to check
+            
+        Raises:
+            SafetyViolationError: If code contains unsafe operations
+        """
+        try:
+            tree = ast.parse(code)
+            checker = SafeCodeChecker()
+            checker.visit(tree)
+            
+            if checker.violations:
+                raise SafetyViolationError(
+                    f"Code contains unsafe operations: {'; '.join(checker.violations)}"
+                )
+        except SyntaxError as e:
+            raise NodeExecutionError(f"Invalid Python syntax: {e}")
         
     def execute_code(self, code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute Python code with given inputs.
@@ -82,10 +164,16 @@ class CodeExecutor:
         Raises:
             NodeExecutionError: If code execution fails
         """
+        # Check code safety first
+        self.check_code_safety(code)
+        
         # Create isolated namespace
         namespace = {
-            '__builtins__': __builtins__,
-            **inputs
+            '__builtins__': {
+                name: getattr(__builtins__, name)
+                for name in self.allowed_builtins
+                if hasattr(__builtins__, name)
+            }
         }
         
         # Add allowed modules
@@ -96,12 +184,15 @@ class CodeExecutor:
             except ImportError:
                 logger.warning(f"Module {module_name} not available")
         
+        # Add inputs
+        namespace.update(inputs)
+        
         try:
             exec(code, namespace)
-            # Return all non-private variables
+            # Return all non-private variables that weren't in inputs
             return {
                 k: v for k, v in namespace.items()
-                if not k.startswith('_') and k not in inputs
+                if not k.startswith('_') and k not in inputs and k not in self.allowed_modules
             }
         except Exception as e:
             error_msg = f"Code execution failed: {str(e)}\n{traceback.format_exc()}"
@@ -162,13 +253,15 @@ class FunctionWrapper:
         node = wrapper.to_node(name="dropna_processor")
     """
     
-    def __init__(self, func: Callable):
+    def __init__(self, func: Callable, executor: Optional[CodeExecutor] = None):
         """Initialize the function wrapper.
         
         Args:
             func: Python function to wrap
+            executor: Code executor instance (optional)
         """
         self.func = func
+        self.executor = executor or CodeExecutor()
         self.signature = inspect.signature(func)
         self.name = func.__name__
         self.doc = inspect.getdoc(func) or ""
@@ -197,6 +290,16 @@ class FunctionWrapper:
         if self.signature.return_annotation != self.signature.empty:
             return self.signature.return_annotation
         return Any
+    
+    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute the wrapped function."""
+        result = self.executor.execute_function(self.func, inputs)
+        
+        # Wrap non-dict results in a dict
+        if not isinstance(result, dict):
+            result = {"result": result}
+            
+        return result
     
     def to_node(self, name: Optional[str] = None, 
                 description: Optional[str] = None,
@@ -244,35 +347,80 @@ class ClassWrapper:
         node = wrapper.to_node(name="accumulator")
     """
     
-    def __init__(self, cls: Type):
+    def __init__(self, cls: Type, method_name: Optional[str] = None, executor: Optional[CodeExecutor] = None):
         """Initialize the class wrapper.
         
         Args:
             cls: Python class to wrap
+            method_name: Method name to call (auto-detected if not provided)
+            executor: Code executor instance (optional)
         """
         self.cls = cls
+        self.method_name = method_name
+        self.executor = executor or CodeExecutor()
         self.name = cls.__name__
         self.doc = inspect.getdoc(cls) or ""
         self._analyze_class()
         
     def _analyze_class(self):
         """Analyze class structure to find processing method."""
-        # Look for common method names
-        process_methods = ['process', 'execute', 'run', 'transform', '__call__']
+        if self.method_name:
+            # Use provided method name
+            if not hasattr(self.cls, self.method_name):
+                raise NodeConfigurationError(
+                    f"Class {self.name} has no method '{self.method_name}'"
+                )
+            self.process_method = self.method_name
+        else:
+            # Look for common method names
+            process_methods = ['process', 'execute', 'run', 'transform', '__call__']
+            
+            self.process_method = None
+            for method_name in process_methods:
+                if hasattr(self.cls, method_name):
+                    method = getattr(self.cls, method_name)
+                    if callable(method) and not method_name.startswith('_'):
+                        self.process_method = method_name
+                        break
+            
+            if not self.process_method:
+                raise NodeConfigurationError(
+                    f"Class {self.name} must have a process method "
+                    f"(one of: {', '.join(process_methods)})"
+                )
         
-        self.process_method = None
-        for method_name in process_methods:
-            if hasattr(self.cls, method_name):
-                method = getattr(self.cls, method_name)
-                if callable(method) and not method_name.startswith('_'):
-                    self.process_method = method_name
-                    break
+        # Create instance and get method
+        self.instance = self.cls()
+        self.method = getattr(self.instance, self.process_method)
+        self.signature = inspect.signature(self.method)
+    
+    def get_input_types(self) -> Dict[str, Type]:
+        """Extract input types from method signature."""
+        input_types = {}
+        for param_name, param in self.signature.parameters.items():
+            if param_name == 'self':
+                continue
+            if param.annotation != param.empty:
+                input_types[param_name] = param.annotation
+            else:
+                input_types[param_name] = Any
+        return input_types
+    
+    def get_output_type(self) -> Type:
+        """Extract output type from method signature."""
+        if self.signature.return_annotation != self.signature.empty:
+            return self.signature.return_annotation
+        return Any
+    
+    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute the wrapped method."""
+        result = self.executor.execute_function(self.method, inputs)
         
-        if not self.process_method:
-            raise NodeConfigurationError(
-                f"Class {self.name} must have a process method "
-                f"(one of: {', '.join(process_methods)})"
-            )
+        # Wrap non-dict results in a dict
+        if not isinstance(result, dict):
+            result = {"result": result}
+            
+        return result
     
     def to_node(self, name: Optional[str] = None,
                 description: Optional[str] = None,
@@ -320,6 +468,7 @@ class PythonCodeNode(Node):
     - Safe code execution with error handling
     - Support for external libraries
     - State management for class-based nodes
+    - AST-based security validation
     
     Example:
         # Function-based node
@@ -429,10 +578,7 @@ class PythonCodeNode(Node):
                 version="1.0.0"
             )
         
-        # Extract config parameters from kwargs
-        config = kwargs.get('config', {})
-        
-        # Pass both metadata and config to parent
+        # Pass kwargs to parent
         super().__init__(**kwargs)
     
     def _validate_config(self):
@@ -444,21 +590,20 @@ class PythonCodeNode(Node):
         # Skip validation - parameters are validated at runtime
         pass
     
-    
     def get_parameters(self) -> Dict[str, 'NodeParameter']:
         """Define the parameters this node accepts.
         
         Returns:
             Dictionary mapping parameter names to their definitions
         """
-        from kailash.nodes.base import NodeParameter
-        
         # Use explicit input schema if provided
         if self._input_schema:
             return self._input_schema
             
-        # Otherwise, generate schema from input types
+        # Otherwise, generate schema from input types or function/class analysis
         parameters = {}
+        
+        # Add parameters from input_types
         for name, type_ in self.input_types.items():
             parameters[name] = NodeParameter(
                 name=name,
@@ -466,6 +611,33 @@ class PythonCodeNode(Node):
                 required=True,
                 description=f"Input parameter {name} of type {type_.__name__}"
             )
+        
+        # If we have a function/class, extract parameter info
+        if self.function:
+            wrapper = FunctionWrapper(self.function, self.executor)
+            for name, type_ in wrapper.get_input_types().items():
+                if name not in parameters:
+                    parameters[name] = NodeParameter(
+                        name=name,
+                        type=type_,
+                        required=True,
+                        description=f"Input parameter {name}"
+                    )
+        elif self.class_type and self.process_method:
+            wrapper = ClassWrapper(
+                self.class_type,
+                self.process_method or 'process',
+                self.executor
+            )
+            for name, type_ in wrapper.get_input_types().items():
+                if name not in parameters:
+                    parameters[name] = NodeParameter(
+                        name=name,
+                        type=type_,
+                        required=True,
+                        description=f"Input parameter {name}"
+                    )
+        
         return parameters
     
     def get_output_schema(self) -> Dict[str, 'NodeParameter']:
@@ -478,8 +650,15 @@ class PythonCodeNode(Node):
         if self._output_schema:
             return self._output_schema
             
-        # Otherwise, return empty schema (no validation)
-        return {}
+        # Otherwise, return default result schema
+        return {
+            "result": NodeParameter(
+                name="result",
+                type=self.output_type,
+                required=True,
+                description="Output result"
+            )
+        }
     
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node's logic.
@@ -490,46 +669,28 @@ class PythonCodeNode(Node):
         Returns:
             Dictionary of outputs
         """
-        # Execute with the validated keyword arguments
-        result = self.execute_code(kwargs)
-        
-        # Ensure result is a dictionary
-        if not isinstance(result, dict):
-            return {"result": result}
-        return result
-    
-    def execute_code(self, inputs: Dict[str, Any]) -> Any:
-        """Execute the Python code with given inputs.
-        
-        This is a custom method for direct code execution, separate from the base 
-        class's execute() lifecycle.
-        
-        Args:
-            inputs: Dictionary of input data
-            
-        Returns:
-            Execution result
-            
-        Raises:
-            NodeExecutionError: If execution fails
-        """
-        # Direct code execution - no validation needed here
-        
         try:
             if self.code:
                 # Execute code string
-                results = self.executor.execute_code(self.code, inputs)
-                # Return 'result' variable if it exists, otherwise all results
-                return results.get('result', results)
+                outputs = self.executor.execute_code(self.code, kwargs)
+                # Return 'result' variable if it exists, otherwise all outputs
+                if 'result' in outputs:
+                    return {"result": outputs['result']}
+                return outputs
                 
             elif self.function:
                 # Execute function
-                return self.executor.execute_function(self.function, inputs)
+                wrapper = FunctionWrapper(self.function, self.executor)
+                return wrapper.execute(kwargs)
                 
-            elif self.instance and self.process_method:
+            elif self.class_type:
                 # Execute class method
-                method = getattr(self.instance, self.process_method)
-                return self.executor.execute_function(method, inputs)
+                wrapper = ClassWrapper(
+                    self.class_type,
+                    self.process_method or 'process',
+                    self.executor
+                )
+                return wrapper.execute(kwargs)
                 
             else:
                 raise NodeExecutionError("No execution method available")
@@ -537,6 +698,7 @@ class PythonCodeNode(Node):
         except NodeExecutionError:
             raise
         except Exception as e:
+            logger.error(f"Python code execution failed: {e}")
             raise NodeExecutionError(f"Execution failed: {str(e)}")
     
     @classmethod
@@ -558,12 +720,25 @@ class PythonCodeNode(Node):
         Returns:
             PythonCodeNode instance
         """
-        wrapper = FunctionWrapper(func)
-        return wrapper.to_node(name=name, description=description,
-                              input_schema=input_schema, output_schema=output_schema)
+        # Extract type information
+        wrapper = FunctionWrapper(func, CodeExecutor())
+        input_types = wrapper.get_input_types()
+        output_type = wrapper.get_output_type()
+        
+        return cls(
+            name=name or func.__name__,
+            function=func,
+            input_types=input_types,
+            output_type=output_type,
+            input_schema=input_schema,
+            output_schema=output_schema,
+            description=description or func.__doc__,
+            **kwargs
+        )
     
     @classmethod
-    def from_class(cls, class_type: Type, name: Optional[str] = None,
+    def from_class(cls, class_type: Type, process_method: Optional[str] = None,
+                  name: Optional[str] = None,
                   description: Optional[str] = None,
                   input_schema: Optional[Dict[str, 'NodeParameter']] = None,
                   output_schema: Optional[Dict[str, 'NodeParameter']] = None,
@@ -572,6 +747,7 @@ class PythonCodeNode(Node):
         
         Args:
             class_type: Python class to wrap
+            process_method: Method name for processing (auto-detected if not provided)
             name: Node name (defaults to class name)
             description: Node description
             input_schema: Explicit input parameter schema for validation
@@ -581,9 +757,22 @@ class PythonCodeNode(Node):
         Returns:
             PythonCodeNode instance
         """
-        wrapper = ClassWrapper(class_type)
-        return wrapper.to_node(name=name, description=description,
-                              input_schema=input_schema, output_schema=output_schema)
+        # Extract type information
+        wrapper = ClassWrapper(class_type, process_method, CodeExecutor())
+        input_types = wrapper.get_input_types()
+        output_type = wrapper.get_output_type()
+        
+        return cls(
+            name=name or class_type.__name__,
+            class_type=class_type,
+            process_method=wrapper.process_method,
+            input_types=input_types,
+            output_type=output_type,
+            input_schema=input_schema,
+            output_schema=output_schema,
+            description=description or class_type.__doc__,
+            **kwargs
+        )
     
     @classmethod
     def from_file(cls, file_path: Union[str, Path], 
