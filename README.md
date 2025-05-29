@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.8+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
+  <img src="https://github.com/terrene-foundation/kailash-py/actions/workflows/ci.yml/badge.svg" alt="CI Status">
 </p>
 
 <p align="center">
