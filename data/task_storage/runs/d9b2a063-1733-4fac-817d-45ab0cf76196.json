@@ -1,0 +1,14 @@
+{
+  "run_id": "d9b2a063-1733-4fac-817d-45ab0cf76196",
+  "workflow_name": "persistent_workflow",
+  "status": "running",
+  "started_at": "2025-05-29T01:49:23.576258",
+  "ended_at": null,
+  "tasks": [
+    "1aaff36a-afb2-4e6b-9298-9b280b290f86"
+  ],
+  "metadata": {
+    "session": "first"
+  },
+  "error": null
+}

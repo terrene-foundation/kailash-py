@@ -19,6 +19,28 @@ A PyPI-hosted package (`kailash_python_sdk`) that provides:
 5. Pre-built node types for common operations
 6. Task tracking for execution monitoring
 
+## 1.3 Deliverables
+
+The final deliverables should include:
+
+1. Complete `kailash_python_sdk` package with all components
+2. Comprehensive test suite
+3. Documentation including:
+   - API reference
+   - User guide
+   - Examples
+   - Developer guide
+   - Architecture Decision Records (ADRs)
+4. Example projects demonstrating typical usage
+5. Setup files for PyPI publication
+
+## 1.4 Additional Notes
+
+- Focus on making the API intuitive for ABCs who are not deep technical experts
+- Prioritize a smooth developer experience
+- Balance flexibility with guardrails to guide users toward architectural compliance
+- Include helpful error messages that guide users toward correct usage
+
 ## 2. Component Requirements
 
 ### 2.1 Node System

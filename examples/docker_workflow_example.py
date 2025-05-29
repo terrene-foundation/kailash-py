@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.absolute()))
 # Import Kailash components
 from kailash.nodes.base import Node
 from kailash.nodes.data.readers import CSVReader
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.writers import CSVWriter
 from kailash.workflow.graph import Workflow
 from kailash.runtime.local import LocalRuntime

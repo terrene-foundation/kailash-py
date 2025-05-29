@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from kailash.workflow.graph import Workflow
 from kailash.nodes.data.readers import CSVReader, JSONReader
 from kailash.nodes.data.writers import CSVWriter, JSONWriter
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.utils.export import WorkflowExporter, ExportConfig, export_workflow
 from kailash.tracking.manager import TaskManager
 from kailash.runtime.local import LocalRuntime

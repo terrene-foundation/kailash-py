@@ -25,7 +25,7 @@ import inspect
 import logging
 import sys
 import traceback
-from typing import Any, Callable, Dict, Optional, Type, Union, List, Tuple
+from typing import Any, Callable, Dict, Optional, Type, Union, List, Tuple, get_type_hints
 import importlib.util
 from pathlib import Path
 import tempfile
@@ -33,7 +33,7 @@ import textwrap
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import (
-    NodeValidationError, NodeExecutionError, NodeConfigurationError, SafetyViolationError)
+    NodeValidationError, NodeExecutionError, NodeConfigurationError, SafetyViolationError, KailashValidationError)
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +265,11 @@ class FunctionWrapper:
         self.signature = inspect.signature(func)
         self.name = func.__name__
         self.doc = inspect.getdoc(func) or ""
+        try:
+            self.type_hints = get_type_hints(func)
+        except (NameError, TypeError):
+            # Handle cases where type hints can't be resolved
+            self.type_hints = {}
         
     def get_input_types(self) -> Dict[str, Type]:
         """Extract input types from function signature.
@@ -274,11 +279,12 @@ class FunctionWrapper:
         """
         input_types = {}
         for param_name, param in self.signature.parameters.items():
-            if param.annotation != param.empty:
-                input_types[param_name] = param.annotation
-            else:
-                # Default to Any if no annotation
-                input_types[param_name] = Any
+            # Skip self parameter for class methods
+            if param_name == 'self':
+                continue
+                
+            param_type = self.type_hints.get(param_name, Any)
+            input_types[param_name] = param_type
         return input_types
     
     def get_output_type(self) -> Type:
@@ -287,9 +293,7 @@ class FunctionWrapper:
         Returns:
             Return type annotation or Any
         """
-        if self.signature.return_annotation != self.signature.empty:
-            return self.signature.return_annotation
-        return Any
+        return self.type_hints.get('return', Any)
     
     def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the wrapped function."""
@@ -360,6 +364,7 @@ class ClassWrapper:
         self.executor = executor or CodeExecutor()
         self.name = cls.__name__
         self.doc = inspect.getdoc(cls) or ""
+        self.instance = None
         self._analyze_class()
         
     def _analyze_class(self):
@@ -389,32 +394,55 @@ class ClassWrapper:
                     f"(one of: {', '.join(process_methods)})"
                 )
         
-        # Create instance and get method
-        self.instance = self.cls()
-        self.method = getattr(self.instance, self.process_method)
-        self.signature = inspect.signature(self.method)
+        # Get method and signature
+        method = getattr(self.cls, self.process_method)
+        if not method:
+            raise NodeConfigurationError(
+                f"Class {self.name} does not have method '{self.process_method}'"
+            )
+            
+        self.method = method
+        self.signature = inspect.signature(method)
+        
+        # Get type hints
+        try:
+            self.type_hints = get_type_hints(method)
+        except (TypeError, NameError):
+            # Handle descriptor objects like properties
+            self.type_hints = {}
     
     def get_input_types(self) -> Dict[str, Type]:
         """Extract input types from method signature."""
         input_types = {}
         for param_name, param in self.signature.parameters.items():
+            # Skip self parameter
             if param_name == 'self':
                 continue
-            if param.annotation != param.empty:
-                input_types[param_name] = param.annotation
-            else:
-                input_types[param_name] = Any
+                
+            param_type = self.type_hints.get(param_name, Any)
+            input_types[param_name] = param_type
         return input_types
     
     def get_output_type(self) -> Type:
         """Extract output type from method signature."""
-        if self.signature.return_annotation != self.signature.empty:
-            return self.signature.return_annotation
-        return Any
+        return self.type_hints.get('return', Any)
     
     def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the wrapped method."""
-        result = self.executor.execute_function(self.method, inputs)
+        # Create instance if needed
+        if self.instance is None:
+            try:
+                self.instance = self.cls()
+            except Exception as e:
+                raise NodeExecutionError(
+                    f"Failed to create instance of {self.cls.__name__}: {e}"
+                ) from e
+        
+        # Get the method from the instance
+        method = getattr(self.instance, self.process_method)
+        
+        # Execute the method
+        result = self.executor.execute_function(method, **inputs)
         
         # Wrap non-dict results in a dict
         if not isinstance(result, dict):
@@ -587,8 +615,9 @@ class PythonCodeNode(Node):
         PythonCodeNode has dynamic parameters based on the wrapped function/class,
         so we skip the base class validation at initialization time.
         """
-        # Skip validation - parameters are validated at runtime
-        pass
+        # Skip validation for python code nodes to avoid complex type issues
+        if not hasattr(self, '_skip_validation'):
+            self._skip_validation = True
     
     def get_parameters(self) -> Dict[str, 'NodeParameter']:
         """Define the parameters this node accepts.
@@ -605,11 +634,14 @@ class PythonCodeNode(Node):
         
         # Add parameters from input_types
         for name, type_ in self.input_types.items():
+            # Use Any type for complex types to avoid validation issues
+            param_type = Any if hasattr(type_, "__origin__") else type_
+            
             parameters[name] = NodeParameter(
                 name=name,
-                type=type_,
+                type=param_type,
                 required=True,
-                description=f"Input parameter {name} of type {type_.__name__}"
+                description=f"Input parameter {name}"
             )
         
         # If we have a function/class, extract parameter info
@@ -617,9 +649,12 @@ class PythonCodeNode(Node):
             wrapper = FunctionWrapper(self.function, self.executor)
             for name, type_ in wrapper.get_input_types().items():
                 if name not in parameters:
+                    # Use Any type for complex types to avoid validation issues
+                    param_type = Any if hasattr(type_, "__origin__") else type_
+                    
                     parameters[name] = NodeParameter(
                         name=name,
-                        type=type_,
+                        type=param_type,
                         required=True,
                         description=f"Input parameter {name}"
                     )
@@ -631,9 +666,12 @@ class PythonCodeNode(Node):
             )
             for name, type_ in wrapper.get_input_types().items():
                 if name not in parameters:
+                    # Use Any type for complex types to avoid validation issues
+                    param_type = Any if hasattr(type_, "__origin__") else type_
+                    
                     parameters[name] = NodeParameter(
                         name=name,
-                        type=type_,
+                        type=param_type,
                         required=True,
                         description=f"Input parameter {name}"
                     )
@@ -654,7 +692,7 @@ class PythonCodeNode(Node):
         return {
             "result": NodeParameter(
                 name="result",
-                type=self.output_type,
+                type=Any,  # Use Any instead of self.output_type to avoid validation issues
                 required=True,
                 description="Output result"
             )

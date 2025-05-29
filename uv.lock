@@ -374,6 +374,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "isort" },
     { name = "matplotlib" },
     { name = "mcp", extra = ["cli"] },
     { name = "networkx" },
@@ -401,6 +402,7 @@ dev = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=22.0" },
     { name = "click", specifier = ">=8.0" },
+    { name = "isort", specifier = ">=6.0.1" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.10" },
     { name = "matplotlib", specifier = ">=3.5" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.9.0" },

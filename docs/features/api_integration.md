@@ -1,277 +1,364 @@
-# API Integration in Kailash SDK
+# API Integration Guide for Kailash SDK
 
-## Overview
+This guide demonstrates how to use the Kailash SDK's comprehensive API integration capabilities. The SDK provides built-in support for common API patterns including REST, GraphQL, authentication, rate limiting, and error handling.
 
-The API Integration module in Kailash SDK provides a comprehensive set of nodes for interacting with external APIs. It supports both synchronous and asynchronous operations, various API styles (HTTP, REST, GraphQL), and multiple authentication methods.
+## Quick Start
 
-## Features
+Run the simple test to verify everything works:
 
-- **HTTP Client Nodes**: Basic HTTP request capabilities for any protocol/endpoint
-- **REST API Client Nodes**: Specialized support for RESTful API patterns
-- **GraphQL Client Nodes**: Support for GraphQL APIs with query/mutation capabilities
-- **Authentication Helpers**: Support for Basic Auth, OAuth2, and API Keys
-- **Async Support**: Non-blocking API operations for high-performance workflows
-- **Error Handling**: Comprehensive error handling and retry capabilities
-- **Response Processing**: Content type detection and automatic parsing
-
-## Node Types
-
-### HTTP Client Nodes
-
-- `HTTPRequestNode`: Core node for making HTTP requests
-- `AsyncHTTPRequestNode`: Asynchronous version with the same interface
-
-These nodes provide low-level access to make any HTTP request with the following capabilities:
-- All HTTP methods (GET, POST, PUT, DELETE, etc.)
-- Custom headers and query parameters
-- Request body in various formats
-- Response parsing based on content type
-- Timeout and SSL verification control
-- Retry logic with exponential backoff
-
-### REST Client Nodes
-
-- `RESTClientNode`: High-level node for RESTful API interactions
-- `AsyncRESTClientNode`: Asynchronous version with the same interface
-
-These nodes build on the HTTP client with REST-specific features:
-- Resource-based URL construction
-- Path parameter substitution
-- Pagination handling
-- Error response format standardization
-- API versioning support
-
-### GraphQL Client Nodes
-
-- `GraphQLClientNode`: Specialized node for GraphQL API operations
-- `AsyncGraphQLClientNode`: Asynchronous version with the same interface
-
-These nodes offer GraphQL-specific functionality:
-- Query and mutation support
-- Variable binding
-- Operation name specification
-- GraphQL error handling
-- Response formatting options
-
-### Authentication Nodes
-
-- `BasicAuthNode`: Username/password authentication
-- `OAuth2Node`: OAuth 2.0 authentication with various grant types
-- `APIKeyNode`: API key authentication in headers, query params, or body
-
-## Usage Examples
-
-### Basic HTTP Request
-
-```python
-from kailash.workflow import Workflow
-from kailash.nodes.api import HTTPRequestNode
-from kailash.runtime.local import LocalRuntime
-
-# Create workflow
-workflow = Workflow(name="http_example")
-
-# Add HTTP request node
-http_node = HTTPRequestNode(
-    id="get_users",
-    name="Get Users",
-    url="https://api.example.com/users",
-    method="GET",
-    headers={"Accept": "application/json"}
-)
-workflow.add_node(http_node, "get_users")
-
-# Execute workflow
-runtime = LocalRuntime()
-results, _ = runtime.execute(workflow)
-
-# Access results
-users = results["get_users"]["response"]["content"]
+```bash
+cd examples
+python simple_api_test.py
 ```
 
-### REST API with Path Parameters
+## Core Features
+
+### 1. HTTP Client Nodes
+
+The SDK provides both synchronous and asynchronous HTTP client nodes:
 
 ```python
-from kailash.workflow import Workflow
+from kailash.nodes.api import HTTPRequestNode, AsyncHTTPRequestNode
+
+# Basic HTTP request
+http_node = HTTPRequestNode(node_id="api_call", url="https://api.example.com/data")
+result = runtime.execute_node(http_node, method="GET")
+
+# Async version for better performance
+async_http = AsyncHTTPRequestNode(node_id="async_call", url="https://api.example.com/data")
+result = await async_runtime.execute_node_async(async_http, method="GET")
+```
+
+### 2. REST API Client
+
+High-level interface for REST APIs with resource patterns:
+
+```python
 from kailash.nodes.api import RESTClientNode
-from kailash.runtime.local import LocalRuntime
 
-# Create workflow
-workflow = Workflow(name="rest_example")
-
-# Add REST client node
-rest_node = RESTClientNode(
-    id="get_user",
-    name="Get User",
+rest_client = RESTClientNode(
+    node_id="api_client",
     base_url="https://api.example.com",
-    resource="users/{id}",
-    method="GET",
-    path_params={"id": 123}
+    resource="users/{id}"
 )
-workflow.add_node(rest_node, "get_user")
 
-# Execute workflow
-runtime = LocalRuntime()
-results, _ = runtime.execute(workflow)
-
-# Access results
-user = results["get_user"]["data"]
+# GET /users/123
+result = runtime.execute_node(
+    rest_client,
+    path_params={"id": 123},
+    method="GET"
+)
 ```
 
-### GraphQL Query with Variables
+### 3. Authentication
+
+Multiple authentication methods are supported:
+
+#### Basic Authentication
+```python
+from kailash.nodes.api import BasicAuthNode
+
+auth_node = BasicAuthNode(node_id="auth", username="user", password="pass")
+auth_result = runtime.execute_node(auth_node, username="myuser", password="mypass")
+
+# Use auth headers in API calls
+api_headers = auth_result["headers"]
+```
+
+#### API Key Authentication
+```python
+from kailash.nodes.api import APIKeyNode
+
+# Header-based API key
+api_key_node = APIKeyNode(node_id="api_key", api_key="my-key")
+auth_result = runtime.execute_node(
+    api_key_node,
+    api_key="your-api-key",
+    location="header",
+    param_name="X-API-Key"
+)
+```
+
+#### OAuth 2.0
+```python
+from kailash.nodes.api import OAuth2Node
+
+oauth_node = OAuth2Node(node_id="oauth", client_id="client", client_secret="secret")
+auth_result = runtime.execute_node(
+    oauth_node,
+    token_url="https://api.example.com/oauth/token",
+    client_id="your-client-id",
+    client_secret="your-secret",
+    grant_type="client_credentials"
+)
+```
+
+### 4. Rate Limiting
+
+Protect your API calls with sophisticated rate limiting:
 
 ```python
-from kailash.workflow import Workflow
+from kailash.nodes.api import RateLimitConfig, RateLimitedAPINode, HTTPRequestNode
+
+# Configure rate limiting
+rate_config = RateLimitConfig(
+    max_requests=10,        # 10 requests
+    time_window=60.0,       # per minute
+    strategy="token_bucket", # algorithm
+    burst_limit=15,         # allow burst up to 15
+    backoff_factor=1.5      # exponential backoff
+)
+
+# Wrap any API node with rate limiting
+http_node = HTTPRequestNode(node_id="api", url="https://api.example.com/data")
+rate_limited = RateLimitedAPINode(
+    wrapped_node=http_node,
+    rate_limit_config=rate_config,
+    node_id="rate_limited_api"
+)
+
+# API calls will automatically respect rate limits
+result = runtime.execute_node(rate_limited)
+```
+
+#### Rate Limiting Strategies
+
+- **Token Bucket**: Allows burst requests while maintaining steady rate
+- **Sliding Window**: More accurate rate limiting, prevents boundary bursts
+
+### 5. GraphQL Support
+
+Full GraphQL integration with variables and error handling:
+
+```python
 from kailash.nodes.api import GraphQLClientNode
-from kailash.runtime.local import LocalRuntime
 
-# Create workflow
-workflow = Workflow(name="graphql_example")
+graphql_node = GraphQLClientNode(node_id="graphql", endpoint="https://api.example.com/graphql")
 
-# Add GraphQL client node
-graphql_node = GraphQLClientNode(
-    id="get_user",
-    name="Get User",
-    endpoint="https://api.example.com/graphql",
-    query="""
-    query GetUser($id: ID!) {
-      user(id: $id) {
+query = """
+query GetUsers($limit: Int!) {
+    users(limit: $limit) {
         id
         name
         email
-      }
     }
-    """,
-    variables={"id": "123"},
-    operation_name="GetUser"
+}
+"""
+
+result = runtime.execute_node(
+    graphql_node,
+    query=query,
+    variables={"limit": 10}
 )
-workflow.add_node(graphql_node, "get_user")
-
-# Execute workflow
-runtime = LocalRuntime()
-results, _ = runtime.execute(workflow)
-
-# Access results
-user = results["get_user"]["data"]["user"]
 ```
 
-### OAuth 2.0 Authentication
+## Advanced Examples
 
+### HMI-Style Healthcare API Integration
+
+The `hmi_style_api_example.py` demonstrates a real-world healthcare API integration pattern:
+
+```bash
+python hmi_style_api_example.py
+```
+
+This example shows:
+- Multi-step API workflows (doctor search → slot check → insurance verification)
+- Different authentication methods for different APIs
+- Rate limiting strategies for different service tiers
+- Error handling and resilience patterns
+
+### Comprehensive API Integration Examples
+
+Run the full example suite:
+
+```bash
+python api_integration_examples.py
+```
+
+This demonstrates:
+- Basic REST API calls
+- GraphQL queries
+- Rate limiting in action
+- OAuth 2.0 flows
+- Complex multi-API workflows
+- Asynchronous API calls
+- Error handling strategies
+
+## Rate Limiting Configuration
+
+### Token Bucket Strategy
 ```python
-from kailash.workflow import Workflow
-from kailash.nodes.api import OAuth2Node, RESTClientNode
-from kailash.runtime.local import LocalRuntime
-
-# Create workflow
-workflow = Workflow(name="oauth_example")
-
-# Add OAuth2 node
-oauth_node = OAuth2Node(
-    id="oauth",
-    name="OAuth Authentication",
-    token_url="https://api.example.com/oauth/token",
-    client_id="your_client_id",
-    client_secret="your_client_secret",
-    grant_type="client_credentials"
+RateLimitConfig(
+    max_requests=100,
+    time_window=60.0,
+    strategy="token_bucket",
+    burst_limit=120,  # Allow occasional bursts
+    backoff_factor=1.5
 )
-workflow.add_node(oauth_node, "oauth")
-
-# Add REST client node
-rest_node = RESTClientNode(
-    id="get_data",
-    name="Get Protected Data",
-    base_url="https://api.example.com",
-    resource="protected-data",
-    method="GET"
-)
-workflow.add_node(rest_node, "get_data")
-
-# Connect OAuth node to REST node
-workflow.connect(
-    "oauth", 
-    "get_data",
-    {"headers": "headers"}
-)
-
-# Execute workflow
-runtime = LocalRuntime()
-results, _ = runtime.execute(workflow)
 ```
 
-### Asynchronous API Calls
-
+### Sliding Window Strategy
 ```python
-import asyncio
-from kailash.workflow import Workflow
-from kailash.nodes.api import AsyncHTTPRequestNode
-from kailash.runtime.async_local import AsyncLocalRuntime
-
-async def main():
-    # Create workflow
-    workflow = Workflow(name="async_example")
-    
-    # Add async HTTP request nodes
-    users_node = AsyncHTTPRequestNode(
-        id="get_users",
-        name="Get Users",
-        url="https://api.example.com/users",
-        method="GET"
-    )
-    workflow.add_node(users_node, "get_users")
-    
-    posts_node = AsyncHTTPRequestNode(
-        id="get_posts",
-        name="Get Posts",
-        url="https://api.example.com/posts",
-        method="GET"
-    )
-    workflow.add_node(posts_node, "get_posts")
-    
-    # Execute workflow asynchronously
-    runtime = AsyncLocalRuntime()
-    results, _ = await runtime.execute_async(workflow)
-    
-    # Access results
-    users = results["get_users"]["response"]["content"]
-    posts = results["get_posts"]["response"]["content"]
-
-# Run async example
-asyncio.run(main())
+RateLimitConfig(
+    max_requests=100,
+    time_window=60.0,
+    strategy="sliding_window",
+    backoff_factor=2.0  # More aggressive backoff
+)
 ```
 
-## Implementation Details
-
-### Error Handling
+## Error Handling
 
 All API nodes include comprehensive error handling:
-- Transport-level errors (connection failures, timeouts)
-- HTTP-level errors (4xx, 5xx status codes)
-- API-level errors (error responses with valid HTTP status)
-- Validation errors (invalid parameters)
 
-### Response Processing
+```python
+# HTTP requests with retry logic
+result = runtime.execute_node(
+    http_node,
+    url="https://api.example.com/data",
+    retry_count=3,           # Retry 3 times
+    retry_backoff=0.5,       # 0.5s base backoff
+    timeout=30               # 30s timeout
+)
 
-Response handling is content-type aware:
-- JSON responses are automatically parsed
-- Text responses are returned as strings
-- Binary responses are returned as bytes
-- Mixed content types can be handled with the `response_format` parameter
+if result["success"]:
+    data = result["response"]["content"]
+else:
+    error_code = result["status_code"]
+    # Handle error appropriately
+```
 
-### Retry Logic
+## Best Practices
 
-All nodes support configurable retry behavior:
-- Number of retry attempts
-- Backoff factor for increasing delays
-- Specific status codes to retry
+### 1. Use Rate Limiting
+Always wrap API calls in rate limiting to respect service limits:
 
-### Extension Points
+```python
+# Good: Rate limited API calls
+rate_limited_api = RateLimitedAPINode(
+    wrapped_node=your_api_node,
+    rate_limit_config=appropriate_config
+)
+```
 
-The module is designed for extensibility:
-- Create specialized API client nodes for specific services
-- Extend authentication mechanisms for custom auth flows
-- Implement custom response processors for special content types
+### 2. Handle Authentication Properly
+Separate authentication from API calls for reusability:
 
-## See Also
+```python
+# Step 1: Get authentication
+auth_result = runtime.execute_node(auth_node, ...)
 
-- [API Integration Example](../../examples/api_integration_example.py)
-- [HTTP Node Tests](../../tests/test_nodes/test_api.py)
+# Step 2: Use auth in API calls
+api_result = runtime.execute_node(
+    api_node,
+    headers=auth_result["headers"],
+    ...
+)
+```
+
+### 3. Use Async for High Throughput
+For concurrent API calls, use async nodes:
+
+```python
+# Multiple concurrent API calls
+tasks = []
+for item in items:
+    task = async_runtime.execute_node_async(api_node, data=item)
+    tasks.append(task)
+
+results = await asyncio.gather(*tasks)
+```
+
+### 4. Implement Proper Error Handling
+Always check for errors and implement appropriate retry logic:
+
+```python
+if not result["success"]:
+    if result["status_code"] == 429:  # Rate limited
+        # Wait and retry
+        pass
+    elif result["status_code"] >= 500:  # Server error
+        # Retry with backoff
+        pass
+    else:  # Client error
+        # Log and handle appropriately
+        pass
+```
+
+## Configuration Examples
+
+### Development Environment
+```python
+# Permissive rate limiting for development
+dev_config = RateLimitConfig(
+    max_requests=1000,
+    time_window=60.0,
+    strategy="token_bucket",
+    burst_limit=1500
+)
+```
+
+### Production Environment
+```python
+# Conservative rate limiting for production
+prod_config = RateLimitConfig(
+    max_requests=100,
+    time_window=60.0,
+    strategy="sliding_window",
+    backoff_factor=2.0,
+    max_backoff=300.0
+)
+```
+
+### High-Frequency Trading
+```python
+# Aggressive rate limiting for high-frequency scenarios
+hft_config = RateLimitConfig(
+    max_requests=1000,
+    time_window=1.0,  # Per second
+    strategy="token_bucket",
+    burst_limit=1200,
+    backoff_factor=1.1  # Quick recovery
+)
+```
+
+## Testing Your Integration
+
+Use the provided test script to validate your setup:
+
+```bash
+# Test core functionality
+python simple_api_test.py
+
+# Test specific features
+python -c "from kailash.nodes.api import *; print('API integration ready!')"
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Rate Limiting Too Aggressive**: Adjust `max_requests` and `time_window`
+2. **Authentication Failures**: Verify credentials and token expiration
+3. **Connection Timeouts**: Increase `timeout` parameter
+4. **SSL Certificate Issues**: Set `verify_ssl=False` for development
+
+### Debug Mode
+
+Enable detailed logging:
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+## Next Steps
+
+1. Review the example files in this directory
+2. Adapt the patterns to your specific API requirements
+3. Implement proper error handling for your use case
+4. Configure appropriate rate limiting for your service tiers
+5. Test thoroughly in development before production deployment
+
+For more advanced usage patterns, see the `hmi_style_api_example.py` which demonstrates real-world healthcare API integration patterns.

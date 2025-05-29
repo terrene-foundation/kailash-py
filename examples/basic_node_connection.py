@@ -5,7 +5,7 @@ from pathlib import Path
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.data import CSVReader
-from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 
 
 # Setup paths

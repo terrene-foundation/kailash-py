@@ -149,6 +149,18 @@ class StorageException(KailashException):
     pass
 
 
+class KailashStorageError(StorageException):
+    """Raised when storage operations fail.
+    
+    This typically occurs when:
+    - File I/O operations fail
+    - Database connections fail
+    - Storage permissions are insufficient
+    - Data formatting is incorrect
+    """
+    pass
+
+
 # Import/Export exceptions
 class ExportException(KailashException):
     """Raised when export operations fail.
@@ -180,6 +192,14 @@ class ConfigurationException(KailashException):
     - Configuration file is missing
     - Required configuration values are not provided
     - Configuration schema is invalid
+    """
+    pass
+
+
+class KailashConfigError(ConfigurationException):
+    """Raised when configuration is invalid (legacy name).
+    
+    This is an alias for ConfigurationException for backward compatibility.
     """
     pass
 

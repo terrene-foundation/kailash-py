@@ -12,7 +12,7 @@ import numpy as np
 from pathlib import Path
 
 from kailash.workflow.graph import Workflow
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReader, CSVWriter
 from kailash.runtime import LocalRuntime
 
