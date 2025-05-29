@@ -260,19 +260,33 @@ This document serves as the master todo list for the Kailash Python SDK, trackin
     - Description: Add comprehensive API integration support addressing gaps analysis requirements
     - Details: Implemented HTTP, REST, GraphQL nodes with authentication, rate limiting (Token Bucket & Sliding Window), OAuth 2.0, retry logic, and comprehensive examples (see ADR-0015)
 
-44. **Add performance optimization for large workflows**
+44. **Fix task tracking backward compatibility issues**
+    - Status: ✅ Completed
+    - Date: 2025-05-29
+    - Priority: High
+    - Description: Fix backward compatibility issues in tracking module
+    - Details: Updated TaskRun model, FileSystemStorage, DatabaseStorage, fixed datetime serialization, added TaskManager methods (see docs/todos/011-completed-tasks-summary.md)
+
+45. **Consolidate API integration examples**
+    - Status: ✅ Completed
+    - Date: 2025-05-29
+    - Priority: Medium
+    - Description: Create comprehensive API integration example
+    - Details: Consolidated redundant examples, fixed workflow execution patterns, created consistent example structure
+
+46. **Add performance optimization for large workflows**
     - Status: 🔄 To Do
     - Priority: Low
     - Description: Further optimize execution for workflows with many nodes
     - Details: Add caching mechanisms, improve memory management
 
-45. **Create visual workflow editor**
+47. **Create visual workflow editor**
     - Status: 🔄 To Do
     - Priority: Low
     - Description: Implement web-based visual editor for workflow creation
     - Details: Add UI for node placement, connection, configuration
 
-46. **Add tests for conditional workflow with Switch/Merge**
+48. **Add tests for conditional workflow with Switch/Merge**
     - Status: 🔄 To Do
     - Priority: Low
     - Description: Create tests for conditional workflow features

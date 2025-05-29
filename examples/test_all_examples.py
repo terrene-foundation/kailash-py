@@ -19,7 +19,9 @@ def test_imports():
         "error_handling.py",
         "export_workflow.py",
         "task_tracking_example.py",
-        "visualization_example.py"
+        "visualization_example.py",
+        "simplified_workflow_example.py",  # Added new simplified example
+        "api_integration_comprehensive.py"  # Added new API integration example
     ]
     
     failed_imports = []
