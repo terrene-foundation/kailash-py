@@ -50,6 +50,17 @@ class NodeConfigurationError(NodeException):
     pass
 
 
+class SafetyViolationError(NodeException):
+    """Raised when code safety validation fails.
+    
+    This typically occurs when:
+    - Code contains dangerous operations (eval, exec, import)
+    - Unsafe module imports are attempted
+    - Malicious code patterns are detected
+    """
+    pass
+
+
 # Workflow-related exceptions
 class WorkflowException(KailashException):
     """Base exception for workflow-related errors."""

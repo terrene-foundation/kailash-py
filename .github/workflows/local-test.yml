@@ -1,0 +1,35 @@
+name: Local Test Workflow
+
+on:
+  push:
+    branches: [ main, feat/* ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        # Install additional dependencies that might not be in pyproject.toml
+        pip install requests
+    
+    - name: Test with pytest
+      run: |
+        # Run only the CI test file for local testing
+        pytest tests/test_ci_setup.py -v
+    
+    - name: Simple checks
+      run: |
+        echo "This workflow was successfully executed locally!"
+        python --version
