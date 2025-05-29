@@ -6,7 +6,7 @@ allowing for more efficient handling of I/O-bound operations in workflows.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Type
 
 from kailash.nodes.base import Node, NodeParameter
@@ -90,7 +90,7 @@ class AsyncNode(Node):
             NodeValidationError: If inputs or outputs are invalid
             NodeExecutionError: If execution fails
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         try:
             self.logger.info(f"Executing node {self.id} asynchronously")
             
@@ -114,7 +114,7 @@ class AsyncNode(Node):
             # Validate outputs
             validated_outputs = self.validate_outputs(outputs)
             
-            execution_time = (datetime.utcnow() - start_time).total_seconds()
+            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.logger.info(
                 f"Node {self.id} executed successfully in {execution_time:.3f}s"
             )

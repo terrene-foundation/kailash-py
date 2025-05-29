@@ -4,7 +4,7 @@ import yaml
 import logging
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Set, Union, Iterator, TypeVar, Generic
-from datetime import datetime
+from datetime import datetime, timezone
 
 import networkx as nx
 from pydantic import BaseModel, Field, ValidationError
@@ -81,7 +81,7 @@ class Workflow:
         if "version" not in self.metadata and version:
             self.metadata["version"] = version
         if "created_at" not in self.metadata:
-            self.metadata["created_at"] = datetime.utcnow().isoformat()
+            self.metadata["created_at"] = datetime.now(timezone.utc).isoformat()
         
         # Create directed graph for the workflow
         self.graph = nx.DiGraph()

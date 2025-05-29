@@ -1,6 +1,6 @@
 """Data models for task tracking."""
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 from uuid import uuid4
 
@@ -118,26 +118,26 @@ class TaskRun(BaseModel):
     def start(self) -> None:
         """Start the task."""
         self.update_status(TaskStatus.RUNNING)
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
     
     def complete(self, output_data: Optional[Dict[str, Any]] = None) -> None:
         """Complete the task successfully."""
         if output_data is not None:
             self.output_data = output_data
         self.update_status(TaskStatus.COMPLETED)
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
     
     def fail(self, error_message: str) -> None:
         """Mark the task as failed."""
         self.error = error_message
         self.update_status(TaskStatus.FAILED)
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
     
     def cancel(self, reason: str) -> None:
         """Cancel the task."""
         self.error = reason
         self.update_status(TaskStatus.CANCELLED)
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
     
     def create_retry(self) -> 'TaskRun':
         """Create a new task as a retry of this task."""
@@ -270,10 +270,10 @@ class TaskRun(BaseModel):
         if ended_at is not None:
             self.ended_at = ended_at
         elif status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED]:
-            self.ended_at = datetime.utcnow()
+            self.ended_at = datetime.now(timezone.utc)
         
         if status == TaskStatus.RUNNING and self.started_at is None:
-            self.started_at = datetime.utcnow()
+            self.started_at = datetime.now(timezone.utc)
             
         if metadata is not None:
             self.metadata.update(metadata)
@@ -386,7 +386,7 @@ class WorkflowRun(BaseModel):
             self.error = error
         
         if status in ["completed", "failed"] and self.ended_at is None:
-            self.ended_at = datetime.utcnow()
+            self.ended_at = datetime.now(timezone.utc)
     
     def add_task(self, task_id: str) -> None:
         """Add a task to this run.

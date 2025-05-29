@@ -67,7 +67,7 @@ class TestCLIIntegration:
         assert result.returncode == 0
         assert "Workflow is valid" in result.stdout
     
-    def test_cli_export_workflow(self, simple_workflow: WorkflowGraph, temp_data_dir: Path):
+    def test_cli_export_workflow(self, simple_workflow: Workflow, temp_data_dir: Path):
         """Test exporting a workflow via CLI."""
         # Create manifest file
         manifest = KailashManifest(

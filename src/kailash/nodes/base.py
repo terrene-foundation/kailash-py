@@ -21,7 +21,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -372,12 +372,12 @@ class Node(ABC):
             ) from e
         
         for param_name, param_def in params.items():
-            if param_def.required and param_name not in self.config:
-                if param_def.default is None:
+            if param_name not in self.config:
+                if param_def.required and param_def.default is None:
                     raise NodeConfigurationError(
                         f"Required parameter '{param_name}' not provided in configuration"
                     )
-                else:
+                elif param_def.default is not None:
                     self.config[param_name] = param_def.default
             
             if param_name in self.config:
@@ -649,7 +649,7 @@ class Node(ABC):
             - Metrics enable performance monitoring
             - Validation ensures data integrity
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         try:
             self.logger.info(f"Executing node {self.id}")
             
@@ -673,7 +673,7 @@ class Node(ABC):
             # Validate outputs
             validated_outputs = self.validate_outputs(outputs)
             
-            execution_time = (datetime.utcnow() - start_time).total_seconds()
+            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.logger.info(
                 f"Node {self.id} executed successfully in {execution_time:.3f}s"
             )

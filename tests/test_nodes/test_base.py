@@ -4,15 +4,16 @@ import pytest
 from typing import Dict, Any
 from datetime import datetime
 
-from kailash.nodes.base import Node, NodeParameter
-from kailash.sdk_exceptions import NodeValidationError, NodeConfigurationError
+from kailash.nodes.base import Node, NodeParameter, NodeMetadata
+from kailash.sdk_exceptions import (
+    NodeValidationError, 
+    NodeConfigurationError,
+    NodeExecutionError
+)
 
 
 class SimpleNode(Node):
     """Simple node for testing."""
-    
-    INPUT_SCHEMA = {"type": "object", "properties": {"x": {"type": "number"}}}
-    OUTPUT_SCHEMA = {"type": "object", "properties": {"y": {"type": "number"}}}
     
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define input parameters."""
@@ -31,8 +32,36 @@ class SimpleNode(Node):
         return {"y": x * 2}
 
 
-class NodeWithoutSchemas(Node):
-    """Node without schemas for testing defaults."""
+class NodeWithOptionalParams(Node):
+    """Node with optional parameters for testing."""
+    
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        """Define input parameters."""
+        return {
+            "x": NodeParameter(
+                name="x",
+                type=float,
+                required=True,
+                description="Required input"
+            ),
+            "y": NodeParameter(
+                name="y",
+                type=float,
+                required=False,
+                default=1.0,
+                description="Optional input"
+            )
+        }
+    
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic."""
+        x = kwargs.get("x")
+        y = kwargs.get("y", 1.0)
+        return {"result": x * y}
+
+
+class NodeWithoutParams(Node):
+    """Node without parameters for testing."""
     
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define input parameters."""
@@ -40,7 +69,7 @@ class NodeWithoutSchemas(Node):
     
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node's logic."""
-        return kwargs
+        return {"message": "Hello, World!"}
 
 
 class NodeWithError(Node):
@@ -55,306 +84,345 @@ class NodeWithError(Node):
         raise ValueError("Processing error")
 
 
-class TestNodeConfig:
-    """Test NodeConfig class."""
+class NodeWithOutputSchema(Node):
+    """Node with output schema validation."""
     
-    def test_node_config_creation(self):
-        """Test creating a node configuration."""
-        config = NodeConfig(
-            node_id="test-node",
-            name="Test Node",
-            version="1.0.0",
-            description="A test node",
-            dependencies=["dep1", "dep2"]
-        )
-        
-        assert config.node_id == "test-node"
-        assert config.name == "Test Node"
-        assert config.version == "1.0.0"
-        assert config.description == "A test node"
-        assert config.dependencies == ["dep1", "dep2"]
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        """Define input parameters."""
+        return {
+            "value": NodeParameter(
+                name="value",
+                type=int,
+                required=True,
+                description="Input value"
+            )
+        }
     
-    def test_node_config_defaults(self):
-        """Test default values in node configuration."""
-        config = NodeConfig(node_id="test", name="Test")
-        
-        assert config.version == "1.0.0"
-        assert config.description == ""
-        assert config.dependencies == []
+    def get_output_schema(self) -> Dict[str, NodeParameter]:
+        """Define output schema."""
+        return {
+            "double": NodeParameter(
+                name="double",
+                type=int,
+                required=True,
+                description="Double the input value"
+            ),
+            "square": NodeParameter(
+                name="square",
+                type=int,
+                required=True,
+                description="Square the input value"
+            )
+        }
     
-    def test_node_config_dict_conversion(self):
-        """Test converting config to/from dict."""
-        config = NodeConfig(
-            node_id="test",
-            name="Test",
-            version="2.0.0",
-            description="Test node"
-        )
-        
-        config_dict = config.dict()
-        assert config_dict["node_id"] == "test"
-        assert config_dict["version"] == "2.0.0"
-        
-        # Test recreating from dict
-        new_config = NodeConfig(**config_dict)
-        assert new_config == config
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic."""
+        value = kwargs.get("value", 0)
+        return {
+            "double": value * 2,
+            "square": value * value
+        }
 
 
 class TestBaseNode:
-    """Test BaseNode class."""
+    """Test base node functionality."""
     
     def test_node_creation_with_params(self):
         """Test creating a node with parameters."""
-        node = SimpleNode(node_id="test", name="Test Node")
-        
-        assert node.node_id == "test"
-        assert node.name == "Test Node"
-        assert node.version == "1.0.0"
-        assert node.description == ""
+        # Node with required parameter must provide it at init or runtime
+        node = SimpleNode(name="Test Node", x=5.0)
+        assert node.metadata.name == "Test Node"
+        assert node.config.get("x") == 5.0
     
-    def test_node_creation_with_config(self):
-        """Test creating a node with configuration."""
-        config = NodeConfig(
-            node_id="test",
-            name="Test Node",
-            version="2.0.0",
-            description="A test"
-        )
-        node = SimpleNode(config=config)
-        
-        assert node.node_id == "test"
-        assert node.name == "Test Node"
-        assert node.version == "2.0.0"
-        assert node.description == "A test"
+    def test_node_creation_without_required_params(self):
+        """Test that node creation without required params fails."""
+        with pytest.raises(NodeConfigurationError) as exc_info:
+            SimpleNode(name="Test Node")  # Missing required 'x' parameter
+        assert "Required parameter 'x' not provided" in str(exc_info.value)
     
-    def test_invalid_creation(self):
-        """Test invalid node creation."""
-        # Must provide either parameters or config
-        with pytest.raises(KailashConfigError):
-            SimpleNode()
+    def test_node_with_optional_params(self):
+        """Test node with optional parameters."""
+        node = NodeWithOptionalParams(name="Test", x=2.0)
+        assert node.config.get("x") == 2.0
+        assert node.config.get("y") == 1.0  # Default value
         
-        # Cannot provide both
-        config = NodeConfig(node_id="test", name="Test")
-        with pytest.raises(KailashConfigError):
-            SimpleNode(config=config, node_id="test2", name="Test2")
+        # Test with explicit optional param
+        node2 = NodeWithOptionalParams(name="Test", x=3.0, y=4.0)
+        assert node2.config.get("y") == 4.0
     
-    def test_default_schemas(self):
-        """Test default input/output schemas."""
-        node = NodeWithoutSchemas(node_id="test", name="Test")
-        
-        # Should have default empty object schemas
-        assert node.INPUT_SCHEMA == {"type": "object"}
-        assert node.OUTPUT_SCHEMA == {"type": "object"}
+    def test_node_without_params(self):
+        """Test node without parameters."""
+        node = NodeWithoutParams(name="No Params")
+        assert node.metadata.name == "No Params"
+        result = node.execute()
+        assert result == {"message": "Hello, World!"}
     
-    def test_validate_input_success(self):
+    def test_validate_inputs_success(self):
         """Test successful input validation."""
-        node = SimpleNode(node_id="test", name="Test")
+        node = SimpleNode(name="Test", x=1.0)
+        validated = node.validate_inputs(x=5.0)
+        assert validated == {"x": 5.0}
         
-        # Valid input
-        node.validate_input({"x": 42})
-        node.validate_input({"x": 3.14})
-        node.validate_input({"x": -10})
+        # Test type conversion
+        validated = node.validate_inputs(x="10.5")
+        assert validated == {"x": 10.5}
+        assert isinstance(validated["x"], float)
     
-    def test_validate_input_failure(self):
+    def test_validate_inputs_failure(self):
         """Test input validation failures."""
-        node = SimpleNode(node_id="test", name="Test")
+        node = SimpleNode(name="Test", x=1.0)
         
-        # Invalid type
-        with pytest.raises(KailashValidationError):
-            node.validate_input({"x": "not a number"})
+        # Missing required parameter
+        with pytest.raises(NodeValidationError) as exc_info:
+            node.validate_inputs()  # Missing 'x'
+        assert "Required input 'x' not provided" in str(exc_info.value)
         
-        # Missing required field
-        with pytest.raises(KailashValidationError):
-            node.validate_input({})
-        
-        # Invalid structure
-        with pytest.raises(KailashValidationError):
-            node.validate_input("not an object")
+        # Invalid type that can't be converted
+        with pytest.raises(NodeValidationError) as exc_info:
+            node.validate_inputs(x="not a number")
+        assert "must be of type float" in str(exc_info.value)
     
-    def test_validate_output_success(self):
+    def test_validate_outputs_success(self):
         """Test successful output validation."""
-        node = SimpleNode(node_id="test", name="Test")
-        
-        # Valid output
-        node.validate_output({"y": 42})
-        node.validate_output({"y": 3.14})
+        node = SimpleNode(name="Test", x=1.0)
+        outputs = {"y": 10.0}
+        validated = node.validate_outputs(outputs)
+        assert validated == outputs
     
-    def test_validate_output_failure(self):
-        """Test output validation failures."""
-        node = SimpleNode(node_id="test", name="Test")
+    def test_validate_outputs_with_schema(self):
+        """Test output validation with schema."""
+        node = NodeWithOutputSchema(name="Test", value=5)
+        
+        # Valid outputs
+        outputs = {"double": 10, "square": 25}
+        validated = node.validate_outputs(outputs)
+        assert validated == outputs
+        
+        # Missing required output
+        with pytest.raises(NodeValidationError) as exc_info:
+            node.validate_outputs({"double": 10})  # Missing 'square'
+        assert "Required output 'square' not provided" in str(exc_info.value)
         
         # Invalid type
-        with pytest.raises(KailashValidationError):
-            node.validate_output({"y": "not a number"})
+        with pytest.raises(NodeValidationError) as exc_info:
+            node.validate_outputs({"double": "ten", "square": 25})
+        assert "Output 'double' must be of type int" in str(exc_info.value)
+    
+    def test_validate_outputs_json_serializable(self):
+        """Test that outputs must be JSON-serializable."""
+        node = SimpleNode(name="Test", x=1.0)
         
-        # Missing required field
-        with pytest.raises(KailashValidationError):
-            node.validate_output({})
+        # Non-serializable object
+        class NonSerializable:
+            pass
+        
+        with pytest.raises(NodeValidationError) as exc_info:
+            node.validate_outputs({"obj": NonSerializable()})
+        assert "must be JSON-serializable" in str(exc_info.value)
     
     def test_execute_success(self):
         """Test successful node execution."""
-        node = SimpleNode(node_id="test", name="Test")
+        node = SimpleNode(name="Test", x=2.0)
         
-        result = node.execute({"x": 21})
-        assert result == {"y": 42}
+        # Execute with config value
+        result = node.execute()
+        assert result == {"y": 4.0}
         
-        # Test with float
-        result = node.execute({"x": 3.5})
-        assert result == {"y": 7.0}
+        # Execute with runtime override
+        result = node.execute(x=3.0)
+        assert result == {"y": 6.0}
     
     def test_execute_with_invalid_input(self):
         """Test execution with invalid input."""
-        node = SimpleNode(node_id="test", name="Test")
+        node = SimpleNode(name="Test", x=1.0)
         
-        with pytest.raises(KailashValidationError):
-            node.execute({"x": "invalid"})
-    
-    def test_execute_with_invalid_output(self):
-        """Test execution that produces invalid output."""
-        class BadOutputNode(BaseNode):
-            OUTPUT_SCHEMA = {"type": "object", "properties": {"y": {"type": "string"}}}
-            
-            def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-                return {"y": 42}  # Returns number instead of string
-        
-        node = BadOutputNode(node_id="test", name="Test")
-        
-        with pytest.raises(KailashValidationError):
-            node.execute({})
+        with pytest.raises(NodeValidationError):
+            node.execute(x="invalid")
     
     def test_execute_with_error(self):
         """Test execution that raises an error."""
-        node = NodeWithError(node_id="test", name="Test")
+        node = NodeWithError(name="Error Node")
         
-        with pytest.raises(ValueError, match="Processing error"):
-            node.execute({})
+        with pytest.raises(NodeExecutionError) as exc_info:
+            node.execute()
+        assert "Processing error" in str(exc_info.value)
     
     def test_get_metadata(self):
         """Test getting node metadata."""
         node = SimpleNode(
-            node_id="test",
             name="Test Node",
-            version="1.5.0",
-            description="Test description"
+            x=1.0,
+            description="A test node",
+            version="2.0.0",
+            author="Test Author",
+            tags={"test", "example"}
         )
         
-        metadata = node.get_metadata()
-        
-        assert metadata["node_id"] == "test"
-        assert metadata["name"] == "Test Node"
-        assert metadata["node_type"] == "SimpleNode"
-        assert metadata["version"] == "1.5.0"
-        assert metadata["description"] == "Test description"
-        assert metadata["input_schema"] == node.INPUT_SCHEMA
-        assert metadata["output_schema"] == node.OUTPUT_SCHEMA
-        assert "created_at" in metadata
-        
-        # Verify created_at is a valid timestamp
-        created_at = datetime.fromisoformat(metadata["created_at"])
-        assert isinstance(created_at, datetime)
+        metadata = node.metadata
+        assert isinstance(metadata, NodeMetadata)
+        assert metadata.name == "Test Node"
+        assert metadata.description == "A test node"
+        assert metadata.version == "2.0.0"
+        assert metadata.author == "Test Author"
+        assert metadata.tags == {"test", "example"}
     
-    def test_node_equality(self):
-        """Test node equality comparison."""
-        node1 = SimpleNode(node_id="test", name="Test")
-        node2 = SimpleNode(node_id="test", name="Test")
-        node3 = SimpleNode(node_id="different", name="Test")
+    def test_node_to_dict(self):
+        """Test converting node to dictionary."""
+        node = SimpleNode(name="Test", x=1.0)
+        node_dict = node.to_dict()
         
-        assert node1 == node2  # Same ID
-        assert node1 != node3  # Different ID
-        assert node1 != "not a node"  # Different type
+        assert node_dict["type"] == "SimpleNode"
+        assert node_dict["id"] == node.id
+        assert "metadata" in node_dict
+        assert "config" in node_dict
+        assert "parameters" in node_dict
+        
+        # Check parameter conversion
+        assert node_dict["parameters"]["x"]["type"] == "float"
+        assert node_dict["parameters"]["x"]["required"] is True
+    
+    def test_node_id_generation(self):
+        """Test automatic node ID generation."""
+        # Default ID is class name
+        node1 = SimpleNode(name="Test", x=1.0)
+        assert node1.id == "SimpleNode"
+        
+        # Custom ID
+        node2 = SimpleNode(id="custom_id", name="Test", x=1.0)
+        assert node2.id == "custom_id"
 
 
 class TestNodeIntegration:
-    """Integration tests for node functionality."""
+    """Test node integration scenarios."""
     
     def test_complex_node_workflow(self):
-        """Test a complex node with multiple features."""
-        class ComplexNode(BaseNode):
-            INPUT_SCHEMA = {
-                "type": "object",
-                "properties": {
-                    "numbers": {
-                        "type": "array",
-                        "items": {"type": "number"}
-                    },
-                    "operation": {
-                        "type": "string",
-                        "enum": ["sum", "product"]
-                    }
-                },
-                "required": ["numbers", "operation"]
-            }
-            OUTPUT_SCHEMA = {
-                "type": "object",
-                "properties": {
-                    "result": {"type": "number"},
-                    "count": {"type": "integer"}
-                }
-            }
+        """Test a more complex node implementation."""
+        class DataProcessor(Node):
+            """Process data with multiple steps."""
             
-            def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-                numbers = data["numbers"]
-                operation = data["operation"]
+            def get_parameters(self) -> Dict[str, NodeParameter]:
+                return {
+                    "data": NodeParameter(
+                        name="data",
+                        type=list,
+                        required=True,
+                        description="Input data list"
+                    ),
+                    "operation": NodeParameter(
+                        name="operation",
+                        type=str,
+                        required=False,
+                        default="sum",
+                        description="Operation to perform"
+                    )
+                }
+            
+            def get_output_schema(self) -> Dict[str, NodeParameter]:
+                return {
+                    "result": NodeParameter(
+                        name="result",
+                        type=float,
+                        required=True,
+                        description="Processing result"
+                    ),
+                    "count": NodeParameter(
+                        name="count",
+                        type=int,
+                        required=True,
+                        description="Number of items processed"
+                    )
+                }
+            
+            def run(self, **kwargs) -> Dict[str, Any]:
+                data = kwargs.get("data", [])
+                operation = kwargs.get("operation", "sum")
                 
                 if operation == "sum":
-                    result = sum(numbers)
+                    result = sum(data)
+                elif operation == "mean":
+                    result = sum(data) / len(data) if data else 0
+                elif operation == "max":
+                    result = max(data) if data else 0
                 else:
-                    result = 1
-                    for num in numbers:
-                        result *= num
+                    raise ValueError(f"Unknown operation: {operation}")
                 
                 return {
-                    "result": result,
-                    "count": len(numbers)
+                    "result": float(result),
+                    "count": len(data)
                 }
         
-        node = ComplexNode(node_id="complex", name="Complex Node")
+        # Test the processor
+        processor = DataProcessor(name="Processor", data=[1, 2, 3, 4, 5])
         
-        # Test sum operation
-        result = node.execute({
-            "numbers": [1, 2, 3, 4],
-            "operation": "sum"
-        })
-        assert result["result"] == 10
-        assert result["count"] == 4
+        # Test sum operation (default)
+        result = processor.execute()
+        assert result["result"] == 15.0
+        assert result["count"] == 5
         
-        # Test product operation
-        result = node.execute({
-            "numbers": [2, 3, 4],
-            "operation": "product"
-        })
-        assert result["result"] == 24
+        # Test mean operation
+        result = processor.execute(operation="mean")
+        assert result["result"] == 3.0
+        
+        # Test with runtime data override
+        result = processor.execute(data=[10, 20, 30], operation="max")
+        assert result["result"] == 30.0
         assert result["count"] == 3
-        
-        # Test with invalid operation
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "numbers": [1, 2],
-                "operation": "invalid"
-            })
     
     def test_node_inheritance(self):
         """Test node inheritance patterns."""
-        class BaseProcessor(BaseNode):
-            """Base processor node."""
+        class BaseProcessor(Node):
+            """Base processor with common functionality."""
             
-            INPUT_SCHEMA = {"type": "object", "properties": {"data": {"type": "string"}}}
+            def get_parameters(self) -> Dict[str, NodeParameter]:
+                params = {
+                    "input_data": NodeParameter(
+                        name="input_data",
+                        type=Any,
+                        required=True,
+                        description="Input data"
+                    )
+                }
+                # Allow subclasses to add parameters
+                params.update(self._get_additional_parameters())
+                return params
             
-            def preprocess(self, data: str) -> str:
-                """Preprocess data."""
-                return data.strip().lower()
+            def _get_additional_parameters(self) -> Dict[str, NodeParameter]:
+                """Override in subclasses to add parameters."""
+                return {}
+            
+            def run(self, **kwargs) -> Dict[str, Any]:
+                input_data = kwargs.get("input_data")
+                processed = self._process(input_data, **kwargs)
+                return {"output": processed}
+            
+            def _process(self, data: Any, **kwargs) -> Any:
+                """Override in subclasses."""
+                raise NotImplementedError()
         
-        class SpecificProcessor(BaseProcessor):
-            """Specific processor extending base."""
+        class StringProcessor(BaseProcessor):
+            """Process string data."""
             
-            OUTPUT_SCHEMA = {"type": "object", "properties": {"processed": {"type": "string"}}}
+            def _get_additional_parameters(self) -> Dict[str, NodeParameter]:
+                return {
+                    "uppercase": NodeParameter(
+                        name="uppercase",
+                        type=bool,
+                        required=False,
+                        default=False,
+                        description="Convert to uppercase"
+                    )
+                }
             
-            def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-                """Process data with preprocessing."""
-                processed = self.preprocess(data["data"])
-                return {"processed": processed.upper()}
+            def _process(self, data: Any, **kwargs) -> Any:
+                result = str(data)
+                if kwargs.get("uppercase", False):
+                    result = result.upper()
+                return result
         
-        node = SpecificProcessor(node_id="specific", name="Specific Processor")
+        # Test the inherited node
+        processor = StringProcessor(name="String Proc", input_data="hello")
+        result = processor.execute()
+        assert result["output"] == "hello"
         
-        result = node.execute({"data": "  HELLO WORLD  "})
-        assert result["processed"] == "HELLO WORLD"
+        result = processor.execute(uppercase=True)
+        assert result["output"] == "HELLO"

@@ -1,6 +1,6 @@
 """Local runtime engine for executing workflows."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
@@ -167,7 +167,7 @@ class LocalRuntime:
                         run_id=run_id,
                         node_id=node_id,
                         node_type=node_instance.__class__.__name__,
-                        started_at=datetime.utcnow()
+                        started_at=datetime.now(timezone.utc)
                     )
                 except Exception as e:
                     self.logger.warning(f"Failed to create task for node '{node_id}': {e}")
@@ -190,9 +190,9 @@ class LocalRuntime:
                     task.update_status(TaskStatus.RUNNING)
                 
                 # Execute node
-                start_time = datetime.utcnow()
+                start_time = datetime.now(timezone.utc)
                 outputs = node_instance.execute(**inputs)
-                execution_time = (datetime.utcnow() - start_time).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                 
                 # Store outputs
                 node_outputs[node_id] = outputs
@@ -206,7 +206,7 @@ class LocalRuntime:
                     task.update_status(
                         TaskStatus.COMPLETED,
                         result=outputs,
-                        ended_at=datetime.utcnow(),
+                        ended_at=datetime.now(timezone.utc),
                         metadata={"execution_time": execution_time}
                     )
                 
@@ -223,7 +223,7 @@ class LocalRuntime:
                     task.update_status(
                         TaskStatus.FAILED,
                         error=str(e),
-                        ended_at=datetime.utcnow()
+                        ended_at=datetime.now(timezone.utc)
                     )
                 
                 # Determine if we should continue
