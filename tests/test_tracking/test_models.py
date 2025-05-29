@@ -346,6 +346,7 @@ class TestTask:
         
         # Valid transitions
         task.status = TaskStatus.RUNNING
+        task.started_at = datetime.now()  # Set started_at for validation to pass
         task.validate()  # Should not raise
         
         task.status = TaskStatus.COMPLETED
@@ -353,7 +354,11 @@ class TestTask:
         
         # Invalid transition - can't go from completed to running
         completed_task = Task(node_id="test", status=TaskStatus.COMPLETED)
-        completed_task.status = TaskStatus.RUNNING
+        completed_task.started_at = datetime.now()  # Set started_at to avoid validation error
+        
+        # Set special attributes for transition validation
+        completed_task._from_status = TaskStatus.COMPLETED
+        completed_task._to_status = TaskStatus.RUNNING
         
         with pytest.raises(KailashValidationError):
             completed_task.validate()

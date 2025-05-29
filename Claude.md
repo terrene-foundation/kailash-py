@@ -75,19 +75,6 @@ without deep technical knowledge.
    - Side effects: Any state changes or external impacts
    - Examples: Concrete usage examples where helpful
 
-5. **Product Requirements Document (PRD)**:
-   - Include the full PRD in the `docs/prd/` directory
-   - Reference the PRD in code comments when implementing specific requirements
-   - Update the PRD if requirements change during development
-   - Link ADRs to relevant sections of the PRD
-
-6. **README.md**: Include comprehensive documentation with:
-   - Installation instructions
-   - Quick start guide
-   - Example usage
-   - API reference
-   - Contributing guidelines
-   - Reference to the PRD and ADRs
 
 ## Project Structure
 
@@ -154,39 +141,6 @@ kailash_python_sdk/           # Project root directory
 ├── setup.py                  # Package setup script
 └── README.md                 # Project README
 ```
-## PRD Requirements
-1. **Product Requirements Document (PRD)**:
-   - Include the full PRD in the `docs/prd/` directory
-   - Reference the PRD when implementing specific requirements
-   - Update the PRD if requirements change during development
-   - Link ADRs to relevant sections of the PRD
-
-## Tests and Validation
-
-1. **Unit Tests**:
-   - Create unit tests for all components using pytest
-   - Maintain >80% code coverage
-   - Place tests in a separate `tests/` directory mirroring the package structure
-
-2. **Integration Tests**:
-   - Create integration tests for workflow execution
-   - Test export functionality for compatibility with Kailash
-
-3. **Documentation Tests**:
-   - Include examples in docstrings that can be verified with doctest
-
-## Examples
-1. **Basic Node Example**:
-   - Create a simple node that reads data from a file and writes it to another file
-   - Include example code in the `examples/` directory
-
-2. **Simple Workflow Example**:
-   - Create a simple workflow that connects two nodes (e.g., a data reader and a transformer)
-   - Include example code in the `examples/` directory
-   
-3. **Complex Workflow Example**:
-   - Create a complex workflow that includes multiple nodes, data transformations, and AI model execution
-   - Include example code in the `examples/` directory
 
 ## Design Principles
 
@@ -250,55 +204,30 @@ Keep dependencies minimal and explicit:
    - Maintain compatibility with existing Kailash architecture
    - Document any breaking changes clearly
 
-## Additional Notes
+## Must Follow: Code Generation Guidelines
 
-- Focus on making the API intuitive for ABCs who are not deep technical experts
-- Prioritize a smooth developer experience
-- Balance flexibility with guardrails to guide users toward architectural compliance
-- Include helpful error messages that guide users toward correct usage
+1. **PRD Requirements**
+   - Always reference the PRDs in `docs/prd` when generating codes and implementing features.
+   - Update the PRD if requirements change during development
+   - Link ADRs to relevant sections of the PRD
 
-## Deliverables
+2. **Architecture Decision Records (ADRs)**
+   - All significant architectural decisions should be documented using ADRs:
+     - **Format**: Follow the ADR template in `docs/adr/`
+     - **Numbering**: Use sequential numbering (e.g., ADR-0001)
+     - **Status**: Mark each ADR as Proposed, Accepted, Deprecated, or Superseded
+     - **Updates**: Create new ADRs rather than modifying existing ones
+     - **Required ADRs**:
+       - Base Node Interface
+       - Workflow Representation
+       - Local Execution Strategy
+       - Data Passing Mechanism
+       - Export Format
+       - Task Tracking Design
+       - Storage Backend Strategy
+     - **README.md**: Include a summary of each ADR in docs/adr/README.md
 
-The final deliverables should include:
-
-1. Complete `kailash_python_sdk` package with all components
-2. Comprehensive test suite
-3. Documentation including:
-   - API reference
-   - User guide
-   - Examples
-   - Developer guide
-   - Architecture Decision Records (ADRs)
-4. Example projects demonstrating typical usage
-5. Setup files for PyPI publication
-
-## Architecture Decision Records (ADRs)
-
-All significant architectural decisions should be documented using ADRs:
-
-1. **Format**: Follow the ADR template in `docs/adr/`
-2. **Numbering**: Use sequential numbering (e.g., ADR-0001)
-3. **Status**: Mark each ADR as Proposed, Accepted, Deprecated, or Superseded
-4. **Updates**: Create new ADRs rather than modifying existing ones
-5. **Required ADRs**:
-   - Base Node Interface
-   - Workflow Representation
-   - Local Execution Strategy
-   - Data Passing Mechanism
-   - Export Format
-   - Task Tracking Design
-   - Storage Backend Strategy
-
-## Code Generation Guidelines
-1. Instructions are inside the `docs/instructions/` directory. Read the latest instructions before starting any implementation.
-   - Example: `docs/instructions/001-initial.md` contains the initial instructions for the project.
-   - Example: `docs/instructions/002-advanced.md` contains advanced instructions for the project.
-   
-2. Always reference the PRDs in docs/prd when generating codes.
-
-3. Record major architectural design changes in 'docs/adr'
-
-4. **Todos List**:
+3. **Todos List**:
    - Use the TodoRead and TodoWrite tools to manage tasks.
    - Create the list of tasks before starting the implementation.
    - Also, create and maintain all todos in `docs/todos/000-master.md`.
@@ -313,9 +242,53 @@ All significant architectural decisions should be documented using ADRs:
          - Description: Create the base class for all nodes with validation and execution contract
          - Status: In Progress
       ```
-   - Other todo files in the same directory should be used to record a summary of completed tasks.
-     
-5. **Github Issues and Project Update**
-   - Use the Github Issues and Projects to track tasks and progress.
-   - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
-   - Update the project board as tasks are completed.
+   - Other todo files in the same directory should be used to record a summary of completed tasks. 
+   - Queue the following tasks at the end of each run's todo list:
+     - examine the examples in /examples, identify those that may be affected by the latest edits, and ensure these examples can work.
+     - ensure all unit, integration, and documentation tests passed
+     - ensure local github actions test passed
+     - update adr, todos, and readme.
+
+4. **Examples**:
+   - Always create example nodes and workflows in the `examples/` directory.
+   - Ensure examples demonstrate best practices and common usage patterns.
+   - Test examples to ensure they work as expected.
+   - Create a basic, simple, and complex examples, such as:
+     - Basic Node Example: Create a simple node that reads data from a file and writes it to another file
+     - Simple Workflow Example: Create a simple workflow that connects two nodes (e.g., a data reader and a transformer)
+     - Complex Workflow Example: Create a complex workflow that includes multiple nodes, data transformations, and AI model execution
+
+5. **Unit Tests**:
+   - Create unit tests for all components using pytest
+   - Maintain >80% code coverage
+   - Place tests in a separate `tests/` directory mirroring the package structure
+
+6. **Integration Tests**:
+   - Create integration tests for workflow execution
+   - Test export functionality for compatibility with Kailash
+
+7. **Documentation Tests**:
+   - Include examples in docstrings that can be verified with doctest
+
+8. **Github Actions**:
+   - Use Github Actions for continuous integration.
+   - Test locally before pushing changes.
+   - Ensure code is linted and formatted using Black and isort before merging.
+
+9. **Update README.md**
+   - Overview of the project
+   - Installation instructions
+   - Quick start guide
+   - Usage examples
+   - API reference
+   - Contribution guidelines
+   - Reference to the PRD and ADRs
+
+10. **Update Claude.md**
+    - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
+    - Update the project structure if there are any changes to the directory layout or file organization.
+   
+11. **Github Issues and Project Update**
+    - Use the Github Issues and Projects to track tasks and progress. 
+    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
+    - Update the project board as tasks are completed.

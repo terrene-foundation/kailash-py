@@ -16,6 +16,7 @@ class MockStorage(StorageBackend):
     def __init__(self):
         """Initialize mock storage."""
         self.tasks = {}
+        self.runs = {}
     
     def save_task(self, task: Task) -> None:
         """Save task to storage."""
@@ -24,6 +25,10 @@ class MockStorage(StorageBackend):
     def get_task(self, task_id: str) -> Task:
         """Get task from storage."""
         return self.tasks.get(task_id)
+    
+    def load_task(self, task_id: str) -> Task:
+        """Load task from storage."""
+        return self.get_task(task_id)
     
     def get_all_tasks(self) -> list[Task]:
         """Get all tasks."""
@@ -56,6 +61,52 @@ class MockStorage(StorageBackend):
             if getattr(task, key) != value:
                 return False
         return True
+    
+    # Required by StorageBackend abstract class
+    def save_run(self, run: WorkflowRun) -> None:
+        """Save workflow run."""
+        self.runs[run.run_id] = run
+    
+    def load_run(self, run_id: str) -> Optional[WorkflowRun]:
+        """Load workflow run."""
+        return self.runs.get(run_id)
+    
+    def list_runs(self, workflow_name: Optional[str] = None, status: Optional[str] = None) -> List[WorkflowRun]:
+        """List workflow runs."""
+        results = []
+        for run in self.runs.values():
+            if workflow_name and run.workflow_name != workflow_name:
+                continue
+            if status and run.status != status:
+                continue
+            results.append(run)
+        return results
+    
+    def list_tasks(self, run_id: str, node_id: Optional[str] = None, status: Optional[TaskStatus] = None) -> List[Task]:
+        """List tasks for a run."""
+        results = []
+        for task in self.tasks.values():
+            if task.run_id != run_id:
+                continue
+            if node_id and task.node_id != node_id:
+                continue
+            if status and task.status != status:
+                continue
+            results.append(task)
+        return results
+    
+    def clear(self) -> None:
+        """Clear all stored data."""
+        self.tasks.clear()
+        self.runs.clear()
+    
+    def export_run(self, run_id: str, output_path: str) -> None:
+        """Export a run and its tasks."""
+        pass
+    
+    def import_run(self, input_path: str) -> str:
+        """Import a run and its tasks."""
+        return "imported-run-id"
 
 
 class TestTaskManager:

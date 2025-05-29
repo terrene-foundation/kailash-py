@@ -50,6 +50,17 @@ class NodeConfigurationError(NodeException):
     pass
 
 
+class SafetyViolationError(NodeException):
+    """Raised when code safety validation fails.
+    
+    This typically occurs when:
+    - Code contains dangerous operations (eval, exec, import)
+    - Unsafe module imports are attempted
+    - Malicious code patterns are detected
+    """
+    pass
+
+
 # Workflow-related exceptions
 class WorkflowException(KailashException):
     """Base exception for workflow-related errors."""
@@ -138,6 +149,18 @@ class StorageException(KailashException):
     pass
 
 
+class KailashStorageError(StorageException):
+    """Raised when storage operations fail.
+    
+    This typically occurs when:
+    - File I/O operations fail
+    - Database connections fail
+    - Storage permissions are insufficient
+    - Data formatting is incorrect
+    """
+    pass
+
+
 # Import/Export exceptions
 class ExportException(KailashException):
     """Raised when export operations fail.
@@ -169,6 +192,14 @@ class ConfigurationException(KailashException):
     - Configuration file is missing
     - Required configuration values are not provided
     - Configuration schema is invalid
+    """
+    pass
+
+
+class KailashConfigError(ConfigurationException):
+    """Raised when configuration is invalid (legacy name).
+    
+    This is an alias for ConfigurationException for backward compatibility.
     """
     pass
 
@@ -217,6 +248,29 @@ class TemplateError(KailashException):
     - Template file is missing
     - Template syntax is invalid
     - Variable substitution fails
+    """
+    pass
+
+
+# Code execution exceptions
+class SafetyViolationError(NodeException):
+    """Raised when code execution violates safety rules.
+    
+    This typically occurs when:
+    - Potentially dangerous operations are attempted
+    - Resource limits are exceeded
+    - Security policies are violated
+    """
+    pass
+
+
+class CodeExecutionError(NodeException):
+    """Raised when code execution fails.
+    
+    This typically occurs when:
+    - Syntax errors in user code
+    - Runtime errors during execution
+    - Import or dependency issues
     """
     pass
 

@@ -1,9 +1,10 @@
 """Database storage backend for task tracking."""
 import json
+from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
-from ..models import TaskRun, WorkflowRun, TaskStatus
+from ..models import TaskRun, WorkflowRun, TaskStatus, TaskMetrics
 from .base import StorageBackend
 
 
@@ -24,8 +25,10 @@ class DatabaseStorage(StorageBackend):
             db_path = connection_string.replace("sqlite://", "")
             db_path = os.path.expanduser(db_path)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
-            connection_string = f"sqlite:///{db_path}"
-        
+        else:
+            # If not a sqlite:// connection string, assume it's a direct path
+            db_path = connection_string
+            
         # For this implementation, we'll use direct SQLite
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
@@ -50,6 +53,37 @@ class DatabaseStorage(StorageBackend):
         
         # Create tasks table
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                task_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                node_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT,
+                ended_at TEXT,
+                result TEXT,
+                error TEXT,
+                metadata TEXT,
+                input_data TEXT,
+                output_data TEXT,
+                FOREIGN KEY (run_id) REFERENCES workflow_runs(run_id)
+            )
+        """)
+        
+        # Create metrics table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS metrics (
+                task_id TEXT PRIMARY KEY,
+                cpu_usage REAL,
+                memory_usage_mb REAL,
+                duration REAL,
+                custom_metrics TEXT,
+                FOREIGN KEY (task_id) REFERENCES tasks(task_id)
+            )
+        """)
+        
+        # For compatibility with code that uses task_runs
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS task_runs (
                 task_id TEXT PRIMARY KEY,
                 run_id TEXT NOT NULL,
@@ -61,6 +95,8 @@ class DatabaseStorage(StorageBackend):
                 result TEXT,
                 error TEXT,
                 metadata TEXT,
+                input_data TEXT,
+                output_data TEXT,
                 FOREIGN KEY (run_id) REFERENCES workflow_runs(run_id)
             )
         """)
@@ -68,9 +104,17 @@ class DatabaseStorage(StorageBackend):
         # Create indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_workflow ON workflow_runs(workflow_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON workflow_runs(status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_run ON task_runs(run_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_node ON task_runs(node_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON task_runs(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_run ON tasks(run_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_node ON tasks(node_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_node_id ON tasks(node_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_status ON tasks(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON tasks(started_at)")
+        
+        # Indexes for task_runs table
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_run ON task_runs(run_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_node ON task_runs(node_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_status ON task_runs(status)")
         
         self.conn.commit()
     
@@ -158,22 +202,40 @@ class DatabaseStorage(StorageBackend):
         """Save a task."""
         cursor = self.conn.cursor()
         
-        cursor.execute("""
-            INSERT OR REPLACE INTO task_runs 
-            (task_id, run_id, node_id, node_type, status, started_at, ended_at, result, error, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            task.task_id,
-            task.run_id,
-            task.node_id,
-            task.node_type,
-            task.status,
-            task.started_at.isoformat() if task.started_at else None,
-            task.ended_at.isoformat() if task.ended_at else None,
-            json.dumps(task.result) if task.result else None,
-            task.error,
-            json.dumps(task.metadata)
-        ))
+        # Insert into both tables for compatibility
+        for table_name in ["tasks", "task_runs"]:
+            cursor.execute(f"""
+                INSERT OR REPLACE INTO {table_name} 
+                (task_id, run_id, node_id, node_type, status, started_at, ended_at, result, error, metadata, input_data, output_data)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                task.task_id,
+                task.run_id,
+                task.node_id,
+                task.node_type,
+                task.status,
+                task.started_at.isoformat() if task.started_at else None,
+                task.ended_at.isoformat() if task.ended_at else None,
+                json.dumps(task.result) if task.result else None,
+                task.error,
+                json.dumps(task.metadata),
+                json.dumps(task.input_data) if task.input_data else None,
+                json.dumps(task.output_data) if task.output_data else None
+            ))
+        
+        # Save metrics if present
+        if hasattr(task, 'metrics') and task.metrics:
+            cursor.execute("""
+                INSERT OR REPLACE INTO metrics 
+                (task_id, cpu_usage, memory_usage_mb, duration, custom_metrics)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                task.task_id,
+                task.metrics.cpu_usage,
+                task.metrics.memory_usage_mb,
+                task.metrics.duration,
+                json.dumps(task.metrics.custom_metrics) if hasattr(task.metrics, 'custom_metrics') else None
+            ))
         
         self.conn.commit()
     
@@ -181,11 +243,19 @@ class DatabaseStorage(StorageBackend):
         """Load a task by ID."""
         cursor = self.conn.cursor()
         
+        # Try tasks table first
         cursor.execute("""
-            SELECT * FROM task_runs WHERE task_id = ?
+            SELECT * FROM tasks WHERE task_id = ?
         """, (task_id,))
         
         row = cursor.fetchone()
+        if not row:
+            # Fall back to task_runs if not found
+            cursor.execute("""
+                SELECT * FROM task_runs WHERE task_id = ?
+            """, (task_id,))
+            row = cursor.fetchone()
+            
         if not row:
             return None
         
@@ -197,8 +267,51 @@ class DatabaseStorage(StorageBackend):
         if data['result']:
             data['result'] = json.loads(data['result'])
         data['metadata'] = json.loads(data['metadata'] or '{}')
+        if data.get('input_data'):
+            try:
+                data['input_data'] = json.loads(data['input_data'])
+            except (json.JSONDecodeError, TypeError):
+                # Handle case where it's already a dict or invalid JSON
+                if isinstance(data['input_data'], str) and data['input_data'].strip():
+                    # Try to sanitize it
+                    try:
+                        data['input_data'] = {"value": data['input_data']}
+                    except:
+                        data['input_data'] = None
+        if data.get('output_data'):
+            try:
+                data['output_data'] = json.loads(data['output_data'])
+            except (json.JSONDecodeError, TypeError):
+                # Handle case where it's already a dict or invalid JSON
+                if isinstance(data['output_data'], str) and data['output_data'].strip():
+                    # Try to sanitize it
+                    try:
+                        data['output_data'] = {"value": data['output_data']}
+                    except:
+                        data['output_data'] = None
         
-        return TaskRun.model_validate(data)
+        task = TaskRun.model_validate(data)
+        
+        # Load metrics if available
+        cursor.execute("SELECT * FROM metrics WHERE task_id = ?", (task_id,))
+        metrics_row = cursor.fetchone()
+        if metrics_row:
+            metrics_columns = [desc[0] for desc in cursor.description]
+            metrics_data = dict(zip(metrics_columns, metrics_row))
+            
+            # Parse custom metrics if present
+            if metrics_data.get('custom_metrics'):
+                metrics_data['custom_metrics'] = json.loads(metrics_data['custom_metrics'])
+                
+            # Create metrics object
+            task.metrics = TaskMetrics(
+                cpu_usage=metrics_data.get('cpu_usage'),
+                memory_usage=metrics_data.get('memory_usage_mb'),
+                duration=metrics_data.get('duration'),
+                custom_metrics=metrics_data.get('custom_metrics')
+            )
+        
+        return task
     
     def list_tasks(self, run_id: str,
                    node_id: Optional[str] = None,
@@ -206,7 +319,7 @@ class DatabaseStorage(StorageBackend):
         """List tasks for a run."""
         cursor = self.conn.cursor()
         
-        query = "SELECT * FROM task_runs WHERE run_id = ?"
+        query = "SELECT * FROM tasks WHERE run_id = ?"
         params = [run_id]
         
         if node_id:
@@ -231,6 +344,28 @@ class DatabaseStorage(StorageBackend):
             if data['result']:
                 data['result'] = json.loads(data['result'])
             data['metadata'] = json.loads(data['metadata'] or '{}')
+            if data.get('input_data'):
+                try:
+                    data['input_data'] = json.loads(data['input_data'])
+                except (json.JSONDecodeError, TypeError):
+                    # Handle case where it's already a dict or invalid JSON
+                    if isinstance(data['input_data'], str) and data['input_data'].strip():
+                        # Try to sanitize it by wrapping in quotes if needed
+                        try:
+                            data['input_data'] = {"value": data['input_data']}
+                        except:
+                            data['input_data'] = None
+            if data.get('output_data'):
+                try:
+                    data['output_data'] = json.loads(data['output_data'])
+                except (json.JSONDecodeError, TypeError):
+                    # Handle case where it's already a dict or invalid JSON
+                    if isinstance(data['output_data'], str) and data['output_data'].strip():
+                        # Try to sanitize it
+                        try:
+                            data['output_data'] = {"value": data['output_data']}
+                        except:
+                            data['output_data'] = None
             
             tasks.append(TaskRun.model_validate(data))
         
@@ -281,6 +416,134 @@ class DatabaseStorage(StorageBackend):
             self.save_task(task)
         
         return run.run_id
+    
+    def get_task(self, task_id: str) -> Optional[TaskRun]:
+        """Load a task by ID.
+        
+        Alias for load_task for API compatibility.
+        
+        Args:
+            task_id: Task ID to load
+            
+        Returns:
+            TaskRun or None if not found
+        """
+        return self.load_task(task_id)
+        
+    def get_all_tasks(self) -> List[TaskRun]:
+        """Get all tasks.
+        
+        Returns:
+            List of all TaskRun objects
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM task_runs")
+        
+        tasks = []
+        columns = [desc[0] for desc in cursor.description]
+        
+        for row in cursor.fetchall():
+            data = dict(zip(columns, row))
+            
+            # Parse JSON fields
+            if data['result']:
+                data['result'] = json.loads(data['result'])
+            data['metadata'] = json.loads(data['metadata'] or '{}')
+            
+            tasks.append(TaskRun.model_validate(data))
+        
+        return tasks
+    
+    def update_task(self, task: TaskRun) -> None:
+        """Update an existing task.
+        
+        Uses save_task internally since our implementation uses REPLACE.
+        
+        Args:
+            task: TaskRun to update
+        """
+        self.save_task(task)
+    
+    def delete_task(self, task_id: str) -> None:
+        """Delete a task.
+        
+        Args:
+            task_id: Task ID to delete
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
+        cursor.execute("DELETE FROM task_runs WHERE task_id = ?", (task_id,))
+        self.conn.commit()
+    
+    def query_tasks(self, node_id: Optional[str] = None, status: Optional[TaskStatus] = None,
+                    started_after: Optional[datetime] = None, completed_before: Optional[datetime] = None) -> List[TaskRun]:
+        """Query tasks with filters.
+        
+        Args:
+            node_id: Filter by node ID
+            status: Filter by status
+            started_after: Filter by start time (inclusive)
+            completed_before: Filter by completion time (exclusive)
+            
+        Returns:
+            List of matching TaskRun objects
+        """
+        cursor = self.conn.cursor()
+        
+        query = "SELECT * FROM task_runs WHERE 1=1"
+        params = []
+        
+        if node_id:
+            query += " AND node_id = ?"
+            params.append(node_id)
+        
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        
+        if started_after:
+            query += " AND started_at >= ?"
+            params.append(started_after.isoformat() if hasattr(started_after, 'isoformat') else started_after)
+        
+        if completed_before:
+            query += " AND ended_at < ?"
+            params.append(completed_before.isoformat() if hasattr(completed_before, 'isoformat') else completed_before)
+        
+        cursor.execute(query, params)
+        
+        tasks = []
+        columns = [desc[0] for desc in cursor.description]
+        
+        for row in cursor.fetchall():
+            data = dict(zip(columns, row))
+            
+            # Parse JSON fields
+            if data['result']:
+                data['result'] = json.loads(data['result'])
+            data['metadata'] = json.loads(data['metadata'] or '{}')
+            
+            tasks.append(TaskRun.model_validate(data))
+        
+        return tasks
+    
+    def _execute_query(self, query, params=()):
+        """Execute a query with parameters.
+        
+        This is a helper method for tests that mock query execution.
+        
+        Args:
+            query: SQL query string
+            params: Query parameters
+            
+        Returns:
+            Cursor after execution
+            
+        Raises:
+            sqlite3.Error: If the query fails
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(query, params)
+        return cursor
     
     def __del__(self):
         """Close database connection."""

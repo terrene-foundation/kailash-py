@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from kailash.workflow.graph import Workflow
 from kailash.nodes.data.readers import CSVReader, JSONReader
 from kailash.nodes.data.writers import CSVWriter, JSONWriter
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.utils.export import WorkflowExporter, ExportConfig, export_workflow
 from kailash.tracking.manager import TaskManager
 from kailash.runtime.local import LocalRuntime
@@ -28,17 +28,18 @@ def create_sample_workflow():
     """Create a sample workflow for export demonstration."""
     
     workflow = Workflow(
+        workflow_id="customer_analysis_pipeline",
         name="customer_analysis_pipeline",
         description="Analyze customer data and generate insights"
     )
     
     # Add metadata
-    workflow.metadata.tags = {"customer", "analytics", "ml"}
-    workflow.metadata.version = "1.0.0"
-    workflow.metadata.author = "John Doe"
+    workflow.metadata["tags"] = {"customer", "analytics", "ml"}
+    workflow.metadata["version"] = "1.0.0"
+    workflow.metadata["author"] = "John Doe"
     
     # Create nodes
-    csv_reader = CSVReader(name="read_customers")
+    csv_reader = CSVReader(file_path="data/customers.csv", headers=True)
     
     # Create transformer using PythonCodeNode
     def transform_data(data: list) -> Dict[str, Any]:
@@ -54,7 +55,20 @@ def create_sample_workflow():
             transformed.append(new_record)
         return {"data": transformed}
     
-    transformer = PythonCodeNode.from_function(transform_data, name="process_data")
+    from kailash.nodes.base import NodeParameter
+    input_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    output_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    
+    transformer = PythonCodeNode.from_function(
+        transform_data, 
+        name="process_data",
+        input_schema=input_schema,
+        output_schema=output_schema
+    )
     
     # Create classifier using PythonCodeNode
     def classify_customers(data: list) -> Dict[str, Any]:
@@ -67,9 +81,14 @@ def create_sample_workflow():
             segments.append(record)
         return {"data": segments}
     
-    classifier = PythonCodeNode.from_function(classify_customers, name="segment_customers")
+    classifier = PythonCodeNode.from_function(
+        classify_customers, 
+        name="segment_customers",
+        input_schema=input_schema,
+        output_schema=output_schema
+    )
     
-    csv_writer = CSVWriter(name="save_results")
+    csv_writer = CSVWriter(file_path="data/export_results.csv")
     
     # Add nodes to workflow with configuration
     workflow.add_node(node_id='reader', node_or_type=csv_reader, config={
@@ -276,10 +295,10 @@ def demonstrate_export_validation():
     print("\n=== Export with Validation ===")
     
     # Create a workflow with some issues
-    workflow = Workflow(name="test_workflow")
+    workflow = Workflow(workflow_id="test_workflow", name="test_workflow")
     
     # Add an incomplete node
-    csv_reader = CSVReader(name="reader")
+    csv_reader = CSVReader(file_path="data/test.csv", headers=True)
     workflow.add_node(node_id='reader', node_or_type=csv_reader)
     # Note: No configuration provided for reader
     

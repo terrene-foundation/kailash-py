@@ -19,7 +19,7 @@ from kailash.tracking.models import TaskStatus, TaskRun, WorkflowRun, TaskSummar
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.nodes.data.readers import CSVReader
 from kailash.nodes.data.writers import CSVWriter
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.workflow.graph import Workflow
 from kailash.runtime.local import LocalRuntime
 
@@ -33,10 +33,10 @@ def demonstrate_basic_task_tracking():
     task_manager = TaskManager()
     
     # Create a simple workflow
-    workflow = Workflow(name="simple_data_processing")
+    workflow = Workflow(workflow_id="simple_data_processing", name="simple_data_processing")
     
     # Create nodes
-    reader = CSVReader(name="read_data")
+    reader = CSVReader(name="read_data", file_path="data/input.csv")
     
     def transform_data(data: list) -> Dict[str, Any]:
         """Simple data transformation."""
@@ -49,7 +49,7 @@ def demonstrate_basic_task_tracking():
     
     transformer = PythonCodeNode.from_function(transform_data, name="transform_data")
     
-    writer = CSVWriter(name="write_results")
+    writer = CSVWriter(name="write_results", file_path="data/output.csv")
     
     # Add nodes to workflow
     workflow.add_node(node_id="reader", node_or_type=reader, config={
@@ -165,7 +165,7 @@ def demonstrate_task_progress_tracking():
     task_manager = TaskManager()
     
     # Create a workflow with a long-running task
-    workflow = Workflow(name="long_running_workflow")
+    workflow = Workflow(workflow_id="long_running_workflow", name="long_running_workflow")
     
     def long_process(data: list) -> Dict[str, Any]:
         """Simulate a long-running process."""
@@ -187,7 +187,7 @@ def demonstrate_task_progress_tracking():
     processor = PythonCodeNode.from_function(long_process, name="long_processor")
     
     # Create reader
-    reader = CSVReader(name="data_reader")
+    reader = CSVReader(name="data_reader", file_path="data/large_input.csv")
     
     # Add nodes
     workflow.add_node(node_id="reader", node_or_type=reader, config={
@@ -250,7 +250,7 @@ def demonstrate_task_error_handling():
     task_manager = TaskManager()
     
     # Create a workflow that might fail
-    workflow = Workflow(name="unreliable_workflow")
+    workflow = Workflow(workflow_id="unreliable_workflow", name="unreliable_workflow")
     
     def unreliable_process(data: list, failure_rate: float = 0.5) -> Dict[str, Any]:
         """Process that randomly fails."""

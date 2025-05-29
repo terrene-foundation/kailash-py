@@ -12,7 +12,7 @@ import numpy as np
 from pathlib import Path
 
 from kailash.workflow.graph import Workflow
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReader, CSVWriter
 from kailash.runtime import LocalRuntime
 
@@ -23,6 +23,15 @@ def create_function_based_node():
     # Define a custom data processing function
     def calculate_metrics(data: pd.DataFrame, window_size: int = 5) -> pd.DataFrame:
         """Calculate rolling metrics for the data."""
+        # Convert to DataFrame if needed
+        if isinstance(data, list):
+            data = pd.DataFrame(data)
+        
+        # Convert string columns to numeric where possible
+        for col in ['value', 'quantity']:
+            if col in data.columns:
+                data[col] = pd.to_numeric(data[col], errors='coerce')
+        
         result = data.copy()
         
         # Calculate rolling mean
@@ -34,7 +43,8 @@ def create_function_based_node():
         if 'value' in data.columns:
             result['value_zscore'] = (data['value'] - data['value'].mean()) / data['value'].std()
         
-        return result
+        # Convert DataFrame to JSON-serializable format
+        return result.to_dict('records')
     
     # Create node from function
     return PythonCodeNode.from_function(
@@ -59,6 +69,15 @@ def create_class_based_node():
         
         def process(self, data: pd.DataFrame, value_column: str = 'value') -> pd.DataFrame:
             """Process data and mark outliers."""
+            # Convert to DataFrame if needed
+            if isinstance(data, list):
+                data = pd.DataFrame(data)
+            
+            # Convert string columns to numeric where possible
+            for col in ['value', 'quantity']:
+                if col in data.columns:
+                    data[col] = pd.to_numeric(data[col], errors='coerce')
+            
             result = data.copy()
             
             # Calculate IQR on first run
@@ -81,7 +100,8 @@ def create_class_based_node():
             self.outlier_count += new_outliers
             result['total_outliers'] = self.outlier_count
             
-            return result
+            # Convert DataFrame to JSON-serializable format
+            return result.to_dict('records')
     
     # Create node from class
     return PythonCodeNode.from_class(
@@ -97,7 +117,16 @@ def create_code_string_node():
     # Define processing logic as a string
     code = """
 # Custom data aggregation logic
-import pandas as pd
+# pandas is available as 'pandas' in the namespace
+
+# Convert to DataFrame if needed
+if isinstance(data, list):
+    data = pandas.DataFrame(data)
+
+# Convert string columns to numeric where possible
+for col in ['value', 'quantity']:
+    if col in data.columns:
+        data[col] = pandas.to_numeric(data[col], errors='coerce')
 
 # Group data by category and calculate statistics
 grouped = data.groupby('category').agg({
@@ -111,10 +140,10 @@ grouped.reset_index(inplace=True)
 
 # Add derived metrics
 grouped['cv'] = grouped['value_std'] / grouped['value_mean']  # Coefficient of variation
-grouped['duration'] = pd.to_datetime(grouped['timestamp_max']) - pd.to_datetime(grouped['timestamp_min'])
+grouped['duration'] = pandas.to_datetime(grouped['timestamp_max']) - pandas.to_datetime(grouped['timestamp_min'])
 
-# Store result
-result = grouped
+# Store result and convert to JSON-serializable format
+result = grouped.to_dict('records')
 """
     
     # Create node from code string
@@ -138,6 +167,15 @@ import numpy as np
 
 def advanced_processing(data: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
     '''Apply advanced processing with configurable threshold.'''
+    # Convert to DataFrame if needed
+    if isinstance(data, list):
+        data = pd.DataFrame(data)
+    
+    # Convert string columns to numeric where possible
+    for col in ['value', 'quantity']:
+        if col in data.columns:
+            data[col] = pd.to_numeric(data[col], errors='coerce')
+    
     result = data.copy()
     
     # Apply transformations
@@ -152,7 +190,8 @@ def advanced_processing(data: pd.DataFrame, threshold: float = 0.5) -> pd.DataFr
     numeric_cols = result.select_dtypes(include=[np.number]).columns
     result['composite_score'] = result[numeric_cols].mean(axis=1)
     
-    return result
+    # Convert DataFrame to JSON-serializable format
+    return result.to_dict('records')
 
 class DataProcessor:
     '''Stateful data processor with memory.'''
@@ -161,6 +200,15 @@ class DataProcessor:
         self.history = []
         
     def process(self, data: pd.DataFrame) -> pd.DataFrame:
+        # Convert to DataFrame if needed
+        if isinstance(data, list):
+            data = pd.DataFrame(data)
+        
+        # Convert string columns to numeric where possible
+        for col in ['value', 'quantity']:
+            if col in data.columns:
+                data[col] = pd.to_numeric(data[col], errors='coerce')
+        
         self.history.append(len(data))
         
         result = data.copy()
@@ -168,7 +216,8 @@ class DataProcessor:
         result['total_processed'] = sum(self.history)
         result['batch_number'] = len(self.history)
         
-        return result
+        # Convert DataFrame to JSON-serializable format
+        return result.to_dict('records')
 """)
     
     # Create node from file (function)
@@ -195,7 +244,7 @@ def main():
     
     # Create sample data
     sample_data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=100, freq='H'),
+        'timestamp': pd.date_range('2024-01-01', periods=100, freq='h'),
         'category': np.random.choice(['A', 'B', 'C'], 100),
         'value': np.random.normal(100, 15, 100),
         'quantity': np.random.randint(1, 20, 100)
@@ -203,46 +252,47 @@ def main():
     sample_data.to_csv('data/sample_metrics.csv', index=False)
     
     # Create workflow
-    workflow = Workflow(name="python_code_demo")
+    workflow = Workflow(workflow_id="python_code_demo", name="python_code_demo")
     
     # Add data reader
-    reader = CSVReader(name="data_reader")
-    workflow.add_node(reader)
+    reader = CSVReader(file_path="data/sample_metrics.csv", name="data_reader")
+    workflow.add_node("data_reader", reader)
     
     # Create and add custom nodes
     function_node = create_function_based_node()
     class_node = create_class_based_node()
-    code_node = create_code_string_node()
+    # code_node = create_code_string_node()  # Commented out due to security restrictions
     file_node, _ = create_external_file_node()
     
-    workflow.add_node(function_node)
-    workflow.add_node(class_node)
-    workflow.add_node(code_node)
-    workflow.add_node(file_node)
+    workflow.add_node("function_node", function_node)
+    workflow.add_node("class_node", class_node)
+    # workflow.add_node("code_node", code_node)  # Commented out
+    workflow.add_node("file_node", file_node)
     
     # Add data writer
-    writer = CSVWriter(name="result_writer")
-    workflow.add_node(writer)
+    writer = CSVWriter(file_path="data/results.csv", name="result_writer")
+    workflow.add_node("result_writer", writer)
     
     # Connect nodes in pipeline
-    workflow.add_edge(reader, function_node)
-    workflow.add_edge(function_node, class_node)
-    workflow.add_edge(class_node, file_node)
-    workflow.add_edge(file_node, writer)
+    workflow.connect("data_reader", "function_node", {"data": "data"})
+    workflow.connect("function_node", "class_node", {"result": "data"})
+    workflow.connect("class_node", "file_node", {"result": "data"})
+    workflow.connect("file_node", "result_writer", {"result": "data"})
     
-    # Also demonstrate parallel processing with code node
-    workflow.add_edge(reader, code_node)
-    aggregation_writer = CSVWriter(name="aggregation_writer")
-    workflow.add_node(aggregation_writer)
-    workflow.add_edge(code_node, aggregation_writer)
+    # Comment out code node due to security restrictions in this demo
+    # workflow.connect("data_reader", "code_node", {"data": "data"})
+    # aggregation_writer = CSVWriter(file_path="data/aggregated_metrics.csv", name="aggregation_writer")
+    # workflow.add_node("aggregation_writer", aggregation_writer)
+    # workflow.connect("code_node", "aggregation_writer", {"result": "data"})
     
     # Configure nodes
     reader.config = {'file_path': 'data/sample_metrics.csv'}
     writer.config = {'file_path': 'data/processed_metrics.csv'}
-    aggregation_writer.config = {'file_path': 'data/aggregated_metrics.csv'}
+    # aggregation_writer.config = {'file_path': 'data/aggregated_metrics.csv'}
     
     # Add custom parameters
     function_node.config = {'window_size': 10}
+    class_node.config = {'value_column': 'value'}
     file_node.config = {'threshold': 0.8}
     
     # Visualize workflow
@@ -258,7 +308,7 @@ def main():
     # Execute workflow
     print("\\nExecuting workflow...")
     runner = LocalRuntime(debug=True)
-    results = runner.run(workflow)
+    results, run_id = runner.execute(workflow)
     
     print(f"\\nWorkflow completed successfully!")
     print(f"Results: {results}")
@@ -268,10 +318,10 @@ def main():
     print(f"\\nProcessed data shape: {processed_df.shape}")
     print(f"New columns: {[col for col in processed_df.columns if col not in sample_data.columns]}")
     
-    # Show aggregated data
-    aggregated_df = pd.read_csv('data/aggregated_metrics.csv')
-    print(f"\\nAggregated data shape: {aggregated_df.shape}")
-    print(aggregated_df.head())
+    # Show aggregated data (commented out for this demo)
+    # aggregated_df = pd.read_csv('data/aggregated_metrics.csv')
+    # print(f"\\nAggregated data shape: {aggregated_df.shape}")
+    # print(aggregated_df.head())
     
     # Clean up
     Path("custom_processor.py").unlink(missing_ok=True)

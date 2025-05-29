@@ -3,7 +3,7 @@ import json
 import yaml
 import logging
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Set, Union, Iterator
+from typing import Any, Dict, List, Optional, Tuple, Set, Union, Iterator, TypeVar, Generic
 from datetime import datetime
 
 import networkx as nx
@@ -27,6 +27,7 @@ from kailash.sdk_exceptions import (
     ExportException
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.workflow.state import WorkflowStateWrapper, StateManager
 
 
 logger = logging.getLogger(__name__)
@@ -697,3 +698,94 @@ class Workflow:
     def __str__(self) -> str:
         """Get readable string."""
         return f"Workflow '{self.name}' (ID: {self.workflow_id}) with {len(self.graph.nodes)} nodes and {len(self.graph.edges)} connections"
+        
+    def create_state_wrapper(self, state_model: BaseModel) -> WorkflowStateWrapper:
+        """Create a state manager wrapper for a workflow.
+        
+        This wrapper provides convenient methods for updating state immutably,
+        making it easier to manage state in workflow nodes.
+        
+        Args:
+            state_model: The Pydantic model state object to wrap
+            
+        Returns:
+            A WorkflowStateWrapper instance
+            
+        Raises:
+            TypeError: If state_model is not a Pydantic BaseModel
+        """
+        if not isinstance(state_model, BaseModel):
+            raise TypeError(f"Expected BaseModel, got {type(state_model)}")
+            
+        return WorkflowStateWrapper(state_model)
+        
+    def execute_with_state(self, 
+                         state_model: BaseModel,
+                         wrap_state: bool = True,
+                         task_manager: Optional[TaskManager] = None,
+                         **overrides) -> Tuple[BaseModel, Dict[str, Any]]:
+        """Execute the workflow with state management.
+        
+        This method provides a simplified interface for executing workflows
+        with automatic state management, making it easier to manage state
+        transitions.
+        
+        Args:
+            state_model: The initial state for workflow execution
+            wrap_state: Whether to wrap state in WorkflowStateWrapper
+            task_manager: Optional task manager for tracking
+            **overrides: Additional parameter overrides
+            
+        Returns:
+            Tuple of (final state, all results)
+            
+        Raises:
+            WorkflowExecutionError: If execution fails
+            WorkflowValidationError: If workflow is invalid
+        """
+        # Validate input
+        if not isinstance(state_model, BaseModel):
+            raise TypeError(f"Expected BaseModel, got {type(state_model)}")
+            
+        # Prepare inputs
+        inputs = overrides.copy()
+        
+        # Wrap the state if needed
+        if wrap_state:
+            state_wrapper = self.create_state_wrapper(state_model)
+            inputs["state_wrapper"] = state_wrapper
+        else:
+            inputs["state"] = state_model
+            
+        # Execute the workflow
+        results = self.execute(inputs=inputs, task_manager=task_manager)
+        
+        # Find the final state
+        # First try to find state_wrapper in the last node's outputs
+        execution_order = self.get_execution_order()
+        if execution_order:
+            last_node_id = execution_order[-1]
+            last_node_results = results.get(last_node_id, {})
+            
+            if wrap_state:
+                final_state_wrapper = last_node_results.get("state_wrapper")
+                if final_state_wrapper and isinstance(final_state_wrapper, WorkflowStateWrapper):
+                    return final_state_wrapper.get_state(), results
+                    
+                # Try to find another key with a WorkflowStateWrapper
+                for key, value in last_node_results.items():
+                    if isinstance(value, WorkflowStateWrapper):
+                        return value.get_state(), results
+            else:
+                final_state = last_node_results.get("state")
+                if final_state and isinstance(final_state, BaseModel):
+                    return final_state, results
+                
+                # Try to find another key with a BaseModel
+                for key, value in last_node_results.items():
+                    if isinstance(value, BaseModel) and type(value) == type(state_model):
+                        return value, results
+                        
+        # Fallback to original state
+        logger.warning("Failed to find final state in workflow results, returning original state")
+        return state_model, results

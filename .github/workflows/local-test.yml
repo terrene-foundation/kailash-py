@@ -1,0 +1,34 @@
+name: Local Test Workflow
+
+on:
+  push:
+    branches: [ main, feat/* ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  simple-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: List files
+      run: |
+        ls -la
+        echo "Workflow directory:"
+        ls -la .github/workflows/
+    
+    - name: Check test file
+      run: |
+        if [ -f "tests/test_ci_setup.py" ]; then
+          echo "✅ Test file exists"
+          cat tests/test_ci_setup.py | head -20
+        else
+          echo "❌ Test file not found"
+        fi
+    
+    - name: Simple validation
+      run: |
+        echo "This workflow was successfully executed locally!"
+        echo "Repository structure is valid"

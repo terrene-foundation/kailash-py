@@ -58,6 +58,8 @@ What becomes easier or more difficult to do because of this change?
 - [0012-workflow-conditional-routing.md](0012-workflow-conditional-routing.md) - Workflow Conditional Routing
 - [0013-simplify-conditional-logic-nodes.md](0013-simplify-conditional-logic-nodes.md) - Simplify Conditional Logic Nodes
 - [0014-async-node-execution.md](0014-async-node-execution.md) - Asynchronous Node Execution & Parallel Workflow Runtime
+- [0015-api-integration-architecture.md](0015-api-integration-architecture.md) - API Integration Architecture
+- [0016-immutable-state-management.md](0016-immutable-state-management) - Immutable State Management
 
 ## References
 

@@ -408,6 +408,7 @@ def create_error_handling_workflow():
     
     # Create workflow
     workflow = Workflow(
+        workflow_id="error_handling_demo",
         name="error_handling_demo",
         description="Demonstrates error handling patterns"
     )
@@ -511,7 +512,7 @@ def demonstrate_node_retry():
     )
     
     # Create a simple workflow
-    workflow = Workflow(name="retry_demo")
+    workflow = Workflow(workflow_id="retry_demo", name="retry_demo")
     workflow.add_node(node_id='flaky', node_or_type=flaky_node)
     
     runner = LocalRuntime()

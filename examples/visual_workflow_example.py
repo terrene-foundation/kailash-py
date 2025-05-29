@@ -7,7 +7,7 @@ from kailash.workflow import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.data import CSVReader, CSVWriter
-from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime import LocalRuntime
 
 

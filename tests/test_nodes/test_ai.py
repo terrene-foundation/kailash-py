@@ -13,10 +13,10 @@ from kailash.nodes.ai.models import (
     NamedEntityRecognizer
 )
 from kailash.nodes.ai.agents import (
-    AgentNode,
-    AgentChainNode,
-    ToolNode,
-    MemoryNode
+    ChatAgent,
+    RetrievalAgent,
+    FunctionCallingAgent,
+    PlanningAgent
 )
 from kailash.sdk_exceptions import KailashValidationError, KailashRuntimeError
 

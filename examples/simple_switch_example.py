@@ -60,6 +60,7 @@ def create_simple_switch_workflow() -> Workflow:
         Workflow: The configured workflow
     """
     workflow = Workflow(
+        workflow_id="simple_switch_example",
         name="Simple Switch Example",
         description="Demonstrate the Switch node functionality"
     )

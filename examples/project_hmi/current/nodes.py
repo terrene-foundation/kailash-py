@@ -339,7 +339,6 @@ async def w1_compose_message(state: AgentState, llm, **kwargs) -> Dict[str, Any]
         "doctor_profile_data": doctor_profile_for_llm,   # Data for {doctor_profile.xxx}
         "earliest_slot_data": earliest_slot_for_llm     # Data for {earliest_slot.xxx}
     }
-    
     # Create messages for the LLM
     messages = [
         SystemMessage(content=system_prompt),

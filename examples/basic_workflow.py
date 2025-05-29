@@ -85,6 +85,7 @@ def main():
     # Step 1: Create a workflow
     print("Creating workflow...")
     workflow = Workflow(
+        workflow_id="basic_customer_processing",
         name="basic_customer_processing",
         description="Simple ETL workflow for customer data"
     )

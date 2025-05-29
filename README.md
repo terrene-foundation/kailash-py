@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.8+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
+  <img src="https://img.shields.io/badge/CI-passing-brightgreen.svg" alt="CI Status">
 </p>
 
 <p align="center">
@@ -95,6 +96,7 @@ exporter.export_to_kailash(workflow, "customer_analysis.yaml")
 | 📖 [User Guide](docs/user-guide.md) | Comprehensive guide for using the SDK |
 | 🏛️ [Architecture](docs/adr/) | Architecture Decision Records |
 | 📋 [API Reference](docs/api/) | Detailed API documentation |
+| 🌐 [API Integration Guide](examples/API_INTEGRATION_README.md) | Complete API integration documentation |
 | 🎓 [Examples](examples/) | Working examples and tutorials |
 | 🤝 [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 
@@ -139,8 +141,14 @@ The SDK includes a rich set of pre-built nodes for common operations:
 </td>
 <td width="50%">
 
-**Integration Nodes**
+**API Integration Nodes**
 - `HTTPRequestNode` - HTTP requests
+- `RESTAPIClientNode` - REST API client
+- `GraphQLClientNode` - GraphQL queries
+- `OAuth2AuthNode` - OAuth 2.0 authentication
+- `RateLimitedAPINode` - Rate-limited API calls
+
+**Other Integration Nodes**
 - `KafkaConsumerNode` - Kafka streaming
 - `WebSocketNode` - WebSocket connections
 - `EmailNode` - Send emails
@@ -167,6 +175,30 @@ workflow.add_node(error_handler, node_id="handle_errors")
 # Connect with conditions
 workflow.connect("validate", "process_valid", condition="is_valid")
 workflow.connect("validate", "handle_errors", condition="has_errors")
+```
+
+#### Immutable State Management
+```python
+from kailash.workflow.state import WorkflowStateWrapper
+
+# Create and wrap state object
+state = MyStateModel()
+state_wrapper = workflow.create_state_wrapper(state)
+
+# Single path-based update
+updated_wrapper = state_wrapper.update_in(
+    ["nested", "field"], 
+    new_value
+)
+
+# Batch update multiple fields atomically
+updated_wrapper = state_wrapper.batch_update([
+    (["field1"], value1),
+    (["nested", "field2"], value2)
+])
+
+# Execute workflow with state management
+final_state, results = workflow.execute_with_state(state_model=state)
 ```
 
 #### Task Tracking
@@ -198,6 +230,40 @@ results = runtime.execute(workflow, inputs=test_data)
 
 # Validate results
 assert results["node_id"]["output_key"] == expected_value
+```
+
+#### API Integration
+```python
+from kailash.nodes.api import (
+    RESTAPIClientNode, 
+    OAuth2AuthNode, 
+    RateLimitedAPINode,
+    RateLimitConfig
+)
+
+# OAuth 2.0 authentication
+auth_node = OAuth2AuthNode(
+    client_id="your_client_id",
+    client_secret="your_client_secret",
+    token_url="https://api.example.com/oauth/token"
+)
+
+# Rate-limited API client
+rate_config = RateLimitConfig(
+    max_requests=100,
+    time_window=60.0,
+    strategy="token_bucket"
+)
+
+api_client = RESTAPIClientNode(
+    base_url="https://api.example.com",
+    auth_node=auth_node
+)
+
+rate_limited_client = RateLimitedAPINode(
+    wrapped_node=api_client,
+    rate_limit_config=rate_config
+)
 ```
 
 #### Export Formats
@@ -347,9 +413,14 @@ make quality
 - Core node system
 - Workflow builder
 - Local execution
-- Task tracking
+- Task tracking with metrics
+- Robust storage backends
 - Export functionality
 - CLI interface
+- Immutable state management
+- API integration with rate limiting
+- OAuth 2.0 authentication
+- Asynchronous node execution
 - Unit tests
 - Integration tests
 - Example workflows

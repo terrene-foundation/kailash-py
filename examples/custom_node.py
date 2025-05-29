@@ -64,7 +64,8 @@ class SentimentAnalyzerNode(Node):
             "data": NodeParameter(
                 name="data",
                 type=list,
-                required=True,
+                required=False,
+                default=[],
                 description="List of text data to analyze"
             ),
             "model": NodeParameter(
@@ -172,13 +173,15 @@ class DataValidatorNode(Node):
             "data": NodeParameter(
                 name="data",
                 type=list,
-                required=True,
+                required=False,
+                default=[],
                 description="Data to validate"
             ),
             "rules": NodeParameter(
                 name="rules",
                 type=list,
-                required=True,
+                required=False,
+                default=[],
                 description="Validation rules to apply"
             ),
             "fail_on_error": NodeParameter(
@@ -278,6 +281,12 @@ class DataValidatorNode(Node):
                 min_val = range_spec.get("min")
                 max_val = range_spec.get("max")
                 
+                # Convert column to numeric for comparison
+                try:
+                    df[column] = pd.to_numeric(df[column], errors='coerce')
+                except:
+                    pass
+                
                 if min_val is not None:
                     violations = df[df[column] < min_val]
                     if not violations.empty:
@@ -347,7 +356,8 @@ class CustomAggregatorNode(Node):
             "data": NodeParameter(
                 name="data",
                 type=list,
-                required=True,
+                required=False,
+                default=[],
                 description="Data to aggregate"
             ),
             "group_by": NodeParameter(
@@ -360,7 +370,8 @@ class CustomAggregatorNode(Node):
             "aggregations": NodeParameter(
                 name="aggregations",
                 type=dict,
-                required=True,
+                required=False,
+                default={},
                 description="Aggregation operations to perform"
             )
         }
@@ -404,6 +415,7 @@ def create_custom_workflow():
     
     # Create workflow
     workflow = Workflow(
+        workflow_id="custom_node_workflow",
         name="custom_node_workflow",
         description="Demonstrates custom node usage"
     )
