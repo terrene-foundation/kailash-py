@@ -13,6 +13,13 @@
       "status": "pending",
       "started_at": null,
       "ended_at": null
+    },
+    "2b10eab6-9749-4c1e-9239-4d7dd559ccf2": {
+      "run_id": "7d530525-f00a-40b3-85d9-59960f8c2265",
+      "node_id": "persistent_node",
+      "status": "pending",
+      "started_at": null,
+      "ended_at": null
     }
   },
   "runs": {}

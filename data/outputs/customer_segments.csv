@@ -1,0 +1,21 @@
+customer_id,name,email,purchase_total,segment
+1,Customer 1,customer1@example.com,443.3096641878338,low_value
+2,Customer 2,customer2@example.com,249.62532320942265,low_value
+3,Customer 3,customer3@example.com,1663.8176304706003,high_value
+4,Customer 4,customer4@example.com,1796.1276229735145,high_value
+5,Customer 5,customer5@example.com,1774.7303983101774,high_value
+6,Customer 6,customer6@example.com,351.66338196361386,low_value
+7,Customer 7,customer7@example.com,1390.2384390754603,high_value
+8,Customer 8,customer8@example.com,299.64794437647623,low_value
+9,Customer 9,customer9@example.com,1159.1003309339346,high_value
+10,Customer 10,customer10@example.com,1138.1599922688235,high_value
+11,Customer 11,customer11@example.com,1393.620886568239,high_value
+12,Customer 12,customer12@example.com,1520.1221691642509,high_value
+13,Customer 13,customer13@example.com,1507.3803071612983,high_value
+14,Customer 14,customer14@example.com,1356.7272118832295,high_value
+15,Customer 15,customer15@example.com,824.4712709236493,medium_value
+16,Customer 16,customer16@example.com,281.2901275132208,low_value
+17,Customer 17,customer17@example.com,1011.8567889978108,high_value
+18,Customer 18,customer18@example.com,333.093897703624,low_value
+19,Customer 19,customer19@example.com,1557.5216188984737,high_value
+20,Customer 20,customer20@example.com,804.1700124277913,medium_value

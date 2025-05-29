@@ -545,13 +545,13 @@ ENTRYPOINT ["/app/entrypoint.py"]
 def create_test_workflow():
     """Create a sample workflow for testing."""
     from kailash.nodes.data.readers import CSVReader
-    from kailash.nodes.transform.processors import PythonCodeNode
+    from kailash.nodes.code.python import PythonCodeNode
     from kailash.nodes.data.writers import CSVWriter
     
-    workflow = Workflow(name="docker_test_workflow")
+    workflow = Workflow(workflow_id="docker_test_workflow", name="docker_test_workflow")
     
     # Create nodes
-    reader = CSVReader(name="csv_reader")
+    reader = CSVReader(file_path="data/customers.csv", headers=True)
     
     def process_data(data):
         """Simple data processing function."""
@@ -559,14 +559,24 @@ def create_test_workflow():
             for row in data:
                 if isinstance(row, dict) and "age" in row:
                     row["age"] = int(row["age"]) + 1
-        return data
+        return {"data": data}
+    
+    from kailash.nodes.base import NodeParameter
+    input_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    output_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
     
     processor = PythonCodeNode.from_function(
         process_data,
-        name="age_incrementer"
+        name="age_incrementer",
+        input_schema=input_schema,
+        output_schema=output_schema
     )
     
-    writer = CSVWriter(name="csv_writer")
+    writer = CSVWriter(file_path="data/processed_output.csv")
     
     # Add nodes to workflow
     workflow.add_node("reader", reader)

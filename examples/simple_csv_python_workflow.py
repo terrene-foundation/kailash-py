@@ -19,7 +19,10 @@ def main():
     output_directory.mkdir(exist_ok=True)
     
     # 1. Create a workflow
-    workflow = Workflow(name="Simple Data Processing")
+    workflow = Workflow(
+        workflow_id="simple_data_processing",
+        name="Simple Data Processing"
+    )
     
     # 2. Create CSV reader node
     csv_reader = CSVReader(
@@ -32,6 +35,11 @@ def main():
     def filter_high_value_customers(data: list, column_name: str, threshold: float) -> Dict[str, Any]:
         """Filter customers based on a threshold value."""
         df = pd.DataFrame(data)
+        
+        # Convert column to numeric
+        df[column_name] = pd.to_numeric(df[column_name], errors='coerce')
+        
+        # Filter based on threshold
         filtered_df = df[df[column_name] > threshold]
         
         return {
@@ -57,38 +65,39 @@ def main():
         }
     )
     
-    # Configure the filter node
-    filter_node.configure({
+    # 4. Create CSV writer node for results
+    csv_writer = CSVWriter(
+        file_path=str(output_directory / 'high_value_customers.csv')
+        # headers will be auto-detected from the dict keys
+    )
+    
+    # 5. Add nodes to workflow with configurations
+    workflow.add_node(node_id='csv_reader', node_or_type=csv_reader)
+    workflow.add_node(node_id='filter', node_or_type=filter_node, config={
         'column_name': 'Total Claim Amount',
         'threshold': 1000.0
     })
-    
-    # 4. Create CSV writer node for results
-    csv_writer = CSVWriter(
-        file_path=str(output_directory / 'high_value_customers.csv'),
-        headers=True
-    )
-    
-    # 5. Add nodes to workflow
-    workflow.add_node(csv_reader)
-    workflow.add_node(filter_node)
-    workflow.add_node(csv_writer)
+    workflow.add_node(node_id='csv_writer', node_or_type=csv_writer)
     
     # 6. Connect the nodes
     # CSV reader output 'data' -> Filter input 'data'
-    workflow.connect(csv_reader.id, 'data', filter_node.id, 'data')
+    workflow.connect('csv_reader', 'filter', {'data': 'data'})
     
     # Filter output 'filtered_data' -> CSV writer input 'data'
-    workflow.connect(filter_node.id, 'filtered_data', csv_writer.id, 'data')
+    workflow.connect('filter', 'csv_writer', {'filtered_data': 'data'})
     
     # 7. Execute the workflow
-    runner = LocalRuntime(debug=True)
-    result = runner.run(workflow)
+    runner = LocalRuntime()
+    results, run_id = runner.execute(workflow)
     
     # 8. Display results
-    filter_output = runner.get_node_output(filter_node.id)
-    print(f"Found {filter_output['count']} high-value customers")
-    print(f"Total value: ${filter_output['total_value']:,.2f}")
+    print(f"\nWorkflow completed successfully!")
+    print(f"Run ID: {run_id}")
+    
+    filter_output = results.get('filter', {})
+    if filter_output:
+        print(f"Found {filter_output.get('count', 0)} high-value customers")
+        print(f"Total value: ${filter_output.get('total_value', 0):,.2f}")
     print(f"Results saved to: {output_directory / 'high_value_customers.csv'}")
     
     # 9. Alternative: Direct execution without workflow
@@ -108,7 +117,8 @@ def main():
     def calculate_statistics(data: list, value_column: str) -> Dict[str, Any]:
         """Calculate basic statistics."""
         df = pd.DataFrame(data)
-        values = df[value_column]
+        # Convert column to numeric
+        values = pd.to_numeric(df[value_column], errors='coerce')
         
         return {
             'mean': values.mean(),
@@ -120,7 +130,14 @@ def main():
     
     stats_node = PythonCodeNode.from_function(
         func=calculate_statistics,
-        name="statistics_calculator"
+        name="statistics_calculator",
+        output_schema={
+            'mean': NodeParameter(name='mean', type=float, required=True),
+            'median': NodeParameter(name='median', type=float, required=True),
+            'std': NodeParameter(name='std', type=float, required=True),
+            'min': NodeParameter(name='min', type=float, required=True),
+            'max': NodeParameter(name='max', type=float, required=True)
+        }
     )
     
     stats_result = stats_node.execute(

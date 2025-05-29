@@ -116,10 +116,26 @@ def main():
             'top_region': summary.loc[summary['sum'].idxmax(), 'Region']
         }
     
+    summary_output_schema = {
+        'regional_summary': NodeParameter(
+            name='regional_summary',
+            type=list,
+            required=True,
+            description='Summary data by region'
+        ),
+        'top_region': NodeParameter(
+            name='top_region',
+            type=str,
+            required=True,
+            description='Region with highest total'
+        )
+    }
+    
     summary_node = PythonCodeNode.from_function(
         func=summarize_by_region,
         name="regional_summary",
-        description="Summarize claims by region"
+        description="Summarize claims by region",
+        output_schema=summary_output_schema
     )
     
     # Execute summary with filtered data
@@ -135,8 +151,8 @@ def main():
     
     # Save filtered data
     filtered_writer = CSVWriter(
-        file_path=str(output_dir / 'high_value_customers.csv'),
-        headers=True
+        file_path=str(output_dir / 'high_value_customers.csv')
+        # headers will be auto-detected from the dict keys
     )
     
     filtered_writer.execute(data=filter_result['filtered_data'])
@@ -144,8 +160,8 @@ def main():
     
     # Save summary
     summary_writer = CSVWriter(
-        file_path=str(output_dir / 'regional_summary.csv'),
-        headers=True
+        file_path=str(output_dir / 'regional_summary.csv')
+        # headers will be auto-detected from the dict keys
     )
     
     summary_writer.execute(data=summary_result['regional_summary'])
@@ -182,10 +198,26 @@ def main():
             'risk_distribution': df['risk_score'].value_counts().to_dict()
         }
     
+    risk_output_schema = {
+        'enriched_data': NodeParameter(
+            name='enriched_data',
+            type=list,
+            required=True,
+            description='Data with risk scores added'
+        ),
+        'risk_distribution': NodeParameter(
+            name='risk_distribution',
+            type=dict,
+            required=True,
+            description='Distribution of risk scores'
+        )
+    }
+    
     risk_node = PythonCodeNode.from_function(
         func=add_risk_score,
         name="risk_scorer",
-        description="Add risk scores to customer data"
+        description="Add risk scores to customer data",
+        output_schema=risk_output_schema
     )
     
     # Execute risk scoring on filtered data

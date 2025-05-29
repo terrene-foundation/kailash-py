@@ -117,28 +117,37 @@ def create_feature_engineer():
         
         # Calculate customer lifetime value (simplified)
         if all(col in df.columns for col in ['purchase_count', 'avg_purchase_value']):
-            df['estimated_clv'] = df['purchase_count'] * df['avg_purchase_value']
+            # Convert to numeric first
+            purchase_count = pd.to_numeric(df['purchase_count'], errors='coerce')
+            avg_value = pd.to_numeric(df['avg_purchase_value'], errors='coerce')
+            df['estimated_clv'] = purchase_count * avg_value
         
         # Age groups
         if 'age' in df.columns:
+            # Convert to numeric first
+            age_numeric = pd.to_numeric(df['age'], errors='coerce')
             df['age_group'] = pd.cut(
-                df['age'],
+                age_numeric,
                 bins=[0, 25, 35, 50, 65, 100],
                 labels=['18-25', '26-35', '36-50', '51-65', '65+']
             )
         
         # Income categories
         if 'income' in df.columns:
+            # Convert to numeric first
+            income_numeric = pd.to_numeric(df['income'], errors='coerce')
             df['income_category'] = pd.cut(
-                df['income'],
+                income_numeric,
                 bins=[0, 30000, 60000, 100000, float('inf')],
                 labels=['Low', 'Medium', 'High', 'Very High']
             )
         
         # Customer value segments
         if 'estimated_clv' in df.columns:
+            # Convert to numeric first
+            clv_numeric = pd.to_numeric(df['estimated_clv'], errors='coerce')
             df['value_segment'] = pd.qcut(
-                df['estimated_clv'],
+                clv_numeric,
                 q=[0, 0.25, 0.75, 1.0],
                 labels=['Low Value', 'Medium Value', 'High Value']
             )
@@ -149,8 +158,10 @@ def create_feature_engineer():
         
         # Activity status based on last purchase
         if 'days_since_last_purchase' in df.columns:
-            df['activity_status'] = df['days_since_last_purchase'].apply(
-                lambda x: 'Active' if x < 30 else 'Inactive' if x < 90 else 'Churned'
+            # Convert to numeric first
+            days_numeric = pd.to_numeric(df['days_since_last_purchase'], errors='coerce')
+            df['activity_status'] = days_numeric.apply(
+                lambda x: 'Active' if pd.notna(x) and x < 30 else 'Inactive' if pd.notna(x) and x < 90 else 'Churned'
             )
         
         # Feature summary
@@ -398,6 +409,7 @@ def create_transformation_pipeline():
     
     # Create workflow
     workflow = Workflow(
+        workflow_id="data_transformation_pipeline",
         name="data_transformation_pipeline",
         description="Complete data transformation workflow"
     )

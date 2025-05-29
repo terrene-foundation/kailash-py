@@ -498,9 +498,6 @@ class WorkflowExporter:
             self.pre_export_hook = None
             self.post_export_hook = None
             
-# Legacy compatibility aliases
-KailashExporter = WorkflowExporter
-            
         except Exception as e:
             raise ConfigurationException(
                 f"Failed to initialize workflow exporter: {e}"
@@ -902,3 +899,7 @@ def export_workflow(workflow: Workflow, format: str = "yaml",
         raise ExportException(
             f"Failed to export workflow: {e}"
         ) from e
+
+
+# Legacy compatibility aliases
+KailashExporter = WorkflowExporter

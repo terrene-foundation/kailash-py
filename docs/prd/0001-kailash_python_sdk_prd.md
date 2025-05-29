@@ -314,3 +314,41 @@ results = workflow.execute()
 3. Implement robust error handling with helpful messages
 4. Ensure test coverage exceeds 80%
 5. Maintain compatibility with Kailash architecture
+
+## 7. Recent Updates (May 2025)
+
+### 7.1 API Improvements
+- **Workflow Creation**: Now requires `workflow_id` parameter for better identification and tracking
+- **Node Output Schemas**: PythonCodeNode functions must define output schemas for proper validation
+- **CSVWriter Headers**: Fixed to accept None (auto-detect) or list of column names, not boolean
+
+### 7.2 Enhanced Features
+- **Asynchronous Execution**: Added AsyncNode base class and async variants of logic nodes
+- **API Integration**: Comprehensive HTTP, REST, and GraphQL nodes with rate limiting
+- **State Management**: Immutable state management with StateManager and WorkflowStateWrapper
+- **Docker Runtime**: Full containerized execution support with DockerRuntime
+- **Parallel Execution**: ParallelRuntime for concurrent node execution
+
+### 7.3 Data Type Handling
+- **Automatic Type Conversion**: Added automatic string-to-numeric conversion in data processing nodes
+- **Type Validation**: Improved type validation for complex types and typing.Any
+- **Error Messages**: Enhanced error messages for type mismatches and validation failures
+
+### 7.4 Example Updates
+All example files have been updated to reflect current API:
+- Proper workflow_id usage in Workflow creation
+- Complete output schemas for all PythonCodeNode instances
+- Numeric conversion for pandas operations
+- Updated connection syntax using mapping dictionaries
+
+### 7.5 Testing Infrastructure
+- Comprehensive unit test suite with >80% coverage
+- Integration tests for complex workflows
+- Example validation suite ensuring all examples run correctly
+- GitHub Actions CI/CD pipeline
+
+### 7.6 Known Issues and Solutions
+1. **String Data in Numeric Operations**: Use `pd.to_numeric(df[column], errors='coerce')` before numeric operations
+2. **Missing Output Schemas**: All PythonCodeNode functions must define output schemas using NodeParameter objects
+3. **Workflow ID Required**: Always provide workflow_id when creating Workflow instances
+4. **CSVWriter Headers**: Pass None for auto-detection or explicit list of column names

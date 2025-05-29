@@ -78,6 +78,7 @@ def create_conditional_workflow() -> Workflow:
         Workflow: The configured workflow
     """
     workflow = Workflow(
+        workflow_id="conditional_transaction_processing",
         name="Conditional Transaction Processing",
         description="Process transactions based on their status"
     )

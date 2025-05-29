@@ -283,8 +283,12 @@ Keep dependencies minimal and explicit:
    - API reference
    - Contribution guidelines
    - Reference to the PRD and ADRs
+
+10. **Update Claude.md**
+    - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
+    - Update the project structure if there are any changes to the directory layout or file organization.
    
-10. **Github Issues and Project Update**
-   - Use the Github Issues and Projects to track tasks and progress.
-   - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
-   - Update the project board as tasks are completed.
+11. **Github Issues and Project Update**
+    - Use the Github Issues and Projects to track tasks and progress. 
+    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
+    - Update the project board as tasks are completed.

@@ -43,7 +43,7 @@ def workflow_execution_example():
     print("In workflow execution, nodes are connected and data flows through the graph.\n")
     
     # Create workflow
-    workflow = Workflow(name="CSV Processing")
+    workflow = Workflow(workflow_id="csv_processing", name="CSV Processing")
     
     # Create nodes - writer doesn't need data at creation time
     reader = CSVReader(
@@ -58,8 +58,8 @@ def workflow_execution_example():
     )
     
     # Add nodes to workflow
-    workflow.add_node(reader, node_id='reader')
-    workflow.add_node(writer, node_id='writer')
+    workflow.add_node(node_id='reader', node_or_type=reader)
+    workflow.add_node(node_id='writer', node_or_type=writer)
     
     # Connect nodes - data flows from reader to writer
     workflow.connect(

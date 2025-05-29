@@ -502,17 +502,36 @@ def example_hmi_workflow():
     config = MockHMIConfig()
     
     # Create workflow
-    workflow = Workflow(name="hmi_api_workflow")
+    workflow = Workflow(workflow_id="hmi_api_workflow", name="hmi_api_workflow")
     
-    # Create nodes
-    doctor_search = HMIDoctorSearchNode(node_id="search_doctors")
-    slot_check = HMISlotCheckNode(node_id="check_slots")
-    insurance_check = MHCInsuranceNode(node_id="check_insurance")
+    # Create nodes with required configuration
+    doctor_search = HMIDoctorSearchNode(
+        node_id="search_doctors",
+        base_url=config.hmi_api_base_url,
+        resource="doctors",
+        api_key=config.hmi_api_key,
+        url=f"{config.hmi_api_base_url}/doctors"  # Required by underlying HTTPRequestNode
+    )
+    slot_check = HMISlotCheckNode(
+        node_id="check_slots",
+        base_url=config.hmi_api_base_url,
+        resource="slots",
+        api_key=config.hmi_api_key,
+        url=f"{config.hmi_api_base_url}/slots"  # Required by underlying HTTPRequestNode
+    )
+    insurance_check = MHCInsuranceNode(
+        node_id="check_insurance",
+        base_url=config.mhc_api_base_url,
+        resource="insurance",
+        client_id=config.mhc_client_id,
+        client_secret=config.mhc_client_secret,
+        url=f"{config.mhc_api_base_url}/insurance"  # Required by underlying HTTPRequestNode
+    )
     
     # Add nodes to workflow
-    workflow.add_node(doctor_search)
-    workflow.add_node(slot_check)
-    workflow.add_node(insurance_check)
+    workflow.add_node("search_doctors", doctor_search)
+    workflow.add_node("check_slots", slot_check)
+    workflow.add_node("check_insurance", insurance_check)
     
     # Connect nodes for data flow
     workflow.connect(
@@ -540,12 +559,9 @@ def example_hmi_workflow():
     
     try:
         print("\n2. Step 1: Search for doctors by specialty and location")
-        doctor_result = runtime.execute_node(
-            doctor_search,
+        doctor_result = doctor_search.execute(
             specialty=patient_info["preferred_specialty"],
-            location=patient_info["preferred_location"],
-            api_key=config.hmi_api_key,
-            base_url=config.hmi_api_base_url
+            location=patient_info["preferred_location"]
         )
         
         doctors = doctor_result["doctors"]
@@ -561,12 +577,9 @@ def example_hmi_workflow():
         if doctors:
             top_doctor = doctors[0]  # Select highest rated doctor
             
-            slot_result = runtime.execute_node(
-                slot_check,
+            slot_result = slot_check.execute(
                 doctor_id=top_doctor["id"],
-                date_range={"start_date": "2024-01-15", "end_date": "2024-01-20"},
-                api_key=config.hmi_api_key,
-                base_url=config.hmi_api_base_url
+                date_range={"start_date": "2024-01-15", "end_date": "2024-01-20"}
             )
             
             slots = slot_result["available_slots"]
@@ -587,11 +600,9 @@ def example_hmi_workflow():
             "client_secret": config.mhc_client_secret
         }
         
-        insurance_result = runtime.execute_node(
-            insurance_check,
+        insurance_result = insurance_check.execute(
             patient_nric=patient_info["nric"],
-            patient_dob=patient_info["dob"],
-            oauth_config=oauth_config
+            patient_dob=patient_info["dob"]
         )
         
         coverage = insurance_result["coverage_info"]
@@ -666,8 +677,7 @@ def example_rate_limiting_strategies():
                 start_time = time.time()
                 
                 # Use a mock URL for demonstration (will likely return 404 but that's ok)
-                result = runtime.execute_node(
-                    rate_limited,
+                result = rate_limited.execute(
                     url="https://httpbin.org/delay/0",  # Fast endpoint for testing
                     method="GET"
                 )

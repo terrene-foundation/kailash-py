@@ -15,6 +15,8 @@ from kailash.sdk_exceptions import ManifestError
 class KailashManifest(BaseModel):
     """Represents a complete Kailash deployment manifest."""
     
+    model_config = {"arbitrary_types_allowed": True}
+    
     metadata: Dict[str, Any] = Field(..., description="Manifest metadata")
     workflow: Optional[Workflow] = Field(None, description="Associated workflow")
     resources: Optional[Dict[str, Any]] = Field(default_factory=dict, 

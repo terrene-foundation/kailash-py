@@ -9,8 +9,12 @@ import logging
 from typing import Any, Dict
 
 from kailash.workflow.state import WorkflowStateWrapper, StateManager
-from examples.project_hmi.adapted.shared import AgentState
-from examples.project_hmi.adapted.workflow_updated import HmiWorkflowV2, create_initial_state
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from project_hmi.adapted.shared import AgentState
+from project_hmi.adapted.workflow_updated import HmiWorkflowV2, create_initial_state
 
 
 # Configure logging

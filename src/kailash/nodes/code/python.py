@@ -442,7 +442,7 @@ class ClassWrapper:
         method = getattr(self.instance, self.process_method)
         
         # Execute the method
-        result = self.executor.execute_function(method, **inputs)
+        result = self.executor.execute_function(method, inputs)
         
         # Wrap non-dict results in a dict
         if not isinstance(result, dict):

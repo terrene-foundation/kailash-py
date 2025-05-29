@@ -27,11 +27,11 @@ from kailash.tracking.models import TaskStatus
 def create_sample_workflow():
     """Create a sample workflow for visualization."""
     
-    workflow = Workflow(name="data_processing_pipeline")
+    workflow = Workflow(workflow_id="data_processing_pipeline", name="data_processing_pipeline")
     
     # Create nodes
-    csv_reader = CSVReader(name="customer_data")
-    json_reader = JSONReader(name="transaction_data")
+    csv_reader = CSVReader(file_path="data/customers.csv", headers=True)
+    json_reader = JSONReader(file_path="data/transactions.json")
     
     # Create joiner using PythonCodeNode
     def join_data(customer_data: list, transaction_data: list) -> Dict[str, Any]:
@@ -48,7 +48,22 @@ def create_sample_workflow():
             })
         return {"data": joined}
     
-    data_joiner = PythonCodeNode.from_function(join_data, name="join_data")
+    from kailash.nodes.base import NodeParameter
+    
+    # Create schemas for joiner
+    joiner_input_schema = {
+        'customer_data': NodeParameter(name='customer_data', type=list, required=True),
+        'transaction_data': NodeParameter(name='transaction_data', type=list, required=True)
+    }
+    joiner_output_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    data_joiner = PythonCodeNode.from_function(
+        join_data, 
+        name="join_data",
+        input_schema=joiner_input_schema,
+        output_schema=joiner_output_schema
+    )
     
     # Create transformer
     def clean_data(data: list) -> Dict[str, Any]:
@@ -61,7 +76,19 @@ def create_sample_workflow():
             cleaned.append(cleaned_record)
         return {"data": cleaned}
     
-    data_transformer = PythonCodeNode.from_function(clean_data, name="clean_data")
+    # Create schemas for transformer
+    transformer_input_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    transformer_output_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    data_transformer = PythonCodeNode.from_function(
+        clean_data, 
+        name="clean_data",
+        input_schema=transformer_input_schema,
+        output_schema=transformer_output_schema
+    )
     
     # Create classifier
     def classify_customers(data: list) -> Dict[str, Any]:
@@ -72,7 +99,12 @@ def create_sample_workflow():
             classified.append(record)
         return {"data": classified}
     
-    classifier = PythonCodeNode.from_function(classify_customers, name="classify_customers")
+    classifier = PythonCodeNode.from_function(
+        classify_customers, 
+        name="classify_customers",
+        input_schema=transformer_input_schema,
+        output_schema=transformer_output_schema
+    )
     
     # Create aggregator
     def calculate_metrics(data: list) -> Dict[str, Any]:
@@ -85,20 +117,29 @@ def create_sample_workflow():
             segments[segment] += 1
         return {"metrics": segments}
     
-    aggregator = PythonCodeNode.from_function(calculate_metrics, name="calculate_metrics")
+    # Create schemas for aggregator
+    aggregator_output_schema = {
+        'metrics': NodeParameter(name='metrics', type=dict, required=True)
+    }
+    aggregator = PythonCodeNode.from_function(
+        calculate_metrics, 
+        name="calculate_metrics",
+        input_schema=transformer_input_schema,
+        output_schema=aggregator_output_schema
+    )
     
-    csv_writer = CSVWriter(name="export_results")
-    json_writer = JSONWriter(name="export_summary")
+    csv_writer = CSVWriter(file_path="data/results.csv")
+    json_writer = JSONWriter(file_path="data/summary.json", data={})
     
     # Add nodes to workflow
-    workflow.add_node("csv_reader", csv_reader, config={"file_path": "data/customers.csv"})
-    workflow.add_node("json_reader", json_reader, config={"file_path": "data/transactions.json"})
-    workflow.add_node("data_joiner", data_joiner)
-    workflow.add_node("data_transformer", data_transformer)
-    workflow.add_node("classifier", classifier)
-    workflow.add_node("aggregator", aggregator)
-    workflow.add_node("csv_writer", csv_writer, config={"file_path": "data/results.csv"})
-    workflow.add_node("json_writer", json_writer, config={"file_path": "data/summary.json"})
+    workflow.add_node(node_id="csv_reader", node_or_type=csv_reader)
+    workflow.add_node(node_id="json_reader", node_or_type=json_reader)
+    workflow.add_node(node_id="data_joiner", node_or_type=data_joiner)
+    workflow.add_node(node_id="data_transformer", node_or_type=data_transformer)
+    workflow.add_node(node_id="classifier", node_or_type=classifier)
+    workflow.add_node(node_id="aggregator", node_or_type=aggregator)
+    workflow.add_node(node_id="csv_writer", node_or_type=csv_writer)
+    workflow.add_node(node_id="json_writer", node_or_type=json_writer)
     
     # Connect nodes
     workflow.connect("csv_reader", "data_joiner", {"data": "customer_data"})
@@ -256,19 +297,38 @@ def demonstrate_workflow_comparison():
     
     # Create two similar workflows
     workflow1 = create_sample_workflow()
-    workflow1.metadata.name = "workflow_v1"
+    workflow1.name = "workflow_v1"
     
     workflow2 = create_sample_workflow()
-    workflow2.metadata.name = "workflow_v2"
+    workflow2.name = "workflow_v2"
     
     # Add an extra node to workflow2
     def extra_processor(data: list) -> Dict[str, Any]:
         """Additional processing step."""
         return {"data": data}
     
-    extra_node = PythonCodeNode.from_function(extra_processor, name="extra_processor")
-    workflow2.add_node("extra_processor", extra_node)
-    workflow2.remove_edge("classifier", "csv_writer")
+    # Import NodeParameter for schemas
+    from kailash.nodes.base import NodeParameter
+    
+    # Create schemas for extra processor
+    extra_processor_input_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    extra_processor_output_schema = {
+        'data': NodeParameter(name='data', type=list, required=True)
+    }
+    extra_node = PythonCodeNode.from_function(
+        extra_processor, 
+        name="extra_processor",
+        input_schema=extra_processor_input_schema,
+        output_schema=extra_processor_output_schema
+    )
+    
+    # Add the extra node and connect it between classifier and csv_writer
+    workflow2.add_node(node_id="extra_processor", node_or_type=extra_node)
+    
+    # Note: Since we can't remove edges, we'll recreate the final connection
+    # This will create an additional branch rather than replacing the connection
     workflow2.connect("classifier", "extra_processor", {"data": "data"})
     workflow2.connect("extra_processor", "csv_writer", {"data": "data"})
     

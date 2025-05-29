@@ -127,9 +127,13 @@ def create_transaction_analyzer():
         transactions_df = pd.DataFrame(data)
         customers_df = pd.DataFrame(customer_data)
         
-        # Ensure numeric types
+        # Ensure numeric types and consistent customer_id format
         if 'amount' in transactions_df.columns:
             transactions_df['amount'] = pd.to_numeric(transactions_df['amount'], errors='coerce')
+        
+        # Convert customer_id to consistent type (string)
+        transactions_df['customer_id'] = transactions_df['customer_id'].astype(str)
+        customers_df['customer_id'] = customers_df['customer_id'].astype(str)
         
         # Join with customer data
         merged_df = pd.merge(
@@ -223,6 +227,7 @@ def main():
         # Step 1: Create workflow
         print("\nCreating complex workflow...")
         workflow = Workflow(
+            workflow_id="complex_customer_analysis",
             name="complex_customer_analysis",
             description="Multi-branch customer analysis workflow"
         )
@@ -296,7 +301,7 @@ def main():
         # Step 4: Create workflow run
         print("\nCreating workflow run...")
         run_id = task_manager.create_run(
-            workflow_name=workflow.metadata.name,
+            workflow_name=workflow.name,
             metadata={
                 "description": "Multi-source customer analysis workflow",
                 "nodes": len(workflow.nodes)

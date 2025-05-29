@@ -97,10 +97,33 @@ def summarize_by_group(data: list, group_col: str, value_col: str) -> Dict[str, 
         'total': sum(summary.values())
     }
 
+# Define output schema for summary node
+summary_output_schema = {
+    'summary': NodeParameter(
+        name='summary',
+        type=dict,
+        required=True,
+        description='Summary by group'
+    ),
+    'groups': NodeParameter(
+        name='groups',
+        type=list,
+        required=True,
+        description='List of groups'
+    ),
+    'total': NodeParameter(
+        name='total',
+        type=float,
+        required=True,
+        description='Total sum'
+    )
+}
+
 summary_node = PythonCodeNode.from_function(
     func=summarize_by_group,
     name="group_summarizer",
-    description="Summarize data by group"
+    description="Summarize data by group",
+    output_schema=summary_output_schema
 )
 
 # Use filtered data for summary
@@ -119,7 +142,8 @@ print(f"Total: ${summary_result['total']:,.2f}")
 def simple_stats(data: list, column: str) -> Dict[str, Any]:
     """Calculate simple statistics."""
     df = pd.DataFrame(data)
-    values = df[column]
+    # Convert column to numeric, handling errors
+    values = pd.to_numeric(df[column], errors='coerce')
     
     return {
         'mean': values.mean(),
@@ -128,10 +152,39 @@ def simple_stats(data: list, column: str) -> Dict[str, Any]:
         'count': len(values)
     }
 
-# Create node without explicit schemas
+# Define output schema for stats node
+stats_output_schema = {
+    'mean': NodeParameter(
+        name='mean',
+        type=float,
+        required=True,
+        description='Mean value'
+    ),
+    'max': NodeParameter(
+        name='max',
+        type=float,
+        required=True,
+        description='Maximum value'
+    ),
+    'min': NodeParameter(
+        name='min',
+        type=float,
+        required=True,
+        description='Minimum value'
+    ),
+    'count': NodeParameter(
+        name='count',
+        type=int,
+        required=True,
+        description='Count of values'
+    )
+}
+
+# Create node with output schema
 stats_node = PythonCodeNode.from_function(
     func=simple_stats,
-    name="simple_stats"
+    name="simple_stats",
+    output_schema=stats_output_schema
 )
 
 # Execute with original data
