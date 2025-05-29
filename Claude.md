@@ -227,27 +227,44 @@ Keep dependencies minimal and explicit:
        - Storage Backend Strategy
      - **README.md**: Include a summary of each ADR in docs/adr/README.md
 
-3. **Todos List**:
-   - Use the TodoRead and TodoWrite tools to manage tasks.
-   - Create the list of tasks before starting the implementation.
-   - Also, create and maintain all todos in `docs/todos/000-master.md`.
-   - Each entry in the todo file should contain:
-   - A list of tasks to be completed
-     - Task descriptions
-     - Status of each task (e.g., "To Do", "In Progress", "Done")
-     - Example:
-      ```
-       # Todo List for Kailash Python SDK
-       - Task 1: Implement base Node class
-         - Description: Create the base class for all nodes with validation and execution contract
-         - Status: In Progress
-      ```
-   - Other todo files in the same directory should be used to record a summary of completed tasks. 
-   - Queue the following tasks at the end of each run's todo list:
-     - examine the examples in /examples, identify those that may be affected by the latest edits, and ensure these examples can work.
-     - ensure all unit, integration, and documentation tests passed
-     - ensure local github actions test passed
-     - update adr, todos, and readme.
+3. **Todos Management**:
+   - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
+   - Maintain the master todo list in `docs/todos/000-master.md` using this structure:
+   
+   ```markdown
+   # Project Status Overview
+   - **Category**: Status - Brief description
+   
+   ## High Priority - Active Tasks
+   - **Task Name**
+     - Description: Clear, actionable description
+     - Status: To Do | In Progress | Completed
+     - Priority: High | Medium | Low
+     - Details: Implementation specifics or context
+   
+   ## Medium/Low Priority Tasks
+   [Same format as above]
+   
+   ## Recent Achievements
+   - Brief summary of completed work
+   
+   ## Completed Tasks Archive
+   - Condensed historical record organized by development phase
+   ```
+   
+   - **Organization Principles**:
+     - Active tasks first, completed tasks archived at bottom
+     - Group by priority and functional area (Testing, Documentation, etc.)
+     - Use condensed format for completed tasks to reduce file length
+     - Include project status overview for quick health assessment
+     - Focus on actionable next steps rather than detailed history
+   
+   - Other todo files in the same directory should record summaries of completed development cycles
+   - Always queue these verification tasks at the end of each development cycle:
+     - Test examples affected by recent changes
+     - Run unit, integration, and documentation tests
+     - Verify local GitHub Actions tests pass
+     - Update ADRs, todos, and README as needed
 
 4. **Examples**:
    - Always create example nodes and workflows in the `examples/` directory.

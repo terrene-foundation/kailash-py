@@ -1,4 +1,19 @@
 {
-  "tasks": {},
+  "tasks": {
+    "6328836f-e425-4438-87e5-df29036b2038": {
+      "run_id": "c849e585-f618-43f7-a789-839edbfa77d2",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-05-29T10:19:52.397958",
+      "ended_at": null
+    },
+    "75efe6ff-f22b-465f-8641-8b6304cdc4fc": {
+      "run_id": "c849e585-f618-43f7-a789-839edbfa77d2",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-05-29T10:19:52.400288"
+    }
+  },
   "runs": {}
 }

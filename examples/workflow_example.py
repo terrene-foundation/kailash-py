@@ -11,7 +11,7 @@ from typing import Any, Dict
 import pandas as pd
 from pathlib import Path
 
-from kailash.workflow import Workflow
+from kailash.workflow.graph import Workflow
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.nodes.data.readers import CSVReader
 from kailash.nodes.data.writers import CSVWriter
@@ -159,7 +159,7 @@ def main():
     print("=== Data Processing Workflow Example ===\n")
     
     # Create workflow
-    workflow = Workflow(name="Customer Data Processing")
+    workflow = Workflow(workflow_id="customer_data_processing", name="Customer Data Processing")
     
     # Step 1: Create nodes
     # CSV reader node
@@ -178,14 +178,14 @@ def main():
     # CSV writer nodes (data will come from connections)
     csv_writer_filtered = CSVWriter(
         file_path=str(output_directory / 'filtered_customers.csv'),
-        delimiter=','
-        # headers will be auto-detected from dict data
+        delimiter=',',
+        headers=None  # headers will be auto-detected from dict data
     )
     
     csv_writer_summary = CSVWriter(
         file_path=str(output_directory / 'customer_summary.csv'),
-        delimiter=','
-        # headers will be auto-detected from dict data
+        delimiter=',',
+        headers=None  # headers will be auto-detected from dict data
     )
     
     # Step 2: Add nodes to workflow with configurations
@@ -272,10 +272,10 @@ def main():
         print(f"Workflow execution failed: {e}")
         raise
     
-    # Step 5: Export workflow
-    workflow_file = output_directory / 'customer_workflow.yaml'
-    workflow.export_to_kailash(str(workflow_file), format="yaml")
-    print(f"\nWorkflow saved to: {workflow_file}")
+    # Step 5: Export workflow (commented out due to method not existing)
+    # workflow_file = output_directory / 'customer_workflow.yaml'
+    # workflow.export_to_kailash(str(workflow_file), format="yaml")
+    # print(f"\nWorkflow saved to: {workflow_file}")
     
     # Step 6: Demonstrate loading and re-running
     print("\n=== Loading and Re-running Workflow ===")
