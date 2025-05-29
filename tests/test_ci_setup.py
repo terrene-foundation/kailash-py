@@ -15,34 +15,40 @@ def test_basic_math():
     assert 3 * 4 == 12, "Basic multiplication should work"
 
 
-@pytest.mark.parametrize("input_val,expected", [
-    (1, 1),
-    (2, 4),
-    (3, 9),
-    (4, 16),
-    (5, 25),
-])
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (1, 1),
+        (2, 4),
+        (3, 9),
+        (4, 16),
+        (5, 25),
+    ],
+)
 def test_square_function(input_val, expected):
     """Test a simple square function with various inputs."""
+
     def square(x):
         return x * x
-    
+
     result = square(input_val)
-    assert result == expected, f"Square of {input_val} should be {expected}, got {result}"
+    assert (
+        result == expected
+    ), f"Square of {input_val} should be {expected}, got {result}"
 
 
 class TestSimpleClass:
     """Test class with setup and multiple test methods."""
-    
+
     def setup_method(self):
         """Setup method called before each test."""
         self.value = 10
-    
+
     def test_increment(self):
         """Test incrementing a value."""
         self.value += 1
         assert self.value == 11
-    
+
     def test_decrement(self):
         """Test decrementing a value."""
         self.value -= 1
