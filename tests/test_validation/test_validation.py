@@ -31,15 +31,15 @@ def test_validation():
     result = node.execute(x=5, y=10)
     print(f"✓ Normal execution: {result}")
     
-    print("\nTesting direct execute_code() method...")
+    print("\nTesting direct executor.execute_code() method...")
     
-    # Test direct execute_code (bypasses validation)
-    result = node.execute_code({'x': 5, 'y': 10})
-    print(f"✓ Direct execute_code: {result}")
+    # Test direct executor.execute_code (bypasses validation)
+    result = node.executor.execute_code(node.code, {'x': 5, 'y': 10})
+    print(f"✓ Direct executor.execute_code: {result}")
     
-    # Test that execute_code doesn't validate (it should work with dict)
-    result = node.execute_code({'x': 5, 'y': 10})
-    print(f"✓ Execute_code with dict works: {result}")
+    # Test that executor.execute_code doesn't validate (it should work with dict)
+    result = node.executor.execute_code(node.code, {'x': 5, 'y': 10})
+    print(f"✓ Executor.execute_code with dict works: {result}")
     
     print("\nAll validation tests passed!")
 

@@ -1,0 +1,55 @@
+{
+  "task_id": "6940b7f0-21b5-4123-bf9e-1432f08dcfc7",
+  "run_id": "1a1e0455-4a72-4aa0-a601-b7fc60b3d9fc",
+  "node_id": "customer_reader",
+  "node_type": "CSVReader",
+  "status": "completed",
+  "started_at": "2025-05-29T14:09:22.070083+00:00",
+  "ended_at": "2025-05-29T14:09:22.071101+00:00",
+  "completed_at": "2025-05-29T14:09:22.071101+00:00",
+  "created_at": "2025-05-29T14:09:22.070102",
+  "result": {
+    "data": [
+      {
+        "customer_id": "cust1",
+        "name": "Alice",
+        "email": "alice@example.com",
+        "tier": "gold"
+      },
+      {
+        "customer_id": "cust2",
+        "name": "Bob",
+        "email": "bob@example.com",
+        "tier": "silver"
+      },
+      {
+        "customer_id": "cust3",
+        "name": "Charlie",
+        "email": "charlie@example.com",
+        "tier": "bronze"
+      },
+      {
+        "customer_id": "cust4",
+        "name": "Diana",
+        "email": "diana@example.com",
+        "tier": "gold"
+      },
+      {
+        "customer_id": "cust5",
+        "name": "Evan",
+        "email": "evan@example.com",
+        "tier": "silver"
+      }
+    ]
+  },
+  "error": null,
+  "metadata": {
+    "execution_time": 0.000218
+  },
+  "input_data": null,
+  "output_data": null,
+  "metrics": null,
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

@@ -157,7 +157,10 @@ class TaskRun(BaseModel):
     @property
     def duration(self) -> Optional[float]:
         """Get task duration in seconds."""
-        if self.started_at and self.completed_at:
+        if self.started_at and self.ended_at:
+            return (self.ended_at - self.started_at).total_seconds()
+        elif self.started_at and self.completed_at:
+            # Fallback for backward compatibility
             return (self.completed_at - self.started_at).total_seconds()
         return None
     
@@ -331,7 +334,7 @@ class WorkflowRun(BaseModel):
     run_id: str = Field(default_factory=lambda: str(uuid4()))
     workflow_name: str = Field(..., description="Name of the workflow")
     status: str = Field(default="running", description="Run status")
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: Optional[datetime] = None
     tasks: List[str] = Field(default_factory=list, description="Task IDs")
     metadata: Dict[str, Any] = Field(default_factory=dict)

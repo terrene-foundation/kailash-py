@@ -4,7 +4,7 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.sdk_exceptions import NodeValidationError
 
 
-def trace_validation():
+def test_trace_validation():
     """Trace how validation works in PythonCodeNode."""
     
     # Create a node with typed inputs
@@ -48,4 +48,4 @@ def trace_validation():
 
 
 if __name__ == "__main__":
-    trace_validation()
+    test_trace_validation()

@@ -1,5 +1,4 @@
 """Test output schema validation functionality."""
-import sys
 from typing import Dict, Any
 from kailash.nodes.base import Node, NodeParameter, NodeMetadata
 from kailash.sdk_exceptions import NodeValidationError
@@ -13,11 +12,11 @@ class TestNodeWithSchema(Node):
         description="Test node with output schema"
     )
     
-    def __init__(self, **kwargs):
+    def configure(self, **kwargs):
         # Provide default config if not specified
         if 'input_value' not in kwargs:
             kwargs['input_value'] = 42
-        super().__init__(**kwargs)
+        super().configure(**kwargs)
     
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -66,11 +65,11 @@ class TestNodeWithoutSchema(Node):
         description="Test node without output schema"
     )
     
-    def __init__(self, **kwargs):
+    def configure(self, **kwargs):
         # Provide default config if not specified
         if 'input_value' not in kwargs:
             kwargs['input_value'] = 42
-        super().__init__(**kwargs)
+        super().configure(**kwargs)
     
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -209,10 +208,10 @@ def test_node_execution_with_output_validation():
             description="Test execution with output validation"
         )
         
-        def __init__(self, **kwargs):
+        def configure(self, **kwargs):
             if 'value' not in kwargs:
                 kwargs['value'] = 5
-            super().__init__(**kwargs)
+            super().configure(**kwargs)
         
         def get_parameters(self) -> Dict[str, NodeParameter]:
             return {
@@ -276,10 +275,10 @@ def test_schema_violation_during_execution():
             description="Node with broken outputs"
         )
         
-        def __init__(self, **kwargs):
+        def configure(self, **kwargs):
             if 'value' not in kwargs:
                 kwargs['value'] = 5
-            super().__init__(**kwargs)
+            super().configure(**kwargs)
         
         def get_parameters(self) -> Dict[str, NodeParameter]:
             return {
@@ -328,12 +327,4 @@ def test_schema_violation_during_execution():
         return False
 
 
-if __name__ == "__main__":
-    success = test_output_schema_validation()
-    success = test_node_execution_with_output_validation() and success
-    success = test_schema_violation_during_execution() and success
-    
-    if not success:
-        sys.exit(1)
-    
-    print("\n🎉 All tests passed!")
+# Remove main execution block for pytest compatibility

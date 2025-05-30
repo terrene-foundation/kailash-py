@@ -1,95 +1,55 @@
 """Test script to verify metadata and method fixes."""
-import sys
-import traceback
+import pytest
 
-tests_passed = 0
-tests_failed = 0
 
-def test_node_structure(module_path, class_name):
+def test_node_structure():
+    """Test importing nodes and checking their structure."""
+    test_cases = [
+        ("kailash.nodes.data.vector_db", "EmbeddingNode"),
+        ("kailash.nodes.data.vector_db", "VectorDatabaseNode"),
+        ("kailash.nodes.data.vector_db", "TextSplitterNode"),
+        ("kailash.nodes.data.streaming", "KafkaConsumerNode"),
+        ("kailash.nodes.data.streaming", "StreamPublisherNode"),
+        ("kailash.nodes.data.streaming", "WebSocketNode"),
+        ("kailash.nodes.data.streaming", "EventStreamNode"),
+        ("kailash.nodes.code.python", "PythonCodeNode"),
+    ]
+    
+    for module_path, class_name in test_cases:
+        _test_single_node_structure(module_path, class_name)
+
+
+def _test_single_node_structure(module_path, class_name):
     """Test importing a class and checking its structure without instantiation."""
-    global tests_passed, tests_failed
-    try:
-        # Dynamic import
-        module = __import__(module_path, fromlist=[class_name])
-        cls = getattr(module, class_name)
+    # Dynamic import
+    module = __import__(module_path, fromlist=[class_name])
+    cls = getattr(module, class_name)
+    
+    # Verify metadata
+    if hasattr(cls, 'metadata'):
+        metadata = cls.metadata
+        # Check that metadata doesn't have invalid 'parameters' field
+        assert not hasattr(metadata, 'parameters'), f"{module_path}.{class_name}: metadata has invalid 'parameters' field"
         
-        # Verify metadata
-        if hasattr(cls, 'metadata'):
-            metadata = cls.metadata
-            # Check that metadata doesn't have invalid 'parameters' field
-            if hasattr(metadata, 'parameters'):
-                print(f"✗ {module_path}.{class_name}: metadata has invalid 'parameters' field")
-                tests_failed += 1
-                return
-            # Check required metadata fields
-            required_fields = ['name', 'description', 'version']
-            for field in required_fields:
-                if not hasattr(metadata, field):
-                    print(f"✗ {module_path}.{class_name}: metadata missing '{field}' field")
-                    tests_failed += 1
-                    return
-            print(f"✓ {module_path}.{class_name}: metadata is valid")
-        else:
-            print(f"✓ {module_path}.{class_name}: imported successfully")
-        
-        # Check for required methods without instantiating
-        if not hasattr(cls, 'get_parameters'):
-            print(f"✗ {module_path}.{class_name}: missing get_parameters method")
-            tests_failed += 1
-            return
-            
-        if not hasattr(cls, 'run'):
-            print(f"✗ {module_path}.{class_name}: missing run method")
-            tests_failed += 1
-            return
-            
-        print(f"✓ {module_path}.{class_name}: has required methods")
-        tests_passed += 1
-        
-    except Exception as e:
-        print(f"✗ {module_path}.{class_name}: {type(e).__name__}: {e}")
-        traceback.print_exc()
-        tests_failed += 1
+        # Check required metadata fields
+        required_fields = ['name', 'description', 'version']
+        for field in required_fields:
+            assert hasattr(metadata, field), f"{module_path}.{class_name}: metadata missing '{field}' field"
+    
+    # Check for required methods without instantiating
+    assert hasattr(cls, 'get_parameters'), f"{module_path}.{class_name}: missing get_parameters method"
+    assert hasattr(cls, 'run'), f"{module_path}.{class_name}: missing run method"
 
-# Test our fixed nodes
-print("Testing vector_db nodes...")
-test_node_structure("kailash.nodes.data.vector_db", "EmbeddingNode")
-test_node_structure("kailash.nodes.data.vector_db", "VectorDatabaseNode")
-test_node_structure("kailash.nodes.data.vector_db", "TextSplitterNode")
 
-print("\nTesting streaming nodes...")
-test_node_structure("kailash.nodes.data.streaming", "KafkaConsumerNode")
-test_node_structure("kailash.nodes.data.streaming", "StreamPublisherNode")
-test_node_structure("kailash.nodes.data.streaming", "WebSocketNode") 
-test_node_structure("kailash.nodes.data.streaming", "EventStreamNode")
-
-print("\nTesting code nodes...")
-# Fix import path - it's in kailash.nodes.code.python
-test_node_structure("kailash.nodes.code.python", "PythonCodeNode")
-
-# Test tracking models
-print("\nTesting tracking models...")
-try:
+def test_tracking_models():
+    """Test tracking models creation and validators."""
     from kailash.tracking.models import TaskRun, WorkflowRun
     
     # Try creating instances to ensure validators work
     task = TaskRun(run_id="test", node_id="node1", node_type="test_type")
-    print("✓ TaskRun: Created successfully with pydantic v2 validators")
-    tests_passed += 1
+    assert task.run_id == "test"
+    assert task.node_id == "node1"
+    assert task.node_type == "test_type"
     
     workflow = WorkflowRun(workflow_name="test_workflow")
-    print("✓ WorkflowRun: Created successfully with pydantic v2 validators")
-    tests_passed += 1
-    
-except Exception as e:
-    print(f"✗ Tracking models: {type(e).__name__}: {e}")
-    traceback.print_exc()
-    tests_failed += 1
-
-print(f"\n=== Summary ===")
-print(f"Tests passed: {tests_passed}")
-print(f"Tests failed: {tests_failed}")
-print(f"Total tests: {tests_passed + tests_failed}")
-
-if tests_failed > 0:
-    sys.exit(1)
+    assert workflow.workflow_name == "test_workflow"

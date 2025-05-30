@@ -20,7 +20,7 @@ def test_type_conversion():
         # Convert back to float for comparison
         threshold_float = float(threshold)
         filtered = data[data['Total Claim Amount'] > threshold_float]
-        return {"filtered_count": len(filtered), "threshold_used": threshold}
+        return {"result": {"filtered_count": len(filtered), "threshold_used": threshold}}
     
     # Create node
     node = PythonCodeNode.from_function(
@@ -47,7 +47,7 @@ def test_strict_type_check():
     
     # Define function expecting a complex type that can't be converted
     def process_data(data: pd.DataFrame) -> dict:
-        return {"rows": len(data)}
+        return {"result": {"rows": len(data)}}
     
     node = PythonCodeNode.from_function(
         func=process_data,

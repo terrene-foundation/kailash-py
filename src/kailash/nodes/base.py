@@ -571,14 +571,27 @@ class Node(ABC):
             outputs = validated_outputs
         
         # Then validate JSON-serializability
-        try:
-            json.dumps(outputs)
-            return outputs
-        except (TypeError, ValueError) as e:
+        # Skip JSON validation for state management objects
+        from kailash.workflow.state import WorkflowStateWrapper
+        from pydantic import BaseModel
+        
+        non_serializable = []
+        for k, v in outputs.items():
+            # Allow WorkflowStateWrapper objects to pass through
+            if isinstance(v, WorkflowStateWrapper):
+                continue
+            # Allow Pydantic models (they can be serialized with .model_dump())
+            if isinstance(v, BaseModel):
+                continue
+            if not self._is_json_serializable(v):
+                non_serializable.append(k)
+                
+        if non_serializable:
             raise NodeValidationError(
-                f"Node outputs must be JSON-serializable. Failed keys: "
-                f"{[k for k, v in outputs.items() if not self._is_json_serializable(v)]}"
-            ) from e
+                f"Node outputs must be JSON-serializable. Failed keys: {non_serializable}"
+            )
+            
+        return outputs
     
     def _is_json_serializable(self, obj: Any) -> bool:
         """Check if an object is JSON-serializable.

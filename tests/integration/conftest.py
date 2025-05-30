@@ -65,21 +65,21 @@ def simple_workflow(sample_csv_file: Path, temp_data_dir: Path) -> Workflow:
     
     # Add nodes
     reader_id = builder.add_node(
-        "CSVFileReader",
+        "CSVReader",
         "reader",
-        config={"path": str(sample_csv_file)}
+        config={"file_path": str(sample_csv_file)}
     )
     
     filter_id = builder.add_node(
-        "DataFilter",
+        "Filter",
         "filter",
-        config={"condition": "value > 100"}
+        config={"field": "value", "operator": ">", "value": 100}
     )
     
     writer_id = builder.add_node(
-        "CSVFileWriter",
+        "CSVWriter",
         "writer",
-        config={"path": str(temp_data_dir / "output.csv")}
+        config={"file_path": str(temp_data_dir / "output.csv")}
     )
     
     # Connect nodes
@@ -96,20 +96,20 @@ def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_di
     
     # Add multiple data sources
     csv_reader_id = builder.add_node(
-        "CSVFileReader",
+        "CSVReader",
         "csv_reader",
-        config={"path": str(sample_csv_file)}
+        config={"file_path": str(sample_csv_file)}
     )
     
     json_reader_id = builder.add_node(
-        "JSONFileReader",
+        "JSONReader",
         "json_reader",
-        config={"path": str(sample_json_file)}
+        config={"file_path": str(sample_json_file)}
     )
     
     # Add transformation nodes
     merger_id = builder.add_node(
-        "DataMerger",
+        "Merge",
         "merger",
         config={
             "on": "id"
@@ -117,54 +117,60 @@ def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_di
     )
     
     aggregator_id = builder.add_node(
-        "DataAggregator",
+        "DataTransformer",
         "aggregator",
         config={
-            "group_by": ["name"],
-            "agg_func": "sum"
+            "transformations": [
+                # Simple transformation - just pass data through
+                "result"
+            ]
         }
     )
     
     # Add conditional logic
     condition_id = builder.add_node(
-        "ConditionalRouter",
+        "Switch",
         "condition",
         config={
-            "condition": "len(data) > 0"
+            "condition_field": "count",
+            "operator": ">",
+            "value": 0
         }
     )
     
     # Add AI node
     ai_processor_id = builder.add_node(
-        "LLMPrompt",
+        "TextSummarizer",
         "ai_processor",
         config={
-            "prompt": "Analyze this data and provide insights"
+            "texts": ["Analyze this data and provide insights"],
+            "max_length": 100
         }
     )
     
     # Add multiple outputs
     csv_writer_id = builder.add_node(
-        "CSVFileWriter",
+        "CSVWriter",
         "csv_writer",
         config={
-            "path": str(temp_data_dir / "processed.csv")
+            "file_path": str(temp_data_dir / "processed.csv")
         }
     )
     
     json_writer_id = builder.add_node(
-        "JSONFileWriter",
+        "JSONWriter",
         "json_writer",
         config={
-            "path": str(temp_data_dir / "processed.json")
+            "file_path": str(temp_data_dir / "processed.json")
         }
     )
     
     report_writer_id = builder.add_node(
-        "TextFileWriter",
+        "TextWriter",
         "report_writer",
         config={
-            "path": str(temp_data_dir / "report.txt")
+            "file_path": str(temp_data_dir / "report.txt"),
+            "text": "Report placeholder"
         }
     )
     
@@ -172,7 +178,7 @@ def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_di
     builder.add_connection(csv_reader_id, "data", merger_id, "left")
     builder.add_connection(json_reader_id, "data", merger_id, "right")
     builder.add_connection(merger_id, "merged_data", aggregator_id, "data")
-    builder.add_connection(aggregator_id, "aggregated_data", condition_id, "data")
+    builder.add_connection(aggregator_id, "result", condition_id, "input_data")
     builder.add_connection(condition_id, "true_data", ai_processor_id, "data")
     builder.add_connection(condition_id, "true_data", csv_writer_id, "data")
     builder.add_connection(condition_id, "false_data", json_writer_id, "data")
@@ -200,8 +206,8 @@ def sample_manifest(simple_workflow: Workflow) -> KailashManifest:
 def task_manager(temp_data_dir: Path) -> TaskManager:
     """Create a task manager for testing."""
     from kailash.tracking.storage.filesystem import FileSystemStorage
-    storage = FileSystemStorage(storage_path=temp_data_dir / "tasks")
-    return TaskManager(storage=storage)
+    storage = FileSystemStorage(base_path=str(temp_data_dir / "tasks"))
+    return TaskManager(storage_backend=storage)
 
 
 @pytest.fixture
@@ -229,25 +235,27 @@ def error_workflow(temp_data_dir: Path) -> Workflow:
     
     # Add a reader that will fail
     reader_id = builder.add_node(
-        "CSVFileReader",
+        "CSVReader",
         "bad_reader",
-        config={"path": str(temp_data_dir / "nonexistent.csv")}
+        config={"file_path": str(temp_data_dir / "nonexistent.csv")}
     )
     
     # Add a processor that will fail
     processor_id = builder.add_node(
-        "DataFilter",
+        "Filter",
         "bad_filter",
         config={
-            "condition": "invalid python syntax!!!"
+            "field": "value",
+            "operator": "invalid_op",
+            "value": 100
         }
     )
     
     writer_id = builder.add_node(
-        "CSVFileWriter",
+        "CSVWriter",
         "writer",
         config={
-            "path": str(temp_data_dir / "output.csv")
+            "file_path": str(temp_data_dir / "output.csv")
         }
     )
     
@@ -281,42 +289,46 @@ def parallel_workflow(temp_data_dir: Path) -> Workflow:
     
     # Single input
     reader_id = builder.add_node(
-        "CSVFileReader",
+        "CSVReader",
         "reader",
-        config={"path": str(temp_data_dir / "input.csv")}
+        config={"file_path": str(temp_data_dir / "input.csv")}
     )
     
     # Parallel processing branches
     filter1_id = builder.add_node(
-        "DataFilter",
+        "Filter",
         "filter_high",
         config={
-            "condition": "value > 500"
+            "field": "value",
+            "operator": ">",
+            "value": 500
         }
     )
     
     filter2_id = builder.add_node(
-        "DataFilter",
+        "Filter",
         "filter_low",
         config={
-            "condition": "value <= 500"
+            "field": "value",
+            "operator": "<=",
+            "value": 500
         }
     )
     
     # Parallel outputs
     writer1_id = builder.add_node(
-        "CSVFileWriter",
+        "CSVWriter",
         "writer_high",
         config={
-            "path": str(temp_data_dir / "high_values.csv")
+            "file_path": str(temp_data_dir / "high_values.csv")
         }
     )
     
     writer2_id = builder.add_node(
-        "CSVFileWriter",
+        "CSVWriter",
         "writer_low",
         config={
-            "path": str(temp_data_dir / "low_values.csv")
+            "file_path": str(temp_data_dir / "low_values.csv")
         }
     )
     
@@ -339,23 +351,25 @@ def yaml_workflow_config(temp_data_dir: Path) -> Path:
             "nodes": [
                 {
                     "id": "reader",
-                    "type": "CSVFileReader",
+                    "type": "CSVReader",
                     "inputs": {
-                        "path": str(temp_data_dir / "input.csv")
+                        "file_path": str(temp_data_dir / "input.csv")
                     }
                 },
                 {
                     "id": "processor",
-                    "type": "DataFilter",
+                    "type": "Filter",
                     "inputs": {
-                        "condition": "value > 100"
+                        "field": "value",
+                        "operator": ">",
+                        "value": 100
                     }
                 },
                 {
                     "id": "writer",
-                    "type": "CSVFileWriter",
+                    "type": "CSVWriter",
                     "inputs": {
-                        "path": str(temp_data_dir / "output.csv")
+                        "file_path": str(temp_data_dir / "output.csv")
                     }
                 }
             ],

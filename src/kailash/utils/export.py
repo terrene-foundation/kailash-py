@@ -746,17 +746,30 @@ class WorkflowExporter:
         # Add metadata if enabled
         if self.config.include_metadata:
             try:
-                data["metadata"] = workflow.metadata.model_dump()
-                # Convert datetime to string
-                data["metadata"]["created_at"] = data["metadata"]["created_at"].isoformat()
-                # Convert set to list for JSON serialization
-                data["metadata"]["tags"] = list(data["metadata"]["tags"])
+                # workflow.metadata is a dict, not a pydantic model
+                data["metadata"] = {
+                    "name": workflow.name,
+                    "description": workflow.description,
+                    "version": workflow.version,
+                    "author": workflow.author
+                }
+                # Add any additional metadata from the dict
+                if workflow.metadata:
+                    data["metadata"].update(workflow.metadata)
+                    
+                # Convert datetime to string if present
+                if "created_at" in data["metadata"] and hasattr(data["metadata"]["created_at"], "isoformat"):
+                    data["metadata"]["created_at"] = data["metadata"]["created_at"].isoformat()
+                    
+                # Convert set to list for JSON serialization if present
+                if "tags" in data["metadata"] and isinstance(data["metadata"]["tags"], set):
+                    data["metadata"]["tags"] = list(data["metadata"]["tags"])
             except Exception as e:
                 raise ExportException(
                     f"Failed to export metadata: {e}"
                 ) from e
         else:
-            data["metadata"] = {"name": workflow.metadata.name}
+            data["metadata"] = {"name": workflow.name}
         
         # Add nodes
         for node_id, node_instance in workflow.nodes.items():
@@ -769,18 +782,21 @@ class WorkflowExporter:
                     "config": deepcopy(node_instance.config)
                 }
                 
-                # Add container info
-                mapping = self.node_mapper.get_mapping(node_instance.node_type)
-                node_data["container"] = {
-                    "image": mapping.container_image,
-                    "command": mapping.command,
-                    "args": mapping.args,
-                    "env": mapping.env
-                }
-                
-                # Add resources if enabled
-                if self.config.include_resources:
-                    node_data["resources"] = mapping.resources.model_dump()
+                # Try to add container info
+                try:
+                    mapping = self.node_mapper.get_mapping(node_instance.node_type)
+                    node_data["container"] = {
+                        "image": mapping.container_image,
+                        "command": mapping.command,
+                        "args": mapping.args,
+                        "env": mapping.env
+                    }
+                    
+                    # Add resources if enabled
+                    if self.config.include_resources:
+                        node_data["resources"] = mapping.resources.model_dump()
+                except Exception as e:
+                    logger.warning(f"No container mapping for node type '{node_instance.node_type}': {e}")
                 
                 # Add position for visualization
                 node_data["position"] = {
@@ -804,8 +820,10 @@ class WorkflowExporter:
             
             try:
                 conn_data = {
-                    "from": f"{connection.source_node}.{connection.source_output}",
-                    "to": f"{connection.target_node}.{connection.target_input}"
+                    "from": connection.source_node,
+                    "to": connection.target_node,
+                    "from_output": connection.source_output,
+                    "to_input": connection.target_input
                 }
                 data["connections"].append(conn_data)
             except Exception as e:

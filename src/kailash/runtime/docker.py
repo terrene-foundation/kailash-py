@@ -159,7 +159,7 @@ logging.basicConfig(
 logger = logging.getLogger("kailash_node")
 
 def main():
-    """Run a Kailash node in a Docker container."""
+    \"\"\"Run a Kailash node in a Docker container.\"\"\"
     logger.info("Starting node execution")
     
     # Load node configuration

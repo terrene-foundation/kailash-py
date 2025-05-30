@@ -1,8 +1,18 @@
 """Tests for API integration nodes."""
 import pytest
 import json
-import responses
 from unittest.mock import patch, MagicMock
+
+try:
+    import responses
+    HAS_RESPONSES = True
+except ImportError:
+    responses = None
+    HAS_RESPONSES = False
+    
+# Skip entire module if responses not available
+if not HAS_RESPONSES:
+    pytest.skip("responses library not available for API tests", allow_module_level=True)
 
 from kailash.nodes.api.http import HTTPRequestNode, AsyncHTTPRequestNode
 from kailash.nodes.api.rest import RESTClientNode, AsyncRESTClientNode

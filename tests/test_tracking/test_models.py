@@ -1,7 +1,7 @@
 """Tests for tracking models module."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 
 from kailash.tracking.models import Task, TaskStatus, TaskMetrics
@@ -153,7 +153,7 @@ class TestTask:
         
         assert task.status == TaskStatus.RUNNING
         assert task.started_at is not None
-        assert task.started_at <= datetime.now()
+        assert task.started_at <= datetime.now(timezone.utc)
     
     def test_task_complete(self):
         """Test completing a task."""

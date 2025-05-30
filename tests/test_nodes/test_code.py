@@ -25,10 +25,10 @@ result = x + y
         assert outputs['result'] == 8
     
     def test_execute_with_imports(self):
-        """Test code execution with module imports."""
+        """Test code execution with pre-imported modules."""
         executor = CodeExecutor(allowed_modules=['math'])
+        # Modules are pre-imported into the namespace, not imported in the code
         code = """
-import math
 result = math.sqrt(x)
 """
         inputs = {'x': 16}
@@ -56,14 +56,14 @@ result = 1 / 0  # Division by zero
             executor.execute_code(code, {})
     
     def test_disallowed_module(self):
-        """Test that disallowed modules raise warnings."""
+        """Test that disallowed modules are not available."""
         executor = CodeExecutor(allowed_modules=['math'])  # os not allowed
         code = """
-import os  # This should fail
-result = os.path.exists('.')
+# os module is not available in the namespace
+result = os.path.exists('.')  # This will fail with NameError
 """
-        # Module import will fail silently, but code using it will error
-        with pytest.raises(NodeExecutionError):
+        # Should raise error because os is not in namespace
+        with pytest.raises(NodeExecutionError, match="name 'os' is not defined"):
             executor.execute_code(code, {})
 
 

@@ -1,0 +1,13 @@
+{
+  "run_id": "d92c9999-a3d2-4ac3-8f4e-2c3f4fb29db0",
+  "workflow_name": "complex_customer_analysis",
+  "status": "failed",
+  "started_at": "2025-05-29T14:09:22.069367",
+  "ended_at": "2025-05-29T14:09:22.074434+00:00",
+  "tasks": [],
+  "metadata": {
+    "description": "Multi-source customer analysis workflow",
+    "nodes": 9
+  },
+  "error": "Workflow execution failed: WorkflowExecutionError: Node 'validator' failed: Function execution failed: Missing required columns: ['purchase_total']\nTraceback (most recent call last):\n  File \"./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py\", line 233, in execute_function\n    return func(**kwargs)\n           ^^^^^^^^^^^^^^\n  File \"./repos/projects/kailash_python_sdk/examples/complex_workflow.py\", line 46, in validate_data\n    raise ValueError(f\"Missing required columns: {missing_columns}\")\nValueError: Missing required columns: ['purchase_total']\n"
+}

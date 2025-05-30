@@ -67,7 +67,7 @@ class LocalRuntime:
             if task_manager:
                 try:
                     run_id = task_manager.create_run(
-                        workflow_name=workflow.metadata.name,
+                        workflow_name=workflow.name,
                         metadata={
                             "parameters": parameters,
                             "debug": self.debug,
@@ -163,12 +163,21 @@ class LocalRuntime:
             task = None
             if task_manager and run_id:
                 try:
+                    # Get node metadata if available
+                    node_metadata = {}
+                    if hasattr(node_instance, 'config') and isinstance(node_instance.config, dict):
+                        node_metadata = node_instance.config.get('metadata', {})
+                    
                     task = task_manager.create_task(
                         run_id=run_id,
                         node_id=node_id,
                         node_type=node_instance.__class__.__name__,
-                        started_at=datetime.now(timezone.utc)
+                        started_at=datetime.now(timezone.utc),
+                        metadata=node_metadata
                     )
+                    # Start the task
+                    if task:
+                        task_manager.update_task_status(task.task_id, TaskStatus.RUNNING)
                 except Exception as e:
                     self.logger.warning(f"Failed to create task for node '{node_id}': {e}")
             
@@ -185,10 +194,6 @@ class LocalRuntime:
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
                 
-                # Update task status
-                if task:
-                    task.update_status(TaskStatus.RUNNING)
-                
                 # Execute node
                 start_time = datetime.now(timezone.utc)
                 outputs = node_instance.execute(**inputs)
@@ -202,8 +207,9 @@ class LocalRuntime:
                     self.logger.debug(f"Node {node_id} outputs: {outputs}")
                 
                 # Update task status
-                if task:
-                    task.update_status(
+                if task and task_manager:
+                    task_manager.update_task_status(
+                        task.task_id,
                         TaskStatus.COMPLETED,
                         result=outputs,
                         ended_at=datetime.now(timezone.utc),
@@ -219,8 +225,9 @@ class LocalRuntime:
                 self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
                 
                 # Update task status
-                if task:
-                    task.update_status(
+                if task and task_manager:
+                    task_manager.update_task_status(
+                        task.task_id,
                         TaskStatus.FAILED,
                         error=str(e),
                         ended_at=datetime.now(timezone.utc)

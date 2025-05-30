@@ -3,12 +3,16 @@
     "id": "tx003",
     "amount": 200.0,
     "status": "failed",
-    "customer_id": "cust3"
+    "customer_id": "cust3",
+    "error_code": "E003",
+    "retry_count": 0
   },
   {
     "id": "tx007",
     "amount": 25.5,
     "status": "failed",
-    "customer_id": "cust2"
+    "customer_id": "cust2",
+    "error_code": "E007",
+    "retry_count": 0
   }
 ]
