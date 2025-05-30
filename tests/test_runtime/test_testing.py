@@ -31,6 +31,7 @@ TestResult = None
 
 from kailash.nodes.base import Node
 from kailash.sdk_exceptions import NodeValidationError
+from kailash.workflow.graph import Workflow
 
 
 class SimpleNode(Node):
@@ -335,7 +336,7 @@ class TestTestRunner:
         runner = TestRunner(task_manager)
 
         # Create and register workflow
-        workflow = WorkflowGraph("simple", "Simple Workflow")
+        workflow = Workflow("simple", "Simple Workflow")
         node = SimpleNode(node_id="node1", name="Node 1")
         workflow.add_node(node)
         runner.register_workflow(workflow)
@@ -359,7 +360,7 @@ class TestTestRunner:
         runner = TestRunner(task_manager)
 
         # Create and register workflow
-        workflow = WorkflowGraph("simple", "Simple Workflow")
+        workflow = Workflow("simple", "Simple Workflow")
         node = SimpleNode(node_id="node1", name="Node 1")
         workflow.add_node(node)
         runner.register_workflow(workflow)
@@ -384,7 +385,7 @@ class TestTestRunner:
         runner = TestRunner(task_manager)
 
         # Create workflow with error node
-        workflow = WorkflowGraph("error", "Error Workflow")
+        workflow = Workflow("error", "Error Workflow")
 
         class ErrorNode(Node):
             def process(self, data):
@@ -412,12 +413,12 @@ class TestTestRunner:
         runner = TestRunner(task_manager)
 
         # Create and register workflows
-        workflow1 = WorkflowGraph("w1", "Workflow 1")
+        workflow1 = Workflow("w1", "Workflow 1")
         node1 = SimpleNode(node_id="n1", name="Node 1")
         workflow1.add_node(node1)
         runner.register_workflow(workflow1)
 
-        workflow2 = WorkflowGraph("w2", "Workflow 2")
+        workflow2 = Workflow("w2", "Workflow 2")
         node2 = ConditionalNode(node_id="n2", name="Node 2")
         workflow2.add_node(node2)
         runner.register_workflow(workflow2)
@@ -490,7 +491,7 @@ class TestTestRunner:
         runner = TestRunner(task_manager)
 
         # Create workflow with regular node
-        workflow = WorkflowGraph("test", "Test")
+        workflow = Workflow("test", "Test")
         real_node = SimpleNode(node_id="real", name="Real Node")
         workflow.add_node(real_node)
 
@@ -520,7 +521,7 @@ class TestTestRunner:
         runner = TestRunner(task_manager)
 
         # Create workflow with slow node
-        workflow = WorkflowGraph("perf", "Performance Test")
+        workflow = Workflow("perf", "Performance Test")
 
         class SlowNode(Node):
             def process(self, data):
