@@ -1,0 +1,109 @@
+/* Custom CSS for Kailash SDK Documentation */
+
+/* Improve readability */
+body {
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+/* Code blocks */
+.highlight {
+    background-color: #f8f8f8;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+/* Inline code */
+code.literal {
+    background-color: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 90%;
+}
+
+/* Navigation improvements */
+.wy-nav-content {
+    max-width: 1200px;
+}
+
+/* Table styling */
+table.docutils {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+}
+
+table.docutils th,
+table.docutils td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+table.docutils th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+/* API reference styling */
+.class {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 2px solid #e1e4e8;
+}
+
+.method {
+    margin-left: 20px;
+    margin-top: 20px;
+}
+
+/* Note and warning boxes */
+.admonition {
+    padding: 12px;
+    margin: 20px 0;
+    border-left: 4px solid;
+    border-radius: 4px;
+}
+
+.admonition.note {
+    background-color: #e3f2fd;
+    border-left-color: #2196f3;
+}
+
+.admonition.warning {
+    background-color: #fff3cd;
+    border-left-color: #ffc107;
+}
+
+.admonition.danger {
+    background-color: #f8d7da;
+    border-left-color: #dc3545;
+}
+
+/* Mermaid diagrams */
+.mermaid {
+    text-align: center;
+    margin: 20px 0;
+}
+
+/* Search improvements */
+.wy-side-nav-search {
+    background-color: #2980b9;
+}
+
+.wy-side-nav-search input[type=text] {
+    border-radius: 4px;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .wy-nav-content {
+        padding: 1.618em 1.618em;
+    }
+    
+    body {
+        font-size: 14px;
+    }
+}

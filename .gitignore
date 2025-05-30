@@ -45,6 +45,7 @@ htmlcov/
 
 # Documentation
 docs/_build/
+docs/api/_build/
 site/
 
 # Jupyter Notebooks
