@@ -200,13 +200,30 @@ kailash_python_sdk/           # Project root directory
 │   │   └── test_cli_integration.py
 │   └── test_ci_setup.py     # CI/CD setup tests
 ├── docs/                    # Documentation
+│   ├── api/                 # Sphinx API documentation (NEW!)
+│   │   ├── conf.py          # Sphinx configuration
+│   │   ├── index.rst        # Main documentation entry point
+│   │   ├── getting_started.rst # Getting started guide
+│   │   ├── installation.rst # Installation instructions
+│   │   ├── quickstart.rst   # 5-minute quickstart
+│   │   ├── requirements.txt # Documentation dependencies
+│   │   ├── Makefile         # Build automation
+│   │   ├── _static/         # Custom CSS/JS files
+│   │   ├── _templates/      # Custom templates
+│   │   └── api/             # API reference files
+│   │       ├── nodes.rst    # Node types documentation
+│   │       ├── workflow.rst # Workflow management
+│   │       ├── runtime.rst  # Runtime engines
+│   │       ├── tracking.rst # Task tracking
+│   │       ├── utils.rst    # Utilities and helpers
+│   │       └── cli.rst      # CLI commands
+│   ├── build_docs.py        # Build script for GitHub Pages
+│   ├── README.md            # Documentation development guide
 │   ├── prd/                 # Product Requirements Documents
 │   │   └── 0001-kailash_python_sdk_prd.md
 │   ├── adr/                 # Architecture Decision Records
 │   │   ├── README.md        # ADR summary
 │   │   ├── 0000-template.md # ADR template
-│   │   ├── 0001-base-node-interface.md
-│   │   ├── 0002-workflow-representation.md
 │   │   ├── 0003-base-node-interface.md
 │   │   ├── 0004-workflow-representation.md
 │   │   ├── 0005-local-execution-strategy.md
@@ -435,10 +452,16 @@ Keep dependencies minimal and explicit:
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
 
-7. **Documentation Tests**:
+7. **Sphinx Documentation**:
+   - Complete API documentation framework in `docs/api/`
+   - Build with: `cd docs && python build_docs.py`
+   - Auto-deployed via GitHub Actions to GitHub Pages
+   - All public APIs must have comprehensive docstrings with examples
+
+8. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
-8. **Code Quality and Linting**:
+9. **Code Quality and Linting**:
    - **Black**: Use Black for automatic code formatting with line length of 88 characters
      ```bash
      black src/ tests/  # Format code
@@ -472,7 +495,7 @@ Keep dependencies minimal and explicit:
      ruff check src/ tests/ --select=E9,F63,F7,F82
      ```
 
-9. **Github Actions**:
+10. **Github Actions**:
    - Use Github Actions for continuous integration.
    - Test locally before pushing changes.
    - Ensure code is linted and formatted using Black, isort, and Ruff before merging.
@@ -482,7 +505,7 @@ Keep dependencies minimal and explicit:
      - Unit tests with pytest
      - Security scanning with Trivy
 
-10. **Update README.md**
+11. **Update README.md**
    - Overview of the project
    - Installation instructions
    - Quick start guide
@@ -491,16 +514,16 @@ Keep dependencies minimal and explicit:
    - Contribution guidelines
    - Reference to the PRD and ADRs
    
-11. **Update ADRs**
+12. **Update ADRs**
     - Ensure all architectural decisions are documented in the ADRs.
     - Link relevant ADRs to the PRD and README.md.
     - Update ADRs as new decisions are made or existing ones are modified.
 
-12. **Update Claude.md**
+13. **Update Claude.md**
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
    
-13. **Github Issues and Project Update**
+14. **Github Issues and Project Update**
     - Use the Github Issues and Projects to track tasks and progress. 
     - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
     - Update the project board as tasks are completed.

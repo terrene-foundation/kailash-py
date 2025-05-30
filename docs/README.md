@@ -14,7 +14,7 @@ This directory contains the documentation for the Kailash Python SDK.
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.11+
 - pip
 
 ### Build for GitHub Pages
