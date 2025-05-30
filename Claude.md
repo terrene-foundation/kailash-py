@@ -78,36 +78,63 @@ without deep technical knowledge.
 
 ## Project Structure
 
-The project should follow this structure:
+The project follows this current structure:
 
 ```
 kailash_python_sdk/           # Project root directory
 ├── src/                      # Source directory
 │   └── kailash/              # Package directory (what gets imported)
 │       ├── __init__.py       # Package initialization
+│       ├── manifest.py       # Core manifest and registry
+│       ├── sdk_exceptions.py # Custom exceptions
 │       ├── nodes/            # Node definitions
 │       │   ├── __init__.py
 │       │   ├── base.py       # Base node class
+│       │   ├── base_async.py # Async base node
 │       │   ├── data/         # Data connector nodes
 │       │   │   ├── __init__.py
 │       │   │   ├── readers.py # Data source nodes
-│       │   │   └── writers.py # Data sink nodes
+│       │   │   ├── writers.py # Data sink nodes
+│       │   │   ├── sql.py     # SQL database nodes
+│       │   │   ├── streaming.py # Streaming data nodes
+│       │   │   └── vector_db.py # Vector database nodes
 │       │   ├── transform/    # Transformation nodes
 │       │   │   ├── __init__.py
 │       │   │   └── processors.py # Data transformation nodes
 │       │   ├── logic/        # Business logic nodes
 │       │   │   ├── __init__.py
-│       │   │   └── operations.py # Logical operation nodes
-│       │   └── ai/           # AI & ML nodes
+│       │   │   ├── operations.py # Logical operation nodes
+│       │   │   └── async_operations.py # Async operations
+│       │   ├── ai/           # AI & ML nodes
+│       │   │   ├── __init__.py
+│       │   │   ├── models.py  # ML model nodes
+│       │   │   └── agents.py  # AI agent nodes
+│       │   ├── api/          # API integration nodes
+│       │   │   ├── __init__.py
+│       │   │   ├── http.py    # HTTP client nodes
+│       │   │   ├── rest.py    # REST API nodes
+│       │   │   ├── graphql.py # GraphQL nodes
+│       │   │   ├── auth.py    # Authentication nodes
+│       │   │   └── rate_limiting.py # Rate limiting
+│       │   └── code/         # Code execution nodes
 │       │       ├── __init__.py
-│       │       └── models.py  # ML model nodes
-│       ├── workflow/         # Workflow builder
+│       │       └── python.py  # Python code execution
+│       ├── workflow/         # Workflow management
 │       │   ├── __init__.py
+│       │   ├── builder.py    # Workflow builder
 │       │   ├── graph.py      # Workflow graph definition
-│       │   └── visualization.py # Visualization utilities
+│       │   ├── runner.py     # Workflow execution
+│       │   ├── state.py      # State management
+│       │   ├── visualization.py # Visualization utilities
+│       │   ├── visualization_backup.py # Backup visualization
+│       │   └── mock_registry.py # Mock registry for testing
 │       ├── runtime/          # Execution environment
 │       │   ├── __init__.py
 │       │   ├── local.py      # Local execution engine
+│       │   ├── async_local.py # Async local execution
+│       │   ├── parallel.py   # Parallel execution
+│       │   ├── docker.py     # Docker runtime
+│       │   ├── runner.py     # Runtime runner
 │       │   └── testing.py    # Testing utilities
 │       ├── tracking/         # Task tracking system
 │       │   ├── __init__.py
@@ -122,24 +149,124 @@ kailash_python_sdk/           # Project root directory
 │       │   ├── __init__.py
 │       │   ├── export.py     # Export utilities
 │       │   └── templates.py  # Node templates
-│       ├── cli/              # Command-line interface
-│       │   ├── __init__.py
-│       │   └── commands.py   # CLI commands
-│       └── exceptions.py     # Custom exceptions
-├── tests/                    # Test directory
+│       └── cli/              # Command-line interface
+│           ├── __init__.py
+│           └── commands.py   # CLI commands
+├── tests/                    # Test directory (mirrors src structure)
 │   ├── __init__.py
-│   ├── test_nodes/
-│   ├── test_workflow/
-│   ├── test_runtime/
-│   └── test_tracking/
-├── docs/                     # Documentation
-│   ├── prd/                  # Product Requirements Document
-│   │   └── kailash_python_sdk_prd.md # Main PRD document
-│   └── adr/                  # Architecture Decision Records
-├── examples/                 # Example usage
-├── pyproject.toml            # Package build configuration
-├── setup.py                  # Package setup script
-└── README.md                 # Project README
+│   ├── conftest.py          # PyTest configuration
+│   ├── sample_data/         # Test data files
+│   ├── test_nodes/          # Node tests
+│   │   ├── test_base.py
+│   │   ├── test_data.py
+│   │   ├── test_api.py
+│   │   ├── test_ai.py
+│   │   ├── test_code.py
+│   │   ├── test_logic.py
+│   │   ├── test_transform.py
+│   │   └── test_async_operations.py
+│   ├── test_workflow/       # Workflow tests
+│   │   ├── test_graph.py
+│   │   ├── test_state_management.py
+│   │   ├── test_visualization.py
+│   │   └── test_hmi_state_management.py
+│   ├── test_runtime/        # Runtime tests
+│   │   ├── test_local.py
+│   │   ├── test_docker.py
+│   │   ├── test_simple_runtime.py
+│   │   └── test_testing.py
+│   ├── test_tracking/       # Tracking tests
+│   │   ├── test_manager.py
+│   │   ├── test_models.py
+│   │   └── test_storage.py
+│   ├── test_utils/          # Utility tests
+│   │   ├── test_export.py
+│   │   └── test_templates.py
+│   ├── test_cli/            # CLI tests
+│   │   └── test_commands.py
+│   ├── test_schema/         # Schema validation tests
+│   ├── test_validation/     # Type validation tests
+│   ├── integration/         # Integration tests
+│   │   ├── test_workflow_execution.py
+│   │   ├── test_node_communication.py
+│   │   ├── test_error_propagation.py
+│   │   ├── test_performance.py
+│   │   ├── test_storage_integration.py
+│   │   ├── test_export_integration.py
+│   │   ├── test_visualization_integration.py
+│   │   ├── test_task_tracking_integration.py
+│   │   ├── test_code_node_integration.py
+│   │   ├── test_complex_workflows.py
+│   │   └── test_cli_integration.py
+│   └── test_ci_setup.py     # CI/CD setup tests
+├── docs/                    # Documentation
+│   ├── prd/                 # Product Requirements Documents
+│   │   └── 0001-kailash_python_sdk_prd.md
+│   ├── adr/                 # Architecture Decision Records
+│   │   ├── README.md        # ADR summary
+│   │   ├── 0000-template.md # ADR template
+│   │   ├── 0001-base-node-interface.md
+│   │   ├── 0002-workflow-representation.md
+│   │   ├── 0003-base-node-interface.md
+│   │   ├── 0004-workflow-representation.md
+│   │   ├── 0005-local-execution-strategy.md
+│   │   ├── 0006-task-tracking-architecture.md
+│   │   ├── 0007-export-format.md
+│   │   ├── 0008-docker-runtime-architecture.md
+│   │   ├── 0009-src-layout-for-package.md
+│   │   ├── 0010-python-code-node.md
+│   │   ├── 0011-workflow-execution-improvements.md
+│   │   ├── 0012-workflow-conditional-routing.md
+│   │   ├── 0013-simplify-conditional-logic-nodes.md
+│   │   ├── 0014-async-node-execution.md
+│   │   ├── 0015-api-integration-architecture.md
+│   │   └── 0016-immutable-state-management.md
+│   ├── features/            # Feature documentation
+│   │   ├── api_integration.md
+│   │   ├── python_code_node.md
+│   │   └── workflow_pattern.md
+│   ├── todos/               # Development task tracking
+│   │   ├── 000-master.md    # Master todo list
+│   │   └── [session-specific todos]
+│   └── adr.md              # ADR overview documentation
+├── examples/                # Example usage and demonstrations
+│   ├── basic_workflow.py    # Basic workflow patterns
+│   ├── comprehensive_workflow_example.py # Complex examples
+│   ├── python_code_node_example.py # Code execution
+│   ├── api_integration_comprehensive.py # API integration
+│   ├── conditional_workflow_example.py # Conditional logic
+│   ├── parallel_workflow_example.py # Parallel execution
+│   ├── docker_workflow_example.py # Docker runtime
+│   ├── state_management_example.py # State management
+│   ├── visualization_example.py # Workflow visualization
+│   ├── task_tracking_example.py # Task tracking
+│   ├── export_workflow.py   # Export functionality
+│   ├── error_handling.py    # Error handling patterns
+│   ├── data_transformation.py # Data processing
+│   ├── custom_node.py       # Custom node development
+│   ├── workflow_example.py  # General workflow patterns
+│   ├── data/                # Example data files
+│   │   ├── customers.csv
+│   │   ├── input.csv
+│   │   ├── transactions.json
+│   │   ├── outputs/         # Generated example outputs
+│   │   └── task_storage/    # Task tracking data
+│   └── test_all_examples.py # Example validation tests
+├── data/                    # Root-level data for testing
+│   ├── customers.csv        # Sample datasets
+│   ├── transactions.json
+│   ├── outputs/             # Processing outputs
+│   └── task_storage/        # Task tracking storage
+├── output/                  # Generated output files
+├── pyproject.toml           # Package build configuration
+├── setup.py                 # Package setup script  
+├── setup.cfg                # Setup configuration
+├── pytest.ini              # PyTest configuration
+├── uv.lock                  # UV lockfile
+├── README.md                # Project README
+├── CONTRIBUTING.md          # Contribution guidelines
+├── LICENSE                  # License file
+└── Claude.md                # Development guidelines (this file)
 ```
 
 ## Design Principles
@@ -227,27 +354,44 @@ Keep dependencies minimal and explicit:
        - Storage Backend Strategy
      - **README.md**: Include a summary of each ADR in docs/adr/README.md
 
-3. **Todos List**:
-   - Use the TodoRead and TodoWrite tools to manage tasks.
-   - Create the list of tasks before starting the implementation.
-   - Also, create and maintain all todos in `docs/todos/000-master.md`.
-   - Each entry in the todo file should contain:
-   - A list of tasks to be completed
-     - Task descriptions
-     - Status of each task (e.g., "To Do", "In Progress", "Done")
-     - Example:
-      ```
-       # Todo List for Kailash Python SDK
-       - Task 1: Implement base Node class
-         - Description: Create the base class for all nodes with validation and execution contract
-         - Status: In Progress
-      ```
-   - Other todo files in the same directory should be used to record a summary of completed tasks. 
-   - Queue the following tasks at the end of each run's todo list:
-     - examine the examples in /examples, identify those that may be affected by the latest edits, and ensure these examples can work.
-     - ensure all unit, integration, and documentation tests passed
-     - ensure local github actions test passed
-     - update adr, todos, and readme.
+3. **Todos Management**:
+   - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
+   - Maintain the master todo list in `docs/todos/000-master.md` using this structure:
+   
+   ```markdown
+   # Project Status Overview
+   - **Category**: Status - Brief description
+   
+   ## High Priority - Active Tasks
+   - **Task Name**
+     - Description: Clear, actionable description
+     - Status: To Do | In Progress | Completed
+     - Priority: High | Medium | Low
+     - Details: Implementation specifics or context
+   
+   ## Medium/Low Priority Tasks
+   [Same format as above]
+   
+   ## Recent Achievements
+   - Brief summary of completed work
+   
+   ## Completed Tasks Archive
+   - Condensed historical record organized by development phase
+   ```
+   
+   - **Organization Principles**:
+     - Active tasks first, completed tasks archived at bottom
+     - Group by priority and functional area (Testing, Documentation, etc.)
+     - Use condensed format for completed tasks to reduce file length
+     - Include project status overview for quick health assessment
+     - Focus on actionable next steps rather than detailed history
+   
+   - Other todo files in the same directory should record summaries of completed development cycles
+   - Always queue these verification tasks at the end of each development cycle:
+     - Test examples affected by recent changes
+     - Run unit, integration, and documentation tests
+     - Verify local GitHub Actions tests pass
+     - Update ADRs, todos, and README as needed
 
 4. **Examples**:
    - Always create example nodes and workflows in the `examples/` directory.
@@ -259,11 +403,13 @@ Keep dependencies minimal and explicit:
      - Complex Workflow Example: Create a complex workflow that includes multiple nodes, data transformations, and AI model execution
 
 5. **Unit Tests**:
+   - Ensure that examples have been tested and validated before creating unit tests
    - Create unit tests for all components using pytest
    - Maintain >80% code coverage
    - Place tests in a separate `tests/` directory mirroring the package structure
 
 6. **Integration Tests**:
+   - Ensure that unit tests have been created for all components before creating integration tests
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
 

@@ -31,7 +31,7 @@ class TestIncrementNode(Node):
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
                 type=WorkflowStateWrapper,
-                required=True,
+                required=False,  # Provided by workflow at runtime
                 description="State wrapper"
             ),
             "amount": NodeParameter(
@@ -59,7 +59,7 @@ class TestIncrementNode(Node):
             )
         }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> Dict[str, Any]:
         state_wrapper = kwargs["state_wrapper"]
         amount = kwargs.get("amount", 1)
         
@@ -85,7 +85,7 @@ class TestTextNode(Node):
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
                 type=WorkflowStateWrapper,
-                required=True,
+                required=False,  # Provided by workflow at runtime
                 description="State wrapper"
             ),
             "text": NodeParameter(
@@ -106,7 +106,7 @@ class TestTextNode(Node):
             )
         }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> Dict[str, Any]:
         state_wrapper = kwargs["state_wrapper"]
         text = kwargs["text"]
         
@@ -127,7 +127,7 @@ class TestMarkProcessedNode(Node):
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
                 type=WorkflowStateWrapper,
-                required=True,
+                required=False,  # Provided by workflow at runtime
                 description="State wrapper"
             )
         }
@@ -148,7 +148,7 @@ class TestMarkProcessedNode(Node):
             )
         }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> Dict[str, Any]:
         state_wrapper = kwargs["state_wrapper"]
         
         # Batch update to set processed flag and prefix the text
@@ -261,7 +261,7 @@ class TestWorkflowStateIntegration:
                     "state": NodeParameter(
                         name="state",
                         type=TestWorkflowState,
-                        required=True,
+                        required=False,  # Provided by workflow at runtime
                         description="Unwrapped state"
                     )
                 }
@@ -276,7 +276,7 @@ class TestWorkflowStateIntegration:
                     )
                 }
             
-            def execute(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> Dict[str, Any]:
                 state = kwargs["state"]
                 # Create a new state object with updates
                 new_state = TestWorkflowState(

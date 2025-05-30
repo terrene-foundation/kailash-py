@@ -215,6 +215,7 @@ class TestAsyncWorkflowStateIntegration:
             # Return an updated wrapper
             return {"state_wrapper": WorkflowStateWrapper(new_state)}
     
+    @pytest.mark.asyncio
     async def test_async_node_execution(self):
         """Test that state is correctly transformed in async nodes."""
         # Arrange

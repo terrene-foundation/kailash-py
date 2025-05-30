@@ -3,18 +3,24 @@
     "id": "tx001",
     "amount": 150.0,
     "status": "completed",
-    "customer_id": "cust1"
+    "customer_id": "cust1",
+    "processing_fee": 3.0,
+    "processed": true
   },
   {
     "id": "tx004",
     "amount": 50.0,
     "status": "completed",
-    "customer_id": "cust4"
+    "customer_id": "cust4",
+    "processing_fee": 1.0,
+    "processed": true
   },
   {
     "id": "tx006",
     "amount": 300.0,
     "status": "completed",
-    "customer_id": "cust1"
+    "customer_id": "cust1",
+    "processing_fee": 6.0,
+    "processed": true
   }
 ]

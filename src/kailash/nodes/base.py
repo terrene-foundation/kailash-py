@@ -21,7 +21,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -372,12 +372,12 @@ class Node(ABC):
             ) from e
         
         for param_name, param_def in params.items():
-            if param_def.required and param_name not in self.config:
-                if param_def.default is None:
+            if param_name not in self.config:
+                if param_def.required and param_def.default is None:
                     raise NodeConfigurationError(
                         f"Required parameter '{param_name}' not provided in configuration"
                     )
-                else:
+                elif param_def.default is not None:
                     self.config[param_name] = param_def.default
             
             if param_name in self.config:
@@ -571,14 +571,27 @@ class Node(ABC):
             outputs = validated_outputs
         
         # Then validate JSON-serializability
-        try:
-            json.dumps(outputs)
-            return outputs
-        except (TypeError, ValueError) as e:
+        # Skip JSON validation for state management objects
+        from kailash.workflow.state import WorkflowStateWrapper
+        from pydantic import BaseModel
+        
+        non_serializable = []
+        for k, v in outputs.items():
+            # Allow WorkflowStateWrapper objects to pass through
+            if isinstance(v, WorkflowStateWrapper):
+                continue
+            # Allow Pydantic models (they can be serialized with .model_dump())
+            if isinstance(v, BaseModel):
+                continue
+            if not self._is_json_serializable(v):
+                non_serializable.append(k)
+                
+        if non_serializable:
             raise NodeValidationError(
-                f"Node outputs must be JSON-serializable. Failed keys: "
-                f"{[k for k, v in outputs.items() if not self._is_json_serializable(v)]}"
-            ) from e
+                f"Node outputs must be JSON-serializable. Failed keys: {non_serializable}"
+            )
+            
+        return outputs
     
     def _is_json_serializable(self, obj: Any) -> bool:
         """Check if an object is JSON-serializable.
@@ -649,7 +662,7 @@ class Node(ABC):
             - Metrics enable performance monitoring
             - Validation ensures data integrity
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         try:
             self.logger.info(f"Executing node {self.id}")
             
@@ -673,7 +686,7 @@ class Node(ABC):
             # Validate outputs
             validated_outputs = self.validate_outputs(outputs)
             
-            execution_time = (datetime.utcnow() - start_time).total_seconds()
+            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.logger.info(
                 f"Node {self.id} executed successfully in {execution_time:.3f}s"
             )

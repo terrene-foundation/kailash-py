@@ -45,7 +45,7 @@ def demonstrate_basic_task_tracking():
             new_record = record.copy()
             new_record['processed'] = True
             transformed.append(new_record)
-        return {"data": transformed}
+        return {"result": transformed}
     
     transformer = PythonCodeNode.from_function(transform_data, name="transform_data")
     
@@ -62,7 +62,7 @@ def demonstrate_basic_task_tracking():
     
     # Connect nodes
     workflow.connect("reader", "transformer", {"data": "data"})
-    workflow.connect("transformer", "writer", {"data": "data"})
+    workflow.connect("transformer", "writer", {"result": "data"})
     
     # Create sample data
     Path("data").mkdir(exist_ok=True)
@@ -182,7 +182,7 @@ def demonstrate_task_progress_tracking():
             progress = (i + 1) / total * 100
             print(f"  Processing: {progress:.1f}%")
         
-        return {"results": results}
+        return {"result": results}
     
     processor = PythonCodeNode.from_function(long_process, name="long_processor")
     

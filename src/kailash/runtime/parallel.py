@@ -7,7 +7,7 @@ specifically designed to run independent nodes concurrently for maximum performa
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Set, Deque
 from collections import deque
 
@@ -327,7 +327,7 @@ class ParallelRuntime:
                     run_id=run_id,
                     node_id=node_id,
                     node_type=node_instance.__class__.__name__,
-                    started_at=datetime.utcnow()
+                    started_at=datetime.now(timezone.utc)
                 )
         except Exception as e:
             self.logger.warning(f"Failed to create task for node '{node_id}': {e}")
@@ -352,7 +352,7 @@ class ParallelRuntime:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
                 
                 # Execute node with appropriate method based on type
-                start_time = datetime.utcnow()
+                start_time = datetime.now(timezone.utc)
                 
                 if isinstance(node_instance, AsyncNode):
                     # Use async execution for AsyncNode
@@ -365,14 +365,14 @@ class ParallelRuntime:
                         lambda: node_instance.execute(**inputs)
                     )
                 
-                execution_time = (datetime.utcnow() - start_time).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
                 
                 # Update task status
                 if task:
                     task.update_status(
                         TaskStatus.COMPLETED,
                         result=outputs,
-                        ended_at=datetime.utcnow(),
+                        ended_at=datetime.now(timezone.utc),
                         metadata={"execution_time": execution_time}
                     )
                 
@@ -390,7 +390,7 @@ class ParallelRuntime:
                 task.update_status(
                     TaskStatus.FAILED,
                     error=str(e),
-                    ended_at=datetime.utcnow()
+                    ended_at=datetime.now(timezone.utc)
                 )
             
             # Return error result

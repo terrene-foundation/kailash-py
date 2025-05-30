@@ -1,5 +1,5 @@
 """Transform nodes for data processing."""
-from typing import Any, Dict, List, Callable, Union
+from typing import Any, Dict, List, Callable
 import ast
 import traceback
 
@@ -15,7 +15,7 @@ class Filter(Node):
             "data": NodeParameter(
                 name="data",
                 type=list,
-                required=True,
+                required=False,  # Data comes from workflow connections
                 description="Input data to filter"
             ),
             "field": NodeParameter(
@@ -62,22 +62,45 @@ class Filter(Node):
     
     def _apply_operator(self, item_value: Any, operator: str, compare_value: Any) -> bool:
         """Apply comparison operator."""
-        if operator == "==":
-            return item_value == compare_value
-        elif operator == "!=":
-            return item_value != compare_value
-        elif operator == ">":
-            return item_value > compare_value
-        elif operator == "<":
-            return item_value < compare_value
-        elif operator == ">=":
-            return item_value >= compare_value
-        elif operator == "<=":
-            return item_value <= compare_value
-        elif operator == "contains":
-            return compare_value in str(item_value)
-        else:
-            raise ValueError(f"Unknown operator: {operator}")
+        try:
+            # Handle None values - they fail most comparisons
+            if item_value is None:
+                if operator in ["==", "!="]:
+                    return (operator == "==") == (compare_value is None)
+                else:
+                    return False  # None fails all other comparisons
+            
+            # For numeric operators, try to convert strings to numbers
+            if operator in [">", "<", ">=", "<="]:
+                try:
+                    # Try to convert both values to float for comparison
+                    if isinstance(item_value, str):
+                        item_value = float(item_value)
+                    if isinstance(compare_value, str):
+                        compare_value = float(compare_value)
+                except (ValueError, TypeError):
+                    # If conversion fails, fall back to string comparison
+                    pass
+                    
+            if operator == "==":
+                return item_value == compare_value
+            elif operator == "!=":
+                return item_value != compare_value
+            elif operator == ">":
+                return item_value > compare_value
+            elif operator == "<":
+                return item_value < compare_value
+            elif operator == ">=":
+                return item_value >= compare_value
+            elif operator == "<=":
+                return item_value <= compare_value
+            elif operator == "contains":
+                return compare_value in str(item_value)
+            else:
+                raise ValueError(f"Unknown operator: {operator}")
+        except Exception:
+            # If any comparison fails, return False (filter out the item)
+            return False
 
 
 @register_node()
@@ -89,7 +112,7 @@ class Map(Node):
             "data": NodeParameter(
                 name="data",
                 type=list,
-                required=True,
+                required=False,  # Data comes from workflow connections
                 description="Input data to transform"
             ),
             "field": NodeParameter(
@@ -113,7 +136,7 @@ class Map(Node):
             ),
             "value": NodeParameter(
                 name="value",
-                type=Union[int, float, str],
+                type=Any,
                 required=False,
                 description="Value for operations that need it"
             )
@@ -302,7 +325,7 @@ class Sort(Node):
             "data": NodeParameter(
                 name="data",
                 type=list,
-                required=True,
+                required=False,  # Data comes from workflow connections
                 description="Input data to sort"
             ),
             "field": NodeParameter(

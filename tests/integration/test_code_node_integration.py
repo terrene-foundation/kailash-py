@@ -43,49 +43,50 @@ class TestPythonCodeNodeIntegration:
         csv_file, json_file = sample_data
         
         # Create function node
-        def process_with_config(data: pd.DataFrame, config: dict) -> pd.DataFrame:
+        def process_with_config(data: list, config: dict) -> dict:
             """Apply threshold and multiply values."""
             threshold = config.get('threshold', 0)
             multiplier = config.get('multiplier', 1)
             
-            result = data.copy()
-            mask = result['value'] > threshold
-            result.loc[mask, 'value'] *= multiplier
-            result['above_threshold'] = mask
+            # Convert to DataFrame for processing
+            df = pd.DataFrame(data)
+            # Convert value column to numeric
+            df['value'] = pd.to_numeric(df['value'])
             
-            return result
+            mask = df['value'] > threshold
+            df.loc[mask, 'value'] *= multiplier
+            df['above_threshold'] = mask
+            
+            # Return as dict to be JSON-serializable
+            return {"result": df.to_dict('records')}
         
         # Create workflow
-        workflow = Workflow(name="function_workflow")
+        workflow = Workflow(workflow_id="function_workflow", name="function_workflow")
         
-        # Add nodes
-        csv_reader = CSVReader(name="csv_reader")
-        json_reader = JSONReader(name="json_reader")
+        # Add nodes with config
+        output_file = tmp_path / "output.csv"
+        
+        csv_reader = CSVReader(name="csv_reader", file_path=str(csv_file))
+        json_reader = JSONReader(name="json_reader", file_path=str(json_file))
         processor = PythonCodeNode.from_function(
             func=process_with_config,
             name="processor"
         )
-        writer = CSVWriter(name="writer")
+        writer = CSVWriter(name="writer", file_path=str(output_file))
         
-        workflow.add_node(csv_reader)
-        workflow.add_node(json_reader)
-        workflow.add_node(processor)
-        workflow.add_node(writer)
+        workflow.add_node("csv_reader", csv_reader)
+        workflow.add_node("json_reader", json_reader)
+        workflow.add_node("processor", processor)
+        workflow.add_node("writer", writer)
         
         # Connect nodes
-        workflow.add_edge(csv_reader, processor, output_key="data")
-        workflow.add_edge(json_reader, processor, output_key="config")
-        workflow.add_edge(processor, writer)
-        
-        # Configure nodes
-        csv_reader.config = {'file_path': str(csv_file)}
-        json_reader.config = {'file_path': str(json_file)}
-        output_file = tmp_path / "output.csv"
-        writer.config = {'file_path': str(output_file)}
+        workflow.connect("csv_reader", "processor", {"data": "data"})
+        workflow.connect("json_reader", "processor", {"data": "config"})
+        workflow.connect("processor", "writer", {"result": "data"})
         
         # Execute workflow
         runner = LocalRuntime()
-        results = runner.run(workflow)
+        results, run_id = runner.execute(workflow)
         
         # Verify results
         assert output_file.exists()
@@ -112,6 +113,8 @@ class TestPythonCodeNodeIntegration:
             
             def process(self, data: pd.DataFrame) -> pd.DataFrame:
                 """Calculate running statistics."""
+                # Convert to numeric first (CSV reader returns strings)
+                data['value'] = pd.to_numeric(data['value'])
                 values = data['value'].values
                 self.count += len(values)
                 self.sum += values.sum()
@@ -126,33 +129,31 @@ class TestPythonCodeNodeIntegration:
                 result['running_std'] = std
                 result['z_score'] = (data['value'] - mean) / std
                 
-                return result
+                # Convert DataFrame to list of dicts for JSON serialization
+                return result.to_dict('records')
         
         # Create workflow
-        workflow = Workflow(name="stateful_workflow")
+        workflow = Workflow(workflow_id="stateful_workflow", name="stateful_workflow")
         
-        reader = CSVReader(name="reader")
+        output_file = tmp_path / "stats_output.csv"
+        
+        reader = CSVReader(name="reader", file_path=str(csv_file))
         stats_node = PythonCodeNode.from_class(
             class_type=RunningStats,
             name="stats"
         )
-        writer = CSVWriter(name="writer")
+        writer = CSVWriter(name="writer", file_path=str(output_file))
         
-        workflow.add_node(reader)
-        workflow.add_node(stats_node)
-        workflow.add_node(writer)
+        workflow.add_node("reader", reader)
+        workflow.add_node("stats", stats_node)
+        workflow.add_node("writer", writer)
         
-        workflow.add_edge(reader, stats_node)
-        workflow.add_edge(stats_node, writer)
-        
-        # Configure nodes
-        reader.config = {'file_path': str(csv_file)}
-        output_file = tmp_path / "stats_output.csv"
-        writer.config = {'file_path': str(output_file)}
+        workflow.connect("reader", "stats", {"data": "data"})
+        workflow.connect("stats", "writer", {"result": "data"})
         
         # Execute workflow
         runner = LocalRuntime()
-        results = runner.run(workflow)
+        results, run_id = runner.execute(workflow)
         
         # Verify results
         result_df = pd.read_csv(output_file)
@@ -170,10 +171,14 @@ class TestPythonCodeNodeIntegration:
         
         # Create code string node
         code = """
-import pandas as pd
+# pandas is already available in the namespace
+# Convert data to DataFrame and numeric types
+df = pandas.DataFrame(data)
+df['value'] = pandas.to_numeric(df['value'])
+df['id'] = pandas.to_numeric(df['id'])
 
 # Group by category and aggregate
-grouped = data.groupby('category').agg({
+grouped = df.groupby('category').agg({
     'value': ['mean', 'std', 'count'],
     'id': 'count'
 })
@@ -185,36 +190,34 @@ grouped.reset_index(inplace=True)
 # Calculate coefficient of variation
 grouped['cv'] = grouped['value_std'] / grouped['value_mean']
 
-result = grouped
+# Convert to list of dicts for JSON serialization
+result = grouped.to_dict('records')
 """
         
         # Create workflow
-        workflow = Workflow(name="code_workflow")
+        workflow = Workflow(workflow_id="code_workflow", name="code_workflow")
         
-        reader = CSVReader(name="reader")
+        output_file = tmp_path / "aggregated.csv"
+        
+        reader = CSVReader(name="reader", file_path=str(csv_file))
         aggregator = PythonCodeNode(
             name="aggregator",
             code=code,
             input_types={'data': pd.DataFrame},
             output_type=pd.DataFrame
         )
-        writer = CSVWriter(name="writer")
+        writer = CSVWriter(name="writer", file_path=str(output_file))
         
-        workflow.add_node(reader)
-        workflow.add_node(aggregator)
-        workflow.add_node(writer)
+        workflow.add_node("reader", reader)
+        workflow.add_node("aggregator", aggregator)
+        workflow.add_node("writer", writer)
         
-        workflow.add_edge(reader, aggregator)
-        workflow.add_edge(aggregator, writer)
-        
-        # Configure nodes
-        reader.config = {'file_path': str(csv_file)}
-        output_file = tmp_path / "aggregated.csv"
-        writer.config = {'file_path': str(output_file)}
+        workflow.connect("reader", "aggregator", {"data": "data"})
+        workflow.connect("aggregator", "writer", {"result": "data"})
         
         # Execute workflow
         runner = LocalRuntime()
-        results = runner.run(workflow)
+        results, run_id = runner.execute(workflow)
         
         # Verify results
         result_df = pd.read_csv(output_file)
@@ -228,47 +231,54 @@ result = grouped
         csv_file, _ = sample_data
         
         # Create multiple processing nodes
-        def normalize(data: pd.DataFrame) -> pd.DataFrame:
+        def normalize(data: list) -> list:
             """Normalize numeric columns."""
-            result = data.copy()
-            for col in result.select_dtypes(include=[np.number]).columns:
+            # Convert list of dicts to DataFrame
+            df = pd.DataFrame(data)
+            # Convert numeric columns
+            df['id'] = pd.to_numeric(df['id'])
+            df['value'] = pd.to_numeric(df['value'])
+            
+            for col in df.select_dtypes(include=[np.number]).columns:
                 if col != 'id':
-                    result[col] = (result[col] - result[col].mean()) / result[col].std()
-            return result
+                    df[col] = (df[col] - df[col].mean()) / df[col].std()
+            # Return as list of dicts
+            return df.to_dict('records')
         
-        def add_features(data: pd.DataFrame) -> pd.DataFrame:
+        def add_features(data: list) -> list:
             """Add engineered features."""
-            result = data.copy()
-            result['value_squared'] = result['value'] ** 2
-            result['value_abs'] = result['value'].abs()
-            result['category_encoded'] = result['category'].map({'A': 1, 'B': 2, 'C': 3})
-            return result
+            df = pd.DataFrame(data)
+            # Ensure numeric types
+            if 'value' in df.columns:
+                df['value'] = pd.to_numeric(df['value'])
+            
+            df['value_squared'] = df['value'] ** 2
+            df['value_abs'] = df['value'].abs()
+            df['category_encoded'] = df['category'].map({'A': 1, 'B': 2, 'C': 3})
+            return df.to_dict('records')
         
         # Create workflow with pipeline
-        workflow = Workflow(name="pipeline_workflow")
+        workflow = Workflow(workflow_id="pipeline_workflow", name="pipeline_workflow")
         
-        reader = CSVReader(name="reader")
+        output_file = tmp_path / "pipeline_output.csv"
+        
+        reader = CSVReader(name="reader", file_path=str(csv_file))
         normalizer = PythonCodeNode.from_function(normalize, name="normalizer")
         feature_eng = PythonCodeNode.from_function(add_features, name="features")
-        writer = CSVWriter(name="writer")
+        writer = CSVWriter(name="writer", file_path=str(output_file))
         
-        workflow.add_node(reader)
-        workflow.add_node(normalizer)
-        workflow.add_node(feature_eng)
-        workflow.add_node(writer)
+        workflow.add_node("reader", reader)
+        workflow.add_node("normalizer", normalizer)
+        workflow.add_node("features", feature_eng)
+        workflow.add_node("writer", writer)
         
-        workflow.add_edge(reader, normalizer)
-        workflow.add_edge(normalizer, feature_eng)
-        workflow.add_edge(feature_eng, writer)
-        
-        # Configure nodes
-        reader.config = {'file_path': str(csv_file)}
-        output_file = tmp_path / "pipeline_output.csv"
-        writer.config = {'file_path': str(output_file)}
+        workflow.connect("reader", "normalizer", {"data": "data"})
+        workflow.connect("normalizer", "features", {"result": "data"})
+        workflow.connect("features", "writer", {"result": "data"})
         
         # Execute workflow
         runner = LocalRuntime()
-        results = runner.run(workflow)
+        results, run_id = runner.execute(workflow)
         
         # Verify results
         result_df = pd.read_csv(output_file)
@@ -293,31 +303,28 @@ result = grouped
             return data
         
         # Create workflow
-        workflow = Workflow(name="failing_workflow")
+        workflow = Workflow(workflow_id="failing_workflow", name="failing_workflow")
         
-        reader = CSVReader(name="reader")
+        output_file = tmp_path / "should_not_exist.csv"
+        
+        reader = CSVReader(name="reader", file_path=str(csv_file))
         processor = PythonCodeNode.from_function(
             failing_processor,
             name="failing_processor"
         )
-        writer = CSVWriter(name="writer")
+        writer = CSVWriter(name="writer", file_path=str(output_file))
         
-        workflow.add_node(reader)
-        workflow.add_node(processor)
-        workflow.add_node(writer)
+        workflow.add_node("reader", reader)
+        workflow.add_node("processor", processor)
+        workflow.add_node("writer", writer)
         
-        workflow.add_edge(reader, processor)
-        workflow.add_edge(processor, writer)
-        
-        # Configure nodes
-        reader.config = {'file_path': str(csv_file)}
-        output_file = tmp_path / "should_not_exist.csv"
-        writer.config = {'file_path': str(output_file)}
+        workflow.connect("reader", "processor", {"data": "data"})
+        workflow.connect("processor", "writer", {"result": "data"})
         
         # Execute workflow and expect failure
         runner = LocalRuntime()
         with pytest.raises(Exception, match="Too many rows"):
-            runner.run(workflow)
+            runner.execute(workflow)
         
         # Output file should not exist
         assert not output_file.exists()

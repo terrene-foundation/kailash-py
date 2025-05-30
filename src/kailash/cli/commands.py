@@ -119,7 +119,7 @@ def run(workflow_file: str, params: Optional[str], debug: bool, no_tracking: boo
                 logger.warning(f"Failed to create task manager: {e}")
                 click.echo("Warning: Task tracking disabled due to error", err=True)
         
-        click.echo(f"Running workflow: {workflow.metadata.name}")
+        click.echo(f"Running workflow: {workflow.name}")
         
         # Execute workflow
         results, run_id = runtime.execute(workflow, task_manager, parameters)
@@ -426,18 +426,38 @@ def node_info(node_name: str):
                 f"Available nodes: {', '.join(available_nodes)}"
             )
         
-        # Create instance to get metadata
-        node = node_class()
+        # Try to create instance with empty config to get metadata
+        # Some nodes require parameters, so provide empty dict
+        try:
+            node = node_class()
+        except NodeConfigurationError:
+            # If node requires config, create with minimal config
+            # This is just for getting metadata
+            node = None
         
         click.echo(f"Node: {node_name}")
         click.echo(f"Class: {node_class.__name__}")
         click.echo(f"Module: {node_class.__module__}")
         
-        if node.metadata.description:
+        # Try to get description from docstring if node instance not available
+        if node and hasattr(node, 'metadata') and node.metadata.description:
             click.echo(f"Description: {node.metadata.description}")
+        elif node_class.__doc__:
+            # Use first line of docstring as description
+            description = node_class.__doc__.strip().split('\n')[0]
+            click.echo(f"Description: {description}")
         
-        # Show parameters
-        params = node.get_parameters()
+        # Show parameters - get from class method if instance not available
+        if node:
+            params = node.get_parameters()
+        else:
+            # Try to get parameters from class without instance
+            try:
+                temp_node = object.__new__(node_class)
+                params = temp_node.get_parameters()
+            except:
+                params = {}
+        
         if params:
             click.echo("\nParameters:")
             for name, param in params.items():

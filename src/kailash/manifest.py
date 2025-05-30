@@ -2,7 +2,7 @@
 import json
 import yaml
 from typing import Any, Dict, List, Optional, Set, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -96,7 +96,7 @@ class KailashManifest(BaseModel):
             "version": workflow.metadata.version,
             "author": workflow.metadata.author,
             "description": workflow.metadata.description,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         
         # Override defaults with provided metadata

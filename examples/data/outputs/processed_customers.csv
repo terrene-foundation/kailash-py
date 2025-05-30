@@ -1,6 +1,3 @@
-customer_id,name,email,tier
-cust1,Alice,alice@example.com,gold
-cust2,Bob,bob@example.com,silver
-cust3,Charlie,charlie@example.com,bronze
-cust4,Diana,diana@example.com,gold
-cust5,Evan,evan@example.com,silver
+customer_id,name,value
+1,Customer A,1000
+2,Customer B,2000

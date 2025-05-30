@@ -20,6 +20,20 @@
       "status": "pending",
       "started_at": null,
       "ended_at": null
+    },
+    "fd7a1a97-ab36-45f4-a157-61190f9c3f81": {
+      "run_id": "42b2fa1c-3a31-4892-8df2-63e9621a5414",
+      "node_id": "persistent_node",
+      "status": "pending",
+      "started_at": null,
+      "ended_at": null
+    },
+    "d27e1e18-f0ad-4e80-b610-828db6761f79": {
+      "run_id": "db7bc2f9-d819-41de-85f7-7bdad2b9f97e",
+      "node_id": "persistent_node",
+      "status": "pending",
+      "started_at": null,
+      "ended_at": null
     }
   },
   "runs": {}

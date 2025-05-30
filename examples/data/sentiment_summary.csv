@@ -1,0 +1,3 @@
+sentiment,rating_mean,rating_count,confidence_mean
+negative,3.0,3,0.5790922449415608
+positive,3.0,2,0.7048689425724728

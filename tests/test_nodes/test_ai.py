@@ -1,8 +1,7 @@
 """Tests for AI nodes."""
 
 import pytest
-from unittest.mock import Mock, patch
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from kailash.nodes.ai.models import (
     TextClassifier,
@@ -18,753 +17,461 @@ from kailash.nodes.ai.agents import (
     FunctionCallingAgent,
     PlanningAgent
 )
-from kailash.sdk_exceptions import KailashValidationError, KailashRuntimeError
+from kailash.sdk_exceptions import NodeValidationError, NodeExecutionError
 
 
-class TestLLMNode:
-    """Test LLM node."""
+class TestTextClassifierNode:
+    """Test TextClassifier node."""
     
-    @patch('kailash.nodes.ai.models.openai')
-    def test_llm_completion(self, mock_openai):
-        """Test LLM completion."""
-        mock_response = Mock()
-        mock_response.choices = [Mock(text="Generated response")]
-        mock_openai.Completion.create.return_value = mock_response
+    def test_text_classification_simple(self):
+        """Test basic text classification."""
+        node = TextClassifier(texts=["This is a test"])
         
-        node = LLMNode(node_id="llm", name="LLM Node")
+        result = node.execute()
         
-        result = node.execute({
-            "prompt": "Hello, world!",
-            "model": "gpt-3.5-turbo",
-            "max_tokens": 100
-        })
-        
-        assert result["response"] == "Generated response"
-        mock_openai.Completion.create.assert_called_once()
+        # Should have default parameters
+        assert "classifications" in result
+        assert result["model_used"] == "simple"
+        assert result["categories"] == ["positive", "negative", "neutral"]
     
-    @patch('kailash.nodes.ai.models.anthropic')
-    def test_llm_with_anthropic(self, mock_anthropic):
-        """Test LLM with Anthropic provider."""
-        mock_client = Mock()
-        mock_response = Mock()
-        mock_response.completion = "Claude response"
-        mock_client.completions.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
+    def test_text_classification_with_texts(self):
+        """Test text classification with specific texts."""
+        node = TextClassifier(
+            texts=["This is good", "This is bad", "This is neutral"],
+            categories=["positive", "negative", "neutral"]
+        )
         
-        node = LLMNode(node_id="llm", name="LLM Node")
+        result = node.execute()
         
-        result = node.execute({
-            "prompt": "Hello, Claude!",
-            "model": "claude-2",
-            "provider": "anthropic",
-            "api_key": "test-key"
-        })
-        
-        assert result["response"] == "Claude response"
+        assert len(result["classifications"]) == 3
+        assert result["classifications"][0]["text"] == "This is good"
+        assert result["classifications"][0]["category"] == "positive"
+        assert result["classifications"][1]["category"] == "negative"
+        assert result["classifications"][2]["category"] == "neutral"
     
-    def test_llm_missing_prompt(self):
-        """Test LLM without prompt."""
-        node = LLMNode(node_id="llm", name="LLM Node")
+    def test_text_classification_confidence_threshold(self):
+        """Test confidence threshold filtering."""
+        node = TextClassifier(
+            texts=["excellent work"],
+            confidence_threshold=0.9
+        )
         
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "model": "gpt-3.5-turbo"
-            })
+        result = node.execute()
+        
+        for classification in result["classifications"]:
+            assert "passed_threshold" in classification
+            assert isinstance(classification["confidence"], float)
     
-    @patch('kailash.nodes.ai.models.openai')
-    def test_llm_with_parameters(self, mock_openai):
-        """Test LLM with additional parameters."""
-        mock_response = Mock()
-        mock_response.choices = [Mock(text="Creative response")]
-        mock_openai.Completion.create.return_value = mock_response
+    def test_text_classification_empty_input(self):
+        """Test with empty text list."""
+        node = TextClassifier(texts=[])
         
-        node = LLMNode(node_id="llm", name="LLM Node")
+        result = node.execute()
         
-        result = node.execute({
-            "prompt": "Write a story",
-            "model": "gpt-3.5-turbo",
-            "temperature": 0.9,
-            "top_p": 0.95,
-            "presence_penalty": 0.1,
-            "frequency_penalty": 0.1
-        })
-        
-        assert result["response"] == "Creative response"
-        
-        # Verify parameters were passed
-        call_args = mock_openai.Completion.create.call_args[1]
-        assert call_args["temperature"] == 0.9
-        assert call_args["top_p"] == 0.95
-    
-    @patch('kailash.nodes.ai.models.openai')
-    def test_llm_error_handling(self, mock_openai):
-        """Test LLM error handling."""
-        mock_openai.Completion.create.side_effect = Exception("API Error")
-        
-        node = LLMNode(node_id="llm", name="LLM Node")
-        
-        with pytest.raises(KailashRuntimeError):
-            node.execute({
-                "prompt": "Test prompt",
-                "model": "gpt-3.5-turbo"
-            })
+        assert result["classifications"] == []
+        assert result["model_used"] == "simple"
 
 
-class TestTextClassificationNode:
-    """Test text classification node."""
+class TestTextEmbedderNode:
+    """Test TextEmbedder node."""
     
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_text_classification(self, mock_transformers):
-        """Test text classification."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            {"label": "POSITIVE", "score": 0.95},
-            {"label": "NEGATIVE", "score": 0.05}
-        ]
-        mock_transformers.pipeline.return_value = mock_pipeline
+    def test_embedding_generation(self):
+        """Test basic embedding generation."""
+        node = TextEmbedder(texts=["Hello world", "Testing embeddings"])
         
-        node = TextClassificationNode(node_id="classifier", name="Text Classifier")
-        
-        result = node.execute({
-            "text": "This is a great product!",
-            "model": "distilbert-base-uncased-finetuned-sst-2-english"
-        })
-        
-        assert result["label"] == "POSITIVE"
-        assert result["score"] == 0.95
-        assert len(result["all_scores"]) == 2
-    
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_text_classification_with_labels(self, mock_transformers):
-        """Test text classification with candidate labels."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = {
-            "labels": ["technology", "sports", "politics"],
-            "scores": [0.8, 0.15, 0.05]
-        }
-        mock_transformers.pipeline.return_value = mock_pipeline
-        
-        node = TextClassificationNode(node_id="classifier", name="Text Classifier")
-        
-        result = node.execute({
-            "text": "The new smartphone features AI capabilities",
-            "model": "facebook/bart-large-mnli",
-            "candidate_labels": ["technology", "sports", "politics"]
-        })
-        
-        assert result["label"] == "technology"
-        assert result["score"] == 0.8
-    
-    def test_text_classification_missing_text(self):
-        """Test classification without text."""
-        node = TextClassificationNode(node_id="classifier", name="Text Classifier")
-        
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "model": "bert-base-uncased"
-            })
-    
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_text_classification_batch(self, mock_transformers):
-        """Test batch text classification."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            [{"label": "POSITIVE", "score": 0.9}],
-            [{"label": "NEGATIVE", "score": 0.85}]
-        ]
-        mock_transformers.pipeline.return_value = mock_pipeline
-        
-        node = TextClassificationNode(node_id="classifier", name="Text Classifier")
-        
-        result = node.execute({
-            "text": ["Great product!", "Terrible service"],
-            "model": "distilbert-base-uncased",
-            "batch_size": 2
-        })
-        
-        assert len(result["labels"]) == 2
-        assert result["labels"][0] == "POSITIVE"
-        assert result["labels"][1] == "NEGATIVE"
-
-
-class TestTextGenerationNode:
-    """Test text generation node."""
-    
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_text_generation(self, mock_transformers):
-        """Test text generation."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            {"generated_text": "Once upon a time, there was a magical kingdom..."}
-        ]
-        mock_transformers.pipeline.return_value = mock_pipeline
-        
-        node = TextGenerationNode(node_id="generator", name="Text Generator")
-        
-        result = node.execute({
-            "prompt": "Once upon a time",
-            "model": "gpt2",
-            "max_length": 50
-        })
-        
-        assert "generated_text" in result
-        assert result["generated_text"].startswith("Once upon a time")
-    
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_text_generation_with_parameters(self, mock_transformers):
-        """Test text generation with parameters."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            {"generated_text": "Creative story about dragons"}
-        ]
-        mock_transformers.pipeline.return_value = mock_pipeline
-        
-        node = TextGenerationNode(node_id="generator", name="Text Generator")
-        
-        result = node.execute({
-            "prompt": "Write a story",
-            "model": "gpt2-medium",
-            "max_length": 100,
-            "temperature": 0.9,
-            "top_p": 0.95,
-            "do_sample": True
-        })
-        
-        assert "generated_text" in result
-        
-        # Verify parameters were passed
-        call_args = mock_pipeline.call_args[1]
-        assert call_args["max_length"] == 100
-        assert call_args["temperature"] == 0.9
-    
-    def test_text_generation_missing_prompt(self):
-        """Test generation without prompt."""
-        node = TextGenerationNode(node_id="generator", name="Text Generator")
-        
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "model": "gpt2"
-            })
-
-
-class TestEmbeddingNode:
-    """Test embedding generation node."""
-    
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_embedding_generation(self, mock_transformers):
-        """Test embedding generation."""
-        mock_model = Mock()
-        mock_tokenizer = Mock()
-        
-        # Mock tokenizer output
-        mock_tokenizer.return_value = {
-            "input_ids": [[101, 2023, 102]],
-            "attention_mask": [[1, 1, 1]]
-        }
-        
-        # Mock model output
-        mock_output = Mock()
-        mock_output.last_hidden_state = Mock()
-        mock_output.last_hidden_state.mean.return_value.numpy.return_value = [
-            [0.1, 0.2, 0.3, 0.4]
-        ]
-        mock_model.return_value = mock_output
-        
-        mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
-        mock_transformers.AutoModel.from_pretrained.return_value = mock_model
-        
-        node = EmbeddingNode(node_id="embedder", name="Embedding Node")
-        
-        result = node.execute({
-            "text": "Generate embeddings for this text",
-            "model": "sentence-transformers/all-MiniLM-L6-v2"
-        })
-        
-        assert "embeddings" in result
-        assert len(result["embeddings"]) == 4
-    
-    @patch('kailash.nodes.ai.models.openai')
-    def test_embedding_with_openai(self, mock_openai):
-        """Test embedding generation with OpenAI."""
-        mock_response = Mock()
-        mock_response.data = [Mock(embedding=[0.1, 0.2, 0.3, 0.4, 0.5])]
-        mock_openai.Embedding.create.return_value = mock_response
-        
-        node = EmbeddingNode(node_id="embedder", name="Embedding Node")
-        
-        result = node.execute({
-            "text": "Generate embeddings",
-            "model": "text-embedding-ada-002",
-            "provider": "openai",
-            "api_key": "test-key"
-        })
-        
-        assert "embeddings" in result
-        assert len(result["embeddings"]) == 5
-    
-    def test_embedding_missing_text(self):
-        """Test embedding without text."""
-        node = EmbeddingNode(node_id="embedder", name="Embedding Node")
-        
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "model": "bert-base-uncased"
-            })
-    
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_embedding_batch_processing(self, mock_transformers):
-        """Test batch embedding generation."""
-        mock_model = Mock()
-        mock_tokenizer = Mock()
-        
-        # Mock for batch processing
-        batch_embeddings = [
-            [0.1, 0.2, 0.3],
-            [0.4, 0.5, 0.6]
-        ]
-        
-        mock_tokenizer.return_value = {
-            "input_ids": [[101, 102], [101, 102]],
-            "attention_mask": [[1, 1], [1, 1]]
-        }
-        
-        mock_output = Mock()
-        mock_output.last_hidden_state.mean.return_value.numpy.return_value = batch_embeddings
-        mock_model.return_value = mock_output
-        
-        mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
-        mock_transformers.AutoModel.from_pretrained.return_value = mock_model
-        
-        node = EmbeddingNode(node_id="embedder", name="Embedding Node")
-        
-        result = node.execute({
-            "text": ["First text", "Second text"],
-            "model": "bert-base-uncased",
-            "batch_size": 2
-        })
+        result = node.execute()
         
         assert "embeddings" in result
         assert len(result["embeddings"]) == 2
-        assert len(result["embeddings"][0]) == 3
+        assert result["dimensions"] == 384
+        
+        # Check embedding structure
+        for embedding in result["embeddings"]:
+            assert "text" in embedding
+            assert "embedding" in embedding
+            assert len(embedding["embedding"]) == 384
+    
+    def test_embedding_custom_dimensions(self):
+        """Test embeddings with custom dimensions."""
+        node = TextEmbedder(
+            texts=["Test text"],
+            dimensions=128
+        )
+        
+        result = node.execute()
+        
+        assert result["dimensions"] == 128
+        assert len(result["embeddings"][0]["embedding"]) == 128
+    
+    def test_embedding_consistent_output(self):
+        """Test that same text produces same embedding."""
+        text = "Consistent test text"
+        
+        node1 = TextEmbedder(texts=[text])
+        node2 = TextEmbedder(texts=[text])
+        
+        result1 = node1.execute()
+        result2 = node2.execute()
+        
+        # Should be the same embedding for same text
+        assert result1["embeddings"][0]["embedding"] == result2["embeddings"][0]["embedding"]
 
 
-class TestSentimentAnalysisNode:
-    """Test sentiment analysis node."""
+class TestSentimentAnalyzerNode:
+    """Test SentimentAnalyzer node."""
     
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_sentiment_analysis(self, mock_transformers):
-        """Test sentiment analysis."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            {"label": "POSITIVE", "score": 0.98}
-        ]
-        mock_transformers.pipeline.return_value = mock_pipeline
+    def test_sentiment_analysis_positive(self):
+        """Test positive sentiment detection."""
+        node = SentimentAnalyzer(texts=["I love this! It's amazing and wonderful."])
         
-        node = SentimentAnalysisNode(node_id="sentiment", name="Sentiment Analyzer")
+        result = node.execute()
         
-        result = node.execute({
-            "text": "I love this product! It's amazing!",
-            "model": "distilbert-base-uncased-finetuned-sst-2-english"
-        })
-        
-        assert result["sentiment"] == "POSITIVE"
-        assert result["confidence"] == 0.98
+        assert len(result["sentiments"]) == 1
+        sentiment = result["sentiments"][0]
+        assert sentiment["sentiment"] == "positive"
+        assert sentiment["score"] > 0.5
     
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_sentiment_analysis_negative(self, mock_transformers):
-        """Test negative sentiment analysis."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            {"label": "NEGATIVE", "score": 0.87}
-        ]
-        mock_transformers.pipeline.return_value = mock_pipeline
+    def test_sentiment_analysis_negative(self):
+        """Test negative sentiment detection."""
+        node = SentimentAnalyzer(texts=["This is terrible and awful. I hate it."])
         
-        node = SentimentAnalysisNode(node_id="sentiment", name="Sentiment Analyzer")
+        result = node.execute()
         
-        result = node.execute({
-            "text": "This is terrible. Very disappointed.",
-            "model": "distilbert-base-uncased-finetuned-sst-2-english"
-        })
-        
-        assert result["sentiment"] == "NEGATIVE"
-        assert result["confidence"] == 0.87
+        sentiment = result["sentiments"][0]
+        assert sentiment["sentiment"] == "negative"
+        assert sentiment["score"] < 0.5
     
-    def test_sentiment_analysis_missing_text(self):
-        """Test sentiment analysis without text."""
-        node = SentimentAnalysisNode(node_id="sentiment", name="Sentiment Analyzer")
+    def test_sentiment_analysis_neutral(self):
+        """Test neutral sentiment detection."""
+        node = SentimentAnalyzer(texts=["This is a neutral statement about facts."])
         
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "model": "bert-base-uncased"
-            })
+        result = node.execute()
+        
+        sentiment = result["sentiments"][0]
+        assert sentiment["sentiment"] == "neutral"
+        assert sentiment["score"] == 0.5
     
-    @patch('kailash.nodes.ai.models.transformers')
-    def test_sentiment_analysis_batch(self, mock_transformers):
+    def test_sentiment_analysis_batch(self):
         """Test batch sentiment analysis."""
-        mock_pipeline = Mock()
-        mock_pipeline.return_value = [
-            [{"label": "POSITIVE", "score": 0.9}],
-            [{"label": "NEGATIVE", "score": 0.85}],
-            [{"label": "NEUTRAL", "score": 0.7}]
+        texts = [
+            "Great product!",
+            "Terrible service.",
+            "Average experience."
         ]
-        mock_transformers.pipeline.return_value = mock_pipeline
         
-        node = SentimentAnalysisNode(node_id="sentiment", name="Sentiment Analyzer")
-        
-        result = node.execute({
-            "text": ["Great!", "Terrible!", "It's okay"],
-            "model": "distilbert-base-uncased"
-        })
+        node = SentimentAnalyzer(texts=texts)
+        result = node.execute()
         
         assert len(result["sentiments"]) == 3
-        assert result["sentiments"][0] == "POSITIVE"
-        assert result["sentiments"][1] == "NEGATIVE"
-        assert result["sentiments"][2] == "NEUTRAL"
+        sentiments = [s["sentiment"] for s in result["sentiments"]]
+        assert "positive" in sentiments
+        assert "negative" in sentiments
 
 
-class TestAgentNode:
-    """Test agent node."""
+class TestNamedEntityRecognizerNode:
+    """Test NamedEntityRecognizer node."""
     
-    def test_agent_creation(self):
-        """Test agent node creation."""
-        node = AgentNode(
-            node_id="agent",
-            name="Test Agent",
-            role="Assistant",
-            instructions="Help the user",
-            tools=["tool1", "tool2"]
+    def test_ner_person_detection(self):
+        """Test person entity detection."""
+        node = NamedEntityRecognizer(
+            texts=["John Smith works at Microsoft in New York."],
+            entity_types=["PERSON", "ORGANIZATION", "LOCATION"]
         )
         
-        assert node.role == "Assistant"
-        assert node.instructions == "Help the user"
-        assert node.tools == ["tool1", "tool2"]
-    
-    @patch('kailash.nodes.ai.agents.openai')
-    def test_agent_execution(self, mock_openai):
-        """Test agent execution."""
-        mock_response = Mock()
-        mock_response.choices = [Mock(message=Mock(content="Agent response"))]
-        mock_openai.ChatCompletion.create.return_value = mock_response
+        result = node.execute()
         
-        node = AgentNode(
-            node_id="agent",
-            name="Test Agent",
-            role="Assistant"
+        entities = result["entities"][0]["entities"]
+        person_entities = [e for e in entities if e["type"] == "PERSON"]
+        assert len(person_entities) > 0
+        assert any("John" in e["text"] for e in person_entities)
+    
+    def test_ner_organization_detection(self):
+        """Test organization entity detection."""
+        node = NamedEntityRecognizer(
+            texts=["I work at Google and Apple."],
+            entity_types=["ORGANIZATION"]
         )
         
-        result = node.execute({
-            "message": "Hello, agent!",
-            "context": {}
-        })
+        result = node.execute()
         
-        assert result["response"] == "Agent response"
-        assert "conversation_history" in result
+        entities = result["entities"][0]["entities"]
+        org_entities = [e for e in entities if e["type"] == "ORGANIZATION"]
+        assert len(org_entities) > 0
     
-    def test_agent_with_memory(self):
-        """Test agent with memory."""
-        node = AgentNode(
-            node_id="agent",
-            name="Test Agent",
-            role="Assistant",
-            memory_enabled=True
+    def test_ner_location_detection(self):
+        """Test location entity detection."""
+        node = NamedEntityRecognizer(
+            texts=["I traveled to Paris and London."],
+            entity_types=["LOCATION"]
         )
         
-        # First interaction
-        result1 = node.execute({
-            "message": "My name is John",
-            "context": {}
-        })
+        result = node.execute()
         
-        # Second interaction should remember
-        result2 = node.execute({
-            "message": "What's my name?",
-            "context": {"history": result1["conversation_history"]}
-        })
-        
-        # Memory should contain previous interactions
-        assert len(result2["conversation_history"]) > 1
-    
-    def test_agent_missing_message(self):
-        """Test agent without message."""
-        node = AgentNode(
-            node_id="agent",
-            name="Test Agent",
-            role="Assistant"
-        )
-        
-        with pytest.raises(KailashValidationError):
-            node.execute({"context": {}})
+        entities = result["entities"][0]["entities"]
+        location_entities = [e for e in entities if e["type"] == "LOCATION"]
+        assert len(location_entities) > 0
 
 
-class TestAgentChainNode:
-    """Test agent chain node."""
+class TestModelPredictorNode:
+    """Test ModelPredictor node."""
     
-    def test_agent_chain_creation(self):
-        """Test agent chain creation."""
-        agents = [
-            {"id": "agent1", "role": "Researcher"},
-            {"id": "agent2", "role": "Writer"},
-            {"id": "agent3", "role": "Editor"}
+    def test_classification_prediction(self):
+        """Test classification predictions."""
+        data = [{"feature1": 1, "feature2": 2}, {"feature1": 3, "feature2": 4}]
+        
+        node = ModelPredictor(
+            data=data,
+            prediction_type="classification"
+        )
+        
+        result = node.execute()
+        
+        assert len(result["predictions"]) == 2
+        assert result["prediction_type"] == "classification"
+        
+        for prediction in result["predictions"]:
+            assert "prediction" in prediction
+            assert "confidence" in prediction
+            assert "probabilities" in prediction
+    
+    def test_regression_prediction(self):
+        """Test regression predictions."""
+        data = [100, 200, 300]
+        
+        node = ModelPredictor(
+            data=data,
+            prediction_type="regression"
+        )
+        
+        result = node.execute()
+        
+        assert len(result["predictions"]) == 3
+        assert result["prediction_type"] == "regression"
+        
+        for prediction in result["predictions"]:
+            assert "prediction" in prediction
+            assert "confidence" in prediction
+            assert isinstance(prediction["prediction"], (int, float))
+
+
+class TestTextSummarizerNode:
+    """Test TextSummarizer node."""
+    
+    def test_extractive_summarization(self):
+        """Test extractive summarization."""
+        long_text = "This is the first sentence. This is the second sentence. This is the third sentence. This is a very long fourth sentence that might be truncated."
+        
+        node = TextSummarizer(
+            texts=[long_text],
+            style="extractive",
+            max_length=100
+        )
+        
+        result = node.execute()
+        
+        assert len(result["summaries"]) == 1
+        summary = result["summaries"][0]
+        assert summary["style"] == "extractive"
+        assert len(summary["summary"]) <= 100
+        assert summary["compression_ratio"] < 1.0
+    
+    def test_abstractive_summarization(self):
+        """Test abstractive summarization."""
+        text = "This is a test document with multiple sentences. It contains information about testing. The summary should be shorter."
+        
+        node = TextSummarizer(
+            texts=[text],
+            style="abstractive",
+            max_length=50
+        )
+        
+        result = node.execute()
+        
+        summary = result["summaries"][0]
+        assert summary["style"] == "abstractive"
+        assert "..." in summary["summary"]  # Abstractive summaries end with ...
+
+
+class TestChatAgentNode:
+    """Test ChatAgent node."""
+    
+    def test_chat_agent_basic(self):
+        """Test basic chat functionality."""
+        messages = [{"role": "user", "content": "Hello, how are you?"}]
+        
+        node = ChatAgent(messages=messages)
+        
+        result = node.execute()
+        
+        assert "responses" in result
+        assert len(result["responses"]) == 1
+        assert result["responses"][0]["role"] == "assistant"
+        assert "Hello" in result["responses"][0]["content"]
+    
+    def test_chat_agent_weather_query(self):
+        """Test weather-related query handling."""
+        messages = [{"role": "user", "content": "What's the weather like?"}]
+        
+        node = ChatAgent(messages=messages)
+        
+        result = node.execute()
+        
+        response_content = result["responses"][0]["content"]
+        assert "weather" in response_content.lower()
+    
+    def test_chat_agent_conversation_history(self):
+        """Test conversation history tracking."""
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+            {"role": "user", "content": "How are you?"}
         ]
         
-        node = AgentChainNode(
-            node_id="chain",
-            name="Agent Chain",
-            agents=agents
-        )
+        node = ChatAgent(messages=messages)
         
-        assert len(node.agents) == 3
-        assert node.agents[0]["role"] == "Researcher"
+        result = node.execute()
+        
+        assert "full_conversation" in result
+        assert len(result["full_conversation"]) >= len(messages) + 1  # +1 for system prompt
+
+
+class TestRetrievalAgentNode:
+    """Test RetrievalAgent node."""
     
-    @patch('kailash.nodes.ai.agents.AgentNode')
-    def test_agent_chain_execution(self, mock_agent_class):
-        """Test agent chain execution."""
-        # Mock individual agents
-        mock_agents = []
-        for i in range(3):
-            mock_agent = Mock()
-            mock_agent.execute.return_value = {
-                "response": f"Agent {i} response",
-                "conversation_history": []
-            }
-            mock_agents.append(mock_agent)
-        
-        mock_agent_class.side_effect = mock_agents
-        
-        agents = [
-            {"id": f"agent{i}", "role": f"Role{i}"}
-            for i in range(3)
+    def test_document_retrieval(self):
+        """Test document retrieval functionality."""
+        documents = [
+            {"content": "This document is about machine learning and AI."},
+            {"content": "This document discusses natural language processing."},
+            {"content": "This document covers computer vision techniques."}
         ]
         
-        node = AgentChainNode(
-            node_id="chain",
-            name="Agent Chain",
-            agents=agents
+        node = RetrievalAgent(
+            query="machine learning",
+            documents=documents,
+            top_k=2
         )
         
-        result = node.execute({
-            "initial_message": "Start the chain",
-            "context": {}
-        })
+        result = node.execute()
         
-        assert len(result["chain_results"]) == 3
-        assert result["final_response"] == "Agent 2 response"
+        assert "retrieved_documents" in result
+        assert len(result["retrieved_documents"]) <= 2
+        assert result["num_retrieved"] >= 0
     
-    def test_agent_chain_empty_agents(self):
-        """Test agent chain with no agents."""
-        with pytest.raises(KailashValidationError):
-            AgentChainNode(
-                node_id="chain",
-                name="Agent Chain",
-                agents=[]
-            )
+    def test_retrieval_with_answer_generation(self):
+        """Test answer generation from retrieved documents."""
+        documents = [
+            {"content": "Python is a programming language used for AI development."},
+            {"content": "Machine learning models can be trained using Python libraries."}
+        ]
+        
+        node = RetrievalAgent(
+            query="Python programming",
+            documents=documents,
+            generate_answer=True
+        )
+        
+        result = node.execute()
+        
+        if result["retrieved_documents"]:
+            assert result["answer"] is not None
+            assert "Python" in result["answer"]
 
 
-class TestToolNode:
-    """Test tool node."""
+class TestFunctionCallingAgentNode:
+    """Test FunctionCallingAgent node."""
     
-    def test_tool_creation(self):
-        """Test tool node creation."""
-        node = ToolNode(
-            node_id="tool",
-            name="Calculator Tool",
-            tool_type="calculator",
-            parameters={"operations": ["add", "subtract", "multiply", "divide"]}
-        )
-        
-        assert node.tool_type == "calculator"
-        assert "operations" in node.parameters
-    
-    def test_tool_execution_calculator(self):
-        """Test calculator tool execution."""
-        node = ToolNode(
-            node_id="tool",
-            name="Calculator Tool",
-            tool_type="calculator"
-        )
-        
-        result = node.execute({
-            "operation": "add",
-            "operands": [5, 3]
-        })
-        
-        assert result["result"] == 8
-    
-    def test_tool_execution_search(self):
-        """Test search tool execution."""
-        node = ToolNode(
-            node_id="tool",
-            name="Search Tool", 
-            tool_type="search"
-        )
-        
-        with patch('kailash.nodes.ai.agents.requests') as mock_requests:
-            mock_response = Mock()
-            mock_response.json.return_value = {
-                "results": ["Result 1", "Result 2"]
+    def test_function_calling_basic(self):
+        """Test basic function calling."""
+        functions = [
+            {
+                "name": "calculate",
+                "description": "Performs mathematical calculations",
+                "parameters": {
+                    "operation": {"type": "string"},
+                    "value": {"type": "number"}
+                }
             }
-            mock_requests.get.return_value = mock_response
-            
-            result = node.execute({
-                "query": "test search",
-                "api_key": "test-key"
-            })
-            
-            assert len(result["results"]) == 2
-    
-    def test_tool_invalid_type(self):
-        """Test tool with invalid type."""
-        with pytest.raises(KailashValidationError):
-            ToolNode(
-                node_id="tool",
-                name="Invalid Tool",
-                tool_type="nonexistent"
-            )
-    
-    def test_tool_missing_parameters(self):
-        """Test tool without required parameters."""
-        node = ToolNode(
-            node_id="tool",
-            name="Calculator Tool",
-            tool_type="calculator"
+        ]
+        
+        node = FunctionCallingAgent(
+            query="calculate the square of 5",
+            available_functions=functions
         )
         
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "operation": "add"
-                # Missing operands
-            })
+        result = node.execute()
+        
+        assert "function_calls" in result
+        assert "response" in result
+        assert result["num_calls"] >= 0
+    
+    def test_function_calling_no_match(self):
+        """Test when no functions match the query."""
+        functions = [
+            {
+                "name": "weather",
+                "description": "Get weather information"
+            }
+        ]
+        
+        node = FunctionCallingAgent(
+            query="calculate math problems",
+            available_functions=functions
+        )
+        
+        result = node.execute()
+        
+        assert result["num_calls"] == 0
+        assert "couldn't find" in result["response"].lower()
 
 
-class TestMemoryNode:
-    """Test memory node."""
+class TestPlanningAgentNode:
+    """Test PlanningAgent node."""
     
-    def test_memory_creation(self):
-        """Test memory node creation."""
-        node = MemoryNode(
-            node_id="memory",
-            name="Conversation Memory",
-            memory_type="conversation",
-            max_entries=100
+    def test_data_processing_plan(self):
+        """Test planning for data processing tasks."""
+        tools = ["CSVReader", "Filter", "Aggregator", "CSVWriter"]
+        
+        node = PlanningAgent(
+            goal="process customer data and generate summary",
+            available_tools=tools
         )
         
-        assert node.memory_type == "conversation"
-        assert node.max_entries == 100
+        result = node.execute()
+        
+        assert "plan" in result
+        assert result["estimated_steps"] > 0
+        assert result["feasibility"] in ["high", "medium", "low"]
     
-    def test_memory_store_and_retrieve(self):
-        """Test storing and retrieving from memory."""
-        node = MemoryNode(
-            node_id="memory",
-            name="Test Memory"
+    def test_text_analysis_plan(self):
+        """Test planning for text analysis tasks."""
+        tools = ["TextReader", "SentimentAnalyzer", "TextSummarizer", "JSONWriter"]
+        
+        node = PlanningAgent(
+            goal="analyze text sentiment and summarize",
+            available_tools=tools
         )
         
-        # Store data
-        store_result = node.execute({
-            "operation": "store",
-            "key": "user_name",
-            "value": "John Doe"
-        })
+        result = node.execute()
         
-        assert store_result["success"] is True
-        
-        # Retrieve data
-        retrieve_result = node.execute({
-            "operation": "retrieve",
-            "key": "user_name"
-        })
-        
-        assert retrieve_result["value"] == "John Doe"
+        assert len(result["plan"]) > 0
+        plan_tools = [step["tool"] for step in result["plan"]]
+        assert any("Sentiment" in tool or "Summariz" in tool for tool in plan_tools)
     
-    def test_memory_conversation_history(self):
-        """Test conversation history memory."""
-        node = MemoryNode(
-            node_id="memory",
-            name="Conversation Memory",
-            memory_type="conversation"
+    def test_planning_with_constraints(self):
+        """Test planning with time constraints."""
+        tools = ["Reader", "Processor", "Writer"]
+        constraints = {"time_limit": 30}  # 30 seconds
+        
+        node = PlanningAgent(
+            goal="quick data processing",
+            available_tools=tools,
+            constraints=constraints,
+            max_steps=5
         )
         
-        # Add messages
-        node.execute({
-            "operation": "add_message",
-            "role": "user",
-            "content": "Hello"
-        })
+        result = node.execute()
         
-        node.execute({
-            "operation": "add_message",
-            "role": "assistant",
-            "content": "Hi there!"
-        })
-        
-        # Get history
-        result = node.execute({
-            "operation": "get_history",
-            "limit": 10
-        })
-        
-        assert len(result["history"]) == 2
-        assert result["history"][0]["content"] == "Hello"
-    
-    def test_memory_clear(self):
-        """Test clearing memory."""
-        node = MemoryNode(
-            node_id="memory",
-            name="Test Memory"
-        )
-        
-        # Store data
-        node.execute({
-            "operation": "store",
-            "key": "test",
-            "value": "value"
-        })
-        
-        # Clear memory
-        clear_result = node.execute({
-            "operation": "clear"
-        })
-        
-        assert clear_result["success"] is True
-        
-        # Try to retrieve cleared data
-        retrieve_result = node.execute({
-            "operation": "retrieve",
-            "key": "test"
-        })
-        
-        assert retrieve_result["value"] is None
-    
-    def test_memory_max_entries(self):
-        """Test memory with max entries limit."""
-        node = MemoryNode(
-            node_id="memory",
-            name="Limited Memory",
-            max_entries=3
-        )
-        
-        # Add more than max entries
-        for i in range(5):
-            node.execute({
-                "operation": "store",
-                "key": f"key{i}",
-                "value": f"value{i}"
-            })
-        
-        # Check that only last 3 entries are kept
-        all_entries = node.execute({
-            "operation": "get_all"
-        })
-        
-        assert len(all_entries["entries"]) == 3
-    
-    def test_memory_invalid_operation(self):
-        """Test memory with invalid operation."""
-        node = MemoryNode(
-            node_id="memory",
-            name="Test Memory"
-        )
-        
-        with pytest.raises(KailashValidationError):
-            node.execute({
-                "operation": "invalid_op"
-            })
+        # Should respect time constraints
+        assert len(result["plan"]) <= 3  # 30 seconds / 10 seconds per step
+        assert result["constraints"] == constraints

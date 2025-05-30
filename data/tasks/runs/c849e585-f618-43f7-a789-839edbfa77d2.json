@@ -1,0 +1,13 @@
+{
+  "run_id": "c849e585-f618-43f7-a789-839edbfa77d2",
+  "workflow_name": "Error Handling Demo",
+  "status": "failed",
+  "started_at": "2025-05-29T10:19:52.396420",
+  "ended_at": "2025-05-29T10:19:52.400804",
+  "tasks": [
+    "6328836f-e425-4438-87e5-df29036b2038",
+    "75efe6ff-f22b-465f-8641-8b6304cdc4fc"
+  ],
+  "metadata": {},
+  "error": "Invalid state transition from TaskStatus.PENDING to TaskStatus.COMPLETED. Valid transitions: TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.RUNNING, TaskStatus.SKIPPED"
+}

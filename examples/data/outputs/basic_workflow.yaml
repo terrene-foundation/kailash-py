@@ -4,8 +4,7 @@ metadata:
   description: Simple ETL workflow for customer data
   version: 1.0.0
   author: ''
-  created_at: '2025-05-19T02:31:39.627518'
-  tags: []
+  created_at: '2025-05-29T14:09:50.955344+00:00'
 nodes:
   reader:
     type: CSVReader
@@ -68,7 +67,11 @@ nodes:
       x: 300.0
       y: 100.0
 connections:
-- from: reader.data
-  to: transformer.data
-- from: transformer.data
-  to: writer.data
+- from: reader
+  to: transformer
+  from_output: data
+  to_input: data
+- from: transformer
+  to: writer
+  from_output: data
+  to_input: data

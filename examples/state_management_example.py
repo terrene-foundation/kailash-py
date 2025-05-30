@@ -1,21 +1,21 @@
 """
-Example demonstrating the improved state management in the Kailash SDK.
+Simple State Management Example
 
-This script shows how to use the new immutable state management system
-for cleaner and more robust state updates in workflows.
+This example demonstrates the immutable state management features
+in the Kailash SDK without complex external dependencies.
 """
-import asyncio
 import logging
-from typing import Any, Dict
-
-from kailash.workflow.state import WorkflowStateWrapper, StateManager
-import sys
+from typing import Any, Dict, List
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
 
-from project_hmi.adapted.shared import AgentState
-from project_hmi.adapted.workflow_updated import HmiWorkflowV2, create_initial_state
+# Ensure module is in path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from kailash.workflow.graph import Workflow
+from kailash.workflow.state import WorkflowStateWrapper, StateManager
+from kailash.nodes.base import Node, NodeParameter
+from kailash.runtime.local import LocalRuntime
 
 # Configure logging
 logging.basicConfig(
@@ -25,124 +25,207 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class SimpleLLM:
-    """Simple LLM mock for demonstration purposes."""
+class StateAccumulatorNode(Node):
+    """A node that accumulates values in the workflow state."""
     
-    async def ainvoke(self, messages: list) -> Dict[str, Any]:
-        """
-        Simulate an LLM response for the message template.
-        
-        Args:
-            messages: List of message objects
-            
-        Returns:
-            Simulated LLM response
-        """
-        # Just simulate a delay
-        await asyncio.sleep(0.5)
-        
-        # Simple template filling for demonstration
-        system_msg = messages[0]["content"]
-        user_msg = messages[1]["content"]
-        
-        # For the demo, just return a canned response
+    def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
-            "content": "Hello John Doe, I've found a suitable appointment with Dr. Smith, " 
-                       "Cardiologist, on 25 Jun 2025 at 10:30 AM at Central Clinic. "
-                       "Please confirm if this works for you."
+            "value": NodeParameter(
+                name="value",
+                type=Any,
+                required=True,
+                description="Value to accumulate"
+            ),
+            "key": NodeParameter(
+                name="key",
+                type=str,
+                required=True,
+                description="State key to accumulate values under"
+            )
+        }
+    
+    def run(self, **kwargs) -> Dict[str, Any]:
+        value = kwargs.get("value")
+        key = kwargs.get("key")
+        
+        # In a real workflow, this would interact with the state manager
+        # For now, we'll just return the value to be accumulated
+        logger.info(f"Accumulating value '{value}' under key '{key}'")
+        
+        return {
+            "accumulated_value": value,
+            "state_key": key,
+            "status": "accumulated"
         }
 
 
-def demonstrate_state_management_basics():
-    """Demonstrate the basics of the new state management system."""
-    print("\n===== Basic State Management Demonstration =====")
+class StateProcessorNode(Node):
+    """A node that processes accumulated state values."""
     
-    # Create an initial state
-    state = create_initial_state()
-    print(f"Initial state: Patient name = {state.patient_details.patient_name}")
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "state_values": NodeParameter(
+                name="state_values",
+                type=list,
+                required=True,
+                description="List of accumulated state values"
+            ),
+            "operation": NodeParameter(
+                name="operation",
+                type=str,
+                required=False,
+                default="sum",
+                description="Operation to perform (sum, count, max, min)"
+            )
+        }
     
-    # Show manual state updates (old way)
-    updated_w1_context = state.w1_context.model_copy()
-    updated_w1_context.no_hmi_slot_flag = True
-    updated_state = state.copy_with_updates(w1_context=updated_w1_context)
-    print(f"Old way - Updated state: no_hmi_slot_flag = {updated_state.w1_context.no_hmi_slot_flag}")
-    
-    # Now demonstrate the new way with StateManager
-    # 1. Direct update_in
-    new_state = StateManager.update_in(state, ["w1_context", "no_hmi_slot_flag"], False)
-    print(f"New way - StateManager.update_in: no_hmi_slot_flag = {new_state.w1_context.no_hmi_slot_flag}")
-    
-    # 2. Batch update
-    batch_updated_state = StateManager.batch_update(
-        state,
-        [
-            (["w1_context", "no_hmi_slot_flag"], True),
-            (["patient_details", "patient_name"], "Jane Doe"),
-            (["current_workflow_id"], "w2")
-        ]
-    )
-    print(f"New way - StateManager.batch_update: "
-          f"no_hmi_slot_flag = {batch_updated_state.w1_context.no_hmi_slot_flag}, "
-          f"patient_name = {batch_updated_state.patient_details.patient_name}, "
-          f"workflow_id = {batch_updated_state.current_workflow_id}")
-    
-    # 3. Using WorkflowStateWrapper
-    state_wrapper = WorkflowStateWrapper(state)
-    
-    # Single update
-    updated_wrapper = state_wrapper.update_in(
-        ["patient_details", "patient_name"], 
-        "Alice Smith"
-    )
-    print(f"WorkflowStateWrapper.update_in: "
-          f"patient_name = {updated_wrapper.get_state().patient_details.patient_name}")
-    
-    # Batch update
-    batch_wrapper = state_wrapper.batch_update([
-        (["patient_details", "patient_name"], "Bob Johnson"),
-        (["referral_context", "referral_specialties"], ["Orthopedics", "Neurology"])
-    ])
-    print(f"WorkflowStateWrapper.batch_update: "
-          f"patient_name = {batch_wrapper.get_state().patient_details.patient_name}, "
-          f"specialties = {batch_wrapper.get_state().referral_context.referral_specialties}")
-    
-    # Demonstrate immutability
-    print(f"Original state (unchanged): patient_name = {state.patient_details.patient_name}")
+    def run(self, **kwargs) -> Dict[str, Any]:
+        state_values = kwargs.get("state_values", [])
+        operation = kwargs.get("operation", "sum")
+        
+        result = None
+        
+        if operation == "sum":
+            result = sum(state_values)
+        elif operation == "count":
+            result = len(state_values)
+        elif operation == "max":
+            result = max(state_values) if state_values else None
+        elif operation == "min":
+            result = min(state_values) if state_values else None
+        else:
+            result = state_values
+            
+        logger.info(f"Processed {len(state_values)} values with operation '{operation}': {result}")
+        
+        return {
+            "result": result,
+            "operation": operation,
+            "value_count": len(state_values)
+        }
 
 
-async def run_workflow_with_new_state_management():
-    """Run the updated HMI workflow with the new state management system."""
-    print("\n===== Running HMI Workflow with New State Management =====")
+def demonstrate_state_management():
+    """Demonstrate state management concepts using the StateManager and WorkflowStateWrapper."""
+    
+    logger.info("=== State Management Demonstration ===")
+    
+    # Create a state manager
+    state_manager = StateManager()
     
     # Create initial state
-    state = create_initial_state()
+    initial_state = {
+        "messages": [],
+        "values": [],
+        "metadata": {
+            "workflow_id": "state_demo",
+            "version": "1.0"
+        }
+    }
     
-    # Create a simple LLM mock
-    llm = SimpleLLM()
+    # Wrap the state for immutable updates
+    state_wrapper = WorkflowStateWrapper(initial_state)
     
-    # Create the workflow with the LLM
-    workflow = HmiWorkflowV2(llm)
+    # Demonstrate immutable updates
+    logger.info("\n1. Adding messages to state (immutable)")
+    new_state = state_wrapper.update_path("messages", ["Hello", "World"])
+    logger.info(f"Original state messages: {state_wrapper.state.get('messages')}")
+    logger.info(f"New state messages: {new_state.state.get('messages')}")
     
-    # Execute the workflow
-    print("Executing workflow...")
-    result_state = await workflow.execute_workflow1(state)
+    # Demonstrate nested updates
+    logger.info("\n2. Updating nested metadata")
+    new_state = new_state.update_path("metadata.updated_at", "2025-05-29")
+    logger.info(f"Updated metadata: {new_state.state.get('metadata')}")
     
-    # Show results
-    print("\nWorkflow Execution Results:")
-    print(f"Patient name: {result_state.patient_details.patient_name}")
-    print(f"Doctor found: {result_state.w1_context.current_doctor_under_consideration and result_state.w1_context.current_doctor_under_consideration.doctor_name}")
-    print(f"No slot flag: {result_state.w1_context.no_hmi_slot_flag}")
-    print(f"Message to patient: {result_state.next_message_to_patient}")
+    # Demonstrate batch updates
+    logger.info("\n3. Batch updates")
+    batch_updates = {
+        "values": [1, 2, 3, 4, 5],
+        "metadata.status": "processing",
+        "metadata.node_count": 3
+    }
+    new_state = new_state.batch_update(batch_updates)
+    logger.info(f"After batch update: {new_state.state}")
+    
+    # Demonstrate merging state
+    logger.info("\n4. Merging additional state")
+    additional_state = {
+        "results": {
+            "sum": 15,
+            "count": 5
+        }
+    }
+    new_state = new_state.merge(additional_state)
+    logger.info(f"After merge: {new_state.state}")
+    
+    return new_state
 
 
-async def main():
-    """Run the demonstrations."""
-    # First demonstrate basic state management
-    demonstrate_state_management_basics()
+def demonstrate_stateful_workflow():
+    """Demonstrate a workflow that uses state management."""
     
-    # Then run a more complete workflow example
-    await run_workflow_with_new_state_management()
+    logger.info("\n=== Stateful Workflow Demonstration ===")
+    
+    # Create workflow
+    workflow = Workflow(
+        workflow_id="stateful_workflow_demo",
+        name="Stateful Workflow Demo"
+    )
+    
+    # Create nodes
+    accumulator1 = StateAccumulatorNode(name="accumulator_1")
+    accumulator2 = StateAccumulatorNode(name="accumulator_2")
+    accumulator3 = StateAccumulatorNode(name="accumulator_3")
+    processor = StateProcessorNode(name="state_processor")
+    
+    # Add nodes to workflow
+    workflow.add_node("acc1", accumulator1, config={"value": 10, "key": "values"})
+    workflow.add_node("acc2", accumulator2, config={"value": 20, "key": "values"})
+    workflow.add_node("acc3", accumulator3, config={"value": 30, "key": "values"})
+    workflow.add_node("processor", processor, config={
+        "state_values": [10, 20, 30],  # In real workflow, this would come from state
+        "operation": "sum"
+    })
+    
+    # Connect nodes (accumulate in parallel, then process)
+    # Note: In a real stateful workflow, state would be passed between nodes
+    # This is a simplified demonstration
+    
+    # Execute workflow
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow)
+    
+    logger.info(f"\nWorkflow completed with run_id: {run_id}")
+    logger.info(f"Results: {results}")
+    
+    return workflow, results
+
+
+def main():
+    """Main function to run all demonstrations."""
+    
+    logger.info("=== Kailash SDK State Management Examples ===\n")
+    
+    # Demonstrate basic state management
+    final_state = demonstrate_state_management()
+    
+    # Demonstrate stateful workflow
+    workflow, results = demonstrate_stateful_workflow()
+    
+    # Summary
+    logger.info("\n=== Summary ===")
+    logger.info("State management features demonstrated:")
+    logger.info("1. Immutable state updates with WorkflowStateWrapper")
+    logger.info("2. Path-based updates for nested state")
+    logger.info("3. Batch updates for multiple state changes")
+    logger.info("4. State merging for combining results")
+    logger.info("5. Stateful workflow execution (simplified)")
+    
+    logger.info("\nNote: Full stateful workflow execution with state passing between")
+    logger.info("nodes would require integration with the runtime's state management.")
+    
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(main())

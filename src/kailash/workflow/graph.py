@@ -4,7 +4,7 @@ import yaml
 import logging
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Set, Union, Iterator, TypeVar, Generic
-from datetime import datetime
+from datetime import datetime, timezone
 
 import networkx as nx
 from pydantic import BaseModel, Field, ValidationError
@@ -81,7 +81,7 @@ class Workflow:
         if "version" not in self.metadata and version:
             self.metadata["version"] = version
         if "created_at" not in self.metadata:
-            self.metadata["created_at"] = datetime.utcnow().isoformat()
+            self.metadata["created_at"] = datetime.now(timezone.utc).isoformat()
         
         # Create directed graph for the workflow
         self.graph = nx.DiGraph()
@@ -748,14 +748,25 @@ class Workflow:
             raise TypeError(f"Expected BaseModel, got {type(state_model)}")
             
         # Prepare inputs
-        inputs = overrides.copy()
+        inputs = {}
         
         # Wrap the state if needed
         if wrap_state:
             state_wrapper = self.create_state_wrapper(state_model)
-            inputs["state_wrapper"] = state_wrapper
+            # Find entry nodes (nodes with no incoming edges) and provide state_wrapper to them
+            for node_id in self.nodes:
+                if self.graph.in_degree(node_id) == 0:  # Entry node
+                    inputs[node_id] = {"state_wrapper": state_wrapper}
         else:
-            inputs["state"] = state_model
+            # Find entry nodes and provide unwrapped state to them
+            for node_id in self.nodes:
+                if self.graph.in_degree(node_id) == 0:  # Entry node
+                    inputs[node_id] = {"state": state_model}
+                    
+        # Add any additional overrides
+        for key, value in overrides.items():
+            if key in self.nodes:
+                inputs.setdefault(key, {}).update(value)
             
         # Execute the workflow
         results = self.execute(inputs=inputs, task_manager=task_manager)

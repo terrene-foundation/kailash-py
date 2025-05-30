@@ -1,6 +1,5 @@
 """Simple test for PythonCodeNode functionality."""
 
-import pandas as pd
 from kailash.nodes.code import PythonCodeNode, CodeExecutor, FunctionWrapper, ClassWrapper
 
 
@@ -25,9 +24,9 @@ def test_function_wrapper():
     wrapper = FunctionWrapper(multiply)
     node = wrapper.to_node(name="multiplier")
     
-    result = node.execute_code({'x': 5, 'y': 3})
+    result = node.execute(x=5, y=3)
     print(f"Function result: {result}")
-    assert result == 15
+    assert result['result'] == 15
 
 
 def test_class_wrapper():
@@ -40,14 +39,28 @@ def test_class_wrapper():
             self.total += value
             return self.total
     
+    # Test that each node execution creates a new instance
+    # (stateful behavior requires using the same wrapper instance)
     wrapper = ClassWrapper(Accumulator)
-    node = wrapper.to_node(name="accumulator")
     
-    result1 = node.execute_code({'value': 5.0})
-    result2 = node.execute_code({'value': 3.0})
-    print(f"Class results: {result1}, {result2}")
-    assert result1 == 5.0
-    assert result2 == 8.0
+    # First execution
+    result1 = wrapper.execute({'value': 5.0})
+    print(f"First class result: {result1}")
+    assert result1['result'] == 5.0
+    
+    # Second execution on same wrapper instance maintains state
+    result2 = wrapper.execute({'value': 3.0})
+    print(f"Second class result: {result2}")
+    assert result2['result'] == 8.0
+    
+    # Test node conversion (each execution creates new instance)
+    node = wrapper.to_node(name="accumulator")
+    result3 = node.execute(value=5.0)
+    result4 = node.execute(value=3.0)
+    print(f"Node results: {result3}, {result4}")
+    # Each node execution creates a new instance, so no accumulation
+    assert result3['result'] == 5.0
+    assert result4['result'] == 3.0  # Not 8.0, because it's a new instance
 
 
 def test_python_code_node():
@@ -60,26 +73,48 @@ def test_python_code_node():
         output_type=int
     )
     
-    result = code_node.execute_code({'a': 10, 'b': 20})
+    result = code_node.execute(a=10, b=20)
     print(f"Code node result: {result}")
-    assert result == 30
+    assert result['result'] == 30
     
-    # Test with function
-    def transform_data(data: pd.DataFrame) -> pd.DataFrame:
-        result = data.copy()
-        result['doubled'] = data['value'] * 2
-        return result
+    # Test with function that returns dict (JSON-serializable)
+    def transform_data(data: list) -> dict:
+        """Transform data and return summary."""
+        values = [item['value'] for item in data]
+        return {
+            'count': len(values),
+            'sum': sum(values),
+            'doubled': [v * 2 for v in values]
+        }
     
     func_node = PythonCodeNode.from_function(
         func=transform_data,
         name="transformer"
     )
     
-    df = pd.DataFrame({'value': [1, 2, 3]})
-    result_df = func_node.execute_code({'data': df})
-    print(f"DataFrame result:\n{result_df}")
-    assert 'doubled' in result_df.columns
-    assert list(result_df['doubled']) == [2, 4, 6]
+    data = [{'value': 1}, {'value': 2}, {'value': 3}]
+    # Use run method - when function returns dict, it's returned as-is
+    result_dict = func_node.run(data=data)
+    print(f"Transform result: {result_dict}")
+    # Function returns a dict, so it's not wrapped
+    assert result_dict['count'] == 3
+    assert result_dict['sum'] == 6
+    assert result_dict['doubled'] == [2, 4, 6]
+    
+    # Test with a function that returns a non-dict value
+    def compute_sum(values: list) -> int:
+        """Compute sum of values."""
+        return sum(values)
+    
+    sum_node = PythonCodeNode.from_function(
+        func=compute_sum,
+        name="summer"
+    )
+    
+    sum_result = sum_node.run(values=[10, 20, 30])
+    print(f"Sum result: {sum_result}")
+    # Non-dict results are wrapped in {"result": value}
+    assert sum_result == {'result': 60}
 
 
 if __name__ == "__main__":

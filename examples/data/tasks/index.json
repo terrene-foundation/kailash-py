@@ -1,4 +1,19 @@
 {
-  "tasks": {},
+  "tasks": {
+    "6940b7f0-21b5-4123-bf9e-1432f08dcfc7": {
+      "run_id": "1a1e0455-4a72-4aa0-a601-b7fc60b3d9fc",
+      "node_id": "customer_reader",
+      "status": "completed",
+      "started_at": "2025-05-29T14:09:22.070083+00:00",
+      "ended_at": "2025-05-29T14:09:22.071101+00:00"
+    },
+    "be206f6c-09b5-4e0a-9550-0a99a3819bfa": {
+      "run_id": "1a1e0455-4a72-4aa0-a601-b7fc60b3d9fc",
+      "node_id": "transaction_reader",
+      "status": "completed",
+      "started_at": "2025-05-29T14:09:22.071329+00:00",
+      "ended_at": "2025-05-29T14:09:22.071892+00:00"
+    }
+  },
   "runs": {}
 }

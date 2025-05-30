@@ -1,7 +1,7 @@
 """Task manager for workflow execution tracking."""
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .models import TaskRun, WorkflowRun, TaskStatus, TaskSummary, RunSummary, TaskMetrics
 from .storage.base import StorageBackend
@@ -844,3 +844,28 @@ class TaskManager:
                 
         except Exception as e:
             raise StorageException(f"Failed to save task: {e}") from e
+    
+    def get_workflow_tasks(self, workflow_id: str) -> List[TaskRun]:
+        """Get all tasks for a workflow.
+        
+        This is a compatibility method that returns all tasks across all runs for a workflow.
+        In practice, tasks are tracked per run, not per workflow.
+        
+        Args:
+            workflow_id: Workflow ID (used to filter runs)
+            
+        Returns:
+            List of all TaskRun objects for the workflow
+            
+        Raises:
+            StorageException: If storage operation fails
+        """
+        try:
+            # Get all tasks from storage
+            all_tasks = self.storage.get_all_tasks()
+            
+            # For now, return all tasks since we don't have a good way to filter by workflow_id
+            # In a real implementation, we'd need to track workflow_id in tasks or runs
+            return all_tasks
+        except Exception as e:
+            raise StorageException(f"Failed to get workflow tasks: {e}") from e

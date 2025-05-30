@@ -2,9 +2,10 @@
 
 import pytest
 from datetime import datetime, timedelta
+from typing import Optional, List
 
 from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import Task, TaskStatus, TaskMetrics
+from kailash.tracking.models import TaskRun, TaskStatus, TaskMetrics, WorkflowRun
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.tracking.storage.base import StorageBackend
 from kailash.sdk_exceptions import KailashValidationError
@@ -18,23 +19,23 @@ class MockStorage(StorageBackend):
         self.tasks = {}
         self.runs = {}
     
-    def save_task(self, task: Task) -> None:
+    def save_task(self, task: TaskRun) -> None:
         """Save task to storage."""
         self.tasks[task.task_id] = task
     
-    def get_task(self, task_id: str) -> Task:
+    def get_task(self, task_id: str) -> TaskRun:
         """Get task from storage."""
         return self.tasks.get(task_id)
     
-    def load_task(self, task_id: str) -> Task:
+    def load_task(self, task_id: str) -> TaskRun:
         """Load task from storage."""
         return self.get_task(task_id)
     
-    def get_all_tasks(self) -> list[Task]:
+    def get_all_tasks(self) -> list[TaskRun]:
         """Get all tasks."""
         return list(self.tasks.values())
     
-    def update_task(self, task: Task) -> None:
+    def update_task(self, task: TaskRun) -> None:
         """Update task in storage."""
         if task.task_id not in self.tasks:
             raise ValueError(f"Task {task.task_id} not found")
@@ -45,7 +46,7 @@ class MockStorage(StorageBackend):
         if task_id in self.tasks:
             del self.tasks[task_id]
     
-    def query_tasks(self, **kwargs) -> list[Task]:
+    def query_tasks(self, **kwargs) -> list[TaskRun]:
         """Query tasks by criteria."""
         results = []
         for task in self.tasks.values():
@@ -53,13 +54,22 @@ class MockStorage(StorageBackend):
                 results.append(task)
         return results
     
-    def _matches_criteria(self, task: Task, **kwargs) -> bool:
+    def _matches_criteria(self, task: TaskRun, **kwargs) -> bool:
         """Check if task matches criteria."""
         for key, value in kwargs.items():
-            if not hasattr(task, key):
-                return False
-            if getattr(task, key) != value:
-                return False
+            # Handle special time range parameters
+            if key == 'started_after':
+                if not task.created_at or task.created_at < value:
+                    return False
+            elif key == 'completed_before':
+                if not task.created_at or task.created_at > value:
+                    return False
+            else:
+                # Handle regular attribute matching
+                if not hasattr(task, key):
+                    return False
+                if getattr(task, key) != value:
+                    return False
         return True
     
     # Required by StorageBackend abstract class
@@ -82,7 +92,7 @@ class MockStorage(StorageBackend):
             results.append(run)
         return results
     
-    def list_tasks(self, run_id: str, node_id: Optional[str] = None, status: Optional[TaskStatus] = None) -> List[Task]:
+    def list_tasks(self, run_id: str, node_id: Optional[str] = None, status: Optional[TaskStatus] = None) -> List[TaskRun]:
         """List tasks for a run."""
         results = []
         for task in self.tasks.values():
@@ -248,6 +258,8 @@ class TestTaskManager:
         task3 = manager.create_task(node_id="test3")
         
         manager.update_task_status(task2.task_id, TaskStatus.RUNNING)
+        # Must transition to RUNNING before COMPLETED
+        manager.update_task_status(task3.task_id, TaskStatus.RUNNING)
         manager.complete_task(task3.task_id, {"result": 1})
         
         # Query by status
@@ -348,23 +360,24 @@ class TestTaskManager:
         storage = MockStorage()
         manager = TaskManager(storage)
         
-        # Create tasks at different times
+        # Create tasks at different times using naive datetime to match model
         now = datetime.now()
         
         task1 = manager.create_task(node_id="test1")
         task1.created_at = now - timedelta(hours=3)
-        storage.update_task(task1)
+        storage.save_task(task1)  # Use save_task instead of update_task
         
         task2 = manager.create_task(node_id="test2")
         task2.created_at = now - timedelta(hours=1)
-        storage.update_task(task2)
+        storage.save_task(task2)
         
         task3 = manager.create_task(node_id="test3")
-        # task3 has current time
+        task3.created_at = now - timedelta(minutes=30)
+        storage.save_task(task3)
         
         # Query by time range
         start_time = now - timedelta(hours=2)
-        end_time = now
+        end_time = now + timedelta(minutes=1)  # Add some buffer
         
         tasks = manager.get_tasks_by_timerange(start_time, end_time)
         
