@@ -81,6 +81,10 @@ Example Workflows:
 """
 
 from kailash.nodes.data.readers import CSVReader, JSONReader, TextReader
+from kailash.nodes.data.sharepoint_graph import (
+    SharePointGraphReader,
+    SharePointGraphWriter,
+)
 from kailash.nodes.data.sql import SQLDatabaseNode, SQLQueryBuilderNode
 from kailash.nodes.data.streaming import (
     EventStreamNode,
@@ -100,10 +104,12 @@ __all__ = [
     "CSVReader",
     "JSONReader",
     "TextReader",
+    "SharePointGraphReader",
     # Writers
     "CSVWriter",
     "JSONWriter",
     "TextWriter",
+    "SharePointGraphWriter",
     # SQL
     "SQLDatabaseNode",
     "SQLQueryBuilderNode",
