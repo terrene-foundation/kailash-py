@@ -86,11 +86,32 @@ jobs:
         exit-code: '0'  # Don't fail the build
         ignore-unfixed: true
     
-    - name: Upload scan results as artifact
+    # Try SARIF upload for repos with Advanced Security
+    - name: Run Trivy scan for SARIF
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        severity: 'CRITICAL,HIGH'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        exit-code: '0'
+      continue-on-error: true
+    
+    - name: Upload SARIF results (if Advanced Security enabled)
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+      continue-on-error: true
+      if: always()
+    
+    - name: Upload scan results as artifact (fallback)
       uses: actions/upload-artifact@v4
       with:
         name: trivy-scan-results
-        path: trivy-results.txt
+        path: |
+          trivy-results.txt
+          trivy-results.sarif
         retention-days: 7
       if: always()
       continue-on-error: true
