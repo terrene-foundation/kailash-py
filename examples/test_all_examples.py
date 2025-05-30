@@ -12,18 +12,28 @@ def test_imports():
     """Test if all example files can be imported."""
     print("=== Testing Example Imports ===\n")
 
-    example_files = [
-        "basic_workflow.py",
-        "complex_workflow.py",
-        "custom_node.py",
-        "data_transformation.py",
-        "error_handling.py",
-        "export_workflow.py",
-        "task_tracking_example.py",
-        "visualization_example.py",
-        "simplified_workflow_example.py",  # Added new simplified example
-        "api_integration_comprehensive.py",  # Added new API integration example
-    ]
+    # Dynamically find all Python example files
+    examples_dir = Path(__file__).parent
+    example_files = []
+    
+    # Files to exclude from testing
+    exclude_files = {
+        "test_all_examples.py",  # This file itself
+        "__init__.py",  # Init files
+        "test_updated_examples.py",  # Other test files
+        "test_api_examples.py",
+        "mcp_server.py",  # Special server files
+    }
+    
+    # Find all .py files in the examples directory (not in subdirectories)
+    for file in examples_dir.glob("*.py"):
+        if file.name not in exclude_files and not file.name.startswith("_"):
+            example_files.append(file.name)
+    
+    # Sort for consistent output
+    example_files.sort()
+    
+    print(f"Found {len(example_files)} example files to test\n")
 
     failed_imports = []
 
