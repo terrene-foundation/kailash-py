@@ -225,4 +225,3 @@ class TestSharePointGraphIntegration:
         deserialized = json.loads(json_str)
         assert deserialized["file_count"] == result["file_count"]
         assert len(deserialized["files"]) == len(result["files"])
-

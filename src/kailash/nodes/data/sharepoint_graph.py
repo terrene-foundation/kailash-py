@@ -621,4 +621,3 @@ class SharePointGraphWriter(Node):
             raise NodeExecutionError(
                 f"Failed to upload file: {response.status_code} - {response.text}"
             )
-
