@@ -1,0 +1,20 @@
+[
+  {
+    "id": "tx001",
+    "amount": 150.0,
+    "status": "completed",
+    "customer_id": "cust1"
+  },
+  {
+    "id": "tx004",
+    "amount": 50.0,
+    "status": "completed",
+    "customer_id": "cust4"
+  },
+  {
+    "id": "tx006",
+    "amount": 300.0,
+    "status": "completed",
+    "customer_id": "cust1"
+  }
+]

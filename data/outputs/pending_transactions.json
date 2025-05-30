@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": "tx002",
+    "amount": 75.25,
+    "status": "pending",
+    "customer_id": "cust2",
+    "follow_up": true,
+    "follow_up_date": "2025-06-01"
+  },
+  {
+    "id": "tx005",
+    "amount": 125.75,
+    "status": "pending",
+    "customer_id": "cust5",
+    "follow_up": true,
+    "follow_up_date": "2025-06-01"
+  },
+  {
+    "id": "tx008",
+    "amount": 175.0,
+    "status": "pending",
+    "customer_id": "cust3",
+    "follow_up": true,
+    "follow_up_date": "2025-06-01"
+  }
+]

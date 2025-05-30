@@ -10,7 +10,11 @@ import asyncio
 
 import pytest
 
-from examples.project_hmi.adapted.shared import AgentState, DoctorInfo, SlotInfo
+from examples.migrations.project_hmi.adapted.shared import (
+    AgentState,
+    DoctorInfo,
+    SlotInfo,
+)
 from kailash.workflow.state import WorkflowStateWrapper
 
 
