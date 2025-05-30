@@ -4,9 +4,11 @@ Tests for the state management functionality in the Kailash SDK.
 This module tests the functionality of the StateManager and WorkflowStateWrapper
 classes to ensure they correctly handle immutable state updates.
 """
+
+from typing import Dict, List, Optional
+
 import pytest
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
 
 from kailash.workflow.state import StateManager, WorkflowStateWrapper
 
@@ -14,6 +16,7 @@ from kailash.workflow.state import StateManager, WorkflowStateWrapper
 # Test model classes
 class NestedModel(BaseModel):
     """Test nested model."""
+
     value: str = "default"
     count: int = 0
     items: List[str] = Field(default_factory=list)
@@ -21,6 +24,7 @@ class NestedModel(BaseModel):
 
 class TestState(BaseModel):
     """Test state model for state management tests."""
+
     name: str = "test"
     enabled: bool = True
     count: int = 0
@@ -32,72 +36,74 @@ class TestState(BaseModel):
 
 class TestStateManager:
     """Tests for the StateManager class."""
-    
+
     def test_update_in_top_level(self):
         """Test updating a top-level property."""
         # Arrange
         state = TestState()
-        
+
         # Act
         new_state = StateManager.update_in(state, ["name"], "updated")
-        
+
         # Assert
         assert new_state.name == "updated"
         assert state.name == "test"  # Original unchanged
         assert new_state is not state  # New instance
-        
+
     def test_update_in_nested(self):
         """Test updating a nested property."""
         # Arrange
         state = TestState()
-        
+
         # Act
         new_state = StateManager.update_in(state, ["nested", "value"], "updated_nested")
-        
+
         # Assert
         assert new_state.nested.value == "updated_nested"
         assert state.nested.value == "default"  # Original unchanged
         assert new_state.nested is not state.nested  # New nested instance
-        
+
     def test_update_in_list(self):
         """Test updating a list property."""
         # Arrange
         state = TestState(tags=["tag1", "tag2"])
-        
+
         # Act
         new_state = StateManager.update_in(state, ["tags"], ["tag3", "tag4"])
-        
+
         # Assert
         assert new_state.tags == ["tag3", "tag4"]
         assert state.tags == ["tag1", "tag2"]  # Original unchanged
-        
+
     def test_update_in_nested_list(self):
         """Test updating a nested list property."""
         # Arrange
         state = TestState(nested=NestedModel(items=["item1", "item2"]))
-        
+
         # Act
-        new_state = StateManager.update_in(state, ["nested", "items"], ["item3", "item4"])
-        
+        new_state = StateManager.update_in(
+            state, ["nested", "items"], ["item3", "item4"]
+        )
+
         # Assert
         assert new_state.nested.items == ["item3", "item4"]
         assert state.nested.items == ["item1", "item2"]  # Original unchanged
-        
+
     def test_batch_update(self):
         """Test batch updating multiple properties."""
         # Arrange
         state = TestState()
-        
+
         # Act
         new_state = StateManager.batch_update(
             state,
             [
                 (["name"], "batch_updated"),
                 (["count"], 42),
-                (["nested", "value"], "nested_batch_updated")
-            ]
+                (["nested", "value"], "nested_batch_updated"),
+            ],
         )
-        
+
         # Assert
         assert new_state.name == "batch_updated"
         assert new_state.count == 42
@@ -105,53 +111,49 @@ class TestStateManager:
         assert state.name == "test"  # Original unchanged
         assert state.count == 0  # Original unchanged
         assert state.nested.value == "default"  # Original unchanged
-        
+
     def test_get_in_top_level(self):
         """Test getting a top-level property."""
         # Arrange
         state = TestState(name="test_get")
-        
+
         # Act
         value = StateManager.get_in(state, ["name"])
-        
+
         # Assert
         assert value == "test_get"
-        
+
     def test_get_in_nested(self):
         """Test getting a nested property."""
         # Arrange
         state = TestState(nested=NestedModel(value="nested_value"))
-        
+
         # Act
         value = StateManager.get_in(state, ["nested", "value"])
-        
+
         # Assert
         assert value == "nested_value"
-        
+
     def test_get_in_invalid_path(self):
         """Test getting an invalid path raises KeyError."""
         # Arrange
         state = TestState()
-        
+
         # Act / Assert
         with pytest.raises(KeyError):
             StateManager.get_in(state, ["non_existent"])
-            
+
         with pytest.raises(KeyError):
             StateManager.get_in(state, ["nested", "non_existent"])
-        
+
     def test_merge(self):
         """Test merging updates."""
         # Arrange
         state = TestState()
-        
+
         # Act
-        new_state = StateManager.merge(
-            state,
-            name="merged",
-            count=99
-        )
-        
+        new_state = StateManager.merge(state, name="merged", count=99)
+
         # Assert
         assert new_state.name == "merged"
         assert new_state.count == 99
@@ -161,77 +163,75 @@ class TestStateManager:
 
 class TestWorkflowStateWrapper:
     """Tests for the WorkflowStateWrapper class."""
-    
+
     def test_create_wrapper(self):
         """Test creating a wrapper."""
         # Arrange
         state = TestState()
-        
+
         # Act
         wrapper = WorkflowStateWrapper(state)
-        
+
         # Assert
         assert wrapper.get_state() is state
-        
+
     def test_update_in(self):
         """Test updating state through wrapper."""
         # Arrange
         state = TestState()
         wrapper = WorkflowStateWrapper(state)
-        
+
         # Act
         new_wrapper = wrapper.update_in(["name"], "wrapped_update")
-        
+
         # Assert
         assert new_wrapper.get_state().name == "wrapped_update"
         assert wrapper.get_state().name == "test"  # Original unchanged
         assert new_wrapper is not wrapper  # New wrapper
         assert new_wrapper.get_state() is not wrapper.get_state()  # New state
-        
+
     def test_batch_update(self):
         """Test batch updating through wrapper."""
         # Arrange
         state = TestState()
         wrapper = WorkflowStateWrapper(state)
-        
+
         # Act
-        new_wrapper = wrapper.batch_update([
-            (["name"], "wrapped_batch"),
-            (["nested", "value"], "wrapped_nested")
-        ])
-        
+        new_wrapper = wrapper.batch_update(
+            [(["name"], "wrapped_batch"), (["nested", "value"], "wrapped_nested")]
+        )
+
         # Assert
         assert new_wrapper.get_state().name == "wrapped_batch"
         assert new_wrapper.get_state().nested.value == "wrapped_nested"
         assert wrapper.get_state().name == "test"  # Original unchanged
         assert wrapper.get_state().nested.value == "default"  # Original unchanged
-        
+
     def test_get_in(self):
         """Test getting value through wrapper."""
         # Arrange
-        state = TestState(name="wrapper_test", nested=NestedModel(value="wrapper_nested"))
+        state = TestState(
+            name="wrapper_test", nested=NestedModel(value="wrapper_nested")
+        )
         wrapper = WorkflowStateWrapper(state)
-        
+
         # Act
         name = wrapper.get_in(["name"])
         nested_value = wrapper.get_in(["nested", "value"])
-        
+
         # Assert
         assert name == "wrapper_test"
         assert nested_value == "wrapper_nested"
-        
+
     def test_merge(self):
         """Test merging through wrapper."""
         # Arrange
         state = TestState()
         wrapper = WorkflowStateWrapper(state)
-        
+
         # Act
-        new_wrapper = wrapper.merge(
-            name="wrapped_merge",
-            enabled=False
-        )
-        
+        new_wrapper = wrapper.merge(name="wrapped_merge", enabled=False)
+
         # Assert
         assert new_wrapper.get_state().name == "wrapped_merge"
         assert new_wrapper.get_state().enabled is False

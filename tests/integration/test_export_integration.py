@@ -1,53 +1,49 @@
 """Test export functionality with real workflows."""
 
 import json
-import yaml
 from pathlib import Path
-from typing import Dict, Any
 
 import pytest
-import pandas as pd
 
-from kailash.runtime.local import LocalRuntime
-from kailash.runtime.runner import WorkflowRunner
-from kailash.workflow import Workflow, WorkflowBuilder
-from kailash.nodes.base import Node, NodeRegistry
 from kailash.manifest import KailashManifest
+from kailash.nodes.base import NodeRegistry
 from kailash.utils.export import WorkflowExporter
+from kailash.workflow import WorkflowBuilder
 
 # Register MockNode from conftest
 from tests.conftest import MockNode
+
 NodeRegistry.register(MockNode)
 
 
 class TestExportIntegration:
     """Test export functionality with real workflows."""
-    
+
     def test_export_simple_workflow(self, temp_data_dir: Path):
         """Test exporting a simple workflow to Kailash format."""
         # Create simple workflow for testing
         builder = WorkflowBuilder()
         node_id = builder.add_node("MockNode", "test_node", config={"value": 10})
         workflow = builder.build("test_workflow")
-        
+
         # Export to file using WorkflowExporter
         exporter = WorkflowExporter()
         export_path = temp_data_dir / "exported_workflow.json"
-        
+
         try:
             exported_data = exporter.export_workflow(workflow, export_path)
         except (AttributeError, NotImplementedError):
             pytest.skip("export_workflow method not implemented")
-        
+
         # Verify export file exists
         assert export_path.exists()
-        
+
         # Verify export file exists (basic test)
         if export_path.exists():
-            with open(export_path, 'r') as f:
+            with open(export_path, "r") as f:
                 loaded_data = json.load(f)
             assert "workflow" in loaded_data or "nodes" in loaded_data
-    
+
     def test_export_complex_workflow(self, temp_data_dir: Path):
         """Test exporting a complex workflow with multiple branches."""
         # Create complex workflow for testing
@@ -56,144 +52,142 @@ class TestExportIntegration:
         node2_id = builder.add_node("MockNode", "node2", config={"value": 20})
         builder.add_connection(node1_id, "output", node2_id, "input")
         workflow = builder.build("complex_workflow")
-        
+
         # Test basic export functionality
         exporter = WorkflowExporter()
         json_path = temp_data_dir / "complex_workflow.json"
-        
+
         try:
             exporter.export_workflow(workflow, json_path)
             assert json_path.exists()
         except (AttributeError, NotImplementedError):
             pytest.skip("export_workflow method not implemented")
-    
+
     def test_export_workflow_as_python_code(self, temp_data_dir: Path):
         """Test exporting workflow as executable Python code."""
         # Create simple workflow
         builder = WorkflowBuilder()
         node_id = builder.add_node("MockNode", "test_node", config={"value": 10})
         workflow = builder.build("test_workflow")
-        
+
         # Test code export if available
         exporter = WorkflowExporter()
         python_file = temp_data_dir / "workflow_code.py"
-        
+
         try:
-            if hasattr(exporter, 'export_as_code'):
+            if hasattr(exporter, "export_as_code"):
                 exporter.export_as_code(workflow, python_file)
                 assert python_file.exists()
             else:
                 pytest.skip("export_as_code method not available")
         except (AttributeError, NotImplementedError):
             pytest.skip("export_as_code method not implemented")
-    
+
     def test_export_with_node_templates(self, temp_data_dir: Path):
         """Test exporting workflow with custom node templates."""
         builder = WorkflowBuilder()
-        
+
         # Create workflow with real nodes that use template-like values
         template_reader_id = builder.add_node(
-            "CSVReader",
-            "template_reader",
-            config={"file_path": "${INPUT_PATH}"}
+            "CSVReader", "template_reader", config={"file_path": "${INPUT_PATH}"}
         )
-        
+
         template_processor_id = builder.add_node(
             "Filter",
             "template_processor",
-            config={
-                "field": "value",
-                "operator": ">",
-                "value": "${THRESHOLD_VALUE}"
-            }
+            config={"field": "value", "operator": ">", "value": "${THRESHOLD_VALUE}"},
         )
-        
-        builder.add_connection(template_reader_id, "data", template_processor_id, "data")
+
+        builder.add_connection(
+            template_reader_id, "data", template_processor_id, "data"
+        )
         workflow = builder.build("templated_workflow")
-        
+
         manifest = KailashManifest(
             metadata={
                 "id": "template-export",
                 "name": "Template Export Test",
                 "template_variables": {
                     "INPUT_PATH": "path/to/input.csv",
-                    "THRESHOLD_VALUE": "100"
-                }
+                    "THRESHOLD_VALUE": "100",
+                },
             },
-            workflow=workflow
+            workflow=workflow,
         )
-        
+
         # Export workflow directly
         export_path = temp_data_dir / "templated_workflow.json"
         manifest.save(export_path, format="json")
-        
+
         # Verify templates in export
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             data = json.load(f)
-        
+
         assert "template_variables" in data["metadata"]
-        assert data["metadata"]["template_variables"]["INPUT_PATH"] == "path/to/input.csv"
-        
+        assert (
+            data["metadata"]["template_variables"]["INPUT_PATH"] == "path/to/input.csv"
+        )
+
         # Check that template vars are preserved in config
         nodes = data["workflow"]["nodes"]
         template_reader = nodes.get("template_reader")
         assert template_reader is not None
         # Check if template vars are in the config
         assert "${INPUT_PATH}" in str(template_reader.get("config", {}))
-    
+
     def test_export_validation(self, temp_data_dir: Path):
         """Test export format validation."""
         # Create simple workflow for validation testing
         builder = WorkflowBuilder()
         workflow = builder.build("validation_test")
-        
+
         # Test validation concept
         export_path = temp_data_dir / "validation_test.json"
-        
+
         # Create a simple JSON file for validation testing
         test_data = {"workflow": {"name": "validation_test"}}
-        with open(export_path, 'w') as f:
+        with open(export_path, "w") as f:
             json.dump(test_data, f)
-        
+
         # Basic validation - file exists and is valid JSON
         assert export_path.exists()
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             loaded_data = json.load(f)
         assert "workflow" in loaded_data
-    
+
     def test_export_with_execution_results(self, temp_data_dir: Path):
         """Test exporting workflow with execution results included."""
         # Create simple workflow for execution results testing
         builder = WorkflowBuilder()
         workflow = builder.build("results_test")
-        
+
         # Create test execution results
         execution_result = {
             "status": "completed",
             "outputs": {"test": "data"},
-            "execution_time": 1.5
+            "execution_time": 1.5,
         }
-        
+
         # Test results export concept
         export_path = temp_data_dir / "workflow_with_results.json"
-        
+
         # Create test data with execution results
         test_data = {
             "workflow": {"name": "results_test"},
-            "execution_result": execution_result
+            "execution_result": execution_result,
         }
-        
-        with open(export_path, 'w') as f:
+
+        with open(export_path, "w") as f:
             json.dump(test_data, f)
-        
+
         # Verify results are included
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             data = json.load(f)
-        
+
         assert "execution_result" in data
         assert data["execution_result"]["status"] == "completed"
         assert "outputs" in data["execution_result"]
-    
+
     def test_export_workflow_bundle(self, temp_data_dir: Path):
         """Test exporting workflow as a complete bundle with dependencies."""
         # Create bundle metadata
@@ -203,24 +197,24 @@ class TestExportIntegration:
             "version": "1.0.0",
             "dependencies": {
                 "python": "3.8+",
-                "packages": ["pandas>=1.0", "numpy", "scikit-learn"]
-            }
+                "packages": ["pandas>=1.0", "numpy", "scikit-learn"],
+            },
         }
-        
+
         # Create bundle directory
         bundle_dir = temp_data_dir / "workflow_bundle"
         bundle_dir.mkdir(exist_ok=True)
-        
+
         # Create workflow file
         workflow_file = bundle_dir / "workflow.json"
-        with open(workflow_file, 'w') as f:
+        with open(workflow_file, "w") as f:
             json.dump({"metadata": bundle_metadata}, f)
-        
+
         # Create requirements file
         requirements_file = bundle_dir / "requirements.txt"
         requirements = bundle_metadata["dependencies"]["packages"]
         requirements_file.write_text("\n".join(requirements))
-        
+
         # Create README
         readme_file = bundle_dir / "README.md"
         readme_content = f"""# {bundle_metadata['name']}
@@ -238,106 +232,100 @@ Workflow bundle
 ```
 """
         readme_file.write_text(readme_content)
-        
+
         # Create metadata file
         metadata_file = bundle_dir / "metadata.json"
         metadata = {
             "bundle_version": "1.0",
             "created_at": "2023-01-01T00:00:00",
             "files": ["workflow.json", "requirements.txt", "README.md"],
-            "workflow_id": bundle_metadata["id"]
+            "workflow_id": bundle_metadata["id"],
         }
-        with open(metadata_file, 'w') as f:
+        with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
-        
+
         # Verify bundle structure
         assert workflow_file.exists()
         assert requirements_file.exists()
         assert readme_file.exists()
         assert metadata_file.exists()
-        
+
         # Verify bundle structure
-        with open(workflow_file, 'r') as f:
+        with open(workflow_file, "r") as f:
             workflow_data = json.load(f)
         assert workflow_data["metadata"]["id"] == "bundle-export"
-    
+
     def test_incremental_export(self, temp_data_dir: Path):
         """Test incremental/versioned exports."""
         # Create base export data
         base_metadata = {
             "id": "incremental-export",
             "name": "Incremental Export Test",
-            "version": "1.0.0"
+            "version": "1.0.0",
         }
-        
+
         base_path = temp_data_dir / "v1.0.0" / "workflow.json"
         base_path.parent.mkdir(exist_ok=True)
-        with open(base_path, 'w') as f:
+        with open(base_path, "w") as f:
             json.dump({"metadata": base_metadata}, f)
-        
+
         # Create modified workflow data
         builder = WorkflowBuilder()
         modified_workflow = builder.build("modified_workflow")
-        
+
         # Create incremental export metadata
         incremental_metadata = {
             "id": "incremental-export",
             "name": "Incremental Export Test",
             "version": "1.1.0",
             "previous_version": "1.0.0",
-            "changes": [
-                "Added DataValidator node",
-                "Updated workflow structure"
-            ]
+            "changes": ["Added DataValidator node", "Updated workflow structure"],
         }
-        
+
         incremental_path = temp_data_dir / "v1.1.0" / "workflow.json"
         incremental_path.parent.mkdir(exist_ok=True)
-        with open(incremental_path, 'w') as f:
+        with open(incremental_path, "w") as f:
             json.dump({"metadata": incremental_metadata}, f)
-        
+
         # Create version manifest
         version_manifest = {
             "versions": [
                 {"version": "1.0.0", "path": "v1.0.0/workflow.json"},
-                {"version": "1.1.0", "path": "v1.1.0/workflow.json", "base": "1.0.0"}
+                {"version": "1.1.0", "path": "v1.1.0/workflow.json", "base": "1.0.0"},
             ],
-            "current": "1.1.0"
+            "current": "1.1.0",
         }
-        
+
         version_file = temp_data_dir / "versions.json"
-        with open(version_file, 'w') as f:
+        with open(version_file, "w") as f:
             json.dump(version_manifest, f, indent=2)
-        
+
         # Verify version structure
         assert base_path.exists()
         assert incremental_path.exists()
         assert version_file.exists()
-        
+
         # Verify incremental changes
-        with open(incremental_path, 'r') as f:
+        with open(incremental_path, "r") as f:
             incremental_data = json.load(f)
-        
+
         assert incremental_data["metadata"]["version"] == "1.1.0"
         assert "changes" in incremental_data["metadata"]
         assert incremental_data["metadata"]["previous_version"] == "1.0.0"
-    
+
     def test_custom_serialization_concept(self, temp_data_dir: Path):
         """Test custom serialization concepts."""
         # Test basic custom serialization concepts
-        custom_data = {
-            "type": "custom",
-            "properties": {"value": 42, "name": "test"}
-        }
-        
+        custom_data = {"type": "custom", "properties": {"value": 42, "name": "test"}}
+
         # Test serialization to JSON
         export_path = temp_data_dir / "custom_export.json"
-        with open(export_path, 'w') as f:
+        with open(export_path, "w") as f:
             json.dump(custom_data, f)
-        
+
         # Verify serialization
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             loaded_data = json.load(f)
-        
+
         assert loaded_data["type"] == "custom"
         assert loaded_data["properties"]["value"] == 42
