@@ -29,7 +29,11 @@ else:
     MOCK_EVERYTHING = False
 
 # We'll import our modules after patching to prevent import errors
-from examples.migrations.project_hmi.adapted.shared import AgentState, DoctorInfo, SlotInfo
+from examples.migrations.project_hmi.adapted.shared import (
+    AgentState,
+    DoctorInfo,
+    SlotInfo,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

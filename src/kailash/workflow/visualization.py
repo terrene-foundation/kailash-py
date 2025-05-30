@@ -359,7 +359,7 @@ class WorkflowVisualizer:
                         new_lines[-1] = line.replace('"]', f' {emoji}"]')
 
         # Create markdown content
-        newline_joined = '\n'.join(new_lines)
+        newline_joined = "\n".join(new_lines)
         markdown_content = f"""# Workflow Execution Status
 
 **Run ID**: `{run_id}`  

@@ -10,7 +10,10 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from examples.migrations.project_hmi.adapted.workflow import HmiWorkflow, create_initial_state
+from examples.migrations.project_hmi.adapted.workflow import (
+    HmiWorkflow,
+    create_initial_state,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
