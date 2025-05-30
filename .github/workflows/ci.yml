@@ -1,9 +1,22 @@
-name: CI - Quick Tests
+# DEPRECATED: This workflow is replaced by unified-ci.yml
+# Keeping for reference during migration period
+# Will be removed after successful validation of unified workflow
 
+name: CI - Quick Tests (DEPRECATED)
+
+# Temporarily disabled - use unified-ci.yml instead
 on:
-  push:
-    branches: [ feat/*, feature/* ]
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual run (this workflow is deprecated)'
+        required: true
+        default: 'Testing deprecated workflow'
+
+# Cancel duplicate runs on the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   basic-test:

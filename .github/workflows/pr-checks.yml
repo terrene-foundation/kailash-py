@@ -1,9 +1,22 @@
-name: PR Checks
+# DEPRECATED: This workflow is replaced by unified-ci.yml
+# Keeping for reference during migration period
+# Will be removed after successful validation of unified workflow
 
+name: PR Checks (DEPRECATED)
+
+# Temporarily disabled - use unified-ci.yml instead
 on:
-  pull_request:
-    branches: [ main ]
-    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual run (this workflow is deprecated)'
+        required: true
+        default: 'Testing deprecated workflow'
+
+# Cancel duplicate runs on the same PR
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   lint-and-format:
