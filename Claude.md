@@ -200,12 +200,15 @@ kailash_python_sdk/           # Project root directory
 │   │   └── test_cli_integration.py
 │   └── test_ci_setup.py     # CI/CD setup tests
 ├── docs/                    # Documentation
-│   ├── api/                 # Sphinx API documentation (NEW!)
+│   ├── api/                 # Sphinx API documentation ✅ COMPLETE
 │   │   ├── conf.py          # Sphinx configuration
 │   │   ├── index.rst        # Main documentation entry point
 │   │   ├── getting_started.rst # Getting started guide
 │   │   ├── installation.rst # Installation instructions
 │   │   ├── quickstart.rst   # 5-minute quickstart
+│   │   ├── best_practices.rst # Best practices guide ✅ NEW
+│   │   ├── troubleshooting.rst # Troubleshooting guide ✅ NEW
+│   │   ├── performance.rst  # Performance optimization ✅ NEW
 │   │   ├── requirements.txt # Documentation dependencies
 │   │   ├── Makefile         # Build automation
 │   │   ├── _static/         # Custom CSS/JS files
@@ -358,6 +361,12 @@ Keep dependencies minimal and explicit:
    - Maintain compatibility with existing Kailash architecture
    - Document any breaking changes clearly
 
+6. **Node Class Names**:
+   - The base node class is `Node` (not `BaseNode`)
+   - Import with: `from kailash.nodes.base import Node`
+   - All custom nodes should inherit from `Node`
+   - Must implement abstract methods: `get_parameters()` and `run()`
+
 ## Must Follow: Code Generation Guidelines
 
 1. **PRD Requirements**
@@ -452,12 +461,12 @@ Keep dependencies minimal and explicit:
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
 
-7. **Sphinx Documentation**:
+7. **Sphinx Documentation**
    - Complete API documentation framework in `docs/api/`
    - Build with: `cd docs && python build_docs.py`
    - Auto-deployed via GitHub Actions to GitHub Pages
    - All public APIs must have comprehensive docstrings with examples
-
+   
 8. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
@@ -505,25 +514,25 @@ Keep dependencies minimal and explicit:
      - Unit tests with pytest
      - Security scanning with Trivy
 
-11. **Update README.md**
-   - Overview of the project
-   - Installation instructions
-   - Quick start guide
-   - Usage examples
-   - API reference
-   - Contribution guidelines
-   - Reference to the PRD and ADRs
+11. **Update README.md**:
+    - Overview of the project
+    - Installation instructions
+    - Quick start guide
+    - Usage examples
+    - API reference
+    - Contribution guidelines
+    - Reference to the PRD and ADRs
    
-12. **Update ADRs**
+12. **Update ADRs**:
     - Ensure all architectural decisions are documented in the ADRs.
     - Link relevant ADRs to the PRD and README.md.
     - Update ADRs as new decisions are made or existing ones are modified.
 
-13. **Update Claude.md**
+13. **Update Claude.md**:
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
    
-14. **Github Issues and Project Update**
+14. **Github Issues and Project Update**:
     - Use the Github Issues and Projects to track tasks and progress. 
     - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
     - Update the project board as tasks are completed.

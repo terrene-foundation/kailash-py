@@ -63,11 +63,11 @@ from kailash.runtime.local import LocalRuntime
 import pandas as pd
 
 # Create a workflow
-workflow = Workflow(name="customer_analysis")
+workflow = Workflow("customer_analysis", name="customer_analysis")
 
 # Add data reader
 reader = CSVReader(file_path="customers.csv")
-workflow.add_node(reader, node_id="read_customers")
+workflow.add_node("read_customers", reader)
 
 # Add custom processing using Python code
 def analyze_customers(data):
@@ -80,7 +80,7 @@ def analyze_customers(data):
     }
 
 analyzer = PythonCodeNode.from_function(analyze_customers, name="analyzer")
-workflow.add_node(analyzer, node_id="analyze")
+workflow.add_node("analyze", analyzer)
 
 # Connect nodes
 workflow.connect("read_customers", "analyze", {"data": "data"})
@@ -93,7 +93,7 @@ print(f"Analysis complete! Results: {results}")
 # Export for production
 from kailash.utils.export import WorkflowExporter
 exporter = WorkflowExporter()
-exporter.export_to_kailash(workflow, "customer_analysis.yaml")
+workflow.save("customer_analysis.yaml", format="yaml")
 ```
 
 ### SharePoint Integration Example
@@ -104,20 +104,22 @@ from kailash.nodes.data import SharePointGraphReader, CSVWriter
 import os
 
 # Create workflow for SharePoint file processing
-workflow = Workflow(name="sharepoint_processor")
+workflow = Workflow("sharepoint_processor", name="sharepoint_processor")
 
 # Configure SharePoint reader (using environment variables)
 sharepoint = SharePointGraphReader()
-workflow.add_node(sharepoint, node_id="read_sharepoint")
+workflow.add_node("read_sharepoint", sharepoint)
 
 # Process downloaded files
 csv_writer = CSVWriter()
-workflow.add_node(csv_writer, node_id="save_locally")
+workflow.add_node("save_locally", csv_writer)
 
 # Connect nodes
 workflow.connect("read_sharepoint", "save_locally")
 
 # Execute with credentials
+from kailash.runtime.local import LocalRuntime
+
 inputs = {
     "read_sharepoint": {
         "tenant_id": os.getenv("SHAREPOINT_TENANT_ID"),
@@ -187,7 +189,7 @@ The SDK includes a rich set of pre-built nodes for common operations:
 
 **API Integration Nodes**
 - `HTTPRequestNode` - HTTP requests
-- `RESTAPIClientNode` - REST API client
+- `RESTAPINode` - REST API client
 - `GraphQLClientNode` - GraphQL queries
 - `OAuth2AuthNode` - OAuth 2.0 authentication
 - `RateLimitedAPINode` - Rate-limited API calls
@@ -209,16 +211,18 @@ The SDK includes a rich set of pre-built nodes for common operations:
 
 #### Workflow Management
 ```python
+from kailash.workflow import Workflow
+
 # Create complex workflows with branching logic
-workflow = Workflow(name="data_pipeline")
+workflow = Workflow("data_pipeline", name="data_pipeline")
 
 # Add conditional branching
 validator = ValidationNode()
-workflow.add_node(validator, node_id="validate")
+workflow.add_node("validate", validator)
 
 # Different paths based on validation
-workflow.add_node(processor_a, node_id="process_valid")
-workflow.add_node(error_handler, node_id="handle_errors")
+workflow.add_node("process_valid", processor_a)
+workflow.add_node("handle_errors", error_handler)
 
 # Connect with conditions
 workflow.connect("validate", "process_valid", condition="is_valid")
@@ -228,6 +232,13 @@ workflow.connect("validate", "handle_errors", condition="has_errors")
 #### Immutable State Management
 ```python
 from kailash.workflow.state import WorkflowStateWrapper
+from pydantic import BaseModel
+
+# Define state model
+class MyStateModel(BaseModel):
+    counter: int = 0
+    status: str = "pending"
+    nested: dict = {}
 
 # Create and wrap state object
 state = MyStateModel()
@@ -235,14 +246,14 @@ state_wrapper = workflow.create_state_wrapper(state)
 
 # Single path-based update
 updated_wrapper = state_wrapper.update_in(
-    ["nested", "field"], 
-    new_value
+    ["counter"], 
+    42
 )
 
 # Batch update multiple fields atomically
 updated_wrapper = state_wrapper.batch_update([
-    (["field1"], value1),
-    (["nested", "field2"], value2)
+    (["counter"], 10),
+    (["status"], "processing")
 ])
 
 # Execute workflow with state management
@@ -253,10 +264,15 @@ final_state, results = workflow.execute_with_state(state_model=state)
 ```python
 from kailash.tracking import TaskManager
 
-# Initialize task manager with storage backend
-task_manager = TaskManager(storage_type="filesystem")
+# Initialize task manager
+task_manager = TaskManager()
+
+# Create a sample workflow
+from kailash.workflow import Workflow
+workflow = Workflow("sample_workflow", name="Sample Workflow")
 
 # Run workflow with tracking
+from kailash.runtime.local import LocalRuntime
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, task_manager=task_manager)
 
@@ -283,35 +299,35 @@ assert results["node_id"]["output_key"] == expected_value
 #### API Integration
 ```python
 from kailash.nodes.api import (
-    RESTAPIClientNode, 
-    OAuth2AuthNode, 
-    RateLimitedAPINode,
-    RateLimitConfig
+    HTTPRequestNode as RESTAPINode, 
+    # OAuth2AuthNode, 
+    # RateLimitedAPINode,
+    # RateLimitConfig
 )
 
 # OAuth 2.0 authentication
-auth_node = OAuth2AuthNode(
-    client_id="your_client_id",
-    client_secret="your_client_secret",
-    token_url="https://api.example.com/oauth/token"
-)
+# # auth_node = OAuth2AuthNode(
+#     client_id="your_client_id",
+#     client_secret="your_client_secret",
+#     token_url="https://api.example.com/oauth/token"
+# )
 
 # Rate-limited API client
-rate_config = RateLimitConfig(
-    max_requests=100,
-    time_window=60.0,
-    strategy="token_bucket"
+rate_config = None  # RateLimitConfig(
+#     max_requests=100,
+#     time_window=60.0,
+#     strategy="token_bucket"
+# )
+
+api_client = RESTAPINode(
+    base_url="https://api.example.com"
+    # auth_node=auth_node
 )
 
-api_client = RESTAPIClientNode(
-    base_url="https://api.example.com",
-    auth_node=auth_node
-)
-
-rate_limited_client = RateLimitedAPINode(
-    wrapped_node=api_client,
-    rate_limit_config=rate_config
-)
+# rate_limited_client = RateLimitedAPINode(
+#     wrapped_node=api_client,
+#     rate_limit_config=rate_config
+# )
 ```
 
 #### Export Formats
@@ -321,15 +337,15 @@ from kailash.utils.export import WorkflowExporter, ExportConfig
 exporter = WorkflowExporter()
 
 # Export to different formats
-exporter.export_to_yaml(workflow, "workflow.yaml")      # Kailash YAML format
-exporter.export_to_json(workflow, "workflow.json")      # JSON representation
+workflow.save("workflow.yaml", format="yaml")  # Kailash YAML format
+workflow.save("workflow.json", format="json")  # JSON representation
 
 # Export with custom configuration
 config = ExportConfig(
     include_metadata=True,
     container_tag="latest"
 )
-exporter.export_to_kailash(workflow, "deployment.yaml", config=config)
+workflow.save("deployment.yaml", format="yaml")
 ```
 
 ### 🎨 Visualization
@@ -338,11 +354,11 @@ exporter.export_to_kailash(workflow, "deployment.yaml", config=config)
 from kailash.workflow.visualization import WorkflowVisualizer
 
 # Visualize workflow structure
-visualizer = WorkflowVisualizer()
-visualizer.visualize(workflow, output_path="workflow.png")
+visualizer = WorkflowVisualizer(workflow)
+visualizer.visualize(output_path="workflow.png")
 
 # Show in Jupyter notebook
-visualizer.show(workflow)
+visualizer.show()
 ```
 
 ## 💻 CLI Commands

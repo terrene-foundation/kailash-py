@@ -13,6 +13,7 @@ This repository uses a strategic workflow configuration to optimize CI/CD perfor
   - Manual dispatch
 - **Jobs**: Basic tests and linting
 - **Duration**: ~3-5 minutes
+- **Note**: Does NOT run on pull requests (to avoid duplication with pr-checks.yml)
 
 ### 2. `pr-checks.yml` - Pull Request Validation
 - **Purpose**: Comprehensive validation for PRs
@@ -45,7 +46,7 @@ This repository uses a strategic workflow configuration to optimize CI/CD perfor
 - **Jobs**: Simple validation tests
 - **Duration**: ~1 minute
 
-## Workflow Strategy
+## Workflow Strategy & Optimization
 
 ### Development Flow
 
@@ -54,8 +55,9 @@ This repository uses a strategic workflow configuration to optimize CI/CD perfor
    - No duplicate runs on feature branches
 
 2. **Pull Request** (to `main`):
-   - `pr-checks.yml` runs comprehensive validation
+   - Only `pr-checks.yml` runs comprehensive validation
    - No duplicate runs from feature branch pushes
+   - `ci.yml` does NOT run to avoid redundancy
 
 3. **Main Branch** (after merge):
    - `full-test.yml` runs complete test suite
@@ -72,6 +74,38 @@ This repository uses a strategic workflow configuration to optimize CI/CD perfor
 3. **Comprehensive PR Validation**: All checks before merge
 4. **Main Branch Protection**: Full suite only on main
 5. **Resource Optimization**: Appropriate test depth for each stage
+
+## Optimization History
+
+### Problem Solved
+Previously, when creating a PR from a feature branch to main, CI runs were duplicated:
+1. `ci.yml` was triggered by the pull_request event
+2. `pr-checks.yml` was also triggered by the pull_request event
+3. If pushing to the feature branch, `ci.yml` had already run on those commits
+
+### Solution Implemented
+Removed the `pull_request` trigger from `ci.yml` to eliminate redundancy:
+
+```yaml
+# Before:
+on:
+  push:
+    branches: [ feat/*, feature/* ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# After:
+on:
+  push:
+    branches: [ feat/*, feature/* ]
+  workflow_dispatch:
+```
+
+This ensures:
+- **No Duplicate Runs**: Each workflow now has distinct, non-overlapping triggers
+- **Clear Separation of Concerns**: Each workflow has a single, clear purpose
+- **Resource Optimization**: Saves CI minutes by avoiding redundant runs
 
 ## Manual Workflow Execution
 
@@ -132,3 +166,8 @@ If you see duplicate runs:
 ### Rate Limiting
 - Codecov uploads may be rate-limited without token
 - Configure `CODECOV_TOKEN` in repository secrets
+
+## Migration Notes
+- Existing PRs will only trigger `pr-checks.yml` after the optimization
+- Feature branch pushes continue to trigger `ci.yml` as before
+- No changes needed to developer workflow
