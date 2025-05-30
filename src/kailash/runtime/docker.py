@@ -24,7 +24,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from kailash.nodes.base import Node
-from kailash.runtime.runner import BaseRuntime
+
+# BaseRuntime doesn't exist - we'll implement task tracking methods directly
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
@@ -353,7 +354,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
         network: str = None,
         env_vars: Dict[str, str] = None,
         resource_limits: Dict[str, str] = None,
-    ) -> str:
+    ) -> bool:
         """
         Run the node in a Docker container.
 
@@ -363,7 +364,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
             resource_limits: Resource limits (memory, CPU) for the container.
 
         Returns:
-            The container ID.
+            True if container ran successfully.
         """
         logger.info(f"Running node {self.node_id} in Docker container")
 
@@ -452,7 +453,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
             shutil.rmtree(self.work_dir)
 
 
-class DockerRuntime(BaseRuntime):
+class DockerRuntime:
     """
     Docker-based runtime for executing workflows.
 
@@ -480,7 +481,7 @@ class DockerRuntime(BaseRuntime):
             resource_limits: Default resource limits for containers.
             task_manager: Task manager for tracking workflow execution.
         """
-        super().__init__(task_manager=task_manager)
+        self.task_manager = task_manager
 
         self.base_image = base_image
         self.network_name = network_name
@@ -515,6 +516,37 @@ class DockerRuntime(BaseRuntime):
 
         # Track node wrappers
         self.node_wrappers = {}
+
+    def _create_task_run(self, workflow: Workflow) -> Optional[str]:
+        """Create a task run if task manager is available."""
+        if self.task_manager:
+            return self.task_manager.create_run(workflow.name)
+        return None
+
+    def _update_task_status(
+        self, run_id: Optional[str], node_id: str, status: str, output: Any = None
+    ):
+        """Update task status if task manager is available."""
+        if self.task_manager and run_id:
+            # For now, just update run status - task tracking needs more setup
+            if status == "failed":
+                error_msg = (
+                    output.get("error", "Unknown error") if output else "Unknown error"
+                )
+                self.task_manager.update_run_status(run_id, "failed", error_msg)
+
+    def _complete_task_run(
+        self, run_id: Optional[str], status: str, result: Any = None
+    ):
+        """Complete task run if task manager is available."""
+        if self.task_manager and run_id:
+            if status == "completed":
+                self.task_manager.update_run_status(run_id, "completed")
+            else:
+                error_msg = (
+                    result.get("error", "Unknown error") if result else "Unknown error"
+                )
+                self.task_manager.update_run_status(run_id, "failed", error_msg)
 
     def _create_network(self):
         """Create a Docker network for container communication."""

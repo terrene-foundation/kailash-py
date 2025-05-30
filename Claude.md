@@ -417,12 +417,51 @@ Keep dependencies minimal and explicit:
 7. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
-8. **Github Actions**:
+8. **Code Quality and Linting**:
+   - **Black**: Use Black for automatic code formatting with line length of 88 characters
+     ```bash
+     black src/ tests/  # Format code
+     black --check src/ tests/  # Check formatting without modifying
+     ```
+   
+   - **isort**: Use isort for organizing imports
+     ```bash
+     isort src/ tests/  # Sort imports
+     isort --check src/ tests/  # Check import sorting without modifying
+     ```
+   
+   - **Ruff**: Use Ruff for linting to catch common errors
+     ```bash
+     ruff check src/ tests/  # Run all linting checks
+     ruff check src/ tests/ --select=E9,F63,F7,F82  # Check critical errors only (syntax, undefined names)
+     ```
+     - Critical error codes:
+       - E9: Syntax errors
+       - F63: Invalid use of comparison operators
+       - F7: Syntax errors in type comments
+       - F82: Undefined names
+   
+   - **Before committing**: Always run formatting and linting
+     ```bash
+     # Format code
+     black src/ tests/
+     isort src/ tests/
+     
+     # Check for critical errors
+     ruff check src/ tests/ --select=E9,F63,F7,F82
+     ```
+
+9. **Github Actions**:
    - Use Github Actions for continuous integration.
    - Test locally before pushing changes.
-   - Ensure code is linted and formatted using Black and isort before merging.
+   - Ensure code is linted and formatted using Black, isort, and Ruff before merging.
+   - CI/CD pipeline checks:
+     - Code formatting with Black and isort
+     - Critical linting errors with Ruff
+     - Unit tests with pytest
+     - Security scanning with Trivy
 
-9. **Update README.md**
+10. **Update README.md**
    - Overview of the project
    - Installation instructions
    - Quick start guide
@@ -431,16 +470,22 @@ Keep dependencies minimal and explicit:
    - Contribution guidelines
    - Reference to the PRD and ADRs
    
-10. **Update ADRs**
+11. **Update ADRs**
     - Ensure all architectural decisions are documented in the ADRs.
     - Link relevant ADRs to the PRD and README.md.
     - Update ADRs as new decisions are made or existing ones are modified.
 
-11. **Update Claude.md**
+12. **Update Claude.md**
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
    
-12. **Github Issues and Project Update**
+13. **Github Issues and Project Update**
     - Use the Github Issues and Projects to track tasks and progress. 
     - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
     - Update the project board as tasks are completed.
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
