@@ -2,21 +2,23 @@
 Shared data models for the HMI project.
 This module contains the Pydantic models used throughout the HMI workflow.
 """
-from typing import List, Dict, Any, Optional
-from typing_extensions import Literal
+
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
+from typing_extensions import Literal
 
 # Literal types
 NRIC_Type = Literal["NRIC", "PASSPORT", "FIN"]
 AppointmentScheduleType = Literal["BOOK", "RESCH", "CANCEL"]
 InsuranceStatusType = Literal[
-    "Covered",         # MHC: Specialist on panel, fully covered
-    "Pay_Claim",       # MHC: Off-panel, or general coverage for claim
-    "Payment_Req",     # MHC: Co-payment or not covered
-    "Covered_ext",     # External TPA: Covered
-    "Not_covered_ext", # External TPA: Not covered
+    "Covered",  # MHC: Specialist on panel, fully covered
+    "Pay_Claim",  # MHC: Off-panel, or general coverage for claim
+    "Payment_Req",  # MHC: Co-payment or not covered
+    "Covered_ext",  # External TPA: Covered
+    "Not_covered_ext",  # External TPA: Not covered
     "Pending_Verification",
-    "Unknown"
+    "Unknown",
 ]
 
 CaseStatusType = Literal[
@@ -36,7 +38,7 @@ CaseStatusType = Literal[
     "Closed_Patient_Decline",
     "Closed_Booking_Completed",
     "Escalated_To_Human",
-    "Error_State"
+    "Error_State",
 ]
 
 W2AIntentCategory = Literal[
@@ -46,11 +48,13 @@ W2AIntentCategory = Literal[
     "GRH",  # Government Restructured Hospital
     "CHAS",
     "polyclinic",
-    "unknown"
+    "unknown",
 ]
+
 
 class PatientDetails(BaseModel):
     """Patient information for the HMI system."""
+
     patient_nric: Optional[str] = Field(default=None)
     nric_type: Optional[NRIC_Type] = Field(default=None)
     patient_dob: Optional[str] = Field(default=None)  # YYYY-MM-DD
@@ -70,16 +74,20 @@ class PatientDetails(BaseModel):
     privacy_policy: Optional[bool] = Field(default=None)
     raw_mhc_member_details: Optional[Dict[str, Any]] = Field(default=None)
 
+
 class ReferralContext(BaseModel):
     """Information about a patient referral."""
+
     referral_specialties: List[str] = Field(default_factory=list)
     num_specialties_referred: Optional[int] = Field(default=None)
     referral_gp_clinic: Optional[str] = Field(default=None)
     referral_visit_date: Optional[str] = Field(default=None)  # YYYY-MM-DD
     referral_source_system_id: Optional[str] = Field(default=None)
 
+
 class DoctorInfo(BaseModel):
     """Information about a doctor in the HMI system."""
+
     doctor_given_id: Optional[str] = Field(default=None)
     system_id: Optional[str] = Field(default=None)
     doctor_name: Optional[str] = Field(default=None)
@@ -92,22 +100,26 @@ class DoctorInfo(BaseModel):
     photo_url: Optional[str] = Field(default=None)
     raw_profile_data: Optional[Dict[str, Any]] = Field(default=None)
 
+
 class SlotInfo(BaseModel):
     """Information about an appointment slot."""
+
     appointment_start_time: Optional[str] = Field(default=None)  # ISO 8601
-    appointment_end_time: Optional[str] = Field(default=None)    # ISO 8601
-    appointment_date_str: Optional[str] = Field(default=None)    # DD MMM YYYY
-    appointment_time_str: Optional[str] = Field(default=None)    # H:MM AM/PM
+    appointment_end_time: Optional[str] = Field(default=None)  # ISO 8601
+    appointment_date_str: Optional[str] = Field(default=None)  # DD MMM YYYY
+    appointment_time_str: Optional[str] = Field(default=None)  # H:MM AM/PM
     location: Optional[str] = Field(default=None)
     system_id: Optional[str] = Field(default=None)
     doctor_given_id: Optional[str] = Field(default=None)
     raw_slot_data: Optional[Dict[str, Any]] = Field(default=None)
 
+
 class BookingContext(BaseModel):
     """Information about an appointment booking."""
+
     chosen_specialist_details: Optional[DoctorInfo] = Field(default=None)
     chosen_slot_details: Optional[SlotInfo] = Field(default=None)
-    
+
     # HMI One specific fields
     hmi_one_appointment_type: str = Field(default="inperson")
     hmi_one_uploaded_files: Optional[str] = Field(default=None)
@@ -131,22 +143,28 @@ class BookingContext(BaseModel):
     patient_confirmed_choice: bool = Field(default=False)
     last_booking_response_raw: Optional[Dict[str, Any]] = Field(default=None)
 
+
 class InterpreterOutput(BaseModel):
     """Output from the message interpreter."""
+
     workflow_id: Optional[str] = Field(default=None)
     parameters: Dict[str, Any] = Field(default_factory=dict)
     confidence: Optional[float] = Field(default=None)
     raw_llm_response: Optional[str] = Field(default=None)
 
+
 class W1Context(BaseModel):
     """Context for Workflow 1 (Present Initial Recommendation)."""
+
     ranked_doctors_list: List[DoctorInfo] = Field(default_factory=list)
     current_doctor_under_consideration: Optional[DoctorInfo] = Field(default=None)
     earliest_slot_found: Optional[SlotInfo] = Field(default=None)
     no_hmi_slot_flag: bool = Field(default=False)
 
+
 class W2aContext(BaseModel):
     """Context for Workflow 2a (Patient Preference Analysis)."""
+
     intent_category: Optional[W2AIntentCategory] = Field(default=None)
     provider_name_preference: Optional[str] = Field(default=None)
     location_preference: Optional[str] = Field(default=None)
@@ -156,30 +174,40 @@ class W2aContext(BaseModel):
     persuasion_template_id_suggestion: Optional[str] = Field(default=None)
     persuasion_variables_suggestion: Optional[Dict[str, Any]] = Field(default=None)
 
+
 class W3Context(BaseModel):
     """Context for Workflow 3 (Handle Patient Date/Time Preference)."""
+
     parsed_date_constraints: Optional[Dict[str, Any]] = Field(default=None)
     filtered_chosen_slot: Optional[SlotInfo] = Field(default=None)
     no_match_found_flag: bool = Field(default=False)
     no_match_reason: Optional[str] = Field(default=None)
 
+
 class Coordinates(BaseModel):
     """Geographic coordinates."""
+
     lat: float
     lng: float
 
+
 class LocationContext(BaseModel):
     """Context for location-based operations."""
+
     geocoding_available: bool = Field(default=True)
     patient_coordinates: Optional[Coordinates] = Field(default=None)
     preferred_provider_coordinates: Optional[Coordinates] = Field(default=None)
     recommended_doctor_coordinates: Optional[Coordinates] = Field(default=None)
     distance_to_preferred: Optional[float] = Field(default=None)
     distance_to_recommended: Optional[float] = Field(default=None)
-    location_comparison_method: Optional[Literal["geocoding", "llm_knowledge"]] = Field(default=None)
+    location_comparison_method: Optional[Literal["geocoding", "llm_knowledge"]] = Field(
+        default=None
+    )
+
 
 class AgentState(BaseModel):
     """Overall state for the HMI agent."""
+
     # Core Identifiers & History
     request_id: Optional[str] = Field(default=None)
 
@@ -219,10 +247,10 @@ class AgentState(BaseModel):
         """
         Create a copy of the current state with specified updates.
         This is a convenience wrapper around model_copy(update=updates).
-        
+
         Args:
             **updates: Dictionary of field updates to apply
-            
+
         Returns:
             AgentState: A new AgentState instance with the updates applied
         """

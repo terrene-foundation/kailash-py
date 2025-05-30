@@ -1,29 +1,28 @@
 # -*- coding: utf-8 -*-
+from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
-from pathlib import Path
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
-from kailash.nodes.data import CSVReader, CSVWriter
 from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import CSVReader
 
-
-sample_directory = Path('tests/sample_data')
+sample_directory = Path("tests/sample_data")
 
 # CSV Node (pre-created)
 csv_reader_node = CSVReader(
     metadata=NodeMetadata(
-        id='csv_node_1',
-        name='customer_value_csv_read_node',
-        description='Read customer value data from csv',
-        version='1.0',
-        author='Esperie',
-        tags={'csv', 'data'},
+        id="csv_node_1",
+        name="customer_value_csv_read_node",
+        description="Read customer value data from csv",
+        version="1.0",
+        author="Esperie",
+        tags={"csv", "data"},
     ),
-    file_path=sample_directory / 'customer_value.csv',
+    file_path=sample_directory / "customer_value.csv",
     headers=True,
-    delimiter=','
+    delimiter=",",
 )
 
 result_from_reusable_csv_node = csv_reader_node.execute()
@@ -39,22 +38,22 @@ class CustomCSVNode(Node):
                 name="file_path",
                 type=str,
                 required=True,
-                description="Path to the CSV file"
+                description="Path to the CSV file",
             ),
             "headers": NodeParameter(
                 name="headers",
                 type=bool,
                 required=True,
                 default=True,
-                description="Whether the CSV file has headers"
+                description="Whether the CSV file has headers",
             ),
             "delimiter": NodeParameter(
                 name="delimiter",
                 type=str,
                 required=True,
                 default=",",
-                description="Delimiter used in the CSV file"
-            )
+                description="Delimiter used in the CSV file",
+            ),
         }
 
     # Output parameters (for automatic validation)
@@ -64,75 +63,74 @@ class CustomCSVNode(Node):
                 name="data",
                 type=list,
                 required=True,
-                description="Dictionary containing the CSV data"
+                description="Dictionary containing the CSV data",
             )
         }
 
     # Code to run when the node is executed
-    def run(self, file_path: str, headers: bool = True, delimiter: str = ',') -> Dict[str, Any]:
+    def run(
+        self, file_path: str, headers: bool = True, delimiter: str = ","
+    ) -> Dict[str, Any]:
 
         # Read the CSV file
-        data = pd.read_csv(file_path, header=0 if headers else None, delimiter=delimiter)
+        data = pd.read_csv(
+            file_path, header=0 if headers else None, delimiter=delimiter
+        )
 
         return {"data": data.to_dict(orient="records")}
 
 
 csv_reader_node = CustomCSVNode(
     metadata=NodeMetadata(
-        id='csv_node_1',
-        name='customer_value_csv_read_node',
-        description='Read customer value data from csv',
-        version='1.0',
-        author='Esperie',
-        tags={'csv', 'data'},
+        id="csv_node_1",
+        name="customer_value_csv_read_node",
+        description="Read customer value data from csv",
+        version="1.0",
+        author="Esperie",
+        tags={"csv", "data"},
     ),
-    file_path=sample_directory / 'customer_value.csv',
+    file_path=sample_directory / "customer_value.csv",
     headers=True,
-    delimiter=','
+    delimiter=",",
 )
 
 result_from_custom_csv_node = csv_reader_node.execute()
 
 # Python Node
 input_schema = {
-    'data': NodeParameter(
-        name='data',
+    "data": NodeParameter(
+        name="data",
         type=list,  # Not pd.DataFrame
         required=True,
-        description='List of data records'
+        description="List of data records",
     ),
-    'column_name': NodeParameter(
-        name='column_name',
+    "column_name": NodeParameter(
+        name="column_name",
         type=str,
         required=True,
-        description='Column name to filter on'
+        description="Column name to filter on",
     ),
-    'threshold': NodeParameter(
-        name='threshold',
+    "threshold": NodeParameter(
+        name="threshold",
         type=float,  # Not str - needs to be numeric for comparison
         required=True,
-        description='Threshold value for filtering'
-    )
+        description="Threshold value for filtering",
+    ),
 }
 
 output_schema = {
-    'filtered_data': NodeParameter(
-        name='filtered_data',
+    "filtered_data": NodeParameter(
+        name="filtered_data",
         type=list,
         required=True,
-        description='Filtered data records'
+        description="Filtered data records",
     )
 }
 
-def custom_filter(
-        data: list, column_name: str, threshold: float
-) -> dict[str, Any]:
+
+def custom_filter(data: list, column_name: str, threshold: float) -> dict[str, Any]:
     df = pd.DataFrame(data)
-    return {
-        'filtered_data': df[df[column_name] > threshold].to_dict(
-            orient='records'
-        )
-    }
+    return {"filtered_data": df[df[column_name] > threshold].to_dict(orient="records")}
 
 
 node = PythonCodeNode.from_function(
@@ -144,17 +142,19 @@ node = PythonCodeNode.from_function(
 )
 
 node.execute(
-    data=result_from_custom_csv_node['data'],
-    column_name='Total Claim Amount',
-    threshold=1000.0
+    data=result_from_custom_csv_node["data"],
+    column_name="Total Claim Amount",
+    threshold=1000.0,
 )  # Automatic type conversion if possible
 
 node.execute_code(
     inputs={
-        'data': result_from_custom_csv_node['data'],
-        'column_name': 'Total Claim Amount',
-        'threshold': 1000.0}
+        "data": result_from_custom_csv_node["data"],
+        "column_name": "Total Claim Amount",
+        "threshold": 1000.0,
+    }
 )
+
 
 # We can also create a CustomNode with the python function under in run
 class FilterNode(Node):
@@ -166,20 +166,20 @@ class FilterNode(Node):
                 name="data",
                 type=list,
                 required=True,
-                description="List of data records"
+                description="List of data records",
             ),
             "column_name": NodeParameter(
                 name="column_name",
                 type=str,
                 required=True,
-                description="Column name to filter on"
+                description="Column name to filter on",
             ),
             "threshold": NodeParameter(
                 name="threshold",
                 type=float,
                 required=True,
-                description="Threshold value for filtering"
-            )
+                description="Threshold value for filtering",
+            ),
         }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
@@ -188,7 +188,7 @@ class FilterNode(Node):
                 name="filtered_data",
                 type=list,
                 required=True,
-                description="Filtered data records"
+                description="Filtered data records",
             )
         }
 
@@ -197,22 +197,21 @@ class FilterNode(Node):
         df = pd.DataFrame(data)
         filtered_df = df[df[column_name] > threshold]
 
-        return {
-            'filtered_data': filtered_df.to_dict(orient='records')
-        }
+        return {"filtered_data": filtered_df.to_dict(orient="records")}
+
 
 filter_node = FilterNode(
     metadata=NodeMetadata(
-        id='filter_node_1',
-        name='filter_total_claims_node',
-        description='Filter total claims above a threshold',
-        version='1.0',
-        author='Esperie',
-        tags={'csv', 'data'},
+        id="filter_node_1",
+        name="filter_total_claims_node",
+        description="Filter total claims above a threshold",
+        version="1.0",
+        author="Esperie",
+        tags={"csv", "data"},
     ),
-    data=result_from_custom_csv_node['data'],
-    column_name='Total Claim Amount',
-    threshold=1000.0
+    data=result_from_custom_csv_node["data"],
+    column_name="Total Claim Amount",
+    threshold=1000.0,
 )
 
 filter_node.execute()

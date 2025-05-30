@@ -23,7 +23,7 @@ Downstream consumers:
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -148,9 +148,11 @@ class SharePointGraphReader(Node):
             ),
         }
 
-    def _authenticate(self, tenant_id: str, client_id: str, client_secret: str) -> Dict[str, Any]:
+    def _authenticate(
+        self, tenant_id: str, client_id: str, client_secret: str
+    ) -> Dict[str, Any]:
         """Authenticate with Microsoft Graph API using MSAL.
-        
+
         Returns dict with token and headers for stateless operation.
         """
         try:
@@ -171,7 +173,7 @@ class SharePointGraphReader(Node):
         )
 
         if "access_token" not in result:
-            error_msg = result.get('error_description', 'Unknown authentication error')
+            error_msg = result.get("error_description", "Unknown authentication error")
             raise NodeExecutionError(f"Authentication failed: {error_msg}")
 
         return {
@@ -180,13 +182,15 @@ class SharePointGraphReader(Node):
                 "Authorization": f"Bearer {result['access_token']}",
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-            }
+            },
         }
 
     def _get_site_data(self, site_url: str, headers: Dict[str, str]) -> Dict[str, Any]:
         """Get SharePoint site data from Graph API."""
         # Convert SharePoint URL to Graph API site ID format
-        site_id = site_url.replace("https://", "").replace(".sharepoint.com", ".sharepoint.com:")
+        site_id = site_url.replace("https://", "").replace(
+            ".sharepoint.com", ".sharepoint.com:"
+        )
         site_endpoint = f"https://graph.microsoft.com/v1.0/sites/{site_id}"
 
         response = requests.get(site_endpoint, headers=headers)
@@ -197,7 +201,9 @@ class SharePointGraphReader(Node):
                 f"Failed to get site data: {response.status_code} - {response.text}"
             )
 
-    def _list_libraries(self, site_id: str, headers: Dict[str, str]) -> List[Dict[str, Any]]:
+    def _list_libraries(
+        self, site_id: str, headers: Dict[str, str]
+    ) -> List[Dict[str, Any]]:
         """List all document libraries in the site."""
         drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
         response = requests.get(drives_url, headers=headers)
@@ -209,7 +215,9 @@ class SharePointGraphReader(Node):
                 f"Failed to get libraries: {response.status_code} - {response.text}"
             )
 
-    def _get_drive_id(self, site_id: str, library_name: str, headers: Dict[str, str]) -> Optional[str]:
+    def _get_drive_id(
+        self, site_id: str, library_name: str, headers: Dict[str, str]
+    ) -> Optional[str]:
         """Get the drive ID for a specific library."""
         libraries = self._list_libraries(site_id, headers)
         for lib in libraries:
@@ -230,31 +238,37 @@ class SharePointGraphReader(Node):
             folder_path = folder_path.strip("/")
             files_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{folder_path}:/children"
         else:
-            files_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root/children"
+            files_url = (
+                f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root/children"
+            )
 
         response = requests.get(files_url, headers=headers)
 
         if response.status_code == 200:
             items = response.json()["value"]
-            
+
             files = []
             folders = []
-            
+
             for item in items:
                 if "file" in item:
-                    files.append({
-                        "name": item["name"],
-                        "id": item["id"],
-                        "size": item["size"],
-                        "modified": item["lastModifiedDateTime"],
-                        "download_url": item.get("@microsoft.graph.downloadUrl"),
-                    })
+                    files.append(
+                        {
+                            "name": item["name"],
+                            "id": item["id"],
+                            "size": item["size"],
+                            "modified": item["lastModifiedDateTime"],
+                            "download_url": item.get("@microsoft.graph.downloadUrl"),
+                        }
+                    )
                 elif "folder" in item:
-                    folders.append({
-                        "name": item["name"],
-                        "id": item["id"],
-                        "child_count": item.get("folder", {}).get("childCount", 0),
-                    })
+                    folders.append(
+                        {
+                            "name": item["name"],
+                            "id": item["id"],
+                            "child_count": item.get("folder", {}).get("childCount", 0),
+                        }
+                    )
 
             return {
                 "library_name": library_name,
@@ -270,8 +284,13 @@ class SharePointGraphReader(Node):
             )
 
     def _download_file(
-        self, site_id: str, library_name: str, file_name: str, 
-        folder_path: str, local_path: str, headers: Dict[str, str]
+        self,
+        site_id: str,
+        library_name: str,
+        file_name: str,
+        folder_path: str,
+        local_path: str,
+        headers: Dict[str, str],
     ) -> Dict[str, Any]:
         """Download a file from SharePoint."""
         drive_id = self._get_drive_id(site_id, library_name, headers)
@@ -286,7 +305,9 @@ class SharePointGraphReader(Node):
             file_path = file_name
 
         # Get file metadata
-        file_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{file_path}"
+        file_url = (
+            f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{file_path}"
+        )
         response = requests.get(file_url, headers=headers)
 
         if response.status_code != 200:
@@ -336,17 +357,21 @@ class SharePointGraphReader(Node):
 
         if response.status_code == 200:
             items = response.json()["value"]
-            
+
             files = []
             for item in items:
                 if "file" in item:
-                    files.append({
-                        "name": item["name"],
-                        "id": item["id"],
-                        "size": item["size"],
-                        "modified": item["lastModifiedDateTime"],
-                        "parent_path": item.get("parentReference", {}).get("path", ""),
-                    })
+                    files.append(
+                        {
+                            "name": item["name"],
+                            "id": item["id"],
+                            "size": item["size"],
+                            "modified": item["lastModifiedDateTime"],
+                            "parent_path": item.get("parentReference", {}).get(
+                                "path", ""
+                            ),
+                        }
+                    )
 
             return {
                 "query": query,
@@ -361,7 +386,7 @@ class SharePointGraphReader(Node):
 
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute SharePoint Graph operation.
-        
+
         This method is stateless and returns JSON-serializable results
         suitable for database persistence and orchestration.
         """
@@ -370,7 +395,7 @@ class SharePointGraphReader(Node):
         client_id = kwargs.get("client_id")
         client_secret = kwargs.get("client_secret")
         site_url = kwargs.get("site_url")
-        
+
         if not all([tenant_id, client_id, client_secret, site_url]):
             raise NodeValidationError(
                 "tenant_id, client_id, client_secret, and site_url are required"
@@ -378,7 +403,12 @@ class SharePointGraphReader(Node):
 
         # Get operation
         operation = kwargs.get("operation", "list_files")
-        valid_operations = ["list_files", "download_file", "search_files", "list_libraries"]
+        valid_operations = [
+            "list_files",
+            "download_file",
+            "search_files",
+            "list_libraries",
+        ]
         if operation not in valid_operations:
             raise NodeValidationError(
                 f"Invalid operation '{operation}'. Must be one of: {', '.join(valid_operations)}"
@@ -409,24 +439,28 @@ class SharePointGraphReader(Node):
 
         elif operation == "download_file":
             if not kwargs.get("file_name"):
-                raise NodeValidationError("file_name is required for download_file operation")
-                
+                raise NodeValidationError(
+                    "file_name is required for download_file operation"
+                )
+
             library_name = kwargs.get("library_name", "Documents")
             file_name = kwargs["file_name"]
             folder_path = kwargs.get("folder_path", "")
             local_path = kwargs.get("local_path")
-            
+
             return self._download_file(
                 site_id, library_name, file_name, folder_path, local_path, headers
             )
 
         elif operation == "search_files":
             if not kwargs.get("search_query"):
-                raise NodeValidationError("search_query is required for search_files operation")
-                
+                raise NodeValidationError(
+                    "search_query is required for search_files operation"
+                )
+
             library_name = kwargs.get("library_name", "Documents")
             query = kwargs["search_query"]
-            
+
             return self._search_files(site_id, library_name, query, headers)
 
 
@@ -525,7 +559,7 @@ class SharePointGraphWriter(Node):
         client_secret = kwargs.get("client_secret")
         site_url = kwargs.get("site_url")
         local_path = kwargs.get("local_path")
-        
+
         if not all([tenant_id, client_id, client_secret, site_url, local_path]):
             raise NodeValidationError(
                 "tenant_id, client_id, client_secret, site_url, and local_path are required"
@@ -587,3 +621,4 @@ class SharePointGraphWriter(Node):
             raise NodeExecutionError(
                 f"Failed to upload file: {response.status_code} - {response.text}"
             )
+

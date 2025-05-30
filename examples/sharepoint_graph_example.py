@@ -18,10 +18,18 @@ def test_sharepoint_graph_operations():
 
     # Your credentials (replace these with your actual values)
     # These are example credentials for the IG Dev Dummy site
-    tenant_id = os.getenv("SHAREPOINT_TENANT_ID", "af88121d-9ac7-4ed0-b7e3-91c931e9c18f")
-    client_id = os.getenv("SHAREPOINT_CLIENT_ID", "a2552663-6550-4bd7-b97b-a39f6da2150c")
-    client_secret = os.getenv("SHAREPOINT_CLIENT_SECRET", "xf58Q~2r.24hQZZ3bMXOnX1nSOIerURgAPumYaqi")
-    site_url = os.getenv("SHAREPOINT_SITE_URL", "https://terrene-foundationglobal.sharepoint.com/sites/IGDevDummy")
+    tenant_id = os.getenv(
+        "SHAREPOINT_TENANT_ID", "af88121d-9ac7-4ed0-b7e3-91c931e9c18f"
+    )
+    client_id = os.getenv(
+        "SHAREPOINT_CLIENT_ID", "a2552663-6550-4bd7-b97b-a39f6da2150c"
+    )
+    client_secret = os.getenv(
+        "SHAREPOINT_CLIENT_SECRET", "xf58Q~2r.24hQZZ3bMXOnX1nSOIerURgAPumYaqi"
+    )
+    site_url = os.getenv(
+        "SHAREPOINT_SITE_URL", "https://terrene-foundationglobal.sharepoint.com/sites/IGDevDummy"
+    )
 
     # Create reader node
     reader = SharePointGraphReader()
@@ -134,10 +142,19 @@ def test_sharepoint_workflow():
 
     # Credentials (using environment variables with defaults)
     credentials = {
-        "tenant_id": os.getenv("SHAREPOINT_TENANT_ID", "af88121d-9ac7-4ed0-b7e3-91c931e9c18f"),
-        "client_id": os.getenv("SHAREPOINT_CLIENT_ID", "a2552663-6550-4bd7-b97b-a39f6da2150c"),
-        "client_secret": os.getenv("SHAREPOINT_CLIENT_SECRET", "xf58Q~2r.24hQZZ3bMXOnX1nSOIerURgAPumYaqi"),
-        "site_url": os.getenv("SHAREPOINT_SITE_URL", "https://terrene-foundationglobal.sharepoint.com/sites/IGDevDummy"),
+        "tenant_id": os.getenv(
+            "SHAREPOINT_TENANT_ID", "af88121d-9ac7-4ed0-b7e3-91c931e9c18f"
+        ),
+        "client_id": os.getenv(
+            "SHAREPOINT_CLIENT_ID", "a2552663-6550-4bd7-b97b-a39f6da2150c"
+        ),
+        "client_secret": os.getenv(
+            "SHAREPOINT_CLIENT_SECRET", "xf58Q~2r.24hQZZ3bMXOnX1nSOIerURgAPumYaqi"
+        ),
+        "site_url": os.getenv(
+            "SHAREPOINT_SITE_URL",
+            "https://terrene-foundationglobal.sharepoint.com/sites/IGDevDummy",
+        ),
     }
 
     try:
