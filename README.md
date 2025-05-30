@@ -25,6 +25,7 @@
 - 🔄 **Seamless Handoff**: Export prototypes directly to production-ready formats
 - 📊 **Built-in Monitoring**: Track workflow execution and performance metrics
 - 🧩 **Extensible**: Easy to create custom nodes for domain-specific operations
+- ⚡ **Fast Installation**: Uses `uv` for lightning-fast Python package management
 
 ## 🎯 Who Is This For?
 
@@ -40,11 +41,16 @@ The Kailash Python SDK is designed for:
 ### Installation
 
 ```bash
-# Install from PyPI
-pip install kailash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install with development tools
-pip install kailash[dev]
+# For users: Install from PyPI
+uv pip install kailash
+
+# For developers: Clone and sync
+git clone https://github.com/terrene-foundation/kailash-py.git
+cd kailash-python-sdk
+uv sync
 ```
 
 ### Your First Workflow
@@ -393,15 +399,15 @@ The SDK is thoroughly tested with comprehensive test suites:
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=kailash --cov-report=html
+uv run pytest --cov=kailash --cov-report=html
 
 # Run specific test categories
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/e2e/
+uv run pytest tests/unit/
+uv run pytest tests/integration/
+uv run pytest tests/e2e/
 ```
 
 ## 🤝 Contributing
@@ -415,15 +421,21 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 git clone https://github.com/terrene-foundation/kailash-py.git
 cd kailash-python-sdk
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install in development mode
-pip install -e ".[dev]"
+# Sync dependencies (creates venv automatically and installs everything)
+uv sync
+
+# Run commands using uv (no need to activate venv)
+uv run pytest
+uv run kailash --help
+
+# Or activate the venv if you prefer
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Set up pre-commit hooks
-pre-commit install
+uv run pre-commit install
 ```
 
 ### Code Quality
@@ -432,17 +444,17 @@ We maintain high code quality standards:
 
 ```bash
 # Format code
-black src/ tests/
-isort src/ tests/
+uv run black src/ tests/
+uv run isort src/ tests/
 
 # Type checking
-mypy src/
+uv run mypy src/
 
 # Linting
-flake8 src/ tests/
+uv run ruff check src/ tests/
 
 # Run all checks
-make quality
+uv run make quality
 ```
 
 ## 📈 Project Status
