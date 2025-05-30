@@ -26,9 +26,8 @@ from typing import Any, Dict, Optional, Tuple
 from kailash.nodes.base import Node
 from kailash.runtime.runner import BaseRuntime
 from kailash.sdk_exceptions import (
-    ConfigurationError,
+    NodeConfigurationError,
     NodeExecutionError,
-    RuntimeError,
 )
 from kailash.tracking.manager import TaskManager
 from kailash.workflow.graph import Workflow
@@ -98,7 +97,7 @@ class DockerNodeWrapper:
                             break
 
             if not hasattr(self, "sdk_path"):
-                raise ConfigurationError(
+                raise NodeConfigurationError(
                     "Could not determine SDK path. Please provide it explicitly."
                 )
 
@@ -305,7 +304,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
                 if (self.sdk_path / setup_file).exists():
                     shutil.copy(self.sdk_path / setup_file, sdk_dir / setup_file)
         else:
-            raise ConfigurationError(
+            raise NodeConfigurationError(
                 f"SDK source directory not found at {self.sdk_path}/src"
             )
 
