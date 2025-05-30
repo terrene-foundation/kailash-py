@@ -65,7 +65,7 @@ from kailash.nodes.api import (  # Basic HTTP nodes; REST API nodes; GraphQL nod
     RateLimitedAPINode,
     RESTClientNode,
 )
-from kailash.runtime.async_local import AsyncLocalRuntime
+# Import LocalRuntime only for workflow execution in Example 1
 from kailash.runtime.local import LocalRuntime
 
 # Kailash SDK imports
@@ -177,20 +177,18 @@ def example_2_rest_api_integration():
     """Example 2: REST API integration with resource patterns."""
     section_header("Example 2: REST API Integration")
 
-    # Execute the workflow
-    runtime = LocalRuntime()
+    # No runtime needed - direct node execution
 
     print("\n1. REST API call with path parameters:")
-    results = runtime.execute_node(
-        RESTClientNode(
-            name="REST API Client",
-            node_id="rest_client",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="users/{id}",
-            method="GET",
-            path_params={"id": 3},
-        )
+    rest_client = RESTClientNode(
+        name="REST API Client",
+        node_id="rest_client",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="users/{id}",
+        method="GET",
+        path_params={"id": 3},
     )
+    results = rest_client.execute()
 
     # Print the results
     user = results["data"]
@@ -198,16 +196,15 @@ def example_2_rest_api_integration():
     print(f"  Company: {user['company']['name']}")
 
     print("\n2. REST API call with query parameters:")
-    results = runtime.execute_node(
-        RESTClientNode(
-            name="REST API Client",
-            node_id="rest_client_query",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="posts",
-            method="GET",
-            query_params={"userId": 3},
-        )
+    rest_client_query = RESTClientNode(
+        name="REST API Client",
+        node_id="rest_client_query",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="posts",
+        method="GET",
+        query_params={"userId": 3},
     )
+    results = rest_client_query.execute()
 
     # Print the results
     posts = results["data"]
@@ -218,43 +215,43 @@ def example_2_rest_api_integration():
     print("\n3. Complex REST example - Get user's posts and their comments:")
 
     # First get a user
-    user_result = runtime.execute_node(
-        RESTClientNode(
-            name="REST API Client",
-            node_id="rest_client_user",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="users/{id}",
-            method="GET",
-            path_params={"id": 2},
-        )
+    rest_client_user = RESTClientNode(
+        name="REST API Client",
+        node_id="rest_client_user",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="users/{id}",
+        method="GET",
+        path_params={"id": 2},
     )
+    user_result = rest_client_user.execute()
     user = user_result["data"]
 
     # Get user's posts
-    posts_result = runtime.execute_node(
-        RESTClientNode(
-            name="REST API Client",
-            node_id="rest_client_posts",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="users/{id}/posts",
-            method="GET",
-            path_params={"id": user["id"]},
-        )
+    rest_client_posts = RESTClientNode(
+        name="REST API Client",
+        node_id="rest_client_posts",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="users/{id}/posts",
+        method="GET",
+        path_params={"id": user["id"]},
     )
+    posts_result = rest_client_posts.execute()
     posts = posts_result["data"]
 
+    # Initialize comments_result
+    comments_result = None
+    
     # Get comments for first post
     if posts:
-        comments_result = runtime.execute_node(
-            RESTClientNode(
-                name="REST API Client",
-                node_id="rest_client_comments",
-                base_url="https://jsonplaceholder.typicode.com",
-                resource="posts/{id}/comments",
-                method="GET",
-                path_params={"id": posts[0]["id"]},
-            )
+        rest_client_comments = RESTClientNode(
+            name="REST API Client",
+            node_id="rest_client_comments",
+            base_url="https://jsonplaceholder.typicode.com",
+            resource="posts/{id}/comments",
+            method="GET",
+            path_params={"id": posts[0]["id"]},
         )
+        comments_result = rest_client_comments.execute()
         comments = comments_result["data"]
 
         print(f"  User: {user['name']} ({user['email']})")
@@ -266,7 +263,7 @@ def example_2_rest_api_integration():
     return {
         "user": user_result,
         "posts": posts_result,
-        "comments": comments_result if posts else None,
+        "comments": comments_result,
     }
 
 
@@ -274,16 +271,14 @@ def example_3_graphql_api_integration():
     """Example 3: GraphQL API integration."""
     section_header("Example 3: GraphQL API Integration")
 
-    # Execute the workflow
-    runtime = LocalRuntime()
+    # No runtime needed - direct node execution
 
     print("\n1. Basic GraphQL query:")
-    results = runtime.execute_node(
-        GraphQLClientNode(
-            name="GraphQL Client",
-            node_id="graphql_client",
-            endpoint="https://api.spacex.land/graphql/",
-            query="""
+    graphql_client = GraphQLClientNode(
+        name="GraphQL Client",
+        node_id="graphql_client",
+        endpoint="https://api.spacex.land/graphql/",
+        query="""
             query {
               company {
                 name
@@ -298,8 +293,8 @@ def example_3_graphql_api_integration():
               }
             }
             """,
-        )
     )
+    results = graphql_client.execute()
 
     # Print the results
     data = results["data"]
@@ -319,12 +314,11 @@ def example_3_graphql_api_integration():
     print("\n2. GraphQL query with variables:")
 
     # Another example using the Countries API with variables
-    results = runtime.execute_node(
-        GraphQLClientNode(
-            name="GraphQL Client",
-            node_id="graphql_countries",
-            endpoint="https://countries.trevorblades.com/",
-            query="""
+    graphql_countries = GraphQLClientNode(
+        name="GraphQL Client",
+        node_id="graphql_countries",
+        endpoint="https://countries.trevorblades.com/",
+        query="""
             query GetCountries($limit: Int!) {
               countries(first: $limit) {
                 name
@@ -334,9 +328,9 @@ def example_3_graphql_api_integration():
               }
             }
             """,
-            variables={"limit": 5},
-        )
+        variables={"limit": 5},
     )
+    results = graphql_countries.execute()
 
     countries = results["data"]["countries"]
     print(f"  Retrieved {len(countries)} countries:")
@@ -352,31 +346,28 @@ def example_4_authentication_methods():
     """Example 4: Various authentication methods."""
     section_header("Example 4: Authentication Methods")
 
-    # Execute the workflow
-    runtime = LocalRuntime()
+    # No runtime needed - direct node execution
 
     print("\n1. API Key Authentication:")
-    api_key_result = runtime.execute_node(
-        APIKeyNode(
-            name="API Key Auth",
-            node_id="api_key_auth",
-            api_key="your-api-key-here",
-            location="header",
-            param_name="X-API-Key",
-        )
+    api_key_node = APIKeyNode(
+        name="API Key Auth",
+        node_id="api_key_auth",
+        api_key="your-api-key-here",
+        location="header",
+        param_name="X-API-Key",
     )
+    api_key_result = api_key_node.execute()
 
     print(f"  API Key Headers: {api_key_result['headers']}")
 
     print("\n2. Basic Authentication:")
-    basic_auth_result = runtime.execute_node(
-        BasicAuthNode(
-            name="Basic Auth",
-            node_id="basic_auth",
-            username="demo_user",
-            password="demo_password",
-        )
+    basic_auth_node = BasicAuthNode(
+        name="Basic Auth",
+        node_id="basic_auth",
+        username="demo_user",
+        password="demo_password",
     )
+    basic_auth_result = basic_auth_node.execute()
 
     print(f"  Basic Auth Headers: {basic_auth_result['headers']}")
 
@@ -401,16 +392,15 @@ def example_4_authentication_methods():
 
     print("\n4. Using authentication with API request:")
     # For demo purposes, we'll use the API Key with a REST request
-    rest_result = runtime.execute_node(
-        RESTClientNode(
-            name="REST Client with Auth",
-            node_id="rest_client_auth",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="posts/1",
-            method="GET",
-            headers=api_key_result["headers"],
-        )
+    rest_client_auth = RESTClientNode(
+        name="REST Client with Auth",
+        node_id="rest_client_auth",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="posts/1",
+        method="GET",
+        headers=api_key_result["headers"],
     )
+    rest_result = rest_client_auth.execute()
 
     print(f"  Request with Auth - Status: {rest_result['success']}")
     print(f"  Post title: {rest_result['data']['title']}")
@@ -435,8 +425,7 @@ def example_5_rate_limiting():
         backoff_factor=1.5,  # increase wait time by 1.5x on each retry
     )
 
-    # Execute the workflow
-    runtime = LocalRuntime()
+    # No runtime needed - direct node execution
 
     print(
         f"\n1. Rate limiting config: {rate_config.max_requests} requests per {rate_config.time_window}s"
@@ -462,7 +451,7 @@ def example_5_rate_limiting():
             node_id=f"rate_limited_api_{i}",
         )
 
-        result = runtime.execute_node(rate_limited_node)
+        result = rate_limited_node.execute()
 
         end_time = time.time()
         results.append(result)
@@ -486,49 +475,45 @@ def example_6_error_handling():
     """Example 6: Error handling and retry strategies."""
     section_header("Example 6: Error Handling and Retry Strategies")
 
-    # Execute the workflow
-    runtime = LocalRuntime()
+    # No runtime needed - direct node execution
 
     print("\n1. Handling a 404 error:")
-    not_found_result = runtime.execute_node(
-        HTTPRequestNode(
-            name="HTTP Client 404",
-            node_id="http_client_404",
-            url="https://jsonplaceholder.typicode.com/nonexistent",
-            method="GET",
-        )
+    http_client_404 = HTTPRequestNode(
+        name="HTTP Client 404",
+        node_id="http_client_404",
+        url="https://jsonplaceholder.typicode.com/nonexistent",
+        method="GET",
     )
+    not_found_result = http_client_404.execute()
 
     print(f"  Status code: {not_found_result['status_code']}")
     print(f"  Success flag: {not_found_result['success']}")
     print(f"  Response contains error: {not_found_result['response']['content'] != ''}")
 
     print("\n2. Configuring automatic retries:")
-    retry_result = runtime.execute_node(
-        HTTPRequestNode(
-            name="HTTP Client Retry",
-            node_id="http_client_retry",
-            url="https://jsonplaceholder.typicode.com/nonexistent",
-            method="GET",
-            retry_count=3,
-            retry_backoff=0.5,
-        )
+    http_client_retry = HTTPRequestNode(
+        name="HTTP Client Retry",
+        node_id="http_client_retry",
+        url="https://jsonplaceholder.typicode.com/nonexistent",
+        method="GET",
+        retry_count=3,
+        retry_backoff=0.5,
     )
+    retry_result = http_client_retry.execute()
 
     print(f"  Status code after retries: {retry_result['status_code']}")
     print(f"  Success flag: {retry_result['success']}")
 
     print("\n3. Handling timeouts:")
     # Using a delay endpoint
-    timeout_result = runtime.execute_node(
-        HTTPRequestNode(
-            name="HTTP Client Timeout",
-            node_id="http_client_timeout",
-            url="https://httpbin.org/delay/3",
-            method="GET",
-            timeout=1,  # 1 second timeout for a 3 second response
-        )
+    http_client_timeout = HTTPRequestNode(
+        name="HTTP Client Timeout",
+        node_id="http_client_timeout",
+        url="https://httpbin.org/delay/3",
+        method="GET",
+        timeout=1,  # 1 second timeout for a 3 second response
     )
+    timeout_result = http_client_timeout.execute()
 
     print(f"  Request timed out: {timeout_result.get('timeout', False)}")
     print(f"  Success flag: {timeout_result.get('success', False)}")
@@ -544,8 +529,7 @@ def example_7_complex_workflow():
     """Example 7: Complex multi-API workflow."""
     section_header("Example 7: Complex Multi-API Workflow")
 
-    # Execute the workflow
-    runtime = LocalRuntime()
+    # No runtime needed - direct node execution
 
     print("\n1. Multi-step API workflow:")
     print("   Step 1: Fetch user information")
@@ -555,47 +539,47 @@ def example_7_complex_workflow():
     # For demonstration, we'll execute step by step
 
     # Step 1: Get user
-    user_result = runtime.execute_node(
-        RESTClientNode(
-            name="REST Client - User",
-            node_id="user_api",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="users/{id}",
-            path_params={"id": 1},
-            method="GET",
-        )
+    user_api = RESTClientNode(
+        name="REST Client - User",
+        node_id="user_api",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="users/{id}",
+        path_params={"id": 1},
+        method="GET",
     )
+    user_result = user_api.execute()
 
     user = user_result["data"]
     print(f"\n2. User: {user['name']} ({user['email']})")
 
     # Step 2: Get user's posts
-    posts_result = runtime.execute_node(
-        RESTClientNode(
-            name="REST Client - Posts",
-            node_id="posts_api",
-            base_url="https://jsonplaceholder.typicode.com",
-            resource="users/{userId}/posts",
-            path_params={"userId": user["id"]},
-            method="GET",
-        )
+    posts_api = RESTClientNode(
+        name="REST Client - Posts",
+        node_id="posts_api",
+        base_url="https://jsonplaceholder.typicode.com",
+        resource="users/{userId}/posts",
+        path_params={"userId": user["id"]},
+        method="GET",
     )
+    posts_result = posts_api.execute()
 
     posts = posts_result["data"]
     print(f"3. Found {len(posts)} posts by {user['name']}")
 
+    # Initialize comments_result
+    comments_result = None
+    
     # Step 3: Get comments for first post
     if posts:
-        comments_result = runtime.execute_node(
-            RESTClientNode(
-                name="REST Client - Comments",
-                node_id="comments_api",
-                base_url="https://jsonplaceholder.typicode.com",
-                resource="posts/{postId}/comments",
-                path_params={"postId": posts[0]["id"]},
-                method="GET",
-            )
+        comments_api = RESTClientNode(
+            name="REST Client - Comments",
+            node_id="comments_api",
+            base_url="https://jsonplaceholder.typicode.com",
+            resource="posts/{postId}/comments",
+            path_params={"postId": posts[0]["id"]},
+            method="GET",
         )
+        comments_result = comments_api.execute()
 
         comments = comments_result["data"]
         print(f"4. First post: '{posts[0]['title']}'")
@@ -605,7 +589,7 @@ def example_7_complex_workflow():
     return {
         "user": user_result,
         "posts": posts_result,
-        "comments": comments_result if posts else None,
+        "comments": comments_result,
     }
 
 
@@ -618,8 +602,7 @@ async def example_8_async_execution():
         max_requests=5, time_window=5.0, strategy="sliding_window"
     )
 
-    # Execute the workflow
-    runtime = AsyncLocalRuntime()
+    # No runtime needed - direct async node execution
 
     print("\n1. Making concurrent API calls asynchronously:")
 
@@ -640,14 +623,13 @@ async def example_8_async_execution():
 
     # Create tasks for HTTP requests
     for i, url in enumerate(urls):
-        task = runtime.execute_node_async(
-            AsyncHTTPRequestNode(
-                name=f"Async HTTP Client {i+1}",
-                node_id=f"async_http_{i+1}",
-                url=url,
-                method="GET",
-            )
+        async_http_node = AsyncHTTPRequestNode(
+            name=f"Async HTTP Client {i+1}",
+            node_id=f"async_http_{i+1}",
+            url=url,
+            method="GET",
         )
+        task = async_http_node.execute_async()
         tasks.append(task)
 
     # Create tasks for REST requests with rate limiting
@@ -668,7 +650,7 @@ async def example_8_async_execution():
             node_id=f"rate_limited_async_{i}",
         )
 
-        task = runtime.execute_node_async(rate_limited_async)
+        task = rate_limited_async.execute_async()
         tasks.append(task)
 
     # Wait for all requests to complete
@@ -705,11 +687,20 @@ def main():
     print("==================================================")
 
     try:
-        # Only run the fixed example for now
+        # Run all examples
         example_1_basic_http_requests()
+        example_2_rest_api_integration()
+        example_3_graphql_api_integration()
+        example_4_authentication_methods()
+        example_5_rate_limiting()
+        example_6_error_handling()
+        example_7_complex_workflow()
+        
+        # Run async example
+        asyncio.run(example_8_async_execution())
 
         print("\n" + "=" * 70)
-        print(" Example completed successfully!")
+        print(" All examples completed successfully!")
         print("=" * 70)
 
         print("\nKey takeaways:")

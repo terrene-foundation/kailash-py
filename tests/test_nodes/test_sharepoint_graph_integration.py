@@ -118,12 +118,15 @@ class TestSharePointGraphIntegration:
 
     def test_upload_and_download(self):
         """Test uploading a file and then downloading it."""
+        import time
+
         writer = SharePointGraphWriter()
         reader = SharePointGraphReader()
 
-        # Create a test file
+        # Create a test file with unique name using timestamp
+        timestamp = int(time.time())
         test_content = "Test content from Kailash SDK integration test\n"
-        test_filename = "kailash_integration_test.txt"
+        test_filename = f"kailash_integration_test_{timestamp}.txt"
 
         with open(test_filename, "w") as f:
             f.write(test_content)
