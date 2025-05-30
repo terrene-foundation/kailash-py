@@ -10,14 +10,14 @@ import logging
 import uuid
 from typing import Any
 
-from examples.project_hmi.adapted.nodes_immutable import (
+from examples.migrations.project_hmi.adapted.nodes_immutable import (
     W1CheckAvailabilityNodeImmutable,
     W1ComposeMessageNodeImmutable,
     W1GetProfileNodeImmutable,
     W1RankSpecialistNodeImmutable,
     W1SendNodeImmutable,
 )
-from examples.project_hmi.adapted.shared import AgentState
+from examples.migrations.project_hmi.adapted.shared import AgentState
 
 from kailash.nodes.logic.operations import Switch
 from kailash.runtime.async_local import AsyncLocalRuntime

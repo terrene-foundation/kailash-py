@@ -10,9 +10,9 @@ import datetime
 import json
 from typing import Any, Dict
 
-from examples.project_hmi.adapted.mcp_wrapper import HmiMcpWrapper
-from examples.project_hmi.adapted.message_templates import WORKFLOW1_TEMPLATES
-from examples.project_hmi.adapted.shared import AgentState, DoctorInfo, SlotInfo
+from examples.migrations.project_hmi.adapted.mcp_wrapper import HmiMcpWrapper
+from examples.migrations.project_hmi.adapted.message_templates import WORKFLOW1_TEMPLATES
+from examples.migrations.project_hmi.adapted.shared import AgentState, DoctorInfo, SlotInfo
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode

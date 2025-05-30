@@ -8,14 +8,14 @@ for presenting initial specialist recommendations.
 import logging
 from typing import Any
 
-from examples.project_hmi.adapted.nodes import (
+from examples.migrations.project_hmi.adapted.nodes import (
     W1CheckAvailabilityNode,
     W1ComposeMessageNode,
     W1GetProfileNode,
     W1RankSpecialistNode,
     W1SendNode,
 )
-from examples.project_hmi.adapted.shared import AgentState
+from examples.migrations.project_hmi.adapted.shared import AgentState
 
 from kailash.nodes.logic.operations import Switch
 from kailash.workflow.graph import Workflow

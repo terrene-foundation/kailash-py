@@ -9,14 +9,14 @@ management system for cleaner, more reliable state updates.
 import logging
 from typing import Any
 
-from examples.project_hmi.adapted.nodes_updated import (
+from examples.migrations.project_hmi.adapted.nodes_updated import (
     W1CheckAvailabilityNodeV2,
     W1ComposeMessageNodeV2,
     W1GetProfileNodeV2,
     W1RankSpecialistNodeV2,
     W1SendNodeV2,
 )
-from examples.project_hmi.adapted.shared import AgentState
+from examples.migrations.project_hmi.adapted.shared import AgentState
 
 from kailash.nodes.logic.operations import Switch
 from kailash.runtime.async_local import AsyncLocalRuntime

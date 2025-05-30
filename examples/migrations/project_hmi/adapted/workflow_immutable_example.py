@@ -29,7 +29,7 @@ else:
     MOCK_EVERYTHING = False
 
 # We'll import our modules after patching to prevent import errors
-from examples.project_hmi.adapted.shared import AgentState, DoctorInfo, SlotInfo
+from examples.migrations.project_hmi.adapted.shared import AgentState, DoctorInfo, SlotInfo
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -284,8 +284,8 @@ async def run_with_mocked_apis():
     """Run the HMI workflow with mocked API responses."""
     # Import real implementation classes now
     # Patch the HmiMcpWrapper in nodes_immutable module
-    import examples.project_hmi.adapted.nodes_immutable as nodes
-    from examples.project_hmi.adapted.workflow_immutable import (
+    import examples.migrations.project_hmi.adapted.nodes_immutable as nodes
+    from examples.migrations.project_hmi.adapted.workflow_immutable import (
         HmiWorkflowImmutable,
         create_initial_state,
     )
@@ -372,7 +372,7 @@ if __name__ == "__main__":
         # Run with just mocked APIs for reliable testing
         try:
             # Only import workflow classes when dependencies are available
-            from examples.project_hmi.adapted.workflow_immutable import (
+            from examples.migrations.project_hmi.adapted.workflow_immutable import (
                 HmiWorkflowImmutable,
                 create_initial_state,
             )

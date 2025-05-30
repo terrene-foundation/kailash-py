@@ -103,7 +103,7 @@ async def main():
     Main function to run the HMI workflow.
     """
     # Import here to avoid circular imports and ensure logging is configured first
-    from examples.project_hmi.adapted.workflow import HmiWorkflow, create_initial_state
+    from examples.migrations.project_hmi.adapted.workflow import HmiWorkflow, create_initial_state
 
     # Create a mock LLM for demonstration
     llm = MockLLM()
