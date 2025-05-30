@@ -7,17 +7,18 @@ functionality of the Kailash SDK with just the standard nodes.
 """
 
 import sys
-import pandas as pd
-import os
 from pathlib import Path
+
+import pandas as pd
 
 # Ensure module is in path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Import from the Kailash SDK
-from kailash.workflow.graph import Workflow
 from kailash.nodes.data import CSVReader, CSVWriter
 from kailash.runtime.local import LocalRuntime
+
+# Import from the Kailash SDK
+from kailash.workflow.graph import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
 
 # Setup directories
@@ -28,12 +29,14 @@ output_dir = Path("data/outputs")
 output_dir.mkdir(exist_ok=True)
 
 # Create sample data
-sample_data = pd.DataFrame({
-    'id': range(1, 101),
-    'name': [f"Item {i}" for i in range(1, 101)],
-    'value': [i * 10 for i in range(1, 101)],
-    'category': ['A', 'B', 'C', 'D'] * 25
-})
+sample_data = pd.DataFrame(
+    {
+        "id": range(1, 101),
+        "name": [f"Item {i}" for i in range(1, 101)],
+        "value": [i * 10 for i in range(1, 101)],
+        "category": ["A", "B", "C", "D"] * 25,
+    }
+)
 
 # Save sample data
 sample_data.to_csv(data_dir / "sample_data.csv", index=False)
@@ -44,15 +47,9 @@ print("=== Basic Workflow Example ===")
 workflow = Workflow(workflow_id="simple_workflow", name="Simple Data Pipeline")
 
 # Create nodes
-reader = CSVReader(
-    name="csv_reader",
-    file_path=str(data_dir / "sample_data.csv")
-)
+reader = CSVReader(name="csv_reader", file_path=str(data_dir / "sample_data.csv"))
 
-writer = CSVWriter(
-    name="csv_writer",
-    file_path=str(output_dir / "processed_data.csv")
-)
+writer = CSVWriter(name="csv_writer", file_path=str(output_dir / "processed_data.csv"))
 
 # Add nodes to workflow
 workflow.add_node(node_id="reader", node_or_type=reader)

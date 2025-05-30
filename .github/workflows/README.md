@@ -10,7 +10,6 @@ This repository uses a strategic workflow configuration to optimize CI/CD perfor
 - **Purpose**: Fast feedback for feature development
 - **Triggers**:
   - Push to feature branches (`feat/*`, `feature/*`)
-  - Pull requests to `main`
   - Manual dispatch
 - **Jobs**: Basic tests and linting
 - **Duration**: ~3-5 minutes
@@ -56,8 +55,7 @@ This repository uses a strategic workflow configuration to optimize CI/CD perfor
 
 2. **Pull Request** (to `main`):
    - `pr-checks.yml` runs comprehensive validation
-   - `ci.yml` also runs (but different jobs)
-   - No overlap with feature branch pushes
+   - No duplicate runs from feature branch pushes
 
 3. **Main Branch** (after merge):
    - `full-test.yml` runs complete test suite

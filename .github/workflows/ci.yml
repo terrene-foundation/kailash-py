@@ -3,8 +3,6 @@ name: CI - Quick Tests
 on:
   push:
     branches: [ feat/*, feature/* ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
