@@ -27,11 +27,9 @@ Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensi
    :maxdepth: 2
    :caption: User Guide
    
-   guides/concepts
-   guides/workflows
-   guides/nodes
-   guides/best_practices
-   guides/troubleshooting
+   best_practices
+   troubleshooting
+   performance
 
 .. toctree::
    :maxdepth: 2
