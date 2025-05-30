@@ -26,7 +26,7 @@ def direct_execution_example():
 
     # Create writer with data available upfront
     writer = CSVWriter(
-        file_path="outputs/direct_output.csv",
+        file_path="../outputs/direct_output.csv",
         data=result["data"],  # Data provided at creation time
         # Don't provide headers=True for dict data - let it auto-detect
     )
@@ -52,7 +52,7 @@ def workflow_execution_example():
     reader = CSVReader(file_path="tests/sample_data/customer_value.csv", headers=True)
 
     writer = CSVWriter(
-        file_path="outputs/workflow_output.csv",
+        file_path="../outputs/workflow_output.csv",
         # Note: No data parameter - it will come from the connection
         # Don't provide headers=True for dict data - let it auto-detect
     )
@@ -125,8 +125,8 @@ def main():
     print("   - Provides execution tracking and management")
 
     print("\nBoth files should contain the same data:")
-    print("- outputs/direct_output.csv")
-    print("- outputs/workflow_output.csv")
+    print("- ../outputs/direct_output.csv")
+    print("- ../outputs/workflow_output.csv")
 
 
 if __name__ == "__main__":

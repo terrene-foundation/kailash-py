@@ -48,6 +48,15 @@ docs/_build/
 docs/api/_build/
 site/
 
+# Generated outputs
+outputs/actual_performance/
+outputs/performance_metrics/
+outputs/performance_test_output.csv
+data/performance_summary.txt
+data/performance_test.csv
+examples/outputs/actual_performance/
+examples/outputs/performance_metrics/
+
 # Jupyter Notebooks
 .ipynb_checkpoints
 
