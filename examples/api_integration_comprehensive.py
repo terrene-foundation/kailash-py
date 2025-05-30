@@ -65,6 +65,7 @@ from kailash.nodes.api import (  # Basic HTTP nodes; REST API nodes; GraphQL nod
     RateLimitedAPINode,
     RESTClientNode,
 )
+
 # Import LocalRuntime only for workflow execution in Example 1
 from kailash.runtime.local import LocalRuntime
 
@@ -240,7 +241,7 @@ def example_2_rest_api_integration():
 
     # Initialize comments_result
     comments_result = None
-    
+
     # Get comments for first post
     if posts:
         rest_client_comments = RESTClientNode(
@@ -568,7 +569,7 @@ def example_7_complex_workflow():
 
     # Initialize comments_result
     comments_result = None
-    
+
     # Step 3: Get comments for first post
     if posts:
         comments_api = RESTClientNode(
@@ -695,7 +696,7 @@ def main():
         example_5_rate_limiting()
         example_6_error_handling()
         example_7_complex_workflow()
-        
+
         # Run async example
         asyncio.run(example_8_async_execution())
 

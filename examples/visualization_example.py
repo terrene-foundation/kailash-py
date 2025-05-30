@@ -163,12 +163,15 @@ def demonstrate_basic_visualization():
 
     workflow = create_sample_workflow()
 
-    # Create visualization using workflow's visualize method
-    workflow.visualize(
-        output_path="data/basic_workflow.png", title="Data Processing Pipeline"
-    )
+    # Create Mermaid visualization
+    output_path = "data/basic_workflow.md"
+    workflow.save_mermaid_markdown(output_path, title="Data Processing Pipeline")
 
-    print("✓ Basic visualization created: data/basic_workflow.png")
+    print(f"✓ Basic visualization created: {output_path}")
+
+    # Also show the Mermaid diagram
+    print("\nMermaid diagram preview:")
+    print(workflow.to_mermaid()[:300] + "...")
 
 
 def demonstrate_custom_visualization():
@@ -179,16 +182,27 @@ def demonstrate_custom_visualization():
     workflow = create_sample_workflow()
     visualizer = WorkflowVisualizer(workflow)
 
-    # Create custom visualization
-    visualizer.visualize(
-        output_path="data/custom_workflow.png",
-        figsize=(15, 10),
-        title="Enhanced Data Processing Pipeline",
-        show_labels=True,
-        show_connections=True,
+    # Import MermaidVisualizer
+    from kailash.workflow.mermaid_visualizer import MermaidVisualizer
+
+    # Create custom Mermaid visualizer with custom styles
+    custom_styles = {
+        "reader": "fill:#2196F3,stroke:#0D47A1,stroke-width:3px,color:#fff",
+        "writer": "fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff",
+        "transform": "fill:#FF9800,stroke:#E65100,stroke-width:3px,color:#fff",
+        "logic": "fill:#E91E63,stroke:#880E4F,stroke-width:3px,color:#fff",
+        "code": "fill:#9C27B0,stroke:#4A148C,stroke-width:3px,color:#fff",
+    }
+
+    mermaid_viz = MermaidVisualizer(
+        workflow, direction="LR", node_styles=custom_styles  # Left to right
     )
 
-    print("✓ Custom visualization created: data/custom_workflow.png")
+    # Save with custom title
+    output_path = "data/custom_workflow.md"
+    mermaid_viz.save_markdown(output_path, title="Enhanced Data Processing Pipeline")
+
+    print(f"✓ Custom visualization created: {output_path}")
 
 
 def demonstrate_execution_visualization():
@@ -243,11 +257,16 @@ def demonstrate_execution_visualization():
         )
         task_manager.save_task(task)
 
-    # Create execution visualization
+    # Create execution visualization as Mermaid markdown
     visualizer = WorkflowVisualizer(workflow)
-    visualizer.create_execution_graph(run_id, task_manager)
+    output_path = visualizer.create_execution_graph(run_id, task_manager)
 
-    print(f"✓ Execution visualization created: execution_{run_id}.png")
+    print(f"✓ Execution visualization created: {output_path}")
+
+    # Also create one with custom output path
+    custom_path = "examples/data/outputs/execution_status.md"
+    custom_output = visualizer.create_execution_graph(run_id, task_manager, custom_path)
+    print(f"✓ Custom execution visualization created: {custom_output}")
 
 
 def demonstrate_performance_metrics():
@@ -293,10 +312,12 @@ def demonstrate_performance_metrics():
     ax3.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("data/performance_metrics.png", dpi=300, bbox_inches="tight")
+    plt.savefig("data/performance_metrics_matplotlib.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✓ Performance metrics visualization created: data/performance_metrics.png")
+    print(
+        "✓ Performance metrics visualization created: data/performance_metrics_matplotlib.png"
+    )
 
 
 def demonstrate_workflow_comparison():
@@ -381,10 +402,41 @@ def demonstrate_workflow_comparison():
     ax2.axis("off")
 
     plt.tight_layout()
-    plt.savefig("data/workflow_comparison.png", dpi=300, bbox_inches="tight")
+    plt.savefig("data/workflow_comparison_matplotlib.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✓ Workflow comparison created: data/workflow_comparison.png")
+    # Also create Mermaid comparison
+    comparison_content = """# Workflow Comparison
+
+This document compares two versions of a data processing workflow.
+
+## Workflow v1 - Original
+
+```mermaid
+{}
+```
+
+## Workflow v2 - Enhanced with Extra Processor
+
+```mermaid
+{}
+```
+
+## Changes Summary
+
+- **Added**: `extra_processor` node between `classifier` and `csv_writer`
+- **Purpose**: Additional processing step for data enhancement
+- **Impact**: Data now goes through an extra transformation before being written to CSV
+""".format(
+        workflow1.to_mermaid(), workflow2.to_mermaid()
+    )
+
+    # Save comparison
+    output_path = "data/workflow_comparison.md"
+    with open(output_path, "w") as f:
+        f.write(comparison_content)
+
+    print(f"✓ Workflow comparison created: {output_path} (and matplotlib version)")
 
 
 def demonstrate_execution_timeline():
@@ -450,10 +502,10 @@ def demonstrate_execution_timeline():
     ax.legend(handles=legend_elements, loc="upper right")
 
     plt.tight_layout()
-    plt.savefig("data/execution_timeline.png", dpi=300, bbox_inches="tight")
+    plt.savefig("data/execution_timeline_matplotlib.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✓ Execution timeline created: data/execution_timeline.png")
+    print("✓ Execution timeline created: data/execution_timeline_matplotlib.png")
 
 
 def demonstrate_resource_heatmap():
@@ -502,10 +554,10 @@ def demonstrate_resource_heatmap():
     plt.colorbar(im2, ax=ax2)
 
     plt.tight_layout()
-    plt.savefig("data/resource_heatmap.png", dpi=300, bbox_inches="tight")
+    plt.savefig("data/resource_heatmap_matplotlib.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✓ Resource heatmap created: data/resource_heatmap.png")
+    print("✓ Resource heatmap created: data/resource_heatmap_matplotlib.png")
 
 
 def main():

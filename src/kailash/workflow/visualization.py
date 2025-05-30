@@ -3,6 +3,8 @@
 import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -300,26 +302,34 @@ class WorkflowVisualizer:
         kwargs["dpi"] = dpi
         self.visualize(output_path=output_path, **kwargs)
 
-    def create_execution_graph(self, run_id: str, task_manager: Any) -> None:
-        """Create a visualization showing execution status.
+    def create_execution_graph(
+        self, run_id: str, task_manager: Any, output_path: Optional[str] = None
+    ) -> str:
+        """Create a Mermaid visualization showing execution status.
 
         Args:
             run_id: Run ID to visualize
             task_manager: Task manager instance
+            output_path: Optional path to save the markdown file. If not provided,
+                        saves to 'workflow_executions/execution_{run_id}.md'
+
+        Returns:
+            Path to the created markdown file
         """
         # Import here to avoid circular dependency
         from kailash.tracking import TaskStatus
+        from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
         # Get tasks for this run
         tasks = task_manager.list_tasks(run_id)
 
-        # Create status colors
-        status_colors = {
-            TaskStatus.PENDING: "lightgray",
-            TaskStatus.RUNNING: "yellow",
-            TaskStatus.COMPLETED: "lightgreen",
-            TaskStatus.FAILED: "lightcoral",
-            TaskStatus.SKIPPED: "lightblue",
+        # Create status emoji mapping
+        status_emojis = {
+            TaskStatus.PENDING: "⏳",
+            TaskStatus.RUNNING: "🔄",
+            TaskStatus.COMPLETED: "✅",
+            TaskStatus.FAILED: "❌",
+            TaskStatus.SKIPPED: "⏭️",
         }
 
         # Map node IDs to statuses
@@ -327,45 +337,81 @@ class WorkflowVisualizer:
         for task in tasks:
             node_status[task.node_id] = task.status
 
-        # Create custom node colors based on status
-        node_colors = []
-        for node_id in self.workflow.graph.nodes():
-            status = node_status.get(node_id, TaskStatus.PENDING)
-            node_colors.append(status_colors[status])
+        # Create Mermaid visualizer
+        visualizer = MermaidVisualizer(self.workflow)
 
-        # Create the visualization
-        plt.figure(figsize=(12, 8))
+        # Generate base Mermaid diagram
+        mermaid_code = visualizer.generate()
 
-        pos = self._calculate_layout()
+        # Add status information to the diagram
+        lines = mermaid_code.split("\n")
+        new_lines = []
 
-        # Draw nodes with custom colors
-        nx.draw_networkx_nodes(
-            self.workflow.graph, pos, node_color=node_colors, node_size=3000, alpha=0.9
-        )
+        for line in lines:
+            new_lines.append(line)
+            # Add status emoji to node labels
+            for node_id, status in node_status.items():
+                sanitized_id = visualizer._sanitize_node_id(node_id)
+                if sanitized_id in line and '["' in line:
+                    # Add emoji to the end of the label
+                    emoji = status_emojis.get(status, "")
+                    if emoji:
+                        new_lines[-1] = line.replace('"]', f' {emoji}"]')
 
-        # Draw edges
-        nx.draw_networkx_edges(
-            self.workflow.graph,
-            pos,
-            edge_color="gray",
-            width=2,
-            alpha=0.6,
-            arrows=True,
-            arrowsize=20,
-            arrowstyle="->",
-        )
+        # Create markdown content
+        markdown_content = f"""# Workflow Execution Status
 
-        # Draw labels
-        labels = self._get_node_labels()
-        nx.draw_networkx_labels(
-            self.workflow.graph, pos, labels, font_size=10, font_weight="bold"
-        )
+**Run ID**: `{run_id}`  
+**Workflow**: {self.workflow.name}  
+**Timestamp**: {task_manager.get_run(run_id).started_at if hasattr(task_manager, 'get_run') else 'N/A'}
 
-        plt.title(f"Execution Status: {run_id}", fontsize=16, fontweight="bold")
-        plt.axis("off")
-        plt.tight_layout()
-        plt.savefig(f"execution_{run_id}.png", dpi=300, bbox_inches="tight")
-        plt.close()
+## Execution Diagram
+
+```mermaid
+{'\n'.join(new_lines)}
+```
+
+## Status Legend
+
+| Status | Symbol | Description |
+|--------|--------|-------------|
+| Pending | ⏳ | Task is waiting to be executed |
+| Running | 🔄 | Task is currently executing |
+| Completed | ✅ | Task completed successfully |
+| Failed | ❌ | Task failed during execution |
+| Skipped | ⏭️ | Task was skipped |
+
+## Task Details
+
+| Node ID | Status | Start Time | End Time | Duration |
+|---------|--------|------------|----------|----------|
+"""
+
+        # Add task details
+        for task in tasks:
+            status_emoji = status_emojis.get(task.status, "")
+            start_time = task.started_at or "N/A"
+            end_time = task.ended_at or "N/A"
+            duration = f"{task.duration:.2f}s" if task.duration else "N/A"
+
+            markdown_content += f"| {task.node_id} | {task.status.value} {status_emoji} | {start_time} | {end_time} | {duration} |\n"
+
+        # Determine output path
+        if output_path is None:
+            # Create default directory if it doesn't exist
+            output_dir = Path("workflow_executions")
+            output_dir.mkdir(exist_ok=True)
+            output_path = output_dir / f"execution_{run_id}.md"
+        else:
+            output_path = Path(output_path)
+            # Create parent directory if needed
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write markdown file
+        with open(output_path, "w") as f:
+            f.write(markdown_content)
+
+        return str(output_path)
 
 
 # Add visualization method to Workflow class

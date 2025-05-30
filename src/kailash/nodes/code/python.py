@@ -37,7 +37,7 @@ from typing import (
     get_type_hints,
 )
 
-from kailash.nodes.base import Node, NodeMetadata, NodeParameter
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
@@ -531,6 +531,7 @@ class ClassWrapper:
         )
 
 
+@register_node()
 class PythonCodeNode(Node):
     """Node for executing arbitrary Python code.
 
