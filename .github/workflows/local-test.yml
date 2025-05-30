@@ -1,10 +1,6 @@
-name: Local Test Workflow
+name: Local Test (act validation)
 
 on:
-  push:
-    branches: [ main, feat/* ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
