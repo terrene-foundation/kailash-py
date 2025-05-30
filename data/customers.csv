@@ -1,3 +1,4 @@
-customer_id,name,value
-1,Customer A,1000
-2,Customer B,2000
+customer_id,name,age,income
+1,John Doe,45,85000
+2,Jane Smith,65,120000
+3,Bob Johnson,35,65000
