@@ -103,7 +103,7 @@ class TestStorageIntegration:
             fs_tracker = TaskTracker(storage=fs_storage)
             
             runtime = LocalRuntime()
-            runner = WorkflowRunner(runtime=runtime)
+            runner = WorkflowRunner()  # WorkflowRunner no longer takes runtime parameter
             
             # Basic verification that components work together
             assert fs_storage is not None
@@ -167,7 +167,7 @@ class TestStorageIntegration:
     def test_runtime_components(self):
         """Test that runtime components are available."""
         runtime = LocalRuntime()
-        runner = WorkflowRunner(runtime=runtime)
+        runner = WorkflowRunner()  # WorkflowRunner no longer takes runtime parameter
         
         assert runtime is not None
         assert runner is not None

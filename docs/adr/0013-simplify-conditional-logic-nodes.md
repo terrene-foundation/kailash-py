@@ -47,5 +47,13 @@ This decision is based on the following rationale:
 3. Update any documentation or examples that reference these nodes
 4. Ensure tests continue to pass without these nodes
 
+## Implementation Notes
+
+The simplification has been successfully implemented:
+- Aggregator and Conditional classes have been removed from `kailash.nodes.logic.operations.py`
+- Module imports and documentation have been updated accordingly
+- All tests continue to pass without these nodes
+- Examples have been verified to work with just Switch and Merge nodes
+
 ## References
 - [ADR-0012: Workflow Conditional Routing](0012-workflow-conditional-routing.md)
