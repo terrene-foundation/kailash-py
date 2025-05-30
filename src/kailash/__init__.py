@@ -4,12 +4,13 @@ The Kailash SDK provides a comprehensive framework for creating nodes and workfl
 that align with container-node architecture while allowing rapid prototyping.
 """
 
-# Import key components for easier access
-from kailash.workflow.graph import Workflow, NodeInstance, Connection
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.workflow.visualization import WorkflowVisualizer
-from kailash.nodes.base import Node, NodeParameter, NodeMetadata
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+# Import key components for easier access
+from kailash.workflow.graph import Connection, NodeInstance, Workflow
+from kailash.workflow.visualization import WorkflowVisualizer
 
 # For backward compatibility
 WorkflowGraph = Workflow
@@ -19,7 +20,7 @@ __version__ = "0.1.0"
 __all__ = [
     "Workflow",
     "WorkflowGraph",  # Backward compatibility
-    "NodeInstance", 
+    "NodeInstance",
     "Connection",
     "WorkflowBuilder",
     "WorkflowVisualizer",

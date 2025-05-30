@@ -1,12 +1,22 @@
 """Node system for the Kailash SDK."""
+
+# Import all node modules to ensure registration
+from kailash.nodes import ai, api, data, logic, transform
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.code import PythonCodeNode
 
-# Import all node modules to ensure registration
-from kailash.nodes import data, transform, logic, ai, api
-
 __all__ = [
-    "Node", "AsyncNode", "NodeParameter", "NodeRegistry", "register_node", 
-    "PythonCodeNode"
+    "Node",
+    "AsyncNode",
+    "NodeParameter",
+    "NodeRegistry",
+    "register_node",
+    "PythonCodeNode",
+    # Node modules
+    "ai",
+    "api",
+    "data",
+    "logic",
+    "transform",
 ]

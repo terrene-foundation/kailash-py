@@ -7,7 +7,6 @@ from typing import Generator
 
 import pytest
 import yaml
-from networkx import DiGraph
 
 from kailash.manifest import KailashManifest
 from kailash.tracking.manager import TaskManager
@@ -38,7 +37,7 @@ def sample_json_file(temp_data_dir: Path) -> Path:
         "items": [
             {"id": 1, "name": "Alice", "value": 100},
             {"id": 2, "name": "Bob", "value": 200},
-            {"id": 3, "name": "Charlie", "value": 300}
+            {"id": 3, "name": "Charlie", "value": 300},
         ]
     }
     json_path.write_text(json.dumps(data, indent=2))
@@ -53,8 +52,8 @@ def mock_api_data() -> dict:
         "data": [
             {"id": 1, "metric": 42.5},
             {"id": 2, "metric": 37.8},
-            {"id": 3, "metric": 55.1}
-        ]
+            {"id": 3, "metric": 55.1},
+        ],
     }
 
 
@@ -62,99 +61,80 @@ def mock_api_data() -> dict:
 def simple_workflow(sample_csv_file: Path, temp_data_dir: Path) -> Workflow:
     """Create a simple workflow for testing."""
     builder = WorkflowBuilder()
-    
+
     # Add nodes
     reader_id = builder.add_node(
-        "CSVReader",
-        "reader",
-        config={"file_path": str(sample_csv_file)}
+        "CSVReader", "reader", config={"file_path": str(sample_csv_file)}
     )
-    
+
     filter_id = builder.add_node(
-        "Filter",
-        "filter",
-        config={"field": "value", "operator": ">", "value": 100}
+        "Filter", "filter", config={"field": "value", "operator": ">", "value": 100}
     )
-    
+
     writer_id = builder.add_node(
-        "CSVWriter",
-        "writer",
-        config={"file_path": str(temp_data_dir / "output.csv")}
+        "CSVWriter", "writer", config={"file_path": str(temp_data_dir / "output.csv")}
     )
-    
+
     # Connect nodes
     builder.add_connection(reader_id, "data", filter_id, "data")
     builder.add_connection(filter_id, "filtered_data", writer_id, "data")
-    
+
     return builder.build("simple_test_workflow")
 
 
 @pytest.fixture
-def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_dir: Path) -> Workflow:
+def complex_workflow(
+    sample_csv_file: Path, sample_json_file: Path, temp_data_dir: Path
+) -> Workflow:
     """Create a complex multi-branch workflow for testing."""
     builder = WorkflowBuilder()
-    
+
     # Add CSV reader
     csv_reader_id = builder.add_node(
-        "CSVReader",
-        "csv_reader",
-        config={"file_path": str(sample_csv_file)}
+        "CSVReader", "csv_reader", config={"file_path": str(sample_csv_file)}
     )
-    
+
     # Add filter
     filter_id = builder.add_node(
-        "Filter",
-        "filter",
-        config={
-            "field": "value",
-            "operator": ">",
-            "value": 150
-        }
+        "Filter", "filter", config={"field": "value", "operator": ">", "value": 150}
     )
-    
+
     # Add AI processor
     ai_processor_id = builder.add_node(
         "TextSummarizer",
         "ai_processor",
-        config={
-            "texts": ["Analyze this data and provide insights"],
-            "max_length": 100
-        }
+        config={"texts": ["Analyze this data and provide insights"], "max_length": 100},
     )
-    
+
     # Add outputs
     csv_writer_id = builder.add_node(
         "CSVWriter",
         "csv_writer",
-        config={
-            "file_path": str(temp_data_dir / "processed.csv")
-        }
+        config={"file_path": str(temp_data_dir / "processed.csv")},
     )
-    
+
     json_writer_id = builder.add_node(
         "JSONWriter",
         "json_writer",
-        config={
-            "file_path": str(temp_data_dir / "processed.json")
-        }
+        config={"file_path": str(temp_data_dir / "processed.json")},
     )
-    
+
     report_writer_id = builder.add_node(
         "TextWriter",
         "report_writer",
         config={
             "file_path": str(temp_data_dir / "report.txt"),
-            "text": "Data analysis complete"
-        }
+            "text": "Data analysis complete",
+        },
     )
-    
+
     # Connect nodes
     builder.add_connection(csv_reader_id, "data", filter_id, "data")
     builder.add_connection(filter_id, "filtered_data", csv_writer_id, "data")
     builder.add_connection(filter_id, "filtered_data", json_writer_id, "data")
     # AI processor can run independently
     builder.add_connection(ai_processor_id, "summaries", report_writer_id, "data")
-    
+
     return builder.build("complex_test_workflow")
 
 
@@ -167,9 +147,9 @@ def sample_manifest(simple_workflow: Workflow) -> KailashManifest:
             "name": "Test Manifest",
             "version": "1.0.0",
             "author": "Test Author",
-            "description": "Test manifest for integration tests"
+            "description": "Test manifest for integration tests",
         },
-        workflow=simple_workflow
+        workflow=simple_workflow,
     )
 
 
@@ -177,6 +157,7 @@ def sample_manifest(simple_workflow: Workflow) -> KailashManifest:
 def task_manager(temp_data_dir: Path) -> TaskManager:
     """Create a task manager for testing."""
     from kailash.tracking.storage.filesystem import FileSystemStorage
+
     storage = FileSystemStorage(base_path=str(temp_data_dir / "tasks"))
     return TaskManager(storage_backend=storage)
 
@@ -203,36 +184,28 @@ def mock_llm_response() -> str:
 def error_workflow(temp_data_dir: Path) -> Workflow:
     """Create a workflow that will produce errors for testing."""
     builder = WorkflowBuilder()
-    
+
     # Add a reader that will fail
     reader_id = builder.add_node(
         "CSVReader",
         "bad_reader",
-        config={"file_path": str(temp_data_dir / "nonexistent.csv")}
+        config={"file_path": str(temp_data_dir / "nonexistent.csv")},
     )
-    
+
     # Add a processor that will fail
     processor_id = builder.add_node(
         "Filter",
         "bad_filter",
-        config={
-            "field": "value",
-            "operator": "invalid_op",
-            "value": 100
-        }
+        config={"field": "value", "operator": "invalid_op", "value": 100},
     )
-    
+
     writer_id = builder.add_node(
-        "CSVWriter",
-        "writer",
-        config={
-            "file_path": str(temp_data_dir / "output.csv")
-        }
+        "CSVWriter", "writer", config={"file_path": str(temp_data_dir / "output.csv")}
     )
-    
+
     builder.add_connection(reader_id, "data", processor_id, "data")
     builder.add_connection(processor_id, "filtered_data", writer_id, "data")
-    
+
     return builder.build("error_test_workflow")
 
 
@@ -240,16 +213,16 @@ def error_workflow(temp_data_dir: Path) -> Workflow:
 def large_dataset(temp_data_dir: Path) -> Path:
     """Create a large dataset for performance testing."""
     csv_path = temp_data_dir / "large_dataset.csv"
-    
+
     # Create a CSV with 10,000 rows
-    with open(csv_path, 'w') as f:
+    with open(csv_path, "w") as f:
         f.write("id,name,value,category\n")
         for i in range(10000):
             name = f"User_{i}"
             value = i * 10 % 1000
             category = f"Cat_{i % 10}"
             f.write(f"{i},{name},{value},{category}\n")
-    
+
     return csv_path
 
 
@@ -257,58 +230,44 @@ def large_dataset(temp_data_dir: Path) -> Path:
 def parallel_workflow(temp_data_dir: Path) -> Workflow:
     """Create a workflow with parallel execution paths."""
     builder = WorkflowBuilder()
-    
+
     # Single input
     reader_id = builder.add_node(
-        "CSVReader",
-        "reader",
-        config={"file_path": str(temp_data_dir / "input.csv")}
+        "CSVReader", "reader", config={"file_path": str(temp_data_dir / "input.csv")}
     )
-    
+
     # Parallel processing branches
     filter1_id = builder.add_node(
         "Filter",
         "filter_high",
-        config={
-            "field": "value",
-            "operator": ">",
-            "value": 500
-        }
+        config={"field": "value", "operator": ">", "value": 500},
     )
-    
+
     filter2_id = builder.add_node(
         "Filter",
         "filter_low",
-        config={
-            "field": "value",
-            "operator": "<=",
-            "value": 500
-        }
+        config={"field": "value", "operator": "<=", "value": 500},
     )
-    
+
     # Parallel outputs
     writer1_id = builder.add_node(
         "CSVWriter",
         "writer_high",
-        config={
-            "file_path": str(temp_data_dir / "high_values.csv")
-        }
+        config={"file_path": str(temp_data_dir / "high_values.csv")},
     )
-    
+
     writer2_id = builder.add_node(
         "CSVWriter",
         "writer_low",
-        config={
-            "file_path": str(temp_data_dir / "low_values.csv")
-        }
+        config={"file_path": str(temp_data_dir / "low_values.csv")},
     )
-    
+
     # Connect parallel branches
     builder.add_connection(reader_id, "data", filter1_id, "data")
     builder.add_connection(reader_id, "data", filter2_id, "data")
     builder.add_connection(filter1_id, "filtered_data", writer1_id, "data")
     builder.add_connection(filter2_id, "filtered_data", writer2_id, "data")
-    
+
     return builder.build("parallel_test_workflow")
 
 
@@ -323,46 +282,38 @@ def yaml_workflow_config(temp_data_dir: Path) -> Path:
                 {
                     "id": "reader",
                     "type": "CSVReader",
-                    "inputs": {
-                        "file_path": str(temp_data_dir / "input.csv")
-                    }
+                    "inputs": {"file_path": str(temp_data_dir / "input.csv")},
                 },
                 {
                     "id": "processor",
                     "type": "Filter",
-                    "inputs": {
-                        "field": "value",
-                        "operator": ">",
-                        "value": 100
-                    }
+                    "inputs": {"field": "value", "operator": ">", "value": 100},
                 },
                 {
                     "id": "writer",
                     "type": "CSVWriter",
-                    "inputs": {
-                        "file_path": str(temp_data_dir / "output.csv")
-                    }
-                }
+                    "inputs": {"file_path": str(temp_data_dir / "output.csv")},
+                },
             ],
             "connections": [
                 {
                     "from": "reader",
                     "from_output": "data",
                     "to": "processor",
-                    "to_input": "data"
+                    "to_input": "data",
                 },
                 {
                     "from": "processor",
                     "from_output": "filtered_data",
                     "to": "writer",
-                    "to_input": "data"
-                }
-            ]
+                    "to_input": "data",
+                },
+            ],
         }
     }
-    
+
     yaml_path = temp_data_dir / "workflow.yaml"
-    with open(yaml_path, 'w') as f:
+    with open(yaml_path, "w") as f:
         yaml.dump(config, f)
-    
+
     return yaml_path

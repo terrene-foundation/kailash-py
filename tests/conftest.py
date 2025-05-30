@@ -1,46 +1,46 @@
 """Shared fixtures for Kailash tests."""
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Generator
+from typing import Any, Dict, Generator
+
+import pytest
 
 from kailash.nodes.base import Node, NodeMetadata
-from kailash.workflow import Workflow
-from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.tracking.manager import TaskManager
+from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage
+from kailash.workflow import Workflow
 
 
 class MockNode(Node):
     """Mock node for testing."""
-    
+
     def __init__(self, name: str = "MockNode", **kwargs):
         """Initialize mock node with metadata."""
         # Handle the id parameter from WorkflowBuilder
-        if 'id' in kwargs and 'name' not in kwargs:
-            name = kwargs.get('id', name)
-        
+        if "id" in kwargs and "name" not in kwargs:
+            name = kwargs.get("id", name)
+
         metadata = NodeMetadata(
-            name=name,
-            description="Mock node for testing",
-            tags={"test", "mock"}
+            name=name, description="Mock node for testing", tags={"test", "mock"}
         )
         super().__init__(metadata=metadata, **kwargs)
-    
+
     def get_parameters(self) -> Dict[str, Any]:
         """Define input parameters for the mock node."""
         from kailash.nodes.base import NodeParameter
+
         return {
             "value": NodeParameter(
                 name="value",
                 type=float,
                 required=True,
-                description="Input value to double"
+                description="Input value to double",
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node's logic."""
         value = kwargs.get("value", 0)
@@ -68,7 +68,7 @@ def mock_node_with_config():
     node.config = {
         "version": "1.0.0",
         "description": "A test node",
-        "dependencies": ["test-dep"]
+        "dependencies": ["test-dep"],
     }
     return node
 
@@ -77,15 +77,15 @@ def mock_node_with_config():
 def sample_workflow():
     """Create a sample workflow graph."""
     workflow = Workflow(name="Test Workflow")
-    
+
     # Add nodes
     node1 = MockNode(name="Node 1")
     node2 = MockNode(name="Node 2")
-    
+
     workflow.add_node(node1)
     workflow.add_node(node2)
     workflow.add_edge(node1, node2)
-    
+
     return workflow
 
 
@@ -98,7 +98,7 @@ def sample_task():
         node_id="test-node",
         node_type="MockNode",
         status=TaskStatus.PENDING,
-        metadata={"user": "test"}
+        metadata={"user": "test"},
     )
 
 
@@ -116,7 +116,7 @@ def invalid_input_data():
         "invalid_type": {"value": "not_a_number"},
         "missing_field": {},
         "extra_field": {"value": 42, "extra": "field"},
-        "null_value": {"value": None}
+        "null_value": {"value": None},
     }
 
 
@@ -127,7 +127,7 @@ def valid_input_data():
         "simple": {"value": 42},
         "negative": {"value": -10},
         "zero": {"value": 0},
-        "float": {"value": 3.14}
+        "float": {"value": 3.14},
     }
 
 
@@ -141,7 +141,7 @@ def complex_workflow():
         "start": MockNode(name="Start Node"),
         "branch1": MockNode(name="Branch 1"),
         "branch2": MockNode(name="Branch 2"),
-        "merge": MockNode(name="Merge Node")
+        "merge": MockNode(name="Merge Node"),
     }
 
     for node in nodes.values():

@@ -1,19 +1,17 @@
 """Project template system for Kailash SDK."""
-import os
-import shutil
-from pathlib import Path
-from typing import Dict, Optional, List, Any
 
-from kailash.nodes.base import Node
+from pathlib import Path
+from typing import Dict, Optional
+
 from kailash.sdk_exceptions import TemplateError
 
 
 class NodeTemplate:
     """Template for creating node implementations."""
-    
+
     def __init__(self, name: str, description: str, base_class: str = "Node"):
         """Initialize node template.
-        
+
         Args:
             name: Node class name
             description: Node description
@@ -25,67 +23,74 @@ class NodeTemplate:
         self.input_params = []
         self.output_params = []
         self.code_template = ""
-    
-    def add_input_parameter(self, name: str, param_type: str, required: bool = True, 
-                          description: str = "", default=None) -> "NodeTemplate":
+
+    def add_input_parameter(
+        self,
+        name: str,
+        param_type: str,
+        required: bool = True,
+        description: str = "",
+        default=None,
+    ) -> "NodeTemplate":
         """Add input parameter to template.
-        
+
         Args:
             name: Parameter name
             param_type: Parameter type (str, int, dict, etc.)
             required: Whether parameter is required
             description: Parameter description
             default: Default value
-            
+
         Returns:
             Self for chaining
         """
-        self.input_params.append({
-            "name": name,
-            "type": param_type,
-            "required": required,
-            "description": description,
-            "default": default
-        })
+        self.input_params.append(
+            {
+                "name": name,
+                "type": param_type,
+                "required": required,
+                "description": description,
+                "default": default,
+            }
+        )
         return self
-    
-    def add_output_parameter(self, name: str, param_type: str, 
-                           description: str = "") -> "NodeTemplate":
+
+    def add_output_parameter(
+        self, name: str, param_type: str, description: str = ""
+    ) -> "NodeTemplate":
         """Add output parameter to template.
-        
+
         Args:
             name: Parameter name
             param_type: Parameter type (str, int, dict, etc.)
             description: Parameter description
-            
+
         Returns:
             Self for chaining
         """
-        self.output_params.append({
-            "name": name,
-            "type": param_type,
-            "description": description
-        })
+        self.output_params.append(
+            {"name": name, "type": param_type, "description": description}
+        )
         return self
-    
+
     def set_code_template(self, code: str) -> "NodeTemplate":
         """Set code template.
-        
+
         Args:
             code: Python code template
-            
+
         Returns:
             Self for chaining
         """
         self.code_template = code
         return self
-    
+
     def generate_code(self) -> str:
         """Generate Python code for the node.
-        
+
         Returns:
             Generated code
-            
+
         Raises:
             TemplateError: If generation fails
         """
@@ -103,7 +108,7 @@ class {self.name}({self.base_class}):
         \"""Define node parameters.\"""
         return {{
 """
-            
+
             # Add input parameters
             for param in self.input_params:
                 default_str = ""
@@ -112,7 +117,7 @@ class {self.name}({self.base_class}):
                         default_str = f'default="{param["default"]}"'
                     else:
                         default_str = f"default={param['default']}"
-                        
+
                 code += f"""            "{param["name"]}": NodeParameter(
                 name="{param["name"]}",
                 type={param["type"]},
@@ -120,7 +125,7 @@ class {self.name}({self.base_class}):
                 description="{param["description"]}"{', ' + default_str if default_str else ''}
             ),
 """
-            
+
             code += """        }
     
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -133,7 +138,7 @@ class {self.name}({self.base_class}):
             Output parameters
         \"""
 """
-            
+
             # Add custom code if provided, otherwise use default implementation
             if self.code_template:
                 code += f"\n{self.code_template}\n"
@@ -147,62 +152,54 @@ class {self.name}({self.base_class}):
                 # Add output parameters
                 for param in self.output_params:
                     code += f'            "{param["name"]}": None,  # TODO: Set {param["name"]}\n'
-                    
+
                 code += "        }\n"
-            
+
             return code
-            
+
         except Exception as e:
             raise TemplateError(f"Failed to generate node code: {e}") from e
-    
+
     def save(self, output_path: str) -> None:
         """Save generated code to file.
-        
+
         Args:
             output_path: Path to save file
-            
+
         Raises:
             TemplateError: If save fails
         """
         try:
             code = self.generate_code()
-            
+
             # Create parent directories if needed
             path = Path(output_path)
             path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Write to file
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 f.write(code)
-                
+
         except Exception as e:
             raise TemplateError(f"Failed to save node code: {e}") from e
 
 
 class TemplateManager:
     """Manage project templates for scaffolding."""
-    
+
     def __init__(self):
         """Initialize template manager."""
         self.templates = {
             "basic": self._basic_template,
             "data_processing": self._data_processing_template,
             "ml_pipeline": self._ml_pipeline_template,
-            "api_workflow": self._api_workflow_template
+            "api_workflow": self._api_workflow_template,
         }
-        
+
         # Export templates for workflow export
         self.export_templates = {
-            "minimal": {
-                "yaml": True,
-                "json": False,
-                "manifest": False
-            },
-            "standard": {
-                "yaml": True,
-                "json": True,
-                "manifest": True
-            },
+            "minimal": {"yaml": True, "json": False, "manifest": False},
+            "standard": {"yaml": True, "json": True, "manifest": True},
             "kubernetes": {
                 "yaml": True,
                 "json": False,
@@ -231,8 +228,8 @@ This directory contains the Kubernetes deployment files for {workflow_name}.
 
 ## Namespace
 Deployed to: {namespace}
-"""
-                }
+""",
+                },
             },
             "docker": {
                 "yaml": True,
@@ -264,31 +261,35 @@ services:
 __pycache__/
 .git/
 .gitignore
-"""
-                }
-            }
+""",
+                },
+            },
         }
-    
+
     def get_template(self, template_name: str) -> Dict:
         """Get an export template by name.
-        
+
         Args:
             template_name: Name of the template
-            
+
         Returns:
             Template dictionary
-            
+
         Raises:
             ValueError: If template not found
         """
         if template_name not in self.export_templates:
             raise ValueError(f"Unknown export template: {template_name}")
         return self.export_templates[template_name]
-    
-    def create_project(self, project_name: str, template: str = "basic", 
-                      target_dir: Optional[str] = None) -> None:
+
+    def create_project(
+        self,
+        project_name: str,
+        template: str = "basic",
+        target_dir: Optional[str] = None,
+    ) -> None:
         """Create a new project from a template.
-        
+
         Args:
             project_name: Name of the project
             template: Template to use
@@ -296,19 +297,19 @@ __pycache__/
         """
         if template not in self.templates:
             raise ValueError(f"Unknown template: {template}")
-        
+
         # Determine target directory
         if target_dir:
             project_root = Path(target_dir) / project_name
         else:
             project_root = Path.cwd() / project_name
-        
+
         # Create project structure
         project_root.mkdir(parents=True, exist_ok=True)
-        
+
         # Apply template
         self.templates[template](project_root, project_name)
-        
+
     def _basic_template(self, project_root: Path, project_name: str) -> None:
         """Create a basic project template."""
         # Create directory structure
@@ -316,7 +317,7 @@ __pycache__/
         (project_root / "nodes").mkdir(exist_ok=True)
         (project_root / "data").mkdir(exist_ok=True)
         (project_root / "output").mkdir(exist_ok=True)
-        
+
         # Create README
         readme_content = f"""# {project_name}
 
@@ -347,7 +348,7 @@ kailash export workflows/example_workflow.py output/workflow.yaml
 See `workflows/example_workflow.py` for a basic workflow example.
 """
         (project_root / "README.md").write_text(readme_content)
-        
+
         # Create example workflow
         workflow_content = '''"""Example workflow for data processing."""
 from kailash.workflow import Workflow
@@ -376,8 +377,10 @@ workflow.connect("aggregate", "writer", {"aggregated_data": "data"})
 
 # Workflow is ready to run!
 '''
-        (project_root / "workflows" / "example_workflow.py").write_text(workflow_content)
-        
+        (project_root / "workflows" / "example_workflow.py").write_text(
+            workflow_content
+        )
+
         # Create example custom node
         node_content = '''"""Custom node example."""
 from typing import Any, Dict
@@ -422,7 +425,7 @@ class CustomProcessor(Node):
         return {"processed_data": processed}
 '''
         (project_root / "nodes" / "custom_nodes.py").write_text(node_content)
-        
+
         # Create sample data
         csv_content = """id,name,value,category
 1,Item A,150,Category 1
@@ -432,7 +435,7 @@ class CustomProcessor(Node):
 5,Item E,180,Category 1
 """
         (project_root / "data" / "input.csv").write_text(csv_content)
-        
+
         # Create .gitignore
         gitignore_content = """# Python
 __pycache__/
@@ -459,12 +462,12 @@ output/
 Thumbs.db
 """
         (project_root / ".gitignore").write_text(gitignore_content)
-    
+
     def _data_processing_template(self, project_root: Path, project_name: str) -> None:
         """Create a data processing focused template."""
         # Start with basic template
         self._basic_template(project_root, project_name)
-        
+
         # Add data processing workflow
         workflow_content = '''"""Data processing pipeline workflow."""
 from kailash.workflow import Workflow
@@ -503,8 +506,10 @@ workflow.connect("merge_data", "group_by_category", {"merged_data": "data"})
 workflow.connect("group_by_category", "sort_results", {"aggregated_data": "data"})
 workflow.connect("sort_results", "write_json", {"sorted_data": "data"})
 '''
-        (project_root / "workflows" / "data_processing_pipeline.py").write_text(workflow_content)
-        
+        (project_root / "workflows" / "data_processing_pipeline.py").write_text(
+            workflow_content
+        )
+
         # Add sample data files
         sales_data = """product_id,date,amount,customer_id,category
 101,2024-01-01,1500,C001,Electronics
@@ -514,7 +519,7 @@ workflow.connect("sort_results", "write_json", {"sorted_data": "data"})
 102,2024-01-05,950,C005,Home
 """
         (project_root / "data" / "sales_data.csv").write_text(sales_data)
-        
+
         product_data = """{
     "products": [
         {"product_id": "101", "name": "Laptop", "category": "Electronics", "cost": 800},
@@ -523,12 +528,12 @@ workflow.connect("sort_results", "write_json", {"sorted_data": "data"})
     ]
 }"""
         (project_root / "data" / "product_data.json").write_text(product_data)
-    
+
     def _ml_pipeline_template(self, project_root: Path, project_name: str) -> None:
         """Create an ML pipeline focused template."""
         # Start with basic template
         self._basic_template(project_root, project_name)
-        
+
         # Add ML workflow
         workflow_content = '''"""Machine learning pipeline workflow."""
 from kailash.workflow import Workflow
@@ -581,7 +586,7 @@ workflow.connect("classify", "merge_results", {"classifications": "data2"})
 workflow.connect("merge_results", "save_results", {"merged_data": "data"})
 '''
         (project_root / "workflows" / "ml_pipeline.py").write_text(workflow_content)
-        
+
         # Add sample text data
         text_data = """id,title,content
 1,Tech Innovation,"The latest developments in artificial intelligence are transforming how businesses operate. Companies like Google and Microsoft are leading the charge with new AI models."
@@ -590,13 +595,13 @@ workflow.connect("merge_results", "save_results", {"merged_data": "data"})
 4,Local News,"The mayor of New York announced new infrastructure plans for the city. The project will create thousands of jobs over the next five years."
 """
         (project_root / "data" / "text_data.csv").write_text(text_data)
-    
+
     def _api_workflow_template(self, project_root: Path, project_name: str) -> None:
         """Create an API integration focused template."""
         # Start with basic template
         self._basic_template(project_root, project_name)
-        
-        # Add API workflow  
+
+        # Add API workflow
         workflow_content = '''"""API integration workflow."""
 from kailash.workflow import Workflow
 from kailash.nodes.data import JSONReader, JSONWriter
@@ -651,7 +656,7 @@ workflow.connect("process_success", "save_results", {"processed_data": "data"})
 workflow.connect("handle_error", "save_results", {"error_data": "data"})
 '''
         (project_root / "workflows" / "api_workflow.py").write_text(workflow_content)
-        
+
         # Add API configuration
         api_config = """{
     "api_endpoints": {

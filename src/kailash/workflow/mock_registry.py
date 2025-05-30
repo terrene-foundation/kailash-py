@@ -1,26 +1,28 @@
 """Mock node registry for tests."""
-from typing import Dict, Any, Type
+
+from typing import Any, Dict, Type
+
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import NodeConfigurationError
 
 
 class MockNode(Node):
     """Mock node for testing."""
-    
+
     def __init__(self, node_id: str = None, name: str = None, **kwargs):
         """Initialize mock node."""
         self.node_id = node_id
         self.name = name or node_id
         self.config = kwargs.copy()
-    
+
     def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process data."""
         return {"value": data.get("value", 0) * 2}
-        
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute node with keyword arguments."""
         return self.process(kwargs)
-        
+
     def get_parameters(self) -> Dict[str, Any]:
         """Get node parameters."""
         return {}
@@ -29,13 +31,13 @@ class MockNode(Node):
 # Register mock nodes with the real registry for tests
 NODE_TYPES = [
     "MockNode",
-    "DataReader", 
-    "DataWriter", 
-    "Processor", 
+    "DataReader",
+    "DataWriter",
+    "Processor",
     "Merger",
     "DataFilter",
     "AIProcessor",
-    "Transformer"
+    "Transformer",
 ]
 
 for node_type in NODE_TYPES:
@@ -47,9 +49,9 @@ for node_type in NODE_TYPES:
 
 class MockRegistry:
     """Mock node registry for testing."""
-    
+
     _registry: Dict[str, Type[Node]] = {node_type: MockNode for node_type in NODE_TYPES}
-    
+
     @classmethod
     def get(cls, node_type: str) -> Type[Node]:
         """Get node class by type name."""
