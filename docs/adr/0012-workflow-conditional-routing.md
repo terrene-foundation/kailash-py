@@ -133,10 +133,19 @@ workflow.connect("success_handler", "results_merger", {"output": "data1"})
 workflow.connect("error_handler", "results_merger", {"output": "data2"})
 ```
 
+## Implementation Status
+
+As of 2025-05-30, conditional routing has been fully implemented:
+- Switch node supports boolean conditions and multi-case switching
+- Merge node handles multiple inputs with various merge strategies
+- Comprehensive test coverage in `tests/test_nodes/test_switch_merge.py`
+- Working examples in `conditional_workflow_example.py` and `simple_switch_example.py`
+- Integration with workflow visualization showing conditional paths
+- All tests passing with full functionality
+
 ## References
 - [NetworkX Directed Acyclic Graphs](https://networkx.org/documentation/stable/reference/classes/digraph.html)
 - [Switch Case statements in programming](https://en.wikipedia.org/wiki/Switch_statement)
 - Related ADRs:
-  - [ADR-0002: Workflow Representation](0002-workflow-representation.md)
   - [ADR-0004: Workflow Representation](0004-workflow-representation.md)
   - [ADR-0005: Local Execution Strategy](0005-local-execution-strategy.md)

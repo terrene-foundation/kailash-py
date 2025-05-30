@@ -340,6 +340,7 @@ Keep dependencies minimal and explicit:
 
 2. **Architecture Decision Records (ADRs)**
    - All significant architectural decisions should be documented using ADRs:
+     - **README.md**: Follow the instructions in `docs/adr/README.md` for creating and managing ADRs.
      - **Format**: Follow the ADR template in `docs/adr/`
      - **Numbering**: Use sequential numbering (e.g., ADR-0001)
      - **Status**: Mark each ADR as Proposed, Accepted, Deprecated, or Superseded
@@ -352,7 +353,7 @@ Keep dependencies minimal and explicit:
        - Export Format
        - Task Tracking Design
        - Storage Backend Strategy
-     - **README.md**: Include a summary of each ADR in docs/adr/README.md
+     - **Summary**: Include a summary of new ADRs in docs/adr/README.md
 
 3. **Todos Management**:
    - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
@@ -429,12 +430,17 @@ Keep dependencies minimal and explicit:
    - API reference
    - Contribution guidelines
    - Reference to the PRD and ADRs
+   
+10. **Update ADRs**
+    - Ensure all architectural decisions are documented in the ADRs.
+    - Link relevant ADRs to the PRD and README.md.
+    - Update ADRs as new decisions are made or existing ones are modified.
 
-10. **Update Claude.md**
+11. **Update Claude.md**
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
    
-11. **Github Issues and Project Update**
+12. **Github Issues and Project Update**
     - Use the Github Issues and Projects to track tasks and progress. 
     - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
     - Update the project board as tasks are completed.

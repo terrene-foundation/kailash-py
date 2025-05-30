@@ -168,11 +168,12 @@ class CodeExecutor:
         self.check_code_safety(code)
         
         # Create isolated namespace
+        import builtins
         namespace = {
             '__builtins__': {
-                name: getattr(__builtins__, name)
+                name: getattr(builtins, name)
                 for name in self.allowed_builtins
-                if hasattr(__builtins__, name)
+                if hasattr(builtins, name)
             }
         }
         
@@ -878,21 +879,61 @@ class PythonCodeNode(Node):
                 f"No suitable function or class found in {file_path}"
             )
     
+    def execute_code(self, inputs: Dict[str, Any]) -> Any:
+        """Execute the code with given inputs.
+        
+        This is a convenience method that directly executes the code
+        without going through the base node validation.
+        
+        Args:
+            inputs: Dictionary of input values
+            
+        Returns:
+            Result of code execution
+        """
+        # Execute directly based on execution type
+        if self.code:
+            outputs = self.executor.execute_code(self.code, inputs)
+            return outputs.get('result', outputs)
+        elif self.function:
+            wrapper = FunctionWrapper(self.function, self.executor)
+            result = wrapper.execute(inputs)
+            return result.get('result', result)
+        elif self.class_type:
+            wrapper = ClassWrapper(
+                self.class_type,
+                self.process_method or 'process',
+                self.executor
+            )
+            # Use the same instance for stateful behavior
+            wrapper.instance = self.instance
+            result = wrapper.execute(inputs)
+            return result.get('result', result)
+        else:
+            raise NodeExecutionError("No execution method available")
+    
     def get_config(self) -> Dict[str, Any]:
         """Get node configuration for serialization.
         
         Returns:
             Configuration dictionary
         """
-        config = super().get_config()
+        # Get base config from parent class
+        config = {
+            'name': self.metadata.name,
+            'description': self.metadata.description,
+            'version': self.metadata.version,
+            'tags': list(self.metadata.tags) if self.metadata.tags else []
+        }
         
         # Add code-specific config
         config.update({
             'code': self.code,
             'input_types': {
-                name: type_.__name__ for name, type_ in self.input_types.items()
+                name: type_.__name__ if hasattr(type_, '__name__') else str(type_) 
+                for name, type_ in self.input_types.items()
             },
-            'output_type': self.output_type.__name__ if self.output_type else 'Any'
+            'output_type': self.output_type.__name__ if hasattr(self.output_type, '__name__') else str(self.output_type)
         })
         
         # For function/class nodes, include source code

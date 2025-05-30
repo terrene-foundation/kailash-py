@@ -72,7 +72,7 @@ class TestVisualizationIntegration:
         """Test integration between visualization and other components."""
         # Test that key components can be imported together
         runtime = LocalRuntime()
-        runner = WorkflowRunner(runtime=runtime)
+        runner = WorkflowRunner()  # WorkflowRunner no longer takes runtime parameter
         builder = WorkflowBuilder()
         
         assert runtime is not None
@@ -97,14 +97,14 @@ class TestVisualizationIntegration:
     def test_workflow_metadata_for_visualization(self):
         """Test that workflows have metadata needed for visualization."""
         builder = WorkflowBuilder()
-        workflow = builder.build("metadata_test")
+        workflow = builder.build(name="metadata_test")
         
         # Test metadata availability
         assert hasattr(workflow, 'metadata')
-        assert workflow.metadata.name == "metadata_test"
+        assert workflow.name == "metadata_test"
         
         # Test that metadata has expected structure
-        assert hasattr(workflow.metadata, 'name')
+        assert isinstance(workflow.metadata, dict)
     
     def test_runtime_visualization_integration(self):
         """Test integration between runtime and visualization components."""

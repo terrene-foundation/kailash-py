@@ -16,8 +16,12 @@ from kailash.tracking.storage.filesystem import FileSystemStorage
 class MockNode(Node):
     """Mock node for testing."""
     
-    def __init__(self, name: str, **kwargs):
+    def __init__(self, name: str = "MockNode", **kwargs):
         """Initialize mock node with metadata."""
+        # Handle the id parameter from WorkflowBuilder
+        if 'id' in kwargs and 'name' not in kwargs:
+            name = kwargs.get('id', name)
+        
         metadata = NodeMetadata(
             name=name,
             description="Mock node for testing",

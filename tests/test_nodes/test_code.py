@@ -90,8 +90,10 @@ class TestFunctionWrapper:
         
         wrapper = FunctionWrapper(process)
         
-        assert wrapper.get_input_types() == {'data': type(...)}  # Any
-        assert wrapper.get_output_type() == type(...)  # Any
+        # For functions without annotations, the wrapper should return Any type
+        from typing import Any
+        assert wrapper.get_input_types() == {'data': Any}
+        assert wrapper.get_output_type() == Any
     
     def test_to_node(self):
         """Test converting wrapper to node."""
@@ -294,13 +296,12 @@ class Tripler:
     
     def test_complex_code_execution(self):
         """Test executing complex code with multiple operations."""
+        # Note: numpy must be pre-imported, not imported in the code
         code = """
-import numpy as np
-
 # Process data
-data_array = np.array(data)
-mean_val = np.mean(data_array)
-std_val = np.std(data_array)
+data_array = numpy.array(data)
+mean_val = numpy.mean(data_array)
+std_val = numpy.std(data_array)
 
 # Normalize
 normalized = (data_array - mean_val) / std_val
@@ -345,6 +346,7 @@ result = {
         assert config['code'] == 'result = x * 2'
         assert config['input_types'] == {'x': 'int'}
         assert config['output_type'] == 'int'
+        assert config['description'] == 'Test node'
         
     def test_error_propagation(self):
         """Test that errors are properly propagated."""

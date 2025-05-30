@@ -47,7 +47,7 @@ class WorkflowRunner:
         Returns:
             Tuple of (results, run_id)
         """
-        self.logger.info(f"Starting workflow: {workflow.metadata.name}")
+        self.logger.info(f"Starting workflow: {workflow.name}")
         
         # Select runtime
         if runtime_type == "local":

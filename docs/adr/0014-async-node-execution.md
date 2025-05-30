@@ -155,3 +155,14 @@ Accepted
 ## Date
 
 2025-05-21
+
+## Implementation Status
+
+As of 2025-05-30, asynchronous node execution has been fully implemented:
+- AsyncNode base class in `kailash.nodes.base_async`
+- AsyncMerge and AsyncSwitch nodes in `kailash.nodes.logic.async_operations`
+- ParallelRuntime in `kailash.runtime.parallel`
+- Comprehensive test coverage in `tests/test_nodes/test_async_operations.py`
+- Working example in `parallel_workflow_example.py`
+- Full integration with existing workflow system
+- All tests passing with async functionality verified

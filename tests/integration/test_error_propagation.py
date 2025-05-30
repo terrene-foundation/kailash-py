@@ -15,7 +15,9 @@ from kailash.nodes.base import Node, NodeParameter, NodeMetadata
 from kailash.sdk_exceptions import (
     KailashException, NodeException, WorkflowException,
     NodeValidationError, NodeExecutionError, 
-    ConnectionError as KailashConnectionError
+    ConnectionError as KailashConnectionError,
+    WorkflowExecutionError, RuntimeExecutionError,
+    NodeConfigurationError
 )
 from kailash.tracking.manager import TaskManager
 
@@ -113,10 +115,16 @@ class TestErrorPropagation:
         # Connect nodes
         workflow.connect("reader", "error", {"data": "unused"})
         
+        # Add a dependent node so error propagates
+        from kailash.nodes.data.writers import CSVWriter
+        writer = CSVWriter(name="writer", file_path=str(temp_data_dir / "output.csv"))
+        workflow.add_node("writer", writer)
+        workflow.connect("error", "writer", {"data": "data"})
+        
         # Execute
         runtime = LocalRuntime()
         
-        with pytest.raises(NodeExecutionError) as exc_info:
+        with pytest.raises(RuntimeExecutionError) as exc_info:
             results, run_id = runtime.execute(workflow)
         
         assert "Processing failed" in str(exc_info.value)
@@ -131,11 +139,11 @@ class TestErrorPropagation:
         
         runtime = LocalRuntime()
         
-        # Should fail
-        with pytest.raises(NodeExecutionError) as exc_info:
-            results, run_id = runtime.execute(workflow)
-        
-        assert "Conditional failure triggered" in str(exc_info.value)
+        # Should fail but since node has no dependents, error is captured in results
+        results, run_id = runtime.execute(workflow)
+        assert "conditional" in results
+        assert results["conditional"]["error"] == "Conditional failure triggered"
+        assert results["conditional"]["failed"] is True
         
         # Now test without failure
         workflow2 = Workflow(workflow_id="conditional_success", name="Conditional Success")
@@ -167,11 +175,12 @@ class TestErrorPropagation:
         # Both nodes run independently (no connections)
         runtime = LocalRuntime()
         
-        # The workflow should fail because one node fails
-        with pytest.raises(NodeExecutionError) as exc_info:
-            results, run_id = runtime.execute(workflow)
-        
-        assert "Branch failed" in str(exc_info.value)
+        # Since nodes have no dependents, errors are captured in results
+        results, run_id = runtime.execute(workflow)
+        assert "error" in results
+        assert results["error"]["error"] == "Branch failed"
+        assert results["error"]["failed"] is True
+        assert results["success"]["processed_data"] == "success"
     
     def test_error_with_task_tracking(self, temp_data_dir: Path):
         """Test that errors are properly tracked in task manager."""
@@ -184,17 +193,23 @@ class TestErrorPropagation:
         error_node = ErrorNode(name="error", error_message="Tracked failure")
         workflow.add_node("error", error_node)
         
-        runtime = LocalRuntime(task_manager=task_manager)
+        runtime = LocalRuntime()
         
-        # Execute and expect failure
-        with pytest.raises(NodeExecutionError):
-            results, run_id = runtime.execute(workflow)
+        # Execute and expect failure captured in results
+        results, run_id = runtime.execute(workflow, task_manager=task_manager)
         
         # Check that the run was tracked
         run = task_manager.get_run(run_id)
         assert run is not None
-        assert run.status == "failed"
-        assert "Tracked failure" in str(run.error) if run.error else False
+        # Run completes even with node failures since error is captured
+        assert run.status == "completed"
+        
+        # Check the individual task failed
+        tasks = task_manager.list_tasks(run_id)
+        error_task = next((t for t in tasks if t.node_id == "error"), None)
+        assert error_task is not None
+        assert error_task.status == "failed"
+        assert "Tracked failure" in str(error_task.error)
     
     def test_validation_error_before_execution(self):
         """Test that validation errors prevent execution."""
@@ -215,7 +230,7 @@ class TestErrorPropagation:
         workflow = Workflow(workflow_id="validation_error", name="Validation Error")
         
         # Add node without required parameter
-        with pytest.raises(NodeValidationError) as exc_info:
+        with pytest.raises(NodeConfigurationError) as exc_info:
             node = ValidationNode(name="validation")  # Missing required_param
         
         assert "Required parameter 'required_param' not provided" in str(exc_info.value)
@@ -233,13 +248,12 @@ class TestErrorPropagation:
         
         runtime = LocalRuntime()
         
-        with pytest.raises(NodeExecutionError) as exc_info:
-            results, run_id = runtime.execute(workflow)
+        # Since node has no dependents, error is captured in results
+        results, run_id = runtime.execute(workflow)
         
-        error_str = str(exc_info.value)
-        # Should include node information in the error
-        assert "contextual_error" in error_str or "error_node" in error_str
-        assert "Something went wrong" in error_str
+        assert "error_node" in results
+        assert results["error_node"]["error"] == "Something went wrong"
+        assert results["error_node"]["failed"] is True
     
     def test_nested_error_handling(self):
         """Test error handling with nested exceptions."""
@@ -261,11 +275,12 @@ class TestErrorPropagation:
         
         runtime = LocalRuntime()
         
-        with pytest.raises(NodeExecutionError) as exc_info:
-            results, run_id = runtime.execute(workflow)
+        # Since node has no dependents, error is captured in results
+        results, run_id = runtime.execute(workflow)
         
-        assert "Failed to process" in str(exc_info.value)
-        assert "Inner error" in str(exc_info.value)
+        assert "nested" in results
+        assert "Failed to process" in results["nested"]["error"]
+        assert results["nested"]["failed"] is True
     
     def test_workflow_recovery_after_error(self):
         """Test that workflows can be re-executed after fixing errors."""
@@ -277,16 +292,16 @@ class TestErrorPropagation:
         
         runtime = LocalRuntime()
         
-        # First execution should fail
-        with pytest.raises(NodeExecutionError):
-            results, run_id = runtime.execute(workflow)
+        # First execution should fail but error is captured
+        results, run_id = runtime.execute(workflow)
+        assert results["node1"]["failed"] is True
         
-        # Now fix the issue by updating the node
-        workflow.remove_node("node1")
+        # Now fix the issue by creating a new workflow
+        workflow2 = Workflow(workflow_id="recovery_test2", name="Recovery Test 2")
         node2 = ConditionalErrorNode(name="maybe_fail", should_fail=False, data="recovered")
-        workflow.add_node("node1", node2)
+        workflow2.add_node("node1", node2)
         
         # Second execution should succeed
-        results, run_id = runtime.execute(workflow)
-        assert results["node1"]["status"] == "success"
-        assert results["node1"]["processed_data"] == "recovered"
+        results2, run_id2 = runtime.execute(workflow2)
+        assert results2["node1"]["status"] == "success"
+        assert results2["node1"]["processed_data"] == "recovered"

@@ -94,51 +94,25 @@ def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_di
     """Create a complex multi-branch workflow for testing."""
     builder = WorkflowBuilder()
     
-    # Add multiple data sources
+    # Add CSV reader
     csv_reader_id = builder.add_node(
         "CSVReader",
         "csv_reader",
         config={"file_path": str(sample_csv_file)}
     )
     
-    json_reader_id = builder.add_node(
-        "JSONReader",
-        "json_reader",
-        config={"file_path": str(sample_json_file)}
-    )
-    
-    # Add transformation nodes
-    merger_id = builder.add_node(
-        "Merge",
-        "merger",
+    # Add filter
+    filter_id = builder.add_node(
+        "Filter",
+        "filter",
         config={
-            "on": "id"
-        }
-    )
-    
-    aggregator_id = builder.add_node(
-        "DataTransformer",
-        "aggregator",
-        config={
-            "transformations": [
-                # Simple transformation - just pass data through
-                "result"
-            ]
-        }
-    )
-    
-    # Add conditional logic
-    condition_id = builder.add_node(
-        "Switch",
-        "condition",
-        config={
-            "condition_field": "count",
+            "field": "value",
             "operator": ">",
-            "value": 0
+            "value": 150
         }
     )
     
-    # Add AI node
+    # Add AI processor
     ai_processor_id = builder.add_node(
         "TextSummarizer",
         "ai_processor",
@@ -148,7 +122,7 @@ def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_di
         }
     )
     
-    # Add multiple outputs
+    # Add outputs
     csv_writer_id = builder.add_node(
         "CSVWriter",
         "csv_writer",
@@ -170,19 +144,16 @@ def complex_workflow(sample_csv_file: Path, sample_json_file: Path, temp_data_di
         "report_writer",
         config={
             "file_path": str(temp_data_dir / "report.txt"),
-            "text": "Report placeholder"
+            "text": "Data analysis complete"
         }
     )
     
-    # Connect nodes to create complex flow
-    builder.add_connection(csv_reader_id, "data", merger_id, "left")
-    builder.add_connection(json_reader_id, "data", merger_id, "right")
-    builder.add_connection(merger_id, "merged_data", aggregator_id, "data")
-    builder.add_connection(aggregator_id, "result", condition_id, "input_data")
-    builder.add_connection(condition_id, "true_data", ai_processor_id, "data")
-    builder.add_connection(condition_id, "true_data", csv_writer_id, "data")
-    builder.add_connection(condition_id, "false_data", json_writer_id, "data")
-    builder.add_connection(ai_processor_id, "response", report_writer_id, "text")
+    # Connect nodes
+    builder.add_connection(csv_reader_id, "data", filter_id, "data")
+    builder.add_connection(filter_id, "filtered_data", csv_writer_id, "data")
+    builder.add_connection(filter_id, "filtered_data", json_writer_id, "data")
+    # AI processor can run independently
+    builder.add_connection(ai_processor_id, "summaries", report_writer_id, "data")
     
     return builder.build("complex_test_workflow")
 

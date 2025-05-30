@@ -61,7 +61,7 @@ class TestPerformance:
         
         # Create runtime
         runtime = LocalRuntime()
-        runner = WorkflowRunner(runtime=runtime)
+        runner = WorkflowRunner()  # WorkflowRunner no longer takes runtime parameter
         
         init_time = time.time() - start_time
         
