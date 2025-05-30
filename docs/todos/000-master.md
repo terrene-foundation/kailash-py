@@ -4,7 +4,8 @@
 - **Tests**: 482/482 passing (100%) | 0 failing | 87 skipped ✅
 - **Coverage**: 15/15 test categories at 100%
 - **Documentation**: Sphinx API docs + Best Practices/Troubleshooting/Performance guides complete! 📚
-- **Next Focus**: Security review and workflow analytics integration
+- **Performance Metrics**: Real-time collection and visualization integrated! 📈
+- **Next Focus**: Security review and real-time dashboard components
 
 ## Project Status Overview
 - **Foundation**: ✅ Complete - All core functionality implemented (2025-05-16 to 2025-05-19)
@@ -40,30 +41,30 @@
 
 ## High Priority - Production Readiness
 
-### 📊 Workflow Analytics & Real-time Metrics Integration
-- **Integrate Task Tracking with Performance Visualizations**
+### 📊 Workflow Analytics & Real-time Metrics Integration ✅ COMPLETE (Session 26)
+- **Integrate Task Tracking with Performance Visualizations** ✅ Complete
   - Description: Replace synthetic data in visualization examples with real workflow execution metrics
-  - Status: To Do
+  - Status: Complete
   - Priority: High
-  - Details: Connect TaskManager data to performance charts, timeline, and heatmap visualizations
-  - Tasks:
-    - Create TaskMetricsAggregator class to collect metrics from TaskManager
-    - Add methods to extract execution times, memory usage, CPU usage from completed runs
-    - Update visualization functions to accept TaskManager/run_id as input
-    - Create utility functions to generate timeline data from task execution history
-    - Add support for comparing multiple workflow runs side-by-side
+  - Details: Connected TaskManager data to performance charts, timeline, and heatmap visualizations
+  - Completed Tasks:
+    - ✅ Created MetricsCollector class with PerformanceMetrics dataclass
+    - ✅ Added methods to extract execution times, memory usage, CPU usage from completed runs
+    - ✅ Updated visualization functions to accept TaskManager/run_id as input
+    - ✅ Created utility functions to generate timeline data from task execution history
+    - ✅ Added support for comparing multiple workflow runs side-by-side
 
-- **Enhance TaskMetrics Collection**
+- **Enhance TaskMetrics Collection** ✅ Complete
   - Description: Ensure TaskMetrics captures all necessary performance data
-  - Status: To Do
+  - Status: Complete
   - Priority: High
-  - Details: Current TaskMetrics may not capture all needed data for visualizations
-  - Tasks:
-    - Add actual CPU and memory sampling during node execution
-    - Capture node input/output data sizes for resource usage analysis
-    - Add network I/O metrics for API nodes
-    - Store detailed timing breakdowns (queue time, execution time, I/O time)
-    - Add support for custom metrics from PythonCodeNode execution
+  - Details: Enhanced TaskMetrics to capture comprehensive performance data
+  - Completed Tasks:
+    - ✅ Added actual CPU and memory sampling during node execution using psutil
+    - ✅ Capture node input/output data sizes for resource usage analysis
+    - ✅ Added network I/O metrics tracking (read/write bytes)
+    - ✅ Store detailed timing breakdowns (duration, start/end times)
+    - ✅ Added support for custom metrics from PythonCodeNode execution
 
 - **Create Real-time Dashboard Components**
   - Description: Build components for live workflow monitoring
@@ -252,7 +253,34 @@
 
 ## Completed Tasks Archive
 
-### User Guides Completion Session 25 (2025-05-30) ✅ NEW!
+### Performance Visualization Integration Session 26 (2025-05-31) ✅ NEW!
+✅ **Task Tracking & Performance Metrics Integration**:
+- **MetricsCollector Implementation** ✅ Complete
+  - Created PerformanceMetrics dataclass with CPU, memory, I/O metrics
+  - Implemented MetricsCollector class with context managers
+  - Added graceful degradation when psutil is not available
+  - Integrated into LocalRuntime and ParallelRuntime
+- **PerformanceVisualizer Component** ✅ Complete
+  - Created comprehensive performance visualization class
+  - Implemented execution timeline (Gantt charts)
+  - Added resource usage charts (CPU, memory over time)
+  - Created performance comparison radar charts
+  - Added I/O analysis and performance heatmaps
+  - Markdown report generation with insights
+- **Real Metrics Collection** ✅ Complete
+  - Fixed JSON serialization for datetime and set objects
+  - Integrated metrics collection into runtime execution
+  - Created viz_performance_actual.py example
+  - Successfully collecting and visualizing actual workflow metrics
+- **Cleanup & Consolidation** ✅ Complete
+  - Removed redundant viz_performance_metrics.py
+  - Consolidated output directories (removed /output/, kept /outputs/)
+  - Updated all file references to use consistent output path
+
+**Session Stats**: Created 2 new modules | Fixed serialization issues | Real metrics visualization working
+**Key Achievement**: Workflows now collect and visualize actual performance metrics in real-time!
+
+### User Guides Completion Session 25 (2025-05-30) ✅
 ✅ **Comprehensive User Guide Documentation**:
 - **Best Practices Guide** ✅ Complete
   - Node development patterns with Pydantic configuration
@@ -502,19 +530,19 @@
 - **Feature Issues**: #28, #29
 
 ## Next Session Priorities
-1. **Workflow Analytics Integration** - Connect TaskManager metrics to visualizations
+1. **Real-time Dashboard Components** - Build live workflow monitoring UI
 2. **Start Security Audit** - Review all I/O operations and code execution (#54)
 3. **Update README.md** - Complete installation and usage guides
 4. **Migration Guide** - Create v1.0 migration documentation
 5. **Configure Async Tests** - Enable pytest-asyncio for 10 skipped tests
 
 ---
-*Last Updated: 2025-05-30 (Session 25 - User Guides Completion)*
-*Total Development Time: 15 days*
+*Last Updated: 2025-05-31 (Session 26 - Performance Visualization Integration)*
+*Total Development Time: 16 days*
 *Test Progress: 100% passing (482/482)* 🎉
 *Categories Complete: 15/15 at 100%* ✅
 *Examples: 23/23 working* ✅
 *API Documentation: Complete Sphinx framework with API reference + user guides* 📚
 *User Guides: Best Practices, Troubleshooting, and Performance guides complete* ✅
 *Total Tests Fixed: 272+ across all sessions*
-*New Features: Pattern-oriented Mermaid diagram visualization*
+*New Features: Real-time performance metrics collection and visualization* 📈

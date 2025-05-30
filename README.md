@@ -73,6 +73,8 @@ workflow.add_node("read_customers", reader)
 def analyze_customers(data):
     """Analyze customer data and compute metrics."""
     df = pd.DataFrame(data)
+    # Convert total_spent to numeric
+    df['total_spent'] = pd.to_numeric(df['total_spent'])
     return {
         "total_customers": len(df),
         "avg_spend": df["total_spent"].mean(),
@@ -296,6 +298,39 @@ results = runtime.execute(workflow, inputs=test_data)
 assert results["node_id"]["output_key"] == expected_value
 ```
 
+#### Performance Monitoring
+```python
+from kailash.visualization.performance import PerformanceVisualizer
+from kailash.tracking import TaskManager
+from kailash.runtime.local import LocalRuntime
+
+# Run workflow with task tracking
+task_manager = TaskManager()
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, task_manager=task_manager)
+
+# Visualize performance metrics
+perf_viz = PerformanceVisualizer(task_manager)
+
+# Generate comprehensive performance report
+outputs = perf_viz.create_run_performance_summary(run_id, output_dir="performance_report")
+
+# Compare multiple runs
+perf_viz.compare_runs([run_id_1, run_id_2], output_path="comparison.png")
+
+# Create performance dashboard
+from kailash.workflow.visualization import WorkflowVisualizer
+viz = WorkflowVisualizer(workflow)
+dashboard = viz.create_performance_dashboard(run_id, task_manager, output_dir="dashboard")
+```
+
+Performance metrics collected include:
+- **Execution Timeline**: Gantt charts showing node execution order and duration
+- **Resource Usage**: CPU and memory consumption over time
+- **I/O Analysis**: Read/write operations and data transfer volumes
+- **Performance Heatmaps**: Identify bottlenecks across workflow runs
+- **Comparison Charts**: Compare performance between different runs
+
 #### API Integration
 ```python
 from kailash.nodes.api import (
@@ -399,11 +434,14 @@ kailash/
 ├── workflow/        # Workflow management
 │   ├── graph.py     # DAG representation
 │   └── visualization.py  # Visualization tools
+├── visualization/   # Performance visualization
+│   └── performance.py    # Performance metrics charts
 ├── runtime/         # Execution engines
 │   ├── local.py     # Local execution
 │   └── docker.py    # Docker execution (planned)
 ├── tracking/        # Monitoring and tracking
 │   ├── manager.py   # Task management
+│   └── metrics_collector.py  # Performance metrics
 │   └── storage/     # Storage backends
 ├── cli/             # Command-line interface
 └── utils/           # Utilities and helpers
@@ -491,6 +529,8 @@ uv run make quality
 - API integration with rate limiting
 - OAuth 2.0 authentication
 - SharePoint Graph API integration
+- **Real-time performance metrics collection**
+- **Performance visualization dashboards**
 - **100% test coverage (482 tests)**
 - **15 test categories all passing**
 - 21+ working examples

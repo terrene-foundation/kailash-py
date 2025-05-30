@@ -120,6 +120,7 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 - [0014-async-node-execution.md](0014-async-node-execution.md) - Asynchronous Node Execution & Parallel Workflow Runtime
 - [0015-api-integration-architecture.md](0015-api-integration-architecture.md) - API Integration Architecture
 - [0016-immutable-state-management.md](0016-immutable-state-management.md) - Immutable State Management
+- [0018-performance-metrics-architecture.md](0018-performance-metrics-architecture.md) - Performance Metrics Architecture
 
 ### DevOps & CI/CD (Proposed)
 - [0017-ci-optimization-unified-workflow.md](0017-ci-optimization-unified-workflow.md) - CI Optimization - Unified Workflow Strategy

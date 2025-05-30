@@ -328,7 +328,7 @@ A Kailash workflow project.
 - `workflows/`: Workflow definitions
 - `nodes/`: Custom node implementations
 - `data/`: Input data files
-- `output/`: Output files
+- `outputs/`: Output files
 
 ## Usage
 
@@ -340,7 +340,7 @@ kailash run workflows/example_workflow.py
 kailash validate workflows/example_workflow.py
 
 # Export to Kailash format
-kailash export workflows/example_workflow.py output/workflow.yaml
+kailash export workflows/example_workflow.py outputs/workflow.yaml
 ```
 
 ## Examples
@@ -367,7 +367,7 @@ workflow.add_node("reader", CSVReader(), file_path="data/input.csv")
 workflow.add_node("filter", Filter(), field="value", operator=">", value=100)
 workflow.add_node("sort", Sort(), field="value", reverse=True)
 workflow.add_node("aggregate", Aggregator(), group_by="category", operation="sum")
-workflow.add_node("writer", CSVWriter(), file_path="output/results.csv")
+workflow.add_node("writer", CSVWriter(), file_path="outputs/results.csv")
 
 # Connect nodes
 workflow.connect("reader", "filter", {"data": "data"})
@@ -448,7 +448,7 @@ venv/
 *.egg-info/
 
 # Output files
-output/
+outputs/
 *.log
 
 # IDE
@@ -495,7 +495,7 @@ workflow.add_node("group_by_category", Aggregator(), group_by="category", operat
 workflow.add_node("sort_results", Sort(), field="value", reverse=True)
 
 # Export results
-workflow.add_node("write_json", JSONWriter(), file_path="output/analysis_results.json")
+workflow.add_node("write_json", JSONWriter(), file_path="outputs/analysis_results.json")
 
 # Connect pipeline
 workflow.connect("csv_reader", "filter_sales", {"data": "data"})
@@ -570,7 +570,7 @@ workflow.add_node("summarize", TextSummarizer(), max_length=100)
 workflow.add_node("merge_results", Merge(), merge_type="merge_dict")
 
 # Export results
-workflow.add_node("save_results", JSONWriter(), file_path="output/ml_results.json")
+workflow.add_node("save_results", JSONWriter(), file_path="outputs/ml_results.json")
 
 # Connect pipeline
 workflow.connect("read_data", "extract_text", {"data": "data"})
@@ -644,7 +644,7 @@ workflow.add_node("process_success", Map(), operation="identity")
 workflow.add_node("handle_error", Map(), operation="identity")
 
 # Save results
-workflow.add_node("save_results", JSONWriter(), file_path="output/api_results.json")
+workflow.add_node("save_results", JSONWriter(), file_path="outputs/api_results.json")
 
 # Connect workflow
 workflow.connect("read_config", "chat_agent", {"data": "messages"})

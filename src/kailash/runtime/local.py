@@ -13,6 +13,8 @@ from kailash.sdk_exceptions import (
     WorkflowValidationError,
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.tracking.metrics_collector import MetricsCollector
+from kailash.tracking.models import TaskMetrics
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -174,7 +176,25 @@ class LocalRuntime:
                     if hasattr(node_instance, "config") and isinstance(
                         node_instance.config, dict
                     ):
-                        node_metadata = node_instance.config.get("metadata", {})
+                        raw_metadata = node_instance.config.get("metadata", {})
+                        # Convert NodeMetadata object to dict if needed
+                        if hasattr(raw_metadata, "model_dump"):
+                            node_metadata_dict = raw_metadata.model_dump()
+                            # Convert datetime objects to strings for JSON serialization
+                            if "created_at" in node_metadata_dict:
+                                node_metadata_dict["created_at"] = str(
+                                    node_metadata_dict["created_at"]
+                                )
+                            # Convert sets to lists for JSON serialization
+                            if "tags" in node_metadata_dict and isinstance(
+                                node_metadata_dict["tags"], set
+                            ):
+                                node_metadata_dict["tags"] = list(
+                                    node_metadata_dict["tags"]
+                                )
+                            node_metadata = node_metadata_dict
+                        elif isinstance(raw_metadata, dict):
+                            node_metadata = raw_metadata
 
                     task = task_manager.create_task(
                         run_id=run_id,
@@ -206,12 +226,13 @@ class LocalRuntime:
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
-                # Execute node
-                start_time = datetime.now(timezone.utc)
-                outputs = node_instance.execute(**inputs)
-                execution_time = (
-                    datetime.now(timezone.utc) - start_time
-                ).total_seconds()
+                # Execute node with metrics collection
+                collector = MetricsCollector()
+                with collector.collect(node_id=node_id) as metrics_context:
+                    outputs = node_instance.execute(**inputs)
+
+                # Get performance metrics
+                performance_metrics = metrics_context.result()
 
                 # Store outputs
                 node_outputs[node_id] = outputs
@@ -220,18 +241,26 @@ class LocalRuntime:
                 if self.debug:
                     self.logger.debug(f"Node {node_id} outputs: {outputs}")
 
-                # Update task status
+                # Update task status with enhanced metrics
                 if task and task_manager:
+                    # Convert performance metrics to TaskMetrics format
+                    task_metrics_data = performance_metrics.to_task_metrics()
+                    task_metrics = TaskMetrics(**task_metrics_data)
+
+                    # Update task with metrics
                     task_manager.update_task_status(
                         task.task_id,
                         TaskStatus.COMPLETED,
                         result=outputs,
                         ended_at=datetime.now(timezone.utc),
-                        metadata={"execution_time": execution_time},
+                        metadata={"execution_time": performance_metrics.duration},
                     )
 
+                    # Update task metrics separately
+                    task_manager.update_task_metrics(task.task_id, task_metrics)
+
                 self.logger.info(
-                    f"Node {node_id} completed successfully in {execution_time:.3f}s"
+                    f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
                 )
 
             except Exception as e:

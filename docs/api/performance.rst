@@ -744,7 +744,42 @@ Profile your code to identify bottlenecks:
 Performance Monitoring in Production
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Monitor performance in production workflows:
+The SDK includes built-in performance monitoring that automatically tracks metrics during workflow execution:
+
+Built-in Performance Tracking
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+    from kailash.tracking import TaskManager
+    from kailash.visualization.performance import PerformanceVisualizer
+    from kailash.runtime.local import LocalRuntime
+    
+    # Performance metrics are collected automatically
+    task_manager = TaskManager()
+    runtime = LocalRuntime()
+    
+    # Execute workflow with tracking
+    results, run_id = runtime.execute(workflow, task_manager=task_manager)
+    
+    # Generate performance visualizations
+    perf_viz = PerformanceVisualizer(task_manager)
+    outputs = perf_viz.create_run_performance_summary(run_id)
+    
+    # Compare multiple runs
+    perf_viz.compare_runs([run_id_1, run_id_2, run_id_3])
+
+The SDK automatically collects:
+- Node execution times
+- CPU usage percentage
+- Memory consumption and peaks
+- I/O operations (read/write bytes)
+- Network I/O for API nodes
+
+Custom Performance Monitoring
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For additional custom metrics, you can extend the built-in monitoring:
 
 .. code-block:: python
 

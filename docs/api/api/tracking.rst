@@ -514,6 +514,125 @@ Send tracking events to external systems:
    
    task_manager.add_handler(webhook)
 
+Performance Metrics Collection
+==============================
+
+The SDK includes comprehensive performance metrics collection that automatically tracks resource usage during workflow execution.
+
+MetricsCollector
+----------------
+
+Collects real-time performance metrics during node execution.
+
+.. autoclass:: kailash.tracking.metrics_collector.MetricsCollector
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Usage Example:**
+
+.. code-block:: python
+
+   from kailash.tracking.metrics_collector import MetricsCollector
+   
+   # Automatic collection in runtime
+   collector = MetricsCollector()
+   with collector.collect(node_id="process_data") as metrics:
+       # Your node execution code
+       result = process_data(input_data)
+   
+   # Access collected metrics
+   performance = metrics.result()
+   print(f"Duration: {performance.duration}s")
+   print(f"CPU Usage: {performance.cpu_percent}%")
+   print(f"Memory: {performance.memory_mb}MB")
+
+PerformanceMetrics
+------------------
+
+Comprehensive performance data collected during execution.
+
+.. autoclass:: kailash.tracking.metrics_collector.PerformanceMetrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Collected Metrics:**
+
+- **Timing**: Start time, end time, duration
+- **CPU**: Usage percentage, user/system time
+- **Memory**: Current usage, peak usage, delta
+- **I/O**: Read/write bytes, operation counts
+- **Network**: Bytes sent/received (for API nodes)
+
+Performance Visualization
+=========================
+
+Visualize and analyze performance metrics from workflow runs.
+
+PerformanceVisualizer
+---------------------
+
+Creates various performance visualizations from collected metrics.
+
+.. autoclass:: kailash.visualization.performance.PerformanceVisualizer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Visualization Types:**
+
+1. **Execution Timeline** - Gantt chart showing node execution order and duration
+2. **Resource Usage** - Line charts of CPU and memory over time
+3. **Performance Comparison** - Radar charts comparing multiple runs
+4. **I/O Analysis** - Bar charts of read/write operations
+5. **Performance Heatmap** - Visual bottleneck identification
+6. **Markdown Reports** - Comprehensive performance analysis
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.visualization.performance import PerformanceVisualizer
+   from kailash.tracking import TaskManager
+   
+   # Create visualizer
+   task_manager = TaskManager()
+   perf_viz = PerformanceVisualizer(task_manager)
+   
+   # Generate performance report
+   outputs = perf_viz.create_run_performance_summary(
+       run_id="abc-123",
+       output_dir="performance_report"
+   )
+   
+   # Compare multiple runs
+   perf_viz.compare_runs(
+       run_ids=["run-1", "run-2", "run-3"],
+       output_path="comparison.png"
+   )
+
+**Dashboard Creation:**
+
+.. code-block:: python
+
+   from kailash.workflow.visualization import WorkflowVisualizer
+   
+   # Create performance dashboard
+   workflow_viz = WorkflowVisualizer(workflow)
+   dashboard = workflow_viz.create_performance_dashboard(
+       run_id=run_id,
+       task_manager=task_manager,
+       output_dir="dashboard"
+   )
+   
+   # Dashboard includes:
+   # - dashboard.html (interactive overview)
+   # - Timeline charts
+   # - Resource usage graphs
+   # - Performance heatmaps
+   # - Detailed metrics tables
+
 Best Practices
 ==============
 

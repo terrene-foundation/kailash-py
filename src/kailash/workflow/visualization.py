@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt
 import networkx as nx
 
+from kailash.tracking.manager import TaskManager
 from kailash.workflow.graph import Workflow
 
 
@@ -413,6 +414,157 @@ class WorkflowVisualizer:
             f.write(markdown_content)
 
         return str(output_path)
+
+    def create_performance_dashboard(
+        self, run_id: str, task_manager: TaskManager, output_dir: Optional[Path] = None
+    ) -> Dict[str, Path]:
+        """Create integrated performance dashboard with workflow visualization.
+
+        Args:
+            run_id: Run ID to visualize
+            task_manager: Task manager with execution data
+            output_dir: Directory for output files
+
+        Returns:
+            Dictionary of output file paths
+        """
+        from kailash.visualization.performance import PerformanceVisualizer
+
+        if output_dir is None:
+            output_dir = Path(f"outputs/performance/{run_id}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        outputs = {}
+
+        # Create workflow execution graph
+        outputs["workflow_graph"] = self.create_execution_graph(
+            run_id, task_manager, str(output_dir / "workflow_execution.md")
+        )
+
+        # Create performance visualizations
+        perf_viz = PerformanceVisualizer(task_manager)
+        perf_outputs = perf_viz.create_run_performance_summary(run_id, output_dir)
+        outputs.update(perf_outputs)
+
+        # Create integrated dashboard HTML
+        dashboard_path = output_dir / "dashboard.html"
+        self._create_dashboard_html(run_id, outputs, dashboard_path)
+        outputs["dashboard"] = dashboard_path
+
+        return outputs
+
+    def _create_dashboard_html(
+        self, run_id: str, outputs: Dict[str, Path], dashboard_path: Path
+    ) -> None:
+        """Create HTML dashboard integrating all visualizations."""
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Performance Dashboard - Run {run_id}</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        h1, h2 {{
+            color: #333;
+        }}
+        .section {{
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }}
+        .image-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        img {{
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }}
+        .report-link {{
+            display: inline-block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }}
+        .report-link:hover {{
+            background-color: #0056b3;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Performance Dashboard - Run {run_id}</h1>
+        
+        <div class="section">
+            <h2>Workflow Execution</h2>
+            <p>View the workflow execution graph and task status:</p>
+            <a href="{outputs.get('workflow_graph', '#')}" class="report-link">
+                View Workflow Graph
+            </a>
+        </div>
+        
+        <div class="section">
+            <h2>Performance Metrics</h2>
+            <div class="image-grid">
+"""
+
+        # Add performance images
+        image_keys = [
+            "execution_timeline",
+            "resource_usage",
+            "performance_comparison",
+            "io_analysis",
+            "performance_heatmap",
+        ]
+
+        for key in image_keys:
+            if key in outputs:
+                title = key.replace("_", " ").title()
+                html_content += f"""
+                <div>
+                    <h3>{title}</h3>
+                    <img src="{outputs[key].name}" alt="{title}">
+                </div>
+"""
+
+        html_content += """
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Detailed Report</h2>
+            <p>View the comprehensive performance analysis report:</p>
+            <a href="{outputs.get('report', '#')}" class="report-link">
+                View Performance Report
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+        with open(dashboard_path, "w") as f:
+            f.write(html_content)
 
 
 # Add visualization method to Workflow class

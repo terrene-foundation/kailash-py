@@ -375,6 +375,29 @@ Tips & Tricks
    # Save as markdown
    w.save_mermaid_markdown("workflow_diagram.md")
 
+6. **Performance Monitoring**
+
+Track and visualize workflow performance:
+
+.. code-block:: python
+
+   from kailash.tracking import TaskManager
+   from kailash.visualization.performance import PerformanceVisualizer
+   
+   # Run with tracking
+   task_manager = TaskManager()
+   results, run_id = runtime.execute(workflow, task_manager=task_manager)
+   
+   # Visualize performance
+   perf_viz = PerformanceVisualizer(task_manager)
+   perf_viz.create_run_performance_summary(run_id, output_dir="performance")
+   
+   # The SDK automatically collects:
+   # - Execution time per node
+   # - CPU and memory usage
+   # - I/O operations
+   # - Resource bottlenecks
+
 Next Steps
 ==========
 
