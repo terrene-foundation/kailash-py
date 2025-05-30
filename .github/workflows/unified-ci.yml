@@ -1,0 +1,318 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ feat/*, feature/* ]
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Determine what level of testing to run based on context
+  determine-context:
+    name: Determine Test Context
+    runs-on: ubuntu-latest
+    outputs:
+      test-level: ${{ steps.determine.outputs.level }}
+      skip-reason: ${{ steps.determine.outputs.skip-reason }}
+    steps:
+      - name: Determine test level
+        id: determine
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const eventName = context.eventName;
+            const isPR = eventName === 'pull_request';
+            const isPush = eventName === 'push';
+            const isManual = eventName === 'workflow_dispatch';
+            
+            console.log(`Event: ${eventName}`);
+            console.log(`Ref: ${context.ref}`);
+            
+            // Manual dispatch always runs full tests
+            if (isManual) {
+              core.setOutput('level', 'full');
+              core.setOutput('skip-reason', '');
+              return;
+            }
+            
+            // For PRs, always run full tests
+            if (isPR) {
+              core.setOutput('level', 'full');
+              core.setOutput('skip-reason', '');
+              console.log('PR event detected - running full test suite');
+              return;
+            }
+            
+            // For pushes, check if a PR exists
+            if (isPush) {
+              const branch = context.ref.replace('refs/heads/', '');
+              console.log(`Checking for PRs on branch: ${branch}`);
+              
+              try {
+                const { data: prs } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch}`,
+                  state: 'open'
+                });
+                
+                if (prs.length > 0) {
+                  core.setOutput('level', 'skip');
+                  core.setOutput('skip-reason', `PR #${prs[0].number} exists for this branch - tests will run on PR`);
+                  console.log(`Found ${prs.length} open PR(s) for this branch`);
+                } else {
+                  core.setOutput('level', 'basic');
+                  core.setOutput('skip-reason', '');
+                  console.log('No PR found - running basic tests');
+                }
+              } catch (error) {
+                // If we can't check PRs, run basic tests to be safe
+                console.log(`Error checking PRs: ${error.message}`);
+                core.setOutput('level', 'basic');
+                core.setOutput('skip-reason', '');
+              }
+            }
+
+      - name: Display decision
+        run: |
+          echo "Test Level: ${{ steps.determine.outputs.level }}"
+          echo "Skip Reason: ${{ steps.determine.outputs.skip-reason }}"
+
+  # Skip notification job
+  notify-skip:
+    name: Notify Skip
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'skip'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify why tests are skipped
+        run: |
+          echo "⏭️ Skipping tests: ${{ needs.determine-context.outputs.skip-reason }}"
+          echo "Tests will run when the PR is updated."
+
+  # Basic tests for feature branch pushes without PRs
+  basic-tests:
+    name: Basic Tests
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'basic'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv sync
+      
+      - name: Run basic smoke tests
+        run: |
+          echo "Running basic smoke tests..."
+          uv run pytest tests/test_ci_setup.py -v
+          uv run python -m kailash --version
+
+  # Full test suite for PRs and manual triggers
+  lint-and-format:
+    name: Lint and Format Check
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv sync
+      
+      - name: Check formatting with black
+        run: |
+          uv run black --check src/ tests/
+      
+      - name: Check import sorting with isort
+        run: |
+          uv run isort --check-only src/ tests/
+      
+      - name: Lint with ruff
+        run: |
+          # Check for critical errors only (syntax errors, undefined names, etc.)
+          uv run ruff check src/ tests/ --select=E9,F63,F7,F82
+          echo "✅ No critical linting errors found"
+
+  test-matrix:
+    name: Test Python ${{ matrix.python-version }}
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'full'
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv sync
+      
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v5
+        if: matrix.python-version == '3.11'
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  security-scan:
+    name: Security Scan
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  validate-examples:
+    name: Validate Examples
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv sync
+      
+      - name: Test all examples
+        run: |
+          cd examples
+          uv run python _utils/test_all_examples.py
+
+  # Summary job for PR status
+  pr-summary:
+    name: PR Summary
+    needs: [lint-and-format, test-matrix, security-scan, validate-examples]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = [
+              { name: 'Lint and Format', status: '${{ needs.lint-and-format.result }}' },
+              { name: 'Tests', status: '${{ needs.test-matrix.result }}' },
+              { name: 'Security', status: '${{ needs.security-scan.result }}' },
+              { name: 'Examples', status: '${{ needs.validate-examples.result }}' }
+            ];
+            
+            let comment = '## 🤖 CI Pipeline Results\n\n';
+            let allPassed = true;
+            
+            for (const job of jobs) {
+              const icon = job.status === 'success' ? '✅' : '❌';
+              comment += `${icon} **${job.name}**: ${job.status}\n`;
+              if (job.status !== 'success') allPassed = false;
+            }
+            
+            comment += '\n';
+            comment += allPassed 
+              ? '✨ All checks passed! Ready for review.'
+              : '⚠️ Some checks failed. Please review the logs.';
+            
+            // Comment on PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('CI Pipeline Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }

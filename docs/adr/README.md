@@ -121,6 +121,9 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 - [0015-api-integration-architecture.md](0015-api-integration-architecture.md) - API Integration Architecture
 - [0016-immutable-state-management.md](0016-immutable-state-management.md) - Immutable State Management
 
+### DevOps & CI/CD (Proposed)
+- [0017-ci-optimization-unified-workflow.md](0017-ci-optimization-unified-workflow.md) - CI Optimization - Unified Workflow Strategy
+
 ### Deprecated/Superseded
 - [0001-base-node-interface.md](0001-base-node-interface.md) - Base Node Interface Design (Superseded by 0003)
 - [0002-workflow-representation.md](0002-workflow-representation.md) - Workflow Representation (Superseded by 0004)
