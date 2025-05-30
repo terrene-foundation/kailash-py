@@ -230,28 +230,38 @@ kailash_python_sdk/           # Project root directory
 │   │   └── [session-specific todos]
 │   └── adr.md              # ADR overview documentation
 ├── examples/                # Example usage and demonstrations
-│   ├── basic_workflow.py    # Basic workflow patterns
-│   ├── comprehensive_workflow_example.py # Complex examples
-│   ├── python_code_node_example.py # Code execution
-│   ├── api_integration_comprehensive.py # API integration
-│   ├── conditional_workflow_example.py # Conditional logic
-│   ├── parallel_workflow_example.py # Parallel execution
-│   ├── docker_workflow_example.py # Docker runtime
-│   ├── state_management_example.py # State management
-│   ├── visualization_example.py # Workflow visualization
-│   ├── task_tracking_example.py # Task tracking
-│   ├── export_workflow.py   # Export functionality
-│   ├── error_handling.py    # Error handling patterns
-│   ├── data_transformation.py # Data processing
-│   ├── custom_node.py       # Custom node development
-│   ├── workflow_example.py  # General workflow patterns
-│   ├── data/                # Example data files
+│   ├── node_examples/       # Individual node usage examples
+│   │   ├── node_basic_connection.py
+│   │   ├── node_custom_creation.py
+│   │   ├── node_docker_test.py
+│   │   ├── node_python_code.py
+│   │   └── node_output_schema.py
+│   ├── workflow_examples/   # Workflow patterns and use cases
+│   │   ├── workflow_basic.py
+│   │   ├── workflow_complex.py
+│   │   ├── workflow_comprehensive.py
+│   │   ├── workflow_conditional.py
+│   │   ├── workflow_parallel.py
+│   │   ├── workflow_error_handling.py
+│   │   └── workflow_task_tracking.py
+│   ├── integration_examples/ # API and system integrations
+│   │   ├── integration_api_comprehensive.py
+│   │   ├── integration_api_simple.py
+│   │   └── integration_sharepoint_graph.py
+│   ├── visualization_examples/ # Visualization and reporting
+│   │   ├── viz_workflow_graphs.py
+│   │   ├── viz_mermaid.py
+│   │   └── viz_examples_overview.py
+│   ├── data/                # Sample data files
 │   │   ├── customers.csv
-│   │   ├── input.csv
 │   │   ├── transactions.json
-│   │   ├── outputs/         # Generated example outputs
-│   │   └── task_storage/    # Task tracking data
-│   └── test_all_examples.py # Example validation tests
+│   │   └── input.csv
+│   ├── outputs/             # Generated output files
+│   │   └── visualizations/  # Mermaid markdown files
+│   ├── migrations/          # Migration experiments
+│   ├── _utils/              # Testing utilities
+│   │   └── test_all_examples.py # Example validation entrypoint
+│   └── README.md            # Examples documentation
 ├── data/                    # Root-level data for testing
 │   ├── customers.csv        # Sample datasets
 │   ├── transactions.json
@@ -396,8 +406,19 @@ Keep dependencies minimal and explicit:
 
 4. **Examples**:
    - Always create example nodes and workflows in the `examples/` directory.
+   - Examples are organized into categories:
+     - `node_examples/` - Individual node usage examples
+     - `workflow_examples/` - Workflow patterns and use cases
+     - `integration_examples/` - API and external system integrations
+     - `visualization_examples/` - Workflow visualization and reporting
+   - Follow naming conventions: `{category}_{description}.py` (e.g., `node_custom_creation.py`, `workflow_basic.py`)
    - Ensure examples demonstrate best practices and common usage patterns.
-   - Test examples to ensure they work as expected.
+   - **Testing Examples**: Use `examples/_utils/test_all_examples.py` as the entrypoint to test all examples:
+     ```bash
+     cd examples
+     python _utils/test_all_examples.py
+     ```
+   - This script automatically discovers and validates all example files across all categories
    - Create a basic, simple, and complex examples, such as:
      - Basic Node Example: Create a simple node that reads data from a file and writes it to another file
      - Simple Workflow Example: Create a simple workflow that connects two nodes (e.g., a data reader and a transformer)
