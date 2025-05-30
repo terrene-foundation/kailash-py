@@ -16,7 +16,6 @@ from examples.migrations.project_hmi.adapted.nodes import (
     W1SendNode,
 )
 from examples.migrations.project_hmi.adapted.shared import AgentState
-
 from kailash.nodes.logic.operations import Switch
 from kailash.workflow.graph import Workflow
 

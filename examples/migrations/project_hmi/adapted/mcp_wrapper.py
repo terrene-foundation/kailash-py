@@ -11,6 +11,7 @@ import urllib.parse
 from typing import Any, Dict, Optional
 
 import requests
+
 from examples.migrations.project_hmi.adapted.shared import (
     NRIC_Type,
 )

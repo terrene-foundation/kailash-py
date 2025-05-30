@@ -19,7 +19,6 @@ from examples.migrations.project_hmi.adapted.shared import (
     DoctorInfo,
     SlotInfo,
 )
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 

@@ -18,7 +18,6 @@ from examples.migrations.project_hmi.adapted.nodes_immutable import (
     W1SendNodeImmutable,
 )
 from examples.migrations.project_hmi.adapted.shared import AgentState
-
 from kailash.nodes.logic.operations import Switch
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow.graph import Workflow
