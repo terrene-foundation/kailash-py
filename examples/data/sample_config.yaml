@@ -16,7 +16,7 @@ data_sources:
     type: csv
     path: data/customers.csv
     encoding: utf-8
-  
+
   transactions:
     type: json
     path: data/transactions.json
@@ -25,7 +25,7 @@ transformations:
   - type: normalize
     columns: [age, income]
     method: standard
-  
+
   - type: encode
     columns: [category]
     method: one_hot

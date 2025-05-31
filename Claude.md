@@ -2,11 +2,11 @@
 
 ## Project Purpose and Background
 
-The Kailash Python SDK is designed to solve a collaboration problem between 
-AI Business Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. 
+The Kailash Python SDK is designed to solve a collaboration problem between
+AI Business Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation.
 
-The SDK provides a framework for creating nodes and workflows that align with 
-Kailash's container-node architecture while allowing ABCs to prototype rapidly 
+The SDK provides a framework for creating nodes and workflows that align with
+Kailash's container-node architecture while allowing ABCs to prototype rapidly
 without deep technical knowledge.
 
 ## Coding Standards and Conventions
@@ -38,7 +38,7 @@ without deep technical knowledge.
      1. Standard library imports
      2. Third-party library imports
      3. Local application imports
-   - Sort alphabetically within each group
+   - Sort them according to isort conventions
    - Use absolute imports within the package
 
 ## Documentation Requirements
@@ -50,16 +50,16 @@ without deep technical knowledge.
    def method(self, arg1, arg2=None):
        """
        Short description of the method.
-       
+
        Longer description if necessary.
-       
+
        Args:
            arg1 (type): Description of arg1
            arg2 (type, optional): Description of arg2. Defaults to None.
-           
+
        Returns:
            type: Description of return value
-           
+
        Raises:
            ExceptionType: Description of when this exception is raised
        """
@@ -78,226 +78,7 @@ without deep technical knowledge.
 
 ## Project Structure
 
-The project follows this current structure:
-
-```
-kailash_python_sdk/           # Project root directory
-├── src/                      # Source directory
-│   └── kailash/              # Package directory (what gets imported)
-│       ├── __init__.py       # Package initialization
-│       ├── manifest.py       # Core manifest and registry
-│       ├── sdk_exceptions.py # Custom exceptions
-│       ├── nodes/            # Node definitions
-│       │   ├── __init__.py
-│       │   ├── base.py       # Base node class
-│       │   ├── base_async.py # Async base node
-│       │   ├── data/         # Data connector nodes
-│       │   │   ├── __init__.py
-│       │   │   ├── readers.py # Data source nodes
-│       │   │   ├── writers.py # Data sink nodes
-│       │   │   ├── sql.py     # SQL database nodes
-│       │   │   ├── streaming.py # Streaming data nodes
-│       │   │   └── vector_db.py # Vector database nodes
-│       │   ├── transform/    # Transformation nodes
-│       │   │   ├── __init__.py
-│       │   │   └── processors.py # Data transformation nodes
-│       │   ├── logic/        # Business logic nodes
-│       │   │   ├── __init__.py
-│       │   │   ├── operations.py # Logical operation nodes
-│       │   │   └── async_operations.py # Async operations
-│       │   ├── ai/           # AI & ML nodes
-│       │   │   ├── __init__.py
-│       │   │   ├── models.py  # ML model nodes
-│       │   │   └── agents.py  # AI agent nodes
-│       │   ├── api/          # API integration nodes
-│       │   │   ├── __init__.py
-│       │   │   ├── http.py    # HTTP client nodes
-│       │   │   ├── rest.py    # REST API nodes
-│       │   │   ├── graphql.py # GraphQL nodes
-│       │   │   ├── auth.py    # Authentication nodes
-│       │   │   └── rate_limiting.py # Rate limiting
-│       │   └── code/         # Code execution nodes
-│       │       ├── __init__.py
-│       │       └── python.py  # Python code execution
-│       ├── workflow/         # Workflow management
-│       │   ├── __init__.py
-│       │   ├── builder.py    # Workflow builder
-│       │   ├── graph.py      # Workflow graph definition
-│       │   ├── runner.py     # Workflow execution
-│       │   ├── state.py      # State management
-│       │   ├── visualization.py # Visualization utilities
-│       │   ├── visualization_backup.py # Backup visualization
-│       │   └── mock_registry.py # Mock registry for testing
-│       ├── runtime/          # Execution environment
-│       │   ├── __init__.py
-│       │   ├── local.py      # Local execution engine
-│       │   ├── async_local.py # Async local execution
-│       │   ├── parallel.py   # Parallel execution
-│       │   ├── docker.py     # Docker runtime
-│       │   ├── runner.py     # Runtime runner
-│       │   └── testing.py    # Testing utilities
-│       ├── tracking/         # Task tracking system
-│       │   ├── __init__.py
-│       │   ├── models.py     # Task data models
-│       │   ├── manager.py    # Task manager
-│       │   └── storage/      # Storage backends
-│       │       ├── __init__.py
-│       │       ├── base.py   # Base storage interface
-│       │       ├── filesystem.py # File system storage
-│       │       └── database.py # Database storage
-│       ├── utils/            # Helper utilities
-│       │   ├── __init__.py
-│       │   ├── export.py     # Export utilities
-│       │   └── templates.py  # Node templates
-│       └── cli/              # Command-line interface
-│           ├── __init__.py
-│           └── commands.py   # CLI commands
-├── tests/                    # Test directory (mirrors src structure)
-│   ├── __init__.py
-│   ├── conftest.py          # PyTest configuration
-│   ├── sample_data/         # Test data files
-│   ├── test_nodes/          # Node tests
-│   │   ├── test_base.py
-│   │   ├── test_data.py
-│   │   ├── test_api.py
-│   │   ├── test_ai.py
-│   │   ├── test_code.py
-│   │   ├── test_logic.py
-│   │   ├── test_transform.py
-│   │   └── test_async_operations.py
-│   ├── test_workflow/       # Workflow tests
-│   │   ├── test_graph.py
-│   │   ├── test_state_management.py
-│   │   ├── test_visualization.py
-│   │   └── test_hmi_state_management.py
-│   ├── test_runtime/        # Runtime tests
-│   │   ├── test_local.py
-│   │   ├── test_docker.py
-│   │   ├── test_simple_runtime.py
-│   │   └── test_testing.py
-│   ├── test_tracking/       # Tracking tests
-│   │   ├── test_manager.py
-│   │   ├── test_models.py
-│   │   └── test_storage.py
-│   ├── test_utils/          # Utility tests
-│   │   ├── test_export.py
-│   │   └── test_templates.py
-│   ├── test_cli/            # CLI tests
-│   │   └── test_commands.py
-│   ├── test_schema/         # Schema validation tests
-│   ├── test_validation/     # Type validation tests
-│   ├── integration/         # Integration tests
-│   │   ├── test_workflow_execution.py
-│   │   ├── test_node_communication.py
-│   │   ├── test_error_propagation.py
-│   │   ├── test_performance.py
-│   │   ├── test_storage_integration.py
-│   │   ├── test_export_integration.py
-│   │   ├── test_visualization_integration.py
-│   │   ├── test_task_tracking_integration.py
-│   │   ├── test_code_node_integration.py
-│   │   ├── test_complex_workflows.py
-│   │   └── test_cli_integration.py
-│   └── test_ci_setup.py     # CI/CD setup tests
-├── docs/                    # Documentation
-│   ├── api/                 # Sphinx API documentation ✅ COMPLETE
-│   │   ├── conf.py          # Sphinx configuration
-│   │   ├── index.rst        # Main documentation entry point
-│   │   ├── getting_started.rst # Getting started guide
-│   │   ├── installation.rst # Installation instructions
-│   │   ├── quickstart.rst   # 5-minute quickstart
-│   │   ├── best_practices.rst # Best practices guide ✅ NEW
-│   │   ├── troubleshooting.rst # Troubleshooting guide ✅ NEW
-│   │   ├── performance.rst  # Performance optimization ✅ NEW
-│   │   ├── requirements.txt # Documentation dependencies
-│   │   ├── Makefile         # Build automation
-│   │   ├── _static/         # Custom CSS/JS files
-│   │   ├── _templates/      # Custom templates
-│   │   └── api/             # API reference files
-│   │       ├── nodes.rst    # Node types documentation
-│   │       ├── workflow.rst # Workflow management
-│   │       ├── runtime.rst  # Runtime engines
-│   │       ├── tracking.rst # Task tracking
-│   │       ├── utils.rst    # Utilities and helpers
-│   │       └── cli.rst      # CLI commands
-│   ├── build_docs.py        # Build script for GitHub Pages
-│   ├── README.md            # Documentation development guide
-│   ├── prd/                 # Product Requirements Documents
-│   │   └── 0001-kailash_python_sdk_prd.md
-│   ├── adr/                 # Architecture Decision Records
-│   │   ├── README.md        # ADR summary
-│   │   ├── 0000-template.md # ADR template
-│   │   ├── 0003-base-node-interface.md
-│   │   ├── 0004-workflow-representation.md
-│   │   ├── 0005-local-execution-strategy.md
-│   │   ├── 0006-task-tracking-architecture.md
-│   │   ├── 0007-export-format.md
-│   │   ├── 0008-docker-runtime-architecture.md
-│   │   ├── 0009-src-layout-for-package.md
-│   │   ├── 0010-python-code-node.md
-│   │   ├── 0011-workflow-execution-improvements.md
-│   │   ├── 0012-workflow-conditional-routing.md
-│   │   ├── 0013-simplify-conditional-logic-nodes.md
-│   │   ├── 0014-async-node-execution.md
-│   │   ├── 0015-api-integration-architecture.md
-│   │   └── 0016-immutable-state-management.md
-│   ├── features/            # Feature documentation
-│   │   ├── api_integration.md
-│   │   ├── python_code_node.md
-│   │   └── workflow_pattern.md
-│   ├── todos/               # Development task tracking
-│   │   ├── 000-master.md    # Master todo list
-│   │   └── [session-specific todos]
-│   └── adr.md              # ADR overview documentation
-├── examples/                # Example usage and demonstrations
-│   ├── node_examples/       # Individual node usage examples
-│   │   ├── node_basic_connection.py
-│   │   ├── node_custom_creation.py
-│   │   ├── node_docker_test.py
-│   │   ├── node_python_code.py
-│   │   └── node_output_schema.py
-│   ├── workflow_examples/   # Workflow patterns and use cases
-│   │   ├── workflow_basic.py
-│   │   ├── workflow_complex.py
-│   │   ├── workflow_comprehensive.py
-│   │   ├── workflow_conditional.py
-│   │   ├── workflow_parallel.py
-│   │   ├── workflow_error_handling.py
-│   │   └── workflow_task_tracking.py
-│   ├── integration_examples/ # API and system integrations
-│   │   ├── integration_api_comprehensive.py
-│   │   ├── integration_api_simple.py
-│   │   └── integration_sharepoint_graph.py
-│   ├── visualization_examples/ # Visualization and reporting
-│   │   ├── viz_workflow_graphs.py
-│   │   ├── viz_mermaid.py
-│   │   └── viz_examples_overview.py
-│   ├── data/                # Sample data files
-│   │   ├── customers.csv
-│   │   ├── transactions.json
-│   │   └── input.csv
-│   ├── outputs/             # Generated output files
-│   │   └── visualizations/  # Mermaid markdown files
-│   ├── migrations/          # Migration experiments
-│   ├── _utils/              # Testing utilities
-│   │   └── test_all_examples.py # Example validation entrypoint
-│   └── README.md            # Examples documentation
-├── data/                    # Root-level data for testing
-│   ├── customers.csv        # Sample datasets
-│   ├── transactions.json
-│   ├── outputs/             # Processing outputs
-│   └── task_storage/        # Task tracking storage
-├── output/                  # Generated output files
-├── pyproject.toml           # Package build configuration
-├── setup.py                 # Package setup script  
-├── setup.cfg                # Setup configuration
-├── pytest.ini              # PyTest configuration
-├── uv.lock                  # UV lockfile
-├── README.md                # Project README
-├── CONTRIBUTING.md          # Contribution guidelines
-├── LICENSE                  # License file
-└── Claude.md                # Development guidelines (this file)
-```
+The project structure is recorded in `docs/prd/0000-project_structure.md`. Refer to it when necessary.
 
 ## Design Principles
 
@@ -361,12 +142,6 @@ Keep dependencies minimal and explicit:
    - Maintain compatibility with existing Kailash architecture
    - Document any breaking changes clearly
 
-6. **Node Class Names**:
-   - The base node class is `Node` (not `BaseNode`)
-   - Import with: `from kailash.nodes.base import Node`
-   - All custom nodes should inherit from `Node`
-   - Must implement abstract methods: `get_parameters()` and `run()`
-
 ## Must Follow: Code Generation Guidelines
 
 1. **PRD Requirements**
@@ -394,35 +169,35 @@ Keep dependencies minimal and explicit:
 3. **Todos Management**:
    - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
    - Maintain the master todo list in `docs/todos/000-master.md` using this structure:
-   
+
    ```markdown
    # Project Status Overview
    - **Category**: Status - Brief description
-   
+
    ## High Priority - Active Tasks
    - **Task Name**
      - Description: Clear, actionable description
      - Status: To Do | In Progress | Completed
      - Priority: High | Medium | Low
      - Details: Implementation specifics or context
-   
+
    ## Medium/Low Priority Tasks
    [Same format as above]
-   
+
    ## Recent Achievements
    - Brief summary of completed work
-   
+
    ## Completed Tasks Archive
    - Condensed historical record organized by development phase
    ```
-   
+
    - **Organization Principles**:
      - Active tasks first, completed tasks archived at bottom
      - Group by priority and functional area (Testing, Documentation, etc.)
      - Use condensed format for completed tasks to reduce file length
      - Include project status overview for quick health assessment
      - Focus on actionable next steps rather than detailed history
-   
+
    - Other todo files in the same directory should record summaries of completed development cycles
    - Always queue these verification tasks at the end of each development cycle:
      - Test examples affected by recent changes
@@ -439,6 +214,7 @@ Keep dependencies minimal and explicit:
      - `visualization_examples/` - Workflow visualization and reporting
    - Follow naming conventions: `{category}_{description}.py` (e.g., `node_custom_creation.py`, `workflow_basic.py`)
    - Ensure examples demonstrate best practices and common usage patterns.
+   - Read the `mistakes\000-master.md` file to avoid common pitfalls in examples.
    - **Testing Examples**: Use `examples/_utils/test_all_examples.py` as the entrypoint to test all examples:
      ```bash
      cd examples
@@ -455,66 +231,31 @@ Keep dependencies minimal and explicit:
    - Create unit tests for all components using pytest
    - Maintain >80% code coverage
    - Place tests in a separate `tests/` directory mirroring the package structure
+   - Read the `mistakes\000-master.md` file to avoid common pitfalls.
 
 6. **Integration Tests**:
    - Ensure that unit tests have been created for all components before creating integration tests
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
+   - Read the `mistakes\000-master.md` file to avoid common pitfalls.
 
 7. **Sphinx Documentation**
    - Complete API documentation framework in `docs/api/`
    - Build with: `cd docs && python build_docs.py`
    - Auto-deployed via GitHub Actions to GitHub Pages
    - All public APIs must have comprehensive docstrings with examples
-   
+
 8. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
-9. **Code Quality and Linting**:
-   - **Black**: Use Black for automatic code formatting with line length of 88 characters
-     ```bash
-     black src/ tests/  # Format code
-     black --check src/ tests/  # Check formatting without modifying
-     ```
-   
-   - **isort**: Use isort for organizing imports
-     ```bash
-     isort src/ tests/  # Sort imports
-     isort --check src/ tests/  # Check import sorting without modifying
-     ```
-   
-   - **Ruff**: Use Ruff for linting to catch common errors
-     ```bash
-     ruff check src/ tests/  # Run all linting checks
-     ruff check src/ tests/ --select=E9,F63,F7,F82  # Check critical errors only (syntax, undefined names)
-     ```
-     - Critical error codes:
-       - E9: Syntax errors
-       - F63: Invalid use of comparison operators
-       - F7: Syntax errors in type comments
-       - F82: Undefined names
-   
-   - **Before committing**: Always run formatting and linting
-     ```bash
-     # Format code
-     black src/ tests/
-     isort src/ tests/
-     
-     # Check for critical errors
-     ruff check src/ tests/ --select=E9,F63,F7,F82
-     ```
+9. **Mistakes**: Record all coding mistakes in `docs/mistakes/000-master.md`
+    - **Example**: If a node fails to execute due to a missing import, document the mistake in `docs/mistakes/missing_import.md`
+    - Include:
+      - Description of the mistake
+      - Code example that caused the issue
+      - Solution or fix applied
 
-10. **Github Actions**:
-   - Use Github Actions for continuous integration.
-   - Test locally before pushing changes.
-   - Ensure code is linted and formatted using Black, isort, and Ruff before merging.
-   - CI/CD pipeline checks:
-     - Code formatting with Black and isort
-     - Critical linting errors with Ruff
-     - Unit tests with pytest
-     - Security scanning with Trivy
-
-11. **Update README.md**:
+10. **Update README.md**:
     - Overview of the project
     - Installation instructions
     - Quick start guide
@@ -522,19 +263,41 @@ Keep dependencies minimal and explicit:
     - API reference
     - Contribution guidelines
     - Reference to the PRD and ADRs
-   
-12. **Update ADRs**:
+
+11. **Update ADRs**:
     - Ensure all architectural decisions are documented in the ADRs.
     - Link relevant ADRs to the PRD and README.md.
     - Update ADRs as new decisions are made or existing ones are modified.
 
-13. **Update Claude.md**:
+12. **Update Claude.md**:
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
-   
-14. **Github Issues and Project Update**:
-    - Use the Github Issues and Projects to track tasks and progress. 
-    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD. 
+
+13. **Pre-commit Hooks and Code Quality**:
+    - **Pre-commit Setup**: Use automated pre-commit hooks to enforce coding standards
+    - **Automated Hooks Configuration** (`.pre-commit-config.yaml`):
+      - **Black**: Code formatting (88 character line length)
+      - **isort**: Import sorting (Black-compatible profile)
+      - **Ruff**: Fast Python linting with auto-fixes
+      - **pytest**: Unit tests (subset for speed)
+      - **Trivy**: Security vulnerability scanning
+      - **detect-secrets**: Secret detection with baseline
+      - **doc8**: Documentation linting
+      - **mypy**: Type checking
+      - **Built-in checks**: Whitespace, file endings, syntax validation
+    - **Development Workflow**:
+      - Hooks run automatically on every commit
+      - Failed hooks prevent commits (encourages fixing issues immediately)
+      - Manual formatting commands still available when needed
+      - See `docs/development/pre-commit-hooks.md` for comprehensive documentation
+
+14. **Github Actions**:
+    - Use Github Actions for continuous integration.
+    - Test locally before pushing changes.
+
+15. **Github Issues and Project Update**:
+    - Use the Github Issues and Projects to track tasks and progress.
+    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
     - Update the project board as tasks are completed.
 
 # important-instruction-reminders

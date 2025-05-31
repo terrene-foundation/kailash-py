@@ -9,7 +9,7 @@ Author: Kailash SDK Team
 Following the gaps analysis from the HMI project implementation, the Kailash SDK needed comprehensive built-in support for API integrations. The original SDK lacked standardized patterns for:
 
 - REST API client integration with authentication and retry logic
-- GraphQL API support  
+- GraphQL API support
 - OAuth 2.0 authentication flows
 - **Rate limiting and throttling for API calls** (key missing piece identified)
 - Comprehensive error handling for external service integration
@@ -42,7 +42,7 @@ We have implemented a comprehensive API integration architecture that provides:
 
 ### 4. Comprehensive Error Handling
 - Transport-level errors (connection failures, timeouts)
-- HTTP-level errors (4xx, 5xx status codes)  
+- HTTP-level errors (4xx, 5xx status codes)
 - API-level errors (error responses with valid HTTP status)
 - Retry logic with exponential backoff
 - Rate limit detection and automatic waiting
@@ -81,7 +81,7 @@ We have implemented a comprehensive API integration architecture that provides:
 ```
 nodes/api/
 ├── __init__.py              # Public API exports
-├── http.py                  # Basic HTTP client nodes  
+├── http.py                  # Basic HTTP client nodes
 ├── rest.py                  # REST API client nodes
 ├── graphql.py              # GraphQL client nodes
 ├── auth.py                 # Authentication nodes
@@ -107,7 +107,7 @@ rate_limited_node = RateLimitedAPINode(
 
 ### 3. Node Classes Implemented
 - **HTTP**: `HTTPRequestNode` & `AsyncHTTPRequestNode`
-- **REST**: `RESTClientNode` & `AsyncRESTClientNode`  
+- **REST**: `RESTClientNode` & `AsyncRESTClientNode`
 - **GraphQL**: `GraphQLClientNode` & `AsyncGraphQLClientNode`
 - **Auth**: `BasicAuthNode`, `OAuth2Node`, `APIKeyNode`
 - **Rate Limiting**: `RateLimitedAPINode` & `AsyncRateLimitedAPINode`

@@ -20,6 +20,8 @@ from kailash.sdk_exceptions import (
     WorkflowValidationError,
 )
 from kailash.tracking import TaskManager, TaskStatus
+from kailash.tracking.metrics_collector import MetricsCollector
+from kailash.tracking.models import TaskMetrics
 from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
@@ -381,34 +383,44 @@ class ParallelRuntime:
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
-                # Execute node with appropriate method based on type
-                start_time = datetime.now(timezone.utc)
+                # Execute node with metrics collection
+                collector = MetricsCollector()
 
                 if isinstance(node_instance, AsyncNode):
                     # Use async execution for AsyncNode
-                    outputs = await node_instance.execute_async(**inputs)
+                    outputs, performance_metrics = await collector.collect_async(
+                        node_instance.execute_async(**inputs), node_id=node_id
+                    )
                 else:
                     # Use sync execution in an executor for regular Node
                     loop = asyncio.get_running_loop()
-                    outputs = await loop.run_in_executor(
-                        None, lambda: node_instance.execute(**inputs)
-                    )
 
-                execution_time = (
-                    datetime.now(timezone.utc) - start_time
-                ).total_seconds()
+                    async def execute_with_metrics():
+                        with collector.collect(node_id=node_id) as context:
+                            result = await loop.run_in_executor(
+                                None, lambda: node_instance.execute(**inputs)
+                            )
+                            return result, context.result()
 
-                # Update task status
+                    outputs, performance_metrics = await execute_with_metrics()
+
+                # Update task status with enhanced metrics
                 if task:
                     task.update_status(
                         TaskStatus.COMPLETED,
                         result=outputs,
                         ended_at=datetime.now(timezone.utc),
-                        metadata={"execution_time": execution_time},
+                        metadata={"execution_time": performance_metrics.duration},
                     )
 
+                    # Convert and save performance metrics
+                    if task_manager:
+                        task_metrics_data = performance_metrics.to_task_metrics()
+                        task_metrics = TaskMetrics(**task_metrics_data)
+                        task_manager.update_task_metrics(task.task_id, task_metrics)
+
                 self.logger.info(
-                    f"Node {node_id} completed successfully in {execution_time:.3f}s"
+                    f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
                 )
 
                 return outputs, True

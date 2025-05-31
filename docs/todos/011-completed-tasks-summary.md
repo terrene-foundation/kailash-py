@@ -181,7 +181,7 @@ We implemented several changes to ensure backward compatibility while maintainin
    - This allowed older code that didn't specify these fields to continue working
 
 2. **Field Synchronization**:
-   - Implemented property synchronization between `ended_at` and `completed_at` 
+   - Implemented property synchronization between `ended_at` and `completed_at`
    - Created a custom `__setattr__` method to keep both fields in sync
    - Added a `model_post_init` hook to ensure both fields have the same value after object creation
 

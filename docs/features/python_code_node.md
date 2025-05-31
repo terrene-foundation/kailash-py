@@ -47,7 +47,7 @@ class MovingAverage:
     def __init__(self, window_size: int = 3):
         self.window_size = window_size
         self.values = []
-    
+
     def process(self, value: float) -> float:
         """Calculate moving average."""
         self.values.append(value)

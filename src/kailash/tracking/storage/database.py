@@ -143,7 +143,7 @@ class DatabaseStorage(StorageBackend):
 
         cursor.execute(
             """
-            INSERT OR REPLACE INTO workflow_runs 
+            INSERT OR REPLACE INTO workflow_runs
             (run_id, workflow_name, status, started_at, ended_at, metadata, error)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
@@ -234,7 +234,7 @@ class DatabaseStorage(StorageBackend):
         for table_name in ["tasks", "task_runs"]:
             cursor.execute(
                 f"""
-                INSERT OR REPLACE INTO {table_name} 
+                INSERT OR REPLACE INTO {table_name}
                 (task_id, run_id, node_id, node_type, status, started_at, ended_at, result, error, metadata, input_data, output_data)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -258,7 +258,7 @@ class DatabaseStorage(StorageBackend):
         if hasattr(task, "metrics") and task.metrics:
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO metrics 
+                INSERT OR REPLACE INTO metrics
                 (task_id, cpu_usage, memory_usage_mb, duration, custom_metrics)
                 VALUES (?, ?, ?, ?, ?)
             """,

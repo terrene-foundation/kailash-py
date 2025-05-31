@@ -53,7 +53,7 @@ This document summarizes the fixes made to address workflow execution issues, pa
 
 ## Key Patterns Established
 
-1. **Configuration Handling**: 
+1. **Configuration Handling**:
    - Nodes store configuration in `self.config`
    - Runtime inputs are passed via `execute(**inputs)`
    - Configuration and runtime inputs are merged, with runtime taking precedence

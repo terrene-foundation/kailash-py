@@ -35,17 +35,17 @@ The central component for tracking workflow execution.
 
    from kailash.tracking import TaskManager
    from kailash import Workflow, WorkflowRunner
-   
+
    # Create task manager
    task_manager = TaskManager()
-   
+
    # Use with workflow runner
    workflow = Workflow("my_workflow")
    runner = WorkflowRunner(workflow, task_manager)
-   
+
    # Execute and track
    results = runner.run()
-   
+
    # Access tracking data
    run_id = results["run_id"]
    run_info = task_manager.get_run(run_id)
@@ -80,7 +80,7 @@ Represents a complete workflow execution.
 
    # Get run information
    run = task_manager.get_run(run_id)
-   
+
    print(f"Run ID: {run.run_id}")
    print(f"Status: {run.status}")
    print(f"Duration: {run.duration}s")
@@ -114,7 +114,7 @@ Represents individual node execution within a workflow run.
 
    # Get task details
    tasks = task_manager.get_tasks(run_id)
-   
+
    for task in tasks:
        print(f"Node: {task.node_id}")
        print(f"Status: {task.status}")
@@ -147,7 +147,7 @@ Performance and resource metrics for task execution.
    # Access task metrics
    task = task_manager.get_task(task_id)
    metrics = task.metrics
-   
+
    print(f"CPU Usage: {metrics.cpu_percent}%")
    print(f"Memory: {metrics.memory_bytes / 1024 / 1024:.2f} MB")
    print(f"Disk Read: {metrics.disk_read_bytes / 1024 / 1024:.2f} MB")
@@ -171,14 +171,14 @@ Default storage backend using the local filesystem.
 .. code-block:: python
 
    from kailash.tracking.storage import FileSystemStorage
-   
+
    storage = FileSystemStorage(
        base_path="/path/to/tracking/data",
        format="json",  # or "yaml"
        compress=True,  # Gzip compression
        retention_days=30  # Auto-cleanup old data
    )
-   
+
    task_manager = TaskManager(storage=storage)
 
 **Directory Structure:**
@@ -221,14 +221,14 @@ Database backend for scalable storage.
 .. code-block:: python
 
    from kailash.tracking.storage import DatabaseStorage
-   
+
    # PostgreSQL
    storage = DatabaseStorage(
        connection_string="postgresql://user:pass@localhost/tracking",
        pool_size=10,
        echo=False  # SQL logging
    )
-   
+
    # MongoDB
    storage = DatabaseStorage(
        connection_string="mongodb://localhost:27017/",
@@ -245,13 +245,13 @@ Implement custom storage by extending the base class:
 
    from kailash.tracking.storage.base import BaseStorage
    import redis
-   
+
    class RedisStorage(BaseStorage):
        """Redis-based tracking storage."""
-       
+
        def __init__(self, redis_url: str):
            self.client = redis.from_url(redis_url)
-       
+
        def save_run(self, run: WorkflowRun) -> None:
            key = f"run:{run.run_id}"
            self.client.setex(
@@ -259,18 +259,18 @@ Implement custom storage by extending the base class:
                86400,  # 24 hour TTL
                run.json()
            )
-       
+
        def get_run(self, run_id: str) -> WorkflowRun:
            key = f"run:{run_id}"
            data = self.client.get(key)
            if data:
                return WorkflowRun.parse_raw(data)
            return None
-       
+
        def save_task(self, task: Task) -> None:
            key = f"task:{task.task_id}"
            self.client.setex(key, 86400, task.json())
-       
+
        def get_tasks(self, run_id: str) -> List[Task]:
            # Implementation for retrieving tasks
            pass
@@ -287,17 +287,17 @@ Configure tracking behavior:
 
    # Storage location
    export KAILASH_TRACKING_PATH=/var/kailash/tracking
-   
+
    # Storage backend
    export KAILASH_TRACKING_BACKEND=filesystem
-   
+
    # Database connection (if using database backend)
    export KAILASH_TRACKING_DB=postgresql://localhost/tracking
-   
+
    # Metrics collection
    export KAILASH_COLLECT_METRICS=true
    export KAILASH_METRICS_INTERVAL=1.0  # seconds
-   
+
    # Retention policy
    export KAILASH_TRACKING_RETENTION_DAYS=30
 
@@ -314,7 +314,7 @@ Configuration File
        path: ~/.kailash/tracking
        format: json
        compress: true
-     
+
      metrics:
        enabled: true
        interval: 1.0
@@ -323,7 +323,7 @@ Configuration File
          - memory
          - disk_io
          - network_io
-     
+
      retention:
        days: 30
        max_runs: 10000
@@ -334,7 +334,7 @@ Programmatic Configuration
 .. code-block:: python
 
    from kailash.tracking import TaskManager, TrackingConfig
-   
+
    config = TrackingConfig(
        enabled=True,
        collect_metrics=True,
@@ -345,7 +345,7 @@ Programmatic Configuration
            "pool_size": 20
        }
    )
-   
+
    task_manager = TaskManager(config=config)
 
 Analytics and Reporting
@@ -359,15 +359,15 @@ Analyze workflow execution patterns:
 .. code-block:: python
 
    from kailash.tracking.analytics import RunAnalyzer
-   
+
    analyzer = RunAnalyzer(task_manager)
-   
+
    # Get run statistics
    stats = analyzer.get_run_stats(
        start_date="2024-01-01",
        end_date="2024-01-31"
    )
-   
+
    print(f"Total runs: {stats['total_runs']}")
    print(f"Success rate: {stats['success_rate']:.2%}")
    print(f"Average duration: {stats['avg_duration']:.2f}s")
@@ -382,7 +382,7 @@ Identify performance bottlenecks:
 
    # Analyze node performance
    node_stats = analyzer.get_node_performance(workflow_id)
-   
+
    for node_id, stats in node_stats.items():
        print(f"\nNode: {node_id}")
        print(f"  Executions: {stats['count']}")
@@ -403,10 +403,10 @@ Monitor resource consumption:
        metric="memory",
        interval="1min"
    )
-   
+
    # Plot memory usage
    import matplotlib.pyplot as plt
-   
+
    plt.plot(resource_trends['timestamps'], resource_trends['values'])
    plt.xlabel('Time')
    plt.ylabel('Memory (MB)')
@@ -421,9 +421,9 @@ Generate custom reports:
 .. code-block:: python
 
    from kailash.tracking.reporting import ReportGenerator
-   
+
    generator = ReportGenerator(task_manager)
-   
+
    # Generate HTML report
    report = generator.generate_html_report(
        run_id=run_id,
@@ -431,10 +431,10 @@ Generate custom reports:
        include_timeline=True,
        include_errors=True
    )
-   
+
    with open("execution_report.html", "w") as f:
        f.write(report)
-   
+
    # Generate CSV summary
    generator.export_run_summary(
        output_path="run_summary.csv",
@@ -453,15 +453,15 @@ Monitor workflows in real-time:
 .. code-block:: python
 
    from kailash.tracking import LiveMonitor
-   
+
    monitor = LiveMonitor(task_manager)
-   
+
    # Start monitoring
    monitor.start()
-   
+
    # Execute workflow
    results = workflow.run()
-   
+
    # Get live statistics
    live_stats = monitor.get_stats()
    print(f"Active tasks: {live_stats['active_tasks']}")
@@ -476,24 +476,24 @@ Stream tracking events:
 .. code-block:: python
 
    from kailash.tracking import EventStream
-   
+
    stream = EventStream(task_manager)
-   
+
    # Subscribe to events
    @stream.on("task.started")
    def on_task_start(event):
        print(f"Task started: {event['node_id']}")
-   
+
    @stream.on("task.completed")
    def on_task_complete(event):
        print(f"Task completed: {event['node_id']} in {event['duration']}s")
-   
+
    @stream.on("run.failed")
    def on_run_failed(event):
        print(f"Run failed: {event['error']}")
        # Send alert
        send_failure_alert(event)
-   
+
    # Start streaming
    stream.start()
 
@@ -505,14 +505,133 @@ Send tracking events to external systems:
 .. code-block:: python
 
    from kailash.tracking import WebhookHandler
-   
+
    webhook = WebhookHandler(
        url="https://api.example.com/webhooks/kailash",
        events=["run.completed", "run.failed"],
        headers={"Authorization": "Bearer token"}
    )
-   
+
    task_manager.add_handler(webhook)
+
+Performance Metrics Collection
+==============================
+
+The SDK includes comprehensive performance metrics collection that automatically tracks resource usage during workflow execution.
+
+MetricsCollector
+----------------
+
+Collects real-time performance metrics during node execution.
+
+.. autoclass:: kailash.tracking.metrics_collector.MetricsCollector
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Usage Example:**
+
+.. code-block:: python
+
+   from kailash.tracking.metrics_collector import MetricsCollector
+
+   # Automatic collection in runtime
+   collector = MetricsCollector()
+   with collector.collect(node_id="process_data") as metrics:
+       # Your node execution code
+       result = process_data(input_data)
+
+   # Access collected metrics
+   performance = metrics.result()
+   print(f"Duration: {performance.duration}s")
+   print(f"CPU Usage: {performance.cpu_percent}%")
+   print(f"Memory: {performance.memory_mb}MB")
+
+PerformanceMetrics
+------------------
+
+Comprehensive performance data collected during execution.
+
+.. autoclass:: kailash.tracking.metrics_collector.PerformanceMetrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Collected Metrics:**
+
+- **Timing**: Start time, end time, duration
+- **CPU**: Usage percentage, user/system time
+- **Memory**: Current usage, peak usage, delta
+- **I/O**: Read/write bytes, operation counts
+- **Network**: Bytes sent/received (for API nodes)
+
+Performance Visualization
+=========================
+
+Visualize and analyze performance metrics from workflow runs.
+
+PerformanceVisualizer
+---------------------
+
+Creates various performance visualizations from collected metrics.
+
+.. autoclass:: kailash.visualization.performance.PerformanceVisualizer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Visualization Types:**
+
+1. **Execution Timeline** - Gantt chart showing node execution order and duration
+2. **Resource Usage** - Line charts of CPU and memory over time
+3. **Performance Comparison** - Radar charts comparing multiple runs
+4. **I/O Analysis** - Bar charts of read/write operations
+5. **Performance Heatmap** - Visual bottleneck identification
+6. **Markdown Reports** - Comprehensive performance analysis
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.visualization.performance import PerformanceVisualizer
+   from kailash.tracking import TaskManager
+
+   # Create visualizer
+   task_manager = TaskManager()
+   perf_viz = PerformanceVisualizer(task_manager)
+
+   # Generate performance report
+   outputs = perf_viz.create_run_performance_summary(
+       run_id="abc-123",
+       output_dir="performance_report"
+   )
+
+   # Compare multiple runs
+   perf_viz.compare_runs(
+       run_ids=["run-1", "run-2", "run-3"],
+       output_path="comparison.png"
+   )
+
+**Dashboard Creation:**
+
+.. code-block:: python
+
+   from kailash.workflow.visualization import WorkflowVisualizer
+
+   # Create performance dashboard
+   workflow_viz = WorkflowVisualizer(workflow)
+   dashboard = workflow_viz.create_performance_dashboard(
+       run_id=run_id,
+       task_manager=task_manager,
+       output_dir="dashboard"
+   )
+
+   # Dashboard includes:
+   # - dashboard.html (interactive overview)
+   # - Timeline charts
+   # - Resource usage graphs
+   # - Performance heatmaps
+   # - Detailed metrics tables
 
 Best Practices
 ==============
@@ -547,10 +666,10 @@ Best Practices
 
    # Focus on important metrics
    key_metrics = analyzer.get_key_metrics(run_id)
-   
+
    if key_metrics['memory_peak'] > threshold:
        alert("High memory usage detected")
-   
+
    if key_metrics['duration'] > sla_duration:
        alert("SLA breach: execution too slow")
 
@@ -566,7 +685,7 @@ Best Practices
 
    # Regular cleanup job
    from kailash.tracking.maintenance import cleanup_old_data
-   
+
    # Run daily
    cleanup_old_data(
        task_manager,

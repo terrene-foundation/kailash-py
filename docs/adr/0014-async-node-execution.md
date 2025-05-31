@@ -39,7 +39,7 @@ The following specialized nodes were created to optimize for asynchronous execut
    - Chunk-based processing for large datasets
    - Asynchronous concatenation, zipping, and dictionary merging
    - Optimized memory usage for large data streams
-   
+
 2. **AsyncSwitch**: Extends AsyncNode to provide conditional routing with features including:
    - Asynchronous condition evaluation
    - Support for boolean, multi-case, and list routing
@@ -98,7 +98,7 @@ class AsyncNode(Node):
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         # Default implementation calls the synchronous run() method
         return self.run(**kwargs)
-    
+
     async def execute_async(self, **runtime_inputs) -> Dict[str, Any]:
         # Validation and execution similar to execute() but in async context
         # ...
@@ -111,7 +111,7 @@ class ParallelRuntime:
     async def execute(self, workflow: Workflow, **kwargs) -> Dict[str, Any]:
         # Dynamic scheduling based on dependency resolution
         # ...
-        
+
     async def _execute_node(self, node_id: str, **kwargs) -> Tuple[Dict[str, Any], bool]:
         # Execute a single node asynchronously
         # Handle both AsyncNode and regular Node types
@@ -126,7 +126,7 @@ class MyAsyncNode(AsyncNode):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         # Parameter definition
         # ...
-        
+
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         # Async implementation
         await asyncio.sleep(1)  # Simulating IO operation

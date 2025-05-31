@@ -48,6 +48,11 @@ docs/_build/
 docs/api/_build/
 site/
 
+# Generated outputs - all output directories
+outputs/
+data/outputs/
+examples/outputs/
+
 # Jupyter Notebooks
 .ipynb_checkpoints
 

@@ -134,4 +134,4 @@ The workflow is implemented as a subgraph within LangGraph, with nodes executed 
 -   The `no_hmi_slot_flag` correctly routes to `w1_compose_message` to inform the patient if no initial HMI slots are found.
 -   The `agentic_workflows_v2.md` mentions: `W1_CheckAvailability (no_hmi_slot) → AffiliateClinic_Workflow (not yet implemented)`. Currently, if `no_hmi_slot` is true, we inform the patient but do not yet branch to an `AffiliateClinic_Workflow`.
 
-This documentation should provide a clear overview of the current state of Workflow 1. 
+This documentation should provide a clear overview of the current state of Workflow 1.

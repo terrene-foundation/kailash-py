@@ -20,7 +20,7 @@ Successfully fixed all remaining integration test failures, achieving a historic
 
 ### 2. MockNode Initialization (3 tests)
 - **Problem**: MockNode missing required 'value' parameter
-- **Solution**: 
+- **Solution**:
   - Made MockNode name parameter optional with default
   - Added config parameter with value to test node creation
 - **Files**: tests/conftest.py, test_export_integration.py
@@ -42,7 +42,7 @@ Successfully fixed all remaining integration test failures, achieving a historic
 
 ### 6. Node Base Class Test (1 test)
 - **Problem**: TestNode missing required parameters
-- **Solution**: 
+- **Solution**:
   - Implemented get_parameters() and run() abstract methods
   - Added required 'input' parameter to node initialization
 

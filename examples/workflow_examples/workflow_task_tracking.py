@@ -18,12 +18,7 @@ from kailash.nodes.data.readers import CSVReader
 from kailash.nodes.data.writers import CSVWriter
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import (
-    RunSummary,
-    TaskRun,
-    TaskStatus,
-    TaskSummary,
-)
+from kailash.tracking.models import RunSummary, TaskRun, TaskStatus, TaskSummary
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.workflow.graph import Workflow
 

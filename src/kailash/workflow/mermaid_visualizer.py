@@ -5,7 +5,7 @@ offering a text-based format that can be embedded in markdown files and
 rendered in various documentation platforms.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from kailash.workflow.graph import Workflow
 

@@ -27,18 +27,18 @@ WorkflowExporter
 
    from kailash.utils.export import WorkflowExporter
    from kailash import Workflow
-   
+
    # Create workflow
    workflow = Workflow("data_pipeline")
    # ... add nodes and edges ...
-   
+
    # Export to YAML
    exporter = WorkflowExporter(workflow)
    yaml_content = exporter.to_yaml()
-   
+
    # Export to JSON
    json_content = exporter.to_json()
-   
+
    # Export with validation
    validated_export = exporter.export(
        format="yaml",
@@ -60,13 +60,13 @@ Export Formats
      metadata:
        created_at: "2024-01-01T10:00:00"
        author: "user@example.com"
-     
+
      nodes:
        - id: read_data
          type: CSVReader
          config:
            file_path: "input.csv"
-       
+
        - id: process
          type: DataTransformer
          config:
@@ -74,12 +74,12 @@ Export Formats
              - type: filter
                column: status
                value: active
-       
+
        - id: save_data
          type: CSVWriter
          config:
            file_path: "output.csv"
-     
+
      edges:
        - from: read_data
          to: process
@@ -125,9 +125,9 @@ Export Options
        "validate_schema": True,
        "compress": False
    }
-   
+
    content = exporter.export(**export_config)
-   
+
    # Save to file
    exporter.save("workflow.yaml", **export_config)
 
@@ -152,7 +152,7 @@ ETL Pipeline Template
 .. code-block:: python
 
    from kailash.utils.templates import WorkflowTemplates
-   
+
    # Create ETL pipeline
    workflow = WorkflowTemplates.create_etl_pipeline(
        name="customer_etl",
@@ -230,36 +230,36 @@ Create custom workflow templates:
 .. code-block:: python
 
    from kailash.utils.templates import BaseTemplate
-   
+
    class DataQualityTemplate(BaseTemplate):
        """Template for data quality workflows."""
-       
+
        def create(self, **kwargs):
            workflow = Workflow(kwargs['name'])
-           
+
            # Add data reader
            workflow.add_node("CSVReader", "input", config={
                "file_path": kwargs['input_file']
            })
-           
+
            # Add quality checks
            checks = kwargs.get('quality_checks', [])
            for i, check in enumerate(checks):
                node_id = f"check_{i}"
                workflow.add_node("DataValidator", node_id, config=check)
-               
+
                if i == 0:
                    workflow.add_edge("input", node_id)
                else:
                    workflow.add_edge(f"check_{i-1}", node_id)
-           
+
            # Add report generator
            workflow.add_node("QualityReporter", "report", config={
                "output_path": kwargs.get('report_path', 'quality_report.html')
            })
-           
+
            workflow.add_edge(f"check_{len(checks)-1}", "report")
-           
+
            return workflow
 
 Node Registry Utilities
@@ -280,18 +280,18 @@ NodeRegistry
 .. code-block:: python
 
    from kailash import NodeRegistry
-   
+
    # List all available nodes
    available_nodes = NodeRegistry.list_nodes()
    print(f"Available nodes: {available_nodes}")
-   
+
    # Get node class
    CSVReader = NodeRegistry.get_node("CSVReader")
-   
+
    # Check if node exists
    if NodeRegistry.has_node("CustomNode"):
        node_class = NodeRegistry.get_node("CustomNode")
-   
+
    # Get node metadata
    metadata = NodeRegistry.get_node_metadata("DataFilter")
    print(f"Node category: {metadata['category']}")
@@ -304,13 +304,13 @@ Registering Custom Nodes
 
    from kailash import register_node
    from kailash.nodes import BaseNode
-   
+
    # Decorator registration
    @register_node("MyCustomNode", category="transform", version="1.0")
    class MyCustomNode(BaseNode):
        """Custom node implementation."""
        pass
-   
+
    # Manual registration
    NodeRegistry.register("AnotherNode", AnotherNodeClass, {
        "category": "custom",
@@ -326,11 +326,11 @@ Node Discovery
    # Discover nodes by category
    data_nodes = NodeRegistry.get_nodes_by_category("data")
    ai_nodes = NodeRegistry.get_nodes_by_category("ai")
-   
+
    # Search nodes
    csv_nodes = NodeRegistry.search_nodes("csv")
    api_nodes = NodeRegistry.search_nodes("api")
-   
+
    # Get node documentation
    for node_name in NodeRegistry.list_nodes():
        doc = NodeRegistry.get_node_doc(node_name)
@@ -347,17 +347,17 @@ Validate node and workflow configurations:
 .. code-block:: python
 
    from kailash.utils.config import ConfigValidator
-   
+
    validator = ConfigValidator()
-   
+
    # Validate node config
    node_config = {
        "file_path": "data.csv",
        "encoding": "utf-8"
    }
-   
+
    is_valid = validator.validate_node_config("CSVReader", node_config)
-   
+
    # Validate with schema
    schema = {
        "type": "object",
@@ -367,7 +367,7 @@ Validate node and workflow configurations:
        },
        "required": ["file_path"]
    }
-   
+
    validator.validate_against_schema(node_config, schema)
 
 ConfigMerger
@@ -378,22 +378,22 @@ Merge configurations with defaults:
 .. code-block:: python
 
    from kailash.utils.config import ConfigMerger
-   
+
    merger = ConfigMerger()
-   
+
    # Define defaults
    defaults = {
        "timeout": 30,
        "retry_count": 3,
        "encoding": "utf-8"
    }
-   
+
    # User config
    user_config = {
        "file_path": "data.csv",
        "timeout": 60
    }
-   
+
    # Merge configs
    final_config = merger.merge(defaults, user_config)
    # Result: {"file_path": "data.csv", "timeout": 60, "retry_count": 3, "encoding": "utf-8"}
@@ -406,13 +406,13 @@ Resolve environment variables in configurations:
 .. code-block:: python
 
    from kailash.utils.config import resolve_env_vars
-   
+
    config = {
        "api_key": "${API_KEY}",
        "base_url": "${API_BASE_URL:-https://api.example.com}",
        "timeout": 30
    }
-   
+
    resolved = resolve_env_vars(config)
    # Resolves ${API_KEY} from environment
    # Uses default for API_BASE_URL if not set
@@ -428,18 +428,18 @@ Create visual representations of workflows:
 .. code-block:: python
 
    from kailash.utils.visualization import WorkflowVisualizer
-   
+
    visualizer = WorkflowVisualizer(workflow)
-   
+
    # Generate Mermaid diagram
    mermaid_code = visualizer.to_mermaid()
-   
+
    # Generate DOT format
    dot_code = visualizer.to_dot()
-   
+
    # Save as image (requires graphviz)
    visualizer.save_image("workflow.png", format="png")
-   
+
    # Interactive HTML visualization
    visualizer.save_interactive("workflow.html")
 
@@ -452,15 +452,15 @@ Visualize workflow execution timeline:
 
    from kailash.utils.visualization import TimelineVisualizer
    from kailash.tracking import TaskManager
-   
+
    # Get execution data
    task_manager = TaskManager()
    run_data = task_manager.get_run(run_id)
-   
+
    # Create timeline
    timeline = TimelineVisualizer()
    timeline.add_run(run_data)
-   
+
    # Generate visualization
    timeline.save("execution_timeline.html")
 
@@ -475,20 +475,20 @@ Profile workflow execution:
 .. code-block:: python
 
    from kailash.utils.performance import WorkflowProfiler
-   
+
    profiler = WorkflowProfiler()
-   
+
    # Profile execution
    with profiler.profile(workflow):
        results = workflow.run()
-   
+
    # Get profiling results
    profile_data = profiler.get_results()
-   
+
    print(f"Total time: {profile_data['total_time']}s")
    print(f"Node times: {profile_data['node_times']}")
    print(f"Memory peak: {profile_data['memory_peak_mb']}MB")
-   
+
    # Save detailed report
    profiler.save_report("profile_report.html")
 
@@ -500,9 +500,9 @@ Benchmark workflow performance:
 .. code-block:: python
 
    from kailash.utils.performance import Benchmark
-   
+
    benchmark = Benchmark()
-   
+
    # Run benchmark
    results = benchmark.run(
        workflow,
@@ -510,7 +510,7 @@ Benchmark workflow performance:
        warmup=2,
        parallel_runs=3
    )
-   
+
    print(f"Average time: {results['avg_time']}s")
    print(f"Min time: {results['min_time']}s")
    print(f"Max time: {results['max_time']}s")
@@ -524,10 +524,10 @@ Get optimization recommendations:
 .. code-block:: python
 
    from kailash.utils.performance import Optimizer
-   
+
    optimizer = Optimizer()
    suggestions = optimizer.analyze(workflow, profile_data)
-   
+
    for suggestion in suggestions:
        print(f"Issue: {suggestion['issue']}")
        print(f"Impact: {suggestion['impact']}")
@@ -544,9 +544,9 @@ Test workflow execution:
 .. code-block:: python
 
    from kailash.utils.testing import WorkflowTester
-   
+
    tester = WorkflowTester()
-   
+
    # Test with sample data
    test_result = tester.test_workflow(
        workflow,
@@ -557,7 +557,7 @@ Test workflow execution:
            "output": pd.DataFrame({"id": [1, 2, 3], "value": [20, 40, 60]})
        }
    )
-   
+
    assert test_result.passed
    print(f"Execution time: {test_result.execution_time}s")
 
@@ -569,13 +569,13 @@ Create mock nodes for testing:
 .. code-block:: python
 
    from kailash.utils.testing import MockNode, mock_node
-   
+
    # Create mock node
    @mock_node("MockReader")
    class MockReader(MockNode):
        def execute(self, inputs):
            return {"data": self.config.get("mock_data", [])}
-   
+
    # Use in tests
    workflow = Workflow("test")
    workflow.add_node("MockReader", "reader", config={
@@ -590,9 +590,9 @@ Generate test data:
 .. code-block:: python
 
    from kailash.utils.testing import TestDataGenerator
-   
+
    generator = TestDataGenerator()
-   
+
    # Generate CSV data
    csv_data = generator.generate_csv(
        rows=1000,
@@ -604,7 +604,7 @@ Generate test data:
            "score": {"type": "float", "min": 0, "max": 100}
        }
    )
-   
+
    # Generate JSON data
    json_data = generator.generate_json(
        count=100,

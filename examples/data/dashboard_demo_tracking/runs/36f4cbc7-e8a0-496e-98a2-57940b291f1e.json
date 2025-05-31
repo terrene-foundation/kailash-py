@@ -1,0 +1,18 @@
+{
+  "run_id": "36f4cbc7-e8a0-496e-98a2-57940b291f1e",
+  "workflow_name": "Dashboard Demo Workflow",
+  "status": "completed",
+  "started_at": "2025-05-31T00:57:43.281442+00:00",
+  "ended_at": "2025-05-31T00:57:43.286003+00:00",
+  "tasks": [
+    "d32509ad-cfc7-4154-956d-b47fc0f97dd8",
+    "300b89f4-bff1-4122-9250-b8e7ca5e658b",
+    "2a930f7a-44c3-4fe4-9cce-8569511a078c"
+  ],
+  "metadata": {
+    "parameters": null,
+    "debug": false,
+    "runtime": "local"
+  },
+  "error": null
+}

@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.8+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-482%20passing-brightgreen.svg" alt="Tests: 482 passing">
+  <img src="https://img.shields.io/badge/tests-544%20passing-brightgreen.svg" alt="Tests: 544 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -23,7 +23,7 @@
 - 🚀 **Rapid Prototyping**: Create and test workflows locally without containerization
 - 🏗️ **Architecture-Aligned**: Automatically ensures compliance with Kailash standards
 - 🔄 **Seamless Handoff**: Export prototypes directly to production-ready formats
-- 📊 **Built-in Monitoring**: Track workflow execution and performance metrics
+- 📊 **Real-time Monitoring**: Live dashboards with WebSocket streaming and performance metrics
 - 🧩 **Extensible**: Easy to create custom nodes for domain-specific operations
 - ⚡ **Fast Installation**: Uses `uv` for lightning-fast Python package management
 
@@ -73,6 +73,8 @@ workflow.add_node("read_customers", reader)
 def analyze_customers(data):
     """Analyze customer data and compute metrics."""
     df = pd.DataFrame(data)
+    # Convert total_spent to numeric
+    df['total_spent'] = pd.to_numeric(df['total_spent'])
     return {
         "total_customers": len(df),
         "avg_spend": df["total_spent"].mean(),
@@ -203,6 +205,12 @@ The SDK includes a rich set of pre-built nodes for common operations:
 - `SharePointGraphReader` - Read SharePoint files
 - `SharePointGraphWriter` - Upload to SharePoint
 
+**Real-time Monitoring**
+- `RealTimeDashboard` - Live workflow monitoring
+- `WorkflowPerformanceReporter` - Comprehensive reports
+- `SimpleDashboardAPI` - REST API for metrics
+- `DashboardAPIServer` - WebSocket streaming server
+
 </td>
 </tr>
 </table>
@@ -246,7 +254,7 @@ state_wrapper = workflow.create_state_wrapper(state)
 
 # Single path-based update
 updated_wrapper = state_wrapper.update_in(
-    ["counter"], 
+    ["counter"],
     42
 )
 
@@ -296,11 +304,76 @@ results = runtime.execute(workflow, inputs=test_data)
 assert results["node_id"]["output_key"] == expected_value
 ```
 
+#### Performance Monitoring & Real-time Dashboards
+```python
+from kailash.visualization.performance import PerformanceVisualizer
+from kailash.visualization.dashboard import RealTimeDashboard, DashboardConfig
+from kailash.visualization.reports import WorkflowPerformanceReporter
+from kailash.tracking import TaskManager
+from kailash.runtime.local import LocalRuntime
+
+# Run workflow with task tracking
+task_manager = TaskManager()
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, task_manager=task_manager)
+
+# Static performance analysis
+perf_viz = PerformanceVisualizer(task_manager)
+outputs = perf_viz.create_run_performance_summary(run_id, output_dir="performance_report")
+perf_viz.compare_runs([run_id_1, run_id_2], output_path="comparison.png")
+
+# Real-time monitoring dashboard
+config = DashboardConfig(
+    update_interval=1.0,
+    max_history_points=100,
+    auto_refresh=True,
+    theme="light"
+)
+
+dashboard = RealTimeDashboard(task_manager, config)
+dashboard.start_monitoring(run_id)
+
+# Add real-time callbacks
+def on_metrics_update(metrics):
+    print(f"Tasks: {metrics.completed_tasks} completed, {metrics.active_tasks} active")
+
+dashboard.add_metrics_callback(on_metrics_update)
+
+# Generate live HTML dashboard
+dashboard.generate_live_report("live_dashboard.html", include_charts=True)
+dashboard.stop_monitoring()
+
+# Comprehensive performance reports
+reporter = WorkflowPerformanceReporter(task_manager)
+report_path = reporter.generate_report(
+    run_id,
+    output_path="workflow_report.html",
+    format=ReportFormat.HTML,
+    compare_runs=[run_id_1, run_id_2]
+)
+```
+
+**Real-time Dashboard Features**:
+- ⚡ **Live Metrics Streaming**: Real-time task progress and resource monitoring
+- 📊 **Interactive Charts**: CPU, memory, and throughput visualizations with Chart.js
+- 🔌 **API Endpoints**: REST and WebSocket APIs for custom integrations
+- 📈 **Performance Reports**: Multi-format reports (HTML, Markdown, JSON) with insights
+- 🎯 **Bottleneck Detection**: Automatic identification of performance issues
+- 📱 **Responsive Design**: Mobile-friendly dashboards with auto-refresh
+
+**Performance Metrics Collected**:
+- **Execution Timeline**: Gantt charts showing node execution order and duration
+- **Resource Usage**: Real-time CPU and memory consumption
+- **I/O Analysis**: Read/write operations and data transfer volumes
+- **Performance Heatmaps**: Identify bottlenecks across workflow runs
+- **Throughput Metrics**: Tasks per minute and completion rates
+- **Error Tracking**: Failed task analysis and error patterns
+
 #### API Integration
 ```python
 from kailash.nodes.api import (
-    HTTPRequestNode as RESTAPINode, 
-    # OAuth2AuthNode, 
+    HTTPRequestNode as RESTAPINode,
+    # OAuth2AuthNode,
     # RateLimitedAPINode,
     # RateLimitConfig
 )
@@ -399,11 +472,14 @@ kailash/
 ├── workflow/        # Workflow management
 │   ├── graph.py     # DAG representation
 │   └── visualization.py  # Visualization tools
+├── visualization/   # Performance visualization
+│   └── performance.py    # Performance metrics charts
 ├── runtime/         # Execution engines
 │   ├── local.py     # Local execution
 │   └── docker.py    # Docker execution (planned)
 ├── tracking/        # Monitoring and tracking
 │   ├── manager.py   # Task management
+│   └── metrics_collector.py  # Performance metrics
 │   └── storage/     # Storage backends
 ├── cli/             # Command-line interface
 └── utils/           # Utilities and helpers
@@ -450,27 +526,52 @@ uv run kailash --help
 # Or activate the venv if you prefer
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
+# Install development dependencies
+uv add --dev pre-commit detect-secrets doc8
+
+# Install Trivy (macOS with Homebrew)
+brew install trivy
+
 # Set up pre-commit hooks
-uv run pre-commit install
+pre-commit install
+pre-commit install --hook-type pre-push
+
+# Run initial setup (formats code and fixes issues)
+pre-commit run --all-files
 ```
 
-### Code Quality
+### Code Quality & Pre-commit Hooks
 
-We maintain high code quality standards:
+We use automated pre-commit hooks to ensure code quality:
 
+**Hooks Include:**
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **Ruff**: Fast Python linting
+- **pytest**: Unit tests
+- **Trivy**: Security vulnerability scanning
+- **detect-secrets**: Secret detection
+- **doc8**: Documentation linting
+- **mypy**: Type checking
+
+**Manual Quality Checks:**
 ```bash
 # Format code
-uv run black src/ tests/
-uv run isort src/ tests/
+black src/ tests/
+isort src/ tests/
+
+# Linting and fixes
+ruff check src/ tests/ --fix
 
 # Type checking
-uv run mypy src/
+mypy src/
 
-# Linting
-uv run ruff check src/ tests/
+# Run all pre-commit hooks manually
+pre-commit run --all-files
 
-# Run all checks
-uv run make quality
+# Run specific hooks
+pre-commit run black
+pre-commit run pytest-check
 ```
 
 ## 📈 Project Status
@@ -491,7 +592,11 @@ uv run make quality
 - API integration with rate limiting
 - OAuth 2.0 authentication
 - SharePoint Graph API integration
-- **100% test coverage (482 tests)**
+- **Real-time performance metrics collection**
+- **Performance visualization dashboards**
+- **Real-time monitoring dashboard with WebSocket streaming**
+- **Comprehensive performance reports (HTML, Markdown, JSON)**
+- **100% test coverage (544 tests)**
 - **15 test categories all passing**
 - 21+ working examples
 
@@ -503,14 +608,12 @@ uv run make quality
 - Security audit & hardening
 - Performance optimizations
 - Docker runtime finalization
-- Advanced visualization features
 
 </td>
 <td width="30%">
 
 ### 📋 Planned
 - Cloud deployment templates
-- Real-time monitoring dashboard
 - Visual workflow editor
 - Plugin system
 - Additional integrations
@@ -520,7 +623,7 @@ uv run make quality
 </table>
 
 ### 🎯 Test Suite Status
-- **Total Tests**: 482 passing (100%)
+- **Total Tests**: 544 passing (100%)
 - **Test Categories**: 15/15 at 100%
 - **Integration Tests**: 65 passing
 - **Examples**: 21/21 working

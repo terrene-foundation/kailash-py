@@ -13,7 +13,7 @@ Created a comprehensive exception hierarchy in `sdk_exceptions.py`:
 - **KailashException**: Base exception for all SDK errors
 - **NodeException**: Base for node-related errors
   - NodeValidationError: Input/output validation failures
-  - NodeExecutionError: Runtime execution failures  
+  - NodeExecutionError: Runtime execution failures
   - NodeConfigurationError: Configuration issues
 - **WorkflowException**: Base for workflow errors
   - WorkflowValidationError: Workflow structure validation
@@ -28,7 +28,7 @@ Created a comprehensive exception hierarchy in `sdk_exceptions.py`:
 - **ExportException**: Export operation failures
 - **ImportException**: Import operation failures
 - **ConfigurationException**: Configuration issues
-- **ManifestError**: Manifest validation failures  
+- **ManifestError**: Manifest validation failures
 - **CLIException**: CLI operation failures
 - **VisualizationError**: Visualization failures
 - **TemplateError**: Template operation failures
@@ -49,7 +49,7 @@ Updated key modules with comprehensive error handling:
 - Improved connection validation with helpful context
 - Added graceful error handling for execution failures
 
-#### runtime/local.py  
+#### runtime/local.py
 - Enhanced workflow validation with specific warnings
 - Added error propagation with context
 - Improved task tracking error handling

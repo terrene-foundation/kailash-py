@@ -1,0 +1,39 @@
+{
+  "task_id": "dfe9d114-e8a8-43ae-837f-b77dba158a64",
+  "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+  "node_id": "seniors_writer",
+  "node_type": "CSVWriter",
+  "status": "completed",
+  "started_at": "2025-05-31T02:41:48.573742+00:00",
+  "ended_at": "2025-05-31T02:41:48.574323+00:00",
+  "completed_at": "2025-05-31T02:41:48.574323+00:00",
+  "created_at": "2025-05-31T02:41:48.573753",
+  "result": {
+    "rows_written": 1,
+    "file_path": "outputs/realtime_seniors.csv"
+  },
+  "error": null,
+  "metadata": {
+    "execution_time": 0.00011992454528808594
+  },
+  "input_data": null,
+  "output_data": null,
+  "metrics": {
+    "duration": 0.00011992454528808594,
+    "memory_usage": 134.078125,
+    "memory_usage_mb": 134.078125,
+    "cpu_usage": 0.0,
+    "custom_metrics": {
+      "memory_delta_mb": 0.03125,
+      "io_read_bytes": 0,
+      "io_write_bytes": 0,
+      "io_read_count": 0,
+      "io_write_count": 0,
+      "thread_count": 4,
+      "context_switches": 266
+    }
+  },
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

@@ -22,10 +22,10 @@ Added checks to skip type validation when parameter type is `Any`:
 if param_def.type is Any:
     continue
 
-# In validate_inputs()  
+# In validate_inputs()
 if param_def.type is Any:
     validated[param_name] = value
-    
+
 # In validate_outputs()
 if param_def.type is Any:
     validated_outputs[param_name] = value

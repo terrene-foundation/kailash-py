@@ -1,0 +1,161 @@
+# Pre-commit hooks configuration for Kailash Python SDK
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # Black - Python code formatter
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+        name: Format code with Black
+        description: "Run Black Python code formatter"
+        language_version: python3
+        args: [--line-length=88]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)
+
+  # isort - Python import sorter
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort imports with isort
+        description: "Sort Python imports"
+        args: [--profile=black]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)
+
+  # Ruff - Python linter (replaces flake8, pylint, etc.)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        name: Lint with Ruff
+        description: "Run Ruff linter"
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)
+
+  # Built-in pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|.*\.html|.*_mermaid\.md)$
+      - id: end-of-file-fixer
+        name: Fix end of files
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|.*\.html|.*_mermaid\.md)$
+      - id: check-yaml
+        name: Check YAML syntax
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)$
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-json
+        name: Check JSON syntax
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)$
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-added-large-files
+        name: Check for large files
+        args: [--maxkb=1000]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)$
+      - id: debug-statements
+        name: Check for debug statements
+
+  # Python-specific checks
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-no-log-warn
+        name: Check for deprecated log.warn
+      - id: python-no-eval
+        name: Check for eval() usage
+      - id: python-use-type-annotations
+        name: Require type annotations
+      - id: python-check-blanket-noqa
+        name: Check for blanket noqa
+
+  # Pytest - Run tests
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: Run pytest unit tests
+        entry: python -m pytest
+        language: system
+        args: [
+          tests/,
+          --tb=short,
+          --maxfail=5,
+          --durations=10,
+          -x,  # Stop on first failure
+          -q   # Quiet output
+        ]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+  # Security scanning with Trivy (temporarily disabled due to config issues)
+  # - repo: local
+  #   hooks:
+  #     - id: trivy-fs
+  #       name: Run Trivy filesystem scan
+  #       entry: trivy
+  #       language: system
+  #       args: [
+  #         filesystem,
+  #         --security-checks=vuln,secret,config,
+  #         --severity=HIGH,CRITICAL,
+  #         --exit-code=1,
+  #         --format=table,
+  #         --quiet,
+  #         .
+  #       ]
+  #       pass_filenames: false
+  #       always_run: false
+  #       stages: [pre-commit]
+
+  # Additional security checks (temporarily disabled due to version issues)
+  # - repo: https://github.com/Yelp/detect-secrets
+  #   rev: v1.4.0
+  #   hooks:
+  #     - id: detect-secrets
+  #       name: Detect secrets
+  #       args: [--baseline, .secrets.baseline]
+  #       exclude: ^(\.secrets\.baseline|tests/.*|.*\.lock)$
+
+  # Documentation checks
+  - repo: https://github.com/PyCQA/doc8
+    rev: v1.1.1
+    hooks:
+      - id: doc8
+        name: Check documentation style
+        args: [--max-line-length=88]
+        files: \.(rst|md)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|.*_mermaid\.md)$
+
+  # Type checking with mypy (temporarily disabled due to type errors)
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.9.0
+  #   hooks:
+  #     - id: mypy
+  #       name: Type check with mypy
+  #       args: [--ignore-missing-imports, --no-strict-optional]
+  #       exclude: ^(tests/|examples/|docs/|data/outputs/|outputs/)
+
+# Configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [pytest-check, trivy-fs]  # Skip resource-intensive hooks in CI
+  submodules: false
+
+# Default stages
+default_stages: [pre-commit]
+
+# Minimum pre-commit version
+minimum_pre_commit_version: 3.0.0

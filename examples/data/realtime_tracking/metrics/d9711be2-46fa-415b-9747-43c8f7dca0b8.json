@@ -1,0 +1,15 @@
+{
+  "duration": 8.392333984375e-05,
+  "memory_usage": 125.78125,
+  "memory_usage_mb": 125.78125,
+  "cpu_usage": 0.0,
+  "custom_metrics": {
+    "memory_delta_mb": 0.03125,
+    "io_read_bytes": 0,
+    "io_write_bytes": 0,
+    "io_read_count": 0,
+    "io_write_count": 0,
+    "thread_count": 4,
+    "context_switches": 1487
+  }
+}

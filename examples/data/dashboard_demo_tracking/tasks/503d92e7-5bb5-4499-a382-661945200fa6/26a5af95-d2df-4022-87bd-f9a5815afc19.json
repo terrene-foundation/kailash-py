@@ -1,0 +1,20 @@
+{
+  "task_id": "26a5af95-d2df-4022-87bd-f9a5815afc19",
+  "run_id": "503d92e7-5bb5-4499-a382-661945200fa6",
+  "node_id": "data_filter",
+  "node_type": "Filter",
+  "status": "failed",
+  "started_at": "2025-05-31T00:57:00.338135+00:00",
+  "ended_at": "2025-05-31T00:57:00.342050+00:00",
+  "completed_at": "2025-05-31T00:57:00.342050+00:00",
+  "created_at": "2025-05-31T00:57:00.338150",
+  "result": null,
+  "error": "Node 'data_filter' execution failed: KeyError: 'data'",
+  "metadata": {},
+  "input_data": null,
+  "output_data": null,
+  "metrics": null,
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

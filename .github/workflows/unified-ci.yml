@@ -30,17 +30,17 @@ jobs:
             const isPR = eventName === 'pull_request';
             const isPush = eventName === 'push';
             const isManual = eventName === 'workflow_dispatch';
-            
+
             console.log(`Event: ${eventName}`);
             console.log(`Ref: ${context.ref}`);
-            
+
             // Manual dispatch always runs full tests
             if (isManual) {
               core.setOutput('level', 'full');
               core.setOutput('skip-reason', '');
               return;
             }
-            
+
             // For PRs, always run full tests
             if (isPR) {
               core.setOutput('level', 'full');
@@ -48,12 +48,12 @@ jobs:
               console.log('PR event detected - running full test suite');
               return;
             }
-            
+
             // For pushes, check if a PR exists
             if (isPush) {
               const branch = context.ref.replace('refs/heads/', '');
               console.log(`Checking for PRs on branch: ${branch}`);
-              
+
               try {
                 const { data: prs } = await github.rest.pulls.list({
                   owner: context.repo.owner,
@@ -61,7 +61,7 @@ jobs:
                   head: `${context.repo.owner}:${branch}`,
                   state: 'open'
                 });
-                
+
                 if (prs.length > 0) {
                   core.setOutput('level', 'skip');
                   core.setOutput('skip-reason', `PR #${prs[0].number} exists for this branch - tests will run on PR`);
@@ -104,22 +104,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      
+
       - name: Install dependencies
         run: |
           uv venv
           uv sync
-      
+
       - name: Run basic smoke tests
         run: |
           echo "Running basic smoke tests..."
@@ -134,30 +134,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      
+
       - name: Install dependencies
         run: |
           uv venv
           uv sync
-      
+
       - name: Check formatting with black
         run: |
           uv run black --check src/ tests/
-      
+
       - name: Check import sorting with isort
         run: |
           uv run isort --check-only src/ tests/
-      
+
       - name: Lint with ruff
         run: |
           # Check for critical errors only (syntax errors, undefined names, etc.)
@@ -174,29 +174,29 @@ jobs:
         python-version: ['3.11', '3.12']
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      
+
       - name: Install dependencies
         run: |
           uv venv
           uv sync
-      
+
       - name: Run tests with coverage
         run: |
           uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
-      
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.11'
@@ -213,7 +213,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
@@ -222,7 +222,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-      
+
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -237,22 +237,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      
+
       - name: Install dependencies
         run: |
           uv venv
           uv sync
-      
+
       - name: Test all examples
         run: |
           cd examples
@@ -275,32 +275,32 @@ jobs:
               { name: 'Security', status: '${{ needs.security-scan.result }}' },
               { name: 'Examples', status: '${{ needs.validate-examples.result }}' }
             ];
-            
+
             let comment = '## 🤖 CI Pipeline Results\n\n';
             let allPassed = true;
-            
+
             for (const job of jobs) {
               const icon = job.status === 'success' ? '✅' : '❌';
               comment += `${icon} **${job.name}**: ${job.status}\n`;
               if (job.status !== 'success') allPassed = false;
             }
-            
+
             comment += '\n';
-            comment += allPassed 
+            comment += allPassed
               ? '✨ All checks passed! Ready for review.'
               : '⚠️ Some checks failed. Please review the logs.';
-            
+
             // Comment on PR
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
-            const botComment = comments.find(c => 
+
+            const botComment = comments.find(c =>
               c.user.type === 'Bot' && c.body.includes('CI Pipeline Results')
             );
-            
+
             if (botComment) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,

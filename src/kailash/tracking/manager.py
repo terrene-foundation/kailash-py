@@ -4,11 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from kailash.sdk_exceptions import (
-    StorageException,
-    TaskException,
-    TaskStateError,
-)
+from kailash.sdk_exceptions import StorageException, TaskException, TaskStateError
 
 from .models import (
     RunSummary,
@@ -841,6 +837,27 @@ class TaskManager:
 
         except Exception as e:
             raise StorageException(f"Failed to save task: {e}") from e
+
+    def get_run_tasks(self, run_id: str) -> List[TaskRun]:
+        """Get all tasks for a specific run.
+
+        Args:
+            run_id: Run ID to get tasks for
+
+        Returns:
+            List of tasks in the run
+        """
+        run = self.get_run(run_id)
+        if not run:
+            return []
+
+        tasks = []
+        for task_id in run.tasks:
+            task = self.get_task(task_id)
+            if task:
+                tasks.append(task)
+
+        return tasks
 
     def get_workflow_tasks(self, workflow_id: str) -> List[TaskRun]:
         """Get all tasks for a workflow.

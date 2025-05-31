@@ -69,7 +69,7 @@ For development or latest features:
    # Clone the repository
    git clone https://github.com/terrene-foundation/kailash-py.git
    cd kailash-python-sdk
-   
+
    # Install in development mode
    pip install -e .
 
@@ -192,20 +192,20 @@ Create a Dockerfile for your application:
 .. code-block:: dockerfile
 
    FROM python:3.9-slim
-   
+
    # Install system dependencies
    RUN apt-get update && apt-get install -y \
        gcc \
        g++ \
        && rm -rf /var/lib/apt/lists/*
-   
+
    # Install Kailash SDK
    RUN pip install kailash
-   
+
    # Copy your workflow files
    COPY . /app
    WORKDIR /app
-   
+
    # Run your workflow
    CMD ["python", "my_workflow.py"]
 
@@ -228,13 +228,13 @@ Always use a virtual environment:
 
    # Create virtual environment
    python -m venv kailash-env
-   
+
    # Activate on Linux/macOS
    source kailash-env/bin/activate
-   
+
    # Activate on Windows
    kailash-env\Scripts\activate
-   
+
    # Install SDK
    pip install kailash
 
@@ -247,13 +247,13 @@ For managing multiple Python versions:
 
    # Install Python 3.9
    pyenv install 3.9.15
-   
+
    # Create virtual environment
    pyenv virtualenv 3.9.15 kailash-env
-   
+
    # Activate environment
    pyenv activate kailash-env
-   
+
    # Install SDK
    pip install kailash
 
@@ -269,13 +269,13 @@ Configure SDK behavior with environment variables:
 
    # Set default runtime
    export KAILASH_RUNTIME=local
-   
+
    # Configure logging
    export KAILASH_LOG_LEVEL=INFO
-   
+
    # Set task storage location
    export KAILASH_TASK_STORAGE=/path/to/storage
-   
+
    # Enable debug mode
    export KAILASH_DEBUG=true
 
@@ -290,17 +290,17 @@ Create ``~/.kailash/config.yaml``:
    runtime:
      type: local
      max_workers: 4
-   
+
    # Logging configuration
    logging:
      level: INFO
      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-   
+
    # Task tracking
    tracking:
      enabled: true
      storage_path: ~/.kailash/tasks
-   
+
    # Node defaults
    nodes:
      timeout: 300  # seconds
@@ -317,13 +317,13 @@ Check the installation:
 .. code-block:: python
 
    import kailash
-   
+
    # Check version
    print(f"Kailash SDK version: {kailash.__version__}")
-   
+
    # List available nodes
    from kailash import NodeRegistry
-   
+
    print("Available nodes:")
    for node_name in NodeRegistry.list_nodes():
        print(f"  - {node_name}")
@@ -336,15 +336,15 @@ Test with a simple workflow:
 .. code-block:: python
 
    from kailash import Workflow
-   
+
    # Create test workflow
    workflow = Workflow("test_installation")
-   
+
    # Add a simple node
    workflow.add_node("PythonCodeNode", "test", config={
        "code": "return {'status': 'Installation successful!'}"
    })
-   
+
    # Run workflow
    result = workflow.run()
    print(result)
@@ -388,7 +388,7 @@ If using Apple Silicon (M1/M2):
 
    # Install Rosetta 2 if needed
    softwareupdate --install-rosetta
-   
+
    # Use x86_64 Python if compatibility issues
    arch -x86_64 pip install kailash
 
@@ -411,7 +411,7 @@ For system-wide installation:
    # Install system dependencies
    sudo apt-get update
    sudo apt-get install python3-pip python3-dev
-   
+
    # Install SDK
    sudo pip3 install kailash
 

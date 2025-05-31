@@ -43,7 +43,7 @@ We considered three alternative approaches:
 
 ### 1. Modify Core Workflow Engine
 - **Pros**: Could offer cleaner expression of conditional logic in workflow definition
-- **Cons**: 
+- **Cons**:
   - Significantly complicates workflow execution and state management
   - Requires rethinking the DAG model and topological sort approach
   - Higher risk of breaking existing workflow functionality
@@ -94,7 +94,7 @@ The implementation consists of the following components:
 class Switch(Node):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         # Parameters include input_data, condition_field, operator, value, cases, etc.
-        
+
     def run(self, **kwargs) -> Dict[str, Any]:
         # If boolean condition: Set true_output or false_output
         # If multi-case: Create dynamic case_X outputs
@@ -106,7 +106,7 @@ class Switch(Node):
 class Merge(Node):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         # Parameters include data1-data5, merge_type, key, skip_none
-        
+
     def run(self, **kwargs) -> Dict[str, Any]:
         # Collect all data inputs
         # Apply merge according to merge_type

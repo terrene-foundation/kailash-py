@@ -4,6 +4,8 @@ Examples Overview - Visual summary of all Kailash SDK examples
 """
 
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -206,12 +208,15 @@ Or run all examples:
 )
 
 # Save summary
-with open("examples_summary.md", "w") as f:
+output_dir = Path("outputs")
+output_dir.mkdir(exist_ok=True)
+summary_path = output_dir / "examples_summary.md"
+with open(summary_path, "w") as f:
     f.write(summary_text)
 
 print("✓ Examples overview created:")
 print("  - Visual summary: data/examples_overview.png")
-print("  - Text summary: examples_summary.md")
+print(f"  - Text summary: {summary_path}")
 
 # Create an index of all examples
 index_html = """
@@ -250,7 +255,8 @@ index_html += """
 </html>
 """
 
-with open("examples_index.html", "w") as f:
+index_path = output_dir / "examples_index.html"
+with open(index_path, "w") as f:
     f.write(index_html)
 
-print("  - HTML index: examples_index.html")
+print(f"  - HTML index: {index_path}")

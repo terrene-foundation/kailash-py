@@ -16,7 +16,7 @@ We will implement a task tracking system with:
 
 1. **Data Models**:
    - `WorkflowRun`: Represents a workflow execution
-   - `TaskRun`: Represents individual node executions 
+   - `TaskRun`: Represents individual node executions
    - `TaskMetrics`: Captures performance metrics for tasks
    - Status enums for execution states
    - Backward compatibility features in models (alias fields, legacy naming support)

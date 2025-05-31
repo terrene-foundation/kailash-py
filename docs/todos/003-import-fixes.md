@@ -47,7 +47,7 @@ Along with import fixes, several code patterns were updated:
    ```python
    # Old
    node = Node(config=NodeConfig(params))
-   
+
    # New
    node = Node(**config_dict)
    ```
@@ -56,7 +56,7 @@ Along with import fixes, several code patterns were updated:
    ```python
    # Old
    workflow = WorkflowGraph()
-   
+
    # New
    workflow = Workflow(name="my_workflow")
    ```
@@ -65,7 +65,7 @@ Along with import fixes, several code patterns were updated:
    ```python
    # Old
    runtime = LocalRuntime()
-   
+
    # New
    runner = LocalRunner()
    ```
@@ -74,7 +74,7 @@ Along with import fixes, several code patterns were updated:
    ```python
    # Old
    tracker = TaskTracker()
-   
+
    # New
    manager = TaskManager()
    ```

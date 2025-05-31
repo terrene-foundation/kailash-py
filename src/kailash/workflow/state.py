@@ -6,13 +6,7 @@ making it easier to handle state transitions in a predictable manner.
 
 import logging
 from copy import deepcopy
-from typing import (
-    Any,
-    Generic,
-    List,
-    Tuple,
-    TypeVar,
-)
+from typing import Any, Generic, List, Tuple, TypeVar
 
 from pydantic import BaseModel
 

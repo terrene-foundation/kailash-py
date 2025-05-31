@@ -26,10 +26,7 @@ from typing import Any, Dict, Optional, Tuple
 from kailash.nodes.base import Node
 
 # BaseRuntime doesn't exist - we'll implement task tracking methods directly
-from kailash.sdk_exceptions import (
-    NodeConfigurationError,
-    NodeExecutionError,
-)
+from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
 from kailash.tracking.manager import TaskManager
 from kailash.workflow.graph import Workflow
 
@@ -168,14 +165,14 @@ logger = logging.getLogger("kailash_node")
 def main():
     \"\"\"Run a Kailash node in a Docker container.\"\"\"
     logger.info("Starting node execution")
-    
+
     # Load node configuration
     node_config_path = Path("/app/node.json")
     with open(node_config_path, 'r') as f:
         node_data = json.load(f)
-    
+
     logger.info(f"Loaded configuration for {node_data['class']} node")
-    
+
     # Load runtime inputs if available
     input_path = Path("/data/input/inputs.json")
     runtime_inputs = {}
@@ -183,7 +180,7 @@ def main():
         logger.info(f"Loading inputs from {input_path}")
         with open(input_path, 'r') as f:
             runtime_inputs = json.load(f)
-    
+
     # Dynamically import the node class
     logger.info(f"Importing {node_data['module']}.{node_data['class']}")
     try:
@@ -192,7 +189,7 @@ def main():
     except (ImportError, AttributeError) as e:
         logger.error(f"Failed to import node class: {e}")
         return 1
-    
+
     # Create node instance
     logger.info(f"Creating node instance: {node_data['name']}")
     try:
@@ -200,7 +197,7 @@ def main():
     except Exception as e:
         logger.error(f"Failed to create node instance: {e}")
         return 1
-    
+
     # Execute node
     logger.info(f"Executing node with inputs: {list(runtime_inputs.keys())}")
     try:
@@ -215,7 +212,7 @@ def main():
                 "type": e.__class__.__name__
             }, f, indent=2)
         return 1
-    
+
     # Save results
     logger.info("Saving execution results")
     try:
@@ -227,12 +224,12 @@ def main():
             except TypeError:
                 logger.warning("Result not directly JSON serializable, converting to string")
                 json.dump({"result": str(result)}, f, indent=2)
-        
+
         logger.info(f"Results saved to {result_path}")
     except Exception as e:
         logger.error(f"Failed to save results: {e}")
         return 1
-    
+
     logger.info(f"Node {node_data['name']} execution completed")
     return 0
 

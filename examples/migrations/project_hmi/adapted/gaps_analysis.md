@@ -44,7 +44,7 @@ workflow.connect_conditional(
 # Example of how this might look:
 def run(self, **kwargs):
     state = kwargs["state"]
-    
+
     # Instead of manual state copying and updating:
     return {
         "updated_state": state.update_in(["w1_context", "ranked_doctors_list"], ranked_doctors)

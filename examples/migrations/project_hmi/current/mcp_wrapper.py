@@ -5,9 +5,7 @@ import urllib.parse  # For printing full URL with params
 from typing import Any, Dict, Optional
 
 import requests
-from models.shared import (
-    NRIC_Type,
-)
+from models.shared import NRIC_Type
 
 # It's good practice to store base URLs and API keys in a more secure and configurable way,
 # e.g., environment variables or a configuration file. For this example, they are hardcoded.

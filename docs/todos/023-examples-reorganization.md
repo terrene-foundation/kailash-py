@@ -8,7 +8,7 @@ Reorganized the entire examples directory for better clarity, navigation, and ma
 ### 1. Directory Structure Reorganization ✅
 Created a clear, category-based folder structure:
 - `node_examples/` - Individual node usage examples
-- `workflow_examples/` - Workflow patterns and use cases  
+- `workflow_examples/` - Workflow patterns and use cases
 - `integration_examples/` - API and system integrations
 - `visualization_examples/` - Visualization and reporting
 - `migrations/` - Migration experiments from other systems (renamed from project_hmi)

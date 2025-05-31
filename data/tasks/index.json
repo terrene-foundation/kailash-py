@@ -41,6 +41,76 @@
       "status": "failed",
       "started_at": null,
       "ended_at": "2025-05-30T13:18:49.399395+00:00"
+    },
+    "d660745f-8453-4845-9660-0fd3c6fe036b": {
+      "run_id": "e33c9025-f789-4599-9d50-8f5c704ff30c",
+      "node_id": "customer_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T02:42:06.782438+00:00",
+      "ended_at": "2025-05-31T02:42:06.783808+00:00"
+    },
+    "253c790a-34c4-4424-bac4-16fe8695fbc7": {
+      "run_id": "e33c9025-f789-4599-9d50-8f5c704ff30c",
+      "node_id": "transaction_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T02:42:06.784377+00:00",
+      "ended_at": "2025-05-31T02:42:06.785045+00:00"
+    },
+    "1776b3fe-c627-4969-bbc8-a6f0aff3cff0": {
+      "run_id": "e33c9025-f789-4599-9d50-8f5c704ff30c",
+      "node_id": "validator",
+      "status": "failed",
+      "started_at": "2025-05-31T02:42:06.790203+00:00",
+      "ended_at": "2025-05-31T02:42:06.793665+00:00"
+    },
+    "0eca0b63-a9c0-4b97-badf-6c98c5ea874b": {
+      "run_id": "0ff851a8-1b7d-4fc0-829d-617836528110",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-05-31T02:42:07.425483+00:00",
+      "ended_at": null
+    },
+    "c83fec3b-eedd-4dbe-8974-b6d749df2b20": {
+      "run_id": "0ff851a8-1b7d-4fc0-829d-617836528110",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-05-31T02:42:07.427883+00:00"
+    },
+    "26157b19-e597-44dc-a20c-f92b0ab6a6d2": {
+      "run_id": "41314ace-159a-47ba-9b04-6ffb3acaeb6b",
+      "node_id": "customer_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:43.920912+00:00",
+      "ended_at": "2025-05-31T04:58:43.922005+00:00"
+    },
+    "f3f45706-0e21-41d3-a0bb-3976a13b39f5": {
+      "run_id": "41314ace-159a-47ba-9b04-6ffb3acaeb6b",
+      "node_id": "transaction_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:43.922734+00:00",
+      "ended_at": "2025-05-31T04:58:43.923396+00:00"
+    },
+    "02a18218-c3ea-4937-a5ba-a5d25cc59535": {
+      "run_id": "41314ace-159a-47ba-9b04-6ffb3acaeb6b",
+      "node_id": "validator",
+      "status": "failed",
+      "started_at": "2025-05-31T04:58:43.923930+00:00",
+      "ended_at": "2025-05-31T04:58:43.927318+00:00"
+    },
+    "b8dc4d71-c2c1-4a1e-96fb-5dcce250f0f9": {
+      "run_id": "9111b108-e97e-46ae-8ecb-e580c5fd738b",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-05-31T04:58:44.489188+00:00",
+      "ended_at": null
+    },
+    "e30f5184-160c-4b5e-a86c-371f672a97d7": {
+      "run_id": "9111b108-e97e-46ae-8ecb-e580c5fd738b",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-05-31T04:58:44.491238+00:00"
     }
   },
   "runs": {}

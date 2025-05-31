@@ -49,7 +49,7 @@ node = PythonCodeNode.from_function(process, name="cleaner")
 class Accumulator:
     def __init__(self):
         self.total = 0
-    
+
     def process(self, value: float) -> float:
         self.total += value
         return self.total
