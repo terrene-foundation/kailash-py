@@ -52,10 +52,17 @@ site/
 outputs/actual_performance/
 outputs/performance_metrics/
 outputs/performance_test_output.csv
+outputs/dashboard_*.html
+outputs/metrics_*.json
+outputs/performance_*.png
+outputs/heatmap_*.png
+outputs/timeline_*.png
 data/performance_summary.txt
 data/performance_test.csv
+data/outputs/
 examples/outputs/actual_performance/
 examples/outputs/performance_metrics/
+examples/outputs/visualizations/
 
 # Jupyter Notebooks
 .ipynb_checkpoints

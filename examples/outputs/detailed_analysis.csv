@@ -1,6 +1,0 @@
-transaction_id,customer_id,amount,date,category,segment
-T001,C001,250.0,2023-01-15,Electronics,high_value
-T002,C002,120.0,2023-01-20,Clothing,high_value
-T003,C003,500.0,2023-01-25,Electronics,high_value
-T004,C001,180.0,2023-02-01,Home,high_value
-T005,C004,320.0,2023-02-05,Electronics,high_value

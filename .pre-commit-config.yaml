@@ -12,6 +12,7 @@ repos:
         description: "Run Black Python code formatter"
         language_version: python3
         args: [--line-length=88]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)
 
   # isort - Python import sorter
   - repo: https://github.com/pycqa/isort
@@ -21,6 +22,7 @@ repos:
         name: Sort imports with isort
         description: "Sort Python imports"
         args: [--profile=black]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)
 
   # Ruff - Python linter (replaces flake8, pylint, etc.)
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -30,6 +32,7 @@ repos:
         name: Lint with Ruff
         description: "Run Ruff linter"
         args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)
 
   # Built-in pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -37,19 +40,24 @@ repos:
     hooks:
       - id: trailing-whitespace
         name: Trim trailing whitespace
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|.*\.html|.*_mermaid\.md)$
       - id: end-of-file-fixer
         name: Fix end of files
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|.*\.html|.*_mermaid\.md)$
       - id: check-yaml
         name: Check YAML syntax
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)$
       - id: check-toml
         name: Check TOML syntax
       - id: check-json
         name: Check JSON syntax
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)$
       - id: check-merge-conflict
         name: Check for merge conflicts
       - id: check-added-large-files
         name: Check for large files
         args: [--maxkb=1000]
+        exclude: ^(data/outputs/|outputs/|examples/outputs/)$
       - id: debug-statements
         name: Check for debug statements
 
@@ -122,6 +130,7 @@ repos:
         name: Check documentation style
         args: [--max-line-length=88]
         files: \.(rst|md)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|.*_mermaid\.md)$
 
   # Type checking with mypy (optional - can be enabled)
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -130,7 +139,7 @@ repos:
       - id: mypy
         name: Type check with mypy
         args: [--ignore-missing-imports, --no-strict-optional]
-        exclude: ^(tests/|examples/|docs/)
+        exclude: ^(tests/|examples/|docs/|data/outputs/|outputs/)
 
 # Configuration
 ci:
