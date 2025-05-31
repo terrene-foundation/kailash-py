@@ -109,7 +109,7 @@ docs:
 
 docs-serve: docs
 	@echo "Serving documentation locally..."
-	cd docs/api/_build/html && python -m http.server 8000
+	cd docs/_build/html && python -m http.server 8000
 
 # Release commands
 build:

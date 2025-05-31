@@ -25,11 +25,11 @@ def run_command(cmd, cwd=None):
 def main():
     # Get paths
     script_dir = Path(__file__).parent
-    api_dir = script_dir / "api"
-    build_dir = api_dir / "_build" / "html"
+    docs_dir = script_dir
+    build_dir = docs_dir / "_build" / "html"
 
-    # Change to API directory
-    os.chdir(api_dir)
+    # Change to docs directory
+    os.chdir(docs_dir)
 
     print("=== Building Sphinx Documentation ===")
 

@@ -121,29 +121,29 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── test_complex_workflows.py
 │   │   └── test_cli_integration.py
 │   └── test_ci_setup.py     # CI/CD setup tests
-├── docs/                    # Public Documentation
-│   ├── api/                 # Sphinx API documentation ✅ COMPLETE
-│   │   ├── conf.py          # Sphinx configuration
-│   │   ├── index.rst        # Main documentation entry point
-│   │   ├── getting_started.rst # Getting started guide
-│   │   ├── installation.rst # Installation instructions
-│   │   ├── quickstart.rst   # 5-minute quickstart
-│   │   ├── best_practices.rst # Best practices guide ✅ NEW
-│   │   ├── troubleshooting.rst # Troubleshooting guide ✅ NEW
-│   │   ├── performance.rst  # Performance optimization ✅ NEW
-│   │   ├── requirements.txt # Documentation dependencies
-│   │   ├── Makefile         # Build automation
-│   │   ├── _static/         # Custom CSS/JS files
-│   │   ├── _templates/      # Custom templates
-│   │   └── api/             # API reference files
-│   │       ├── nodes.rst    # Node types documentation
-│   │       ├── workflow.rst # Workflow management
-│   │       ├── runtime.rst  # Runtime engines
-│   │       ├── tracking.rst # Task tracking
-│   │       ├── utils.rst    # Utilities and helpers
-│   │       └── cli.rst      # CLI commands
-│   ├── build_docs.py        # Build script for GitHub Pages
-│   └── README.md            # Documentation development guide
+├── docs/                    # Public Documentation (Sphinx)
+│   ├── conf.py              # Sphinx configuration
+│   ├── index.rst            # Main documentation entry point
+│   ├── getting_started.rst  # Getting started guide
+│   ├── installation.rst     # Installation instructions
+│   ├── quickstart.rst       # 5-minute quickstart
+│   ├── best_practices.rst   # Best practices guide
+│   ├── troubleshooting.rst  # Troubleshooting guide
+│   ├── performance.rst      # Performance optimization
+│   ├── requirements.txt     # Documentation dependencies
+│   ├── Makefile            # Build automation
+│   ├── build_docs.py       # Build script for GitHub Pages
+│   ├── README.md           # Documentation development guide
+│   ├── _static/            # Custom CSS/JS files
+│   ├── _templates/         # Custom templates (if any)
+│   └── api/                # API reference files
+│       ├── nodes.rst       # Node types documentation
+│       ├── workflow.rst    # Workflow management
+│       ├── runtime.rst     # Runtime engines
+│       ├── tracking.rst    # Task tracking
+│       ├── utils.rst       # Utilities and helpers
+│       ├── visualization.rst # Visualization tools
+│       └── cli.rst         # CLI commands
 ├── guide/                   # Internal Development Documentation (not in PyPI)
 │   ├── README.md            # Guide overview
 │   ├── prd/                 # Product Requirements Documents

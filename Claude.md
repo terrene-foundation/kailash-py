@@ -240,7 +240,7 @@ Keep dependencies minimal and explicit:
    - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
 7. **Sphinx Documentation**
-   - Complete API documentation framework in `docs/api/`
+   - Complete API documentation framework in `docs/`
    - Build with: `cd docs && python build_docs.py`
    - Auto-deployed via GitHub Actions to GitHub Pages
    - All public APIs must have comprehensive docstrings with examples

@@ -6,7 +6,7 @@ Created comprehensive Sphinx-based API documentation framework for the Kailash P
 ## Completed Tasks
 
 ### 1. Sphinx Documentation Framework ✅
-- Created `docs/api/` directory structure
+- Created `docs/` directory structure for Sphinx documentation
 - Set up `conf.py` with full Sphinx configuration:
   - Autodoc for automatic API documentation from docstrings
   - Napoleon for Google/NumPy docstring support
@@ -114,7 +114,7 @@ Created detailed API reference documentation for all major components:
 
 ### To Build Documentation:
 ```bash
-cd docs/api
+cd docs
 pip install -r requirements.txt
 make html
 # View at _build/html/index.html
