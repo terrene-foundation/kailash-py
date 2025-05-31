@@ -1,0 +1,58 @@
+# Include important files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include pyproject.toml
+include setup.py
+include setup.cfg
+include pytest.ini
+
+# Include source code
+recursive-include src *.py
+recursive-include src *.pyi
+recursive-include src py.typed
+
+# Include tests (optional, you might want to exclude these too)
+recursive-include tests *.py
+recursive-include tests *.json
+recursive-include tests *.csv
+recursive-include tests *.yaml
+
+# Exclude internal documentation and development files
+prune guide
+exclude CLAUDE.md
+exclude CONTRIBUTING.md
+exclude RELEASE_ANNOUNCEMENT.md
+
+# Exclude build artifacts
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dylib
+global-exclude *.dll
+
+# Exclude version control
+prune .git
+prune .github
+exclude .gitignore
+exclude .gitattributes
+
+# Exclude development files
+exclude .pre-commit-config.yaml
+exclude uv.lock
+prune .venv
+prune .pytest_cache
+prune .ruff_cache
+prune .mypy_cache
+
+# Exclude temporary files
+prune data/tasks
+prune data/task_storage
+prune examples/data/*/tracking
+prune examples/data/*/metrics
+prune examples/data/*/runs
+prune examples/data/*/tasks
+prune examples/outputs
+prune outputs
+prune workflow_executions

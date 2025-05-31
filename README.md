@@ -144,7 +144,6 @@ results, run_id = runtime.execute(workflow, inputs=inputs)
 | Resource | Description |
 |----------|-------------|
 | 📖 [User Guide](docs/user-guide.md) | Comprehensive guide for using the SDK |
-| 🏛️ [Architecture](docs/adr/) | Architecture Decision Records |
 | 📋 [API Reference](docs/api/) | Detailed API documentation |
 | 🌐 [API Integration Guide](examples/API_INTEGRATION_README.md) | Complete API integration documentation |
 | 🎓 [Examples](examples/) | Working examples and tutorials |

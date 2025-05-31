@@ -49,6 +49,7 @@ dependencies = [
     "fastapi[all]>=0.115.12",
     "pytest-asyncio>=1.0.0",
     "pre-commit>=4.2.0",
+    "twine>=6.1.0",
 ]
 
 [project.optional-dependencies]
