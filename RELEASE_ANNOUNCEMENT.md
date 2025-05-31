@@ -1,4 +1,4 @@
-# 🎉 Kailash Python SDK v0.1.0 Release Announcement
+# 🎉 Kailash Python SDK v0.1.1 Release Announcement
 
 ## We're Live on PyPI!
 
