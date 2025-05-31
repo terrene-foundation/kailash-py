@@ -11,19 +11,19 @@ This section provides comprehensive documentation for all node types available i
 Base Node Classes
 =================
 
-BaseNode
---------
+Node
+----
 
-.. autoclass:: kailash.nodes.base.BaseNode
+.. autoclass:: kailash.nodes.base.Node
    :members:
    :undoc-members:
    :show-inheritance:
    :special-members: __init__
 
-BaseAsyncNode
--------------
+AsyncNode
+---------
 
-.. autoclass:: kailash.nodes.base_async.BaseAsyncNode
+.. autoclass:: kailash.nodes.base_async.AsyncNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -523,11 +523,11 @@ Creating custom nodes is straightforward:
 
 .. code-block:: python
 
-   from kailash.nodes import BaseNode
+   from kailash.nodes import Node
    from kailash import register_node
 
    @register_node("MyCustomNode")
-   class MyCustomNode(BaseNode):
+   class MyCustomNode(Node):
        """Custom node for specific processing."""
 
        def validate_config(self) -> None:
@@ -563,11 +563,11 @@ For async operations:
 
 .. code-block:: python
 
-   from kailash.nodes import BaseAsyncNode
+   from kailash.nodes import AsyncNode
    import aiohttp
 
    @register_node("AsyncAPINode")
-   class AsyncAPINode(BaseAsyncNode):
+   class AsyncAPINode(AsyncNode):
        """Async node for API calls."""
 
        async def execute(self, inputs: dict) -> dict:
@@ -597,7 +597,7 @@ Node Configuration Best Practices
 
 .. code-block:: python
 
-   class MyNode(BaseNode):
+   class MyNode(Node):
        def validate_config(self):
            # Set defaults
            self.config.setdefault("timeout", 30)
@@ -615,7 +615,7 @@ Node Configuration Best Practices
 
 .. code-block:: python
 
-   class MyNode(BaseNode):
+   class MyNode(Node):
        """
        My custom node.
 
