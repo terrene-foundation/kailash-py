@@ -42,4 +42,4 @@ In the future, this example could be expanded to include:
 - Asynchronous API execution
 
 ## Reference
-- Task #45 in [Master Todo List](/docs/todos/000-master.md)
+- Task #45 in [Master Todo List](/guide/todos/000-master.md)

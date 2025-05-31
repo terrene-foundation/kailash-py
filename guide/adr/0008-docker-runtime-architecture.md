@@ -119,6 +119,6 @@ The implementation will include:
 
 ## References
 
-1. Docker Runtime Implementation (docs/todos/013-docker-runtime-implementation.md)
-2. Local Execution Strategy (docs/adr/0005-local-execution-strategy.md)
-3. Task Tracking Architecture (docs/adr/0006-task-tracking-architecture.md)
+1. Docker Runtime Implementation (guide/todos/013-docker-runtime-implementation.md)
+2. Local Execution Strategy (guide/adr/0005-local-execution-strategy.md)
+3. Task Tracking Architecture (guide/adr/0006-task-tracking-architecture.md)

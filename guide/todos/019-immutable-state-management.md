@@ -89,5 +89,5 @@ final_state, results = workflow.execute_with_state(state_model=state)
    - `/tests/test_workflow/test_hmi_state_management.py` (new)
 
 4. Documentation:
-   - `/docs/adr/0015-immutable-state-management.md` (new)
-   - `/docs/todos/018-immutable-state-management.md` (new)
+   - `/guide/adr/0015-immutable-state-management.md` (new)
+   - `/guide/todos/018-immutable-state-management.md` (new)

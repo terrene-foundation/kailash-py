@@ -121,7 +121,7 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── test_complex_workflows.py
 │   │   └── test_cli_integration.py
 │   └── test_ci_setup.py     # CI/CD setup tests
-├── docs/                    # Documentation
+├── docs/                    # Public Documentation
 │   ├── api/                 # Sphinx API documentation ✅ COMPLETE
 │   │   ├── conf.py          # Sphinx configuration
 │   │   ├── index.rst        # Main documentation entry point
@@ -143,9 +143,12 @@ kailash_python_sdk/           # Project root directory
 │   │       ├── utils.rst    # Utilities and helpers
 │   │       └── cli.rst      # CLI commands
 │   ├── build_docs.py        # Build script for GitHub Pages
-│   ├── README.md            # Documentation development guide
+│   └── README.md            # Documentation development guide
+├── guide/                   # Internal Development Documentation (not in PyPI)
+│   ├── README.md            # Guide overview
 │   ├── prd/                 # Product Requirements Documents
-│   │   └── 0001-kailash_python_sdk_prd.md
+│   │   ├── 0001-kailash_python_sdk_prd.md
+│   │   └── 0000-project_structure.md (this file)
 │   ├── adr/                 # Architecture Decision Records
 │   │   ├── README.md        # ADR summary
 │   │   ├── 0000-template.md # ADR template
@@ -167,10 +170,13 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── api_integration.md
 │   │   ├── python_code_node.md
 │   │   └── workflow_pattern.md
-│   ├── todos/               # Development task tracking
-│   │   ├── 000-master.md    # Master todo list
-│   │   └── [session-specific todos]
-│   └── adr.md              # ADR overview documentation
+│   ├── development/         # Development workflows and processes
+│   │   └── pre-commit-hooks.md
+│   ├── mistakes/            # Common mistakes and lessons learned
+│   │   └── 000-master.md
+│   └── todos/               # Development task tracking
+│       ├── 000-master.md    # Master todo list
+│       └── [session-specific todos]
 ├── examples/                # Example usage and demonstrations
 │   ├── node_examples/       # Individual node usage examples
 │   │   ├── node_basic_connection.py

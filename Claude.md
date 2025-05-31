@@ -78,7 +78,7 @@ without deep technical knowledge.
 
 ## Project Structure
 
-The project structure is recorded in `docs/prd/0000-project_structure.md`. Refer to it when necessary.
+The project structure is recorded in `guide/prd/0000-project_structure.md`. Refer to it when necessary.
 
 ## Design Principles
 
@@ -145,14 +145,14 @@ Keep dependencies minimal and explicit:
 ## Must Follow: Code Generation Guidelines
 
 1. **PRD Requirements**
-   - Always reference the PRDs in `docs/prd` when generating codes and implementing features.
+   - Always reference the PRDs in `guide/prd` when generating codes and implementing features.
    - Update the PRD if requirements change during development
    - Link ADRs to relevant sections of the PRD
 
 2. **Architecture Decision Records (ADRs)**
    - All significant architectural decisions should be documented using ADRs:
-     - **README.md**: Follow the instructions in `docs/adr/README.md` for creating and managing ADRs.
-     - **Format**: Follow the ADR template in `docs/adr/`
+     - **README.md**: Follow the instructions in `guide/adr/README.md` for creating and managing ADRs.
+     - **Format**: Follow the ADR template in `guide/adr/`
      - **Numbering**: Use sequential numbering (e.g., ADR-0001)
      - **Status**: Mark each ADR as Proposed, Accepted, Deprecated, or Superseded
      - **Updates**: Create new ADRs rather than modifying existing ones
@@ -164,11 +164,11 @@ Keep dependencies minimal and explicit:
        - Export Format
        - Task Tracking Design
        - Storage Backend Strategy
-     - **Summary**: Include a summary of new ADRs in docs/adr/README.md
+     - **Summary**: Include a summary of new ADRs in guide/adr/README.md
 
 3. **Todos Management**:
    - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
-   - Maintain the master todo list in `docs/todos/000-master.md` using this structure:
+   - Maintain the master todo list in `guide/todos/000-master.md` using this structure:
 
    ```markdown
    # Project Status Overview
@@ -214,7 +214,7 @@ Keep dependencies minimal and explicit:
      - `visualization_examples/` - Workflow visualization and reporting
    - Follow naming conventions: `{category}_{description}.py` (e.g., `node_custom_creation.py`, `workflow_basic.py`)
    - Ensure examples demonstrate best practices and common usage patterns.
-   - Read the `mistakes\000-master.md` file to avoid common pitfalls in examples.
+   - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls in examples.
    - **Testing Examples**: Use `examples/_utils/test_all_examples.py` as the entrypoint to test all examples:
      ```bash
      cd examples
@@ -231,13 +231,13 @@ Keep dependencies minimal and explicit:
    - Create unit tests for all components using pytest
    - Maintain >80% code coverage
    - Place tests in a separate `tests/` directory mirroring the package structure
-   - Read the `mistakes\000-master.md` file to avoid common pitfalls.
+   - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
 6. **Integration Tests**:
    - Ensure that unit tests have been created for all components before creating integration tests
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
-   - Read the `mistakes\000-master.md` file to avoid common pitfalls.
+   - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
 7. **Sphinx Documentation**
    - Complete API documentation framework in `docs/api/`
@@ -248,8 +248,8 @@ Keep dependencies minimal and explicit:
 8. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
-9. **Mistakes**: Record all coding mistakes in `docs/mistakes/000-master.md`
-    - **Example**: If a node fails to execute due to a missing import, document the mistake in `docs/mistakes/missing_import.md`
+9. **Mistakes**: Record all coding mistakes in `guide/mistakes/000-master.md`
+    - **Example**: If a node fails to execute due to a missing import, document the mistake in `guide/mistakes/missing_import.md`
     - Include:
       - Description of the mistake
       - Code example that caused the issue
@@ -289,7 +289,7 @@ Keep dependencies minimal and explicit:
       - Hooks run automatically on every commit
       - Failed hooks prevent commits (encourages fixing issues immediately)
       - Manual formatting commands still available when needed
-      - See `docs/development/pre-commit-hooks.md` for comprehensive documentation
+      - See `guide/development/pre-commit-hooks.md` for comprehensive documentation
 
 14. **Github Actions**:
     - Use Github Actions for continuous integration.

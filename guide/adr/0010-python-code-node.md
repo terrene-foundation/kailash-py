@@ -136,7 +136,7 @@ As of 2025-05-30, the PythonCodeNode has been fully implemented and tested:
 
 ## References
 
-1. PythonCodeNode Implementation (docs/todos/005-python-code-node.md)
-2. Base Node Interface (docs/adr/0003-base-node-interface.md)
-3. Workflow Execution Fixes (docs/todos/004-workflow-execution-fixes.md)
-4. Type Validation Fixes (docs/todos/008-type-validation-fixes.md)
+1. PythonCodeNode Implementation (guide/todos/005-python-code-node.md)
+2. Base Node Interface (guide/adr/0003-base-node-interface.md)
+3. Workflow Execution Fixes (guide/todos/004-workflow-execution-fixes.md)
+4. Type Validation Fixes (guide/todos/008-type-validation-fixes.md)

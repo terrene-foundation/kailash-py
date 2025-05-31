@@ -129,7 +129,7 @@ As of 2025-05-30, all workflow execution improvements have been successfully imp
 
 ## References
 
-1. Workflow Execution Fixes (docs/todos/004-workflow-execution-fixes.md)
-2. Type Validation Fixes (docs/todos/008-type-validation-fixes.md)
-3. Base Node Interface (docs/adr/0003-base-node-interface.md)
-4. Workflow Representation (docs/adr/0004-workflow-representation.md)
+1. Workflow Execution Fixes (guide/todos/004-workflow-execution-fixes.md)
+2. Type Validation Fixes (guide/todos/008-type-validation-fixes.md)
+3. Base Node Interface (guide/adr/0003-base-node-interface.md)
+4. Workflow Representation (guide/adr/0004-workflow-representation.md)
