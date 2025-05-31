@@ -53,8 +53,27 @@ site/
 
 # Generated outputs - all output directories
 outputs/
+output/
 data/outputs/
 examples/outputs/
+examples/output/
+
+# Task tracking storage
+**/task_storage/
+**/tasks/runs/
+**/tasks/tasks/
+**/tasks/metrics/
+**/*_tracking/
+
+# Data exports
+data/exports/docker/
+data/exports/kubernetes/
+data/exports/minimal/
+data/exports/standard/
+
+# Generated visualizations and data files
+data/*_matplotlib.png
+data/sample_metrics.csv
 
 # Jupyter Notebooks
 .ipynb_checkpoints
