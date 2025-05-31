@@ -206,10 +206,16 @@ Transform nodes manipulate and process data.
 DataFilter
 ----------
 
-.. autoclass:: kailash.nodes.transform.processors.DataFilter
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Column-based filtering with multiple operators
+- Complex condition support (AND/OR logic)
+- Null value handling
+- Performance optimized for large datasets
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom filtering logic in the meantime.
 
 **Example Usage:**
 
@@ -231,10 +237,16 @@ DataFilter
 DataMapper
 ----------
 
-.. autoclass:: kailash.nodes.transform.processors.DataMapper
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Column mapping and transformation
+- Lambda function support
+- Data type conversion
+- Nested data structure handling
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom mapping logic in the meantime.
 
 **Example Usage:**
 
@@ -251,10 +263,16 @@ DataMapper
 DataSorter
 ----------
 
-.. autoclass:: kailash.nodes.transform.processors.DataSorter
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Multi-column sorting
+- Custom sort key functions
+- Memory-efficient sorting for large datasets
+- Stable sorting algorithms
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom sorting logic in the meantime.
 
 DataTransformer
 ---------------
@@ -329,10 +347,16 @@ Merge
 Validator
 ---------
 
-.. autoclass:: kailash.nodes.logic.operations.Validator
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Schema validation using JSON Schema
+- Data quality checks
+- Custom validation rules
+- Error reporting and data cleansing
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom validation logic in the meantime.
 
 AI/ML Nodes
 ===========
@@ -360,18 +384,30 @@ TextClassifier
 EmbeddingGenerator
 ------------------
 
-.. autoclass:: kailash.nodes.ai.models.EmbeddingGenerator
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Text embeddings using various models (OpenAI, HuggingFace)
+- Batch processing for efficiency
+- Vector similarity calculations
+- Embedding caching and storage
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with embedding libraries in the meantime.
 
 LLMAgent
 --------
 
-.. autoclass:: kailash.nodes.ai.agents.LLMAgent
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Integration with OpenAI, Anthropic, and other LLM providers
+- Conversation memory and context management
+- Tool calling and function execution
+- Prompt templating and optimization
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with LLM APIs in the meantime.
 
 **Example Usage:**
 
@@ -392,10 +428,16 @@ Nodes for external API integrations.
 HTTPClient
 ----------
 
-.. autoclass:: kailash.nodes.api.http.HTTPClient
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- Generic HTTP client with method support
+- Authentication handling (Bearer, Basic, OAuth)
+- Request/response logging
+- Retry logic and error handling
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with requests library in the meantime.
 
 **Example Usage:**
 
@@ -413,10 +455,16 @@ HTTPClient
 RESTClient
 ----------
 
-.. autoclass:: kailash.nodes.api.rest.RESTClient
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- RESTful API client with CRUD operations
+- JSON serialization/deserialization
+- Response pagination handling
+- Rate limiting and throttling
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with requests library in the meantime.
 
 **Example Usage:**
 
@@ -439,10 +487,16 @@ RESTClient
 GraphQLClient
 -------------
 
-.. autoclass:: kailash.nodes.api.graphql.GraphQLClient
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This node is planned for a future release.
+
+**Planned Features:**
+- GraphQL query and mutation support
+- Variable binding and validation
+- Schema introspection
+- Subscription support
+
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with GraphQL libraries in the meantime.
 
 Code Nodes
 ==========

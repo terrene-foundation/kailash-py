@@ -45,43 +45,44 @@ class CSVWriter(Node):
     applies appropriate writing strategies.
 
     Design Features:
-        1. Automatic format detection (dict vs list)
-        2. Header generation from dictionary keys
-        3. Configurable delimiters
-        4. Unicode support through encoding
-        5. Transaction-safe writing
+    1. Automatic format detection (dict vs list)
+    2. Header generation from dictionary keys
+    3. Configurable delimiters
+    4. Unicode support through encoding
+    5. Transaction-safe writing
 
     Data Flow:
-        - Input: Structured data (list of dicts/lists)
-        - Processing: Format detection and CSV generation
-        - Output: File creation confirmation
+    - Input: Structured data (list of dicts/lists)
+    - Processing: Format detection and CSV generation
+    - Output: File creation confirmation
 
     Common Usage Patterns:
-        1. Exporting processed data
-        2. Creating reports
-        3. Generating data backups
-        4. Producing import files
-        5. Saving analysis results
+    1. Exporting processed data
+    2. Creating reports
+    3. Generating data backups
+    4. Producing import files
+    5. Saving analysis results
 
     Upstream Sources:
-        - CSVReader: Modified data round-trip
-        - Transform nodes: Processed tabular data
-        - Aggregator: Summarized results
-        - API nodes: Structured responses
+    - CSVReader: Modified data round-trip
+    - Transform nodes: Processed tabular data
+    - Aggregator: Summarized results
+    - API nodes: Structured responses
 
     Downstream Consumers:
-        - File system: Stores the CSV
-        - External tools: Excel, databases
-        - Other workflows: Read the output
-        - Archive systems: Long-term storage
+    - File system: Stores the CSV
+    - External tools: Excel, databases
+    - Other workflows: Read the output
+    - Archive systems: Long-term storage
 
     Error Handling:
-        - PermissionError: Write access denied
-        - OSError: Disk full or path issues
-        - TypeError: Invalid data structure
-        - UnicodeEncodeError: Encoding issues
+    - PermissionError: Write access denied
+    - OSError: Disk full or path issues
+    - TypeError: Invalid data structure
+    - UnicodeEncodeError: Encoding issues
 
-    Example:
+    Example::
+
         # Write customer data
         writer = CSVWriter(
             file_path='output.csv',
@@ -225,43 +226,44 @@ class JSONWriter(Node):
     It ensures data persistence while maintaining structure integrity.
 
     Design Features:
-        1. Preserves complex data structures
-        2. Pretty printing with indentation
-        3. Unicode support by default
-        4. Type preservation for round-trips
-        5. Atomic write operations
+    1. Preserves complex data structures
+    2. Pretty printing with indentation
+    3. Unicode support by default
+    4. Type preservation for round-trips
+    5. Atomic write operations
 
     Data Flow:
-        - Input: Any JSON-serializable data
-        - Processing: JSON serialization
-        - Output: File creation confirmation
+    - Input: Any JSON-serializable data
+    - Processing: JSON serialization
+    - Output: File creation confirmation
 
     Common Usage Patterns:
-        1. Saving API responses
-        2. Persisting configuration
-        3. Caching structured data
-        4. Exporting analysis results
-        5. Creating data backups
+    1. Saving API responses
+    2. Persisting configuration
+    3. Caching structured data
+    4. Exporting analysis results
+    5. Creating data backups
 
     Upstream Sources:
-        - JSONReader: Modified data round-trip
-        - API nodes: Response data
-        - Transform nodes: Processed structures
-        - Aggregator: Complex results
+    - JSONReader: Modified data round-trip
+    - API nodes: Response data
+    - Transform nodes: Processed structures
+    - Aggregator: Complex results
 
     Downstream Consumers:
-        - File system: Stores JSON file
-        - JSONReader: Can reload data
-        - APIs: Import the data
-        - Version control: Track changes
+    - File system: Stores JSON file
+    - JSONReader: Can reload data
+    - APIs: Import the data
+    - Version control: Track changes
 
     Error Handling:
-        - TypeError: Non-serializable data
-        - PermissionError: Write access denied
-        - OSError: Path or disk issues
-        - JSONEncodeError: Encoding problems
+    - TypeError: Non-serializable data
+    - PermissionError: Write access denied
+    - OSError: Path or disk issues
+    - JSONEncodeError: Encoding problems
 
-    Example:
+    Example::
+
         # Write API response
         writer = JSONWriter(
             file_path='response.json',
@@ -376,43 +378,44 @@ class TextWriter(Node):
     output for logs, documents, and generated content.
 
     Design Features:
-        1. Flexible encoding support
-        2. Append mode for log files
-        3. Overwrite mode for fresh output
-        4. Byte counting for verification
-        5. Unicode-safe operations
+    1. Flexible encoding support
+    2. Append mode for log files
+    3. Overwrite mode for fresh output
+    4. Byte counting for verification
+    5. Unicode-safe operations
 
     Data Flow:
-        - Input: Text string and configuration
-        - Processing: Encode and write text
-        - Output: Write confirmation
+    - Input: Text string and configuration
+    - Processing: Encode and write text
+    - Output: Write confirmation
 
     Common Usage Patterns:
-        1. Writing log entries
-        2. Saving generated content
-        3. Creating documentation
-        4. Exporting text reports
-        5. Building configuration files
+    1. Writing log entries
+    2. Saving generated content
+    3. Creating documentation
+    4. Exporting text reports
+    5. Building configuration files
 
     Upstream Sources:
-        - TextReader: Modified text round-trip
-        - Transform nodes: Processed text
-        - AI nodes: Generated content
-        - Template nodes: Formatted output
+    - TextReader: Modified text round-trip
+    - Transform nodes: Processed text
+    - AI nodes: Generated content
+    - Template nodes: Formatted output
 
     Downstream Consumers:
-        - File system: Stores text file
-        - Log analyzers: Process logs
-        - Documentation systems: Use output
-        - Version control: Track changes
+    - File system: Stores text file
+    - Log analyzers: Process logs
+    - Documentation systems: Use output
+    - Version control: Track changes
 
     Error Handling:
-        - PermissionError: Write access denied
-        - OSError: Path or disk issues
-        - UnicodeEncodeError: Encoding mismatch
-        - MemoryError: Text too large
+    - PermissionError: Write access denied
+    - OSError: Path or disk issues
+    - UnicodeEncodeError: Encoding mismatch
+    - MemoryError: Text too large
 
-    Example:
+    Example::
+
         # Append to log file
         writer = TextWriter(
             file_path='app.log',

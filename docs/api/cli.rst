@@ -681,5 +681,5 @@ See Also
 
 - :doc:`../getting_started` - Getting started guide
 - :doc:`../guides/workflows` - Workflow development
-- :doc:`../guides/debugging` - Debugging workflows
-- :doc:`../examples/cli` - CLI usage examples
+- Debugging workflows
+- CLI usage examples

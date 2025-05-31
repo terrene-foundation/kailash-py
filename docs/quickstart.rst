@@ -401,7 +401,7 @@ Next Steps
 
 Ready for more? Here's where to go next:
 
-1. **Learn Core Concepts**: :doc:`guides/concepts`
+1. **Learn Core Concepts**: Read about workflow concepts
 2. **Explore Node Types**: :doc:`api/nodes`
 3. **Build Complex Workflows**: :doc:`guides/workflows`
 4. **Create Custom Nodes**: :doc:`guides/custom_nodes`
@@ -412,7 +412,7 @@ Need Help?
 
 - 📖 **Full Documentation**: :doc:`index`
 - 💡 **Examples**: :doc:`examples/index`
-- 🐛 **Troubleshooting**: :doc:`guides/troubleshooting`
+- 🐛 **Troubleshooting**: :doc:`troubleshooting`
 - 💬 **Community**: `GitHub Discussions <https://github.com/terrene-foundation/kailash-py/discussions>`_
 
 Happy workflow building! 🚀

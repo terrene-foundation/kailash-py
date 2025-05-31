@@ -225,7 +225,7 @@ Node-Level Error Handling
                     time.sleep(2 ** attempt)  # Exponential backoff
 
 Workflow-Level Error Handling
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -293,7 +293,7 @@ Unit Testing Nodes
             assert result["success"] is True
 
 Integration Testing Workflows
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -320,7 +320,7 @@ Performance Optimization
 ------------------------
 
 Memory Management
-^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -346,7 +346,7 @@ Memory Management
             gc.collect()
 
 Parallel Execution
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -373,7 +373,7 @@ Parallel Execution
             return results
 
 Caching Strategies
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -442,7 +442,7 @@ Performance Monitoring
         return wrapper
 
 Structured Logging
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -471,10 +471,10 @@ Structured Logging
             self.logger.info(json.dumps(log_entry))
 
 Security Considerations
-----------------------
+-----------------------
 
 Input Sanitization
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 

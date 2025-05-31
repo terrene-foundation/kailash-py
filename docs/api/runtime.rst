@@ -211,12 +211,16 @@ Execute nodes in isolated Docker containers.
 TestingRuntime
 ==============
 
-Mock runtime for unit testing workflows.
+.. note::
+   🚧 **Coming Soon** - This runtime is planned for a future release.
 
-.. autoclass:: kailash.runtime.testing.TestingRuntime
-   :members:
-   :undoc-members:
-   :show-inheritance:
+**Planned Features:**
+- Mock runtime for unit testing workflows
+- Configurable node behavior simulation
+- Deterministic test results
+- Performance testing capabilities
+
+**Alternative:** Use the local runtime with mock data for testing in the meantime.
 
 **Example Usage:**
 

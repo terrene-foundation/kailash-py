@@ -139,10 +139,17 @@ Templates for creating common workflow patterns.
 WorkflowTemplates
 -----------------
 
-.. autoclass:: kailash.utils.templates.WorkflowTemplates
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This utility is planned for a future release.
+
+**Planned Features:**
+- Pre-built workflow templates for common patterns
+- ETL pipeline templates
+- API integration templates
+- ML pipeline templates
+- **Agentic workflow templates** (LangChain/Langgraph integration)
+
+**Alternative:** Build workflows manually using the WorkflowBuilder for now.
 
 **Available Templates:**
 
@@ -270,10 +277,16 @@ Utilities for working with the node registry.
 NodeRegistry
 ------------
 
-.. autoclass:: kailash.manifest.NodeRegistry
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   🚧 **Coming Soon** - This utility is planned for a future release.
+
+**Planned Features:**
+- Dynamic node discovery and registration
+- Node metadata and documentation
+- Plugin system for third-party nodes
+- Node versioning and compatibility checks
+
+**Alternative:** Use direct imports for now.
 
 **Example Usage:**
 

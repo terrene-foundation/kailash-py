@@ -48,10 +48,7 @@ framework for building workflow-based applications with a container-node archite
    :maxdepth: 2
    :caption: Examples
 
-   examples/basic
-   examples/advanced
-   examples/integrations
-   examples/patterns
+   examples/index
 
 .. toctree::
    :maxdepth: 1
@@ -61,6 +58,7 @@ framework for building workflow-based applications with a container-node archite
    changelog
    contributing
    security
+   unimplemented_nodes_tracker
 
 Overview
 ========

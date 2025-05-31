@@ -2,9 +2,9 @@
 
 .. _examples-utils:
 
-===============
+================
 Utility Examples
-===============
+================
 
 This section shows examples of using utility functions and helpers.
 

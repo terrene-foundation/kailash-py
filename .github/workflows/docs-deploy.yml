@@ -9,6 +9,11 @@ on:
       - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:  # Allow manual trigger
 
+# Prevent multiple deployments from running simultaneously
+# This ensures only the latest push to main gets deployed
+env:
+  DEPLOYMENT_ENVIRONMENT: github-pages
+
 permissions:
   contents: read
   pages: write
@@ -16,7 +21,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -27,6 +32,39 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Clean up stale deployments
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          // Get all deployments
+          const deployments = await github.rest.repos.listDeployments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            environment: 'github-pages',
+            per_page: 100
+          });
+          
+          // Keep only the latest deployment and mark others as inactive
+          const sortedDeployments = deployments.data.sort((a, b) => 
+            new Date(b.created_at) - new Date(a.created_at)
+          );
+          
+          for (let i = 1; i < sortedDeployments.length; i++) {
+            const deployment = sortedDeployments[i];
+            
+            // Update deployment status to inactive
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'inactive',
+              description: 'Superseded by newer deployment'
+            });
+            
+            console.log(`Marked deployment ${deployment.id} as inactive`);
+          }
 
     - name: Set up Python
       uses: actions/setup-python@v5

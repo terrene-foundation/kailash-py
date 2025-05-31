@@ -546,7 +546,8 @@ class PythonCodeNode(Node):
     - State management for class-based nodes
     - AST-based security validation
 
-    Example:
+    Example::
+
         # Function-based node
         def custom_filter(data: pd.DataFrame, threshold: float) -> pd.DataFrame:
             return data[data['value'] > threshold]
