@@ -118,6 +118,48 @@
       "status": "completed",
       "started_at": "2025-05-31T04:58:22.246857+00:00",
       "ended_at": "2025-05-31T04:58:22.247827+00:00"
+    },
+    "19eeb96b-7ef0-444e-b02e-11e8ed485597": {
+      "run_id": "ae6898e4-7be6-4511-8a60-33b46dcbd44e",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:13.936113+00:00",
+      "ended_at": "2025-05-31T16:53:13.938149+00:00"
+    },
+    "126efe36-b0a6-4808-bcfe-294e6bfdb342": {
+      "run_id": "ae6898e4-7be6-4511-8a60-33b46dcbd44e",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:13.940136+00:00",
+      "ended_at": "2025-05-31T16:53:13.942144+00:00"
+    },
+    "f5915e6a-f826-4b69-996f-7f2f8fb977b3": {
+      "run_id": "ae6898e4-7be6-4511-8a60-33b46dcbd44e",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:13.943696+00:00",
+      "ended_at": "2025-05-31T16:53:13.945942+00:00"
+    },
+    "85465e43-0062-4f75-8703-46cf3caabee5": {
+      "run_id": "02dadbe7-b379-44bd-8355-92977bba4154",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:47.650484+00:00",
+      "ended_at": "2025-05-31T17:02:47.652459+00:00"
+    },
+    "f8cd5828-a94e-49e0-9401-8584e22b63a1": {
+      "run_id": "02dadbe7-b379-44bd-8355-92977bba4154",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:47.654035+00:00",
+      "ended_at": "2025-05-31T17:02:47.655948+00:00"
+    },
+    "44c178d7-9834-47b0-955e-3ab4bac5842d": {
+      "run_id": "02dadbe7-b379-44bd-8355-92977bba4154",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:47.657265+00:00",
+      "ended_at": "2025-05-31T17:02:47.658985+00:00"
     }
   },
   "runs": {}

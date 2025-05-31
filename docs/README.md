@@ -1,3 +1,5 @@
+:orphan:
+
 # Kailash Python SDK Documentation
 
 This directory contains the public documentation for the Kailash Python SDK.

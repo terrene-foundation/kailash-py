@@ -118,6 +118,48 @@
       "status": "completed",
       "started_at": "2025-05-31T04:58:32.258515+00:00",
       "ended_at": "2025-05-31T04:58:32.259522+00:00"
+    },
+    "842a1160-3a4e-4df5-9c58-d491bb658e41": {
+      "run_id": "337f8ce1-d993-442f-9f50-421980877d6a",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:24.105453+00:00",
+      "ended_at": "2025-05-31T16:53:24.107356+00:00"
+    },
+    "27f14230-5e8f-469f-8dcc-ccb4e9ee9cd4": {
+      "run_id": "337f8ce1-d993-442f-9f50-421980877d6a",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:24.108921+00:00",
+      "ended_at": "2025-05-31T16:53:24.110676+00:00"
+    },
+    "31ddc958-620b-40a2-8524-cf8bd1868085": {
+      "run_id": "337f8ce1-d993-442f-9f50-421980877d6a",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:24.112142+00:00",
+      "ended_at": "2025-05-31T16:53:24.113977+00:00"
+    },
+    "9e425e7a-3655-402b-a918-03a874638660": {
+      "run_id": "e8078cf1-e60b-438d-af4d-9b596d1fc497",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:57.665878+00:00",
+      "ended_at": "2025-05-31T17:02:57.667883+00:00"
+    },
+    "4300e218-2caa-4081-af9c-edb7f5937eaf": {
+      "run_id": "e8078cf1-e60b-438d-af4d-9b596d1fc497",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:57.669565+00:00",
+      "ended_at": "2025-05-31T17:02:57.671237+00:00"
+    },
+    "7c1ce86b-972a-4faf-bf73-9faa4a8c2c40": {
+      "run_id": "e8078cf1-e60b-438d-af4d-9b596d1fc497",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:57.672815+00:00",
+      "ended_at": "2025-05-31T17:02:57.674420+00:00"
     }
   },
   "runs": {}

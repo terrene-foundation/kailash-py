@@ -32,6 +32,17 @@ AsyncNode
 Data Nodes
 ==========
 
+.. note::
+
+   Additional data nodes are planned for future releases:
+   
+   - **XMLReader/XMLWriter**: For XML file processing
+   - **ParquetReader/ParquetWriter**: For Apache Parquet columnar storage
+   - **ExcelReader/ExcelWriter**: For Microsoft Excel files
+   
+   Track implementation progress in the `GitHub issues <https://github.com/your-org/kailash-sdk/issues>`_.
+
+
 Data nodes handle input/output operations for various file formats and data sources.
 
 Readers
@@ -88,29 +99,7 @@ TextReader
    :undoc-members:
    :show-inheritance:
 
-XMLReader
-~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.readers.XMLReader
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-ParquetReader
-~~~~~~~~~~~~~
-
-.. autoclass:: kailash.nodes.data.readers.ParquetReader
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-ExcelReader
-~~~~~~~~~~~
-
-.. autoclass:: kailash.nodes.data.readers.ExcelReader
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 Writers
 -------
@@ -149,27 +138,10 @@ TextWriter
    :undoc-members:
    :show-inheritance:
 
-ParquetWriter
-~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.writers.ParquetWriter
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
-ExcelWriter
-~~~~~~~~~~~
-
-.. autoclass:: kailash.nodes.data.writers.ExcelWriter
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Database Nodes
---------------
-
-SQLReader
-~~~~~~~~~
+SQLDatabaseNode
+~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.nodes.data.sql.SQLReader
    :members:
@@ -180,14 +152,14 @@ SQLReader
 
 .. code-block:: python
 
-   workflow.add_node("SQLReader", "query_orders", config={
+   workflow.add_node("SQLDatabaseNode", "query_orders", config={
        "connection_string": "postgresql://user:pass@host/db",
        "query": "SELECT * FROM orders WHERE status = 'active'",
        "params": {"limit": 1000}
    })
 
-SQLWriter
-~~~~~~~~~
+SQLQueryBuilderNode
+~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.nodes.data.sql.SQLWriter
    :members:
@@ -244,13 +216,13 @@ DataFilter
 .. code-block:: python
 
    # Simple equality filter
-   workflow.add_node("DataFilter", "filter_active", config={
+   workflow.add_node("Filter", "filter_active", config={
        "column": "status",
        "value": "active"
    })
 
    # Complex filter with operator
-   workflow.add_node("DataFilter", "filter_high_value", config={
+   workflow.add_node("Filter", "filter_high_value", config={
        "column": "revenue",
        "value": 10000,
        "operation": ">="
@@ -268,7 +240,7 @@ DataMapper
 
 .. code-block:: python
 
-   workflow.add_node("DataMapper", "add_columns", config={
+   workflow.add_node("Map", "add_columns", config={
        "mapping": {
            "full_name": "lambda row: f'{row.first_name} {row.last_name}'",
            "is_vip": "lambda row: row.total_purchases > 10000",
@@ -307,6 +279,11 @@ DataTransformer
 
 Logic Nodes
 ===========
+
+.. note::
+
+   The **Validator** node for complex data validation rules is planned for a future release.
+
 
 Logic nodes control workflow execution flow.
 
@@ -400,7 +377,7 @@ LLMAgent
 
 .. code-block:: python
 
-   workflow.add_node("LLMAgent", "analyze", config={
+   workflow.add_node("ChatAgent", "analyze", config={
        "model": "gpt-4",
        "prompt_template": "Analyze the following customer feedback: {feedback}",
        "temperature": 0.7,
@@ -424,7 +401,7 @@ HTTPClient
 
 .. code-block:: python
 
-   workflow.add_node("HTTPClient", "fetch_data", config={
+   workflow.add_node("HTTPRequestNode", "fetch_data", config={
        "url": "https://api.example.com/data",
        "method": "GET",
        "headers": {
@@ -445,7 +422,7 @@ RESTClient
 
 .. code-block:: python
 
-   workflow.add_node("RESTClient", "api_call", config={
+   workflow.add_node("RESTClientNode", "api_call", config={
        "base_url": "https://api.example.com",
        "endpoint": "/users/{user_id}",
        "method": "PUT",
@@ -590,7 +567,7 @@ Node Configuration Best Practices
 
 .. code-block:: python
 
-   workflow.add_node("RESTClient", "api", config={
+   workflow.add_node("RESTClientNode", "api", config={
        "auth": {
            "token": "${API_TOKEN}"  # Resolved from environment
        }
@@ -631,6 +608,6 @@ Node Configuration Best Practices
 See Also
 ========
 
-- :doc:`../guides/custom_nodes` - Guide to creating custom nodes
-- :doc:`../guides/best_practices` - Best practices for node usage
-- :doc:`../examples/index` - Example workflows using various nodes
+- :doc:`/guides/custom_nodes` - Guide to creating custom nodes
+- :doc:`/best_practices` - Best practices for node usage
+- :doc:`/examples/index` - Example workflows using various nodes

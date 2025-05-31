@@ -487,5 +487,5 @@ See Also
 - :doc:`nodes` - Node types and development
 - :doc:`workflow` - Workflow construction
 - :doc:`tracking` - Execution tracking
-- :doc:`../guides/performance` - Performance optimization guide
-- :doc:`../examples/runtime` - Runtime usage examples
+- :doc:`/performance` - Performance optimization guide
+- :doc:`/examples/runtime` - Runtime usage examples

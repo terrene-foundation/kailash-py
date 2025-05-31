@@ -6,8 +6,8 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-539%20passing-brightgreen.svg" alt="Tests: 539 passing">
-  <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
+  <img src="https://img.shields.io/badge/tests-571%20passing-brightgreen.svg" alt="Tests: 571 passing">
+  <img src="https://img.shields.io/badge/coverage-89%25-brightgreen.svg" alt="Coverage: 89%">
 </p>
 
 <p align="center">
@@ -659,9 +659,9 @@ pre-commit run pytest-check
 - **Performance visualization dashboards**
 - **Real-time monitoring dashboard with WebSocket streaming**
 - **Comprehensive performance reports (HTML, Markdown, JSON)**
-- **100% test coverage (544 tests)**
+- **89% test coverage (571 tests)**
 - **15 test categories all passing**
-- 21+ working examples
+- 37 working examples
 
 </td>
 <td width="30%">
@@ -686,11 +686,17 @@ pre-commit run pytest-check
 </table>
 
 ### 🎯 Test Suite Status
-- **Total Tests**: 544 passing (100%)
+- **Total Tests**: 571 passing (89%)
 - **Test Categories**: 15/15 at 100%
 - **Integration Tests**: 65 passing
-- **Examples**: 21/21 working
-- **Code Coverage**: Comprehensive
+- **Examples**: 37/37 working
+- **Code Coverage**: 89%
+
+## ⚠️ Known Issues
+
+1. **DateTime Comparison in `list_runs()`**: The `TaskManager.list_runs()` method may encounter timezone comparison errors between timezone-aware and timezone-naive datetime objects. Workaround: Use try-catch blocks when calling `list_runs()` or access run details directly via `get_run(run_id)`.
+
+2. **Performance Tracking**: To enable performance metrics collection, you must pass the `task_manager` parameter to the `runtime.execute()` method: `runtime.execute(workflow, task_manager=task_manager)`.
 
 ## 📄 License
 

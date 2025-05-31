@@ -37,6 +37,7 @@ class NodeMetadata(BaseModel):
     """Metadata for a node.
 
     This class stores descriptive information about a node that is used for:
+
     1. Discovery in the UI/CLI (name, description, tags)
     2. Version tracking and compatibility checks
     3. Documentation and tooltips
@@ -68,6 +69,7 @@ class NodeParameter(BaseModel):
     """Definition of a node parameter.
 
     This class defines the schema for node inputs and outputs, providing:
+
     1. Type information for validation
     2. Default values for optional parameters
     3. Documentation for users
@@ -102,6 +104,7 @@ class Node(ABC):
 
     This abstract class defines the contract that all nodes must implement.
     It provides the foundation for:
+
     1. Parameter validation and type checking
     2. Execution lifecycle management
     3. Error handling and reporting
@@ -117,6 +120,7 @@ class Node(ABC):
 
     Inheritance Pattern:
     All concrete nodes must:
+
     1. Implement get_parameters() to define inputs
     2. Implement run() to process data
     3. Call super().__init__() with configuration
@@ -137,6 +141,7 @@ class Node(ABC):
         """Initialize the node with configuration parameters.
 
         This method performs the following initialization steps:
+
         1. Sets the node ID (defaults to class name)
         2. Creates metadata from provided arguments
         3. Sets up logging for the node
@@ -195,6 +200,7 @@ class Node(ABC):
 
         This abstract method must be implemented by all concrete nodes to
         specify their input schema. The parameters define:
+
         1. What inputs the node expects
         2. Type requirements for each input
         3. Whether inputs are required or optional
@@ -202,12 +208,14 @@ class Node(ABC):
         5. Documentation for each parameter
 
         The returned dictionary is used throughout the node lifecycle:
+
         - During initialization: _validate_config() checks configuration
         - During execution: validate_inputs() validates runtime data
         - During workflow creation: Used for connection validation
         - During export: Included in workflow manifests
 
-        Example implementation:
+        Example::
+
             def get_parameters(self):
                 return {
                     'input_file': NodeParameter(
@@ -239,8 +247,10 @@ class Node(ABC):
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define output parameters for this node.
 
-        This optional method allows nodes to specify their output schema for validation.
-        If not overridden, outputs will only be validated for JSON-serializability.
+        This optional method allows nodes to specify their output schema for
+        validation.
+        If not overridden, outputs will only be validated for
+        JSON-serializability.
 
         Design purpose:
         - Enables static analysis of node outputs
@@ -249,12 +259,14 @@ class Node(ABC):
         - Facilitates workflow validation and type checking
 
         The output schema serves similar purposes as input parameters:
+
         1. Type validation during execution
         2. Documentation for downstream consumers
         3. Workflow connection validation
         4. Export manifest generation
 
-        Example implementation:
+        Example::
+
             def get_output_schema(self):
                 return {
                     'dataframe': NodeParameter(
@@ -293,10 +305,12 @@ class Node(ABC):
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node's logic.
 
-        This is the core method that implements the node's data processing logic.
+        This is the core method that implements the node's data processing
+        logic.
         It receives validated inputs and must return a dictionary of outputs.
 
         Design requirements:
+
         1. Must be stateless - no side effects between runs
         2. All inputs are provided as keyword arguments
         3. Must return a dictionary (JSON-serializable)
@@ -305,12 +319,14 @@ class Node(ABC):
         6. Should use self.logger for status reporting
 
         The method is called by execute() which handles:
+
         - Input validation before calling run()
         - Output validation after run() completes
         - Error wrapping and logging
         - Execution timing and metrics
 
-        Example implementation:
+        Example::
+
             def run(self, input_file, delimiter=','):
                 df = pd.read_csv(input_file, delimiter=delimiter)
                 return {
@@ -344,15 +360,19 @@ class Node(ABC):
         provided configuration matches the node's parameter requirements.
 
         Validation process:
+
         1. Calls get_parameters() to get schema
         2. For each parameter, checks if:
+
            - Required parameters are present
            - Values match expected types
            - Type conversion is possible if needed
+
         3. Sets default values for missing optional parameters
         4. Updates self.config with validated values
 
         Type conversion:
+
         - If a value doesn't match the expected type, attempts conversion
         - For example: string "123" -> int 123
         - Conversion failures result in descriptive errors
@@ -406,15 +426,19 @@ class Node(ABC):
         error messages for invalid inputs.
 
         Validation steps:
+
         1. Gets parameter definitions from get_parameters()
         2. Checks each parameter for:
+
            - Presence (if required)
            - Type compatibility
            - Null handling for optional parameters
+
         3. Attempts type conversion if needed
         4. Applies default values for missing optional parameters
 
         Key behaviors:
+
         - Required parameters must be provided or have defaults
         - Optional parameters can be None
         - Type mismatches attempt conversion before failing
@@ -423,7 +447,7 @@ class Node(ABC):
         Example flow:
             # Node expects: {'count': int, 'name': str (optional)}
             inputs = {'count': '42', 'name': None}
-            validated = validate_inputs(**inputs)
+            validated = validate_inputs(\**inputs)
             # Returns: {'count': 42}  # Converted and None removed
 
         Args:
@@ -431,12 +455,14 @@ class Node(ABC):
 
         Returns:
             Dictionary of validated inputs with:
+
             - Type conversions applied
             - Defaults for missing optional parameters
             - None values removed for optional parameters
 
         Raises:
             NodeValidationError: If inputs are invalid:
+
                 - Missing required parameters
                 - Type conversion failures
                 - get_parameters() errors
@@ -489,20 +515,25 @@ class Node(ABC):
         """Validate outputs against schema and JSON-serializability.
 
         This enhanced method validates outputs in two ways:
+
         1. Schema validation: If get_output_schema() is defined, validates
            types and required fields
         2. JSON serialization: Ensures all outputs can be serialized
 
         Validation process:
+
         1. Check outputs is a dictionary
         2. If output schema exists:
+
            - Validate required fields are present
            - Check type compatibility
            - Attempt type conversion if needed
+
         3. Verify JSON-serializability
         4. Return validated outputs
 
         Schema validation features:
+
         - Required outputs must be present
         - Optional outputs can be None or missing
         - Type mismatches attempt conversion
@@ -516,6 +547,7 @@ class Node(ABC):
 
         Raises:
             NodeValidationError: If outputs are invalid:
+
                 - Not a dictionary
                 - Missing required outputs
                 - Type validation failures
@@ -632,6 +664,7 @@ class Node(ABC):
         5. Performance metrics
 
         Execution flow:
+
         1. Logs execution start
         2. Validates inputs against parameter schema
         3. Calls run() with validated inputs
@@ -640,11 +673,13 @@ class Node(ABC):
         6. Returns validated outputs
 
         Error handling strategy:
+
         - NodeValidationError: Re-raised as-is (input/output issues)
         - NodeExecutionError: Re-raised as-is (run() failures)
         - Other exceptions: Wrapped in NodeExecutionError
 
         Performance tracking:
+
         - Records execution start/end times
         - Logs total execution duration
         - Includes timing in execution logs
@@ -713,12 +748,14 @@ class Node(ABC):
         """Convert node to dictionary representation.
 
         Serializes the node instance to a dictionary format suitable for:
+
         1. Workflow export
         2. Node persistence
         3. API responses
         4. Configuration sharing
 
         The serialized format includes:
+
         - id: Unique node identifier
         - type: Node class name
         - metadata: Complete node metadata
@@ -726,12 +763,14 @@ class Node(ABC):
         - parameters: Parameter definitions with types
 
         Type serialization:
+
         - Python types are converted to string names
         - Complex types may require custom handling
         - Parameter defaults are included
 
         Returns:
             Dictionary representation containing:
+
             - Node identification and type
             - Complete metadata
             - Configuration values
@@ -739,6 +778,7 @@ class Node(ABC):
 
         Raises:
             NodeExecutionError: If serialization fails due to:
+
                 - get_parameters() errors
                 - Metadata serialization issues
                 - Type conversion problems
@@ -777,23 +817,27 @@ class NodeRegistry:
 
     This singleton class provides a global registry for node types,
     enabling:
+
     1. Dynamic node discovery
     2. Node class registration
     3. Workflow deserialization
     4. CLI/UI node palettes
 
     Design pattern: Singleton
+
     - Single global instance (_instance)
     - Shared registry of node classes (_nodes)
     - Thread-safe through class methods
 
     Registration flow:
+
     1. Nodes register via @register_node decorator
     2. Registry validates node inheritance
     3. Stores class reference by name/alias
     4. Available for instantiation
 
     Usage patterns:
+
     - Automatic: @register_node decorator
     - Manual: NodeRegistry.register(NodeClass)
     - Discovery: NodeRegistry.list_nodes()
@@ -835,12 +879,14 @@ class NodeRegistry:
         for discovery and instantiation.
 
         Registration process:
+
         1. Validates node_class inherits from Node
         2. Determines registration name (alias or class name)
         3. Warns if overwriting existing registration
         4. Stores class reference in registry
 
         Thread safety:
+
         - Class method ensures single registry
         - Dictionary operations are atomic
         - Safe for concurrent registration
@@ -855,10 +901,12 @@ class NodeRegistry:
 
         Raises:
             NodeConfigurationError: If registration fails:
+
                 - node_class doesn't inherit from Node
                 - Invalid class type provided
 
         Side effects:
+
             - Updates cls._nodes dictionary
             - Logs registration success/warnings
             - Overwrites existing registrations
@@ -889,6 +937,7 @@ class NodeRegistry:
         Used during workflow creation and deserialization.
 
         Lookup process:
+
         1. Searches registry by exact name match
         2. Returns class reference if found
         3. Provides helpful error with available nodes
@@ -905,6 +954,7 @@ class NodeRegistry:
 
         Raises:
             NodeConfigurationError: If node is not registered:
+
                 - Includes list of available nodes
                 - Suggests similar names if possible
 
@@ -931,6 +981,7 @@ class NodeRegistry:
 
         Returns:
             Dictionary mapping node names to their classes:
+
             - Keys: Node names/aliases
             - Values: Node class references
             - Safe copy prevents registry modification
@@ -948,20 +999,23 @@ class NodeRegistry:
         """Clear all registered nodes.
 
         Removes all nodes from the registry. Primarily used for:
+
         1. Testing - Clean state between tests
         2. Reloading - Before re-registering nodes
         3. Cleanup - Memory management
 
         Side effects:
+
             - Empties the _nodes dictionary
             - Logs the clearing action
             - Existing node instances remain valid
 
-        Warning:
-            - Subsequent get() calls will fail
-            - Workflows may not deserialize
-            - Should re-register needed nodes
-        """
+        Warning::
+
+        - Subsequent get() calls will fail
+        - Workflows may not deserialize
+        - Should re-register needed nodes
+"""
         cls._nodes.clear()
         logging.info("Cleared all registered nodes")
 
@@ -982,11 +1036,13 @@ def register_node(alias: Optional[str] = None):
             pass
 
     Registration timing:
+
     - Occurs when module is imported
     - Before any workflow creation
     - Enables automatic discovery
 
     Error handling:
+
     - Wraps registration errors
     - Provides clear error messages
     - Preserves original class
@@ -996,18 +1052,21 @@ def register_node(alias: Optional[str] = None):
 
     Returns:
         Decorator function that:
+
         - Registers the node class
         - Returns the unmodified class
         - Handles registration errors
 
-    Example:
+    Example::
+
         @register_node(alias='CSV')
         class CSVReaderNode(Node):
             def get_parameters(self):
                 return {'file': NodeParameter(...)}
+
             def run(self, file):
                 return pd.read_csv(file)
-    """
+        """
 
     def decorator(node_class: Type[Node]):
         """Inner decorator that performs registration.
