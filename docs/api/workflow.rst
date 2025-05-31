@@ -76,12 +76,12 @@ Builder pattern for constructing workflows programmatically.
 
    results = workflow.run()
 
-WorkflowGraph
-=============
+Workflow Graph Management
+=========================
 
-Internal graph representation of workflows.
+Internal graph representation is handled by the Workflow class.
 
-.. autoclass:: kailash.workflow.graph.WorkflowGraph
+.. autoclass:: kailash.workflow.graph.Workflow
    :members:
    :undoc-members:
    :show-inheritance:
@@ -130,12 +130,17 @@ Executes workflows with various runtime configurations.
    run_id = results["run_id"]
    metrics = task_manager.get_run_metrics(run_id)
 
-WorkflowState
-=============
+State Management
+================
 
 Manages workflow execution state and data flow.
 
-.. autoclass:: kailash.workflow.state.WorkflowState
+.. autoclass:: kailash.workflow.state.StateManager
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: kailash.workflow.state.WorkflowStateWrapper
    :members:
    :undoc-members:
    :show-inheritance:
