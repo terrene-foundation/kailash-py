@@ -38,7 +38,7 @@ try:
         WebSocketDisconnect,
     )
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import FileResponse, JSONResponse
+    from fastapi.responses import FileResponse
     from pydantic import BaseModel
 
     FASTAPI_AVAILABLE = True
@@ -47,10 +47,7 @@ except ImportError:
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
-from kailash.visualization.dashboard import (
-    DashboardConfig,
-    RealTimeDashboard,
-)
+from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 
 logger = logging.getLogger(__name__)
