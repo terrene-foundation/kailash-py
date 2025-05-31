@@ -34,7 +34,8 @@ The central component for tracking workflow execution.
 .. code-block:: python
 
    from kailash.tracking import TaskManager
-   from kailash import Workflow, WorkflowRunner
+   from kailash import Workflow
+   from kailash.workflow.runner import WorkflowRunner
 
    # Create task manager
    task_manager = TaskManager()

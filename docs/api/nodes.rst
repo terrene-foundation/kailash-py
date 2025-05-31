@@ -50,14 +50,18 @@ CSVReader
 .. code-block:: python
 
    from kailash import Workflow
+   from kailash.nodes.data import CSVReader
 
    workflow = Workflow("csv_example")
-   workflow.add_node("CSVReader", "read_customers", config={
-       "file_path": "customers.csv",
-       "encoding": "utf-8",
-       "parse_dates": ["created_at", "updated_at"],
-       "dtype": {"customer_id": str}
-   })
+   
+   # Create the CSV reader node
+   csv_reader = CSVReader(
+       file_path="customers.csv",
+       encoding="utf-8"
+   )
+   
+   # Add the node to the workflow
+   workflow.add_node("read_customers", csv_reader)
 
 JSONReader
 ~~~~~~~~~~
@@ -523,8 +527,7 @@ Creating custom nodes is straightforward:
 
 .. code-block:: python
 
-   from kailash.nodes import Node
-   from kailash import register_node
+   from kailash.nodes import Node, register_node
 
    @register_node("MyCustomNode")
    class MyCustomNode(Node):

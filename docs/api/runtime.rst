@@ -26,7 +26,7 @@ Runtimes are automatically selected based on the workflow configuration:
 
 .. code-block:: python
 
-   from kailash import Workflow, RuntimeConfig
+   from kailash import Workflow
 
    # Default: LocalRuntime
    workflow = Workflow("my_workflow")

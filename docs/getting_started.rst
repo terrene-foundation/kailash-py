@@ -78,7 +78,8 @@ Step 1: Import Required Components
 
 .. code-block:: python
 
-   from kailash import Workflow, NodeRegistry
+   from kailash import Workflow
+   from kailash.nodes import NodeRegistry
 
 Step 2: Create a Workflow
 -------------------------

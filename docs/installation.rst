@@ -322,7 +322,7 @@ Check the installation:
    print(f"Kailash SDK version: {kailash.__version__}")
 
    # List available nodes
-   from kailash import NodeRegistry
+   from kailash.nodes import NodeRegistry
 
    print("Available nodes:")
    for node_name in NodeRegistry.list_nodes():

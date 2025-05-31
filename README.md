@@ -427,14 +427,19 @@ workflow.save("deployment.yaml", format="yaml")
 ### 🎨 Visualization
 
 ```python
-from kailash.workflow.visualization import WorkflowVisualizer
+# Generate Mermaid diagram (recommended for documentation)
+mermaid_code = workflow.to_mermaid()
+print(mermaid_code)
 
-# Visualize workflow structure
+# Save as Mermaid markdown file
+with open("workflow.md", "w") as f:
+    f.write(workflow.to_mermaid_markdown(title="My Workflow"))
+
+# Or use matplotlib visualization
+from kailash import WorkflowVisualizer
 visualizer = WorkflowVisualizer(workflow)
-visualizer.visualize(output_path="workflow.png")
-
-# Show in Jupyter notebook
-visualizer.show()
+visualizer.visualize()  # Display
+visualizer.save("workflow.png", dpi=300)  # Save as PNG
 ```
 
 ## 💻 CLI Commands

@@ -114,7 +114,8 @@ Quick Example
 
 .. code-block:: python
 
-   from kailash import Workflow, NodeRegistry
+   from kailash import Workflow
+   from kailash.nodes import NodeRegistry
 
    # Create a simple data processing workflow
    workflow = Workflow("data_processing")
