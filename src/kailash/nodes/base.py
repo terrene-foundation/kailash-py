@@ -1015,7 +1015,7 @@ class NodeRegistry:
         - Subsequent get() calls will fail
         - Workflows may not deserialize
         - Should re-register needed nodes
-"""
+        """
         cls._nodes.clear()
         logging.info("Cleared all registered nodes")
 
@@ -1066,7 +1066,7 @@ def register_node(alias: Optional[str] = None):
 
             def run(self, file):
                 return pd.read_csv(file)
-        """
+    """
 
     def decorator(node_class: Type[Node]):
         """Inner decorator that performs registration.
