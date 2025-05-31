@@ -1,23 +1,24 @@
 # Kailash Python SDK - Master Todo List
 
 ## 📊 Quick Stats
-- **Tests**: 544/544 passing (100%) | 0 failing | 87 skipped ✅
+- **Tests**: 539/539 passing (100%) | 0 failing | 87 skipped ✅
 - **Coverage**: 15/15 test categories at 100%
 - **Documentation**: Sphinx API docs + Best Practices/Troubleshooting/Performance guides complete! 📚
 - **Performance Metrics**: Real-time collection and visualization integrated! 📈
 - **Dashboard Components**: Real-time monitoring and reporting complete! 🚀
-- **File Organization**: Output files consolidated to outputs/ directory! 📁
-- **Pre-commit Hooks**: Comprehensive code quality framework implemented! 🔧
+- **PyPI Release**: v0.1.1 published with clean distribution! 📦
+- **GitHub Actions**: Separated docs build/deploy workflows! 🔧
 - **Development Workflow**: Automated formatting, linting, and testing on every commit! ⚡
 - **Next Focus**: Security audit and production deployment guides
 
 ## Project Status Overview
 - **Foundation**: ✅ Complete - All core functionality implemented (2025-05-16 to 2025-05-19)
 - **Feature Extensions**: ✅ Complete - Advanced features working (2025-05-20 to 2025-05-29)
-- **Quality Assurance**: ✅ 100% Complete - ALL 544 tests passing! (2025-05-30)
+- **Quality Assurance**: ✅ 100% Complete - ALL 539 tests passing! (2025-05-30)
 - **SharePoint Integration**: ✅ Complete - Graph API nodes with MSAL auth (2025-05-30)
 - **API Documentation**: ✅ Complete - Sphinx framework with comprehensive API docs (2025-05-30)
 - **Development Infrastructure**: ✅ Complete - Pre-commit hooks, gitignore, automated workflow (2025-05-31)
+- **PyPI Release**: ✅ Complete - v0.1.0 and v0.1.1 published (2025-05-31)
 - **Production Readiness**: 🔄 In Progress - Security, performance, and remaining guides
 
 ## 🎉 MAJOR MILESTONE ACHIEVED: ENTIRE Test Suite 100% Passing!
@@ -38,11 +39,11 @@
 - ✅ **Performance Tests (8/8)** - Performance and scalability validation
 - ✅ **SharePoint Graph (27/27)** - Graph API with MSAL authentication
 
-**Current Status**: 544/544 tests passing (100%), with 87 tests appropriately skipped!
+**Current Status**: 539/539 tests passing (100%), with 87 tests appropriately skipped!
 **Test Categories Complete**: 15/15 (100%) - ALL test categories passing!
-**PR Status**: #74 - Comprehensive SDK with pre-commit hooks ready for review
-**Session Progress**: Implemented pre-commit hooks framework and cleaned up gitignore!
-**Latest Update**: Pre-commit hooks enforcing code quality on every commit!
+**PR Status**: #75 merged, #76 created - PyPI release and documentation fixes
+**Session Progress**: Published to PyPI and fixed all documentation issues!
+**Latest Update**: v0.1.1 on PyPI with clean distribution and updated docs!
 
 ## High Priority - Production Readiness
 
@@ -144,12 +145,12 @@
 
 ## 🎯 Next Session Priorities
 
-### Session 29 Focus Areas (Ready to Start)
+### Session 30 Focus Areas (Ready to Start)
 1. **Security Audit** - Begin comprehensive security review of file I/O and code execution
-2. **Migration Guide** - Create v1.0 to v2.0 migration documentation
-3. **Pre-commit Hook Optimization** - Re-enable Trivy, detect-secrets, and mypy with proper configuration
-4. **Async Test Configuration** - Fix pytest-asyncio setup for 10 skipped async tests
-5. **README.md Update** - Comprehensive installation and usage guide refresh
+2. **Migration Guide** - Create v1.0 to v0.1.x migration documentation for early adopters
+3. **Consider yanking v0.1.0** - Prevent users from downloading the bloated initial release
+4. **Pre-commit Hook Optimization** - Re-enable Trivy, detect-secrets, and mypy with proper configuration
+5. **Async Test Configuration** - Fix pytest-asyncio setup for 10 skipped async tests
 
 ### Recommended Session Order
 - **High Impact, Low Effort**: Migration guide, README update, async test fixes
@@ -157,6 +158,37 @@
 - **Infrastructure**: Pre-commit hook optimization and dependency cleanup
 
 ## Completed Tasks Archive
+
+### PyPI Release & Documentation Fixes Session 29 (2025-05-31) ✅
+✅ **PyPI Package Release & Documentation Updates**:
+- **PyPI Release v0.1.0 & v0.1.1** ✅ Complete
+  - Successfully published first version to PyPI
+  - Fixed package distribution with proper MANIFEST.in
+  - v0.1.0 contained unnecessary files (tests, docs, examples)
+  - v0.1.1 is clean release with only essential files (95 files vs hundreds)
+  - Updated version consistency across all files
+  - Created GitHub releases for both versions
+- **Documentation Fixes** ✅ Complete
+  - Fixed all Sphinx build warnings
+  - Updated class names: BaseNode → Node, BaseAsyncNode → AsyncNode
+  - Fixed all import statements to use correct modules
+  - Updated visualization examples to use to_mermaid() methods
+  - Fixed workflow methods: add_edge() → connect()
+  - Removed non-existent RuntimeConfig import
+  - Updated README with correct Python version (3.11+) and badges
+- **GitHub Actions Improvements** ✅ Complete
+  - Separated docs.yml into docs-check.yml and docs-deploy.yml
+  - Prevented unnecessary deployment records on PRs
+  - Deployments now only occur on main branch
+  - PR checks still validate documentation builds
+- **Documentation Reorganization** ✅ Complete
+  - Moved internal docs to guide/ directory
+  - Simplified public docs structure (removed nested docs/api/)
+  - Updated all references throughout codebase
+  - CLAUDE.md remains in root as required
+
+**Session Stats**: Published 2 PyPI releases | Fixed 50+ doc references | Created PR #76
+**Key Achievement**: SDK now available via pip install kailash with clean distribution!
 
 ### Pre-commit Hooks & Development Infrastructure Session 28 (2025-05-31) ✅
 ✅ **Comprehensive Development Infrastructure**:
@@ -533,13 +565,14 @@
 - **Remaining Issues**: #27 (doctest examples), #28 (CLI commands), #29 (workflow visualization)
 
 ---
-*Last Updated: 2025-05-31 (Session 28 - Development Infrastructure Complete)*
-*Total Development Time: 16 days | Sessions: 28*
-*Test Progress: 100% passing (544/544)* 🎉
+*Last Updated: 2025-05-31 (Session 29 - PyPI Release Complete)*
+*Total Development Time: 16 days | Sessions: 29*
+*Test Progress: 100% passing (539/539)* 🎉
 *Test Categories: 15/15 complete* ✅
 *Examples: 23/23 working* ✅
 *Documentation: Complete Sphinx API docs + User guides* 📚
 *Infrastructure: Pre-commit hooks + automated quality* 🔧
 *Performance: Real-time metrics + dashboards* 📈
-*Current PR: #74 - Comprehensive SDK ready for review*
+*PyPI Release: v0.1.1 published* 📦
+*Current PR: #76 - Documentation and workflow fixes*
 *Ready for: Security audit, migration guide, production deployment*
