@@ -166,3 +166,123 @@ As of 2025-05-30, asynchronous node execution has been fully implemented:
 - Working example in `parallel_workflow_example.py`
 - Full integration with existing workflow system
 - All tests passing with async functionality verified
+
+## Agentic Workflow Integration
+
+**Updated 2025-06-01**: Following client requirements for agentic AI workflows, the async execution architecture has been extended to support advanced agent coordination patterns:
+
+### Async Agent Coordination Patterns
+
+1. **Concurrent Agent Execution**: Multiple LLM agents can execute simultaneously with proper coordination
+```python
+# Multiple agents processing different aspects concurrently
+workflow = Workflow("multi_agent_analysis")
+
+# Async agents can run concurrently
+workflow.add_node("LLMAgent", "research_agent", config={
+    "provider": "openai",
+    "model": "gpt-4",
+    "role": "research_specialist",
+    "async_execution": True
+})
+
+workflow.add_node("LLMAgent", "analysis_agent", config={
+    "provider": "anthropic", 
+    "model": "claude-3-sonnet",
+    "role": "data_analyst",
+    "async_execution": True
+})
+
+# AsyncMerge coordinates results from multiple agents
+workflow.add_node("AsyncMerge", "coordinator", config={
+    "merge_strategy": "intelligent_synthesis",
+    "wait_for_all": True
+})
+```
+
+2. **Agent Communication Coordination**: Async patterns for A2A (Agent-to-Agent) communication
+```python
+# Async coordination for agent message passing
+workflow.add_node("A2AMessengerNode", "agent_messenger", config={
+    "message_pattern": "async_broadcast",
+    "target_agents": ["agent1", "agent2", "agent3"],
+    "coordination_timeout": 30,
+    "async_delivery": True
+})
+
+# AsyncSwitch for agent response routing
+workflow.add_node("AsyncSwitch", "response_router", config={
+    "condition_type": "agent_consensus",
+    "routing_logic": "majority_vote",
+    "timeout": 60
+})
+```
+
+3. **Concurrent Context Sharing**: Async MCP (Model Context Protocol) integration
+```python
+# Async MCP context sharing between agents
+workflow.add_node("MCPClientNode", "context_manager", config={
+    "server_uri": "mcp://context-server",
+    "async_context_sync": True,
+    "shared_memory": {
+        "type": "distributed",
+        "consistency": "eventual"
+    }
+})
+```
+
+### Multi-Agent Async Patterns
+
+1. **Pipeline Parallelism**: Agents working on different stages simultaneously
+```python
+# Stage 1: Multiple agents processing input in parallel
+workflow.add_node("LLMAgent", "preprocessor_1", config={"stage": 1, "async": True})
+workflow.add_node("LLMAgent", "preprocessor_2", config={"stage": 1, "async": True})
+
+# Stage 2: Synthesis agent waits for all preprocessors
+workflow.add_node("AsyncMerge", "stage1_merge", config={"wait_strategy": "all"})
+workflow.add_node("LLMAgent", "synthesizer", config={"stage": 2, "async": True})
+```
+
+2. **Consensus Building**: Async coordination for agent agreement
+```python
+# Async consensus among multiple agents
+workflow.add_node("ConsensusNode", "agent_consensus", config={
+    "participants": ["agent1", "agent2", "agent3"],
+    "consensus_type": "async_voting",
+    "timeout": 120,
+    "minimum_agreement": 0.67
+})
+```
+
+3. **Dynamic Agent Scaling**: Async spawning and coordination of agents
+```python
+# Dynamic agent creation based on workload
+workflow.add_node("AgentSpawnerNode", "dynamic_agents", config={
+    "scaling_strategy": "async_auto",
+    "min_agents": 2,
+    "max_agents": 10,
+    "spawn_criteria": "queue_length > 5"
+})
+```
+
+### Async Agent Communication Protocols
+
+1. **Async Message Queuing**: Non-blocking message delivery between agents
+2. **Async State Synchronization**: Eventual consistency for distributed agent state
+3. **Async Coordination Primitives**: Semaphores, barriers, and coordination mechanisms
+4. **Async Error Recovery**: Fault tolerance in multi-agent scenarios
+
+### Performance Benefits for Agentic Workflows
+
+- **Concurrent LLM Calls**: Multiple model API calls executing simultaneously
+- **Efficient Resource Utilization**: Better CPU/memory usage during I/O waits
+- **Scalable Agent Coordination**: Support for hundreds of concurrent agents
+- **Responsive Multi-Agent Systems**: Lower latency in agent-to-agent communication
+
+## Related ADRs
+
+- [ADR-0022: MCP Integration Architecture](0022-mcp-integration-architecture.md) - Async context sharing protocols
+- [ADR-0023: A2A Communication Architecture](0023-a2a-communication-architecture.md) - Async agent communication patterns  
+- [ADR-0024: LLM Agent Architecture](0024-llm-agent-architecture.md) - Async LLM agent execution
+- [ADR-0015: API Integration Architecture](0015-api-integration-architecture.md) - Async API operations

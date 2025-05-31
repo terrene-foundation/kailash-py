@@ -139,6 +139,80 @@ As of 2025-05-30, the API integration architecture has been fully implemented:
 - Working examples demonstrating all features
 - Production-ready with all gaps from HMI analysis addressed
 
+## Agentic Workflow Integration
+
+**Updated 2025-06-01**: Following client requirements for agentic AI workflows, the API integration architecture has been extended to support:
+
+### LangChain/Langgraph Integration Patterns
+
+The API nodes are designed to integrate seamlessly with agentic workflows:
+
+1. **Agent Tool Integration**: API nodes can be exposed as tools to LLM agents
+```python
+# LLM Agent with API tool integration
+workflow.add_node("LLMAgent", "research_agent", config={
+    "provider": "openai",
+    "model": "gpt-4",
+    "tools": [
+        {
+            "name": "search_api", 
+            "node": "RESTClientNode",
+            "config": {"base_url": "https://api.search.com"}
+        },
+        {
+            "name": "data_api",
+            "node": "GraphQLClientNode", 
+            "config": {"endpoint": "https://api.data.com/graphql"}
+        }
+    ]
+})
+```
+
+2. **Multi-Agent API Coordination**: API calls coordinated between multiple agents
+```python
+# Agent A fetches data, Agent B processes results
+workflow.add_node("LLMAgent", "data_fetcher", config={
+    "role": "data_collector",
+    "api_tools": ["search_api", "database_api"]
+})
+
+workflow.add_node("LLMAgent", "data_processor", config={
+    "role": "data_analyzer", 
+    "receives_from": ["data_fetcher"],
+    "api_tools": ["analysis_api"]
+})
+```
+
+3. **MCP Protocol Support**: API nodes support Model Context Protocol for context sharing
+```python
+# API node with MCP context sharing
+workflow.add_node("RESTClientNode", "mcp_api", config={
+    "base_url": "https://api.example.com",
+    "mcp_context": {
+        "share_responses": True,
+        "context_key": "api_data",
+        "format": "structured"
+    }
+})
+```
+
+### Agent-to-Agent API Communication
+
+API nodes facilitate communication between agents in distributed workflows:
+
+1. **Agent Registry API**: Agents discover each other through registry APIs
+2. **Status APIs**: Agents report status and coordinate through API endpoints  
+3. **Data Exchange APIs**: Agents share data and results via structured APIs
+
+### Agentic Workflow Patterns
+
+Common patterns for API integration in agentic workflows:
+
+1. **Research Agent Pattern**: Agent uses search/knowledge APIs as tools
+2. **Data Pipeline Agent**: Agent orchestrates multiple data APIs
+3. **Monitoring Agent**: Agent uses status/health check APIs
+4. **Coordination Agent**: Agent manages other agents via control APIs
+
 ## References
 
 - Gaps Analysis: HMI Project Implementation
@@ -146,3 +220,7 @@ As of 2025-05-30, the API integration architecture has been fully implemented:
 - [HTTP/1.1 RFC 7231](https://tools.ietf.org/html/rfc7231)
 - [GraphQL Specification](https://spec.graphql.org/)
 - [Token Bucket Algorithm](https://en.wikipedia.org/wiki/Token_bucket)
+- [LangChain Tool Integration](https://python.langchain.com/docs/modules/tools/)
+- [ADR-0022: MCP Integration Architecture](0022-mcp-integration-architecture.md)
+- [ADR-0023: A2A Communication Architecture](0023-a2a-communication-architecture.md)
+- [ADR-0024: LLM Agent Architecture](0024-llm-agent-architecture.md)
