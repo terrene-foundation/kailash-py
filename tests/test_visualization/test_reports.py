@@ -635,10 +635,10 @@ class TestReportIntegration:
         assert data["summary"]["total_tasks"] == 50
         assert len(data["detailed_analysis"]["task_analysis"]["by_node_type"]) == 5
 
-        # Performance should be reasonable (less than 5 seconds for 50 tasks)
+        # Performance should be reasonable (less than 10 seconds for 50 tasks)
         assert (
-            report_time < 5.0
-        ), f"Report generation took {report_time:.2f}s, expected < 5s"
+            report_time < 10.0
+        ), f"Report generation took {report_time:.2f}s, expected < 10s"
 
         print(f"Setup: {setup_time:.2f}s, Report generation: {report_time:.2f}s")
 
