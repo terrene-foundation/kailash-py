@@ -43,10 +43,13 @@ venv.bak/
 .coverage
 htmlcov/
 
-# Documentation
+# Documentation builds
 docs/_build/
 docs/api/_build/
+docs/*/_build/
+_build/
 site/
+*.doctree
 
 # Generated outputs - all output directories
 outputs/
