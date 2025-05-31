@@ -5,10 +5,10 @@
     "description": "Analyze customer data and generate insights",
     "version": "1.0.0",
     "author": "John Doe",
-    "created_at": "2025-05-31T04:58:52.653055+00:00",
+    "created_at": "2025-05-31T17:03:21.023444+00:00",
     "tags": [
-      "customer",
       "analytics",
+      "customer",
       "ml"
     ]
   },

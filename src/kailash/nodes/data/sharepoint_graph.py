@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from kailash.nodes.base import Node, NodeMetadata, NodeParameter
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
@@ -35,6 +35,7 @@ from kailash.sdk_exceptions import (
 )
 
 
+@register_node()
 class SharePointGraphReader(Node):
     """Node for reading files from SharePoint using Microsoft Graph API.
 
@@ -464,6 +465,7 @@ class SharePointGraphReader(Node):
             return self._search_files(site_id, library_name, query, headers)
 
 
+@register_node()
 class SharePointGraphWriter(Node):
     """Node for uploading files to SharePoint using Microsoft Graph API.
 

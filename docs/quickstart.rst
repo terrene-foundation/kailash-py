@@ -186,12 +186,10 @@ Essential Classes
 
 .. code-block:: python
 
-   from kailash import (
-       Workflow,        # Main workflow class
-       NodeRegistry,    # Access available nodes
-       WorkflowRunner,  # Execute workflows
-       TaskManager      # Track execution
-   )
+   from kailash import Workflow
+   from kailash.nodes import NodeRegistry
+   from kailash.workflow.runner import WorkflowRunner
+   from kailash.tracking import TaskManager
 
 Common Nodes
 ------------

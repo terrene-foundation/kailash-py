@@ -24,7 +24,7 @@ from kailash import ...
 **Environment:**
  - OS: [e.g. macOS, Ubuntu]
  - Python version: [e.g. 3.11.0]
- - Kailash version: [e.g. 0.1.0]
+ - Kailash version: [e.g. 0.1.1]
 
 **Additional context**
 Add any other context about your question here.

@@ -279,7 +279,7 @@ NodeRegistry
 
 .. code-block:: python
 
-   from kailash import NodeRegistry
+   from kailash.nodes import NodeRegistry
 
    # List all available nodes
    available_nodes = NodeRegistry.list_nodes()
@@ -302,12 +302,11 @@ Registering Custom Nodes
 
 .. code-block:: python
 
-   from kailash import register_node
-   from kailash.nodes import BaseNode
+   from kailash.nodes import Node, register_node
 
    # Decorator registration
    @register_node("MyCustomNode", category="transform", version="1.0")
-   class MyCustomNode(BaseNode):
+   class MyCustomNode(Node):
        """Custom node implementation."""
        pass
 
@@ -429,19 +428,21 @@ Create visual representations of workflows:
 
    from kailash.utils.visualization import WorkflowVisualizer
 
+   # Generate Mermaid diagram directly from workflow
+   mermaid_code = workflow.to_mermaid()
+   
+   # Generate Mermaid with markdown wrapper
+   mermaid_markdown = workflow.to_mermaid_markdown(title="My Workflow")
+   
+   # Save to file
+   with open("workflow.md", "w") as f:
+       f.write(mermaid_markdown)
+   
+   # Or use WorkflowVisualizer for matplotlib visualization
+   from kailash import WorkflowVisualizer
    visualizer = WorkflowVisualizer(workflow)
-
-   # Generate Mermaid diagram
-   mermaid_code = visualizer.to_mermaid()
-
-   # Generate DOT format
-   dot_code = visualizer.to_dot()
-
-   # Save as image (requires graphviz)
-   visualizer.save_image("workflow.png", format="png")
-
-   # Interactive HTML visualization
-   visualizer.save_interactive("workflow.html")
+   visualizer.visualize()  # Display with matplotlib
+   visualizer.save("workflow.png", dpi=300)  # Save as PNG
 
 Execution Timeline
 ------------------
@@ -623,6 +624,6 @@ See Also
 
 - :doc:`nodes` - Node types reference
 - :doc:`workflow` - Workflow construction
-- :doc:`../guides/testing` - Testing guide
-- :doc:`../guides/performance` - Performance guide
-- :doc:`../examples/utils` - Utility examples
+- :doc:`/guides/testing` - Testing guide
+- :doc:`/performance` - Performance guide
+- :doc:`/examples/utils` - Utility examples

@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath("../../src"))
 project = "Kailash Python SDK"
 copyright = f"{datetime.now().year}, Terrene Foundation"
 author = "Terrene Foundation"
-release = "0.1.0"
+release = "0.1.1"
 version = "0.1"
 
 # General configuration
@@ -41,7 +41,7 @@ templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md"]
 
 # The suffix(es) of source filenames
 source_suffix = {
@@ -94,7 +94,6 @@ intersphinx_mapping = {
 html_theme = "sphinx_rtd_theme"
 html_theme_options = {
     "logo_only": False,
-    "display_version": True,
     "prev_next_buttons_location": "bottom",
     "style_external_links": True,
     "style_nav_header_background": "#2980B9",

@@ -144,8 +144,10 @@ Manages workflow execution state and data flow.
 
 .. code-block:: python
 
+   from kailash.nodes import Node
+   
    # Access during node execution
-   class MyNode(BaseNode):
+   class MyNode(Node):
        def execute(self, inputs):
            # Get workflow state
            state = self.workflow_state
@@ -449,5 +451,5 @@ See Also
 - :doc:`nodes` - Available node types
 - :doc:`runtime` - Execution runtime options
 - :doc:`tracking` - Task tracking and monitoring
-- :doc:`../guides/workflows` - Workflow design guide
-- :doc:`../examples/index` - Example workflows
+- :doc:`/guides/workflows` - Workflow design guide
+- :doc:`/examples/index` - Example workflows

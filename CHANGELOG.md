@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-05-31
+
+### Changed
+- Updated version to 0.1.1
+
 ## [0.1.0] - 2025-05-31
 
 ### Added
@@ -32,5 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe code execution in isolated environments
 - Authentication support for API nodes
 
-[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.1.0

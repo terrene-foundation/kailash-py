@@ -195,6 +195,104 @@
       "status": "completed",
       "started_at": "2025-05-31T04:58:27.247294+00:00",
       "ended_at": "2025-05-31T04:58:27.248028+00:00"
+    },
+    "7e59a5bc-09e5-4d6c-b5e7-8e117a6c4921": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.933986+00:00",
+      "ended_at": "2025-05-31T16:53:18.936068+00:00"
+    },
+    "31fd2706-19ce-4686-a23a-8ae65702747b": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.937840+00:00",
+      "ended_at": "2025-05-31T16:53:18.939549+00:00"
+    },
+    "f6f778a9-9554-4db0-bbc9-5d79b2a8050f": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.941394+00:00",
+      "ended_at": "2025-05-31T16:53:18.942944+00:00"
+    },
+    "83f9b28b-102e-4306-993e-3e2122211a34": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.944208+00:00",
+      "ended_at": "2025-05-31T16:53:18.945805+00:00"
+    },
+    "c2524f00-9ec1-452f-b289-3232ffd4f8eb": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.947016+00:00",
+      "ended_at": "2025-05-31T16:53:18.948839+00:00"
+    },
+    "acb179f4-0d68-4520-9f63-b0773fa46bbd": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.949991+00:00",
+      "ended_at": "2025-05-31T16:53:18.951687+00:00"
+    },
+    "8993c5d8-8af4-4fba-8198-b257c5702c90": {
+      "run_id": "08e88585-6ed8-4ae0-b3a0-55b15d1cdbe5",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T16:53:18.953078+00:00",
+      "ended_at": "2025-05-31T16:53:18.954838+00:00"
+    },
+    "26af5083-5889-433e-b88b-cf2e79d9e066": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.723468+00:00",
+      "ended_at": "2025-05-31T17:02:52.725650+00:00"
+    },
+    "cf886944-987b-41ef-bf9b-820ba7900f50": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.727440+00:00",
+      "ended_at": "2025-05-31T17:02:52.729054+00:00"
+    },
+    "0bea6232-c13a-4089-be65-8ca2ce8ecad8": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.730678+00:00",
+      "ended_at": "2025-05-31T17:02:52.732544+00:00"
+    },
+    "a6376996-9b9a-4bf7-acc9-73cdee4f1f71": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.734106+00:00",
+      "ended_at": "2025-05-31T17:02:52.735986+00:00"
+    },
+    "c51cc5c7-be82-482b-859c-c566ef52f936": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.737793+00:00",
+      "ended_at": "2025-05-31T17:02:52.739629+00:00"
+    },
+    "b6f06a1a-dea1-4d07-b6ce-723573116cc9": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.741088+00:00",
+      "ended_at": "2025-05-31T17:02:52.742931+00:00"
+    },
+    "cbf97032-4cd5-478e-ad5e-a47f09bc551a": {
+      "run_id": "23fe401e-ec2e-4490-9c87-8d14e55b8d7d",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T17:02:52.744343+00:00",
+      "ended_at": "2025-05-31T17:02:52.746193+00:00"
     }
   },
   "runs": {}

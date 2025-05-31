@@ -36,7 +36,7 @@ from kailash import Node, Workflow
 **Environment (please complete the following information):**
  - OS: [e.g. macOS, Ubuntu]
  - Python version: [e.g. 3.11.0]
- - Kailash version: [e.g. 0.1.0]
+ - Kailash version: [e.g. 0.1.1]
  - Installation method: [pip/source]
 
 **Additional context**

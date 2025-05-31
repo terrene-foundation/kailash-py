@@ -11,19 +11,19 @@ This section provides comprehensive documentation for all node types available i
 Base Node Classes
 =================
 
-BaseNode
---------
+Node
+----
 
-.. autoclass:: kailash.nodes.base.BaseNode
+.. autoclass:: kailash.nodes.base.Node
    :members:
    :undoc-members:
    :show-inheritance:
    :special-members: __init__
 
-BaseAsyncNode
--------------
+AsyncNode
+---------
 
-.. autoclass:: kailash.nodes.base_async.BaseAsyncNode
+.. autoclass:: kailash.nodes.base_async.AsyncNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -31,6 +31,17 @@ BaseAsyncNode
 
 Data Nodes
 ==========
+
+.. note::
+
+   Additional data nodes are planned for future releases:
+   
+   - **XMLReader/XMLWriter**: For XML file processing
+   - **ParquetReader/ParquetWriter**: For Apache Parquet columnar storage
+   - **ExcelReader/ExcelWriter**: For Microsoft Excel files
+   
+   Track implementation progress in the `GitHub issues <https://github.com/your-org/kailash-sdk/issues>`_.
+
 
 Data nodes handle input/output operations for various file formats and data sources.
 
@@ -50,14 +61,18 @@ CSVReader
 .. code-block:: python
 
    from kailash import Workflow
+   from kailash.nodes.data import CSVReader
 
    workflow = Workflow("csv_example")
-   workflow.add_node("CSVReader", "read_customers", config={
-       "file_path": "customers.csv",
-       "encoding": "utf-8",
-       "parse_dates": ["created_at", "updated_at"],
-       "dtype": {"customer_id": str}
-   })
+   
+   # Create the CSV reader node
+   csv_reader = CSVReader(
+       file_path="customers.csv",
+       encoding="utf-8"
+   )
+   
+   # Add the node to the workflow
+   workflow.add_node("read_customers", csv_reader)
 
 JSONReader
 ~~~~~~~~~~
@@ -84,29 +99,7 @@ TextReader
    :undoc-members:
    :show-inheritance:
 
-XMLReader
-~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.readers.XMLReader
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-ParquetReader
-~~~~~~~~~~~~~
-
-.. autoclass:: kailash.nodes.data.readers.ParquetReader
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-ExcelReader
-~~~~~~~~~~~
-
-.. autoclass:: kailash.nodes.data.readers.ExcelReader
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 Writers
 -------
@@ -145,27 +138,10 @@ TextWriter
    :undoc-members:
    :show-inheritance:
 
-ParquetWriter
-~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.writers.ParquetWriter
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
-ExcelWriter
-~~~~~~~~~~~
-
-.. autoclass:: kailash.nodes.data.writers.ExcelWriter
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Database Nodes
---------------
-
-SQLReader
-~~~~~~~~~
+SQLDatabaseNode
+~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.nodes.data.sql.SQLReader
    :members:
@@ -176,14 +152,14 @@ SQLReader
 
 .. code-block:: python
 
-   workflow.add_node("SQLReader", "query_orders", config={
+   workflow.add_node("SQLDatabaseNode", "query_orders", config={
        "connection_string": "postgresql://user:pass@host/db",
        "query": "SELECT * FROM orders WHERE status = 'active'",
        "params": {"limit": 1000}
    })
 
-SQLWriter
-~~~~~~~~~
+SQLQueryBuilderNode
+~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.nodes.data.sql.SQLWriter
    :members:
@@ -240,13 +216,13 @@ DataFilter
 .. code-block:: python
 
    # Simple equality filter
-   workflow.add_node("DataFilter", "filter_active", config={
+   workflow.add_node("Filter", "filter_active", config={
        "column": "status",
        "value": "active"
    })
 
    # Complex filter with operator
-   workflow.add_node("DataFilter", "filter_high_value", config={
+   workflow.add_node("Filter", "filter_high_value", config={
        "column": "revenue",
        "value": 10000,
        "operation": ">="
@@ -264,7 +240,7 @@ DataMapper
 
 .. code-block:: python
 
-   workflow.add_node("DataMapper", "add_columns", config={
+   workflow.add_node("Map", "add_columns", config={
        "mapping": {
            "full_name": "lambda row: f'{row.first_name} {row.last_name}'",
            "is_vip": "lambda row: row.total_purchases > 10000",
@@ -303,6 +279,11 @@ DataTransformer
 
 Logic Nodes
 ===========
+
+.. note::
+
+   The **Validator** node for complex data validation rules is planned for a future release.
+
 
 Logic nodes control workflow execution flow.
 
@@ -396,7 +377,7 @@ LLMAgent
 
 .. code-block:: python
 
-   workflow.add_node("LLMAgent", "analyze", config={
+   workflow.add_node("ChatAgent", "analyze", config={
        "model": "gpt-4",
        "prompt_template": "Analyze the following customer feedback: {feedback}",
        "temperature": 0.7,
@@ -420,7 +401,7 @@ HTTPClient
 
 .. code-block:: python
 
-   workflow.add_node("HTTPClient", "fetch_data", config={
+   workflow.add_node("HTTPRequestNode", "fetch_data", config={
        "url": "https://api.example.com/data",
        "method": "GET",
        "headers": {
@@ -441,7 +422,7 @@ RESTClient
 
 .. code-block:: python
 
-   workflow.add_node("RESTClient", "api_call", config={
+   workflow.add_node("RESTClientNode", "api_call", config={
        "base_url": "https://api.example.com",
        "endpoint": "/users/{user_id}",
        "method": "PUT",
@@ -523,11 +504,10 @@ Creating custom nodes is straightforward:
 
 .. code-block:: python
 
-   from kailash.nodes import BaseNode
-   from kailash import register_node
+   from kailash.nodes import Node, register_node
 
    @register_node("MyCustomNode")
-   class MyCustomNode(BaseNode):
+   class MyCustomNode(Node):
        """Custom node for specific processing."""
 
        def validate_config(self) -> None:
@@ -563,11 +543,11 @@ For async operations:
 
 .. code-block:: python
 
-   from kailash.nodes import BaseAsyncNode
+   from kailash.nodes import AsyncNode
    import aiohttp
 
    @register_node("AsyncAPINode")
-   class AsyncAPINode(BaseAsyncNode):
+   class AsyncAPINode(AsyncNode):
        """Async node for API calls."""
 
        async def execute(self, inputs: dict) -> dict:
@@ -587,7 +567,7 @@ Node Configuration Best Practices
 
 .. code-block:: python
 
-   workflow.add_node("RESTClient", "api", config={
+   workflow.add_node("RESTClientNode", "api", config={
        "auth": {
            "token": "${API_TOKEN}"  # Resolved from environment
        }
@@ -597,7 +577,7 @@ Node Configuration Best Practices
 
 .. code-block:: python
 
-   class MyNode(BaseNode):
+   class MyNode(Node):
        def validate_config(self):
            # Set defaults
            self.config.setdefault("timeout", 30)
@@ -615,7 +595,7 @@ Node Configuration Best Practices
 
 .. code-block:: python
 
-   class MyNode(BaseNode):
+   class MyNode(Node):
        """
        My custom node.
 
@@ -628,6 +608,6 @@ Node Configuration Best Practices
 See Also
 ========
 
-- :doc:`../guides/custom_nodes` - Guide to creating custom nodes
-- :doc:`../guides/best_practices` - Best practices for node usage
-- :doc:`../examples/index` - Example workflows using various nodes
+- :doc:`/guides/custom_nodes` - Guide to creating custom nodes
+- :doc:`/best_practices` - Best practices for node usage
+- :doc:`/examples/index` - Example workflows using various nodes
