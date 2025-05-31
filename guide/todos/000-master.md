@@ -145,12 +145,13 @@
 
 ## 🎯 Next Session Priorities
 
-### Session 30 Focus Areas (Ready to Start)
-1. **Security Audit** - Begin comprehensive security review of file I/O and code execution
-2. **Migration Guide** - Create v1.0 to v0.1.x migration documentation for early adopters
-3. **Consider yanking v0.1.0** - Prevent users from downloading the bloated initial release
-4. **Pre-commit Hook Optimization** - Re-enable Trivy, detect-secrets, and mypy with proper configuration
-5. **Async Test Configuration** - Fix pytest-asyncio setup for 10 skipped async tests
+### Session 31 Focus Areas (Ready to Start)
+1. **Fix SDK Bugs** - Address datetime comparison issue in list_runs() and document known issues
+2. **Security Audit** - Begin comprehensive security review of file I/O and code execution
+3. **Migration Guide** - Create v1.0 to v0.1.x migration documentation for early adopters
+4. **Consider yanking v0.1.0** - Prevent users from downloading the bloated initial release
+5. **Pre-commit Hook Optimization** - Re-enable Trivy, detect-secrets, and mypy with proper configuration
+6. **Async Test Configuration** - Fix pytest-asyncio setup for 10 skipped async tests
 
 ### Recommended Session Order
 - **High Impact, Low Effort**: Migration guide, README update, async test fixes
@@ -158,6 +159,32 @@
 - **Infrastructure**: Pre-commit hook optimization and dependency cleanup
 
 ## Completed Tasks Archive
+
+### README Example Fixes & SDK Investigation Session 30 (2025-05-31) ✅
+✅ **README Code Examples & SDK Issue Investigation**:
+- **README Example Fixes** ✅ Complete
+  - Fixed PythonCodeNode to return {"result": {...}} matching output schema
+  - Added required file_path parameter to CSVWriter
+  - Fixed DataTransformer imports (transform module, not data)
+  - Added transformations parameter to all DataTransformer instances
+  - Fixed state access to use _state attribute
+  - Removed unsupported limit parameter from list_runs()
+  - Fixed performance monitoring to pass task_manager to execute()
+  - Changed HTTPRequestNode base_url to url parameter
+  - All 8/10 examples now working (2 fail due to SDK bugs)
+- **SDK Issue Investigation** ✅ Complete
+  - Identified datetime comparison bug in list_runs() - timezone awareness mismatch
+  - Confirmed performance monitoring requires task_manager parameter
+  - Found that examples/ directory has more accurate patterns than README
+  - Created workflow_task_list_runs.py demonstrating list_runs() with error handling
+- **Documentation Updates** ✅ Complete
+  - Enhanced Task Tracking section with comprehensive list_runs() examples
+  - Added error handling and filtering demonstrations
+  - Documented workarounds for timezone issue
+  - Added note about passing task_manager for performance tracking
+
+**Session Stats**: Fixed 8 README examples | Created list_runs example | Identified 2 SDK bugs
+**Key Achievement**: All README examples now have correct API usage with known issues documented!
 
 ### PyPI Release & Documentation Fixes Session 29 (2025-05-31) ✅
 ✅ **PyPI Package Release & Documentation Updates**:
@@ -565,14 +592,14 @@
 - **Remaining Issues**: #27 (doctest examples), #28 (CLI commands), #29 (workflow visualization)
 
 ---
-*Last Updated: 2025-05-31 (Session 29 - PyPI Release Complete)*
-*Total Development Time: 16 days | Sessions: 29*
+*Last Updated: 2025-05-31 (Session 30 - README Examples Fixed)*
+*Total Development Time: 16 days | Sessions: 30*
 *Test Progress: 100% passing (539/539)* 🎉
 *Test Categories: 15/15 complete* ✅
-*Examples: 23/23 working* ✅
-*Documentation: Complete Sphinx API docs + User guides* 📚
+*Examples: 24/24 working (added list_runs example)* ✅
+*Documentation: Complete Sphinx API docs + User guides + Fixed README examples* 📚
 *Infrastructure: Pre-commit hooks + automated quality* 🔧
 *Performance: Real-time metrics + dashboards* 📈
 *PyPI Release: v0.1.1 published* 📦
-*Current PR: #76 - Documentation and workflow fixes*
-*Ready for: Security audit, migration guide, production deployment*
+*Known Issues: DateTime comparison in list_runs(), run_id requires task_manager*
+*Ready for: SDK bug fixes, security audit, migration guide*

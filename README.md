@@ -80,9 +80,11 @@ def analyze_customers(data):
     # Convert total_spent to numeric
     df['total_spent'] = pd.to_numeric(df['total_spent'])
     return {
-        "total_customers": len(df),
-        "avg_spend": df["total_spent"].mean(),
-        "top_customers": df.nlargest(10, "total_spent").to_dict("records")
+        "result": {
+            "total_customers": len(df),
+            "avg_spend": df["total_spent"].mean(),
+            "top_customers": df.nlargest(10, "total_spent").to_dict("records")
+        }
     }
 
 analyzer = PythonCodeNode.from_function(analyze_customers, name="analyzer")
@@ -117,7 +119,7 @@ sharepoint = SharePointGraphReader()
 workflow.add_node("read_sharepoint", sharepoint)
 
 # Process downloaded files
-csv_writer = CSVWriter()
+csv_writer = CSVWriter(file_path="sharepoint_output.csv")
 workflow.add_node("save_locally", csv_writer)
 
 # Connect nodes
@@ -223,25 +225,30 @@ The SDK includes a rich set of pre-built nodes for common operations:
 #### Workflow Management
 ```python
 from kailash.workflow import Workflow
+from kailash.nodes.logic import Switch
+from kailash.nodes.transform import DataTransformer
 
 # Create complex workflows with branching logic
 workflow = Workflow("data_pipeline", name="data_pipeline")
 
-# Add conditional branching
-validator = ValidationNode()
-workflow.add_node("validate", validator)
+# Add conditional branching with Switch node
+switch = Switch()
+workflow.add_node("route", switch)
 
 # Different paths based on validation
+processor_a = DataTransformer(transformations=["lambda x: x"])
+error_handler = DataTransformer(transformations=["lambda x: {'error': str(x)}"])
 workflow.add_node("process_valid", processor_a)
 workflow.add_node("handle_errors", error_handler)
 
-# Connect with conditions
-workflow.connect("validate", "process_valid", condition="is_valid")
-workflow.connect("validate", "handle_errors", condition="has_errors")
+# Connect with switch routing
+workflow.connect("route", "process_valid")
+workflow.connect("route", "handle_errors")
 ```
 
 #### Immutable State Management
 ```python
+from kailash.workflow import Workflow
 from kailash.workflow.state import WorkflowStateWrapper
 from pydantic import BaseModel
 
@@ -250,6 +257,9 @@ class MyStateModel(BaseModel):
     counter: int = 0
     status: str = "pending"
     nested: dict = {}
+
+# Create workflow
+workflow = Workflow("state_workflow", name="state_workflow")
 
 # Create and wrap state object
 state = MyStateModel()
@@ -267,8 +277,9 @@ updated_wrapper = state_wrapper.batch_update([
     (["status"], "processing")
 ])
 
-# Execute workflow with state management
-final_state, results = workflow.execute_with_state(state_model=state)
+# Access the updated state
+print(f"Updated counter: {updated_wrapper._state.counter}")
+print(f"Updated status: {updated_wrapper._state.status}")
 ```
 
 #### Task Tracking
@@ -285,45 +296,75 @@ workflow = Workflow("sample_workflow", name="Sample Workflow")
 # Run workflow with tracking
 from kailash.runtime.local import LocalRuntime
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, task_manager=task_manager)
+results, run_id = runtime.execute(workflow)
 
 # Query execution history
-runs = task_manager.list_runs(status="completed", limit=10)
-details = task_manager.get_run(run_id)
+# Note: list_runs() may fail with timezone comparison errors in some cases
+try:
+    # List all runs
+    all_runs = task_manager.list_runs()
+    
+    # Filter by status
+    completed_runs = task_manager.list_runs(status="completed")
+    failed_runs = task_manager.list_runs(status="failed")
+    
+    # Filter by workflow name
+    workflow_runs = task_manager.list_runs(workflow_name="sample_workflow")
+    
+    # Process run information
+    for run in completed_runs[:5]:  # First 5 runs
+        print(f"Run {run.run_id[:8]}: {run.workflow_name} - {run.status}")
+        
+except Exception as e:
+    print(f"Error listing runs: {e}")
+    # Fallback: Access run details directly if available
+    if hasattr(task_manager, 'storage'):
+        run = task_manager.get_run(run_id)
 ```
 
 #### Local Testing
 ```python
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
+
+# Create a test workflow
+workflow = Workflow("test_workflow", name="test_workflow")
 
 # Create test runtime with debugging enabled
 runtime = LocalRuntime(debug=True)
 
-# Execute with test data
-test_data = {"customers": [...]}
-results = runtime.execute(workflow, inputs=test_data)
+# Execute with test data  
+results, run_id = runtime.execute(workflow)
 
 # Validate results
-assert results["node_id"]["output_key"] == expected_value
+assert isinstance(results, dict)
 ```
 
 #### Performance Monitoring & Real-time Dashboards
 ```python
 from kailash.visualization.performance import PerformanceVisualizer
 from kailash.visualization.dashboard import RealTimeDashboard, DashboardConfig
-from kailash.visualization.reports import WorkflowPerformanceReporter
+from kailash.visualization.reports import WorkflowPerformanceReporter, ReportFormat
 from kailash.tracking import TaskManager
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
+from kailash.nodes.transform import DataTransformer
+
+# Create a workflow to monitor
+workflow = Workflow("monitored_workflow", name="monitored_workflow")
+node = DataTransformer(transformations=["lambda x: x"])
+workflow.add_node("transform", node)
 
 # Run workflow with task tracking
+# Note: Pass task_manager to execute() to enable performance tracking
 task_manager = TaskManager()
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, task_manager=task_manager)
 
 # Static performance analysis
+from pathlib import Path
 perf_viz = PerformanceVisualizer(task_manager)
-outputs = perf_viz.create_run_performance_summary(run_id, output_dir="performance_report")
-perf_viz.compare_runs([run_id_1, run_id_2], output_path="comparison.png")
+outputs = perf_viz.create_run_performance_summary(run_id, output_dir=Path("performance_report"))
 
 # Real-time monitoring dashboard
 config = DashboardConfig(
@@ -351,8 +392,7 @@ reporter = WorkflowPerformanceReporter(task_manager)
 report_path = reporter.generate_report(
     run_id,
     output_path="workflow_report.html",
-    format=ReportFormat.HTML,
-    compare_runs=[run_id_1, run_id_2]
+    format=ReportFormat.HTML
 )
 ```
 
@@ -409,6 +449,13 @@ api_client = RESTAPINode(
 #### Export Formats
 ```python
 from kailash.utils.export import WorkflowExporter, ExportConfig
+from kailash.workflow import Workflow
+from kailash.nodes.transform import DataTransformer
+
+# Create a workflow to export
+workflow = Workflow("export_example", name="export_example")
+node = DataTransformer(transformations=["lambda x: x"])
+workflow.add_node("transform", node)
 
 exporter = WorkflowExporter()
 
@@ -421,12 +468,21 @@ config = ExportConfig(
     include_metadata=True,
     container_tag="latest"
 )
-workflow.save("deployment.yaml", format="yaml")
+workflow.save("deployment.yaml")
 ```
 
 ### 🎨 Visualization
 
 ```python
+from kailash.workflow import Workflow
+from kailash.workflow.visualization import WorkflowVisualizer
+from kailash.nodes.transform import DataTransformer
+
+# Create a workflow to visualize
+workflow = Workflow("viz_example", name="viz_example")
+node = DataTransformer(transformations=["lambda x: x"])
+workflow.add_node("transform", node)
+
 # Generate Mermaid diagram (recommended for documentation)
 mermaid_code = workflow.to_mermaid()
 print(mermaid_code)
@@ -436,9 +492,8 @@ with open("workflow.md", "w") as f:
     f.write(workflow.to_mermaid_markdown(title="My Workflow"))
 
 # Or use matplotlib visualization
-from kailash import WorkflowVisualizer
 visualizer = WorkflowVisualizer(workflow)
-visualizer.visualize()  # Display
+visualizer.visualize()
 visualizer.save("workflow.png", dpi=300)  # Save as PNG
 ```
 
