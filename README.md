@@ -3,10 +3,10 @@
 <p align="center">
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/v/kailash.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/pyversions/kailash.svg" alt="Python versions"></a>
-  <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/dm/kailash.svg" alt="Downloads"></a>
+  <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-544%20passing-brightgreen.svg" alt="Tests: 544 passing">
+  <img src="https://img.shields.io/badge/tests-539%20passing-brightgreen.svg" alt="Tests: 539 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -41,6 +41,8 @@ The Kailash Python SDK is designed for:
 ## 🚀 Quick Start
 
 ### Installation
+
+**Requirements:** Python 3.11 or higher
 
 ```bash
 # Install uv if you haven't already
