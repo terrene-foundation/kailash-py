@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Architecture Diagram</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .diagram-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+        .error {
+            text-align: center;
+            color: #d32f2f;
+            padding: 20px;
+            background: #ffebee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Workflow Architecture Diagram</h1>
+    
+    <div class="diagram-container">
+        <div id="loading" class="loading">Loading diagram...</div>
+        <div id="error" class="error" style="display: none;">
+            Failed to load diagram. Please check your internet connection.
+        </div>
+        <div class="mermaid" id="diagram" style="display: none;">
+            graph TB
+            subgraph "Node Types"
+                A[Data Nodes]
+                B[Transform Nodes]
+                C[Logic Nodes]
+                D[AI/ML Nodes]
+                E[API Nodes]
+                F[Code Nodes]
+            end
+
+            subgraph "Workflow Engine"
+                G[Builder]
+                H[Graph]
+                I[Runner]
+                J[State Manager]
+            end
+
+            subgraph "Runtime"
+                K[Local]
+                L[Docker]
+                M[Async]
+                N[Parallel]
+            end
+
+            A --> G
+            B --> G
+            C --> G
+            D --> G
+            E --> G
+            F --> G
+
+            G --> H
+            H --> I
+            I --> J
+
+            I --> K
+            I --> L
+            I --> M
+            I --> N
+
+            style A fill:#e1f5fe
+            style B fill:#e8f5e8
+            style C fill:#fff3e0
+            style D fill:#f3e5f5
+            style E fill:#fce4ec
+            style F fill:#e0f2f1
+        </div>
+    </div>
+
+    <script>
+        // Function to load script with fallback
+        function loadMermaid() {
+            const cdns = [
+                'https://unpkg.com/mermaid@10.6.1/dist/mermaid.min.js',
+                'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js'
+            ];
+
+            let currentCdn = 0;
+
+            function tryNextCdn() {
+                if (currentCdn >= cdns.length) {
+                    showError();
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = cdns[currentCdn];
+                
+                script.onload = function() {
+                    console.log('Mermaid loaded from:', cdns[currentCdn]);
+                    initializeMermaid();
+                };
+                
+                script.onerror = function() {
+                    console.warn('Failed to load from:', cdns[currentCdn]);
+                    currentCdn++;
+                    tryNextCdn();
+                };
+                
+                document.head.appendChild(script);
+            }
+
+            tryNextCdn();
+        }
+
+        function initializeMermaid() {
+            try {
+                mermaid.initialize({ 
+                    startOnLoad: false,
+                    theme: 'default',
+                    flowchart: {
+                        useMaxWidth: true,
+                        htmlLabels: true,
+                        curve: 'basis'
+                    }
+                });
+
+                // Render the diagram
+                mermaid.run();
+                
+                // Show diagram and hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('diagram').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error initializing mermaid:', error);
+                showError();
+            }
+        }
+
+        function showError() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+        }
+
+        // Start loading when page is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadMermaid);
+        } else {
+            loadMermaid();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Kailash Documentation
+    url: https://github.com/terrene-foundation/kailash-py/tree/main/docs
+    about: Please check the documentation first for answers
+  - name: Examples Directory
+    url: https://github.com/terrene-foundation/kailash-py/tree/main/examples
+    about: Check out our extensive examples collection
+  - name: Community Discussions
+    url: https://github.com/terrene-foundation/kailash-py/discussions
+    about: Ask questions and discuss with the community

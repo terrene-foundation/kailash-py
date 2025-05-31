@@ -8,10 +8,10 @@ An Architecture Decision Record (ADR) is a document that captures an important a
 
 ## ADR Structure
 
-Each ADR should be stored in the `docs/adr/` directory with a filename pattern of `NNNN-title-with-dashes.md` where `NNNN` is a sequential number.
+Each ADR should be stored in the `guide/adr/` directory with a filename pattern of `NNNN-title-with-dashes.md` where `NNNN` is a sequential number.
 
 ```
-docs/
+guide/
 └── adr/
     ├── 0001-base-node-interface.md
     ├── 0002-workflow-representation.md

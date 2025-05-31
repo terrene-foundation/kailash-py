@@ -31,7 +31,7 @@ Successfully implemented the PythonCodeNode feature that allows users to execute
 - `/tests/test_nodes/test_code.py` - Unit tests
 - `/tests/integration/test_code_node_integration.py` - Integration tests
 - `/examples/python_code_node_example.py` - Usage examples
-- `/docs/features/python_code_node.md` - Documentation
+- `/guide/features/python_code_node.md` - Documentation
 
 **Modified:**
 - `/src/kailash/nodes/__init__.py` - Added PythonCodeNode export

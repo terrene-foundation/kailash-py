@@ -69,7 +69,7 @@ These architectural decisions directly support the project's goals:
 5. **User Experience**: Making the SDK intuitive for non-technical users
 
 ## References
-- Docker Runtime Implementation (docs/todos/013-docker-runtime-implementation.md)
-- Python Code Node Implementation (docs/todos/005-python-code-node.md)
-- Workflow Execution Fixes (docs/todos/004-workflow-execution-fixes.md)
-- Type Validation Fixes (docs/todos/008-type-validation-fixes.md)
+- Docker Runtime Implementation (guide/todos/013-docker-runtime-implementation.md)
+- Python Code Node Implementation (guide/todos/005-python-code-node.md)
+- Workflow Execution Fixes (guide/todos/004-workflow-execution-fixes.md)
+- Type Validation Fixes (guide/todos/008-type-validation-fixes.md)

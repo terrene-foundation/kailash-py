@@ -121,37 +121,37 @@ This document summarizes all tasks that have been completed as of 2025-05-29, in
 ### Import Statement Fixes
 - Fixed all incorrect imports throughout the codebase
 - Updated test files to use correct class names
-- See: docs/todos/003-import-fixes.md
+- See: guide/todos/003-import-fixes.md
 
 ### Error Handling Implementation
 - Created comprehensive exception hierarchy
 - Added helpful error messages throughout
-- See: docs/todos/002-error-handling.md
+- See: guide/todos/002-error-handling.md
 
 ### Docstring Expansion
 - Enhanced documentation for all data nodes
 - Added design philosophy and usage patterns
-- See: docs/todos/004-docstring-expansion.md
+- See: guide/todos/004-docstring-expansion.md
 
 ### PythonCodeNode Implementation
 - Created flexible code execution node
 - Added function and class wrappers
-- See: docs/todos/005-python-code-node.md
+- See: guide/todos/005-python-code-node.md
 
 ### Type Validation Fixes
 - Fixed handling of typing.Any
 - Updated base node validation
-- See: docs/todos/008-type-validation-fixes.md
+- See: guide/todos/008-type-validation-fixes.md
 
 ### Workflow Execution Fixes
 - Fixed configuration passing
 - Enhanced runtime input handling
-- See: docs/todos/004-workflow-execution-fixes.md
+- See: guide/todos/004-workflow-execution-fixes.md
 
 ### Example Script Updates
 - Fixed all example scripts to use correct SDK patterns
 - Created comprehensive workflow examples
-- See: docs/todos/010-workflow-example-fixes.md
+- See: guide/todos/010-workflow-example-fixes.md
 
 ### Tracking Module Fixes
 - Fixed datetime serialization issues

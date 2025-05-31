@@ -12,7 +12,8 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensive framework for building workflow-based applications with a container-node architecture.
+Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensive
+framework for building workflow-based applications with a container-node architecture.
 
 .. toctree::
    :maxdepth: 2
@@ -64,11 +65,14 @@ Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensi
 Overview
 ========
 
-The Kailash Python SDK is designed to bridge the gap between AI Business Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It provides:
+The Kailash Python SDK is designed to bridge the gap between AI Business Coaches
+(ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It provides:
 
 - **Node-Based Architecture**: Build complex workflows by connecting reusable nodes
-- **Extensive Node Library**: Pre-built nodes for data I/O, transformation, AI/ML, APIs, and more
-- **Flexible Runtime**: Execute workflows locally, in Docker, or distributed environments
+- **Extensive Node Library**: Pre-built nodes for data I/O, transformation, AI/ML,
+  APIs, and more
+- **Flexible Runtime**: Execute workflows locally, in Docker, or distributed
+  environments
 - **Task Tracking**: Monitor workflow execution with detailed metrics and logs
 - **Easy Extension**: Create custom nodes with simple Python classes
 
@@ -137,12 +141,14 @@ Quick Example
    results = workflow.run()
 
 Architecture Overview
---------------------
+---------------------
+
+The Kailash SDK follows a modular architecture with three main layers:
 
 .. mermaid::
 
    graph TB
-       subgraph "Node Types"
+       subgraph NodeTypes["Node Types"]
            A[Data Nodes]
            B[Transform Nodes]
            C[Logic Nodes]
@@ -151,14 +157,14 @@ Architecture Overview
            F[Code Nodes]
        end
 
-       subgraph "Workflow Engine"
+       subgraph WorkflowEngine["Workflow Engine"]
            G[Builder]
            H[Graph]
            I[Runner]
            J[State Manager]
        end
 
-       subgraph "Runtime"
+       subgraph Runtime["Runtime Options"]
            K[Local]
            L[Docker]
            M[Async]
@@ -180,6 +186,16 @@ Architecture Overview
        I --> L
        I --> M
        I --> N
+
+       style A fill:#e1f5fe
+       style B fill:#e8f5e8
+       style C fill:#fff3e0
+       style D fill:#f3e5f5
+       style E fill:#fce4ec
+       style F fill:#e0f2f1
+
+.. note::
+   If the diagram above doesn't render properly, you can view the `interactive architecture diagram <_static/architecture_diagram.html>`_ in a separate window.
 
 Indices and Tables
 ==================

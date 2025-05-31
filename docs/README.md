@@ -1,14 +1,15 @@
 # Kailash Python SDK Documentation
 
-This directory contains the documentation for the Kailash Python SDK.
+This directory contains the public documentation for the Kailash Python SDK.
 
 ## Structure
 
-- `api/` - Sphinx source files for API documentation
-- `adr/` - Architecture Decision Records
-- `features/` - Feature documentation
-- `prd/` - Product Requirements Documents
-- `todos/` - Development task tracking
+- `*.rst` - Sphinx source files for API documentation
+- `api/` - API reference documentation
+- `_static/` - Static assets for documentation
+- `Makefile` - Build commands
+- `conf.py` - Sphinx configuration
+- `build_docs.py` - Documentation build script
 
 ## Building Documentation
 
@@ -36,12 +37,12 @@ This will:
 To build documentation manually:
 
 ```bash
-cd docs/api
+cd docs
 pip install -r requirements.txt
 make html
 ```
 
-The built documentation will be in `docs/api/_build/html/`.
+The built documentation will be in `docs/_build/html/`.
 
 ## Deploying to GitHub Pages
 

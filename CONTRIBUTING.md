@@ -38,10 +38,10 @@ pytest --cov=kailash
 
 ### Architecture Decision Records (ADRs)
 
-For significant architectural changes, please create an ADR:
-1. Copy the template from `docs/adr/0000-template.md`
-2. Fill in the sections with your proposal
-3. Submit along with your code changes
+For significant architectural changes, please document them appropriately:
+1. Describe the architectural change in your pull request
+2. Explain the rationale and trade-offs
+3. Update relevant documentation
 
 ## Pull Request Process
 

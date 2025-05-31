@@ -100,8 +100,8 @@ The implementation leverages the existing Node and AsyncNode base classes, ensur
 
 ### Documentation
 - `examples/API_INTEGRATION_README.md` - Complete API integration guide
-- `docs/adr/0015-api-integration-architecture.md` - Updated with rate limiting details
-- `docs/todos/000-master.md` - Updated to reflect completion
+- `guide/adr/0015-api-integration-architecture.md` - Updated with rate limiting details
+- `guide/todos/000-master.md` - Updated to reflect completion
 - `README.md` - Updated with API integration features
 
 ## Future Work
