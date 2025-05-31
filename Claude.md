@@ -155,48 +155,54 @@ Keep dependencies minimal and explicit:
      - **Format**: Follow the ADR template in `guide/adr/`
      - **Numbering**: Use sequential numbering (e.g., ADR-0001)
      - **Status**: Mark each ADR as Proposed, Accepted, Deprecated, or Superseded
-     - **Updates**: Create new ADRs rather than modifying existing ones
-     - **Required ADRs**:
-       - Base Node Interface
-       - Workflow Representation
-       - Local Execution Strategy
-       - Data Passing Mechanism
-       - Export Format
-       - Task Tracking Design
-       - Storage Backend Strategy
-     - **Summary**: Include a summary of new ADRs in guide/adr/README.md
+     - **Summary**: Update or add a summary of ADRs in guide/adr/README.md
 
 3. **Todos Management**:
    - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
-   - Maintain the master todo list in `guide/todos/000-master.md` using this structure:
-
+   - **Two-File Todo System** for better Claude Code context management:
+     - **Master File**: `guide/todos/000-master.md` - Active tasks and current priorities only
+     - **Archive File**: `guide/todos/completed-archive.md` - Complete historical record
+   
+   **Master File Structure** (`guide/todos/000-master.md`):
    ```markdown
    # Project Status Overview
    - **Category**: Status - Brief description
-
+   
+   ## 🔥 URGENT PRIORITY - Current Client Needs
+   - **High-impact tasks for active client projects**
+   
    ## High Priority - Active Tasks
    - **Task Name**
      - Description: Clear, actionable description
      - Status: To Do | In Progress | Completed
      - Priority: High | Medium | Low
      - Details: Implementation specifics or context
-
+   
    ## Medium/Low Priority Tasks
    [Same format as above]
-
+   
    ## Recent Achievements
-   - Brief summary of completed work
+   - Brief summary of latest completed work (last 2-3 sessions)
+   - Link to completed-archive.md for full history
+   ```
 
-   ## Completed Tasks Archive
-   - Condensed historical record organized by development phase
+   **Archive File Structure** (`guide/todos/completed-archive.md`):
+   ```markdown
+   # Completed Tasks Archive
+   
+   ## Development Sessions History
+   ### Session XX (Date) ✅
+   - Detailed breakdown of completed tasks
+   - Session statistics and achievements
+   - Links to relevant PRs and commits
    ```
 
    - **Organization Principles**:
-     - Active tasks first, completed tasks archived at bottom
-     - Group by priority and functional area (Testing, Documentation, etc.)
-     - Use condensed format for completed tasks to reduce file length
-     - Include project status overview for quick health assessment
-     - Focus on actionable next steps rather than detailed history
+     - **Master file**: Focus on current/upcoming work, keep under 300 lines for Claude Code efficiency
+     - **Archive file**: Complete historical record for reference and project documentation
+     - **Recent achievements**: Brief summary in master, detailed history in archive
+     - **Client-driven priorities**: Place urgent client needs at the top of master file
+     - **Session documentation**: Record completed work in archive with proper categorization
 
    - Other todo files in the same directory should record summaries of completed development cycles
    - Always queue these verification tasks at the end of each development cycle:

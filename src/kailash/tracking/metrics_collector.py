@@ -88,7 +88,8 @@ class MetricsCollector:
     metrics during node execution, with support for both process-level and
     system-level monitoring.
 
-    Usage:
+    Usage::
+
         collector = MetricsCollector()
         with collector.collect() as metrics:
             # Execute node code here

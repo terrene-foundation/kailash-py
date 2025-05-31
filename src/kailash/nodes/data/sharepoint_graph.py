@@ -56,8 +56,8 @@ class SharePointGraphReader(Node):
     3. Search for files by name
     4. Navigate folder structures
 
-    Example:
-        ```python
+    Example::
+
         reader = SharePointGraphReader()
         result = reader.execute(
             tenant_id="your-tenant-id",
@@ -68,7 +68,6 @@ class SharePointGraphReader(Node):
             library_name="Documents",
             folder_path="Reports/2024"
         )
-        ```
     """
 
     def get_metadata(self) -> NodeMetadata:
@@ -472,8 +471,8 @@ class SharePointGraphWriter(Node):
     This node handles file uploads to SharePoint document libraries,
     supporting folder structures and metadata.
 
-    Example:
-        ```python
+    Example::
+
         writer = SharePointGraphWriter()
         result = writer.execute(
             tenant_id="your-tenant-id",
@@ -485,7 +484,6 @@ class SharePointGraphWriter(Node):
             folder_path="Reports/2024",
             sharepoint_name="Q4_Report_2024.pdf"
         )
-        ```
     """
 
     def get_metadata(self) -> NodeMetadata:

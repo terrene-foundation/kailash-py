@@ -423,6 +423,6 @@ After installation:
 1. Read the :doc:`getting_started` guide
 2. Explore :doc:`examples/index`
 3. Review :doc:`guides/best_practices`
-4. Check :doc:`api/index` for detailed reference
+4. Check the API documentation for detailed reference
 
-For additional help, see :doc:`guides/troubleshooting` or visit our `GitHub Issues <https://github.com/terrene-foundation/kailash-py/issues>`_.
+For additional help, see :doc:`troubleshooting` or visit our `GitHub Issues <https://github.com/terrene-foundation/kailash-py/issues>`_.

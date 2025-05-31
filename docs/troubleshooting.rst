@@ -53,7 +53,7 @@ Dependency Conflicts
     pip install "networkx>=2.8,<3.0" "pydantic>=1.10,<2.0"
 
 Missing Optional Dependencies
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Problem**: ModuleNotFoundError for optional features
 
@@ -76,7 +76,7 @@ Node Development Issues
 -----------------------
 
 Import Errors
-^^^^^^^^^^^^
+^^^^^^^^^^^^^
 
 **Problem**: Cannot import custom nodes or base classes
 
@@ -100,7 +100,7 @@ Import Errors
     print(kailash.__version__)
 
 Configuration Validation Errors
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Problem**: Pydantic validation errors in node configuration
 
@@ -186,7 +186,7 @@ Workflow Execution Issues
 -------------------------
 
 Circular Dependencies
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 **Problem**: Workflow fails to execute due to circular references
 
@@ -229,7 +229,7 @@ Circular Dependencies
         print(f"Workflow validation failed: {e}")
 
 Missing Node Dependencies
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Problem**: Workflow execution fails because nodes can't find their dependencies
 
@@ -276,7 +276,7 @@ Missing Node Dependencies
     debug_workflow_connections(my_workflow)
 
 Data Passing Issues
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 **Problem**: Data not properly passed between nodes
 
@@ -339,7 +339,7 @@ Memory and Performance Issues
 -----------------------------
 
 Memory Leaks
-^^^^^^^^^^^
+^^^^^^^^^^^^
 
 **Problem**: Memory usage continuously increases during workflow execution
 
@@ -404,7 +404,7 @@ Memory Leaks
             gc.collect()
 
 Slow Execution
-^^^^^^^^^^^^^
+^^^^^^^^^^^^^^
 
 **Problem**: Workflow execution is slower than expected
 
@@ -466,7 +466,7 @@ Data Processing Errors
 ----------------------
 
 File I/O Issues
-^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^
 
 **Problem**: Unable to read/write files
 
@@ -502,7 +502,7 @@ File I/O Issues
                 return f.read()
 
 Data Type Mismatches
-^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
 
 **Problem**: Type errors when processing data between nodes
 
@@ -589,7 +589,7 @@ Unit Test Failures
             assert isinstance(result["error"], str)
 
 Integration Test Issues
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
 
 **Problem**: Integration tests fail in CI/CD but pass locally
 
@@ -624,7 +624,7 @@ Integration Test Issues
             assert os.path.exists(output_file)
 
 Getting Help
------------
+------------
 
 Enabling Debug Logging
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -648,7 +648,7 @@ Enabling Debug Logging
     kailash_logger.setLevel(logging.DEBUG)
 
 Collecting Diagnostic Information
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 

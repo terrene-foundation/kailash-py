@@ -2,9 +2,9 @@
 
 .. _guides-workflows:
 
-==================
+===================
 Workflow Management
-==================
+===================
 
 This guide covers workflow creation, management, and best practices.
 

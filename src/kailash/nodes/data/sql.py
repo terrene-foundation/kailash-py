@@ -63,7 +63,8 @@ class SQLDatabaseNode(Node):
     - TimeoutError: Query execution timeout
     - PermissionError: Access denied
 
-    Example:
+    Example::
+
         # Query customer data
         sql_node = SQLDatabaseNode(
             connection_string='postgresql://user:pass@host/db',
@@ -258,7 +259,8 @@ class SQLQueryBuilderNode(Node):
     3. Multi-table joins
     4. Aggregation queries
 
-    Example:
+    Example::
+
         builder = SQLQueryBuilderNode(
             table='customers',
             select=['name', 'email'],

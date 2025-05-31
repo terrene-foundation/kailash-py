@@ -699,6 +699,6 @@ See Also
 
 - :doc:`workflow` - Workflow execution
 - :doc:`runtime` - Runtime engines
-- :doc:`../guides/monitoring` - Monitoring guide
+- Monitoring guide
 - :doc:`../guides/performance` - Performance optimization
-- :doc:`../examples/tracking` - Tracking examples
+- Tracking examples

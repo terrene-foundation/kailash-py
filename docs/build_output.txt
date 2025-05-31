@@ -1,0 +1,677 @@
+Running Sphinx v8.2.3
+loading translations [en]... done
+loading intersphinx inventory 'python' from https://docs.python.org/3/objects.inv ...
+loading intersphinx inventory 'numpy' from https://numpy.org/doc/stable/objects.inv ...
+loading intersphinx inventory 'pandas' from https://pandas.pydata.org/docs/objects.inv ...
+loading intersphinx inventory 'networkx' from https://networkx.org/documentation/stable/objects.inv ...
+loading intersphinx inventory 'pydantic' from https://docs.pydantic.dev/latest/objects.inv ...
+[autosummary] generating autosummary for: api/cli.rst, api/nodes.rst, api/runtime.rst, api/tracking.rst, api/utils.rst, api/visualization.rst, api/workflow.rst, best_practices.rst, changelog.rst, contributing.rst, ..., guides/workflows.rst, index.rst, installation.rst, migration_guide.rst, performance.rst, quickstart.rst, security.rst, troubleshooting.rst, tutorials/index.rst, unimplemented_nodes_tracker.md
+myst v4.0.1: MdParserConfig(commonmark_only=False, gfm_only=False, enable_extensions=set(), disable_syntax=[], all_links_external=False, links_external_new_tab=False, url_schemes=('http', 'https', 'mailto', 'ftp'), ref_domains=None, fence_as_directive=set(), number_code_blocks=[], title_to_header=False, heading_anchors=0, heading_slug_func=None, html_meta={}, footnote_sort=True, footnote_transition=True, words_per_minute=200, substitutions={}, linkify_fuzzy_links=True, dmath_allow_labels=True, dmath_allow_space=True, dmath_allow_digits=True, dmath_double_inline=False, update_mathjax=True, mathjax_classes='tex2jax_process|mathjax_process|math|output_area', enable_checkboxes=False, suppress_warnings=[], highlight_code_blocks=True)
+building [mo]: targets for 0 po files that are out of date
+writing output... 
+building [html]: targets for 32 source files that are out of date
+updating environment: [new config] 32 added, 0 changed, 0 removed
+reading sources... [  3%] api/cli
+reading sources... [  6%] api/nodes
+<unknown>:422: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+<unknown>:3: SyntaxWarning: invalid escape sequence '\*'
+reading sources... [  9%] api/runtime
+reading sources... [ 12%] api/tracking
+reading sources... [ 16%] api/utils
+reading sources... [ 19%] api/visualization
+reading sources... [ 22%] api/workflow
+reading sources... [ 25%] best_practices
+reading sources... [ 28%] changelog
+reading sources... [ 31%] contributing
+reading sources... [ 34%] examples/advanced
+reading sources... [ 38%] examples/basic
+reading sources... [ 41%] examples/index
+reading sources... [ 44%] examples/integrations
+reading sources... [ 47%] examples/patterns
+reading sources... [ 50%] examples/runtime
+reading sources... [ 53%] examples/utils
+reading sources... [ 56%] getting_started
+reading sources... [ 59%] guides/best_practices
+reading sources... [ 62%] guides/custom_nodes
+reading sources... [ 66%] guides/performance
+reading sources... [ 69%] guides/testing
+reading sources... [ 72%] guides/workflows
+reading sources... [ 75%] index
+reading sources... [ 78%] installation
+reading sources... [ 81%] migration_guide
+reading sources... [ 84%] performance
+reading sources... [ 88%] quickstart
+reading sources... [ 91%] security
+reading sources... [ 94%] troubleshooting
+reading sources... [ 97%] tutorials/index
+reading sources... [100%] unimplemented_nodes_tracker
+
+WARNING: autodoc: failed to import class 'DataFilter' from module 'kailash.nodes.transform.processors'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.transform.processors' has no attribute 'DataFilter'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: DataFilter
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'DataMapper' from module 'kailash.nodes.transform.processors'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.transform.processors' has no attribute 'DataMapper'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: DataMapper
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'DataSorter' from module 'kailash.nodes.transform.processors'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.transform.processors' has no attribute 'DataSorter'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: DataSorter
+ [autodoc.import_object]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/logic/operations.py:docstring of kailash.nodes.logic.operations.Switch:23: ERROR: Unexpected indentation. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/logic/operations.py:docstring of kailash.nodes.logic.operations.Switch:25: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]
+WARNING: autodoc: failed to import class 'Validator' from module 'kailash.nodes.logic.operations'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.logic.operations' has no attribute 'Validator'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: Validator
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'EmbeddingGenerator' from module 'kailash.nodes.ai.models'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.ai.models' has no attribute 'EmbeddingGenerator'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: EmbeddingGenerator
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'LLMAgent' from module 'kailash.nodes.ai.agents'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.ai.agents' has no attribute 'LLMAgent'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: LLMAgent
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'HTTPClient' from module 'kailash.nodes.api.http'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.api.http' has no attribute 'HTTPClient'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: HTTPClient
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'RESTClient' from module 'kailash.nodes.api.rest'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.api.rest' has no attribute 'RESTClient'. Did you mean: 'RESTClientNode'?
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: RESTClient
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'GraphQLClient' from module 'kailash.nodes.api.graphql'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.nodes.api.graphql' has no attribute 'GraphQLClient'. Did you mean: 'GraphQLClientNode'?
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: GraphQLClient
+ [autodoc.import_object]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:27: ERROR: Unexpected indentation. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:32: WARNING: Definition list ends without a blank line; unexpected unindent. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:36: ERROR: Unexpected indentation. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:43: ERROR: Unexpected indentation. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:44: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:49: WARNING: Definition list ends without a blank line; unexpected unindent. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:55: ERROR: Unexpected indentation. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:57: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py:docstring of kailash.nodes.code.python.PythonCodeNode:64: WARNING: Definition list ends without a blank line; unexpected unindent. [docutils]
+WARNING: autodoc: failed to import class 'TestingRuntime' from module 'kailash.runtime.testing'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.runtime.testing' has no attribute 'TestingRuntime'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: TestingRuntime
+ [autodoc.import_object]
+./repos/projects/kailash_python_sdk/src/kailash/tracking/metrics_collector.py:docstring of kailash.tracking.metrics_collector.MetricsCollector:10: ERROR: Unexpected indentation. [docutils]
+./repos/projects/kailash_python_sdk/src/kailash/tracking/metrics_collector.py:docstring of kailash.tracking.metrics_collector.MetricsCollector:12: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]
+WARNING: autodoc: failed to import class 'WorkflowTemplates' from module 'kailash.utils.templates'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.utils.templates' has no attribute 'WorkflowTemplates'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: WorkflowTemplates
+ [autodoc.import_object]
+WARNING: autodoc: failed to import class 'NodeRegistry' from module 'kailash.manifest'; the following exception was raised:
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 461, in safe_getattr
+    return getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'kailash.manifest' has no attribute 'NodeRegistry'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/importer.py", line 288, in import_object
+    obj = attrgetter(obj, mangled_name)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 384, in get_attr
+    return autodoc_attrgetter(obj, name, *defargs, registry=self.env._registry)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/ext/autodoc/__init__.py", line 3149, in autodoc_attrgetter
+    return safe_getattr(obj, name, *defargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/sphinx/util/inspect.py", line 477, in safe_getattr
+    raise AttributeError(name) from exc
+AttributeError: NodeRegistry
+ [autodoc.import_object]
+./repos/projects/kailash_python_sdk/src/kailash/visualization/performance.py:docstring of kailash.visualization.performance.PerformanceVisualizer:1: WARNING: duplicate object description of kailash.visualization.performance.PerformanceVisualizer, other instance in api/tracking, use :no-index: for one of them
+./repos/projects/kailash_python_sdk/src/kailash/visualization/performance.py:docstring of kailash.visualization.performance.PerformanceVisualizer.__init__:1: WARNING: duplicate object description of kailash.visualization.performance.PerformanceVisualizer.__init__, other instance in api/tracking, use :no-index: for one of them
+./repos/projects/kailash_python_sdk/src/kailash/visualization/performance.py:docstring of kailash.visualization.performance.PerformanceVisualizer.create_run_performance_summary:1: WARNING: duplicate object description of kailash.visualization.performance.PerformanceVisualizer.create_run_performance_summary, other instance in api/tracking, use :no-index: for one of them
+./repos/projects/kailash_python_sdk/src/kailash/visualization/performance.py:docstring of kailash.visualization.performance.PerformanceVisualizer.compare_runs:1: WARNING: duplicate object description of kailash.visualization.performance.PerformanceVisualizer.compare_runs, other instance in api/tracking, use :no-index: for one of them
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:228: WARNING: Title underline too short.
+
+Workflow-Level Error Handling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:228: WARNING: Title underline too short.
+
+Workflow-Level Error Handling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:296: WARNING: Title underline too short.
+
+Integration Testing Workflows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:296: WARNING: Title underline too short.
+
+Integration Testing Workflows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:323: WARNING: Title underline too short.
+
+Memory Management
+^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:349: WARNING: Title underline too short.
+
+Parallel Execution
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:349: WARNING: Title underline too short.
+
+Parallel Execution
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:376: WARNING: Title underline too short.
+
+Caching Strategies
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:376: WARNING: Title underline too short.
+
+Caching Strategies
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:445: WARNING: Title underline too short.
+
+Structured Logging
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:445: WARNING: Title underline too short.
+
+Structured Logging
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:474: WARNING: Title underline too short.
+
+Security Considerations
+---------------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:474: WARNING: Title underline too short.
+
+Security Considerations
+---------------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/best_practices.rst:477: WARNING: Title underline too short.
+
+Input Sanitization
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/examples/utils.rst:5: WARNING: Title overline too short.
+
+===============
+Utility Examples
+=============== [docutils]
+./repos/projects/kailash_python_sdk/docs/guides/custom_nodes.rst:5: WARNING: Title overline too short.
+
+===================
+Creating Custom Nodes
+=================== [docutils]
+./repos/projects/kailash_python_sdk/docs/guides/performance.rst:5: WARNING: Title overline too short.
+
+=======================
+Performance Optimization
+======================= [docutils]
+./repos/projects/kailash_python_sdk/docs/guides/testing.rst:5: WARNING: Title overline too short.
+
+================
+Testing Workflows
+================ [docutils]
+./repos/projects/kailash_python_sdk/docs/guides/workflows.rst:5: WARNING: Title overline too short.
+
+==================
+Workflow Management
+================== [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:110: WARNING: Title underline too short.
+
+Streaming and Chunked Processing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:110: WARNING: Title underline too short.
+
+Streaming and Chunked Processing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:167: WARNING: Title underline too short.
+
+Vectorization
+^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:203: WARNING: Title underline too short.
+
+Parallel Processing
+^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:203: WARNING: Title underline too short.
+
+Parallel Processing
+^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:275: WARNING: Title underline too short.
+
+Caching Strategies
+----------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:275: WARNING: Title underline too short.
+
+Caching Strategies
+----------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:410: WARNING: Title underline too short.
+
+I/O Optimization
+--------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:410: WARNING: Title underline too short.
+
+I/O Optimization
+--------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:413: WARNING: Title underline too short.
+
+Asynchronous I/O
+^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:512: WARNING: Title underline too short.
+
+Connection Pooling
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:512: WARNING: Title underline too short.
+
+Connection Pooling
+^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:581: WARNING: Title underline too short.
+
+Database Optimization
+-------------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/performance.rst:581: WARNING: Title underline too short.
+
+Database Optimization
+-------------------- [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:56: WARNING: Title underline too short.
+
+Missing Optional Dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:56: WARNING: Title underline too short.
+
+Missing Optional Dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:79: WARNING: Title underline too short.
+
+Import Errors
+^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:103: WARNING: Title underline too short.
+
+Configuration Validation Errors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:103: WARNING: Title underline too short.
+
+Configuration Validation Errors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:189: WARNING: Title underline too short.
+
+Circular Dependencies
+^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:232: WARNING: Title underline too short.
+
+Missing Node Dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:232: WARNING: Title underline too short.
+
+Missing Node Dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:279: WARNING: Title underline too short.
+
+Data Passing Issues
+^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:279: WARNING: Title underline too short.
+
+Data Passing Issues
+^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:342: WARNING: Title underline too short.
+
+Memory Leaks
+^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:407: WARNING: Title underline too short.
+
+Slow Execution
+^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:407: WARNING: Title underline too short.
+
+Slow Execution
+^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:469: WARNING: Title underline too short.
+
+File I/O Issues
+^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:505: WARNING: Title underline too short.
+
+Data Type Mismatches
+^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:505: WARNING: Title underline too short.
+
+Data Type Mismatches
+^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:592: WARNING: Title underline too short.
+
+Integration Test Issues
+^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:592: WARNING: Title underline too short.
+
+Integration Test Issues
+^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:627: WARNING: Title underline too short.
+
+Getting Help
+----------- [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:627: WARNING: Title underline too short.
+
+Getting Help
+----------- [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:651: WARNING: Title underline too short.
+
+Collecting Diagnostic Information
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+./repos/projects/kailash_python_sdk/docs/troubleshooting.rst:651: WARNING: Title underline too short.
+
+Collecting Diagnostic Information
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [docutils]
+looking for now-outdated files... none found
+pickling environment... done
+checking consistency... ./repos/projects/kailash_python_sdk/docs/unimplemented_nodes_tracker.md: WARNING: document isn't included in any toctree [toc.not_included]
+done
+preparing documents... done
+copying assets... 
+copying static files... 
+Writing evaluated template result to ./repos/projects/kailash_python_sdk/docs/_build/html/_static/basic.css
+Writing evaluated template result to ./repos/projects/kailash_python_sdk/docs/_build/html/_static/language_data.js
+Writing evaluated template result to ./repos/projects/kailash_python_sdk/docs/_build/html/_static/documentation_options.js
+Writing evaluated template result to ./repos/projects/kailash_python_sdk/docs/_build/html/_static/js/versions.js
+Writing evaluated template result to ./repos/projects/kailash_python_sdk/docs/_build/html/_static/copybutton.js
+copying static files: done
+copying extra files... 
+copying extra files: done
+copying assets: done
+writing output... [  3%] api/cli
+writing output... [  6%] api/nodes
+writing output... [  9%] api/runtime
+writing output... [ 12%] api/tracking
+writing output... [ 16%] api/utils
+writing output... [ 19%] api/visualization
+writing output... [ 22%] api/workflow
+writing output... [ 25%] best_practices
+writing output... [ 28%] changelog
+writing output... [ 31%] contributing
+writing output... [ 34%] examples/advanced
+writing output... [ 38%] examples/basic
+writing output... [ 41%] examples/index
+writing output... [ 44%] examples/integrations
+writing output... [ 47%] examples/patterns
+writing output... [ 50%] examples/runtime
+writing output... [ 53%] examples/utils
+writing output... [ 56%] getting_started
+writing output... [ 59%] guides/best_practices
+writing output... [ 62%] guides/custom_nodes
+writing output... [ 66%] guides/performance
+writing output... [ 69%] guides/testing
+writing output... [ 72%] guides/workflows
+writing output... [ 75%] index
+writing output... [ 78%] installation
+writing output... [ 81%] migration_guide
+writing output... [ 84%] performance
+writing output... [ 88%] quickstart
+writing output... [ 91%] security
+writing output... [ 94%] troubleshooting
+writing output... [ 97%] tutorials/index
+writing output... [100%] unimplemented_nodes_tracker
+
+./repos/projects/kailash_python_sdk/docs/api/cli.rst:684: WARNING: unknown document: '../guides/debugging' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/api/cli.rst:685: WARNING: unknown document: '../examples/cli' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/api/tracking.rst:702: WARNING: unknown document: '../guides/monitoring' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/api/tracking.rst:704: WARNING: unknown document: '../examples/tracking' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/getting_started.rst:251: WARNING: unknown document: 'guides/concepts' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/getting_started.rst:321: WARNING: unknown document: 'guides/troubleshooting' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/getting_started.rst:322: WARNING: unknown document: 'api/index' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/installation.rst:426: WARNING: unknown document: 'api/index' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/installation.rst:428: WARNING: unknown document: 'guides/troubleshooting' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/quickstart.rst:404: WARNING: unknown document: 'guides/concepts' [ref.doc]
+./repos/projects/kailash_python_sdk/docs/quickstart.rst:415: WARNING: unknown document: 'guides/troubleshooting' [ref.doc]
+generating indices... genindex done
+highlighting module code... [  3%] kailash.nodes.ai.models
+highlighting module code... [  7%] kailash.nodes.base
+highlighting module code... [ 10%] kailash.nodes.base_async
+highlighting module code... [ 14%] kailash.nodes.code.python
+highlighting module code... [ 17%] kailash.nodes.data.readers
+highlighting module code... [ 21%] kailash.nodes.data.sharepoint_graph
+highlighting module code... [ 24%] kailash.nodes.data.sql
+highlighting module code... [ 28%] kailash.nodes.data.writers
+highlighting module code... [ 31%] kailash.nodes.logic.operations
+highlighting module code... [ 34%] kailash.nodes.transform.processors
+highlighting module code... [ 38%] kailash.runtime.async_local
+highlighting module code... [ 41%] kailash.runtime.docker
+highlighting module code... [ 45%] kailash.runtime.local
+highlighting module code... [ 48%] kailash.runtime.parallel
+highlighting module code... [ 52%] kailash.tracking.manager
+highlighting module code... [ 55%] kailash.tracking.metrics_collector
+highlighting module code... [ 59%] kailash.tracking.models
+highlighting module code... [ 62%] kailash.tracking.storage.database
+highlighting module code... [ 66%] kailash.tracking.storage.filesystem
+highlighting module code... [ 69%] kailash.utils.export
+highlighting module code... [ 72%] kailash.visualization.api
+highlighting module code... [ 76%] kailash.visualization.dashboard
+highlighting module code... [ 79%] kailash.visualization.performance
+highlighting module code... [ 83%] kailash.visualization.reports
+highlighting module code... [ 86%] kailash.workflow.builder
+highlighting module code... [ 90%] kailash.workflow.graph
+highlighting module code... [ 93%] kailash.workflow.mermaid_visualizer
+highlighting module code... [ 97%] kailash.workflow.runner
+highlighting module code... [100%] kailash.workflow.state
+
+writing additional pages... search done
+dumping search index in English (code: en)... done
+dumping object inventory... done
+build finished with problems, 96 warnings (with warnings treated as errors).

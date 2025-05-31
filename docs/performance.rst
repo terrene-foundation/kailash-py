@@ -107,7 +107,7 @@ Reduce memory allocations by reusing objects:
                 self.buffer_pool.put(buffer)
 
 Streaming and Chunked Processing
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Process large datasets in chunks to control memory usage:
 
@@ -164,7 +164,7 @@ CPU Optimization
 ----------------
 
 Vectorization
-^^^^^^^^^^^^
+^^^^^^^^^^^^^
 
 Use vectorized operations whenever possible:
 
@@ -200,7 +200,7 @@ Use vectorized operations whenever possible:
         return x * 2 + np.sin(x)
 
 Parallel Processing
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 Leverage multiple CPU cores for computational tasks:
 
@@ -272,7 +272,7 @@ Leverage multiple CPU cores for computational tasks:
             return {"success": True, "data": results}
 
 Caching Strategies
------------------
+------------------
 
 Function-Level Caching
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -407,10 +407,10 @@ Implement caching within nodes for repeated operations:
             raise NotImplementedError
 
 I/O Optimization
----------------
+----------------
 
 Asynchronous I/O
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 Use async I/O for better concurrency:
 
@@ -509,7 +509,7 @@ Use async I/O for better concurrency:
             return await asyncio.gather(*tasks)
 
 Connection Pooling
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 Reuse connections for better performance:
 
@@ -578,7 +578,7 @@ Reuse connections for better performance:
                 self.session.close()
 
 Database Optimization
---------------------
+---------------------
 
 Query Optimization
 ^^^^^^^^^^^^^^^^^^

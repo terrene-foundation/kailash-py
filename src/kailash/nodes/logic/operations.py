@@ -25,7 +25,8 @@ class Switch(Node):
     The outputs of Switch nodes are typically connected to different processing
     nodes, and those branches can be rejoined later using a Merge node.
 
-    Example usage:
+    Example usage::
+
         # Simple boolean condition
         switch_node = Switch(condition_field="status", operator="==", value="success")
         workflow.add_node("router", switch_node)

@@ -248,7 +248,7 @@ Next Steps
 Now that you've created your first workflow:
 
 1. **Explore Examples**: Check out the :doc:`examples/index` section
-2. **Learn Concepts**: Read about :doc:`guides/concepts`
+2. **Learn Concepts**: Read about workflow concepts
 3. **Build Complex Workflows**: See :doc:`guides/workflows`
 4. **Create Custom Nodes**: Learn in :doc:`guides/custom_nodes`
 5. **Best Practices**: Review :doc:`guides/best_practices`
@@ -318,8 +318,8 @@ Getting Help
 
 If you need help:
 
-- Check the :doc:`guides/troubleshooting` guide
-- Review the :doc:`api/index` for detailed documentation
+- Check the :doc:`troubleshooting` guide
+- Review the API documentation sections
 - Visit our `GitHub Issues <https://github.com/terrene-foundation/kailash-py/issues>`_
 - Join our community discussions
 

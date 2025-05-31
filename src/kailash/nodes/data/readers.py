@@ -44,41 +44,42 @@ class CSVReader(Node):
     to handle common CSV formats and edge cases.
 
     Design Features:
-        1. Automatic header detection
-        2. Configurable delimiters
-        3. Memory-efficient line-by-line reading
-        4. Consistent dictionary output format
-        5. Unicode support through encoding parameter
+    1. Automatic header detection
+    2. Configurable delimiters
+    3. Memory-efficient line-by-line reading
+    4. Consistent dictionary output format
+    5. Unicode support through encoding parameter
 
     Data Flow:
-        - Input: File path and configuration parameters
-        - Processing: Reads CSV line by line, converting to dictionaries
-        - Output: List of dictionaries (with headers) or list of lists
+    - Input: File path and configuration parameters
+    - Processing: Reads CSV line by line, converting to dictionaries
+    - Output: List of dictionaries (with headers) or list of lists
 
     Common Usage Patterns:
-        1. Reading data exports from databases
-        2. Processing spreadsheet data
-        3. Loading configuration from CSV
-        4. Ingesting sensor data logs
+    1. Reading data exports from databases
+    2. Processing spreadsheet data
+    3. Loading configuration from CSV
+    4. Ingesting sensor data logs
 
     Upstream Sources:
-        - File system paths from user input
-        - Output paths from previous nodes
-        - Configuration management systems
+    - File system paths from user input
+    - Output paths from previous nodes
+    - Configuration management systems
 
     Downstream Consumers:
-        - DataTransformer: Processes tabular data
-        - Aggregator: Summarizes data
-        - CSVWriter: Reformats and saves
-        - Visualizer: Creates charts from data
+    - DataTransformer: Processes tabular data
+    - Aggregator: Summarizes data
+    - CSVWriter: Reformats and saves
+    - Visualizer: Creates charts from data
 
     Error Handling:
-        - FileNotFoundError: Invalid file path
-        - PermissionError: Insufficient read permissions
-        - UnicodeDecodeError: Encoding mismatch
-        - csv.Error: Malformed CSV data
+    - FileNotFoundError: Invalid file path
+    - PermissionError: Insufficient read permissions
+    - UnicodeDecodeError: Encoding mismatch
+    - csv.Error: Malformed CSV data
 
-    Example:
+    Example::
+
         # Read customer data with headers
         reader = CSVReader(
             file_path='customers.csv',
@@ -366,43 +367,44 @@ class TextReader(Node):
     and any text-based format not handled by specialized readers.
 
     Design Features:
-        1. Flexible encoding support
-        2. Reads entire file as single string
-        3. Preserves line endings and whitespace
-        4. Handles various text encodings
-        5. Simple, predictable output format
+    1. Flexible encoding support
+    2. Reads entire file as single string
+    3. Preserves line endings and whitespace
+    4. Handles various text encodings
+    5. Simple, predictable output format
 
     Data Flow:
-        - Input: File path and encoding
-        - Processing: Read entire file as text
-        - Output: Single text string
+    - Input: File path and encoding
+    - Processing: Read entire file as text
+    - Output: Single text string
 
     Common Usage Patterns:
-        1. Reading log files
-        2. Processing documentation
-        3. Loading templates
-        4. Reading configuration files
-        5. Processing natural language data
+    1. Reading log files
+    2. Processing documentation
+    3. Loading templates
+    4. Reading configuration files
+    5. Processing natural language data
 
     Upstream Sources:
-        - Log file generators
-        - Document management systems
-        - Template repositories
-        - Previous TextWriter outputs
+    - Log file generators
+    - Document management systems
+    - Template repositories
+    - Previous TextWriter outputs
 
     Downstream Consumers:
-        - NLP processors: Analyze text content
-        - Pattern matchers: Search for patterns
-        - TextWriter: Save processed text
-        - AI models: Process natural language
+    - NLP processors: Analyze text content
+    - Pattern matchers: Search for patterns
+    - TextWriter: Save processed text
+    - AI models: Process natural language
 
     Error Handling:
-        - FileNotFoundError: Missing file
-        - PermissionError: Access denied
-        - UnicodeDecodeError: Wrong encoding
-        - MemoryError: File too large
+    - FileNotFoundError: Missing file
+    - PermissionError: Access denied
+    - UnicodeDecodeError: Wrong encoding
+    - MemoryError: File too large
 
-    Example:
+    Example::
+
         # Read a log file
         reader = TextReader(
             file_path='application.log',
