@@ -17,8 +17,8 @@ sys.path.insert(0, os.path.abspath("../../src"))
 project = "Kailash Python SDK"
 copyright = f"{datetime.now().year}, Terrene Foundation"
 author = "Terrene Foundation"
-release = "1.0.0"
-version = "1.0"
+release = "0.1.0"
+version = "0.1"
 
 # General configuration
 extensions = [
@@ -33,6 +33,7 @@ extensions = [
     "sphinx_rtd_theme",  # Read the Docs theme
     "sphinx_copybutton",  # Copy button for code blocks
     "sphinxcontrib.mermaid",  # Mermaid diagram support
+    "myst_parser",  # Markdown support
 ]
 
 # Add any paths that contain templates here, relative to this directory
@@ -86,7 +87,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "networkx": ("https://networkx.org/documentation/stable/", None),
-    "pydantic": ("https://docs.pydantic.dev/", None),
+    "pydantic": ("https://docs.pydantic.dev/latest/", None),
 }
 
 # HTML output configuration
