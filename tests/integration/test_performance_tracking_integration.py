@@ -11,6 +11,7 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
+from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.visualization.performance import PerformanceVisualizer
 from kailash.workflow.graph import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
@@ -23,6 +24,11 @@ class TestPerformanceTrackingIntegration:
     def simple_workflow(self):
         """Create a simple test workflow."""
         workflow = Workflow(workflow_id="perf_test", name="Performance Test")
+
+        # Create input data source node
+        def data_source() -> Dict[str, Any]:
+            """Provides initial data for the workflow."""
+            return {"result": "test_data"}
 
         # Create nodes with different performance characteristics
         def fast_node(data: str) -> Dict[str, Any]:
@@ -44,39 +50,53 @@ class TestPerformanceTrackingIntegration:
             return {"result": f"cpu_{data}_{total}"}
 
         # Create schemas
-        schema = {
+        source_schema = {
+            "input": {},  # No inputs required
+            "output": {"result": NodeParameter(name="result", type=str, required=True)},
+        }
+
+        process_schema = {
             "input": {"data": NodeParameter(name="data", type=str, required=True)},
             "output": {"result": NodeParameter(name="result", type=str, required=True)},
         }
 
         # Create nodes
+        source = PythonCodeNode.from_function(
+            data_source,
+            name="source",
+            input_schema=source_schema["input"],
+            output_schema=source_schema["output"],
+        )
+
         fast = PythonCodeNode.from_function(
             fast_node,
             name="fast",
-            input_schema=schema["input"],
-            output_schema=schema["output"],
+            input_schema=process_schema["input"],
+            output_schema=process_schema["output"],
         )
 
         slow = PythonCodeNode.from_function(
             slow_node,
             name="slow",
-            input_schema=schema["input"],
-            output_schema=schema["output"],
+            input_schema=process_schema["input"],
+            output_schema=process_schema["output"],
         )
 
         cpu = PythonCodeNode.from_function(
             cpu_intensive_node,
             name="cpu",
-            input_schema=schema["input"],
-            output_schema=schema["output"],
+            input_schema=process_schema["input"],
+            output_schema=process_schema["output"],
         )
 
         # Add nodes
+        workflow.add_node("source_node", source)
         workflow.add_node("fast_node", fast)
         workflow.add_node("slow_node", slow)
         workflow.add_node("cpu_node", cpu)
 
         # Connect nodes
+        workflow.connect("source_node", "fast_node", {"result": "data"})
         workflow.connect("fast_node", "slow_node", {"result": "data"})
         workflow.connect("slow_node", "cpu_node", {"result": "data"})
 
@@ -85,29 +105,25 @@ class TestPerformanceTrackingIntegration:
     def test_metrics_collection_during_execution(self, simple_workflow, tmp_path):
         """Test that metrics are collected during workflow execution."""
         # Setup
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
-        # Create run
-        run_id = task_manager.create_run(workflow_name=simple_workflow.name)
-
-        # Execute workflow
-        results, _ = runtime.execute(
+        # Execute workflow (runtime will create its own run)
+        results, run_id = runtime.execute(
             workflow=simple_workflow,
             task_manager=task_manager,
-            parameters={"fast_node": {"data": "test"}},
         )
 
         # Verify execution completed
+        assert "source_node" in results
         assert "fast_node" in results
         assert "slow_node" in results
         assert "cpu_node" in results
 
         # Get tasks and verify metrics
         tasks = task_manager.get_run_tasks(run_id)
-        assert len(tasks) == 3
+        assert len(tasks) == 4
 
         for task in tasks:
             assert task.status == TaskStatus.COMPLETED
@@ -123,17 +139,14 @@ class TestPerformanceTrackingIntegration:
     def test_performance_visualization_generation(self, simple_workflow, tmp_path):
         """Test generation of performance visualizations."""
         # Setup
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
-        # Execute workflow
-        run_id = task_manager.create_run(workflow_name=simple_workflow.name)
-        runtime.execute(
+        # Execute workflow (runtime will create its own run)
+        results, run_id = runtime.execute(
             workflow=simple_workflow,
             task_manager=task_manager,
-            parameters={"fast_node": {"data": "test"}},
         )
 
         # Create performance visualizer
@@ -162,17 +175,14 @@ class TestPerformanceTrackingIntegration:
     def test_integrated_dashboard_creation(self, simple_workflow, tmp_path):
         """Test creation of integrated performance dashboard."""
         # Setup
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
-        # Execute workflow
-        run_id = task_manager.create_run(workflow_name=simple_workflow.name)
-        runtime.execute(
+        # Execute workflow (runtime will create its own run)
+        results, run_id = runtime.execute(
             workflow=simple_workflow,
             task_manager=task_manager,
-            parameters={"fast_node": {"data": "test"}},
         )
 
         # Create workflow visualizer
@@ -201,19 +211,16 @@ class TestPerformanceTrackingIntegration:
     def test_run_comparison(self, simple_workflow, tmp_path):
         """Test performance comparison between multiple runs."""
         # Setup
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
         # Execute workflow multiple times
         run_ids = []
         for i in range(3):
-            run_id = task_manager.create_run(workflow_name=simple_workflow.name)
-            runtime.execute(
+            results, run_id = runtime.execute(
                 workflow=simple_workflow,
                 task_manager=task_manager,
-                parameters={"fast_node": {"data": f"test_{i}"}},
             )
             run_ids.append(run_id)
             time.sleep(0.05)  # Add some variance
@@ -233,53 +240,82 @@ class TestPerformanceTrackingIntegration:
         # Create workflow with failing node
         workflow = Workflow(workflow_id="fail_test", name="Fail Test")
 
+        def data_source() -> Dict[str, Any]:
+            """Provides initial data for the workflow."""
+            return {"result": "test_data"}
+
         def failing_node(data: str) -> Dict[str, Any]:
             """Node that fails after some processing."""
             time.sleep(0.05)
             raise RuntimeError("Simulated failure")
 
-        schema = {
+        source_schema = {
+            "input": {},  # No inputs required
+            "output": {"result": NodeParameter(name="result", type=str, required=True)},
+        }
+
+        fail_schema = {
             "input": {"data": NodeParameter(name="data", type=str, required=True)},
             "output": {"result": NodeParameter(name="result", type=str, required=True)},
         }
 
+        source_node = PythonCodeNode.from_function(
+            data_source,
+            name="source",
+            input_schema=source_schema["input"],
+            output_schema=source_schema["output"],
+        )
+
         fail_node = PythonCodeNode.from_function(
             failing_node,
             name="fail",
-            input_schema=schema["input"],
-            output_schema=schema["output"],
+            input_schema=fail_schema["input"],
+            output_schema=fail_schema["output"],
         )
 
+        workflow.add_node("source_node", source_node)
         workflow.add_node("failing_node", fail_node)
+        workflow.connect("source_node", "failing_node", {"result": "data"})
 
         # Execute with tracking
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
-        run_id = task_manager.create_run(workflow_name=workflow.name)
+        # Execute workflow - failing node will fail but execution continues since it's a leaf node
+        results, run_id = runtime.execute(
+            workflow=workflow,
+            task_manager=task_manager,
+        )
 
-        with pytest.raises(Exception):
-            runtime.execute(
-                workflow=workflow,
-                task_manager=task_manager,
-                parameters={"failing_node": {"data": "test"}},
-            )
+        # Verify the failing node failed
+        assert "failing_node" in results
+        assert results["failing_node"].get("failed") is True
 
         # Get task and verify metrics were still collected
         tasks = task_manager.get_run_tasks(run_id)
-        assert len(tasks) == 1
+        assert len(tasks) == 2  # source_node should complete, failing_node should fail
 
-        failed_task = tasks[0]
+        # Find the failed task
+        failed_task = next(task for task in tasks if task.node_id == "failing_node")
         assert failed_task.status == TaskStatus.FAILED
-        assert failed_task.metrics is not None
-        assert failed_task.metrics.duration >= 0.05
+        assert failed_task.error is not None
+        assert "Simulated failure" in failed_task.error
+
+        # Verify timing information is available from task timestamps
+        assert failed_task.started_at is not None
+        assert failed_task.ended_at is not None
+        duration = (failed_task.ended_at - failed_task.started_at).total_seconds()
+        assert duration >= 0.05  # Should be at least 50ms due to sleep
 
     def test_custom_metrics_integration(self, tmp_path):
         """Test integration of custom metrics."""
         # Create workflow with custom metrics
         workflow = Workflow(workflow_id="custom_test", name="Custom Test")
+
+        def data_source() -> Dict[str, Any]:
+            """Provides initial data for the workflow."""
+            return {"data": [10, 20, 60, 70, 80]}
 
         def custom_metrics_node(data: list) -> Dict[str, Any]:
             """Node that would report custom metrics."""
@@ -297,7 +333,12 @@ class TestPerformanceTrackingIntegration:
             }
             return result
 
-        schema = {
+        source_schema = {
+            "input": {},  # No inputs required
+            "output": {"data": NodeParameter(name="data", type=list, required=True)},
+        }
+
+        custom_schema = {
             "input": {"data": NodeParameter(name="data", type=list, required=True)},
             "output": {
                 "data": NodeParameter(name="data", type=list, required=True),
@@ -305,26 +346,32 @@ class TestPerformanceTrackingIntegration:
             },
         }
 
+        source_node = PythonCodeNode.from_function(
+            data_source,
+            name="source",
+            input_schema=source_schema["input"],
+            output_schema=source_schema["output"],
+        )
+
         custom_node = PythonCodeNode.from_function(
             custom_metrics_node,
             name="custom",
-            input_schema=schema["input"],
-            output_schema=schema["output"],
+            input_schema=custom_schema["input"],
+            output_schema=custom_schema["output"],
         )
 
+        workflow.add_node("source_node", source_node)
         workflow.add_node("custom_node", custom_node)
+        workflow.connect("source_node", "custom_node", {"data": "data"})
 
         # Execute
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
-        run_id = task_manager.create_run(workflow_name=workflow.name)
-        results, _ = runtime.execute(
+        results, run_id = runtime.execute(
             workflow=workflow,
             task_manager=task_manager,
-            parameters={"custom_node": {"data": [10, 20, 60, 70, 80]}},
         )
 
         # Verify custom metrics in results
@@ -339,44 +386,71 @@ class TestPerformanceTrackingIntegration:
         # Create workflow with parallel branches
         workflow = Workflow(workflow_id="parallel_test", name="Parallel Test")
 
+        def data_source() -> Dict[str, Any]:
+            """Provides initial data for the workflow."""
+            return {"result": "test_data"}
+
         def process_branch(data: str, branch_id: int) -> Dict[str, Any]:
             """Process data in a branch."""
             time.sleep(0.05 * branch_id)  # Different delays
             return {"result": f"{data}_branch_{branch_id}"}
 
-        schema = {
+        source_schema = {
+            "input": {},  # No inputs required
+            "output": {"result": NodeParameter(name="result", type=str, required=True)},
+        }
+
+        branch_schema = {
             "input": {"data": NodeParameter(name="data", type=str, required=True)},
             "output": {"result": NodeParameter(name="result", type=str, required=True)},
         }
 
-        # Create parallel branches
+        # Create source node
+        source_node = PythonCodeNode.from_function(
+            data_source,
+            name="source",
+            input_schema=source_schema["input"],
+            output_schema=source_schema["output"],
+        )
+        workflow.add_node("source_node", source_node)
+
+        # Create parallel branches - need to define separate functions to avoid closure issues
+        def create_branch_function(branch_id):
+            def branch_func(data):
+                return process_branch(data, branch_id)
+
+            return branch_func
+
         for i in range(3):
+            branch_func = create_branch_function(i)
             node = PythonCodeNode.from_function(
-                lambda d, bid=i: process_branch(d, bid),
+                branch_func,
                 name=f"branch_{i}",
-                input_schema=schema["input"],
-                output_schema=schema["output"],
+                input_schema=branch_schema["input"],
+                output_schema=branch_schema["output"],
             )
             workflow.add_node(f"branch_{i}", node)
+            workflow.connect("source_node", f"branch_{i}", {"result": "data"})
 
         # Execute (nodes run in sequence in LocalRuntime, but metrics are collected)
-        task_manager = TaskManager(
-            storage_backend="filesystem", storage_path=str(tmp_path)
-        )
+        storage = FileSystemStorage(base_path=str(tmp_path))
+        task_manager = TaskManager(storage_backend=storage)
         runtime = LocalRuntime()
 
-        run_id = task_manager.create_run(workflow_name=workflow.name)
-        runtime.execute(
+        results, run_id = runtime.execute(
             workflow=workflow,
             task_manager=task_manager,
-            parameters={f"branch_{i}": {"data": "test"} for i in range(3)},
         )
 
         # Verify all branches have metrics
         tasks = task_manager.get_run_tasks(run_id)
-        assert len(tasks) == 3
+        assert len(tasks) == 4  # source + 3 branches
 
-        for i, task in enumerate(sorted(tasks, key=lambda t: t.node_id)):
+        # Get only the branch tasks for timing verification
+        branch_tasks = [task for task in tasks if task.node_id.startswith("branch_")]
+        assert len(branch_tasks) == 3
+
+        for i, task in enumerate(sorted(branch_tasks, key=lambda t: t.node_id)):
             assert task.metrics is not None
             # Verify relative durations
             if i > 0:

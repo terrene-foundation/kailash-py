@@ -401,8 +401,8 @@ class WorkflowVisualizer:
         # Determine output path
         if output_path is None:
             # Create default directory if it doesn't exist
-            output_dir = Path("workflow_executions")
-            output_dir.mkdir(exist_ok=True)
+            output_dir = Path.cwd() / "outputs" / "workflow_executions"
+            output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"execution_{run_id}.md"
         else:
             output_path = Path(output_path)
@@ -431,7 +431,7 @@ class WorkflowVisualizer:
         from kailash.visualization.performance import PerformanceVisualizer
 
         if output_dir is None:
-            output_dir = Path(f"outputs/performance/{run_id}")
+            output_dir = Path.cwd() / "outputs" / "performance" / run_id
         output_dir.mkdir(parents=True, exist_ok=True)
 
         outputs = {}

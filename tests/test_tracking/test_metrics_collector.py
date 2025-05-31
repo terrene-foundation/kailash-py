@@ -135,6 +135,10 @@ class TestMetricsCollector:
     @patch("kailash.tracking.metrics_collector.psutil")
     def test_metrics_with_mocked_psutil(self, mock_psutil):
         """Test metrics collection with mocked psutil."""
+        # Mock exception classes as real exception classes
+        mock_psutil.AccessDenied = type("AccessDenied", (Exception,), {})
+        mock_psutil.NoSuchProcess = type("NoSuchProcess", (Exception,), {})
+
         # Mock process
         mock_process = Mock()
         mock_psutil.Process.return_value = mock_process
@@ -158,6 +162,12 @@ class TestMetricsCollector:
         # Mock thread count
         mock_process.num_threads.return_value = 4
 
+        # Mock context switches with proper attributes
+        mock_ctx = Mock()
+        mock_ctx.voluntary = 50
+        mock_ctx.involuntary = 25
+        mock_process.num_ctx_switches.return_value = mock_ctx
+
         # Force monitoring to be enabled
         collector = MetricsCollector()
         collector._monitoring_enabled = True
@@ -169,6 +179,7 @@ class TestMetricsCollector:
 
         assert metrics.memory_mb == 100.0
         assert metrics.thread_count == 4
+        assert metrics.context_switches == 75
 
 
 class TestCollectMetricsDecorator:

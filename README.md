@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.8+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-482%20passing-brightgreen.svg" alt="Tests: 482 passing">
+  <img src="https://img.shields.io/badge/tests-544%20passing-brightgreen.svg" alt="Tests: 544 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -23,7 +23,7 @@
 - 🚀 **Rapid Prototyping**: Create and test workflows locally without containerization
 - 🏗️ **Architecture-Aligned**: Automatically ensures compliance with Kailash standards
 - 🔄 **Seamless Handoff**: Export prototypes directly to production-ready formats
-- 📊 **Built-in Monitoring**: Track workflow execution and performance metrics
+- 📊 **Real-time Monitoring**: Live dashboards with WebSocket streaming and performance metrics
 - 🧩 **Extensible**: Easy to create custom nodes for domain-specific operations
 - ⚡ **Fast Installation**: Uses `uv` for lightning-fast Python package management
 
@@ -205,6 +205,12 @@ The SDK includes a rich set of pre-built nodes for common operations:
 - `SharePointGraphReader` - Read SharePoint files
 - `SharePointGraphWriter` - Upload to SharePoint
 
+**Real-time Monitoring**
+- `RealTimeDashboard` - Live workflow monitoring
+- `WorkflowPerformanceReporter` - Comprehensive reports
+- `SimpleDashboardAPI` - REST API for metrics
+- `DashboardAPIServer` - WebSocket streaming server
+
 </td>
 </tr>
 </table>
@@ -298,9 +304,11 @@ results = runtime.execute(workflow, inputs=test_data)
 assert results["node_id"]["output_key"] == expected_value
 ```
 
-#### Performance Monitoring
+#### Performance Monitoring & Real-time Dashboards
 ```python
 from kailash.visualization.performance import PerformanceVisualizer
+from kailash.visualization.dashboard import RealTimeDashboard, DashboardConfig
+from kailash.visualization.reports import WorkflowPerformanceReporter
 from kailash.tracking import TaskManager
 from kailash.runtime.local import LocalRuntime
 
@@ -309,27 +317,57 @@ task_manager = TaskManager()
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, task_manager=task_manager)
 
-# Visualize performance metrics
+# Static performance analysis
 perf_viz = PerformanceVisualizer(task_manager)
-
-# Generate comprehensive performance report
 outputs = perf_viz.create_run_performance_summary(run_id, output_dir="performance_report")
-
-# Compare multiple runs
 perf_viz.compare_runs([run_id_1, run_id_2], output_path="comparison.png")
 
-# Create performance dashboard
-from kailash.workflow.visualization import WorkflowVisualizer
-viz = WorkflowVisualizer(workflow)
-dashboard = viz.create_performance_dashboard(run_id, task_manager, output_dir="dashboard")
+# Real-time monitoring dashboard
+config = DashboardConfig(
+    update_interval=1.0,
+    max_history_points=100,
+    auto_refresh=True,
+    theme="light"
+)
+
+dashboard = RealTimeDashboard(task_manager, config)
+dashboard.start_monitoring(run_id)
+
+# Add real-time callbacks
+def on_metrics_update(metrics):
+    print(f"Tasks: {metrics.completed_tasks} completed, {metrics.active_tasks} active")
+
+dashboard.add_metrics_callback(on_metrics_update)
+
+# Generate live HTML dashboard
+dashboard.generate_live_report("live_dashboard.html", include_charts=True)
+dashboard.stop_monitoring()
+
+# Comprehensive performance reports
+reporter = WorkflowPerformanceReporter(task_manager)
+report_path = reporter.generate_report(
+    run_id,
+    output_path="workflow_report.html",
+    format=ReportFormat.HTML,
+    compare_runs=[run_id_1, run_id_2]
+)
 ```
 
-Performance metrics collected include:
+**Real-time Dashboard Features**:
+- ⚡ **Live Metrics Streaming**: Real-time task progress and resource monitoring
+- 📊 **Interactive Charts**: CPU, memory, and throughput visualizations with Chart.js
+- 🔌 **API Endpoints**: REST and WebSocket APIs for custom integrations
+- 📈 **Performance Reports**: Multi-format reports (HTML, Markdown, JSON) with insights
+- 🎯 **Bottleneck Detection**: Automatic identification of performance issues
+- 📱 **Responsive Design**: Mobile-friendly dashboards with auto-refresh
+
+**Performance Metrics Collected**:
 - **Execution Timeline**: Gantt charts showing node execution order and duration
-- **Resource Usage**: CPU and memory consumption over time
+- **Resource Usage**: Real-time CPU and memory consumption
 - **I/O Analysis**: Read/write operations and data transfer volumes
 - **Performance Heatmaps**: Identify bottlenecks across workflow runs
-- **Comparison Charts**: Compare performance between different runs
+- **Throughput Metrics**: Tasks per minute and completion rates
+- **Error Tracking**: Failed task analysis and error patterns
 
 #### API Integration
 ```python
@@ -531,7 +569,9 @@ uv run make quality
 - SharePoint Graph API integration
 - **Real-time performance metrics collection**
 - **Performance visualization dashboards**
-- **100% test coverage (482 tests)**
+- **Real-time monitoring dashboard with WebSocket streaming**
+- **Comprehensive performance reports (HTML, Markdown, JSON)**
+- **100% test coverage (544 tests)**
 - **15 test categories all passing**
 - 21+ working examples
 
@@ -543,14 +583,12 @@ uv run make quality
 - Security audit & hardening
 - Performance optimizations
 - Docker runtime finalization
-- Advanced visualization features
 
 </td>
 <td width="30%">
 
 ### 📋 Planned
 - Cloud deployment templates
-- Real-time monitoring dashboard
 - Visual workflow editor
 - Plugin system
 - Additional integrations
@@ -560,7 +598,7 @@ uv run make quality
 </table>
 
 ### 🎯 Test Suite Status
-- **Total Tests**: 482 passing (100%)
+- **Total Tests**: 544 passing (100%)
 - **Test Categories**: 15/15 at 100%
 - **Integration Tests**: 65 passing
 - **Examples**: 21/21 working
