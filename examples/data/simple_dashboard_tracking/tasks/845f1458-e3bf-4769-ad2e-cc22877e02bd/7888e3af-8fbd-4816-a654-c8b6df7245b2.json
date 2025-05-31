@@ -1,0 +1,39 @@
+{
+  "task_id": "7888e3af-8fbd-4816-a654-c8b6df7245b2",
+  "run_id": "845f1458-e3bf-4769-ad2e-cc22877e02bd",
+  "node_id": "writer",
+  "node_type": "CSVWriter",
+  "status": "completed",
+  "started_at": "2025-05-31T00:55:51.452198+00:00",
+  "ended_at": "2025-05-31T00:55:51.452832+00:00",
+  "completed_at": "2025-05-31T00:55:51.452832+00:00",
+  "created_at": "2025-05-31T00:55:51.452207",
+  "result": {
+    "rows_written": 10,
+    "file_path": "outputs/simple_dashboard_output.csv"
+  },
+  "error": null,
+  "metadata": {
+    "execution_time": 0.00024008750915527344
+  },
+  "input_data": null,
+  "output_data": null,
+  "metrics": {
+    "duration": 0.00024008750915527344,
+    "memory_usage": 126.625,
+    "memory_usage_mb": 126.625,
+    "cpu_usage": 0.0,
+    "custom_metrics": {
+      "memory_delta_mb": 0.03125,
+      "io_read_bytes": 0,
+      "io_write_bytes": 0,
+      "io_read_count": 0,
+      "io_write_count": 0,
+      "thread_count": 3,
+      "context_switches": 1463
+    }
+  },
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

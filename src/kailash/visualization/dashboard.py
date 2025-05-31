@@ -20,7 +20,6 @@ Downstream Consumers:
 - Export utilities include dashboard snapshots in reports
 """
 
-import asyncio
 import json
 import logging
 import threading
@@ -30,13 +29,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation
-from matplotlib.figure import Figure
 
 from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import TaskRun, TaskStatus
+from kailash.tracking.models import TaskStatus
 from kailash.visualization.performance import PerformanceVisualizer
 
 logger = logging.getLogger(__name__)
@@ -388,7 +384,7 @@ class RealTimeDashboard:
                 </span>
             </div>
         </header>
-        
+
         {status_section}
         {live_metrics_section}
         {charts_section}
@@ -480,7 +476,7 @@ class RealTimeDashboard:
                 </div>
             </div>
             <script>
-                drawLiveCharts({json.dumps(timestamps)}, {json.dumps(cpu_data)}, 
+                drawLiveCharts({json.dumps(timestamps)}, {json.dumps(cpu_data)},
                               {json.dumps(memory_data)}, {json.dumps(throughput_data)});
             </script>
         </section>
@@ -602,20 +598,20 @@ class RealTimeDashboard:
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: {colors['bg']};
             color: {colors['text']};
             line-height: 1.6;
         }}
-        
+
         .dashboard-container {{
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
         }}
-        
+
         .dashboard-header {{
             display: flex;
             justify-content: space-between;
@@ -626,24 +622,24 @@ class RealTimeDashboard:
             border-radius: 8px;
             border: 1px solid {colors['border']};
         }}
-        
+
         .dashboard-header h1 {{
             color: {colors['primary']};
             font-size: 2em;
         }}
-        
+
         .status-indicator {{
             font-weight: bold;
         }}
-        
+
         .status-active {{
             color: {colors['success']};
         }}
-        
+
         .status-inactive {{
             color: {colors['danger']};
         }}
-        
+
         section {{
             margin-bottom: 30px;
             padding: 20px;
@@ -651,19 +647,19 @@ class RealTimeDashboard:
             border-radius: 8px;
             border: 1px solid {colors['border']};
         }}
-        
+
         section h2 {{
             margin-bottom: 20px;
             color: {colors['primary']};
             font-size: 1.5em;
         }}
-        
+
         .status-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
         }}
-        
+
         .status-card {{
             text-align: center;
             padding: 20px;
@@ -671,62 +667,62 @@ class RealTimeDashboard:
             border-radius: 6px;
             border: 1px solid {colors['border']};
         }}
-        
+
         .status-value {{
             display: block;
             font-size: 2em;
             font-weight: bold;
             color: {colors['primary']};
         }}
-        
+
         .status-label {{
             display: block;
             font-size: 0.9em;
             color: {colors['text']};
             opacity: 0.8;
         }}
-        
+
         .charts-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 20px;
         }}
-        
+
         .chart-container, .chart-item {{
             padding: 15px;
             background: {colors['bg']};
             border-radius: 6px;
             border: 1px solid {colors['border']};
         }}
-        
+
         .chart-container h3, .chart-item h3 {{
             margin-bottom: 10px;
             color: {colors['text']};
         }}
-        
+
         .chart-image {{
             max-width: 100%;
             height: auto;
             border-radius: 4px;
         }}
-        
+
         .tasks-table {{
             width: 100%;
             border-collapse: collapse;
         }}
-        
+
         .tasks-table th,
         .tasks-table td {{
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid {colors['border']};
         }}
-        
+
         .tasks-table th {{
             background: {colors['bg']};
             font-weight: bold;
         }}
-        
+
         .status-badge {{
             padding: 4px 8px;
             border-radius: 4px;
@@ -734,27 +730,27 @@ class RealTimeDashboard:
             font-weight: bold;
             text-transform: uppercase;
         }}
-        
+
         .status-running {{
             background: {colors['primary']};
             color: white;
         }}
-        
+
         .status-completed {{
             background: {colors['success']};
             color: white;
         }}
-        
+
         .status-failed {{
             background: {colors['danger']};
             color: white;
         }}
-        
+
         .status-pending {{
             background: {colors['warning']};
             color: black;
         }}
-        
+
         canvas {{
             max-width: 100%;
             height: 200px;
@@ -770,18 +766,18 @@ class RealTimeDashboard:
             drawSimpleChart('memoryChart', timestamps, memoryData, 'Memory MB', '#28a745');
             drawSimpleChart('throughputChart', timestamps, throughputData, 'Tasks/Min', '#ffc107');
         }
-        
+
         function drawSimpleChart(canvasId, labels, data, label, color) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
-            
+
             const ctx = canvas.getContext('2d');
             const width = canvas.width = canvas.offsetWidth;
             const height = canvas.height = 200;
-            
+
             // Clear canvas
             ctx.clearRect(0, 0, width, height);
-            
+
             if (data.length === 0) {
                 ctx.fillStyle = '#666';
                 ctx.font = '14px Arial';
@@ -789,13 +785,13 @@ class RealTimeDashboard:
                 ctx.fillText('No data available', width/2, height/2);
                 return;
             }
-            
+
             // Calculate scales
             const maxValue = Math.max(...data, 1);
             const padding = 40;
             const chartWidth = width - 2 * padding;
             const chartHeight = height - 2 * padding;
-            
+
             // Draw axes
             ctx.strokeStyle = '#ddd';
             ctx.lineWidth = 1;
@@ -804,17 +800,17 @@ class RealTimeDashboard:
             ctx.lineTo(padding, height - padding);
             ctx.lineTo(width - padding, height - padding);
             ctx.stroke();
-            
+
             // Draw data line
             if (data.length > 1) {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
-                
+
                 for (let i = 0; i < data.length; i++) {
                     const x = padding + (i / (data.length - 1)) * chartWidth;
                     const y = height - padding - (data[i] / maxValue) * chartHeight;
-                    
+
                     if (i === 0) {
                         ctx.moveTo(x, y);
                     } else {
@@ -822,19 +818,19 @@ class RealTimeDashboard:
                     }
                 }
                 ctx.stroke();
-                
+
                 // Draw data points
                 ctx.fillStyle = color;
                 for (let i = 0; i < data.length; i++) {
                     const x = padding + (i / (data.length - 1)) * chartWidth;
                     const y = height - padding - (data[i] / maxValue) * chartHeight;
-                    
+
                     ctx.beginPath();
                     ctx.arc(x, y, 3, 0, 2 * Math.PI);
                     ctx.fill();
                 }
             }
-            
+
             // Draw labels
             ctx.fillStyle = '#666';
             ctx.font = '12px Arial';
@@ -842,7 +838,7 @@ class RealTimeDashboard:
             ctx.fillText(`Max: ${maxValue.toFixed(1)}`, width - 60, padding + 15);
             ctx.fillText('0', padding - 20, height - padding + 5);
         }
-        
+
         // Auto-refresh functionality
         setInterval(function() {
             if (window.location.hash !== '#no-refresh') {

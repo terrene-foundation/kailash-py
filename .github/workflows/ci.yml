@@ -32,7 +32,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -40,13 +40,13 @@ jobs:
         pip install requests aiohttp
         # Try to install dev dependencies if possible
         pip install -e ".[dev]" || pip install -e .
-    
+
     - name: Test with pytest
       run: |
         # Run all tests
         pytest tests/ -v --tb=short || true
         # If tests fail, still continue to see coverage
-    
+
     - name: Fix missing SafetyViolationError
       run: |
         # Check if the error exists and add it if not
@@ -65,12 +65,12 @@ jobs:
               pass\
           ' src/kailash/sdk_exceptions.py
         fi
-    
+
     - name: Run coverage on all tests
       run: |
         # Run tests excluding the 2 known async validation issues
         pytest tests/ --cov=src/kailash --cov-report=xml --cov-report=term --tb=short -k "not (test_async_switch_missing_input or test_async_merge_missing_data)"
-    
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
@@ -87,16 +87,16 @@ jobs:
       with:
         python-version: '3.11'
         cache: 'pip'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install black isort
-    
+
     - name: Lint with black
       run: |
         black --check src/ tests/ || true
-    
+
     - name: Check imports with isort
       run: |
         isort --check src/ tests/ || true

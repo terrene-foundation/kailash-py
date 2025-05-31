@@ -254,7 +254,7 @@ state_wrapper = workflow.create_state_wrapper(state)
 
 # Single path-based update
 updated_wrapper = state_wrapper.update_in(
-    ["counter"], 
+    ["counter"],
     42
 )
 
@@ -372,8 +372,8 @@ report_path = reporter.generate_report(
 #### API Integration
 ```python
 from kailash.nodes.api import (
-    HTTPRequestNode as RESTAPINode, 
-    # OAuth2AuthNode, 
+    HTTPRequestNode as RESTAPINode,
+    # OAuth2AuthNode,
     # RateLimitedAPINode,
     # RateLimitConfig
 )
@@ -526,27 +526,52 @@ uv run kailash --help
 # Or activate the venv if you prefer
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
+# Install development dependencies
+uv add --dev pre-commit detect-secrets doc8
+
+# Install Trivy (macOS with Homebrew)
+brew install trivy
+
 # Set up pre-commit hooks
-uv run pre-commit install
+pre-commit install
+pre-commit install --hook-type pre-push
+
+# Run initial setup (formats code and fixes issues)
+pre-commit run --all-files
 ```
 
-### Code Quality
+### Code Quality & Pre-commit Hooks
 
-We maintain high code quality standards:
+We use automated pre-commit hooks to ensure code quality:
 
+**Hooks Include:**
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **Ruff**: Fast Python linting
+- **pytest**: Unit tests
+- **Trivy**: Security vulnerability scanning
+- **detect-secrets**: Secret detection
+- **doc8**: Documentation linting
+- **mypy**: Type checking
+
+**Manual Quality Checks:**
 ```bash
 # Format code
-uv run black src/ tests/
-uv run isort src/ tests/
+black src/ tests/
+isort src/ tests/
+
+# Linting and fixes
+ruff check src/ tests/ --fix
 
 # Type checking
-uv run mypy src/
+mypy src/
 
-# Linting
-uv run ruff check src/ tests/
+# Run all pre-commit hooks manually
+pre-commit run --all-files
 
-# Run all checks
-uv run make quality
+# Run specific hooks
+pre-commit run black
+pre-commit run pytest-check
 ```
 
 ## 📈 Project Status

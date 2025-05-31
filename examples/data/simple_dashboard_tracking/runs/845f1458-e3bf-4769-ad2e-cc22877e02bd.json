@@ -1,0 +1,18 @@
+{
+  "run_id": "845f1458-e3bf-4769-ad2e-cc22877e02bd",
+  "workflow_name": "Simple Dashboard Demo",
+  "status": "completed",
+  "started_at": "2025-05-31T00:55:51.448705+00:00",
+  "ended_at": "2025-05-31T00:55:51.453299+00:00",
+  "tasks": [
+    "f3eb51f0-6d0b-4bbc-beb6-4713d46ced89",
+    "e93c6f28-f32b-42e2-bd57-f331116383a6",
+    "7888e3af-8fbd-4816-a654-c8b6df7245b2"
+  ],
+  "metadata": {
+    "parameters": null,
+    "debug": false,
+    "runtime": "local"
+  },
+  "error": null
+}

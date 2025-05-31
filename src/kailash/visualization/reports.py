@@ -24,19 +24,16 @@ Downstream Consumers:
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.visualization.performance import PerformanceVisualizer
-from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -968,7 +965,7 @@ class WorkflowPerformanceReporter:
         {insights_section}
         {charts_section}
         {comparison_section}
-        
+
         <footer class="report-footer">
             <p>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Kailash Workflow Performance Reporter</p>
         </footer>
@@ -990,19 +987,19 @@ class WorkflowPerformanceReporter:
         summary = analysis["summary"]
 
         lines = []
-        lines.append(f"# 🚀 Workflow Performance Report")
-        lines.append(f"")
+        lines.append("# 🚀 Workflow Performance Report")
+        lines.append("")
         lines.append(f"**Run ID:** {run_info['run_id']}")
         lines.append(f"**Workflow:** {run_info['workflow_name']}")
         lines.append(f"**Started:** {run_info['started_at']}")
         lines.append(f"**Status:** {run_info['status']}")
-        lines.append(f"")
+        lines.append("")
 
         # Executive Summary
-        lines.append(f"## 📊 Executive Summary")
-        lines.append(f"")
-        lines.append(f"| Metric | Value |")
-        lines.append(f"|--------|-------|")
+        lines.append("## 📊 Executive Summary")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
         lines.append(f"| Total Tasks | {summary.total_tasks} |")
         lines.append(f"| Completed Tasks | {summary.completed_tasks} |")
         lines.append(f"| Failed Tasks | {summary.failed_tasks} |")
@@ -1011,33 +1008,33 @@ class WorkflowPerformanceReporter:
         lines.append(f"| Peak Memory Usage | {summary.peak_memory_usage:.0f}MB |")
         lines.append(f"| Throughput | {summary.throughput:.2f} tasks/min |")
         lines.append(f"| Efficiency Score | {summary.efficiency_score:.0f}/100 |")
-        lines.append(f"")
+        lines.append("")
 
         # Insights
         if insights:
-            lines.append(f"## 💡 Performance Insights")
-            lines.append(f"")
+            lines.append("## 💡 Performance Insights")
+            lines.append("")
             for insight in insights:
                 icon = {"bottleneck": "🔍", "optimization": "⚡", "warning": "⚠️"}.get(
                     insight.category, "📋"
                 )
                 lines.append(f"### {icon} {insight.title} ({insight.severity.upper()})")
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"**Description:** {insight.description}")
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"**Recommendation:** {insight.recommendation}")
-                lines.append(f"")
+                lines.append("")
 
         # Task Analysis
         task_analysis = analysis.get("task_analysis", {})
         if task_analysis.get("by_node_type"):
-            lines.append(f"## 📋 Task Performance by Node Type")
-            lines.append(f"")
+            lines.append("## 📋 Task Performance by Node Type")
+            lines.append("")
             lines.append(
-                f"| Node Type | Count | Completed | Avg Duration | Success Rate |"
+                "| Node Type | Count | Completed | Avg Duration | Success Rate |"
             )
             lines.append(
-                f"|-----------|-------|-----------|--------------|--------------|"
+                "|-----------|-------|-----------|--------------|--------------|"
             )
 
             for node_type, stats in task_analysis["by_node_type"].items():
@@ -1045,40 +1042,40 @@ class WorkflowPerformanceReporter:
                     f"| {node_type} | {stats['count']} | {stats['completed']} | "
                     f"{stats['avg_duration']:.2f}s | {stats['success_rate']:.1f}% |"
                 )
-            lines.append(f"")
+            lines.append("")
 
         # Bottlenecks
         bottlenecks = analysis.get("bottlenecks", [])
         if bottlenecks:
-            lines.append(f"## 🔍 Performance Bottlenecks")
-            lines.append(f"")
+            lines.append("## 🔍 Performance Bottlenecks")
+            lines.append("")
             for bottleneck in bottlenecks[:5]:  # Top 5 bottlenecks
                 lines.append(
                     f"- **{bottleneck['node_id']}** ({bottleneck['node_type']}): "
                     f"{bottleneck['type']} = {bottleneck['value']:.2f} "
                     f"(threshold: {bottleneck['threshold']:.2f}) - {bottleneck['severity']} severity"
                 )
-            lines.append(f"")
+            lines.append("")
 
         # Error Analysis
         error_analysis = analysis.get("error_analysis", {})
         if error_analysis.get("error_summary", {}).get("total_errors", 0) > 0:
-            lines.append(f"## ⚠️ Error Analysis")
-            lines.append(f"")
+            lines.append("## ⚠️ Error Analysis")
+            lines.append("")
             error_summary = error_analysis["error_summary"]
             lines.append(f"- **Total Errors:** {error_summary['total_errors']}")
             lines.append(f"- **Error Rate:** {error_summary['error_rate']:.1f}%")
             lines.append(
                 f"- **Critical Failures:** {error_summary['critical_failures']}"
             )
-            lines.append(f"")
+            lines.append("")
 
         # Comparison
         if comparison_data and comparison_data.get("runs"):
-            lines.append(f"## 📈 Performance Comparison")
-            lines.append(f"")
+            lines.append("## 📈 Performance Comparison")
+            lines.append("")
             trends = comparison_data.get("trends", {})
-            lines.append(f"**Trends vs Previous Run:**")
+            lines.append("**Trends vs Previous Run:**")
             lines.append(f"- Duration Change: {trends.get('duration_change', 0):.1f}%")
             lines.append(
                 f"- Efficiency Change: {trends.get('efficiency_change', 0):.1f} points"
@@ -1086,9 +1083,9 @@ class WorkflowPerformanceReporter:
             lines.append(
                 f"- Throughput Change: {trends.get('throughput_change', 0):.1f}%"
             )
-            lines.append(f"")
+            lines.append("")
 
-        lines.append(f"---")
+        lines.append("---")
         lines.append(
             f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Kailash Performance Reporter*"
         )
@@ -1172,7 +1169,7 @@ class WorkflowPerformanceReporter:
         return f"""
         <section class="comparison-section">
             <h2>📈 Performance Comparison</h2>
-            
+
             <div class="trends-summary">
                 <h3>Trends vs Previous Run</h3>
                 <div class="trends-grid">
@@ -1193,7 +1190,7 @@ class WorkflowPerformanceReporter:
                     </div>
                 </div>
             </div>
-            
+
             <table class="comparison-table">
                 <thead>
                     <tr>
@@ -1219,20 +1216,20 @@ class WorkflowPerformanceReporter:
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: #333;
             background-color: #f8f9fa;
         }
-        
+
         .report-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         .report-header {
             background: white;
             padding: 30px;
@@ -1240,39 +1237,39 @@ class WorkflowPerformanceReporter:
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 30px;
         }
-        
+
         .report-header h1 {
             color: #2c3e50;
             margin-bottom: 20px;
             font-size: 2.5em;
         }
-        
+
         .run-info {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
         }
-        
+
         .info-item {
             display: flex;
             flex-direction: column;
         }
-        
+
         .info-item .label {
             font-weight: bold;
             color: #7f8c8d;
             font-size: 0.9em;
         }
-        
+
         .info-item .value {
             font-size: 1.1em;
             color: #2c3e50;
         }
-        
+
         .status-completed { color: #27ae60; }
         .status-failed { color: #e74c3c; }
         .status-running { color: #3498db; }
-        
+
         section {
             background: white;
             margin-bottom: 30px;
@@ -1280,7 +1277,7 @@ class WorkflowPerformanceReporter:
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
+
         section h2 {
             color: #2c3e50;
             margin-bottom: 25px;
@@ -1288,13 +1285,13 @@ class WorkflowPerformanceReporter:
             border-bottom: 2px solid #ecf0f1;
             padding-bottom: 10px;
         }
-        
+
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 20px;
         }
-        
+
         .summary-card {
             text-align: center;
             padding: 20px;
@@ -1302,66 +1299,66 @@ class WorkflowPerformanceReporter:
             border-radius: 8px;
             border: 1px solid #ecf0f1;
         }
-        
+
         .metric-value {
             font-size: 2em;
             font-weight: bold;
             color: #3498db;
             display: block;
         }
-        
+
         .efficiency-score {
             color: #27ae60;
         }
-        
+
         .metric-label {
             color: #7f8c8d;
             font-size: 0.9em;
             margin-top: 5px;
         }
-        
+
         .insights-container {
             display: flex;
             flex-direction: column;
             gap: 20px;
         }
-        
+
         .insight-item {
             border-left: 4px solid #3498db;
             padding: 20px;
             background: #f8f9fa;
             border-radius: 0 8px 8px 0;
         }
-        
+
         .insight-item.severity-high {
             border-left-color: #e74c3c;
         }
-        
+
         .insight-item.severity-medium {
             border-left-color: #f39c12;
         }
-        
+
         .insight-item.severity-low {
             border-left-color: #27ae60;
         }
-        
+
         .insight-header {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 15px;
         }
-        
+
         .insight-icon {
             font-size: 1.2em;
         }
-        
+
         .insight-header h4 {
             flex: 1;
             color: #2c3e50;
             margin: 0;
         }
-        
+
         .severity-badge {
             padding: 4px 8px;
             border-radius: 4px;
@@ -1370,100 +1367,100 @@ class WorkflowPerformanceReporter:
             text-transform: uppercase;
             color: white;
         }
-        
+
         .severity-high {
             background: #e74c3c;
         }
-        
+
         .severity-medium {
             background: #f39c12;
         }
-        
+
         .severity-low {
             background: #27ae60;
         }
-        
+
         .description {
             margin-bottom: 10px;
             color: #555;
         }
-        
+
         .recommendation {
             color: #2c3e50;
         }
-        
+
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 20px;
         }
-        
+
         .chart-item {
             text-align: center;
         }
-        
+
         .chart-item h4 {
             margin-bottom: 15px;
             color: #2c3e50;
         }
-        
+
         .chart-image {
             max-width: 100%;
             height: auto;
             border: 1px solid #ecf0f1;
             border-radius: 8px;
         }
-        
+
         .trends-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
-        
+
         .trend-item {
             text-align: center;
             padding: 15px;
             background: #f8f9fa;
             border-radius: 8px;
         }
-        
+
         .trend-icon {
             font-size: 1.5em;
             display: block;
             margin-bottom: 5px;
         }
-        
+
         .trend-label {
             display: block;
             color: #7f8c8d;
             font-size: 0.9em;
         }
-        
+
         .trend-value {
             font-weight: bold;
             color: #2c3e50;
         }
-        
+
         .comparison-table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
         }
-        
+
         .comparison-table th,
         .comparison-table td {
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid #ecf0f1;
         }
-        
+
         .comparison-table th {
             background: #f8f9fa;
             font-weight: bold;
             color: #2c3e50;
         }
-        
+
         .report-footer {
             text-align: center;
             color: #7f8c8d;

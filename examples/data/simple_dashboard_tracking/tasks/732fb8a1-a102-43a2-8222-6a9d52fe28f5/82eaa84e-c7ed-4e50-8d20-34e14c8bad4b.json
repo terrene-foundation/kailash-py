@@ -1,0 +1,102 @@
+{
+  "task_id": "82eaa84e-c7ed-4e50-8d20-34e14c8bad4b",
+  "run_id": "732fb8a1-a102-43a2-8222-6a9d52fe28f5",
+  "node_id": "reader",
+  "node_type": "CSVReader",
+  "status": "completed",
+  "started_at": "2025-05-31T04:58:32.254700+00:00",
+  "ended_at": "2025-05-31T04:58:32.256207+00:00",
+  "completed_at": "2025-05-31T04:58:32.256207+00:00",
+  "created_at": "2025-05-31T04:58:32.254731",
+  "result": {
+    "data": [
+      {
+        "name": "John",
+        "age": "25",
+        "city": "New York",
+        "salary": "50000"
+      },
+      {
+        "name": "Mary",
+        "age": "30",
+        "city": "Los Angeles",
+        "salary": "65000"
+      },
+      {
+        "name": "Bob",
+        "age": "45",
+        "city": "Chicago",
+        "salary": "75000"
+      },
+      {
+        "name": "Alice",
+        "age": "35",
+        "city": "Houston",
+        "salary": "80000"
+      },
+      {
+        "name": "Charlie",
+        "age": "60",
+        "city": "Phoenix",
+        "salary": "90000"
+      },
+      {
+        "name": "Diana",
+        "age": "28",
+        "city": "Philadelphia",
+        "salary": "55000"
+      },
+      {
+        "name": "Eve",
+        "age": "22",
+        "city": "San Antonio",
+        "salary": "45000"
+      },
+      {
+        "name": "Frank",
+        "age": "55",
+        "city": "San Diego",
+        "salary": "85000"
+      },
+      {
+        "name": "Grace",
+        "age": "40",
+        "city": "Dallas",
+        "salary": "70000"
+      },
+      {
+        "name": "Henry",
+        "age": "65",
+        "city": "San Jose",
+        "salary": "95000"
+      },
+      {
+        "name": "EOF < /dev/null"
+      }
+    ]
+  },
+  "error": null,
+  "metadata": {
+    "execution_time": 0.0002560615539550781
+  },
+  "input_data": null,
+  "output_data": null,
+  "metrics": {
+    "duration": 0.0002560615539550781,
+    "memory_usage": 132.578125,
+    "memory_usage_mb": 132.578125,
+    "cpu_usage": 0.0,
+    "custom_metrics": {
+      "memory_delta_mb": 0.0,
+      "io_read_bytes": 0,
+      "io_write_bytes": 0,
+      "io_read_count": 0,
+      "io_write_count": 0,
+      "thread_count": 3,
+      "context_switches": 69
+    }
+  },
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

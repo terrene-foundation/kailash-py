@@ -95,7 +95,7 @@ Integration tests create test data in temporary directories. Large datasets are 
    ```bash
    # macOS
    brew install graphviz
-   
+
    # Ubuntu/Debian
    apt-get install graphviz
    ```
@@ -131,7 +131,7 @@ Integration tests are run as part of the CI/CD pipeline. Long-running performanc
 - name: Run Integration Tests
   run: |
     pytest tests/integration/ --cov=kailash
-    
+
 - name: Run Performance Tests
   if: github.ref == 'refs/heads/performance-testing'
   run: |

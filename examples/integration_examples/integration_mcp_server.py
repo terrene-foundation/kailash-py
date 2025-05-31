@@ -43,7 +43,7 @@ def registry_report() -> str:
     :return: The generated prompt.
     """
     return """
-    You are a Kailash administrator. 
+    You are a Kailash administrator.
     Generate the registry report for the current run."""
 
 

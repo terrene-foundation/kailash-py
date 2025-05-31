@@ -72,7 +72,7 @@ The implementation will include:
 
 ### Challenges
 
-1. **Performance Overhead**: 
+1. **Performance Overhead**:
    - Container startup time (1-3s per container)
    - Memory overhead (~10-50MB per container)
    - Serialization/deserialization costs for data transfer

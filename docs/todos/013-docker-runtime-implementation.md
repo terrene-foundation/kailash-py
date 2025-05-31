@@ -87,7 +87,7 @@ Created `docker_workflow_example.py` demonstrating:
 
 ## Challenges and Solutions
 
-1. **SDK Packaging**: 
+1. **SDK Packaging**:
    - Challenge: Including the SDK in Docker images
    - Solution: Created a mechanism to copy SDK files into build context
 

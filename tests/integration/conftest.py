@@ -166,14 +166,14 @@ def task_manager(temp_data_dir: Path) -> TaskManager:
 def mock_llm_response() -> str:
     """Create a mock LLM response for testing."""
     return """Based on the data analysis:
-    
+
     1. Total records: 3
     2. Average value: 200
     3. Key insights:
        - Bob has the median value
        - Charlie has the highest value at 300
        - Alice has the lowest value at 100
-    
+
     Recommendations:
     - Focus on understanding Charlie's high performance
     - Investigate why Alice's value is lower

@@ -13,11 +13,11 @@ This session successfully implemented SharePoint integration using Microsoft Gra
 ## Major Achievements
 
 ### 1. SharePoint Graph API Nodes ✅
-- **SharePointGraphReader**: 
+- **SharePointGraphReader**:
   - Operations: list_libraries, list_files, download_file, search_files
   - Stateless design for orchestration
   - JSON-serializable outputs for MongoDB
-  
+
 - **SharePointGraphWriter**:
   - Upload files with folder support
   - Custom naming and metadata
@@ -34,7 +34,7 @@ This session successfully implemented SharePoint integration using Microsoft Gra
   - All mocked, no real credentials needed
   - Comprehensive coverage of all operations
   - Proper error handling tests
-  
+
 - **Integration Tests (7)**:
   - Real SharePoint site testing
   - Upload/download verification

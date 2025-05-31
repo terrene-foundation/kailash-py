@@ -109,14 +109,14 @@ class Node(ABC):
     @abstractmethod
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define the parameters this node accepts."""
-        
+
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define output parameters for this node."""
-        
+
     @abstractmethod
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node's logic."""
-        
+
     def execute(self, **runtime_inputs) -> Dict[str, Any]:
         """Execute with validation and error handling."""
 ```
@@ -127,20 +127,20 @@ class Node(ABC):
 class Workflow:
     def __init__(self, workflow_id: str, name: str, **kwargs):
         """Create a new workflow."""
-        
-    def _add_node_internal(self, node_id: str, node_type: str, 
+
+    def _add_node_internal(self, node_id: str, node_type: str,
                          config: Optional[Dict[str, Any]] = None):
         """Add a node to the workflow (internal method)."""
-        
+
     def get_node(self, node_id: str) -> Optional[Node]:
         """Get node instance by ID."""
-        
+
     def get_execution_order(self) -> List[str]:
         """Get topological execution order for nodes."""
-        
+
     def validate(self) -> None:
         """Validate the workflow structure."""
-        
+
     def execute(self, inputs: Optional[Dict[str, Any]] = None,
               task_manager: Optional[TaskManager] = None) -> Dict[str, Any]:
         """Execute the workflow."""
@@ -152,21 +152,21 @@ class Workflow:
 class WorkflowBuilder:
     def __init__(self):
         """Initialize an empty workflow builder."""
-        
-    def add_node(self, node_type: str, node_id: Optional[str] = None, 
+
+    def add_node(self, node_type: str, node_id: Optional[str] = None,
                 config: Optional[Dict[str, Any]] = None) -> str:
         """Add a node to the workflow."""
-        
+
     def add_connection(self, from_node: str, from_output: str,
                      to_node: str, to_input: str) -> None:
         """Connect two nodes in the workflow."""
-        
+
     def build(self, workflow_id: str, **kwargs) -> Workflow:
         """Build and return a Workflow instance."""
-        
+
     def clear(self) -> "WorkflowBuilder":
         """Clear builder state."""
-        
+
     @classmethod
     def from_dict(cls, config: Dict[str, Any]) -> "WorkflowBuilder":
         """Create builder from dictionary configuration."""
@@ -178,13 +178,13 @@ class WorkflowBuilder:
 class TaskManager:
     def create_run(self, workflow_name: str, metadata: Optional[Dict] = None) -> str:
         """Create a new workflow run."""
-        
+
     def create_task(self, run_id: str, node_id: str, node_type: str) -> TaskRun:
         """Create a new task for a node execution."""
-        
+
     def get_run_summary(self, run_id: str) -> RunSummary:
         """Get a summary of a workflow run."""
-        
+
     def list_tasks(self, run_id: str) -> List[TaskSummary]:
         """List all tasks for a workflow run."""
 ```
@@ -242,11 +242,11 @@ from kailash.workflow.builder import WorkflowBuilder
 builder = WorkflowBuilder()
 
 # Add nodes
-reader_id = builder.add_node("CSVReader", "reader", 
+reader_id = builder.add_node("CSVReader", "reader",
                            {"file_path": "customers.csv", "headers": True})
-transformer_id = builder.add_node("DataTransformer", "transformer", 
+transformer_id = builder.add_node("DataTransformer", "transformer",
                                 {"transformations": ["lambda x: {**x, 'tier': 'premium' if x['value'] > 100 else 'standard'}"]})
-writer_id = builder.add_node("CSVWriter", "writer", 
+writer_id = builder.add_node("CSVWriter", "writer",
                            {"file_path": "processed_customers.csv"})
 
 # Add connections
@@ -267,18 +267,18 @@ from kailash.workflow.builder import WorkflowBuilder
 builder = WorkflowBuilder()
 
 # Add nodes
-reader_id = builder.add_node("JSONReader", "reader", 
+reader_id = builder.add_node("JSONReader", "reader",
                            {"file_path": "transactions.json"})
 
-switch_id = builder.add_node("Switch", "status_router", 
+switch_id = builder.add_node("Switch", "status_router",
                            {"field": "status", "cases": ["completed", "pending", "failed"]})
 
 # Add processing nodes for each case
-completed_id = builder.add_node("DataTransformer", "completed_processor", 
+completed_id = builder.add_node("DataTransformer", "completed_processor",
                               {"transformations": ["lambda x: {**x, 'processed': True}"]})
-pending_id = builder.add_node("DataTransformer", "pending_processor", 
+pending_id = builder.add_node("DataTransformer", "pending_processor",
                             {"transformations": ["lambda x: {**x, 'reminder_sent': True}"]})
-failed_id = builder.add_node("DataTransformer", "failed_processor", 
+failed_id = builder.add_node("DataTransformer", "failed_processor",
                            {"transformations": ["lambda x: {**x, 'retry_count': x.get('retry_count', 0) + 1}"]})
 
 # Add merge node to combine results

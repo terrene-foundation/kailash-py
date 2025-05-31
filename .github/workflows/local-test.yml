@@ -8,13 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: List files
       run: |
         ls -la
         echo "Workflow directory:"
         ls -la .github/workflows/
-    
+
     - name: Check test file
       run: |
         if [ -f "tests/test_ci_setup.py" ]; then
@@ -23,7 +23,7 @@ jobs:
         else
           echo "❌ Test file not found"
         fi
-    
+
     - name: Simple validation
       run: |
         echo "This workflow was successfully executed locally!"

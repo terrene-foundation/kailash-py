@@ -17,7 +17,7 @@ Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensi
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started
-   
+
    getting_started
    installation
    quickstart
@@ -26,7 +26,7 @@ Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensi
 .. toctree::
    :maxdepth: 2
    :caption: User Guide
-   
+
    best_practices
    troubleshooting
    performance
@@ -34,18 +34,19 @@ Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensi
 .. toctree::
    :maxdepth: 2
    :caption: API Reference
-   
+
    api/nodes
    api/workflow
    api/runtime
    api/tracking
+   api/visualization
    api/utils
    api/cli
 
 .. toctree::
    :maxdepth: 2
    :caption: Examples
-   
+
    examples/basic
    examples/advanced
    examples/integrations
@@ -54,7 +55,7 @@ Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensi
 .. toctree::
    :maxdepth: 1
    :caption: Development
-   
+
    migration_guide
    changelog
    contributing
@@ -97,9 +98,12 @@ Key Features
 
 📈 **Monitoring & Analytics**
    - Real-time task tracking
-   - Performance metrics
-   - Execution history
-   - Resource utilization
+   - Performance metrics and visualization
+   - Live monitoring dashboards with WebSocket streaming
+   - Comprehensive performance reports (HTML, Markdown, JSON)
+   - Interactive charts with Chart.js integration
+   - Resource utilization monitoring (CPU, memory, I/O)
+   - Execution history and bottleneck analysis
 
 Quick Example
 -------------
@@ -107,28 +111,28 @@ Quick Example
 .. code-block:: python
 
    from kailash import Workflow, NodeRegistry
-   
+
    # Create a simple data processing workflow
    workflow = Workflow("data_processing")
-   
+
    # Add nodes
    reader = workflow.add_node("CSVReader", "read_data", config={
        "file_path": "customers.csv"
    })
-   
+
    filter_node = workflow.add_node("DataFilter", "filter_active", config={
        "column": "status",
        "value": "active"
    })
-   
+
    writer = workflow.add_node("CSVWriter", "save_results", config={
        "file_path": "active_customers.csv"
    })
-   
+
    # Connect nodes
    workflow.add_edge("read_data", "filter_active")
    workflow.add_edge("filter_active", "save_results")
-   
+
    # Execute workflow
    results = workflow.run()
 
@@ -146,32 +150,32 @@ Architecture Overview
            E[API Nodes]
            F[Code Nodes]
        end
-       
+
        subgraph "Workflow Engine"
            G[Builder]
            H[Graph]
            I[Runner]
            J[State Manager]
        end
-       
+
        subgraph "Runtime"
            K[Local]
            L[Docker]
            M[Async]
            N[Parallel]
        end
-       
+
        A --> G
        B --> G
        C --> G
        D --> G
        E --> G
        F --> G
-       
+
        G --> H
        H --> I
        I --> J
-       
+
        I --> K
        I --> L
        I --> M

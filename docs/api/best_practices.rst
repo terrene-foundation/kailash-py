@@ -25,7 +25,7 @@ When creating custom nodes, follow these patterns:
     class MyCustomNode(Node):
         """
         Custom node for specific business logic.
-        
+
         Example:
             >>> from kailash.nodes.base import Node
             >>> node = MyCustomNode(
@@ -34,20 +34,20 @@ When creating custom nodes, follow these patterns:
             ... )
             >>> result = node.execute({"input": "data"})
         """
-        
+
         def __init__(self, node_id: str, config: Dict[str, Any]):
             super().__init__(node_id, config)
             self.config_model = MyCustomNodeConfig(**config)
-        
+
         def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
             """Execute the node logic."""
             try:
                 # Validate inputs
                 self.validate_inputs(inputs)
-                
+
                 # Process data
                 result = self._process_data(inputs)
-                
+
                 # Return structured output
                 return {
                     "success": True,
@@ -78,14 +78,14 @@ Data Handling
 
     import pandas as pd
     from pathlib import Path
-    
+
     def safe_file_read(file_path: str) -> pd.DataFrame:
         """Safely read CSV files with error handling."""
         try:
             path = Path(file_path)
             if not path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
-            
+
             return pd.read_csv(path)
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path}: {e}")
@@ -95,7 +95,7 @@ Data Handling
 .. code-block:: python
 
     import pandas as pd
-    
+
     def process_large_dataset(data: pd.DataFrame, chunk_size: int = 10000):
         """Process large datasets in chunks to manage memory."""
         for i in range(0, len(data), chunk_size):
@@ -113,20 +113,20 @@ Workflow Patterns
 .. code-block:: python
 
     from kailash.workflow.builder import WorkflowBuilder
-    
+
     def create_linear_workflow():
         """Create a simple linear processing workflow."""
         builder = WorkflowBuilder()
-        
+
         # Add nodes in sequence
         builder.add_node("reader", "CSVReader", {"file_path": "input.csv"})
         builder.add_node("processor", "DataProcessor", {"operation": "clean"})
         builder.add_node("writer", "CSVWriter", {"file_path": "output.csv"})
-        
+
         # Connect nodes
         builder.add_edge("reader", "processor")
         builder.add_edge("processor", "writer")
-        
+
         return builder.build()
 
 **Parallel Processing:**
@@ -136,23 +136,23 @@ Workflow Patterns
     def create_parallel_workflow():
         """Create workflow with parallel processing branches."""
         builder = WorkflowBuilder()
-        
+
         # Input node
         builder.add_node("input", "CSVReader", {"file_path": "data.csv"})
-        
+
         # Parallel processing branches
         builder.add_node("process_a", "ProcessorA", {})
         builder.add_node("process_b", "ProcessorB", {})
-        
+
         # Merge results
         builder.add_node("merge", "DataMerger", {})
-        
+
         # Connect parallel branches
         builder.add_edge("input", "process_a")
         builder.add_edge("input", "process_b")
         builder.add_edge("process_a", "merge")
         builder.add_edge("process_b", "merge")
-        
+
         return builder.build()
 
 **Conditional Routing:**
@@ -162,20 +162,20 @@ Workflow Patterns
     def create_conditional_workflow():
         """Create workflow with conditional logic."""
         builder = WorkflowBuilder()
-        
+
         builder.add_node("input", "CSVReader", {})
         builder.add_node("validator", "DataValidator", {})
         builder.add_node("clean_data", "DataCleaner", {})
         builder.add_node("reject_data", "DataRejector", {})
-        
+
         # Add conditional routing
         builder.add_conditional_edge(
-            "validator", 
+            "validator",
             condition=lambda x: x.get("valid", False),
             true_target="clean_data",
             false_target="reject_data"
         )
-        
+
         return builder.build()
 
 Error Handling
@@ -190,17 +190,17 @@ Node-Level Error Handling
 
     class RobustNode(Node):
         """Node with comprehensive error handling."""
-        
+
         def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 # Validate inputs
                 self._validate_inputs(inputs)
-                
+
                 # Process with retries
                 result = self._execute_with_retry(inputs)
-                
+
                 return {"success": True, "data": result}
-                
+
             except ValidationError as e:
                 return {
                     "success": False,
@@ -213,7 +213,7 @@ Node-Level Error Handling
                     "error": str(e),
                     "error_type": "execution"
                 }
-        
+
         def _execute_with_retry(self, inputs: Dict[str, Any], max_retries: int = 3):
             """Execute with retry logic."""
             for attempt in range(max_retries):
@@ -232,19 +232,19 @@ Workflow-Level Error Handling
     def create_error_resilient_workflow():
         """Create workflow with error handling and recovery."""
         builder = WorkflowBuilder()
-        
+
         # Main processing path
         builder.add_node("processor", "DataProcessor", {})
         builder.add_node("validator", "ResultValidator", {})
-        
+
         # Error handling path
         builder.add_node("error_handler", "ErrorHandler", {})
         builder.add_node("fallback", "FallbackProcessor", {})
-        
+
         # Add error routing
         builder.add_error_handler("processor", "error_handler")
         builder.add_edge("error_handler", "fallback")
-        
+
         return builder.build()
 
 Testing Strategies
@@ -257,38 +257,38 @@ Unit Testing Nodes
 
     import pytest
     from unittest.mock import Mock, patch
-    
+
     class TestMyCustomNode:
         """Test suite for MyCustomNode."""
-        
+
         def test_successful_execution(self):
             """Test successful node execution."""
             node = MyCustomNode("test_node", {"parameter": "test"})
             inputs = {"input": "test_data"}
-            
+
             result = node.execute(inputs)
-            
+
             assert result["success"] is True
             assert "data" in result
-        
+
         def test_input_validation(self):
             """Test input validation."""
             node = MyCustomNode("test_node", {"parameter": "test"})
             invalid_inputs = {}
-            
+
             result = node.execute(invalid_inputs)
-            
+
             assert result["success"] is False
             assert "error" in result
-        
+
         @patch('mymodule.external_api_call')
         def test_with_mocked_dependencies(self, mock_api):
             """Test node with mocked external dependencies."""
             mock_api.return_value = {"status": "ok"}
-            
+
             node = MyCustomNode("test_node", {"parameter": "test"})
             result = node.execute({"input": "data"})
-            
+
             mock_api.assert_called_once()
             assert result["success"] is True
 
@@ -299,19 +299,19 @@ Integration Testing Workflows
 
     class TestWorkflowIntegration:
         """Integration tests for complete workflows."""
-        
+
         def test_end_to_end_workflow(self, tmp_path):
             """Test complete workflow execution."""
             # Setup test data
             input_file = tmp_path / "input.csv"
             input_file.write_text("name,age\\nJohn,30\\nJane,25")
-            
+
             # Create workflow
             workflow = create_linear_workflow()
-            
+
             # Execute workflow
             result = workflow.execute({"input_file": str(input_file)})
-            
+
             # Verify results
             assert result["success"] is True
             assert (tmp_path / "output.csv").exists()
@@ -326,7 +326,7 @@ Memory Management
 
     import gc
     from memory_profiler import profile
-    
+
     @profile
     def memory_efficient_processing(large_dataset):
         """Process large datasets efficiently."""
@@ -334,13 +334,13 @@ Memory Management
         chunk_size = 10000
         for i in range(0, len(large_dataset), chunk_size):
             chunk = large_dataset[i:i + chunk_size]
-            
+
             # Process chunk
             processed = process_chunk(chunk)
-            
+
             # Yield results immediately
             yield processed
-            
+
             # Clean up references
             del chunk, processed
             gc.collect()
@@ -352,16 +352,16 @@ Parallel Execution
 
     from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
     import multiprocessing as mp
-    
+
     def parallel_node_execution(nodes, inputs):
         """Execute multiple nodes in parallel."""
         # Use ThreadPoolExecutor for I/O-bound tasks
         with ThreadPoolExecutor(max_workers=mp.cpu_count()) as executor:
             futures = {
-                executor.submit(node.execute, inputs): node 
+                executor.submit(node.execute, inputs): node
                 for node in nodes
             }
-            
+
             results = {}
             for future in futures:
                 node = futures[future]
@@ -369,7 +369,7 @@ Parallel Execution
                     results[node.node_id] = future.result(timeout=30)
                 except Exception as e:
                     results[node.node_id] = {"success": False, "error": str(e)}
-            
+
             return results
 
 Caching Strategies
@@ -380,28 +380,28 @@ Caching Strategies
     from functools import lru_cache
     import hashlib
     import pickle
-    
+
     from kailash.nodes.base import Node
 
     class CacheableNode(Node):
         """Node with built-in caching capabilities."""
-        
+
         def __init__(self, node_id: str, config: Dict[str, Any]):
             super().__init__(node_id, config)
             self.cache = {}
-        
+
         def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
             """Execute with caching."""
             cache_key = self._generate_cache_key(inputs)
-            
+
             if cache_key in self.cache:
                 return self.cache[cache_key]
-            
+
             result = self._execute_logic(inputs)
             self.cache[cache_key] = result
-            
+
             return result
-        
+
         def _generate_cache_key(self, inputs: Dict[str, Any]) -> str:
             """Generate cache key from inputs."""
             serialized = pickle.dumps(inputs, protocol=pickle.HIGHEST_PROTOCOL)
@@ -418,27 +418,27 @@ Performance Monitoring
     import time
     import logging
     from functools import wraps
-    
+
     def monitor_performance(func):
         """Decorator to monitor function performance."""
         @wraps(func)
         def wrapper(*args, **kwargs):
             start_time = time.time()
             memory_before = get_memory_usage()
-            
+
             try:
                 result = func(*args, **kwargs)
                 execution_time = time.time() - start_time
                 memory_after = get_memory_usage()
-                
+
                 logging.info(f"{func.__name__} completed in {execution_time:.2f}s")
                 logging.info(f"Memory usage: {memory_after - memory_before:.2f}MB")
-                
+
                 return result
             except Exception as e:
                 logging.error(f"{func.__name__} failed: {e}")
                 raise
-        
+
         return wrapper
 
 Structured Logging
@@ -449,14 +449,14 @@ Structured Logging
     import logging
     import json
     from datetime import datetime
-    
+
     class StructuredLogger:
         """Structured logging for workflow execution."""
-        
+
         def __init__(self, name: str):
             self.logger = logging.getLogger(name)
             self.logger.setLevel(logging.INFO)
-        
+
         def log_node_execution(self, node_id: str, inputs: dict, outputs: dict):
             """Log node execution details."""
             log_entry = {
@@ -467,7 +467,7 @@ Structured Logging
                 "output_size": len(str(outputs)),
                 "success": outputs.get("success", False)
             }
-            
+
             self.logger.info(json.dumps(log_entry))
 
 Security Considerations
@@ -480,20 +480,20 @@ Input Sanitization
 
     import re
     from pathlib import Path
-    
+
     def sanitize_file_path(file_path: str) -> str:
         """Sanitize file paths to prevent directory traversal."""
         # Remove dangerous patterns
         sanitized = re.sub(r'\.\./', '', file_path)
         sanitized = re.sub(r'\.\.\\', '', sanitized)
-        
+
         # Ensure path is within allowed directory
         path = Path(sanitized).resolve()
         allowed_dir = Path("/allowed/directory").resolve()
-        
+
         if not str(path).startswith(str(allowed_dir)):
             raise ValueError("Path outside allowed directory")
-        
+
         return str(path)
 
 Configuration Validation
@@ -502,19 +502,19 @@ Configuration Validation
 .. code-block:: python
 
     from pydantic import BaseModel, validator
-    
+
     class SecureNodeConfig(BaseModel):
         """Secure configuration with validation."""
-        
+
         api_key: str
         file_path: str
-        
+
         @validator('api_key')
         def validate_api_key(cls, v):
             if len(v) < 32:
                 raise ValueError('API key too short')
             return v
-        
+
         @validator('file_path')
         def validate_file_path(cls, v):
             return sanitize_file_path(v)

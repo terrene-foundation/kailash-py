@@ -131,7 +131,7 @@ def my_node(data: list) -> Dict[str, Any]:
     # Process data
     processed_count = len(data)
     error_count = sum(1 for item in data if item.get("error"))
-    
+
     # Return custom metrics
     return {
         "data": processed_data,

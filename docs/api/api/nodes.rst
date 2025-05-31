@@ -50,7 +50,7 @@ CSVReader
 .. code-block:: python
 
    from kailash import Workflow
-   
+
    workflow = Workflow("csv_example")
    workflow.add_node("CSVReader", "read_customers", config={
        "file_path": "customers.csv",
@@ -244,7 +244,7 @@ DataFilter
        "column": "status",
        "value": "active"
    })
-   
+
    # Complex filter with operator
    workflow.add_node("DataFilter", "filter_high_value", config={
        "column": "revenue",
@@ -484,27 +484,27 @@ PythonCodeNode
    workflow.add_node("PythonCodeNode", "process", config={
        "code": '''
    import pandas as pd
-   
+
    # Access input data
    df = inputs["data"]
-   
+
    # Process data
    result = df.groupby("category").agg({
        "revenue": "sum",
        "quantity": "count"
    })
-   
+
    # Return results
    return {"summary": result}
    '''
    })
-   
+
    # Execute from file
    workflow.add_node("PythonCodeNode", "analyze", config={
        "mode": "file",
        "file_path": "scripts/analysis.py"
    })
-   
+
    # Call specific function
    workflow.add_node("PythonCodeNode", "transform", config={
        "mode": "function",
@@ -525,35 +525,35 @@ Creating custom nodes is straightforward:
 
    from kailash.nodes import BaseNode
    from kailash import register_node
-   
+
    @register_node("MyCustomNode")
    class MyCustomNode(BaseNode):
        """Custom node for specific processing."""
-       
+
        def validate_config(self) -> None:
            """Validate node configuration."""
            required = ["param1", "param2"]
            for param in required:
                if param not in self.config:
                    raise ValueError(f"Missing required parameter: {param}")
-       
+
        def execute(self, inputs: dict) -> dict:
            """Execute the node logic."""
            # Access configuration
            param1 = self.config["param1"]
            param2 = self.config["param2"]
-           
+
            # Process inputs
            data = inputs.get("data")
            if data is None:
                raise ValueError("No input data provided")
-           
+
            # Your custom logic here
            result = self.process_data(data, param1, param2)
-           
+
            # Return outputs
            return {"processed_data": result}
-       
+
        def process_data(self, data, param1, param2):
            """Custom processing logic."""
            # Implementation here
@@ -565,19 +565,19 @@ For async operations:
 
    from kailash.nodes import BaseAsyncNode
    import aiohttp
-   
+
    @register_node("AsyncAPINode")
    class AsyncAPINode(BaseAsyncNode):
        """Async node for API calls."""
-       
+
        async def execute(self, inputs: dict) -> dict:
            """Execute async API call."""
            url = self.config["url"]
-           
+
            async with aiohttp.ClientSession() as session:
                async with session.get(url) as response:
                    data = await response.json()
-           
+
            return {"api_response": data}
 
 Node Configuration Best Practices
@@ -618,7 +618,7 @@ Node Configuration Best Practices
    class MyNode(BaseNode):
        """
        My custom node.
-       
+
        Config:
            file_path (str): Path to input file
            encoding (str, optional): File encoding. Defaults to 'utf-8'

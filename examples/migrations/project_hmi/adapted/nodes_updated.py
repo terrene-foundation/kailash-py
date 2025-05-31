@@ -537,7 +537,7 @@ class W1ComposeMessageNodeV2(AsyncNode):
         You are drafting a WhatsApp message to a patient.
         Your task is to fill all placeholders in the provided `template_string_to_fill`.
         You will be given the template string and three data objects: `patient_details_data`, `doctor_profile_data`, and `earliest_slot_data`.
-        
+
         The template uses placeholders that directly correspond to the keys in these data objects, nested under the object name. For example:
         - To fill `{patient_details.patient_name}`, use the `patient_name` value from the `patient_details_data` object.
         - To fill `{doctor_profile.name}`, use the `name` value from the `doctor_profile_data` object.

@@ -103,7 +103,7 @@ class {self.name}({self.base_class}):
     \"""
     {self.description}
     \"""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         \"""Define node parameters.\"""
         return {{
@@ -127,13 +127,13 @@ class {self.name}({self.base_class}):
 """
 
             code += """        }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         \"""Process node logic.
-        
+
         Args:
             **kwargs: Input parameters
-            
+
         Returns:
             Output parameters
         \"""
@@ -145,7 +145,7 @@ class {self.name}({self.base_class}):
             else:
                 code += """        # TODO: Implement node logic
         # Access input parameters via kwargs
-        
+
         # Return results as a dictionary
         return {
 """
@@ -390,7 +390,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 @register_node()
 class CustomProcessor(Node):
     """A custom data processing node."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
@@ -407,11 +407,11 @@ class CustomProcessor(Node):
                 description="Value multiplier"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         data = kwargs["data"]
         multiplier = kwargs.get("multiplier", 1.0)
-        
+
         # Process data
         processed = []
         for item in data:
@@ -421,7 +421,7 @@ class CustomProcessor(Node):
                 processed.append(new_item)
             else:
                 processed.append(item)
-        
+
         return {"processed_data": processed}
 '''
         (project_root / "nodes" / "custom_nodes.py").write_text(node_content)
@@ -540,7 +540,7 @@ from kailash.workflow import Workflow
 from kailash.nodes.data import CSVReader, JSONWriter
 from kailash.nodes.transform import Filter, Map
 from kailash.nodes.ai import (
-    TextClassifier, 
+    TextClassifier,
     SentimentAnalyzer,
     NamedEntityRecognizer,
     TextSummarizer
@@ -560,7 +560,7 @@ workflow.add_node("extract_text", Map(), field="content")
 
 # ML processing
 workflow.add_node("sentiment", SentimentAnalyzer(), language="en")
-workflow.add_node("classify", TextClassifier(), 
+workflow.add_node("classify", TextClassifier(),
                   categories=["tech", "business", "health", "other"])
 workflow.add_node("extract_entities", NamedEntityRecognizer(),
                   entity_types=["PERSON", "ORGANIZATION", "LOCATION"])
@@ -619,7 +619,7 @@ workflow = Workflow(
 workflow.add_node("read_config", JSONReader(), file_path="data/api_config.json")
 
 # Process with AI agent
-workflow.add_node("chat_agent", ChatAgent(), 
+workflow.add_node("chat_agent", ChatAgent(),
                   model="default",
                   system_prompt="You are a helpful API integration assistant.")
 

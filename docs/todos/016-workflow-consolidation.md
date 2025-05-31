@@ -64,7 +64,7 @@ The following components were updated to work with the consolidated implementati
 All tests are now passing with the consolidated implementation:
 - Unit tests for the Workflow class
 - Integration tests for workflow execution
-- Visualization tests 
+- Visualization tests
 - Tests for the WorkflowBuilder
 
 ## Next Steps

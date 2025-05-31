@@ -1,0 +1,201 @@
+{
+  "tasks": {
+    "3d2bc7de-b72b-498d-bbb6-822e2f43e246": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.608902+00:00",
+      "ended_at": "2025-05-31T00:58:50.609803+00:00"
+    },
+    "cb70619d-742e-485a-888b-4effdceedf56": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.610304+00:00",
+      "ended_at": "2025-05-31T00:58:50.610800+00:00"
+    },
+    "219eb88c-c445-4697-bb5e-f5f7f50a3ed2": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.611229+00:00",
+      "ended_at": "2025-05-31T00:58:50.611701+00:00"
+    },
+    "d9711be2-46fa-415b-9747-43c8f7dca0b8": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.612174+00:00",
+      "ended_at": "2025-05-31T00:58:50.612671+00:00"
+    },
+    "54d21b8e-1092-4140-9083-6d8b1fd3e18f": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.613072+00:00",
+      "ended_at": "2025-05-31T00:58:50.613618+00:00"
+    },
+    "55dbf480-e866-4462-bf70-b1e49f76dbbb": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.613989+00:00",
+      "ended_at": "2025-05-31T00:58:50.614548+00:00"
+    },
+    "2fdd69bf-4932-4960-982f-5c9d77fb2ef1": {
+      "run_id": "37f0ab82-cf39-450a-9292-d33e5fcb31f9",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T00:58:50.614910+00:00",
+      "ended_at": "2025-05-31T00:58:50.615790+00:00"
+    },
+    "d8d7e67d-236f-40c9-b274-0d1dc0f03754": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.566144+00:00",
+      "ended_at": "2025-05-31T02:41:48.567272+00:00"
+    },
+    "de68dce0-a980-4e97-b1cc-c785fda287e7": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.567968+00:00",
+      "ended_at": "2025-05-31T02:41:48.569018+00:00"
+    },
+    "b2a8765a-da34-4dad-bdf4-0ccc29bce6e1": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.569557+00:00",
+      "ended_at": "2025-05-31T02:41:48.570148+00:00"
+    },
+    "8eadd619-0aab-43b1-8e30-40b0fc9c43ee": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.570693+00:00",
+      "ended_at": "2025-05-31T02:41:48.571177+00:00"
+    },
+    "804362a7-3165-49fa-b5a9-a200bd336dd7": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.571577+00:00",
+      "ended_at": "2025-05-31T02:41:48.572179+00:00"
+    },
+    "3857b100-1067-4151-a700-ffac6d61a226": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.572643+00:00",
+      "ended_at": "2025-05-31T02:41:48.573285+00:00"
+    },
+    "dfe9d114-e8a8-43ae-837f-b77dba158a64": {
+      "run_id": "47374696-0a25-4c95-937b-1dd0aec5c2f6",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:48.573742+00:00",
+      "ended_at": "2025-05-31T02:41:48.574323+00:00"
+    },
+    "7d513f9e-d5d8-4c98-a298-8868b49209a1": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.400459+00:00",
+      "ended_at": "2025-05-31T02:43:04.401852+00:00"
+    },
+    "f18b6a4b-9a1b-4033-a216-66fffa7cc6c0": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.402551+00:00",
+      "ended_at": "2025-05-31T02:43:04.403570+00:00"
+    },
+    "486afff9-02f9-4b4d-a16e-4bfe6d96d531": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.404240+00:00",
+      "ended_at": "2025-05-31T02:43:04.404989+00:00"
+    },
+    "c1c2dcdc-55fd-461a-8bf7-51352d373662": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.405710+00:00",
+      "ended_at": "2025-05-31T02:43:04.406640+00:00"
+    },
+    "75d241ed-549b-4b33-8c79-16a254fa1be9": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.407177+00:00",
+      "ended_at": "2025-05-31T02:43:04.407856+00:00"
+    },
+    "4e25ddd9-8067-438b-8d0b-7703214ac43c": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.408416+00:00",
+      "ended_at": "2025-05-31T02:43:04.409072+00:00"
+    },
+    "99127a10-e083-4a34-912a-9fb234c7c0a3": {
+      "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:43:04.409621+00:00",
+      "ended_at": "2025-05-31T02:43:04.410243+00:00"
+    },
+    "e158267a-9c89-436e-8d95-ee588f98da01": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.236433+00:00",
+      "ended_at": "2025-05-31T04:58:27.238108+00:00"
+    },
+    "41028ba2-725c-49b0-a6ad-95abc85b0204": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.239050+00:00",
+      "ended_at": "2025-05-31T04:58:27.240001+00:00"
+    },
+    "0188316c-eeb0-4448-83f0-1388131ba0f5": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.240802+00:00",
+      "ended_at": "2025-05-31T04:58:27.241598+00:00"
+    },
+    "bc32f945-ddd7-4574-b651-33965879cf39": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.242403+00:00",
+      "ended_at": "2025-05-31T04:58:27.243350+00:00"
+    },
+    "2490c3a1-c5c1-4673-8fd6-1cceb905aad7": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.244082+00:00",
+      "ended_at": "2025-05-31T04:58:27.245073+00:00"
+    },
+    "f3200491-f88d-48ca-b11e-b97a00812ae1": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.245822+00:00",
+      "ended_at": "2025-05-31T04:58:27.246721+00:00"
+    },
+    "6bff4ade-505a-4540-a4aa-2f40e19b31f4": {
+      "run_id": "ff3eeadf-9066-477d-b89d-d667cc3d7951",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:27.247294+00:00",
+      "ended_at": "2025-05-31T04:58:27.248028+00:00"
+    }
+  },
+  "runs": {}
+}

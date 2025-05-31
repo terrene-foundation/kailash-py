@@ -14,7 +14,7 @@ Overview
 The visualization system provides comprehensive real-time monitoring and performance analysis for workflow execution:
 
 - **Real-time Dashboards**: Live monitoring with streaming metrics
-- **Performance Reports**: Multi-format comprehensive reports  
+- **Performance Reports**: Multi-format comprehensive reports
 - **Interactive Charts**: Chart.js integration for web dashboards
 - **API Access**: REST and WebSocket endpoints for custom integrations
 - **Resource Monitoring**: CPU, memory, and I/O tracking
@@ -124,7 +124,7 @@ Basic Real-time Monitoring
    from kailash.visualization.dashboard import RealTimeDashboard, DashboardConfig
    from kailash.tracking import TaskManager
    from kailash.runtime.local import LocalRuntime
-   
+
    # Setup components
    task_manager = TaskManager()
    config = DashboardConfig(
@@ -133,17 +133,17 @@ Basic Real-time Monitoring
        auto_refresh=True,
        theme="light"
    )
-   
+
    # Create dashboard
    dashboard = RealTimeDashboard(task_manager, config)
-   
+
    # Start monitoring
    dashboard.start_monitoring()
-   
+
    # Execute workflow with monitoring
    runtime = LocalRuntime()
    results, run_id = runtime.execute(workflow, task_manager)
-   
+
    # Generate live dashboard
    dashboard.generate_live_report("dashboard.html", include_charts=True)
    dashboard.stop_monitoring()
@@ -154,10 +154,10 @@ Performance Report Generation
 .. code-block:: python
 
    from kailash.visualization.reports import WorkflowPerformanceReporter, ReportFormat
-   
+
    # Create reporter
    reporter = WorkflowPerformanceReporter(task_manager)
-   
+
    # Generate comprehensive HTML report
    report_path = reporter.generate_report(
        run_id,
@@ -165,7 +165,7 @@ Performance Report Generation
        format=ReportFormat.HTML,
        compare_runs=[previous_run_id]
    )
-   
+
    # Generate Markdown report
    md_report = reporter.generate_report(
        run_id,
@@ -178,18 +178,18 @@ API-based Monitoring
 .. code-block:: python
 
    from kailash.visualization.api import SimpleDashboardAPI
-   
+
    # Create API interface
    api = SimpleDashboardAPI(task_manager)
    api.start_monitoring()
-   
+
    # Get current metrics
    metrics = api.get_current_metrics()
    print(f"Active tasks: {metrics['active_tasks']}")
-   
+
    # Get historical data
    history = api.get_metrics_history(minutes=30)
-   
+
    # Stop monitoring
    api.stop_monitoring()
 
@@ -200,14 +200,14 @@ WebSocket Streaming Server
 
    from kailash.visualization.api import DashboardAPIServer
    import asyncio
-   
+
    # Create server
    server = DashboardAPIServer(task_manager, port=8000)
-   
+
    # Start server (runs async)
    async def run_server():
        await server.start()
-   
+
    # In your client (JavaScript):
    # const ws = new WebSocket('ws://localhost:8000/api/v1/metrics/stream');
    # ws.onmessage = (event) => {
@@ -223,13 +223,13 @@ Real-time Callbacks
    # Add custom callbacks for real-time events
    def on_metrics_update(metrics):
        print(f"CPU: {metrics.total_cpu_usage:.1f}%, Memory: {metrics.total_memory_usage:.1f}MB")
-   
+
    def on_status_change(event_type, count):
        if event_type == "task_completed":
            print(f"✅ {count} task(s) completed")
        elif event_type == "task_failed":
            print(f"❌ {count} task(s) failed")
-   
+
    dashboard.add_metrics_callback(on_metrics_update)
    dashboard.add_status_callback(on_status_change)
 
@@ -275,38 +275,38 @@ The visualization system follows a modular architecture:
            B[LiveMetrics]
            C[DashboardConfig]
        end
-       
+
        subgraph "Reporting Layer"
            D[WorkflowPerformanceReporter]
            E[PerformanceInsight]
            F[ReportFormat]
        end
-       
+
        subgraph "API Layer"
            G[SimpleDashboardAPI]
            H[DashboardAPIServer]
            I[WebSocket Streaming]
        end
-       
+
        subgraph "Static Analysis"
            J[PerformanceVisualizer]
            K[Chart Generation]
            L[Metrics Analysis]
        end
-       
+
        A --> B
        A --> C
        A --> G
-       
+
        D --> E
        D --> F
-       
+
        G --> H
        H --> I
-       
+
        J --> K
        J --> L
-       
+
        A --> D
        G --> J
 

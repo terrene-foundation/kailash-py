@@ -10,7 +10,7 @@
 ### 2. Expand docstrings in nodes/data/ directory
 - **Status**: ✅ Completed
 - **Description**: Enhanced documentation for all reader and writer nodes following the same comprehensive pattern
-- **Files Changed**: 
+- **Files Changed**:
   - `src/kailash/nodes/data/readers.py`
   - `src/kailash/nodes/data/writers.py`
   - `src/kailash/nodes/data/__init__.py`

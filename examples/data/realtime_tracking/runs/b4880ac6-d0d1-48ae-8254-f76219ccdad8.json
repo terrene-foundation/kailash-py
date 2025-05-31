@@ -1,0 +1,22 @@
+{
+  "run_id": "b4880ac6-d0d1-48ae-8254-f76219ccdad8",
+  "workflow_name": "Real-time Demo Workflow",
+  "status": "completed",
+  "started_at": "2025-05-31T02:43:04.399879+00:00",
+  "ended_at": "2025-05-31T02:43:04.410812+00:00",
+  "tasks": [
+    "7d513f9e-d5d8-4c98-a298-8868b49209a1",
+    "f18b6a4b-9a1b-4033-a216-66fffa7cc6c0",
+    "486afff9-02f9-4b4d-a16e-4bfe6d96d531",
+    "c1c2dcdc-55fd-461a-8bf7-51352d373662",
+    "75d241ed-549b-4b33-8c79-16a254fa1be9",
+    "4e25ddd9-8067-438b-8d0b-7703214ac43c",
+    "99127a10-e083-4a34-912a-9fb234c7c0a3"
+  ],
+  "metadata": {
+    "parameters": null,
+    "debug": false,
+    "runtime": "local"
+  },
+  "error": null
+}

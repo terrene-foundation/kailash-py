@@ -54,7 +54,7 @@ state_wrapper = workflow.create_state_wrapper(state)
 
 # Single update
 updated_wrapper = state_wrapper.update_in(
-    ["w1_context", "ranked_doctors_list"], 
+    ["w1_context", "ranked_doctors_list"],
     ranked_doctors
 )
 

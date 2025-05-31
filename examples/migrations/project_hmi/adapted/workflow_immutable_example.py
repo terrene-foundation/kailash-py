@@ -276,7 +276,7 @@ async def run_fully_mocked():
         """
     return {
         "state_wrapper": state_wrapper.update_in(
-            ["w1_context", "ranked_doctors_list"], 
+            ["w1_context", "ranked_doctors_list"],
             ranked_doctors
         )
     }

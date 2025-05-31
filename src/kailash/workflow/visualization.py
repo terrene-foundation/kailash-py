@@ -3,7 +3,6 @@
 import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -363,8 +362,8 @@ class WorkflowVisualizer:
         newline_joined = "\n".join(new_lines)
         markdown_content = f"""# Workflow Execution Status
 
-**Run ID**: `{run_id}`  
-**Workflow**: {self.workflow.name}  
+**Run ID**: `{run_id}`
+**Workflow**: {self.workflow.name}
 **Timestamp**: {task_manager.get_run(run_id).started_at if hasattr(task_manager, 'get_run') else 'N/A'}
 
 ## Execution Diagram
@@ -514,7 +513,7 @@ class WorkflowVisualizer:
 <body>
     <div class="container">
         <h1>Performance Dashboard - Run {run_id}</h1>
-        
+
         <div class="section">
             <h2>Workflow Execution</h2>
             <p>View the workflow execution graph and task status:</p>
@@ -522,7 +521,7 @@ class WorkflowVisualizer:
                 View Workflow Graph
             </a>
         </div>
-        
+
         <div class="section">
             <h2>Performance Metrics</h2>
             <div class="image-grid">
@@ -550,7 +549,7 @@ class WorkflowVisualizer:
         html_content += """
             </div>
         </div>
-        
+
         <div class="section">
             <h2>Detailed Report</h2>
             <p>View the comprehensive performance analysis report:</p>

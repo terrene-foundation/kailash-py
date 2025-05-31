@@ -46,10 +46,10 @@ For additional features, install with extras:
 
    # For API testing support
    pip install kailash[api-testing]
-   
+
    # For development tools
    pip install kailash[dev]
-   
+
    # For all optional dependencies
    pip install kailash[all]
 
@@ -101,7 +101,7 @@ Step 3: Add Nodes
            "file_path": "customers.csv"
        }
    )
-   
+
    # Add a data filter node
    filter_node = workflow.add_node(
        node_type="DataFilter",
@@ -112,7 +112,7 @@ Step 3: Add Nodes
            "operation": "equals"
        }
    )
-   
+
    # Add a CSV writer node
    writer = workflow.add_node(
        node_type="CSVWriter",
@@ -138,7 +138,7 @@ Step 5: Execute the Workflow
 
    # Run the workflow
    results = workflow.run()
-   
+
    # Check the results
    print(f"Workflow completed: {results.get('success')}")
    print(f"Output saved to: active_customers.csv")
@@ -151,31 +151,31 @@ Here's the complete script:
 .. code-block:: python
 
    from kailash import Workflow
-   
+
    # Create and configure workflow
    workflow = Workflow("customer_processing")
-   
+
    # Add nodes
    workflow.add_node("CSVReader", "read_data", config={
        "file_path": "customers.csv"
    })
-   
+
    workflow.add_node("DataFilter", "filter_active", config={
        "column": "status",
        "value": "active"
    })
-   
+
    workflow.add_node("CSVWriter", "save_data", config={
        "file_path": "active_customers.csv"
    })
-   
+
    # Connect nodes
    workflow.add_edge("read_data", "filter_active")
    workflow.add_edge("filter_active", "save_data")
-   
+
    # Execute
    results = workflow.run()
-   
+
    if results["success"]:
        print("Workflow completed successfully!")
    else:
@@ -261,12 +261,12 @@ Data Processing Pipeline
 .. code-block:: python
 
    workflow = Workflow("etl_pipeline")
-   
+
    # Extract
    workflow.add_node("CSVReader", "extract", config={
        "file_path": "raw_data.csv"
    })
-   
+
    # Transform
    workflow.add_node("DataTransformer", "transform", config={
        "operations": [
@@ -275,13 +275,13 @@ Data Processing Pipeline
            {"type": "filter", "condition": "amount > 0"}
        ]
    })
-   
+
    # Load
    workflow.add_node("SQLWriter", "load", config={
        "connection_string": "postgresql://...",
        "table_name": "processed_data"
    })
-   
+
    workflow.connect_sequential(["extract", "transform", "load"])
    workflow.run()
 
@@ -291,24 +291,24 @@ API Integration
 .. code-block:: python
 
    workflow = Workflow("api_integration")
-   
+
    # Read input data
    workflow.add_node("JSONReader", "read_requests", config={
        "file_path": "api_requests.json"
    })
-   
+
    # Make API calls
    workflow.add_node("RESTClient", "call_api", config={
        "base_url": "https://api.example.com",
        "method": "POST",
        "endpoint": "/process"
    })
-   
+
    # Save responses
    workflow.add_node("JSONWriter", "save_responses", config={
        "file_path": "api_responses.json"
    })
-   
+
    workflow.connect_sequential(["read_requests", "call_api", "save_responses"])
    workflow.run()
 

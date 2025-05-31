@@ -1,0 +1,11 @@
+[
+  {
+    "timestamp": "2025-05-31T12:58:27.747741",
+    "active": 0,
+    "completed": 7,
+    "failed": 0,
+    "cpu": 0.0,
+    "memory": 933.4,
+    "throughput": 0.0
+  }
+]

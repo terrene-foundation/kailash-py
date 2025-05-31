@@ -1,0 +1,17 @@
+{
+  "run_id": "503d92e7-5bb5-4499-a382-661945200fa6",
+  "workflow_name": "Dashboard Demo Workflow",
+  "status": "failed",
+  "started_at": "2025-05-31T00:57:00.336355+00:00",
+  "ended_at": "2025-05-31T00:57:00.342378+00:00",
+  "tasks": [
+    "3c867048-8155-4c25-8a59-d99225ef17cb",
+    "26a5af95-d2df-4022-87bd-f9a5815afc19"
+  ],
+  "metadata": {
+    "parameters": null,
+    "debug": false,
+    "runtime": "local"
+  },
+  "error": "Node 'data_filter' failed: Node 'data_filter' execution failed: KeyError: 'data'"
+}

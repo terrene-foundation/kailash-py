@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-05-31T08:57:53.323504",
+  "current_metrics": {
+    "timestamp": "2025-05-31T08:57:51.827318",
+    "active_tasks": 0,
+    "completed_tasks": 3,
+    "failed_tasks": 0,
+    "total_cpu_usage": 0.0,
+    "total_memory_usage": 381.59375,
+    "throughput": 0.0,
+    "avg_task_duration": 0.00021855036417643228
+  },
+  "history": [
+    {
+      "timestamp": "2025-05-31T08:57:51.827318",
+      "active_tasks": 0,
+      "completed_tasks": 3,
+      "failed_tasks": 0,
+      "total_cpu_usage": 0.0,
+      "total_memory_usage": 381.59375,
+      "throughput": 0.0,
+      "avg_task_duration": 0.00021855036417643228
+    }
+  ],
+  "config": {
+    "update_interval": 1.0,
+    "theme": "light",
+    "monitoring_active": false
+  }
+}

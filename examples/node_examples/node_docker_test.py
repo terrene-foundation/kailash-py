@@ -154,27 +154,27 @@ def main():
     node_config_path = Path("/app/node.json")
     with open(node_config_path, 'r') as f:
         node_data = json.load(f)
-    
+
     # Load runtime inputs if available
     runtime_inputs_path = Path("/data/inputs.json")
     runtime_inputs = {}
     if runtime_inputs_path.exists():
         with open(runtime_inputs_path, 'r') as f:
             runtime_inputs = json.load(f)
-    
+
     # Dynamically import and instantiate the node
     module_name = node_data["module"]
     class_name = node_data["class"]
-    
+
     module = importlib.import_module(module_name)
     node_class = getattr(module, class_name)
-    
+
     # Create node instance (simplified - would need actual parameter parsing)
     node = node_class(name=node_data["name"])
-    
+
     # Execute node
     result = node.run(**runtime_inputs)
-    
+
     # Save results
     os.makedirs("/data/output", exist_ok=True)
     with open("/data/output/result.json", 'w') as f:
@@ -184,7 +184,7 @@ def main():
         except TypeError:
             # Simplified handling - would need better serialization
             json.dump({"result": str(result)}, f, indent=2)
-    
+
     print(f"Node {node_data['name']} execution completed")
     return 0
 

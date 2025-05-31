@@ -18,7 +18,7 @@ class AsyncNode(Node):
         """Asynchronous execution method for the node."""
         # Default implementation calls the synchronous run() method
         return self.run(**kwargs)
-        
+
     async def execute_async(self, **runtime_inputs) -> Dict[str, Any]:
         """Execute with validation and error handling in async context."""
         # Similar to execute() but async
@@ -64,7 +64,7 @@ class AsyncSwitch(AsyncNode):
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         # Async implementation of switch node
         # ...
-        
+
     async def _evaluate_condition(self, check_value: Any, operator: str, compare_value: Any) -> bool:
         # Async condition evaluation
         # ...
@@ -80,11 +80,11 @@ class ParallelRuntime:
         """Initialize the parallel runtime."""
         self.max_workers = max_workers
         # ...
-        
+
     async def execute(self, workflow: Workflow, **kwargs) -> Tuple[Dict[str, Any], Optional[str]]:
         """Execute a workflow with parallel node execution."""
         # ...
-        
+
     async def _execute_workflow_parallel(self, workflow: Workflow, **kwargs) -> Dict[str, Any]:
         """Execute nodes in parallel where possible."""
         # Dynamic scheduling based on dependency resolution

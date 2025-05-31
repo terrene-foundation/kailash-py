@@ -1,0 +1,409 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Performance Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+
+        .report-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .report-header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .report-header h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+
+        .run-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-item .label {
+            font-weight: bold;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .info-item .value {
+            font-size: 1.1em;
+            color: #2c3e50;
+        }
+
+        .status-completed { color: #27ae60; }
+        .status-failed { color: #e74c3c; }
+        .status-running { color: #3498db; }
+
+        section {
+            background: white;
+            margin-bottom: 30px;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        section h2 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .summary-card {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #ecf0f1;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+            display: block;
+        }
+
+        .efficiency-score {
+            color: #27ae60;
+        }
+
+        .metric-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .insights-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .insight-item {
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .insight-item.severity-high {
+            border-left-color: #e74c3c;
+        }
+
+        .insight-item.severity-medium {
+            border-left-color: #f39c12;
+        }
+
+        .insight-item.severity-low {
+            border-left-color: #27ae60;
+        }
+
+        .insight-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .insight-icon {
+            font-size: 1.2em;
+        }
+
+        .insight-header h4 {
+            flex: 1;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .severity-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: white;
+        }
+
+        .severity-high {
+            background: #e74c3c;
+        }
+
+        .severity-medium {
+            background: #f39c12;
+        }
+
+        .severity-low {
+            background: #27ae60;
+        }
+
+        .description {
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .recommendation {
+            color: #2c3e50;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .chart-item {
+            text-align: center;
+        }
+
+        .chart-item h4 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .chart-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ecf0f1;
+            border-radius: 8px;
+        }
+
+        .trends-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .trend-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .trend-icon {
+            font-size: 1.5em;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .trend-label {
+            display: block;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .trend-value {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .comparison-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .report-footer {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9em;
+            padding: 20px;
+            border-top: 1px solid #ecf0f1;
+        }
+        </style>
+</head>
+<body>
+    <div class="report-container">
+
+        <header class="report-header">
+            <h1>🚀 Workflow Performance Report</h1>
+            <div class="run-info">
+                <div class="info-item">
+                    <span class="label">Run ID:</span>
+                    <span class="value">732fb8a1-a102-43a2-8222-6a9d52fe28f5</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Workflow:</span>
+                    <span class="value">Simple Dashboard Demo</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Started:</span>
+                    <span class="value">2025-05-31 04:58:32.253550+00:00</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Status:</span>
+                    <span class="value status-completed">completed</span>
+                </div>
+            </div>
+        </header>
+
+
+        <section class="executive-summary">
+            <h2>📊 Executive Summary</h2>
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="metric-value">3</div>
+                    <div class="metric-label">Total Tasks</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value">3</div>
+                    <div class="metric-label">Completed</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value">0</div>
+                    <div class="metric-label">Failed</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value">0.0s</div>
+                    <div class="metric-label">Duration</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value">0.0%</div>
+                    <div class="metric-label">Avg CPU</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value">133MB</div>
+                    <div class="metric-label">Peak Memory</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value">240975.0</div>
+                    <div class="metric-label">Tasks/Min</div>
+                </div>
+                <div class="summary-card">
+                    <div class="metric-value efficiency-score">100/100</div>
+                    <div class="metric-label">Efficiency Score</div>
+                </div>
+            </div>
+        </section>
+
+
+            <section class="insights-section">
+                <h2>💡 Performance Insights</h2>
+                <div class="insights-container">
+
+                <div class="insight-item severity-medium">
+                    <div class="insight-header">
+                        <span class="insight-icon">🔍</span>
+                        <h4>Execution Time Bottleneck</h4>
+                        <span class="severity-badge severity-medium">medium</span>
+                    </div>
+                    <div class="insight-content">
+                        <p class="description">Task writer (CSVWriter) is taking 0.00s, significantly longer than average.</p>
+                        <p class="recommendation"><strong>Recommendation:</strong> Consider optimizing this task or running it in parallel with other operations.</p>
+                    </div>
+                </div>
+
+                <div class="insight-item severity-medium">
+                    <div class="insight-header">
+                        <span class="insight-icon">🔍</span>
+                        <h4>High Memory Usage</h4>
+                        <span class="severity-badge severity-medium">medium</span>
+                    </div>
+                    <div class="insight-content">
+                        <p class="description">Task writer is using 132.7MB of memory.</p>
+                        <p class="recommendation"><strong>Recommendation:</strong> Consider processing data in chunks or optimizing data structures to reduce memory footprint.</p>
+                    </div>
+                </div>
+
+                </div>
+            </section>
+
+
+            <section class="charts-section">
+                <h2>📈 Performance Visualizations</h2>
+                <div class="charts-grid">
+
+                <div class="chart-item">
+                    <h4>Execution Timeline</h4>
+                    <img src="./repos/projects/kailash_python_sdk/examples/outputs/performance/timeline_732fb8a1-a102-43a2-8222-6a9d52fe28f5.png" alt="execution_timeline" class="chart-image">
+                </div>
+
+                <div class="chart-item">
+                    <h4>Resource Usage</h4>
+                    <img src="./repos/projects/kailash_python_sdk/examples/outputs/performance/resources_732fb8a1-a102-43a2-8222-6a9d52fe28f5.png" alt="resource_usage" class="chart-image">
+                </div>
+
+                <div class="chart-item">
+                    <h4>Performance Comparison</h4>
+                    <img src="./repos/projects/kailash_python_sdk/examples/outputs/performance/comparison_732fb8a1-a102-43a2-8222-6a9d52fe28f5.png" alt="performance_comparison" class="chart-image">
+                </div>
+
+                <div class="chart-item">
+                    <h4>Io Analysis</h4>
+                    <img src="./repos/projects/kailash_python_sdk/examples/outputs/performance/io_analysis_732fb8a1-a102-43a2-8222-6a9d52fe28f5.png" alt="io_analysis" class="chart-image">
+                </div>
+
+                <div class="chart-item">
+                    <h4>Performance Heatmap</h4>
+                    <img src="./repos/projects/kailash_python_sdk/examples/outputs/performance/heatmap_732fb8a1-a102-43a2-8222-6a9d52fe28f5.png" alt="performance_heatmap" class="chart-image">
+                </div>
+
+                <div class="chart-item">
+                    <h4>Report</h4>
+                    <img src="./repos/projects/kailash_python_sdk/examples/outputs/performance/report_732fb8a1-a102-43a2-8222-6a9d52fe28f5.md" alt="report" class="chart-image">
+                </div>
+
+                </div>
+            </section>
+
+
+
+        <footer class="report-footer">
+            <p>Generated on 2025-05-31 12:58:35 by Kailash Workflow Performance Reporter</p>
+        </footer>
+    </div>
+</body>
+</html>

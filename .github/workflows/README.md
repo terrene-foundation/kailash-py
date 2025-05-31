@@ -24,7 +24,7 @@ This repository uses a unified CI pipeline that intelligently avoids duplicate t
     - Security scanning
     - Example validation
     - PR summary with bot comments
-- **Duration**: 
+- **Duration**:
   - Basic: ~2-3 minutes
   - Full: ~5-10 minutes
 

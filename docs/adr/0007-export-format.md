@@ -22,7 +22,7 @@ metadata:
   version: 1.0.0
   author: Author Name
   created_at: 2024-01-01T00:00:00
-  
+
 nodes:
   node_id:
     type: NodeType
@@ -30,7 +30,7 @@ nodes:
       param1: value1
       param2: ${ENV_VAR}
     position: [x, y]
-    
+
 connections:
   - from: source_node.output_field
     to: target_node.input_field

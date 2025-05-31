@@ -1,0 +1,124 @@
+{
+  "tasks": {
+    "3c867048-8155-4c25-8a59-d99225ef17cb": {
+      "run_id": "503d92e7-5bb5-4499-a382-661945200fa6",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:00.336557+00:00",
+      "ended_at": "2025-05-31T00:57:00.337651+00:00"
+    },
+    "26a5af95-d2df-4022-87bd-f9a5815afc19": {
+      "run_id": "503d92e7-5bb5-4499-a382-661945200fa6",
+      "node_id": "data_filter",
+      "status": "failed",
+      "started_at": "2025-05-31T00:57:00.338135+00:00",
+      "ended_at": "2025-05-31T00:57:00.342050+00:00"
+    },
+    "61e2b26b-7cc2-45a2-85fe-5b35a46244cd": {
+      "run_id": "6dad4c8f-f275-470b-99f0-98566f5c082c",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:13.806315+00:00",
+      "ended_at": "2025-05-31T00:57:13.809454+00:00"
+    },
+    "32ce7fa1-b479-4de2-975a-66fda2df9ce1": {
+      "run_id": "6dad4c8f-f275-470b-99f0-98566f5c082c",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:13.809919+00:00",
+      "ended_at": "2025-05-31T00:57:13.810402+00:00"
+    },
+    "6304b709-c71b-40d7-94f2-8da6859c7072": {
+      "run_id": "6dad4c8f-f275-470b-99f0-98566f5c082c",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:13.810897+00:00",
+      "ended_at": "2025-05-31T00:57:13.811535+00:00"
+    },
+    "d32509ad-cfc7-4154-956d-b47fc0f97dd8": {
+      "run_id": "36f4cbc7-e8a0-496e-98a2-57940b291f1e",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:43.281635+00:00",
+      "ended_at": "2025-05-31T00:57:43.282904+00:00"
+    },
+    "300b89f4-bff1-4122-9250-b8e7ca5e658b": {
+      "run_id": "36f4cbc7-e8a0-496e-98a2-57940b291f1e",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:43.283666+00:00",
+      "ended_at": "2025-05-31T00:57:43.284413+00:00"
+    },
+    "2a930f7a-44c3-4fe4-9cce-8569511a078c": {
+      "run_id": "36f4cbc7-e8a0-496e-98a2-57940b291f1e",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T00:57:43.284949+00:00",
+      "ended_at": "2025-05-31T00:57:43.285550+00:00"
+    },
+    "f6ce7f7c-878d-4ada-95da-7c53cbb8d725": {
+      "run_id": "f59fc726-52d4-42c2-9679-0ba660292cd6",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:43.546163+00:00",
+      "ended_at": "2025-05-31T02:41:43.547679+00:00"
+    },
+    "03db27c0-4cd6-414e-9c1b-08c00b3cc4b3": {
+      "run_id": "f59fc726-52d4-42c2-9679-0ba660292cd6",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:43.548677+00:00",
+      "ended_at": "2025-05-31T02:41:43.549499+00:00"
+    },
+    "5122f9bc-4367-4e00-968d-943432855b3c": {
+      "run_id": "f59fc726-52d4-42c2-9679-0ba660292cd6",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:41:43.550166+00:00",
+      "ended_at": "2025-05-31T02:41:43.550713+00:00"
+    },
+    "3a646a91-876f-46c7-ad0f-c00226140a94": {
+      "run_id": "634d8aaa-85b1-4818-ba3d-8c0b019a9c6e",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T02:42:41.270502+00:00",
+      "ended_at": "2025-05-31T02:42:41.272258+00:00"
+    },
+    "d9aa8c7b-3b05-4063-b5a4-3d31529138f8": {
+      "run_id": "634d8aaa-85b1-4818-ba3d-8c0b019a9c6e",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T02:42:41.273305+00:00",
+      "ended_at": "2025-05-31T02:42:41.274270+00:00"
+    },
+    "fc8e3a2f-9367-44cb-9c39-bf018a6f7615": {
+      "run_id": "634d8aaa-85b1-4818-ba3d-8c0b019a9c6e",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T02:42:41.275176+00:00",
+      "ended_at": "2025-05-31T02:42:41.276225+00:00"
+    },
+    "7c649e8b-feca-436f-b0a9-1d9d8044bbb8": {
+      "run_id": "3315f015-930b-4ff9-a93b-dd19719e0605",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:22.242416+00:00",
+      "ended_at": "2025-05-31T04:58:22.244149+00:00"
+    },
+    "59c0d342-6dae-46c0-8375-07e397d22cf7": {
+      "run_id": "3315f015-930b-4ff9-a93b-dd19719e0605",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:22.245117+00:00",
+      "ended_at": "2025-05-31T04:58:22.246088+00:00"
+    },
+    "984bd26d-f754-44d3-896e-bfcffd6c945a": {
+      "run_id": "3315f015-930b-4ff9-a93b-dd19719e0605",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-05-31T04:58:22.246857+00:00",
+      "ended_at": "2025-05-31T04:58:22.247827+00:00"
+    }
+  },
+  "runs": {}
+}

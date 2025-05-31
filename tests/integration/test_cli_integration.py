@@ -32,7 +32,7 @@ reader_id = builder.add_node(
 )
 
 filter_id = builder.add_node(
-    "Filter", 
+    "Filter",
     "filter",
     config={{"field": "value", "operator": ">", "value": 100}}
 )
@@ -381,10 +381,10 @@ from kailash.nodes.base import Node
 
 class CustomPlugin(Node):
     '''Custom plugin node for testing.'''
-    
+
     def execute(self, inputs):
         return {"message": "Plugin executed!"}
-    
+
     @classmethod
     def get_info(cls):
         return {

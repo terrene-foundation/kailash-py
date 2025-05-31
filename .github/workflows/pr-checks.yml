@@ -24,24 +24,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
-    
+
     - name: Install linting tools
       run: |
         python -m pip install --upgrade pip
         pip install black isort ruff
-    
+
     - name: Check formatting with black
       run: black --check src/ tests/
-    
+
     - name: Check import sorting with isort
       run: isort --check src/ tests/
-    
+
     - name: Lint with ruff
       run: |
         # Check for critical errors only (syntax errors, undefined names, etc.)
@@ -54,27 +54,27 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.11', '3.12']
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-cov pytest-asyncio
         pip install -e ".[dev]" || pip install -e .
-    
+
     - name: Run tests with coverage
       run: |
         pytest tests/ --cov=src/kailash --cov-report=xml --cov-report=term-missing --tb=short \
           -k "not (test_async_switch_missing_input or test_async_merge_missing_data)"
-    
+
     - name: Upload coverage
       uses: codecov/codecov-action@v3
       with:
@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Run Trivy security scan
       uses: aquasecurity/trivy-action@master
       with:
@@ -98,7 +98,7 @@ jobs:
         output: 'trivy-results.txt'
         exit-code: '0'  # Don't fail the build
         ignore-unfixed: true
-    
+
     # Try SARIF upload for repos with Advanced Security
     - name: Run Trivy scan for SARIF
       uses: aquasecurity/trivy-action@master
@@ -110,14 +110,14 @@ jobs:
         output: 'trivy-results.sarif'
         exit-code: '0'
       continue-on-error: true
-    
+
     - name: Upload SARIF results (if Advanced Security enabled)
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-results.sarif'
       continue-on-error: true
       if: always()
-    
+
     - name: Upload scan results as artifact (fallback)
       uses: actions/upload-artifact@v4
       with:
@@ -134,23 +134,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
-    
+
     - name: Install package
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-    
+
     - name: Test example files
       run: |
         # Create required directories
         mkdir -p output data/outputs examples/data/outputs
-        
+
         # Test that examples can be imported
         for example in examples/*.py; do
           if [[ -f "$example" && "$example" != *"__"* && "$example" != *"test_"* ]]; then
@@ -174,7 +174,7 @@ jobs:
         echo "- Security: ${{ needs.security-check.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Examples: ${{ needs.validate-examples.result }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        
+
         if [ "${{ needs.lint-and-format.result }}" != "success" ] || \
            [ "${{ needs.test-matrix.result }}" != "success" ] || \
            [ "${{ needs.validate-examples.result }}" != "success" ]; then

@@ -45,13 +45,13 @@ Run a Workflow
 
    # Run a workflow file
    kailash run workflow.py
-   
+
    # Run with arguments
    kailash run workflow.py --input data.csv --output results.csv
-   
+
    # Run with environment file
    kailash run workflow.py --env-file .env
-   
+
    # Run with specific runtime
    kailash run workflow.py --runtime docker
 
@@ -64,27 +64,27 @@ Workflows can be defined in Python files:
 
    # workflow.py
    from kailash import Workflow
-   
+
    def create_workflow():
        workflow = Workflow("my_workflow")
-       
+
        workflow.add_node("CSVReader", "input", config={
            "file_path": "${INPUT_FILE:-data.csv}"
        })
-       
+
        workflow.add_node("DataFilter", "filter", config={
            "column": "status",
            "value": "active"
        })
-       
+
        workflow.add_node("CSVWriter", "output", config={
            "file_path": "${OUTPUT_FILE:-output.csv}"
        })
-       
+
        workflow.connect_sequential(["input", "filter", "output"])
-       
+
        return workflow
-   
+
    # Required for CLI
    if __name__ == "__main__":
        workflow = create_workflow()
@@ -128,19 +128,19 @@ Execute workflows from the command line.
 
    # Basic execution
    kailash run my_workflow.py
-   
+
    # With parameters
    kailash run etl_pipeline.py \
      --param source=customers.csv \
      --param target=processed.csv \
      --runtime parallel \
      --workers 4
-   
+
    # Docker execution
    kailash run secure_workflow.py \
      --runtime docker \
      --config docker-config.yaml
-   
+
    # Profiling
    kailash run complex_workflow.py \
      --profile \
@@ -172,13 +172,13 @@ List available nodes and workflows.
 
    # List all nodes
    kailash list nodes
-   
+
    # List data nodes
    kailash list nodes --category data
-   
+
    # Search for CSV nodes
    kailash list nodes --search csv
-   
+
    # List workflow runs
    kailash list runs --limit 10
 
@@ -199,10 +199,10 @@ Get detailed information about nodes or workflows.
 
    # Node information
    kailash info node CSVReader
-   
+
    # Workflow information
    kailash info workflow my_workflow.py
-   
+
    # Run information
    kailash info run 123e4567-e89b-12d3-a456-426614174000
 
@@ -231,10 +231,10 @@ Validate workflow definitions.
 
    # Basic validation
    kailash validate workflow.py
-   
+
    # Strict validation
    kailash validate workflow.py --strict
-   
+
    # Validate export format
    kailash validate workflow.yaml --format
 
@@ -264,7 +264,7 @@ Export workflows to different formats.
 
    # Export to YAML
    kailash export workflow.py workflow.yaml
-   
+
    # Export to JSON with metadata
    kailash export workflow.py workflow.json \
      --format json \
@@ -296,10 +296,10 @@ Generate workflow visualizations.
 
    # Generate Mermaid diagram
    kailash visualize workflow.py diagram.md --format mermaid
-   
+
    # Generate PNG image
    kailash visualize workflow.py workflow.png --format png
-   
+
    # Interactive HTML
    kailash visualize workflow.py workflow.html \
      --format html \
@@ -332,10 +332,10 @@ Run workflow tests.
 
    # Run all tests
    kailash test tests/
-   
+
    # Run specific test file
    kailash test test_workflow.py
-   
+
    # With coverage
    kailash test tests/ --coverage
 
@@ -365,7 +365,7 @@ Profile workflow performance.
 
    # Basic profiling
    kailash profile workflow.py
-   
+
    # Multiple iterations
    kailash profile workflow.py \
      --iterations 10 \
@@ -398,10 +398,10 @@ Debug workflow execution.
 
    # Debug with breakpoint
    kailash debug workflow.py --breakpoint process_data
-   
+
    # Step through execution
    kailash debug workflow.py --step
-   
+
    # Watch variables
    kailash debug workflow.py --watch "data.shape"
 
@@ -431,10 +431,10 @@ Start the Kailash API server.
 
    # Start server
    kailash server
-   
+
    # Development mode
    kailash server --reload --host localhost
-   
+
    # Production mode
    kailash server --workers 4 --port 80
 
@@ -452,17 +452,17 @@ Create ``~/.kailash/cli.yaml``:
    runtime:
      type: local
      workers: 4
-   
+
    # Tracking settings
    tracking:
      enabled: true
      storage: ~/.kailash/tracking
-   
+
    # Output preferences
    output:
      format: table
      color: auto
-   
+
    # Aliases
    aliases:
      etl: run --runtime parallel --workers 8
@@ -477,13 +477,13 @@ Configure CLI behavior:
 
    # Set default runtime
    export KAILASH_RUNTIME=docker
-   
+
    # Set tracking directory
    export KAILASH_TRACKING_DIR=/var/kailash/tracking
-   
+
    # Enable debug mode
    export KAILASH_DEBUG=1
-   
+
    # Disable color output
    export KAILASH_COLOR=0
 
@@ -500,27 +500,27 @@ Add custom commands using plugins:
    # my_plugin.py
    import click
    from kailash.cli import cli
-   
+
    @cli.command()
    @click.argument('workflow_file')
    @click.option('--output', '-o', help='Output file')
    def analyze(workflow_file, output):
        """Analyze workflow complexity."""
        from kailash import Workflow
-       
+
        workflow = Workflow.from_file(workflow_file)
-       
+
        # Analysis logic
        node_count = len(workflow.nodes)
        edge_count = len(workflow.edges)
        complexity = edge_count / node_count
-       
+
        result = {
            'nodes': node_count,
            'edges': edge_count,
            'complexity': complexity
        }
-       
+
        if output:
            with open(output, 'w') as f:
                json.dump(result, f, indent=2)
@@ -533,7 +533,7 @@ Register the plugin:
 
    # Install plugin
    pip install -e ./my_plugin
-   
+
    # Use custom command
    kailash analyze workflow.py -o analysis.json
 
@@ -546,23 +546,23 @@ Use the CLI in scripts:
 
    #!/bin/bash
    # batch_process.sh
-   
+
    # Process multiple workflows
    for workflow in workflows/*.py; do
        echo "Processing $workflow..."
-       
+
        # Run workflow
        kailash run "$workflow" \
          --runtime parallel \
          --workers 4 \
          --output "results/$(basename $workflow .py).csv"
-       
+
        # Generate report
        kailash visualize "$workflow" \
          "reports/$(basename $workflow .py).html" \
          --format html
    done
-   
+
    # Aggregate results
    kailash analyze results/ --output summary.json
 
@@ -574,7 +574,7 @@ Use CLI functionality from Python:
 .. code-block:: python
 
    from kailash.cli import runner
-   
+
    # Run workflow programmatically
    result = runner.run_workflow(
        'workflow.py',
@@ -582,15 +582,15 @@ Use CLI functionality from Python:
        params={'input': 'data.csv'},
        tracking=True
    )
-   
+
    # Validate workflow
    from kailash.cli import validator
-   
+
    is_valid = validator.validate_workflow('workflow.py', strict=True)
-   
+
    # Export workflow
    from kailash.cli import exporter
-   
+
    exporter.export_workflow(
        'workflow.py',
        'workflow.yaml',
@@ -609,7 +609,7 @@ Best Practices
    INPUT_FILE=data/customers.csv
    OUTPUT_FILE=output/processed.csv
    API_KEY=secret_key
-   
+
    # Run with env file
    kailash run workflow.py --env-file .env
 
@@ -621,7 +621,7 @@ Best Practices
    alias kr='kailash run'
    alias kv='kailash validate'
    alias kp='kailash profile'
-   
+
    # Quick workflow run
    kr my_workflow.py
 
@@ -633,11 +633,11 @@ Best Practices
    runtime:
      type: docker
      image: custom-kailash:latest
-   
+
    parameters:
      batch_size: 1000
      timeout: 300
-   
+
    tracking:
      enabled: true
      metrics: all
@@ -653,7 +653,7 @@ Best Practices
    # test_workflow.py
    import pytest
    from kailash.cli import tester
-   
+
    def test_etl_workflow():
        result = tester.test_workflow(
            'etl_workflow.py',
@@ -669,10 +669,10 @@ Best Practices
 
    # Start workflow in background
    kailash run long_workflow.py --tracking &
-   
+
    # Monitor progress
    watch kailash info run latest
-   
+
    # View logs
    kailash logs -f
 

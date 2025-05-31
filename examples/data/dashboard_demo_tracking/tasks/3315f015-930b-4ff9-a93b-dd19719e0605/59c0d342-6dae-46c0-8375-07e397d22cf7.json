@@ -1,0 +1,87 @@
+{
+  "task_id": "59c0d342-6dae-46c0-8375-07e397d22cf7",
+  "run_id": "3315f015-930b-4ff9-a93b-dd19719e0605",
+  "node_id": "data_filter",
+  "node_type": "Filter",
+  "status": "completed",
+  "started_at": "2025-05-31T04:58:22.245117+00:00",
+  "ended_at": "2025-05-31T04:58:22.246088+00:00",
+  "completed_at": "2025-05-31T04:58:22.246088+00:00",
+  "created_at": "2025-05-31T04:58:22.245152",
+  "result": {
+    "filtered_data": [
+      {
+        "name": "Mary",
+        "age": "30",
+        "city": "Los Angeles",
+        "salary": "65000"
+      },
+      {
+        "name": "Bob",
+        "age": "45",
+        "city": "Chicago",
+        "salary": "75000"
+      },
+      {
+        "name": "Alice",
+        "age": "35",
+        "city": "Houston",
+        "salary": "80000"
+      },
+      {
+        "name": "Charlie",
+        "age": "60",
+        "city": "Phoenix",
+        "salary": "90000"
+      },
+      {
+        "name": "Diana",
+        "age": "28",
+        "city": "Philadelphia",
+        "salary": "55000"
+      },
+      {
+        "name": "Frank",
+        "age": "55",
+        "city": "San Diego",
+        "salary": "85000"
+      },
+      {
+        "name": "Grace",
+        "age": "40",
+        "city": "Dallas",
+        "salary": "70000"
+      },
+      {
+        "name": "Henry",
+        "age": "65",
+        "city": "San Jose",
+        "salary": "95000"
+      }
+    ]
+  },
+  "error": null,
+  "metadata": {
+    "execution_time": 0.00014209747314453125
+  },
+  "input_data": null,
+  "output_data": null,
+  "metrics": {
+    "duration": 0.00014209747314453125,
+    "memory_usage": 134.921875,
+    "memory_usage_mb": 134.921875,
+    "cpu_usage": 0.0,
+    "custom_metrics": {
+      "memory_delta_mb": 0.0,
+      "io_read_bytes": 0,
+      "io_write_bytes": 0,
+      "io_read_count": 0,
+      "io_write_count": 0,
+      "thread_count": 3,
+      "context_switches": 369
+    }
+  },
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

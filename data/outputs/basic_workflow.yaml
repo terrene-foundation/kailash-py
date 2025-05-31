@@ -4,7 +4,7 @@ metadata:
   description: Simple ETL workflow for customer data
   version: 1.0.0
   author: ''
-  created_at: '2025-05-30T13:18:47.937271+00:00'
+  created_at: '2025-05-31T04:58:43.382842+00:00'
 nodes:
   reader:
     type: CSVReader
