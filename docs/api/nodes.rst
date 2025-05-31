@@ -143,7 +143,7 @@ TextWriter
 SQLDatabaseNode
 ~~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.sql.SQLReader
+.. autoclass:: kailash.nodes.data.sql.SQLDatabaseNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -161,7 +161,7 @@ SQLDatabaseNode
 SQLQueryBuilderNode
 ~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.sql.SQLWriter
+.. autoclass:: kailash.nodes.data.sql.SQLQueryBuilderNode
    :members:
    :undoc-members:
    :show-inheritance:
