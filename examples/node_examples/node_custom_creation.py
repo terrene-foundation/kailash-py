@@ -25,10 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.runtime.local import LocalRuntime
-from kailash.sdk_exceptions import (
-    NodeExecutionError,
-    NodeValidationError,
-)
+from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 from kailash.workflow.graph import Workflow
 
 

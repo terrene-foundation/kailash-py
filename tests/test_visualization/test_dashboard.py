@@ -1,16 +1,14 @@
 """Tests for dashboard visualization components."""
 
 import json
-import threading
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 
 from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import TaskMetrics, TaskRun, TaskStatus
+from kailash.tracking.models import TaskMetrics, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.visualization.dashboard import (
     DashboardConfig,

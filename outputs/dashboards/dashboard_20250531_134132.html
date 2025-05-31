@@ -6,7 +6,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        
+
         * {
             margin: 0;
             padding: 0;
@@ -169,10 +169,10 @@
             max-width: 100%;
             height: 200px;
         }
-        
+
     </style>
     <script>
-        
+
         function drawLiveCharts(timestamps, cpuData, memoryData, throughputData) {
             // Simple canvas-based charts (replace with Chart.js or similar for production)
             drawSimpleChart('cpuChart', timestamps, cpuData, 'CPU %', '#007bff');
@@ -258,7 +258,7 @@
                 window.location.reload();
             }
         }, 30000); // Refresh every 30 seconds
-        
+
     </script>
 </head>
 <body>
@@ -272,7 +272,7 @@
             </div>
         </header>
 
-        
+
         <section class="status-section">
             <h2>📊 Current Status</h2>
             <div class="status-grid">
@@ -302,8 +302,8 @@
                 </div>
             </div>
         </section>
-        
-        
+
+
         <section class="metrics-section">
             <h2>📈 Live Metrics (Last 30 minutes)</h2>
             <div class="charts-grid">
@@ -325,8 +325,8 @@
                               [255.0], [0.0]);
             </script>
         </section>
-        
-        
+
+
         <section class="charts-section">
             <h2>📊 Performance Analysis</h2>
             <div class="charts-grid">
@@ -344,8 +344,8 @@
                 </div>
             </div>
         </section>
-        
-        
+
+
         <section class="tasks-section">
             <h2>📋 Recent Tasks</h2>
             <table class="tasks-table">
@@ -359,7 +359,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    
+
             <tr class="status-failed">
                 <td>task_3</td>
                 <td>Type_1</td>
@@ -367,7 +367,7 @@
                 <td>1.40s</td>
                 <td>05:41:31</td>
             </tr>
-            
+
             <tr class="status-completed">
                 <td>task_2</td>
                 <td>Type_0</td>
@@ -375,7 +375,7 @@
                 <td>1.10s</td>
                 <td>05:41:31</td>
             </tr>
-            
+
             <tr class="status-completed">
                 <td>task_1</td>
                 <td>Type_1</td>
@@ -383,7 +383,7 @@
                 <td>0.80s</td>
                 <td>05:41:31</td>
             </tr>
-            
+
             <tr class="status-completed">
                 <td>task_0</td>
                 <td>Type_0</td>
@@ -391,12 +391,11 @@
                 <td>0.50s</td>
                 <td>05:41:31</td>
             </tr>
-            
+
                 </tbody>
             </table>
         </section>
-        
+
     </div>
 </body>
 </html>
-        

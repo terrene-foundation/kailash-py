@@ -25,10 +25,7 @@ Downstream Consumers:
 import asyncio
 import json
 import logging
-import threading
-import time
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -49,10 +46,9 @@ except ImportError:
     FASTAPI_AVAILABLE = False
 
 from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import TaskRun, TaskStatus
+from kailash.tracking.models import TaskStatus
 from kailash.visualization.dashboard import (
     DashboardConfig,
-    LiveMetrics,
     RealTimeDashboard,
 )
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter

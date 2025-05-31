@@ -10,7 +10,6 @@ from kailash.tracking.metrics_collector import (
     MetricsCollector,
     PerformanceMetrics,
     collect_metrics,
-    default_collector,
 )
 
 

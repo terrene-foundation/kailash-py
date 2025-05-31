@@ -4,9 +4,10 @@ Examples Overview - Visual summary of all Kailash SDK examples
 """
 
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-from pathlib import Path
 
 # Define example categories and their descriptions
 examples = {

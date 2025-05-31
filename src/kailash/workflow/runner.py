@@ -9,9 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
-from kailash.sdk_exceptions import (
-    WorkflowExecutionError,
-)
+from kailash.sdk_exceptions import WorkflowExecutionError
 from kailash.tracking import TaskManager
 from kailash.workflow.graph import Workflow
 

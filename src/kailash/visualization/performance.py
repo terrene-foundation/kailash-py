@@ -22,17 +22,14 @@ Downstream Consumers:
 """
 
 import logging
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.figure import Figure
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
-from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +302,7 @@ class PerformanceVisualizer:
                     fontsize=8,
                 )
 
-        plt.suptitle(f"Resource Usage Analysis", fontsize=14)
+        plt.suptitle("Resource Usage Analysis", fontsize=14)
         plt.tight_layout()
         plt.savefig(output_path, dpi=150, bbox_inches="tight")
         plt.close()
@@ -693,7 +690,7 @@ class PerformanceVisualizer:
         if completed_tasks:
             # Find bottlenecks
             slowest = max(completed_tasks, key=lambda t: t.metrics.duration or 0)
-            lines.append(f"\n### Bottlenecks")
+            lines.append("\n### Bottlenecks")
             lines.append(
                 f"- **Slowest Node:** {slowest.node_id} ({slowest.metrics.duration:.2f}s)"
             )

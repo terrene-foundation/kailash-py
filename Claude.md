@@ -247,7 +247,7 @@ Keep dependencies minimal and explicit:
 
 8. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
-   
+
 9. **Mistakes**: Record all coding mistakes in `docs/mistakes/000-master.md`
     - **Example**: If a node fails to execute due to a missing import, document the mistake in `docs/mistakes/missing_import.md`
     - Include:
@@ -275,7 +275,6 @@ Keep dependencies minimal and explicit:
 
 13. **Pre-commit Hooks and Code Quality**:
     - **Pre-commit Setup**: Use automated pre-commit hooks to enforce coding standards
-
     - **Automated Hooks Configuration** (`.pre-commit-config.yaml`):
       - **Black**: Code formatting (88 character line length)
       - **isort**: Import sorting (Black-compatible profile)
@@ -286,7 +285,6 @@ Keep dependencies minimal and explicit:
       - **doc8**: Documentation linting
       - **mypy**: Type checking
       - **Built-in checks**: Whitespace, file endings, syntax validation
-
     - **Development Workflow**:
       - Hooks run automatically on every commit
       - Failed hooks prevent commits (encourages fixing issues immediately)

@@ -18,13 +18,11 @@ Downstream Consumers:
 """
 
 import asyncio
-import os
-import platform
 import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional
 
 try:
     import psutil

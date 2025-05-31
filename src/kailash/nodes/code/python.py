@@ -26,16 +26,7 @@ import inspect
 import logging
 import traceback
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Type,
-    Union,
-    get_type_hints,
-)
+from typing import Any, Callable, Dict, List, Optional, Type, Union, get_type_hints
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import (

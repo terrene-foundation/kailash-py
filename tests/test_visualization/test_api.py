@@ -1,16 +1,14 @@
 """Tests for dashboard API components."""
 
-import asyncio
 import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 
 from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import TaskMetrics, TaskRun, TaskStatus
+from kailash.tracking.models import TaskMetrics, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.visualization.api import SimpleDashboardAPI
 from kailash.visualization.dashboard import DashboardConfig
@@ -827,7 +825,6 @@ class TestAPIIntegration:
         api = SimpleDashboardAPI(task_manager)
 
         import threading
-        import time
 
         results = []
         errors = []

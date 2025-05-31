@@ -12,9 +12,7 @@ from typing import Any, Dict, Optional
 
 import requests
 
-from examples.migrations.project_hmi.adapted.shared import (
-    NRIC_Type,
-)
+from examples.migrations.project_hmi.adapted.shared import NRIC_Type
 
 # API Endpoints and Keys
 HMI_ONE_API_BASE_URL = "https://hmi-nonprod-vpc-gwy.azure-api.net/la/hmi"

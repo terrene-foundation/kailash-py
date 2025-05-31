@@ -13,8 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReader, CSVWriter, JSONReader, JSONWriter
-from kailash.nodes.logic import Merge, Switch
-from kailash.nodes.transform import DataTransformer, Filter
+from kailash.nodes.transform import DataTransformer
 from kailash.workflow import MermaidVisualizer, Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
