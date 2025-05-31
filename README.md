@@ -1,7 +1,9 @@
 # Kailash Python SDK
 
 <p align="center">
-  <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.8+">
+  <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/v/kailash.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/pyversions/kailash.svg" alt="Python versions"></a>
+  <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/dm/kailash.svg" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
   <img src="https://img.shields.io/badge/tests-544%20passing-brightgreen.svg" alt="Tests: 544 passing">
@@ -45,7 +47,7 @@ The Kailash Python SDK is designed for:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # For users: Install from PyPI
-uv pip install kailash
+pip install kailash
 
 # For developers: Clone and sync
 git clone https://github.com/terrene-foundation/kailash-py.git
