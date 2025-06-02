@@ -150,7 +150,7 @@ Manages workflow execution state and data flow.
 .. code-block:: python
 
    from kailash.nodes import Node
-   
+
    # Access during node execution
    class MyNode(Node):
        def execute(self, inputs):

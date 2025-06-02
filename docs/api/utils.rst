@@ -443,14 +443,14 @@ Create visual representations of workflows:
 
    # Generate Mermaid diagram directly from workflow
    mermaid_code = workflow.to_mermaid()
-   
+
    # Generate Mermaid with markdown wrapper
    mermaid_markdown = workflow.to_mermaid_markdown(title="My Workflow")
-   
+
    # Save to file
    with open("workflow.md", "w") as f:
        f.write(mermaid_markdown)
-   
+
    # Or use WorkflowVisualizer for matplotlib visualization
    from kailash import WorkflowVisualizer
    visualizer = WorkflowVisualizer(workflow)

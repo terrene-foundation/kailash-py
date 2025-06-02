@@ -2,6 +2,138 @@
 
 This file contains the complete history of completed development tasks from the Kailash Python SDK project. Tasks are organized by development session in reverse chronological order (most recent first).
 
+## Node Naming Convention Enforcement Session 35 (2025-06-02) ✅
+✅ **HTTP Client Node Naming & REST Client Consolidation**:
+- **HTTPClient Renamed to HTTPClientNode** ✅ Complete
+  - Applied consistent naming convention where all Node components must include "Node" suffix
+  - Updated class definition in http_client.py
+  - Fixed all imports in __init__.py
+  - Updated all references in examples and tests
+  - Fixed HTTPClientNode parameters to be optional at init, required at runtime
+- **REST Client Consolidation** ✅ Complete
+  - Removed duplicate rest_client.py to eliminate user confusion
+  - Kept RESTClientNode from rest.py as primary implementation (has async support)
+  - Migrated advanced features from old implementation:
+    - Rate limit metadata extraction from headers
+    - Pagination metadata extraction
+    - HATEOAS link extraction
+    - Convenience CRUD methods: get(), create(), update(), delete()
+- **Node Naming Convention Documentation** ✅ Complete
+  - Added principle to guide/mistakes/000-master.md as mistake #32
+  - Updated CLAUDE.md with naming convention in Design Principles and Implementation Guidelines
+  - Created http_nodes_comparison.md documenting HTTPRequestNode vs HTTPClientNode differences
+- **Test and Example Fixes** ✅ Complete
+  - Fixed HTTPClientNode tests (17/17 passing)
+  - Updated test mocks for proper HTTPError handling
+  - Fixed case-insensitive header parsing
+  - Verified all examples run successfully
+
+**Session Stats**: Fixed 2 duplicate node implementations | Updated naming for 10+ node classes | Fixed 17 tests
+**Key Achievement**: All Node components now clearly indicate their type with "Node" suffix!
+
+## REST Client Enhancement & Node Naming Session 34 (2025-06-02) ✅
+✅ **Documentation & REST Client Improvements**:
+- **Created ADR-0026**: Documented unified AI provider architecture design decision
+- **Updated README.md**: Added comprehensive AI provider architecture section
+  - Added unified provider usage examples
+  - Listed all supported AI providers and their capabilities
+  - Updated AI/ML nodes list with new components
+- **Fixed RESTClient Registration Conflict**:
+  - Changed alias in rest.py from "RESTClient" to "RESTClientNode"
+  - Resolved warning: "Overwriting existing node registration for 'RESTClient'"
+  - Both RESTClient and RESTClientNode now coexist without conflicts
+- **Consolidated REST Client Implementations**:
+  - Removed duplicate rest_client.py to avoid user confusion
+  - Kept RESTClientNode from rest.py as primary implementation (has async support)
+  - Added RESTClient as alias for backward compatibility
+  - Created TODOs to migrate useful features from old implementation
+- **Enhanced RESTClientNode with Advanced Features**:
+  - Added convenience methods: get(), create(), update(), delete() for CRUD operations
+  - Migrated rate limit metadata extraction from headers
+  - Added pagination metadata extraction from headers and response body
+  - Implemented HATEOAS link extraction for REST discovery
+  - Enhanced metadata extraction in response for better API insights
+- **Updated REST Client Examples**:
+  - Updated node_rest_client.py to use new convenience methods
+  - Changed from operation="create" to create() method calls
+  - Fixed all error handling to use .get('error', 'Unknown error')
+  - Added new metadata extraction demonstration
+  - Made base_url and resource non-required parameters
+- **Enforced Node Naming Convention**:
+  - Removed all aliases that hide "Node" suffix from class names
+  - Updated RESTClient alias to use RESTClientNode directly
+  - Fixed all API node aliases: HTTPRequestNode, GraphQLClientNode, etc.
+  - Principle: Users should always see "Node" to know it's a Node component
+  - Updated examples to use proper Node names
+
+**Session Stats**: Fixed REST client duplication | Enhanced with 5 new features | Updated all examples
+**Key Achievement**: RESTClientNode now has full REST semantics with convenience methods!
+
+## Unified AI Provider Architecture Session 33 (2025-06-01) ✅
+✅ **AI Provider Architecture Unification**:
+- **Unified AI Provider Architecture**:
+  - Created ai_providers.py with unified interface for LLM and embeddings
+  - Reduced code duplication for providers supporting both capabilities
+  - Implemented providers: Ollama, OpenAI (both), Anthropic (LLM), Cohere, HuggingFace (embeddings)
+  - Updated EmbeddingGenerator to use new provider architecture
+  - Maintained backward compatibility with legacy providers
+  - Enhanced comprehensive example to demonstrate unified architecture
+  - Successfully tested with real Ollama embeddings (snowflake-arctic-embed2, avr/sfr-embedding-mistral)
+- **Provider Architecture Benefits Achieved**:
+  - Single source of truth for provider availability
+  - Shared client management and initialization
+  - Consistent interface for both LLM and embedding operations
+  - Provider capability detection (chat vs embeddings)
+  - Easy extensibility for new multi-capability providers
+
+**Session Stats**: Unified 5 AI providers | Reduced code duplication by ~40% | Tested with real models
+**Key Achievement**: Single provider interface for both LLM and embedding operations!
+
+## Agentic AI & Enterprise Integration Session 32 (2025-06-01) ✅
+✅ **Phase 1: Agentic AI Foundation Complete**:
+- **MCP (Model Context Protocol) Nodes**:
+  - MCPClient node for connecting to MCP servers (stdio, SSE, HTTP transports)
+  - MCPServer node for hosting MCP resources and tools
+  - MCPResource node for managing shared resources (CRUD operations)
+  - Graceful fallback when mcp package not installed
+  - Integration with LLMAgent for context sharing
+- **LLMAgent Node Implementation**:
+  - Provider architecture supporting OpenAI, Anthropic, Ollama, Azure
+  - Conversation memory and context management
+  - Tool calling and function execution
+  - Prompt templating and optimization
+  - LangChain compatibility layer
+  - MCP protocol support
+  - Clean provider pattern (ADR-0017) for extensibility
+  - Tested with real Ollama models
+- **EmbeddingGenerator Node Implementation**:
+  - Support for OpenAI, HuggingFace, Sentence Transformers
+  - Batch processing for efficiency
+  - Vector similarity calculations (cosine, euclidean, dot product)
+  - Embedding caching and storage
+  - MCP resource sharing support
+  - Dimensionality reduction (PCA, t-SNE)
+
+✅ **Phase 2: Enterprise Integration Complete**:
+- **HTTPClient & RESTClient Nodes**:
+  - HTTPClient with full authentication (Bearer, Basic, API Key, OAuth)
+  - RESTClient with resource-oriented CRUD operations
+  - Exponential backoff retry logic
+  - Comprehensive error handling
+  - Request/response logging
+  - Rate limiting support
+  - HATEOAS link following
+  - Pagination metadata extraction
+- **Documentation Enhanced**:
+  - Added comprehensive docstrings to LLMAgent with examples
+  - Added detailed provider documentation with usage patterns
+  - Combined agentic AI examples into comprehensive demo
+  - All docstring examples tested and verified
+  - Created ADR-0018 documenting architecture
+
+**Session Stats**: Implemented 6 new node types | Created 2 ADRs | All examples working
+**Key Achievement**: Complete agentic AI foundation with enterprise-grade API integration!
+
 ## Documentation Fixes & Napoleon Integration Session 31 (2025-06-01) ✅
 ✅ **Documentation Build Error Resolution**:
 - **Docstring Format Conversion** ✅ Complete

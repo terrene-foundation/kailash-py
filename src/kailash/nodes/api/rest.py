@@ -503,7 +503,7 @@ class RESTClientNode(Node):
         # Handle potential error responses
         if not success:
             error_message = result.get("error", "Unknown error")
-            
+
             # If we have a response object, try to extract error details
             if response and isinstance(response.get("content"), dict):
                 # Try to extract error message from common formats
@@ -515,15 +515,17 @@ class RESTClientNode(Node):
                 elif isinstance(error_value, str):
                     error_message = error_value
                 # Check for message at root level
-                if not error_message or error_message == result.get("error", "Unknown error"):
+                if not error_message or error_message == result.get(
+                    "error", "Unknown error"
+                ):
                     error_message = content.get("message") or error_message
-            
+
             # If we have a status code, include it
             if status_code:
                 error_message = f"{error_message} (status: {status_code})"
 
             self.logger.error(f"REST API error: {error_message}")
-            
+
             # Return error response with recovery suggestions if available
             error_result = {
                 "data": None,
@@ -531,13 +533,13 @@ class RESTClientNode(Node):
                 "success": False,
                 "error": error_message,
                 "error_type": result.get("error_type", "APIError"),
-                "metadata": {}
+                "metadata": {},
             }
-            
+
             # Include recovery suggestions if available
             if "recovery_suggestions" in result:
                 error_result["recovery_suggestions"] = result["recovery_suggestions"]
-                
+
             return error_result
 
             # Note: We don't raise an exception here, as the caller might want
@@ -557,7 +559,7 @@ class RESTClientNode(Node):
             "url": url,
             "method": method,
         }
-        
+
         # Add response metadata if available
         if response:
             metadata["response_time_ms"] = response.get("response_time_ms", 0)
@@ -1006,7 +1008,7 @@ class AsyncRESTClientNode(AsyncNode):
         # Handle potential error responses
         if not success:
             error_message = result.get("error", "Unknown error")
-            
+
             # If we have a response object, try to extract error details
             if response and isinstance(response.get("content"), dict):
                 # Try to extract error message from common formats
@@ -1018,15 +1020,17 @@ class AsyncRESTClientNode(AsyncNode):
                 elif isinstance(error_value, str):
                     error_message = error_value
                 # Check for message at root level
-                if not error_message or error_message == result.get("error", "Unknown error"):
+                if not error_message or error_message == result.get(
+                    "error", "Unknown error"
+                ):
                     error_message = content.get("message") or error_message
-            
+
             # If we have a status code, include it
             if status_code:
                 error_message = f"{error_message} (status: {status_code})"
 
             self.logger.error(f"REST API error: {error_message}")
-            
+
             # Return error response with recovery suggestions if available
             error_result = {
                 "data": None,
@@ -1034,13 +1038,13 @@ class AsyncRESTClientNode(AsyncNode):
                 "success": False,
                 "error": error_message,
                 "error_type": result.get("error_type", "APIError"),
-                "metadata": {}
+                "metadata": {},
             }
-            
+
             # Include recovery suggestions if available
             if "recovery_suggestions" in result:
                 error_result["recovery_suggestions"] = result["recovery_suggestions"]
-                
+
             return error_result
 
         # Handle pagination if requested (simplified for now)

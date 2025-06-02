@@ -1,7 +1,5 @@
 """Unit tests for MCP (Model Context Protocol) nodes."""
 
-from unittest.mock import Mock, patch
-
 import pytest
 
 from kailash.nodes.mcp import MCPClient, MCPResource, MCPServer
@@ -185,9 +183,9 @@ class TestMCPClient:
         """Test reading a specific resource."""
         node = MCPClient()
         server_config = {
-            "name": "test-server", 
+            "name": "test-server",
             "transport": "stdio",
-            "command": "mcp-test-server"  # Add required command
+            "command": "mcp-test-server",  # Add required command
         }
 
         result = node.run(
@@ -205,9 +203,9 @@ class TestMCPClient:
         """Test listing available tools."""
         node = MCPClient()
         server_config = {
-            "name": "test-server", 
+            "name": "test-server",
             "transport": "stdio",
-            "command": "mcp-test-server"  # Add required command
+            "command": "mcp-test-server",  # Add required command
         }
 
         result = node.run(server_config=server_config, operation="list_tools")
@@ -221,9 +219,9 @@ class TestMCPClient:
         """Test calling a tool on the server."""
         node = MCPClient()
         server_config = {
-            "name": "test-server", 
+            "name": "test-server",
             "transport": "stdio",
-            "command": "mcp-test-server"  # Add required command
+            "command": "mcp-test-server",  # Add required command
         }
 
         result = node.run(
@@ -242,9 +240,9 @@ class TestMCPClient:
         """Test getting a prompt from the server."""
         node = MCPClient()
         server_config = {
-            "name": "test-server", 
+            "name": "test-server",
             "transport": "stdio",
-            "command": "mcp-test-server"  # Add required command
+            "command": "mcp-test-server",  # Add required command
         }
 
         result = node.run(
@@ -286,9 +284,9 @@ class TestMCPClient:
         """Test handling of unsupported operations."""
         node = MCPClient()
         server_config = {
-            "name": "test-server", 
+            "name": "test-server",
             "transport": "stdio",
-            "command": "mcp-test-server"  # Add required command
+            "command": "mcp-test-server",  # Add required command
         }
 
         result = node.run(server_config=server_config, operation="invalid_operation")
@@ -300,9 +298,9 @@ class TestMCPClient:
         """Test tool call without tool name."""
         node = MCPClient()
         server_config = {
-            "name": "test-server", 
+            "name": "test-server",
             "transport": "stdio",
-            "command": "mcp-test-server"  # Add required command
+            "command": "mcp-test-server",  # Add required command
         }
 
         result = node.run(server_config=server_config, operation="call_tool")

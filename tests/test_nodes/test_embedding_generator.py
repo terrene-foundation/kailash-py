@@ -1,7 +1,5 @@
 """Unit tests for EmbeddingGenerator node."""
 
-from unittest.mock import Mock, patch
-
 import pytest
 
 from kailash.nodes.ai import EmbeddingGenerator
@@ -169,6 +167,7 @@ class TestEmbeddingGenerator:
             if provider == "ollama":
                 try:
                     import ollama
+
                     # Try to connect to Ollama
                     ollama.list()
                     assert result["success"] is True
@@ -176,7 +175,9 @@ class TestEmbeddingGenerator:
                     assert result["dimensions"] > 0
                 except:
                     # If Ollama is not available, the test should fail gracefully
-                    assert result["success"] is False or "Ollama" in result.get("error", "")
+                    assert result["success"] is False or "Ollama" in result.get(
+                        "error", ""
+                    )
             else:
                 assert result["success"] is True
                 assert result["dimensions"] == expected_dims
@@ -357,7 +358,10 @@ class TestEmbeddingGenerator:
 
         assert result["success"] is False
         # The actual error message is more specific
-        assert "embedding_2" in result["error"] or "provide embedding_1 and embedding_2" in result["error"]
+        assert (
+            "embedding_2" in result["error"]
+            or "provide embedding_1 and embedding_2" in result["error"]
+        )
 
     def test_error_handling_invalid_operation(self):
         """Test error handling for invalid operations."""

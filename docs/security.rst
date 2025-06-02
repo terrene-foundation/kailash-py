@@ -12,9 +12,9 @@ Security Features
 The Kailash Python SDK includes several security features to protect your workflows:
 
 1. **Sandboxed Code Execution**
-   
+
    The ``PythonCodeNode`` executes user code in a restricted environment:
-   
+
    - Limited namespace access
    - No access to system modules by default
    - Configurable allowed imports
@@ -22,16 +22,16 @@ The Kailash Python SDK includes several security features to protect your workfl
    - Memory limits (planned)
 
 2. **Input Validation**
-   
+
    All nodes validate inputs before execution:
-   
+
    - Type checking with Pydantic
    - Path traversal prevention
    - SQL injection protection in database nodes
    - XSS prevention in web-related nodes
 
 3. **Secure Credential Handling**
-   
+
    - Support for environment variables
    - No hardcoded credentials in code
    - Integration with secret managers (planned)
@@ -56,7 +56,7 @@ When using file I/O nodes:
 
    safe_dir = Path("/app/data").resolve()
    file_path = (safe_dir / user_input).resolve()
-   
+
    if not str(file_path).startswith(str(safe_dir)):
        raise ValueError("Invalid file path")
 
@@ -111,28 +111,28 @@ Known Security Considerations
 -----------------------------
 
 1. **Python Code Execution**
-   
+
    The ``PythonCodeNode`` allows arbitrary code execution. While we provide
    sandboxing, it's not foolproof. For production use:
-   
+
    - Run in isolated containers
    - Use separate service accounts
    - Monitor resource usage
    - Implement network isolation
 
 2. **File System Access**
-   
+
    File I/O nodes have access to the file system. To mitigate risks:
-   
+
    - Run with minimal permissions
    - Use chroot or containers
    - Implement quota limits
    - Monitor file operations
 
 3. **Network Access**
-   
+
    API nodes can make external requests. Consider:
-   
+
    - Network segmentation
    - Egress filtering
    - DNS filtering
@@ -145,7 +145,7 @@ If you discover a security vulnerability:
 
 1. **Do NOT** open a public issue
 2. Email security@terrene.foundation with:
-   
+
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact

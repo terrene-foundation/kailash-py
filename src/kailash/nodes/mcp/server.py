@@ -1,7 +1,7 @@
 """MCP Server node for hosting Model Context Protocol resources and tools."""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -462,14 +462,18 @@ if __name__ == "__main__":
 
             # Generate function parameters from schema
             param_list = []
-            
+
             # Handle OpenAPI schema format
             if isinstance(parameters, dict) and "properties" in parameters:
                 properties = parameters.get("properties", {})
                 required = parameters.get("required", [])
-                
+
                 for param_name, param_info in properties.items():
-                    param_type = param_info.get("type", "str") if isinstance(param_info, dict) else "str"
+                    param_type = (
+                        param_info.get("type", "str")
+                        if isinstance(param_info, dict)
+                        else "str"
+                    )
                     if param_name in required:
                         param_list.append(f"{param_name}: {param_type}")
                     else:
@@ -488,10 +492,10 @@ if __name__ == "__main__":
 
             param_str = ", ".join(param_list) if param_list else ""
 
-            code_lines.append(f"@mcp.tool()")
+            code_lines.append("@mcp.tool()")
             code_lines.append(f"def {name}({param_str}):")
             code_lines.append(f'    """{description}"""')
-            code_lines.append(f"    # Mock tool implementation")
+            code_lines.append("    # Mock tool implementation")
             code_lines.append(
                 f'    return {{"tool": "{name}", "status": "executed", "parameters": locals()}}'
             )
@@ -528,7 +532,7 @@ if __name__ == "__main__":
             if template:
                 template_escaped = json.dumps(template)
                 code_lines.append(f"    template = {template_escaped}")
-                code_lines.append(f"    return template.format(**locals())")
+                code_lines.append("    return template.format(**locals())")
             else:
                 code_lines.append(
                     f'    return f"Mock prompt: {name} with args: {{locals()}}"'
@@ -549,8 +553,8 @@ if __name__ == "__main__":
             code_lines.append(f'@mcp.resource("{pattern}")')
             code_lines.append(f"def dynamic_{sanitized_pattern}(**kwargs):")
             code_lines.append(f'    """Dynamic resource provider for {pattern}"""')
-            code_lines.append(f"    # Mock dynamic resource implementation")
-            code_lines.append(f'    return f"Dynamic content for {{kwargs}}"')
+            code_lines.append("    # Mock dynamic resource implementation")
+            code_lines.append('    return f"Dynamic content for {kwargs}"')
             code_lines.append("")
 
         return "\n".join(code_lines)

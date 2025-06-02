@@ -1,7 +1,5 @@
 """Tests for workflow template base classes."""
 
-from typing import Any, Dict
-
 import pytest
 
 from kailash.workflow.builder import WorkflowBuilder
@@ -19,7 +17,7 @@ class TestTemplateParameter:
         )
 
         assert param.name == "input_file"
-        assert param.type == str
+        assert param.type is str
         assert param.description == "Input file path"
         assert param.required is True
         assert param.default is None
@@ -209,7 +207,9 @@ class TestWorkflowTemplate:
         def create_workflow(message: str) -> Workflow:
             builder = WorkflowBuilder()
             builder.add_node(
-                "PythonCodeNode", "processor", config={"name": "processor", "code": f"print('{message}')"}
+                "PythonCodeNode",
+                "processor",
+                config={"name": "processor", "code": f"print('{message}')"},
             )
             return builder.build(name="Test Workflow")
 
@@ -282,7 +282,7 @@ class TestWorkflowTemplate:
         assert template.template_id == "deserial_test"
         assert template.version == "2.0.0"
         assert len(template.parameters) == 2
-        assert template.parameters["input"].type == str
+        assert template.parameters["input"].type is str
         assert template.parameters["count"].default == 5
 
     def test_base_config(self):
@@ -317,7 +317,7 @@ class TestWorkflowTemplate:
         template.set_workflow_factory(create_workflow)
 
         # Instantiate without override
-        workflow1 = template.instantiate()
+        template.instantiate()
 
         # Instantiate with override
-        workflow2 = template.instantiate(temperature=0.3)
+        template.instantiate(temperature=0.3)

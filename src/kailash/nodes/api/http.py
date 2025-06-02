@@ -284,7 +284,7 @@ class HTTPRequestNode(Node):
         api_key_header: str,
     ) -> dict:
         """Apply authentication to request headers.
-        
+
         Args:
             headers: Existing headers dictionary
             auth_type: Type of authentication (bearer, basic, api_key, oauth2)
@@ -292,7 +292,7 @@ class HTTPRequestNode(Node):
             auth_username: Username for basic authentication
             auth_password: Password for basic authentication
             api_key_header: Header name for API key authentication
-            
+
         Returns:
             Updated headers dictionary with authentication
         """
@@ -373,7 +373,12 @@ class HTTPRequestNode(Node):
         # Apply authentication to headers
         if auth_type:
             headers = self._apply_authentication(
-                headers, auth_type, auth_token, auth_username, auth_password, api_key_header
+                headers,
+                auth_type,
+                auth_token,
+                auth_username,
+                auth_password,
+                api_key_header,
             )
 
         # Validate method
@@ -516,16 +521,18 @@ class HTTPRequestNode(Node):
         }
 
         if not success:
-            result["recovery_suggestions"] = self._get_recovery_suggestions(response.status_code)
+            result["recovery_suggestions"] = self._get_recovery_suggestions(
+                response.status_code
+            )
 
         return result
 
     def _get_recovery_suggestions(self, status_code: int) -> list:
         """Get recovery suggestions based on status code.
-        
+
         Args:
             status_code: HTTP status code
-            
+
         Returns:
             List of recovery suggestions
         """
@@ -625,7 +632,7 @@ class AsyncHTTPRequestNode(AsyncNode):
         api_key_header: str,
     ) -> dict:
         """Apply authentication to request headers.
-        
+
         Args:
             headers: Existing headers dictionary
             auth_type: Type of authentication (bearer, basic, api_key, oauth2)
@@ -633,7 +640,7 @@ class AsyncHTTPRequestNode(AsyncNode):
             auth_username: Username for basic authentication
             auth_password: Password for basic authentication
             api_key_header: Header name for API key authentication
-            
+
         Returns:
             Updated headers dictionary with authentication
         """
@@ -713,7 +720,12 @@ class AsyncHTTPRequestNode(AsyncNode):
         # Apply authentication to headers
         if auth_type:
             headers = self._apply_authentication(
-                headers, auth_type, auth_token, auth_username, auth_password, api_key_header
+                headers,
+                auth_type,
+                auth_token,
+                auth_username,
+                auth_password,
+                api_key_header,
             )
 
         # Validate method
@@ -841,7 +853,9 @@ class AsyncHTTPRequestNode(AsyncNode):
                     }
 
                     if not success:
-                        result["recovery_suggestions"] = self._get_recovery_suggestions(response.status)
+                        result["recovery_suggestions"] = self._get_recovery_suggestions(
+                            response.status
+                        )
 
                     return result
 
@@ -874,10 +888,10 @@ class AsyncHTTPRequestNode(AsyncNode):
 
     def _get_recovery_suggestions(self, status_code: int) -> list:
         """Get recovery suggestions based on status code.
-        
+
         Args:
             status_code: HTTP status code
-            
+
         Returns:
             List of recovery suggestions
         """

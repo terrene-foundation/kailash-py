@@ -103,6 +103,12 @@ The project structure is recorded in `guide/prd/0000-project_structure.md`. Refe
    - Provide clear error messages
    - Do not silently ignore errors
 
+6. **Clear Component Naming**:
+   - Node components MUST include "Node" suffix in their class names
+   - Do NOT use aliases that hide the component type (e.g., @register_node(alias="RESTClient"))
+   - Users should immediately understand what type of component they're using
+   - Examples: RESTClientNode, HTTPRequestNode, GraphQLClientNode (NOT RESTClient, HTTPRequest, etc.)
+
 ## Dependencies
 
 Keep dependencies minimal and explicit:
@@ -134,11 +140,18 @@ Keep dependencies minimal and explicit:
    - Design for extension through plugins or custom nodes
    - Document extension points
 
-4. **Performance**:
+4. **Node Naming Standards**:
+   - ALWAYS use full class names with "Node" suffix for all Node components
+   - NEVER create aliases that remove "Node" from the name
+   - Bad: `@register_node(alias="HTTPRequest")` for `HTTPRequestNode`
+   - Good: `@register_node()` for `HTTPRequestNode`
+   - This ensures users always know they're working with a Node component
+
+5. **Performance**:
    - Optimize for developer experience first
    - Address performance bottlenecks as identified
 
-5. **Backward Compatibility**:
+6. **Backward Compatibility**:
    - Maintain compatibility with existing Kailash architecture
    - Document any breaking changes clearly
 
@@ -162,25 +175,25 @@ Keep dependencies minimal and explicit:
    - **Two-File Todo System** for better Claude Code context management:
      - **Master File**: `guide/todos/000-master.md` - Active tasks and current priorities only
      - **Archive File**: `guide/todos/completed-archive.md` - Complete historical record
-   
+
    **Master File Structure** (`guide/todos/000-master.md`):
    ```markdown
    # Project Status Overview
    - **Category**: Status - Brief description
-   
+
    ## 🔥 URGENT PRIORITY - Current Client Needs
    - **High-impact tasks for active client projects**
-   
+
    ## High Priority - Active Tasks
    - **Task Name**
      - Description: Clear, actionable description
      - Status: To Do | In Progress | Completed
      - Priority: High | Medium | Low
      - Details: Implementation specifics or context
-   
+
    ## Medium/Low Priority Tasks
    [Same format as above]
-   
+
    ## Recent Achievements
    - Brief summary of latest completed work (last 2-3 sessions)
    - Link to completed-archive.md for full history
@@ -189,7 +202,7 @@ Keep dependencies minimal and explicit:
    **Archive File Structure** (`guide/todos/completed-archive.md`):
    ```markdown
    # Completed Tasks Archive
-   
+
    ## Development Sessions History
    ### Session XX (Date) ✅
    - Detailed breakdown of completed tasks

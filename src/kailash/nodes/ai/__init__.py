@@ -1,6 +1,8 @@
 """AI and ML nodes for the Kailash SDK."""
 
 from .agents import ChatAgent, FunctionCallingAgent, PlanningAgent, RetrievalAgent
+from .embedding_generator import EmbeddingGenerator
+from .llm_agent import LLMAgent
 from .models import (
     ModelPredictor,
     NamedEntityRecognizer,
@@ -10,12 +12,42 @@ from .models import (
     TextSummarizer,
 )
 
+# Import from unified ai_providers module
+from .ai_providers import (
+    PROVIDERS,
+    AnthropicProvider,
+    BaseAIProvider,
+    CohereProvider,
+    EmbeddingProvider,
+    HuggingFaceProvider,
+    LLMProvider,
+    MockProvider,
+    OllamaProvider,
+    OpenAIProvider,
+    UnifiedAIProvider,
+    get_available_providers,
+    get_provider,
+)
+
+
 __all__ = [
     # Agents
     "ChatAgent",
     "RetrievalAgent",
     "FunctionCallingAgent",
     "PlanningAgent",
+    "LLMAgent",
+    # Embedding and Vector Operations
+    "EmbeddingGenerator",
+    # Provider Infrastructure
+    "LLMProvider",
+    "OllamaProvider",
+    "OpenAIProvider",
+    "AnthropicProvider",
+    "MockProvider",
+    "get_provider",
+    "get_available_providers",
+    "PROVIDERS",
     # Models
     "TextClassifier",
     "TextEmbedder",

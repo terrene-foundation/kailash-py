@@ -1,7 +1,5 @@
 """Unit tests for LLMAgent node."""
 
-from unittest.mock import Mock, patch
-
 import pytest
 
 from kailash.nodes.ai import LLMAgent
@@ -205,13 +203,16 @@ class TestLLMAgent:
                 # Check if Ollama is available
                 try:
                     import ollama
+
                     # Try to connect to Ollama
                     ollama.list()
                     assert result["success"] is True
                     assert result["metadata"]["provider"] == provider
                 except:
                     # If Ollama is not available, it should fail gracefully
-                    assert result["success"] is False or "Ollama" in result.get("error", "")
+                    assert result["success"] is False or "Ollama" in result.get(
+                        "error", ""
+                    )
             else:
                 assert result["success"] is True
                 assert result["metadata"]["provider"] == provider
@@ -431,7 +432,7 @@ def test_agent_with_realistic_scenario(sample_conversation_history, sample_tools
         2. Pattern identification
         3. Visualization recommendations
         4. Statistical insights
-        
+
         Use available tools to query data and create visualizations.""",
         tools=sample_tools,
         conversation_id="data_analysis_session",

@@ -186,10 +186,12 @@ The SDK includes a rich set of pre-built nodes for common operations:
 <td width="50%">
 
 **AI/ML Nodes**
-- `EmbeddingNode` - Generate embeddings
-- `VectorDatabaseNode` - Vector search
-- `ModelPredictorNode` - ML predictions
-- `LLMNode` - LLM integration
+- `LLMAgent` - Multi-provider LLM with memory & tools
+- `EmbeddingGenerator` - Vector embeddings with caching
+- `MCPClient/MCPServer` - Model Context Protocol
+- `TextClassifier` - Text classification
+- `SentimentAnalyzer` - Sentiment analysis
+- `NamedEntityRecognizer` - NER extraction
 
 </td>
 <td width="50%">
@@ -303,18 +305,18 @@ results, run_id = runtime.execute(workflow)
 try:
     # List all runs
     all_runs = task_manager.list_runs()
-    
+
     # Filter by status
     completed_runs = task_manager.list_runs(status="completed")
     failed_runs = task_manager.list_runs(status="failed")
-    
+
     # Filter by workflow name
     workflow_runs = task_manager.list_runs(workflow_name="sample_workflow")
-    
+
     # Process run information
     for run in completed_runs[:5]:  # First 5 runs
         print(f"Run {run.run_id[:8]}: {run.workflow_name} - {run.status}")
-        
+
 except Exception as e:
     print(f"Error listing runs: {e}")
     # Fallback: Access run details directly if available
@@ -333,7 +335,7 @@ workflow = Workflow("test_workflow", name="test_workflow")
 # Create test runtime with debugging enabled
 runtime = LocalRuntime(debug=True)
 
-# Execute with test data  
+# Execute with test data
 results, run_id = runtime.execute(workflow)
 
 # Validate results
@@ -547,6 +549,45 @@ kailash/
 ├── cli/             # Command-line interface
 └── utils/           # Utilities and helpers
 ```
+
+### 🤖 Unified AI Provider Architecture
+
+The SDK features a unified provider architecture for AI capabilities:
+
+```python
+from kailash.nodes.ai import LLMAgent, EmbeddingGenerator
+
+# Multi-provider LLM support
+agent = LLMAgent()
+result = agent.run(
+    provider="ollama",  # or "openai", "anthropic", "mock"
+    model="llama3.1:8b-instruct-q8_0",
+    messages=[{"role": "user", "content": "Explain quantum computing"}],
+    generation_config={"temperature": 0.7, "max_tokens": 500}
+)
+
+# Vector embeddings with the same providers
+embedder = EmbeddingGenerator()
+embedding = embedder.run(
+    provider="ollama",  # Same providers support embeddings
+    model="snowflake-arctic-embed2",
+    operation="embed_text",
+    input_text="Quantum computing uses quantum mechanics principles"
+)
+
+# Check available providers and capabilities
+from kailash.nodes.ai.ai_providers import get_available_providers
+providers = get_available_providers()
+# Returns: {"ollama": {"available": True, "chat": True, "embeddings": True}, ...}
+```
+
+**Supported AI Providers:**
+- **Ollama**: Local LLMs with both chat and embeddings (llama3.1, mistral, etc.)
+- **OpenAI**: GPT models and text-embedding-3 series
+- **Anthropic**: Claude models (chat only)
+- **Cohere**: Embedding models (embed-english-v3.0)
+- **HuggingFace**: Sentence transformers and local models
+- **Mock**: Testing provider with consistent outputs
 
 ## 🧪 Testing
 

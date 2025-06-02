@@ -20,7 +20,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const MAX_DEPLOYMENTS = 5;  // Keep only the latest 5 deployments
-          
+
           // Get all deployments
           const deployments = await github.rest.repos.listDeployments({
             owner: context.repo.owner,
@@ -28,18 +28,18 @@ jobs:
             environment: 'github-pages',
             per_page: 100
           });
-          
+
           // Sort by creation date (newest first)
-          const sortedDeployments = deployments.data.sort((a, b) => 
+          const sortedDeployments = deployments.data.sort((a, b) =>
             new Date(b.created_at) - new Date(a.created_at)
           );
-          
+
           console.log(`Found ${sortedDeployments.length} total deployments`);
-          
+
           // Delete old deployments
           for (let i = MAX_DEPLOYMENTS; i < sortedDeployments.length; i++) {
             const deployment = sortedDeployments[i];
-            
+
             try {
               // Mark as inactive first
               await github.rest.repos.createDeploymentStatus({
@@ -49,18 +49,18 @@ jobs:
                 state: 'inactive',
                 description: 'Cleaned up by automation'
               });
-              
+
               // Then delete the deployment
               await github.rest.repos.deleteDeployment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 deployment_id: deployment.id
               });
-              
+
               console.log(`Deleted deployment ${deployment.id} from ${deployment.created_at}`);
             } catch (error) {
               console.log(`Failed to delete deployment ${deployment.id}: ${error.message}`);
             }
           }
-          
+
           console.log('Cleanup completed');

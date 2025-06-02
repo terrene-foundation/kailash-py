@@ -29,7 +29,9 @@ def demonstrate_basic_requests():
         print(f"   ✅ Status: {result['status_code']}")
         response_data = result["response"]["content"]
         print(f"   Response: {response_data.get('origin', 'N/A')}")
-        print(f"   User-Agent: {response_data.get('headers', {}).get('User-Agent', 'N/A')}")
+        print(
+            f"   User-Agent: {response_data.get('headers', {}).get('User-Agent', 'N/A')}"
+        )
     else:
         print(f"   ❌ Error: {result.get('error', 'Unknown error')}")
 
@@ -195,7 +197,7 @@ def demonstrate_error_handling():
             for suggestion in result["recovery_suggestions"][:2]:
                 print(f"      - {suggestion}")
     else:
-        print(f"   ✅ Request completed (unexpected)")
+        print("   ✅ Request completed (unexpected)")
 
 
 def demonstrate_advanced_features():
@@ -291,7 +293,7 @@ def demonstrate_workflow_integration():
 
         if user_result["success"]:
             response_data = user_result["response"]["content"]
-            print(f"   ✅ User data retrieved")
+            print("   ✅ User data retrieved")
             print(f"   Authenticated: {response_data.get('authenticated', False)}")
 
         # Step 3: Update user preferences
@@ -306,11 +308,13 @@ def demonstrate_workflow_integration():
 
         if update_result["success"]:
             response_data = update_result["response"]["content"]
-            print(f"   ✅ Preferences updated")
+            print("   ✅ Preferences updated")
             print(f"   Updated data: {response_data.get('json', {})}")
 
     print("\n" + "=" * 50)
-    print("✨ Enhanced HTTPRequestNode provides all features in a single, unified interface!")
+    print(
+        "✨ Enhanced HTTPRequestNode provides all features in a single, unified interface!"
+    )
 
 
 def main():

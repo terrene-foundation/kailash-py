@@ -259,7 +259,7 @@ def create_rate_limiter(config: RateLimitConfig) -> RateLimiter:
         raise ValueError(f"Unsupported rate limiting strategy: {config.strategy}")
 
 
-@register_node(alias="RateLimitedAPI")
+@register_node()
 class RateLimitedAPINode(Node):
     """Wrapper node that adds rate limiting to any API node.
 
@@ -427,7 +427,7 @@ class RateLimitedAPINode(Node):
         )
 
 
-@register_node(alias="AsyncRateLimitedAPI")
+@register_node()
 class AsyncRateLimitedAPINode(AsyncNode):
     """Asynchronous wrapper node that adds rate limiting to any async API node.
 

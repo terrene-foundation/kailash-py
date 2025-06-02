@@ -47,7 +47,7 @@ This document tracks nodes that are planned for implementation to support curren
 - **Client Impact**: Core requirement for current agentic projects
 - **Estimated Effort**: 2-3 weeks
 
-#### EmbeddingGenerator Node  
+#### EmbeddingGenerator Node
 - **Priority**: 🔴 **URGENT** (Active client need)
 - **Use Case**: Vector search, RAG systems, semantic similarity
 - **Features**:
@@ -147,7 +147,7 @@ This document tracks nodes that are planned for implementation to support curren
 **Target**: Robust API and data integration
 
 1. **HTTPClient Node** (1-2 weeks)
-2. **RESTClient Node** (1-2 weeks) 
+2. **RESTClient Node** (1-2 weeks)
 3. **GraphQLClient Node** (1 week)
 
 ### Phase 3: Data Processing Enhancement (3-4 weeks) 🟡
@@ -170,7 +170,7 @@ This document tracks nodes that are planned for implementation to support curren
 ### Current Client Needs (Q1 2025)
 - ✅ **PythonCodeNode**: Already implemented (can handle custom logic)
 - 🔴 **LLMAgent**: Required for all agentic workflows
-- 🔴 **EmbeddingGenerator**: Required for RAG implementations  
+- 🔴 **EmbeddingGenerator**: Required for RAG implementations
 - 🟠 **HTTPClient/RESTClient**: Required for API integrations
 - 🟡 **DataFilter/Mapper**: Nice-to-have (workarounds exist)
 

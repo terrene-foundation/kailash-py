@@ -35,11 +35,11 @@ Data Nodes
 .. note::
 
    Additional data nodes are planned for future releases:
-   
+
    - **XMLReader/XMLWriter**: For XML file processing
    - **ParquetReader/ParquetWriter**: For Apache Parquet columnar storage
    - **ExcelReader/ExcelWriter**: For Microsoft Excel files
-   
+
    Track implementation progress in the `GitHub issues <https://github.com/your-org/kailash-sdk/issues>`_.
 
 
@@ -64,13 +64,13 @@ CSVReader
    from kailash.nodes.data import CSVReader
 
    workflow = Workflow("csv_example")
-   
+
    # Create the CSV reader node
    csv_reader = CSVReader(
        file_path="customers.csv",
        encoding="utf-8"
    )
-   
+
    # Add the node to the workflow
    workflow.add_node("read_customers", csv_reader)
 
