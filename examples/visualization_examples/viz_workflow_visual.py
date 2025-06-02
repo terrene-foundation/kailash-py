@@ -24,7 +24,7 @@ def create_data_pipeline():
 
     # 1. Input: CSV Reader
     csv_reader = CSVReader(
-        file_path=Path("tests/sample_data/customer_value.csv"),
+        file_path=Path("tests/sample_examples/data/customer_value.csv"),
         headers=True,
         delimiter=",",
     )
@@ -113,7 +113,7 @@ def create_data_pipeline():
     summarizer.id = "summarizer"
 
     # 5. Output: CSV Writers
-    output_dir = Path("output")
+    output_dir = Path("../outputs")
     output_dir.mkdir(exist_ok=True)
 
     enriched_writer = CSVWriter(
@@ -157,7 +157,7 @@ def main():
     """Execute the data pipeline and visualize it."""
 
     # Create sample data if needed
-    sample_dir = Path("tests/sample_data")
+    sample_dir = Path("../tests/sample_data")
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     if not (sample_dir / "customer_value.csv").exists():
@@ -203,7 +203,7 @@ def main():
     visualizer = WorkflowVisualizer()
 
     # Save workflow diagram
-    output_dir = Path("output")
+    output_dir = Path("../outputs")
     output_dir.mkdir(exist_ok=True)
 
     try:
@@ -222,7 +222,7 @@ def main():
     # Execute the workflow
     print("\n=== Executing Workflow ===")
     runner = LocalRuntime(debug=True)
-    result = runner.run(workflow)
+    runner.run(workflow)
 
     # Display results
     print("\nExecution Results:")

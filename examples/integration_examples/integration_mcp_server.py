@@ -27,7 +27,7 @@ def get_document(document: str = "customer_value.csv") -> dict:
     """
     from kailash.nodes.data import CSVReader
 
-    sample_directory = Path("tests/sample_data")
+    sample_directory = Path("../tests/sample_data")
 
     csv_reader_node = CSVReader(
         file_path=sample_directory / document, headers=True, delimiter=","

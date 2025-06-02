@@ -14,8 +14,8 @@ def main():
     """Simple example of connecting data nodes to Python nodes."""
 
     # Setup paths
-    sample_dir = Path("tests/sample_data")
-    output_dir = Path("output")
+    sample_dir = Path("../tests/sample_data")
+    output_dir = Path("../outputs")
     output_dir.mkdir(exist_ok=True)
 
     print("=== Simple Node Connection Example ===\n")
@@ -231,7 +231,7 @@ def main():
 
 if __name__ == "__main__":
     # Ensure sample data exists
-    sample_dir = Path("tests/sample_data")
+    sample_dir = Path("../tests/sample_data")
     if not (sample_dir / "customer_value.csv").exists():
         print("Creating sample data...")
 

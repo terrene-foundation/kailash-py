@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def generate_sample_data():
     """Generate sample data files for the example."""
     # Create data directory if it doesn't exist
-    os.makedirs("../data/outputs", exist_ok=True)
+    os.makedirs("../outputs", exist_ok=True)
 
     # Sample transaction data with different status values
     transactions = [
@@ -165,23 +165,23 @@ def create_conditional_workflow() -> Workflow:
     # Output writers for each transaction status
     workflow.add_node(
         "completed_writer",
-        JSONWriter(file_path="../data/outputs/completed_transactions.json"),
+        JSONWriter(file_path="../outputs/completed_transactions.json"),
     )
 
     workflow.add_node(
         "pending_writer",
-        JSONWriter(file_path="../data/outputs/pending_transactions.json"),
+        JSONWriter(file_path="../outputs/pending_transactions.json"),
     )
 
     workflow.add_node(
         "failed_writer",
-        JSONWriter(file_path="../data/outputs/failed_transactions.json"),
+        JSONWriter(file_path="../outputs/failed_transactions.json"),
     )
 
     # Output node for all transactions
     workflow.add_node(
         "results_writer",
-        JSONWriter(file_path="../data/outputs/processed_transactions.json"),
+        JSONWriter(file_path="../outputs/processed_transactions.json"),
     )
 
     # 2. Connect the nodes
@@ -326,7 +326,7 @@ def create_multi_condition_workflow() -> Workflow:
     # Output
     workflow.add_node(
         "results_writer",
-        JSONWriter(file_path="../data/outputs/multi_condition_results.json"),
+        JSONWriter(file_path="../outputs/multi_condition_results.json"),
     )
 
     # Connect nodes - First connect data sources for joining
@@ -393,10 +393,10 @@ def run_example():
     # Check output files
     try:
         output_files = [
-            "../data/outputs/processed_transactions.json",
-            "../data/outputs/completed_transactions.json",
-            "../data/outputs/pending_transactions.json",
-            "../data/outputs/failed_transactions.json",
+            "../outputs/processed_transactions.json",
+            "../outputs/completed_transactions.json",
+            "../outputs/pending_transactions.json",
+            "../outputs/failed_transactions.json",
         ]
 
         for file_path in output_files:
