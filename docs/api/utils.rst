@@ -11,7 +11,8 @@ This section covers utility functions and helpers in the Kailash SDK.
 Export Utilities
 ================
 
-The export module provides functionality for exporting workflows to various formats compatible with Kailash orchestration.
+The export module provides functionality for exporting workflows to various formats
+compatible with Kailash orchestration.
 
 WorkflowExporter
 ----------------
@@ -131,143 +132,129 @@ Export Options
    # Save to file
    exporter.save("workflow.yaml", **export_config)
 
-Template Utilities
-==================
+Hierarchical RAG Utilities
+==========================
 
-Templates for creating common workflow patterns.
+The SDK provides specialized nodes for building hierarchical Retrieval-Augmented
+Generation (RAG) workflows.
 
-WorkflowTemplates
------------------
+RAG Components
+--------------
 
-.. note::
-   🚧 **Coming Soon** - This utility is planned for a future release.
-
-**Planned Features:**
-- Pre-built workflow templates for common patterns
-- ETL pipeline templates
-- API integration templates
-- ML pipeline templates
-- **Agentic workflow templates** (LangChain/Langgraph integration)
-
-**Alternative:** Build workflows manually using the WorkflowBuilder for now.
-
-**Available Templates:**
-
-ETL Pipeline Template
-~~~~~~~~~~~~~~~~~~~~~
+**Data Source Nodes:**
 
 .. code-block:: python
 
-   from kailash.utils.templates import WorkflowTemplates
+   from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 
-   # Create ETL pipeline
-   workflow = WorkflowTemplates.create_etl_pipeline(
-       name="customer_etl",
-       source_config={
-           "type": "CSVReader",
-           "file_path": "raw_customers.csv"
-       },
-       transform_config={
-           "operations": [
-               {"type": "clean", "columns": ["email", "phone"]},
-               {"type": "validate", "schema": "customer_schema.json"},
-               {"type": "enrich", "lookup": "geo_data.csv"}
-           ]
-       },
-       target_config={
-           "type": "SQLWriter",
-           "connection_string": "postgresql://localhost/warehouse",
-           "table": "dim_customers"
-       }
+   # Autonomous document provider
+   doc_source = DocumentSourceNode()
+
+   # Query provider for RAG processing
+   query_source = QuerySourceNode()
+
+**Document Processing Nodes:**
+
+.. code-block:: python
+
+   from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+   from kailash.nodes.transform.formatters import (
+       ChunkTextExtractorNode, QueryTextWrapperNode, ContextFormatterNode
    )
 
-API Integration Template
-~~~~~~~~~~~~~~~~~~~~~~~~
+   # Split documents into intelligent chunks
+   chunker = HierarchicalChunkerNode(chunk_size=200, overlap=50)
+
+   # Extract text for embedding generation
+   text_extractor = ChunkTextExtractorNode()
+
+   # Wrap queries for batch processing
+   query_wrapper = QueryTextWrapperNode()
+
+   # Format context for LLM consumption
+   context_formatter = ContextFormatterNode()
+
+**Retrieval and Scoring:**
 
 .. code-block:: python
 
-   # Create API integration workflow
-   workflow = WorkflowTemplates.create_api_integration(
-       name="api_sync",
-       api_config={
-           "base_url": "https://api.example.com",
-           "auth": {
-               "type": "oauth2",
-               "client_id": "${CLIENT_ID}",
-               "client_secret": "${CLIENT_SECRET}"
-           }
-       },
-       endpoints=[
-           {"path": "/users", "method": "GET"},
-           {"path": "/orders", "method": "GET"},
-           {"path": "/products", "method": "GET"}
-       ],
-       output_format="json"
+   from kailash.nodes.data.retrieval import RelevanceScorerNode
+
+   # Multi-method similarity scoring
+   relevance_scorer = RelevanceScorerNode(
+       similarity_method="cosine",  # or "text_based"
+       top_k=3
    )
 
-ML Pipeline Template
-~~~~~~~~~~~~~~~~~~~~
+Complete RAG Pipeline Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-   # Create ML pipeline
-   workflow = WorkflowTemplates.create_ml_pipeline(
-       name="customer_churn_prediction",
-       data_source="customers.csv",
-       feature_engineering=[
-           {"type": "normalize", "columns": ["age", "income"]},
-           {"type": "encode", "columns": ["category", "region"]},
-           {"type": "generate", "features": ["recency", "frequency"]}
-       ],
-       model_config={
-           "type": "RandomForestClassifier",
-           "params": {
-               "n_estimators": 100,
-               "max_depth": 10
-           }
-       },
-       output_path="predictions.csv"
+   from kailash.workflow import Workflow
+   from kailash.nodes.ai.embedding_generator import EmbeddingGenerator
+   from kailash.nodes.ai.llm_agent import LLMAgent
+   from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
+   from kailash.nodes.data.retrieval import RelevanceScorerNode
+   from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+   from kailash.nodes.transform.formatters import (
+       ChunkTextExtractorNode, QueryTextWrapperNode, ContextFormatterNode
    )
 
-Custom Templates
-----------------
+   # Create hierarchical RAG workflow
+   workflow = Workflow("hierarchical_rag", name="Hierarchical RAG Workflow")
 
-Create custom workflow templates:
+   # Data sources (autonomous - no external files needed)
+   doc_source = DocumentSourceNode()
+   query_source = QuerySourceNode()
 
-.. code-block:: python
+   # Document processing pipeline
+   chunker = HierarchicalChunkerNode()
+   chunk_text_extractor = ChunkTextExtractorNode()
+   query_text_wrapper = QueryTextWrapperNode()
 
-   from kailash.utils.templates import BaseTemplate
+   # AI processing with Ollama
+   chunk_embedder = EmbeddingGenerator(
+       provider="ollama", model="nomic-embed-text", operation="embed_batch"
+   )
+   query_embedder = EmbeddingGenerator(
+       provider="ollama", model="nomic-embed-text", operation="embed_batch"
+   )
 
-   class DataQualityTemplate(BaseTemplate):
-       """Template for data quality workflows."""
+   # Retrieval and response generation
+   relevance_scorer = RelevanceScorerNode()
+   context_formatter = ContextFormatterNode()
+   llm_agent = LLMAgent(provider="ollama", model="llama3.2", temperature=0.7)
 
-       def create(self, **kwargs):
-           workflow = Workflow(kwargs['name'])
+   # Add all nodes to workflow
+   for name, node in {
+       "doc_source": doc_source, "query_source": query_source,
+       "chunker": chunker, "chunk_text_extractor": chunk_text_extractor,
+       "query_text_wrapper": query_text_wrapper, "chunk_embedder": chunk_embedder,
+       "query_embedder": query_embedder, "relevance_scorer": relevance_scorer,
+       "context_formatter": context_formatter, "llm_agent": llm_agent
+   }.items():
+       workflow.add_node(name, node)
 
-           # Add data reader
-           workflow.add_node("CSVReader", "input", config={
-               "file_path": kwargs['input_file']
-           })
+   # Connect the RAG pipeline
+   workflow.connect("doc_source", "chunker", {"documents": "documents"})
+   workflow.connect("chunker", "chunk_text_extractor", {"chunks": "chunks"})
+   workflow.connect("chunk_text_extractor", "chunk_embedder", {"input_texts": "input_texts"})
+   workflow.connect("query_source", "query_text_wrapper", {"query": "query"})
+   workflow.connect("query_text_wrapper", "query_embedder", {"input_texts": "input_texts"})
+   workflow.connect("chunker", "relevance_scorer", {"chunks": "chunks"})
+   workflow.connect("query_embedder", "relevance_scorer", {"embeddings": "query_embedding"})
+   workflow.connect("chunk_embedder", "relevance_scorer", {"embeddings": "chunk_embeddings"})
+   workflow.connect("relevance_scorer", "context_formatter", {"relevant_chunks": "relevant_chunks"})
+   workflow.connect("query_source", "context_formatter", {"query": "query"})
+   workflow.connect("context_formatter", "llm_agent", {"messages": "messages"})
 
-           # Add quality checks
-           checks = kwargs.get('quality_checks', [])
-           for i, check in enumerate(checks):
-               node_id = f"check_{i}"
-               workflow.add_node("DataValidator", node_id, config=check)
+   # Execute the RAG workflow
+   from kailash.runtime.local import LocalRuntime
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow)
 
-               if i == 0:
-                   workflow.add_edge("input", node_id)
-               else:
-                   workflow.add_edge(f"check_{i-1}", node_id)
-
-           # Add report generator
-           workflow.add_node("QualityReporter", "report", config={
-               "output_path": kwargs.get('report_path', 'quality_report.html')
-           })
-
-           workflow.add_edge(f"check_{len(checks)-1}", "report")
-
-           return workflow
+   print("RAG Response:", results["llm_agent"]["response"])
 
 Node Registry Utilities
 =======================
