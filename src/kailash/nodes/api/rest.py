@@ -18,7 +18,7 @@ from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
-@register_node(alias="RESTClient")
+@register_node()
 class RESTClientNode(Node):
     """Node for interacting with REST APIs.
 
@@ -60,7 +60,7 @@ class RESTClientNode(Node):
             **kwargs: Additional parameters passed to base Node
         """
         super().__init__(**kwargs)
-        self.http_node = HTTPRequestNode(**kwargs)
+        self.http_node = HTTPRequestNode(url="")
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define the parameters this node accepts.
@@ -72,13 +72,13 @@ class RESTClientNode(Node):
             "base_url": NodeParameter(
                 name="base_url",
                 type=str,
-                required=True,
+                required=False,
                 description="Base URL for the REST API (e.g., https://api.example.com)",
             ),
             "resource": NodeParameter(
                 name="resource",
                 type=str,
-                required=True,
+                required=False,
                 description="API resource path (e.g., 'users' or 'products/{id}')",
             ),
             "method": NodeParameter(
@@ -164,6 +164,41 @@ class RESTClientNode(Node):
                 required=False,
                 default=0.5,
                 description="Backoff factor for retries",
+            ),
+            "auth_type": NodeParameter(
+                name="auth_type",
+                type=str,
+                required=False,
+                default=None,
+                description="Authentication type: bearer, basic, api_key, oauth2",
+            ),
+            "auth_token": NodeParameter(
+                name="auth_token",
+                type=str,
+                required=False,
+                default=None,
+                description="Authentication token/key for bearer, api_key, or oauth2",
+            ),
+            "auth_username": NodeParameter(
+                name="auth_username",
+                type=str,
+                required=False,
+                default=None,
+                description="Username for basic authentication",
+            ),
+            "auth_password": NodeParameter(
+                name="auth_password",
+                type=str,
+                required=False,
+                default=None,
+                description="Password for basic authentication",
+            ),
+            "api_key_header": NodeParameter(
+                name="api_key_header",
+                type=str,
+                required=False,
+                default="X-API-Key",
+                description="Header name for API key authentication",
             ),
         }
 
@@ -383,6 +418,11 @@ class RESTClientNode(Node):
             pagination_params (dict, optional): Pagination configuration
             retry_count (int, optional): Number of times to retry failed requests
             retry_backoff (float, optional): Backoff factor for retries
+            auth_type (str, optional): Authentication type (bearer, basic, api_key, oauth2)
+            auth_token (str, optional): Authentication token/key
+            auth_username (str, optional): Username for basic auth
+            auth_password (str, optional): Password for basic auth
+            api_key_header (str, optional): Header name for API key auth
 
         Returns:
             Dictionary containing:
@@ -409,6 +449,12 @@ class RESTClientNode(Node):
         pagination_params = kwargs.get("pagination_params")
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
+        # Authentication parameters
+        auth_type = kwargs.get("auth_type")
+        auth_token = kwargs.get("auth_token")
+        auth_username = kwargs.get("auth_username")
+        auth_password = kwargs.get("auth_password")
+        api_key_header = kwargs.get("api_key_header", "X-API-Key")
 
         # Build full URL with path parameters
         url = self._build_url(base_url, resource, path_params, version)
@@ -438,6 +484,11 @@ class RESTClientNode(Node):
             "verify_ssl": verify_ssl,
             "retry_count": retry_count,
             "retry_backoff": retry_backoff,
+            "auth_type": auth_type,
+            "auth_token": auth_token,
+            "auth_username": auth_username,
+            "auth_password": auth_password,
+            "api_key_header": api_key_header,
         }
 
         # Execute the HTTP request
@@ -445,30 +496,56 @@ class RESTClientNode(Node):
         result = self.http_node.run(**http_params)
 
         # Extract response data
-        response = result["response"]
-        status_code = result["status_code"]
-        success = result["success"]
+        response = result.get("response")
+        status_code = result.get("status_code")
+        success = result.get("success", False)
 
         # Handle potential error responses
         if not success:
-            error_message = "Unknown error"
-            if isinstance(response["content"], dict):
+            error_message = result.get("error", "Unknown error")
+            
+            # If we have a response object, try to extract error details
+            if response and isinstance(response.get("content"), dict):
                 # Try to extract error message from common formats
-                error_message = (
-                    response["content"].get("error", {}).get("message")
-                    or response["content"].get("message")
-                    or response["content"].get("error")
-                    or f"API returned error status: {status_code}"
-                )
+                content = response["content"]
+                # Handle case where error is a string or dict
+                error_value = content.get("error")
+                if isinstance(error_value, dict):
+                    error_message = error_value.get("message") or error_message
+                elif isinstance(error_value, str):
+                    error_message = error_value
+                # Check for message at root level
+                if not error_message or error_message == result.get("error", "Unknown error"):
+                    error_message = content.get("message") or error_message
+            
+            # If we have a status code, include it
+            if status_code:
+                error_message = f"{error_message} (status: {status_code})"
 
             self.logger.error(f"REST API error: {error_message}")
+            
+            # Return error response with recovery suggestions if available
+            error_result = {
+                "data": None,
+                "status_code": status_code,
+                "success": False,
+                "error": error_message,
+                "error_type": result.get("error_type", "APIError"),
+                "metadata": {}
+            }
+            
+            # Include recovery suggestions if available
+            if "recovery_suggestions" in result:
+                error_result["recovery_suggestions"] = result["recovery_suggestions"]
+                
+            return error_result
 
             # Note: We don't raise an exception here, as the caller might want
             # to handle error responses normally. Instead, we set success=False
             # and include error details in the response.
 
         # Handle pagination if requested
-        data = response["content"]
+        data = response["content"] if response else None
         if paginate and method == "GET" and success:
             try:
                 data = self._handle_pagination(data, query_params, pagination_params)
@@ -479,9 +556,14 @@ class RESTClientNode(Node):
         metadata = {
             "url": url,
             "method": method,
-            "response_time_ms": response["response_time_ms"],
-            "headers": response["headers"],
         }
+        
+        # Add response metadata if available
+        if response:
+            metadata["response_time_ms"] = response.get("response_time_ms", 0)
+            metadata["headers"] = response.get("headers", {})
+            # Extract additional metadata
+            metadata.update(self._extract_metadata(response))
 
         return {
             "data": data,
@@ -490,8 +572,293 @@ class RESTClientNode(Node):
             "metadata": metadata,
         }
 
+    # Convenience methods for CRUD operations
+    def get(
+        self, base_url: str, resource: str, resource_id: Optional[str] = None, **kwargs
+    ) -> Dict[str, Any]:
+        """GET a resource or list of resources.
 
-@register_node(alias="AsyncRESTClient")
+        Args:
+            base_url: Base API URL
+            resource: Resource name (e.g., 'users', 'posts')
+            resource_id: Optional resource ID for single resource retrieval
+            **kwargs: Additional parameters (query_params, headers, etc.)
+
+        Returns:
+            API response dictionary
+        """
+        if resource_id:
+            # Single resource retrieval
+            path_params = kwargs.pop("path_params", {})
+            path_params["id"] = resource_id
+            resource_path = f"{resource}/{{id}}"
+        else:
+            # List resources
+            resource_path = resource
+            path_params = kwargs.pop("path_params", {})
+
+        return self.run(
+            base_url=base_url,
+            resource=resource_path,
+            method="GET",
+            path_params=path_params,
+            **kwargs,
+        )
+
+    def create(
+        self, base_url: str, resource: str, data: Dict[str, Any], **kwargs
+    ) -> Dict[str, Any]:
+        """CREATE (POST) a new resource.
+
+        Args:
+            base_url: Base API URL
+            resource: Resource name (e.g., 'users', 'posts')
+            data: Resource data to create
+            **kwargs: Additional parameters (headers, etc.)
+
+        Returns:
+            API response dictionary
+        """
+        return self.run(
+            base_url=base_url, resource=resource, method="POST", data=data, **kwargs
+        )
+
+    def update(
+        self,
+        base_url: str,
+        resource: str,
+        resource_id: str,
+        data: Dict[str, Any],
+        partial: bool = False,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """UPDATE (PUT/PATCH) an existing resource.
+
+        Args:
+            base_url: Base API URL
+            resource: Resource name (e.g., 'users', 'posts')
+            resource_id: Resource ID to update
+            data: Updated resource data
+            partial: If True, use PATCH for partial update; if False, use PUT
+            **kwargs: Additional parameters (headers, etc.)
+
+        Returns:
+            API response dictionary
+        """
+        path_params = kwargs.pop("path_params", {})
+        path_params["id"] = resource_id
+
+        return self.run(
+            base_url=base_url,
+            resource=f"{resource}/{{id}}",
+            method="PATCH" if partial else "PUT",
+            path_params=path_params,
+            data=data,
+            **kwargs,
+        )
+
+    def delete(
+        self, base_url: str, resource: str, resource_id: str, **kwargs
+    ) -> Dict[str, Any]:
+        """DELETE a resource.
+
+        Args:
+            base_url: Base API URL
+            resource: Resource name (e.g., 'users', 'posts')
+            resource_id: Resource ID to delete
+            **kwargs: Additional parameters (headers, etc.)
+
+        Returns:
+            API response dictionary
+        """
+        path_params = kwargs.pop("path_params", {})
+        path_params["id"] = resource_id
+
+        return self.run(
+            base_url=base_url,
+            resource=f"{resource}/{{id}}",
+            method="DELETE",
+            path_params=path_params,
+            **kwargs,
+        )
+
+    def _extract_metadata(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract additional metadata from response.
+
+        Args:
+            response: HTTP response dictionary
+
+        Returns:
+            Dictionary with extracted metadata
+        """
+        metadata = {}
+        headers = response.get("headers", {})
+
+        # Extract rate limit information
+        rate_limit = self._extract_rate_limit_metadata(headers)
+        if rate_limit:
+            metadata["rate_limit"] = rate_limit
+
+        # Extract pagination metadata
+        pagination = self._extract_pagination_metadata(
+            headers, response.get("content", {})
+        )
+        if pagination:
+            metadata["pagination"] = pagination
+
+        # Extract HATEOAS links
+        links = self._extract_links(response.get("content", {}))
+        if links:
+            metadata["links"] = links
+
+        return metadata
+
+    def _extract_rate_limit_metadata(
+        self, headers: Dict[str, str]
+    ) -> Optional[Dict[str, Any]]:
+        """Extract rate limiting information from response headers.
+
+        Args:
+            headers: Response headers dictionary
+
+        Returns:
+            Rate limit metadata or None if not found
+        """
+        rate_limit = {}
+
+        # Common rate limit headers
+        rate_limit_headers = {
+            "X-RateLimit-Limit": "limit",
+            "X-RateLimit-Remaining": "remaining",
+            "X-RateLimit-Reset": "reset",
+            "X-Rate-Limit-Limit": "limit",
+            "X-Rate-Limit-Remaining": "remaining",
+            "X-Rate-Limit-Reset": "reset",
+            "RateLimit-Limit": "limit",
+            "RateLimit-Remaining": "remaining",
+            "RateLimit-Reset": "reset",
+        }
+
+        for header, key in rate_limit_headers.items():
+            value = headers.get(header) or headers.get(header.lower())
+            if value:
+                try:
+                    rate_limit[key] = int(value)
+                except ValueError:
+                    rate_limit[key] = value
+
+        return rate_limit if rate_limit else None
+
+    def _extract_pagination_metadata(
+        self, headers: Dict[str, str], content: Any
+    ) -> Optional[Dict[str, Any]]:
+        """Extract pagination information from headers and response body.
+
+        Args:
+            headers: Response headers dictionary
+            content: Response body content
+
+        Returns:
+            Pagination metadata or None if not found
+        """
+        pagination = {}
+
+        # Extract from headers (Link header parsing)
+        link_header = headers.get("Link") or headers.get("link")
+        if link_header:
+            links = self._parse_link_header(link_header)
+            pagination.update(links)
+
+        # Extract from response body (common patterns)
+        if isinstance(content, dict):
+            # Look for common pagination fields
+            pagination_fields = {
+                "page": ["page", "current_page", "pageNumber"],
+                "per_page": ["per_page", "page_size", "pageSize", "limit"],
+                "total": ["total", "totalCount", "total_count", "totalRecords"],
+                "total_pages": ["total_pages", "totalPages", "pageCount"],
+                "has_next": ["has_next", "hasNext", "has_more", "hasMore"],
+                "has_prev": ["has_prev", "hasPrev", "has_previous", "hasPrevious"],
+            }
+
+            for key, fields in pagination_fields.items():
+                for field in fields:
+                    # Check in root
+                    if field in content:
+                        pagination[key] = content[field]
+                        break
+                    # Check in meta/metadata
+                    meta = content.get("meta") or content.get("metadata", {})
+                    if isinstance(meta, dict) and field in meta:
+                        pagination[key] = meta[field]
+                        break
+
+        return pagination if pagination else None
+
+    def _parse_link_header(self, link_header: str) -> Dict[str, str]:
+        """Parse Link header for pagination URLs.
+
+        Args:
+            link_header: Link header value
+
+        Returns:
+            Dictionary of rel -> URL mappings
+        """
+        links = {}
+
+        # Parse Link header format: <url>; rel="next", <url>; rel="prev"
+        for link in link_header.split(","):
+            link = link.strip()
+            if ";" in link:
+                url_part, rel_part = link.split(";", 1)
+                url = url_part.strip("<>")
+                rel_match = rel_part.split("=", 1)
+                if len(rel_match) == 2:
+                    rel = rel_match[1].strip("\"'")
+                    links[rel] = url
+
+        return links
+
+    def _extract_links(self, content: Any) -> Optional[Dict[str, Any]]:
+        """Extract HATEOAS links from response content.
+
+        Args:
+            content: Response body content
+
+        Returns:
+            Links dictionary or None if not found
+        """
+        if not isinstance(content, dict):
+            return None
+
+        links = {}
+
+        # Check common link locations
+        link_fields = ["links", "_links", "link", "href"]
+
+        for field in link_fields:
+            if field in content:
+                link_data = content[field]
+                if isinstance(link_data, dict):
+                    # HAL format: {"self": {"href": "..."}, "next": {"href": "..."}}
+                    for rel, link_obj in link_data.items():
+                        if isinstance(link_obj, dict) and "href" in link_obj:
+                            links[rel] = link_obj["href"]
+                        elif isinstance(link_obj, str):
+                            links[rel] = link_obj
+                elif isinstance(link_data, list):
+                    # Array of link objects
+                    for link_obj in link_data:
+                        if isinstance(link_obj, dict):
+                            rel = link_obj.get("rel", "related")
+                            href = link_obj.get("href") or link_obj.get("url")
+                            if href:
+                                links[rel] = href
+
+        return links if links else None
+
+
+@register_node()
 class AsyncRESTClientNode(AsyncNode):
     """Asynchronous node for interacting with REST APIs.
 
@@ -585,6 +952,12 @@ class AsyncRESTClientNode(AsyncNode):
         pagination_params = kwargs.get("pagination_params")
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
+        # Authentication parameters
+        auth_type = kwargs.get("auth_type")
+        auth_token = kwargs.get("auth_token")
+        auth_username = kwargs.get("auth_username")
+        auth_password = kwargs.get("auth_password")
+        api_key_header = kwargs.get("api_key_header", "X-API-Key")
 
         # Build full URL with path parameters (reuse from synchronous version)
         url = self.rest_node._build_url(base_url, resource, path_params, version)
@@ -614,6 +987,11 @@ class AsyncRESTClientNode(AsyncNode):
             "verify_ssl": verify_ssl,
             "retry_count": retry_count,
             "retry_backoff": retry_backoff,
+            "auth_type": auth_type,
+            "auth_token": auth_token,
+            "auth_username": auth_username,
+            "auth_password": auth_password,
+            "api_key_header": api_key_header,
         }
 
         # Execute the HTTP request asynchronously
@@ -621,23 +999,49 @@ class AsyncRESTClientNode(AsyncNode):
         result = await self.http_node.async_run(**http_params)
 
         # Extract response data
-        response = result["response"]
-        status_code = result["status_code"]
-        success = result["success"]
+        response = result.get("response")
+        status_code = result.get("status_code")
+        success = result.get("success", False)
 
         # Handle potential error responses
         if not success:
-            error_message = "Unknown error"
-            if isinstance(response["content"], dict):
+            error_message = result.get("error", "Unknown error")
+            
+            # If we have a response object, try to extract error details
+            if response and isinstance(response.get("content"), dict):
                 # Try to extract error message from common formats
-                error_message = (
-                    response["content"].get("error", {}).get("message")
-                    or response["content"].get("message")
-                    or response["content"].get("error")
-                    or f"API returned error status: {status_code}"
-                )
+                content = response["content"]
+                # Handle case where error is a string or dict
+                error_value = content.get("error")
+                if isinstance(error_value, dict):
+                    error_message = error_value.get("message") or error_message
+                elif isinstance(error_value, str):
+                    error_message = error_value
+                # Check for message at root level
+                if not error_message or error_message == result.get("error", "Unknown error"):
+                    error_message = content.get("message") or error_message
+            
+            # If we have a status code, include it
+            if status_code:
+                error_message = f"{error_message} (status: {status_code})"
 
             self.logger.error(f"REST API error: {error_message}")
+            
+            # Return error response with recovery suggestions if available
+            error_result = {
+                "data": None,
+                "status_code": status_code,
+                "success": False,
+                "error": error_message,
+                "error_type": result.get("error_type", "APIError"),
+                "metadata": {}
+            }
+            
+            # Include recovery suggestions if available
+            if "recovery_suggestions" in result:
+                error_result["recovery_suggestions"] = result["recovery_suggestions"]
+                
+            return error_result
 
         # Handle pagination if requested (simplified for now)
         data = response["content"]
