@@ -4,11 +4,11 @@ metadata:
   description: Analyze customer data and generate insights
   version: 1.0.0
   author: John Doe
-  created_at: '2025-06-02T10:09:43.624130+00:00'
+  created_at: '2025-06-02T16:32:15.685037+00:00'
   tags:
   - customer
-  - ml
   - analytics
+  - ml
 nodes:
   reader:
     type: CSVReader

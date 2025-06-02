@@ -17,20 +17,29 @@ kailash_python_sdk/           # Project root directory
 │       │   │   ├── __init__.py
 │       │   │   ├── readers.py # Data source nodes
 │       │   │   ├── writers.py # Data sink nodes
+│       │   │   ├── sources.py # Data input/source nodes
+│       │   │   ├── retrieval.py # Document retrieval and similarity
 │       │   │   ├── sql.py     # SQL database nodes
 │       │   │   ├── streaming.py # Streaming data nodes
+│       │   │   ├── sharepoint_graph.py # SharePoint integration
 │       │   │   └── vector_db.py # Vector database nodes
 │       │   ├── transform/    # Transformation nodes
 │       │   │   ├── __init__.py
-│       │   │   └── processors.py # Data transformation nodes
+│       │   │   ├── processors.py # Data transformation nodes
+│       │   │   ├── chunkers.py # Document chunking and splitting
+│       │   │   └── formatters.py # Text formatting and preparation
 │       │   ├── logic/        # Business logic nodes
 │       │   │   ├── __init__.py
 │       │   │   ├── operations.py # Logical operation nodes
 │       │   │   └── async_operations.py # Async operations
 │       │   ├── ai/           # AI & ML nodes
 │       │   │   ├── __init__.py
+│       │   │   ├── ai_providers.py # Unified AI provider architecture
+│       │   │   ├── llm_agent.py # Large Language Model agents
+│       │   │   ├── embedding_generator.py # Vector embedding generation
+│       │   │   ├── document_processing.py # Document processing nodes
 │       │   │   ├── models.py  # ML model nodes
-│       │   │   └── agents.py  # AI agent nodes
+│       │   │   └── agents.py  # Legacy AI agent nodes
 │       │   ├── api/          # API integration nodes
 │       │   │   ├── __init__.py
 │       │   │   ├── http.py    # HTTP client nodes
@@ -38,6 +47,11 @@ kailash_python_sdk/           # Project root directory
 │       │   │   ├── graphql.py # GraphQL nodes
 │       │   │   ├── auth.py    # Authentication nodes
 │       │   │   └── rate_limiting.py # Rate limiting
+│       │   ├── mcp/          # Model Context Protocol nodes
+│       │   │   ├── __init__.py
+│       │   │   ├── client.py  # MCP client integration
+│       │   │   ├── server.py  # MCP server implementation
+│       │   │   └── resource.py # MCP resource handling
 │       │   └── code/         # Code execution nodes
 │       │       ├── __init__.py
 │       │       └── python.py  # Python code execution
@@ -86,6 +100,7 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── test_code.py
 │   │   ├── test_logic.py
 │   │   ├── test_transform.py
+│   │   ├── test_mcp.py
 │   │   └── test_async_operations.py
 │   ├── test_workflow/       # Workflow tests
 │   │   ├── test_graph.py
@@ -190,6 +205,7 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── workflow_comprehensive.py
 │   │   ├── workflow_conditional.py
 │   │   ├── workflow_parallel.py
+│   │   ├── workflow_hierarchical_rag.py # RAG with embedding retrieval
 │   │   ├── workflow_error_handling.py
 │   │   └── workflow_task_tracking.py
 │   ├── integration_examples/ # API and system integrations

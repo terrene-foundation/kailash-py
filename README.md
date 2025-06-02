@@ -6,8 +6,8 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-571%20passing-brightgreen.svg" alt="Tests: 571 passing">
-  <img src="https://img.shields.io/badge/coverage-89%25-brightgreen.svg" alt="Coverage: 89%">
+  <img src="https://img.shields.io/badge/tests-746%20passing-brightgreen.svg" alt="Tests: 746 passing">
+  <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
 <p align="center">
@@ -28,6 +28,8 @@
 - 📊 **Real-time Monitoring**: Live dashboards with WebSocket streaming and performance metrics
 - 🧩 **Extensible**: Easy to create custom nodes for domain-specific operations
 - ⚡ **Fast Installation**: Uses `uv` for lightning-fast Python package management
+- 🤖 **AI-Powered**: Complete LLM agents, embeddings, and hierarchical RAG architecture
+- 🧠 **Retrieval-Augmented Generation**: Full RAG pipeline with intelligent document processing
 
 ## 🎯 Who Is This For?
 
@@ -143,6 +145,75 @@ runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, inputs=inputs)
 ```
 
+### Hierarchical RAG Example
+
+```python
+from kailash.workflow import Workflow
+from kailash.nodes.ai.embedding_generator import EmbeddingGenerator
+from kailash.nodes.ai.llm_agent import LLMAgent
+from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
+from kailash.nodes.data.retrieval import RelevanceScorerNode
+from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+from kailash.nodes.transform.formatters import (
+    ChunkTextExtractorNode, QueryTextWrapperNode, ContextFormatterNode
+)
+
+# Create hierarchical RAG workflow
+workflow = Workflow("hierarchical_rag", name="Hierarchical RAG Workflow")
+
+# Data sources (autonomous - no external files needed)
+doc_source = DocumentSourceNode()
+query_source = QuerySourceNode()
+
+# Document processing pipeline
+chunker = HierarchicalChunkerNode()
+chunk_text_extractor = ChunkTextExtractorNode()
+query_text_wrapper = QueryTextWrapperNode()
+
+# AI processing with Ollama
+chunk_embedder = EmbeddingGenerator(
+    provider="ollama", model="nomic-embed-text", operation="embed_batch"
+)
+query_embedder = EmbeddingGenerator(
+    provider="ollama", model="nomic-embed-text", operation="embed_batch"
+)
+
+# Retrieval and response generation
+relevance_scorer = RelevanceScorerNode()
+context_formatter = ContextFormatterNode()
+llm_agent = LLMAgent(provider="ollama", model="llama3.2", temperature=0.7)
+
+# Add all nodes to workflow
+for name, node in {
+    "doc_source": doc_source, "query_source": query_source,
+    "chunker": chunker, "chunk_text_extractor": chunk_text_extractor,
+    "query_text_wrapper": query_text_wrapper, "chunk_embedder": chunk_embedder,
+    "query_embedder": query_embedder, "relevance_scorer": relevance_scorer,
+    "context_formatter": context_formatter, "llm_agent": llm_agent
+}.items():
+    workflow.add_node(name, node)
+
+# Connect the RAG pipeline
+workflow.connect("doc_source", "chunker", {"documents": "documents"})
+workflow.connect("chunker", "chunk_text_extractor", {"chunks": "chunks"})
+workflow.connect("chunk_text_extractor", "chunk_embedder", {"input_texts": "input_texts"})
+workflow.connect("query_source", "query_text_wrapper", {"query": "query"})
+workflow.connect("query_text_wrapper", "query_embedder", {"input_texts": "input_texts"})
+workflow.connect("chunker", "relevance_scorer", {"chunks": "chunks"})
+workflow.connect("query_embedder", "relevance_scorer", {"embeddings": "query_embedding"})
+workflow.connect("chunk_embedder", "relevance_scorer", {"embeddings": "chunk_embeddings"})
+workflow.connect("relevance_scorer", "context_formatter", {"relevant_chunks": "relevant_chunks"})
+workflow.connect("query_source", "context_formatter", {"query": "query"})
+workflow.connect("context_formatter", "llm_agent", {"messages": "messages"})
+
+# Execute the RAG workflow
+from kailash.runtime.local import LocalRuntime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow)
+
+print("RAG Response:", results["llm_agent"]["response"])
+```
+
 ## 📚 Documentation
 
 | Resource | Description |
@@ -166,6 +237,9 @@ The SDK includes a rich set of pre-built nodes for common operations:
 **Data Operations**
 - `CSVReader` - Read CSV files
 - `JSONReader` - Read JSON files
+- `DocumentSourceNode` - Sample document provider
+- `QuerySourceNode` - Sample query provider
+- `RelevanceScorerNode` - Multi-method similarity
 - `SQLDatabaseNode` - Query databases
 - `CSVWriter` - Write CSV files
 - `JSONWriter` - Write JSON files
@@ -173,12 +247,15 @@ The SDK includes a rich set of pre-built nodes for common operations:
 </td>
 <td width="50%">
 
-**Processing Nodes**
+**Transform Nodes**
 - `PythonCodeNode` - Custom Python logic
 - `DataTransformer` - Transform data
+- `HierarchicalChunkerNode` - Document chunking
+- `ChunkTextExtractorNode` - Extract chunk text
+- `QueryTextWrapperNode` - Wrap queries for processing
+- `ContextFormatterNode` - Format LLM context
 - `Filter` - Filter records
 - `Aggregator` - Aggregate data
-- `TextProcessor` - Process text
 
 </td>
 </tr>
@@ -498,6 +575,118 @@ visualizer = WorkflowVisualizer(workflow)
 visualizer.visualize()
 visualizer.save("workflow.png", dpi=300)  # Save as PNG
 ```
+
+#### Hierarchical RAG (Retrieval-Augmented Generation)
+```python
+from kailash.workflow import Workflow
+from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
+from kailash.nodes.data.retrieval import RelevanceScorerNode
+from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+from kailash.nodes.transform.formatters import (
+    ChunkTextExtractorNode,
+    QueryTextWrapperNode,
+    ContextFormatterNode,
+)
+from kailash.nodes.ai.llm_agent import LLMAgent
+from kailash.nodes.ai.embedding_generator import EmbeddingGenerator
+
+# Create hierarchical RAG workflow
+workflow = Workflow(
+    workflow_id="hierarchical_rag_example",
+    name="Hierarchical RAG Workflow",
+    description="Complete RAG pipeline with embedding-based retrieval",
+    version="1.0.0"
+)
+
+# Create data source nodes
+doc_source = DocumentSourceNode()
+query_source = QuerySourceNode()
+
+# Create document processing pipeline
+chunker = HierarchicalChunkerNode()
+chunk_text_extractor = ChunkTextExtractorNode()
+query_text_wrapper = QueryTextWrapperNode()
+
+# Create embedding generators
+chunk_embedder = EmbeddingGenerator(
+    provider="ollama",
+    model="nomic-embed-text",
+    operation="embed_batch"
+)
+
+query_embedder = EmbeddingGenerator(
+    provider="ollama",
+    model="nomic-embed-text",
+    operation="embed_batch"
+)
+
+# Create retrieval and formatting nodes
+relevance_scorer = RelevanceScorerNode(similarity_method="cosine")
+context_formatter = ContextFormatterNode()
+
+# Create LLM agent for final answer generation
+llm_agent = LLMAgent(
+    provider="ollama",
+    model="llama3.2",
+    temperature=0.7,
+    max_tokens=500
+)
+
+# Add all nodes to workflow
+for node_id, node in [
+    ("doc_source", doc_source),
+    ("chunker", chunker),
+    ("query_source", query_source),
+    ("chunk_text_extractor", chunk_text_extractor),
+    ("query_text_wrapper", query_text_wrapper),
+    ("chunk_embedder", chunk_embedder),
+    ("query_embedder", query_embedder),
+    ("relevance_scorer", relevance_scorer),
+    ("context_formatter", context_formatter),
+    ("llm_agent", llm_agent)
+]:
+    workflow.add_node(node_id, node)
+
+# Connect the workflow pipeline
+# Document processing: docs → chunks → text → embeddings
+workflow.connect("doc_source", "chunker", {"documents": "documents"})
+workflow.connect("chunker", "chunk_text_extractor", {"chunks": "chunks"})
+workflow.connect("chunk_text_extractor", "chunk_embedder", {"input_texts": "input_texts"})
+
+# Query processing: query → text wrapper → embeddings
+workflow.connect("query_source", "query_text_wrapper", {"query": "query"})
+workflow.connect("query_text_wrapper", "query_embedder", {"input_texts": "input_texts"})
+
+# Relevance scoring: chunks + embeddings → scored chunks
+workflow.connect("chunker", "relevance_scorer", {"chunks": "chunks"})
+workflow.connect("query_embedder", "relevance_scorer", {"embeddings": "query_embedding"})
+workflow.connect("chunk_embedder", "relevance_scorer", {"embeddings": "chunk_embeddings"})
+
+# Context formatting: relevant chunks + query → formatted context
+workflow.connect("relevance_scorer", "context_formatter", {"relevant_chunks": "relevant_chunks"})
+workflow.connect("query_source", "context_formatter", {"query": "query"})
+
+# Final answer generation: formatted context → LLM response
+workflow.connect("context_formatter", "llm_agent", {"messages": "messages"})
+
+# Execute workflow
+results, run_id = workflow.run()
+
+# Access results
+print("🎯 Top Relevant Chunks:")
+for chunk in results["relevance_scorer"]["relevant_chunks"]:
+    print(f"  - {chunk['document_title']}: {chunk['relevance_score']:.3f}")
+
+print("\n🤖 Final Answer:")
+print(results["llm_agent"]["response"]["content"])
+```
+
+This example demonstrates:
+- **Document chunking** with hierarchical structure
+- **Vector embeddings** using Ollama's nomic-embed-text model
+- **Semantic similarity** scoring with cosine similarity
+- **Context formatting** for LLM input
+- **Answer generation** using Ollama's llama3.2 model
 
 ## 💻 CLI Commands
 

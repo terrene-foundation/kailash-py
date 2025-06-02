@@ -245,20 +245,23 @@ Keep dependencies minimal and explicit:
      - Simple Workflow Example: Create a simple workflow that connects two nodes (e.g., a data reader and a transformer)
      - Complex Workflow Example: Create a complex workflow that includes multiple nodes, data transformations, and AI model execution
 
-5. **Unit Tests**:
+5. **Troubleshooting**:
+   - Always refer to `guide/mistakes/000-master.md` when troubleshooting issues
+
+6. **Unit Tests**:
    - Ensure that examples have been tested and validated before creating unit tests
    - Create unit tests for all components using pytest
    - Maintain >80% code coverage
    - Place tests in a separate `tests/` directory mirroring the package structure
    - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
-6. **Integration Tests**:
+7. **Integration Tests**:
    - Ensure that unit tests have been created for all components before creating integration tests
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
    - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
-7. **Sphinx Documentation**
+8. **Sphinx Documentation**
    - Complete API documentation framework in `docs/`
    - Build with: `cd docs && python build_docs.py`
    - Auto-deployed via GitHub Actions to GitHub Pages
@@ -266,17 +269,16 @@ Keep dependencies minimal and explicit:
    - Use Napoleon with Google-style for docstrings
    - Uses ReStructuredText (reST) format for Sphinx compatibility, which means that code blocks must be preceded by :: followed by a newline, and indentation must be consistent.
 
-8. **Documentation Tests**:
+9. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
-9. **Mistakes**: Record all coding mistakes in `guide/mistakes/000-master.md`
-    - **Example**: If a node fails to execute due to a missing import, document the mistake in `guide/mistakes/missing_import.md`
+10. **Mistakes**: Record all coding mistakes in `guide/mistakes/000-master.md`
     - Include:
       - Description of the mistake
       - Code example that caused the issue
       - Solution or fix applied
 
-10. **Update README.md**:
+11. **Update README.md**:
     - Overview of the project
     - Installation instructions
     - Quick start guide
@@ -285,16 +287,25 @@ Keep dependencies minimal and explicit:
     - Contribution guidelines
     - Reference to the PRD and ADRs
 
-11. **Update ADRs**:
+12. **Update ADRs**:
     - Ensure all architectural decisions are documented in the ADRs.
     - Link relevant ADRs to the PRD and README.md.
     - Update ADRs as new decisions are made or existing ones are modified.
 
-12. **Update Claude.md**:
+13. **Update Claude.md**:
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
 
-13. **Pre-commit Hooks and Code Quality**:
+14. ** Update CHANGELOG.md**:
+    - Record all changes made in the current development cycle.
+    - Include:
+      - New features
+      - Bug fixes
+      - Improvements
+      - Breaking changes
+    - Use a clear and consistent format for each entry.
+
+15. **Pre-commit Hooks and Code Quality**:
     - **Pre-commit Setup**: Use automated pre-commit hooks to enforce coding standards
     - **Automated Hooks Configuration** (`.pre-commit-config.yaml`):
       - **Black**: Code formatting (88 character line length)
@@ -312,11 +323,11 @@ Keep dependencies minimal and explicit:
       - Manual formatting commands still available when needed
       - See `guide/development/pre-commit-hooks.md` for comprehensive documentation
 
-14. **Github Actions**:
+16. **Github Actions**:
     - Use Github Actions for continuous integration.
     - Test locally before pushing changes.
 
-15. **Github Issues and Project Update**:
+17. **Github Issues and Project Update**:
     - Use the Github Issues and Projects to track tasks and progress.
     - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
     - Update the project board as tasks are completed.

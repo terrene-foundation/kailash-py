@@ -289,14 +289,14 @@ def main():
 
     # Comment out code node due to security restrictions in this demo
     # workflow.connect("data_reader", "code_node", {"data": "data"})
-    # aggregation_writer = CSVWriter(file_path="data/aggregated_metrics.csv", name="aggregation_writer")
+    # aggregation_writer = CSVWriter(file_path="../data/aggregated_metrics.csv", name="aggregation_writer")
     # workflow.add_node("aggregation_writer", aggregation_writer)
     # workflow.connect("code_node", "aggregation_writer", {"result": "data"})
 
     # Configure nodes
     reader.config = {"file_path": "../data/sample_metrics.csv"}
     writer.config = {"file_path": "../outputs/processed_metrics.csv"}
-    # aggregation_writer.config = {'file_path': 'data/aggregated_metrics.csv'}
+    # aggregation_writer.config = {'file_path': "../data/aggregated_metrics.csv'}
 
     # Add custom parameters
     function_node.config = {"window_size": 10}
@@ -310,7 +310,7 @@ def main():
         workflow.visualize()
         plt.savefig("../outputs/python_code_workflow.png", dpi=300, bbox_inches="tight")
         plt.close()
-        print("Workflow visualization saved to '../outputs/python_code_workflow.png'")
+        print("Workflow visualization saved to ../outputs/python_code_workflow.png")
     except ImportError:
         print("Matplotlib not available for visualization")
 
@@ -330,7 +330,7 @@ def main():
     )
 
     # Show aggregated data (commented out for this demo)
-    # aggregated_df = pd.read_csv('data/aggregated_metrics.csv')
+    # aggregated_df = pd.read_csv("../data/aggregated_metrics.csv')
     # print(f"\\nAggregated data shape: {aggregated_df.shape}")
     # print(aggregated_df.head())
 

@@ -25,7 +25,7 @@ def main():
     # Define resources to expose via MCP
     workflow_resources = [
         {
-            "uri": "workflow://data/customer_segments.csv",
+            "uri": "workflow://examples/data/customer_segments.csv",
             "name": "Customer Segments",
             "content": "segment,count,revenue,avg_ltv\nPower Users,3084,1470000,476.23\nRegular Users,7710,857500,111.27\nOccasional Users,4626,122500,26.49",
             "mimeType": "text/csv",
@@ -197,7 +197,7 @@ def main():
 
         Provide specific, data-driven observations.""",
         mcp_servers=[server_config],
-        mcp_context=["workflow://data/customer_segments.csv"],
+        mcp_context=["workflow://examples/data/customer_segments.csv"],
         conversation_id="data_analysis_session",
         generation_config={"temperature": 0.3, "max_tokens": 800},
     )

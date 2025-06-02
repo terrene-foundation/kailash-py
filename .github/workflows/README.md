@@ -28,17 +28,7 @@ This repository uses a unified CI pipeline that intelligently avoids duplicate t
   - Basic: ~2-3 minutes
   - Full: ~5-10 minutes
 
-### 2. `ci.yml` - CI Quick Tests (DEPRECATED)
-- **Status**: Disabled - replaced by unified-ci.yml
-- **Previous Purpose**: Fast feedback for feature development
-- **Migration**: All functionality moved to unified-ci.yml
-
-### 3. `pr-checks.yml` - Pull Request Validation (DEPRECATED)
-- **Status**: Disabled - replaced by unified-ci.yml
-- **Previous Purpose**: Comprehensive validation for PRs
-- **Migration**: All functionality moved to unified-ci.yml
-
-### 4. `full-test.yml` - Full Test Suite
+### 2. `full-test.yml` - Full Test Suite
 - **Purpose**: Complete test coverage and artifact generation
 - **Triggers**:
   - Push to `main` branch
@@ -50,7 +40,7 @@ This repository uses a unified CI pipeline that intelligently avoids duplicate t
   - Coverage report uploads
 - **Duration**: ~10-15 minutes
 
-### 5. `local-test.yml` - Local Testing Validation
+### 3. `local-test.yml` - Local Testing Validation
 - **Purpose**: Validate workflows work with `act` for local testing
 - **Triggers**:
   - Manual dispatch only
@@ -119,10 +109,6 @@ All workflows support `workflow_dispatch` for manual runs:
 gh workflow run unified-ci.yml
 gh workflow run full-test.yml
 gh workflow run local-test.yml
-
-# Legacy workflows (deprecated)
-# gh workflow run ci.yml
-# gh workflow run pr-checks.yml
 
 # Check status
 gh run list

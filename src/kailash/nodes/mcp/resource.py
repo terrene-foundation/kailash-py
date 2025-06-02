@@ -61,7 +61,7 @@ class MCPResource(Node):
     resource = MCPResource()
     result = resource.run(
         operation="create",
-        uri="workflow://data/customer_analysis.txt",
+        uri="workflow://examples/data/customer_analysis.txt",
         content="Customer analysis results from Q4 2024...",
         metadata={
             "name": "Q4 Customer Analysis",
@@ -92,7 +92,7 @@ class MCPResource(Node):
     updated = MCPResource()
     result = updated.run(
         operation="update",
-        uri="workflow://data/customer_analysis.txt",
+        uri="workflow://examples/data/customer_analysis.txt",
         content="Updated customer analysis with new data...",
         version="2.0"
     )
@@ -530,7 +530,7 @@ class MCPResource(Node):
         # Mock resource listing
         mock_resources = [
             {
-                "uri": "workflow://data/customer_analysis.txt",
+                "uri": "workflow://examples/data/customer_analysis.txt",
                 "name": "Customer Analysis",
                 "mimeType": "text/plain",
                 "size": 1024,

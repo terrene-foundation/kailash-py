@@ -1,0 +1,6 @@
+Processing Summary
+==================
+Total Records: 50
+High Value Records: 29
+Total Processed Value: 134750.0
+Average Value: 2695.00

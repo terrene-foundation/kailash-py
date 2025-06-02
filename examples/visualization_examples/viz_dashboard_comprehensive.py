@@ -38,12 +38,12 @@ def create_sample_workflow():
     workflow = Workflow("dashboard_demo_workflow", "Dashboard Demo Workflow")
 
     # Create sample data processing workflow
-    reader = CSVReader(node_id="data_reader", file_path="data/customers.csv")
+    reader = CSVReader(node_id="data_reader", file_path="../data/customers.csv")
 
     filter_node = Filter(node_id="data_filter", field="age", operator=">", value=25)
 
     writer = CSVWriter(
-        node_id="data_writer", file_path="outputs/dashboard_demo_output.csv"
+        node_id="data_writer", file_path="../outputs/dashboard_demo_output.csv"
     )
 
     # Build workflow graph
@@ -59,7 +59,7 @@ def create_sample_workflow():
 
 def setup_task_manager():
     """Set up task manager with file system storage."""
-    storage_path = Path("data/dashboard_demo_tracking")
+    storage_path = Path("../data/dashboard_demo_tracking")
     storage_path.mkdir(parents=True, exist_ok=True)
 
     storage = FileSystemStorage(storage_path)
@@ -120,7 +120,7 @@ def demonstrate_real_time_dashboard():
             print(f"     - Throughput: {current_metrics.throughput:.2f} tasks/min")
 
         # Generate live dashboard
-        dashboard_path = Path("outputs/dashboard_demo_live.html")
+        dashboard_path = Path("../outputs/dashboard_demo_live.html")
         dashboard_path.parent.mkdir(parents=True, exist_ok=True)
 
         dashboard.generate_live_report(dashboard_path, include_charts=True)
@@ -142,9 +142,9 @@ def demonstrate_performance_reports(run_id: str, task_manager: TaskManager):
 
     # Generate reports in different formats
     formats_to_test = [
-        (ReportFormat.HTML, "outputs/dashboard_demo_report.html"),
-        (ReportFormat.MARKDOWN, "outputs/dashboard_demo_report.md"),
-        (ReportFormat.JSON, "outputs/dashboard_demo_report.json"),
+        (ReportFormat.HTML, "../outputs/dashboard_demo_report.html"),
+        (ReportFormat.MARKDOWN, "../outputs/dashboard_demo_report.md"),
+        (ReportFormat.JSON, "../outputs/dashboard_demo_report.json"),
     ]
 
     for report_format, output_path in formats_to_test:
@@ -239,7 +239,7 @@ def demonstrate_advanced_visualizations(run_id: str, task_manager: TaskManager):
     # Generate comprehensive dashboard
     print("  🎨 Generating advanced dashboard...")
 
-    advanced_dashboard_path = Path("outputs/dashboard_demo_advanced.html")
+    advanced_dashboard_path = Path("../outputs/dashboard_demo_advanced.html")
     dashboard.generate_live_report(advanced_dashboard_path, include_charts=True)
     print(f"     💾 Advanced dashboard: {advanced_dashboard_path}")
 
@@ -250,7 +250,7 @@ def demonstrate_advanced_visualizations(run_id: str, task_manager: TaskManager):
 
     exporter = DashboardExporter(dashboard)
 
-    snapshot_dir = Path("outputs/dashboard_snapshot")
+    snapshot_dir = Path("../outputs/dashboard_snapshot")
     assets = exporter.create_dashboard_snapshot(
         output_dir=snapshot_dir, include_static_charts=True
     )
@@ -269,7 +269,7 @@ def demonstrate_advanced_visualizations(run_id: str, task_manager: TaskManager):
     try:
         # Create detailed performance visualizations
         perf_outputs = perf_viz.create_run_performance_summary(
-            run_id, output_dir=Path("outputs/performance_analysis")
+            run_id, output_dir=Path("../outputs/performance_analysis")
         )
 
         print("     📈 Performance visualizations:")

@@ -32,12 +32,12 @@ def create_simple_workflow():
     workflow = Workflow("simple_dashboard_demo", "Simple Dashboard Demo")
 
     # Simple 3-node workflow
-    reader = CSVReader(node_id="reader", file_path="data/customers.csv")
+    reader = CSVReader(node_id="reader", file_path="../data/customers.csv")
 
     filter_node = Filter(node_id="filter", field="age", operator=">", value=18)
 
     writer = CSVWriter(
-        node_id="writer", file_path="outputs/simple_dashboard_output.csv"
+        node_id="writer", file_path="../outputs/simple_dashboard_output.csv"
     )
 
     # Connect nodes
@@ -53,7 +53,7 @@ def create_simple_workflow():
 
 def setup_basic_tracking():
     """Set up basic task tracking."""
-    storage_path = Path("data/simple_dashboard_tracking")
+    storage_path = Path("../data/simple_dashboard_tracking")
     storage_path.mkdir(parents=True, exist_ok=True)
 
     storage = FileSystemStorage(storage_path)
@@ -120,7 +120,7 @@ def generate_simple_reports(run_id: str, task_manager: TaskManager):
     # Generate HTML report
     html_report = reporter.generate_report(
         run_id=run_id,
-        output_path="outputs/simple_dashboard_report.html",
+        output_path="../outputs/simple_dashboard_report.html",
         format=ReportFormat.HTML,
     )
     print(f"   📄 HTML report: {html_report}")
@@ -128,7 +128,7 @@ def generate_simple_reports(run_id: str, task_manager: TaskManager):
     # Generate Markdown report
     md_report = reporter.generate_report(
         run_id=run_id,
-        output_path="outputs/simple_dashboard_report.md",
+        output_path="../outputs/simple_dashboard_report.md",
         format=ReportFormat.MARKDOWN,
     )
     print(f"   📄 Markdown report: {md_report}")
@@ -138,7 +138,7 @@ def generate_live_dashboard(dashboard: RealTimeDashboard):
     """Generate live dashboard HTML."""
     print("\n6. Generating live dashboard...")
 
-    dashboard_path = Path("outputs/simple_live_dashboard.html")
+    dashboard_path = Path("../outputs/simple_live_dashboard.html")
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
 
     dashboard.generate_live_report(dashboard_path, include_charts=True)

@@ -4,11 +4,11 @@ metadata:
   description: Analyze customer data and generate insights
   version: 1.0.0
   author: John Doe
-  created_at: '2025-06-02T16:32:15.681228+00:00'
+  created_at: '2025-06-02T15:52:53.753419+00:00'
   tags:
   - customer
-  - analytics
   - ml
+  - analytics
 nodes:
   reader:
     type: CSVReader
@@ -36,16 +36,18 @@ nodes:
     type: PythonCodeNode
     config: {}
     container:
-      image: kailash/pythoncodenode:latest
-      command:
+      image: custom/python-executor:latest
+      command: &id001
       - python
       - -m
-      - kailash.nodes.pythoncodenode
-      args: []
-      env: {}
+      - executor
+      args: &id002
+      - --config
+      - /config/node.yaml
+      env: &id003 {}
     resources:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 500m
+      memory: 1Gi
       cpu_limit: null
       memory_limit: null
       gpu: null
@@ -56,16 +58,13 @@ nodes:
     type: PythonCodeNode
     config: {}
     container:
-      image: kailash/pythoncodenode:latest
-      command:
-      - python
-      - -m
-      - kailash.nodes.pythoncodenode
-      args: []
-      env: {}
+      image: custom/python-executor:latest
+      command: *id001
+      args: *id002
+      env: *id003
     resources:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 500m
+      memory: 1Gi
       cpu_limit: null
       memory_limit: null
       gpu: null

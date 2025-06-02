@@ -320,7 +320,7 @@ class TestMCPServer:
             server_config={"name": "test-server", "transport": "stdio"},
             resources=[
                 {
-                    "uri": "test://data/metrics.json",
+                    "uri": "test://examples/data/metrics.json",
                     "name": "Test Metrics",
                     "content": {"views": 100, "users": 10},
                 }
@@ -464,7 +464,7 @@ def sample_mcp_config():
         },
         "resources": [
             {
-                "uri": "test://data/sample.json",
+                "uri": "test://examples/data/sample.json",
                 "name": "Sample Data",
                 "content": {"test": "data"},
             }

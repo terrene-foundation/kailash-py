@@ -174,7 +174,7 @@ def main():
     logger.info(f"Loaded configuration for {node_data['class']} node")
 
     # Load runtime inputs if available
-    input_path = Path("/data/input/inputs.json")
+    input_path = Path("/examples/data/input/inputs.json")
     runtime_inputs = {}
     if input_path.exists():
         logger.info(f"Loading inputs from {input_path}")
@@ -206,7 +206,7 @@ def main():
     except Exception as e:
         logger.error(f"Node execution failed: {e}")
         # Save error information
-        with open("/data/output/error.json", 'w') as f:
+        with open("/examples/data/output/error.json", 'w') as f:
             json.dump({
                 "error": str(e),
                 "type": e.__class__.__name__
@@ -216,7 +216,7 @@ def main():
     # Save results
     logger.info("Saving execution results")
     try:
-        result_path = Path("/data/output/result.json")
+        result_path = Path("/examples/data/output/result.json")
         with open(result_path, 'w') as f:
             # Handle non-serializable objects with basic conversion
             try:
@@ -266,7 +266,7 @@ COPY node.json /app/node.json
 COPY entrypoint.py /app/entrypoint.py
 
 # Create data directories
-RUN mkdir -p /data/input /data/output
+RUN mkdir -p /examples/data/input /examples/data/output
 
 # Set entrypoint
 ENTRYPOINT ["/app/entrypoint.py"]
@@ -391,9 +391,9 @@ ENTRYPOINT ["/app/entrypoint.py"]
         cmd.extend(
             [
                 "-v",
-                f"{self.input_dir.absolute()}:/data/input",
+                f"{self.input_dir.absolute()}:/examples/data/input",
                 "-v",
-                f"{self.output_dir.absolute()}:/data/output",
+                f"{self.output_dir.absolute()}:/examples/data/output",
             ]
         )
 
