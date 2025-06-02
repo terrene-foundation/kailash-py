@@ -60,30 +60,30 @@ class HTTPRequestNode(Node):
     """Enhanced node for making HTTP requests to external APIs.
 
     This node provides a flexible interface for making HTTP requests with support for:
-    - All common HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
-    - Multiple authentication methods (Bearer, Basic, API Key, OAuth2)
-    - JSON, form, and multipart request bodies
-    - Custom headers and query parameters
-    - Response parsing (JSON, text, binary)
-    - Error handling and retries with recovery suggestions
-    - Rate limiting support
-    - Request/response logging
+        * All common HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
+        * Multiple authentication methods (Bearer, Basic, API Key, OAuth2)
+        * JSON, form, and multipart request bodies
+        * Custom headers and query parameters
+        * Response parsing (JSON, text, binary)
+        * Error handling and retries with recovery suggestions
+        * Rate limiting support
+        * Request/response logging
 
     Design Purpose:
-    - Enable workflow integration with external HTTP APIs
-    - Provide a consistent interface for HTTP operations
-    - Support common authentication patterns
-    - Handle response parsing and error handling
-    - Offer enterprise-grade features like rate limiting
+        * Enable workflow integration with external HTTP APIs
+        * Provide a consistent interface for HTTP operations
+        * Support common authentication patterns
+        * Handle response parsing and error handling
+        * Offer enterprise-grade features like rate limiting
 
     Upstream Usage:
-    - Workflow: Creates and configures node for API integration
-    - Specialized API nodes: May extend this node for specific APIs
+        * Workflow: Creates and configures node for API integration
+        * Specialized API nodes: May extend this node for specific APIs
 
     Downstream Consumers:
-    - Data processing nodes: Consume API response data
-    - Decision nodes: Route workflow based on API responses
-    - Custom nodes: Process API-specific data formats
+        * Data processing nodes: Consume API response data
+        * Decision nodes: Route workflow based on API responses
+        * Custom nodes: Process API-specific data formats
     """
 
     def __init__(self, **kwargs):

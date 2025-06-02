@@ -5,9 +5,9 @@ synchronous and asynchronous modes. These nodes build on the base HTTP nodes
 to provide a more convenient interface for working with REST APIs.
 
 Key Components:
-- RESTClientNode: Synchronous REST API client
-- AsyncRESTClientNode: Asynchronous REST API client
-- Resource path builders and response handlers
+    * RESTClientNode: Synchronous REST API client
+    * AsyncRESTClientNode: Asynchronous REST API client
+    * Resource path builders and response handlers
 """
 
 from typing import Any, Dict, List, Optional
@@ -24,25 +24,25 @@ class RESTClientNode(Node):
 
     This node provides a higher-level interface for interacting with REST APIs,
     with built-in support for:
-    - Resource-based operations (e.g., GET /users/{id})
-    - Common REST patterns (list, get, create, update, delete)
-    - Pagination handling
-    - Response schema validation
-    - Error response handling
+        * Resource-based operations (e.g., GET /users/{id})
+        * Common REST patterns (list, get, create, update, delete)
+        * Pagination handling
+        * Response schema validation
+        * Error response handling
 
     Design Purpose:
-    - Simplify REST API integration in workflows
-    - Provide consistent interfaces for common REST operations
-    - Support standard REST conventions and patterns
-    - Handle common REST-specific error cases
+        * Simplify REST API integration in workflows
+        * Provide consistent interfaces for common REST operations
+        * Support standard REST conventions and patterns
+        * Handle common REST-specific error cases
 
     Upstream Usage:
-    - Workflow: Creates and configures for specific REST APIs
-    - API integration workflows: Uses for external service integration
+        * Workflow: Creates and configures for specific REST APIs
+        * API integration workflows: Uses for external service integration
 
     Downstream Consumers:
-    - Data processing nodes: Consume API response data
-    - Custom nodes: Process API-specific data formats
+        * Data processing nodes: Consume API response data
+        * Custom nodes: Process API-specific data formats
     """
 
     def __init__(self, **kwargs):
@@ -306,9 +306,9 @@ class RESTClientNode(Node):
         """Handle pagination for REST API responses.
 
         This method supports common pagination patterns:
-        - Page-based: ?page=1&per_page=100
-        - Offset-based: ?offset=0&limit=100
-        - Cursor-based: ?cursor=abc123
+            * Page-based: ?page=1&per_page=100
+            * Offset-based: ?offset=0&limit=100
+            * Cursor-based: ?cursor=abc123
 
         Args:
             initial_response: Response from the first API call
@@ -868,17 +868,17 @@ class AsyncRESTClientNode(AsyncNode):
     asynchronous I/O for better performance, especially for concurrent requests.
 
     Design Purpose:
-    - Enable efficient, non-blocking REST API operations in workflows
-    - Provide the same interface as RESTClientNode but with async execution
-    - Support high-throughput API integrations with minimal overhead
+        * Enable efficient, non-blocking REST API operations in workflows
+        * Provide the same interface as RESTClientNode but with async execution
+        * Support high-throughput API integrations with minimal overhead
 
     Upstream Usage:
-    - AsyncLocalRuntime: Executes workflow with async support
-    - Specialized async API nodes: May extend this node
+        * AsyncLocalRuntime: Executes workflow with async support
+        * Specialized async API nodes: May extend this node
 
     Downstream Consumers:
-    - Data processing nodes: Consume API response data
-    - Decision nodes: Route workflow based on API responses
+        * Data processing nodes: Consume API response data
+        * Decision nodes: Route workflow based on API responses
     """
 
     def __init__(self, **kwargs):

@@ -363,6 +363,42 @@ AI/ML Nodes
 
 AI and machine learning nodes for intelligent processing.
 
+Provider Architecture
+---------------------
+
+The AI nodes use a unified provider architecture that supports multiple LLM and embedding providers:
+
+.. automodule:: kailash.nodes.ai.ai_providers
+   :members: get_provider, get_available_providers
+   :undoc-members:
+
+**Supported Providers:**
+
+- **OpenAI**: GPT models and text embeddings
+- **Anthropic**: Claude models (LLM only)
+- **Ollama**: Local models for both LLM and embeddings
+- **Cohere**: Embedding models
+- **HuggingFace**: Embedding models (API and local)
+- **Mock**: For testing without API keys
+
+**Example: Check Available Providers**
+
+.. code-block:: python
+
+   from kailash.nodes.ai import get_available_providers
+   
+   # Check all providers
+   providers = get_available_providers()
+   for name, info in providers.items():
+       if info['available']:
+           print(f"{name}: ✓ Chat={info['chat']}, Embeddings={info['embeddings']}")
+   
+   # Check only LLM providers
+   llm_providers = get_available_providers("chat")
+   
+   # Check only embedding providers
+   embed_providers = get_available_providers("embeddings")
+
 TextClassifier
 --------------
 
@@ -384,65 +420,120 @@ TextClassifier
 EmbeddingGenerator
 ------------------
 
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
-
-**Planned Features:**
-- Text embeddings using various models (OpenAI, HuggingFace)
-- Batch processing for efficiency
-- Vector similarity calculations
-- Embedding caching and storage
-
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with embedding libraries in the meantime.
-
-LLMAgent
---------
-
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
-
-**Planned Features:**
-- Integration with OpenAI, Anthropic, and other LLM providers
-- Conversation memory and context management
-- Tool calling and function execution
-- Prompt templating and optimization
-
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with LLM APIs in the meantime.
+.. autoclass:: kailash.nodes.ai.embedding_generator.EmbeddingGenerator
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 **Example Usage:**
 
 .. code-block:: python
 
-   workflow.add_node("ChatAgent", "analyze", config={
-       "model": "gpt-4",
-       "prompt_template": "Analyze the following customer feedback: {feedback}",
-       "temperature": 0.7,
-       "max_tokens": 500
-   })
+   from kailash.nodes.ai import EmbeddingGenerator
+   
+   # Single text embedding
+   embedder = EmbeddingGenerator()
+   result = embedder.run(
+       provider="openai",
+       model="text-embedding-3-large",
+       input_text="This is a sample document to embed",
+       operation="embed_text"
+   )
+   
+   # Batch embedding with caching
+   result = embedder.run(
+       provider="huggingface",
+       model="sentence-transformers/all-MiniLM-L6-v2",
+       input_texts=["Document 1", "Document 2", "Document 3"],
+       operation="embed_batch",
+       batch_size=32,
+       cache_enabled=True
+   )
+   
+   # Calculate similarity between embeddings
+   result = embedder.run(
+       operation="calculate_similarity",
+       embedding_1=[0.1, 0.2, 0.3, ...],
+       embedding_2=[0.15, 0.25, 0.35, ...],
+       similarity_metric="cosine"
+   )
+
+LLMAgent
+--------
+
+.. autoclass:: kailash.nodes.ai.llm_agent.LLMAgent
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.nodes.ai import LLMAgent
+   
+   # Basic question-answering
+   agent = LLMAgent()
+   result = agent.run(
+       provider="openai",
+       model="gpt-4",
+       prompt="What is the capital of France?",
+       operation="qa"
+   )
+   
+   # Conversation with memory
+   result = agent.run(
+       provider="anthropic",
+       model="claude-3-sonnet-20240229",
+       prompt="Explain quantum computing",
+       operation="conversation",
+       memory_config={
+           "type": "window",
+           "window_size": 10
+       }
+   )
+   
+   # Tool calling with functions
+   result = agent.run(
+       provider="openai",
+       model="gpt-4",
+       prompt="What's the weather in Paris?",
+       operation="tool_calling",
+       tools=[{
+           "type": "function",
+           "function": {
+               "name": "get_weather",
+               "description": "Get current weather",
+               "parameters": {
+                   "type": "object",
+                   "properties": {
+                       "location": {"type": "string"}
+                   }
+               }
+           }
+       }]
+   )
 
 API Nodes
 =========
 
 Nodes for external API integrations.
 
-HTTPClient
-----------
+HTTPRequestNode
+---------------
 
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
-
-**Planned Features:**
-- Generic HTTP client with method support
-- Authentication handling (Bearer, Basic, OAuth)
-- Request/response logging
-- Retry logic and error handling
-
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with requests library in the meantime.
+.. autoclass:: kailash.nodes.api.http.HTTPRequestNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 **Example Usage:**
 
 .. code-block:: python
 
+   from kailash.nodes.api import HTTPRequestNode
+   
+   # Simple GET request
    workflow.add_node("HTTPRequestNode", "fetch_data", config={
        "url": "https://api.example.com/data",
        "method": "GET",
@@ -451,37 +542,53 @@ HTTPClient
        },
        "timeout": 30
    })
+   
+   # POST with authentication
+   workflow.add_node("HTTPRequestNode", "create_resource", config={
+       "url": "https://api.example.com/resources",
+       "method": "POST",
+       "auth_type": "bearer",
+       "auth_token": "${API_TOKEN}",
+       "json_data": {
+           "name": "New Resource",
+           "type": "example"
+       }
+   })
 
-RESTClient
-----------
+RESTClientNode
+--------------
 
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
-
-**Planned Features:**
-- RESTful API client with CRUD operations
-- JSON serialization/deserialization
-- Response pagination handling
-- Rate limiting and throttling
-
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with requests library in the meantime.
+.. autoclass:: kailash.nodes.api.rest.RESTClientNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 **Example Usage:**
 
 .. code-block:: python
 
-   workflow.add_node("RESTClientNode", "api_call", config={
+   from kailash.nodes.api import RESTClientNode
+   
+   # GET a resource
+   workflow.add_node("RESTClientNode", "get_user", config={
        "base_url": "https://api.example.com",
-       "endpoint": "/users/{user_id}",
-       "method": "PUT",
-       "auth": {
-           "type": "bearer",
-           "token": "${API_TOKEN}"
+       "resource": "users/{id}",
+       "path_params": {"id": "123"},
+       "method": "GET",
+       "auth_type": "bearer",
+       "auth_token": "${API_TOKEN}"
+   })
+   
+   # Create a new resource
+   workflow.add_node("RESTClientNode", "create_user", config={
+       "base_url": "https://api.example.com",
+       "resource": "users",
+       "method": "POST",
+       "data": {
+           "name": "John Doe",
+           "email": "john@example.com"
        },
-       "retry": {
-           "max_attempts": 3,
-           "backoff_factor": 2
-       }
+       "version": "v2"
    })
 
 GraphQLClient
@@ -497,6 +604,54 @@ GraphQLClient
 - Subscription support
 
 **Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with GraphQL libraries in the meantime.
+
+MCP Nodes
+=========
+
+Model Context Protocol (MCP) nodes for AI context management.
+
+MCPClient
+---------
+
+.. autoclass:: kailash.nodes.mcp.client.MCPClient
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.nodes.mcp import MCPClient
+   
+   # List available resources
+   client = MCPClient()
+   result = client.run(
+       server_config={
+           "name": "filesystem-server",
+           "command": "python",
+           "args": ["-m", "mcp_filesystem"]
+       },
+       operation="list_resources"
+   )
+   
+   # Read a specific resource
+   result = client.run(
+       server_config=server_config,
+       operation="read_resource",
+       resource_uri="file:///path/to/document.txt"
+   )
+   
+   # Call a tool on the server
+   result = client.run(
+       server_config=server_config,
+       operation="call_tool",
+       tool_name="create_file",
+       tool_arguments={
+           "path": "/path/to/new_file.txt",
+           "content": "Hello, World!"
+       }
+   )
 
 Code Nodes
 ==========

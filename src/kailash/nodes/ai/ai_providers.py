@@ -152,30 +152,29 @@ class UnifiedAIProvider(LLMProvider, EmbeddingProvider):
 
 
 class OllamaProvider(UnifiedAIProvider):
-    """
-    Ollama provider for both LLM and embedding operations.
+    """Ollama provider for both LLM and embedding operations.
 
     Ollama runs models locally on your machine, supporting both chat and
     embedding operations with various open-source models.
 
     Prerequisites:
-    - Install Ollama: https://ollama.ai
-    - Pull models:
-      - LLM: `ollama pull llama3.1:8b-instruct-q8_0`
-      - Embeddings: `ollama pull snowflake-arctic-embed2`
-    - Ensure Ollama service is running
+        * Install Ollama: https://ollama.ai
+        * Pull models:
+            * LLM: ``ollama pull llama3.1:8b-instruct-q8_0``
+            * Embeddings: ``ollama pull snowflake-arctic-embed2``
+        * Ensure Ollama service is running
 
     Supported LLM models:
-    - llama3.1:* (various quantizations)
-    - mixtral:* (various quantizations)
-    - mistral:* (various quantizations)
-    - qwen2.5:* (various sizes and quantizations)
+        * llama3.1:* (various quantizations)
+        * mixtral:* (various quantizations)
+        * mistral:* (various quantizations)
+        * qwen2.5:* (various sizes and quantizations)
 
     Supported embedding models:
-    - snowflake-arctic-embed2 (1024 dimensions)
-    - avr/sfr-embedding-mistral (4096 dimensions)
-    - nomic-embed-text (768 dimensions)
-    - mxbai-embed-large (1024 dimensions)
+        * snowflake-arctic-embed2 (1024 dimensions)
+        * avr/sfr-embedding-mistral (4096 dimensions)
+        * nomic-embed-text (768 dimensions)
+        * mxbai-embed-large (1024 dimensions)
     """
 
     def __init__(self):
@@ -199,15 +198,19 @@ class OllamaProvider(UnifiedAIProvider):
         return self._available
 
     def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """
-        Generate a chat completion using Ollama.
+        """Generate a chat completion using Ollama.
 
-        Supported kwargs:
-        - model (str): Ollama model name (default: "llama3.1:8b-instruct-q8_0")
-        - generation_config (dict): Generation parameters including:
-            - temperature, max_tokens, top_p, top_k, repeat_penalty
-            - seed, stop, num_ctx, num_batch, num_thread
-            - tfs_z, typical_p, mirostat, mirostat_tau, mirostat_eta
+        Args:
+            messages: Conversation messages in OpenAI format.
+            **kwargs: Additional arguments including:
+                model (str): Ollama model name (default: "llama3.1:8b-instruct-q8_0")
+                generation_config (dict): Generation parameters including:
+                    * temperature, max_tokens, top_p, top_k, repeat_penalty
+                    * seed, stop, num_ctx, num_batch, num_thread
+                    * tfs_z, typical_p, mirostat, mirostat_tau, mirostat_eta
+
+        Returns:
+            Dict containing the standardized response.
         """
         try:
             import ollama
@@ -841,7 +844,9 @@ class HuggingFaceProvider(EmbeddingProvider):
 
                 torch_spec = importlib.util.find_spec("torch")
                 transformers_spec = importlib.util.find_spec("transformers")
-                self._available_local = torch_spec is not None and transformers_spec is not None
+                self._available_local = (
+                    torch_spec is not None and transformers_spec is not None
+                )
             except ImportError:
                 self._available_local = False
 
@@ -915,7 +920,7 @@ class HuggingFaceProvider(EmbeddingProvider):
                 tokenizer = AutoTokenizer.from_pretrained(model)
                 model_obj = AutoModel.from_pretrained(model)
                 model_obj.to(device)
-                model_obj.eval()
+                model_obj.eval()  # noqa: PGH001
                 self._models[model] = (tokenizer, model_obj)
 
             tokenizer, model_obj = self._models[model]
@@ -1154,33 +1159,30 @@ def get_provider(
         ValueError: If the provider name is not recognized or doesn't support the requested type.
 
     Examples:
-        Get any provider:
-        ```python
+
+        Get any provider::
+
         provider = get_provider("openai")
         if provider.supports_chat():
             # Use for chat
         if provider.supports_embeddings():
             # Use for embeddings
-        ```
 
         Get chat-only provider:
-        ```python
+
         chat_provider = get_provider("anthropic", "chat")
         response = chat_provider.chat(messages, model="claude-3-sonnet")
-        ```
 
         Get embedding-only provider:
-        ```python
+
         embed_provider = get_provider("cohere", "embeddings")
         embeddings = embed_provider.embed(texts, model="embed-english-v3.0")
-        ```
 
         Check provider capabilities:
-        ```python
+
         provider = get_provider("ollama")
         capabilities = provider.get_capabilities()
         print(f"Chat: {capabilities['chat']}, Embeddings: {capabilities['embeddings']}")
-        ```
     """
     provider_class = PROVIDERS.get(provider_name.lower())
     if not provider_class:
@@ -1221,18 +1223,20 @@ def get_available_providers(
         Dict mapping provider names to their availability and capabilities.
 
     Examples:
-        ```python
-        # Get all providers
+
+        Get all providers::
+
         all_providers = get_available_providers()
         for name, info in all_providers.items():
             print(f"{name}: Available={info['available']}, Chat={info['chat']}, Embeddings={info['embeddings']}")
 
-        # Get only chat providers
+        Get only chat providers:
+
         chat_providers = get_available_providers("chat")
 
-        # Get only embedding providers
+        Get only embedding providers:
+
         embed_providers = get_available_providers("embeddings")
-        ```
     """
     results = {}
 

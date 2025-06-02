@@ -263,6 +263,8 @@ Keep dependencies minimal and explicit:
    - Build with: `cd docs && python build_docs.py`
    - Auto-deployed via GitHub Actions to GitHub Pages
    - All public APIs must have comprehensive docstrings with examples
+   - Use Napoleon with Google-style for docstrings
+   - Uses ReStructuredText (reST) format for Sphinx compatibility, which means that code blocks must be preceded by :: followed by a newline, and indentation must be consistent.
 
 8. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest

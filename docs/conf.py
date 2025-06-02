@@ -30,6 +30,7 @@ extensions = [
     "sphinx.ext.todo",  # Support for TODO items
     "sphinx.ext.autosummary",  # Generate summary tables
     "sphinx.ext.githubpages",  # GitHub Pages support
+    "sphinx.ext.doctest",  # Test code examples in documentation
     "sphinx_rtd_theme",  # Read the Docs theme
     "sphinx_copybutton",  # Copy button for code blocks
     "sphinxcontrib.mermaid",  # Mermaid diagram support

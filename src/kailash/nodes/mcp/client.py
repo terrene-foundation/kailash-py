@@ -53,36 +53,38 @@ class MCPClient(Node):
     - Logs connection events and errors for debugging
 
     Examples:
-    ```python
-    # Connect to an MCP server and list resources
-    client = MCPClient()
-    result = client.run(
-        server_config={
-            "name": "filesystem-server",
-            "command": "python",
-            "args": ["-m", "mcp_filesystem"]
-        },
-        operation="list_resources"
-    )
 
-    # Fetch a specific resource
-    resource = client.run(
-        server_config=server_config,
-        operation="read_resource",
-        resource_uri="file:///path/to/document.txt"
-    )
+        Connect to an MCP server and list resources::
 
-    # Call a tool on the server
-    tool_result = client.run(
-        server_config=server_config,
-        operation="call_tool",
-        tool_name="create_file",
-        tool_arguments={
-            "path": "/path/to/new_file.txt",
-            "content": "Hello, World!"
-        }
-    )
-    ```
+        client = MCPClient()
+        result = client.run(
+            server_config={
+                "name": "filesystem-server",
+                "command": "python",
+                "args": ["-m", "mcp_filesystem"]
+            },
+            operation="list_resources"
+        )
+
+        Fetch a specific resource:
+
+        resource = client.run(
+            server_config=server_config,
+            operation="read_resource",
+            resource_uri="file:///path/to/document.txt"
+        )
+
+        Call a tool on the server:
+
+        tool_result = client.run(
+            server_config=server_config,
+            operation="call_tool",
+            tool_name="create_file",
+            tool_arguments={
+                "path": "/path/to/new_file.txt",
+                "content": "Hello, World!"
+            }
+        )
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:

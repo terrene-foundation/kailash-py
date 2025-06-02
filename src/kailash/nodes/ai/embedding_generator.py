@@ -61,51 +61,54 @@ class EmbeddingGenerator(Node):
     - Updates usage statistics and cost tracking
 
     Examples:
-    ```python
-    # Single text embedding
-    embedder = EmbeddingGenerator()
-    result = embedder.run(
-        provider="openai",
-        model="text-embedding-3-large",
-        input_text="This is a sample document to embed",
-        operation="embed_text"
-    )
 
-    # Batch document embedding
-    batch_embedder = EmbeddingGenerator()
-    result = batch_embedder.run(
-        provider="huggingface",
-        model="sentence-transformers/all-MiniLM-L6-v2",
-        input_texts=[
-            "First document content...",
-            "Second document content...",
-            "Third document content..."
-        ],
-        operation="embed_batch",
-        batch_size=32,
-        cache_enabled=True
-    )
+        Single text embedding::
 
-    # Similarity calculation
-    similarity = EmbeddingGenerator()
-    result = similarity.run(
-        operation="calculate_similarity",
-        embedding_1=[0.1, 0.2, 0.3, ...],
-        embedding_2=[0.15, 0.25, 0.35, ...],
-        similarity_metric="cosine"
-    )
+        embedder = EmbeddingGenerator()
+        result = embedder.run(
+            provider="openai",
+            model="text-embedding-3-large",
+            input_text="This is a sample document to embed",
+            operation="embed_text"
+        )
 
-    # Cached embedding with MCP integration
-    mcp_embedder = EmbeddingGenerator()
-    result = mcp_embedder.run(
-        provider="azure",
-        model="text-embedding-3-small",
-        mcp_resource_uri="data://documents/knowledge_base.json",
-        operation="embed_mcp_resource",
-        cache_ttl=3600,
-        chunk_size=512
-    )
-    ```
+        Batch document embedding:
+
+        batch_embedder = EmbeddingGenerator()
+        result = batch_embedder.run(
+            provider="huggingface",
+            model="sentence-transformers/all-MiniLM-L6-v2",
+            input_texts=[
+                "First document content...",
+                "Second document content...",
+                "Third document content..."
+            ],
+            operation="embed_batch",
+            batch_size=32,
+            cache_enabled=True
+        )
+
+        Similarity calculation:
+
+        similarity = EmbeddingGenerator()
+        result = similarity.run(
+            operation="calculate_similarity",
+            embedding_1=[0.1, 0.2, 0.3, ...],
+            embedding_2=[0.15, 0.25, 0.35, ...],
+            similarity_metric="cosine"
+        )
+
+        Cached embedding with MCP integration:
+
+        mcp_embedder = EmbeddingGenerator()
+        result = mcp_embedder.run(
+            provider="azure",
+            model="text-embedding-3-small",
+            mcp_resource_uri="data://documents/knowledge_base.json",
+            operation="embed_mcp_resource",
+            cache_ttl=3600,
+            chunk_size=512
+        )
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
