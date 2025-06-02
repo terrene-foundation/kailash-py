@@ -103,6 +103,12 @@ The project structure is recorded in `guide/prd/0000-project_structure.md`. Refe
    - Provide clear error messages
    - Do not silently ignore errors
 
+6. **Clear Component Naming**:
+   - Node components MUST include "Node" suffix in their class names
+   - Do NOT use aliases that hide the component type (e.g., @register_node(alias="RESTClient"))
+   - Users should immediately understand what type of component they're using
+   - Examples: RESTClientNode, HTTPRequestNode, GraphQLClientNode (NOT RESTClient, HTTPRequest, etc.)
+
 ## Dependencies
 
 Keep dependencies minimal and explicit:
@@ -134,11 +140,18 @@ Keep dependencies minimal and explicit:
    - Design for extension through plugins or custom nodes
    - Document extension points
 
-4. **Performance**:
+4. **Node Naming Standards**:
+   - ALWAYS use full class names with "Node" suffix for all Node components
+   - NEVER create aliases that remove "Node" from the name
+   - Bad: `@register_node(alias="HTTPRequest")` for `HTTPRequestNode`
+   - Good: `@register_node()` for `HTTPRequestNode`
+   - This ensures users always know they're working with a Node component
+
+5. **Performance**:
    - Optimize for developer experience first
    - Address performance bottlenecks as identified
 
-5. **Backward Compatibility**:
+6. **Backward Compatibility**:
    - Maintain compatibility with existing Kailash architecture
    - Document any breaking changes clearly
 
@@ -162,25 +175,25 @@ Keep dependencies minimal and explicit:
    - **Two-File Todo System** for better Claude Code context management:
      - **Master File**: `guide/todos/000-master.md` - Active tasks and current priorities only
      - **Archive File**: `guide/todos/completed-archive.md` - Complete historical record
-   
+
    **Master File Structure** (`guide/todos/000-master.md`):
    ```markdown
    # Project Status Overview
    - **Category**: Status - Brief description
-   
+
    ## 🔥 URGENT PRIORITY - Current Client Needs
    - **High-impact tasks for active client projects**
-   
+
    ## High Priority - Active Tasks
    - **Task Name**
      - Description: Clear, actionable description
      - Status: To Do | In Progress | Completed
      - Priority: High | Medium | Low
      - Details: Implementation specifics or context
-   
+
    ## Medium/Low Priority Tasks
    [Same format as above]
-   
+
    ## Recent Achievements
    - Brief summary of latest completed work (last 2-3 sessions)
    - Link to completed-archive.md for full history
@@ -189,7 +202,7 @@ Keep dependencies minimal and explicit:
    **Archive File Structure** (`guide/todos/completed-archive.md`):
    ```markdown
    # Completed Tasks Archive
-   
+
    ## Development Sessions History
    ### Session XX (Date) ✅
    - Detailed breakdown of completed tasks
@@ -232,36 +245,40 @@ Keep dependencies minimal and explicit:
      - Simple Workflow Example: Create a simple workflow that connects two nodes (e.g., a data reader and a transformer)
      - Complex Workflow Example: Create a complex workflow that includes multiple nodes, data transformations, and AI model execution
 
-5. **Unit Tests**:
+5. **Troubleshooting**:
+   - Always refer to `guide/mistakes/000-master.md` when troubleshooting issues
+
+6. **Unit Tests**:
    - Ensure that examples have been tested and validated before creating unit tests
    - Create unit tests for all components using pytest
    - Maintain >80% code coverage
    - Place tests in a separate `tests/` directory mirroring the package structure
    - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
-6. **Integration Tests**:
+7. **Integration Tests**:
    - Ensure that unit tests have been created for all components before creating integration tests
    - Create integration tests for workflow execution
    - Test export functionality for compatibility with Kailash
    - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
 
-7. **Sphinx Documentation**
+8. **Sphinx Documentation**
    - Complete API documentation framework in `docs/`
    - Build with: `cd docs && python build_docs.py`
    - Auto-deployed via GitHub Actions to GitHub Pages
    - All public APIs must have comprehensive docstrings with examples
+   - Use Napoleon with Google-style for docstrings
+   - Uses ReStructuredText (reST) format for Sphinx compatibility, which means that code blocks must be preceded by :: followed by a newline, and indentation must be consistent.
 
-8. **Documentation Tests**:
+9. **Documentation Tests**:
    - Include examples in docstrings that can be verified with doctest
 
-9. **Mistakes**: Record all coding mistakes in `guide/mistakes/000-master.md`
-    - **Example**: If a node fails to execute due to a missing import, document the mistake in `guide/mistakes/missing_import.md`
+10. **Mistakes**: Record all coding mistakes in `guide/mistakes/000-master.md`
     - Include:
       - Description of the mistake
       - Code example that caused the issue
       - Solution or fix applied
 
-10. **Update README.md**:
+11. **Update README.md**:
     - Overview of the project
     - Installation instructions
     - Quick start guide
@@ -270,16 +287,25 @@ Keep dependencies minimal and explicit:
     - Contribution guidelines
     - Reference to the PRD and ADRs
 
-11. **Update ADRs**:
+12. **Update ADRs**:
     - Ensure all architectural decisions are documented in the ADRs.
     - Link relevant ADRs to the PRD and README.md.
     - Update ADRs as new decisions are made or existing ones are modified.
 
-12. **Update Claude.md**:
+13. **Update Claude.md**:
     - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
     - Update the project structure if there are any changes to the directory layout or file organization.
 
-13. **Pre-commit Hooks and Code Quality**:
+14. ** Update CHANGELOG.md**:
+    - Record all changes made in the current development cycle.
+    - Include:
+      - New features
+      - Bug fixes
+      - Improvements
+      - Breaking changes
+    - Use a clear and consistent format for each entry.
+
+15. **Pre-commit Hooks and Code Quality**:
     - **Pre-commit Setup**: Use automated pre-commit hooks to enforce coding standards
     - **Automated Hooks Configuration** (`.pre-commit-config.yaml`):
       - **Black**: Code formatting (88 character line length)
@@ -297,11 +323,11 @@ Keep dependencies minimal and explicit:
       - Manual formatting commands still available when needed
       - See `guide/development/pre-commit-hooks.md` for comprehensive documentation
 
-14. **Github Actions**:
+16. **Github Actions**:
     - Use Github Actions for continuous integration.
     - Test locally before pushing changes.
 
-15. **Github Issues and Project Update**:
+17. **Github Issues and Project Update**:
     - Use the Github Issues and Projects to track tasks and progress.
     - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
     - Update the project board as tasks are completed.

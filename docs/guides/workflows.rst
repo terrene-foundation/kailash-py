@@ -14,7 +14,7 @@ Creating Workflows
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   
+
    # Create a new workflow
    workflow = Workflow(
        workflow_id="data_processing",

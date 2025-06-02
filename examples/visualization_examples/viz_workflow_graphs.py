@@ -180,7 +180,7 @@ def demonstrate_custom_visualization():
     print("\n=== Custom Visualization ===")
 
     workflow = create_sample_workflow()
-    visualizer = WorkflowVisualizer(workflow)
+    WorkflowVisualizer(workflow)
 
     # Import MermaidVisualizer
     from kailash.workflow.mermaid_visualizer import MermaidVisualizer
@@ -264,7 +264,7 @@ def demonstrate_execution_visualization():
     print(f"✓ Execution visualization created: {output_path}")
 
     # Also create one with custom output path
-    custom_path = "../data/outputs/execution_status.md"
+    custom_path = "../outputs/execution_status.md"
     custom_output = visualizer.create_execution_graph(run_id, task_manager, custom_path)
     print(f"✓ Custom execution visualization created: {custom_output}")
 
@@ -318,7 +318,7 @@ def demonstrate_performance_metrics():
     plt.close()
 
     print(
-        "✓ Performance metrics visualization created: ../data/performance_metrics_matplotlib.png"
+        "✓ Performance metrics visualization created: data/performance_metrics_matplotlib.png"
     )
 
 
@@ -511,7 +511,7 @@ def demonstrate_execution_timeline():
     )
     plt.close()
 
-    print("✓ Execution timeline created: ../data/execution_timeline_matplotlib.png")
+    print("✓ Execution timeline created: data/execution_timeline_matplotlib.png")
 
 
 def demonstrate_resource_heatmap():
@@ -563,7 +563,7 @@ def demonstrate_resource_heatmap():
     plt.savefig("../data/resource_heatmap_matplotlib.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✓ Resource heatmap created: ../data/resource_heatmap_matplotlib.png")
+    print("✓ Resource heatmap created: data/resource_heatmap_matplotlib.png")
 
 
 def main():

@@ -52,13 +52,13 @@ The LLM Agent architecture will be designed as:
 
 1. **Continue with Mock Implementations**: Keep current placeholder agents
    - **Rejected**: Doesn't meet client requirements for real LLM integration
-   
+
 2. **Wrapper-Only Approach**: Simple wrapper around LangChain agents
    - **Rejected**: Would limit customization and optimization for Kailash workflows
-   
+
 3. **Single Provider Focus**: Implement only OpenAI integration initially
    - **Rejected**: Clients need multi-provider support for flexibility and cost optimization
-   
+
 4. **External Service Only**: LLM integration only through external API calls
    - **Rejected**: Limits functionality and increases latency for complex workflows
 

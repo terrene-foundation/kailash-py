@@ -278,16 +278,7 @@ class TemplateError(KailashException):
 
 
 # Code execution exceptions
-class SafetyViolationError(NodeException):
-    """Raised when code execution violates safety rules.
-
-    This typically occurs when:
-    - Potentially dangerous operations are attempted
-    - Resource limits are exceeded
-    - Security policies are violated
-    """
-
-    pass
+# (SafetyViolationError already defined above - removing duplicate)
 
 
 class CodeExecutionError(NodeException):
@@ -297,6 +288,29 @@ class CodeExecutionError(NodeException):
     - Syntax errors in user code
     - Runtime errors during execution
     - Import or dependency issues
+    """
+
+    pass
+
+
+# Resource exceptions
+class KailashNotFoundException(KailashException):
+    """Raised when a requested resource cannot be found.
+
+    This typically occurs when:
+    - A template ID doesn't exist in the registry
+    - A node type is not registered
+    - A file or resource is missing
+    """
+
+    pass
+
+
+# Workflow-specific exceptions
+class KailashWorkflowException(WorkflowException):
+    """Raised for general workflow-related errors.
+
+    This is an alias for WorkflowException for consistency.
     """
 
     pass

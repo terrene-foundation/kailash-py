@@ -21,7 +21,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
-@register_node(alias="BasicAuth")
+@register_node()
 class BasicAuthNode(Node):
     """Node for adding Basic Authentication to API requests.
 
@@ -116,7 +116,7 @@ class BasicAuthNode(Node):
         return {"headers": headers, "auth_type": "basic"}
 
 
-@register_node(alias="OAuth2")
+@register_node()
 class OAuth2Node(Node):
     """Node for handling OAuth 2.0 authentication flows.
 
@@ -421,7 +421,7 @@ class OAuth2Node(Node):
         }
 
 
-@register_node(alias="APIKey")
+@register_node()
 class APIKeyNode(Node):
     """Node for API key authentication.
 

@@ -215,7 +215,7 @@ with open(summary_path, "w") as f:
     f.write(summary_text)
 
 print("✓ Examples overview created:")
-print("  - Visual summary: data/examples_overview.png")
+print("  - Visual summary: examples/data/examples_overview.png")
 print(f"  - Text summary: {summary_path}")
 
 # Create an index of all examples

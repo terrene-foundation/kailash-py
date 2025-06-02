@@ -155,13 +155,13 @@ workflow.add_node("LLMAgent", "research_agent", config={
     "model": "gpt-4",
     "tools": [
         {
-            "name": "search_api", 
+            "name": "search_api",
             "node": "RESTClientNode",
             "config": {"base_url": "https://api.search.com"}
         },
         {
             "name": "data_api",
-            "node": "GraphQLClientNode", 
+            "node": "GraphQLClientNode",
             "config": {"endpoint": "https://api.data.com/graphql"}
         }
     ]
@@ -177,7 +177,7 @@ workflow.add_node("LLMAgent", "data_fetcher", config={
 })
 
 workflow.add_node("LLMAgent", "data_processor", config={
-    "role": "data_analyzer", 
+    "role": "data_analyzer",
     "receives_from": ["data_fetcher"],
     "api_tools": ["analysis_api"]
 })
@@ -201,7 +201,7 @@ workflow.add_node("RESTClientNode", "mcp_api", config={
 API nodes facilitate communication between agents in distributed workflows:
 
 1. **Agent Registry API**: Agents discover each other through registry APIs
-2. **Status APIs**: Agents report status and coordinate through API endpoints  
+2. **Status APIs**: Agents report status and coordinate through API endpoints
 3. **Data Exchange APIs**: Agents share data and results via structured APIs
 
 ### Agentic Workflow Patterns

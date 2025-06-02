@@ -123,11 +123,15 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 - [0018-performance-metrics-architecture.md](0018-performance-metrics-architecture.md) - Performance Metrics Architecture
 - [0019-real-time-dashboard-architecture.md](0019-real-time-dashboard-architecture.md) - Real-time Dashboard Architecture
 
-### Agentic AI Architecture (Proposed)
+### Agentic AI Architecture
 **Priority**: 🔴 **URGENT** - Client-driven requirements for agentic workflows
 
+#### Accepted
+- [0026-unified-ai-provider-architecture.md](0026-unified-ai-provider-architecture.md) - Unified AI Provider Architecture (LLM + Embeddings)
+
+#### Proposed
 - [0022-mcp-integration-architecture.md](0022-mcp-integration-architecture.md) - Model Context Protocol (MCP) Integration Architecture
-- [0023-a2a-communication-architecture.md](0023-a2a-communication-architecture.md) - Agent-to-Agent (A2A) Communication Architecture  
+- [0023-a2a-communication-architecture.md](0023-a2a-communication-architecture.md) - Agent-to-Agent (A2A) Communication Architecture
 - [0024-llm-agent-architecture.md](0024-llm-agent-architecture.md) - LLM Agent Architecture for Real Integration
 
 ### Package & Documentation (Accepted)
@@ -143,7 +147,7 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 
 ## Project Status
 
-As of 2025-06-01, the Kailash Python SDK has achieved major milestones:
+As of 2025-06-02, the Kailash Python SDK has achieved major milestones:
 - **100% test pass rate** (571/640 tests passing, 89%)
 - **15/15 test categories** at 100% coverage
 - **All core architectural decisions** implemented and validated

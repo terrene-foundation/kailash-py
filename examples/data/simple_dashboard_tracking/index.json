@@ -160,6 +160,132 @@
       "status": "completed",
       "started_at": "2025-05-31T17:02:57.672815+00:00",
       "ended_at": "2025-05-31T17:02:57.674420+00:00"
+    },
+    "cac7dfe3-65e6-445a-9fe7-568d09594c7b": {
+      "run_id": "fa76f471-83d6-4ca1-bd5a-3eb823b754e4",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:19.086787+00:00",
+      "ended_at": "2025-06-02T07:09:19.089117+00:00"
+    },
+    "1d5a5a5b-54d8-4966-a2e3-fcaa2be53f24": {
+      "run_id": "fa76f471-83d6-4ca1-bd5a-3eb823b754e4",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:19.090863+00:00",
+      "ended_at": "2025-06-02T07:09:19.092512+00:00"
+    },
+    "aafa3f19-bf1c-4849-86a5-ac85cb081786": {
+      "run_id": "fa76f471-83d6-4ca1-bd5a-3eb823b754e4",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:19.093985+00:00",
+      "ended_at": "2025-06-02T07:09:19.096494+00:00"
+    },
+    "b065add9-6100-4ae4-ae28-f36ad314c28a": {
+      "run_id": "8ed7a0ef-45e2-49bf-97be-65d983f2b650",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:48.577679+00:00",
+      "ended_at": "2025-06-02T08:26:48.580326+00:00"
+    },
+    "180ed210-ef36-4b07-999b-755ee8d2deae": {
+      "run_id": "8ed7a0ef-45e2-49bf-97be-65d983f2b650",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:48.582090+00:00",
+      "ended_at": "2025-06-02T08:26:48.583746+00:00"
+    },
+    "b1cafbf4-5f39-4407-b08d-c47cba677d0a": {
+      "run_id": "8ed7a0ef-45e2-49bf-97be-65d983f2b650",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:48.585199+00:00",
+      "ended_at": "2025-06-02T08:26:48.587101+00:00"
+    },
+    "cff88e63-77f6-4aac-b4de-be06cde9115d": {
+      "run_id": "80626e37-399d-4747-9a52-72c0622a46f8",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:43.837296+00:00",
+      "ended_at": "2025-06-02T08:31:43.839428+00:00"
+    },
+    "94bf2e38-bacf-42a2-9443-7ed2152c65b7": {
+      "run_id": "80626e37-399d-4747-9a52-72c0622a46f8",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:43.841267+00:00",
+      "ended_at": "2025-06-02T08:31:43.843138+00:00"
+    },
+    "31964dd4-232c-4f84-8966-4f270ceb9559": {
+      "run_id": "80626e37-399d-4747-9a52-72c0622a46f8",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:43.844652+00:00",
+      "ended_at": "2025-06-02T08:31:43.846642+00:00"
+    },
+    "9fe9e8a8-aafc-4d3a-9293-b13c6406655e": {
+      "run_id": "f8f8d633-b55e-49ee-b114-d821877689cc",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:25.503831+00:00",
+      "ended_at": "2025-06-02T08:33:25.505953+00:00"
+    },
+    "5e1888c0-616a-420a-9a9e-413384d62bfe": {
+      "run_id": "f8f8d633-b55e-49ee-b114-d821877689cc",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:25.507658+00:00",
+      "ended_at": "2025-06-02T08:33:25.509367+00:00"
+    },
+    "4fd0d867-a84a-44ea-a8c8-99c518d64173": {
+      "run_id": "f8f8d633-b55e-49ee-b114-d821877689cc",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:25.511235+00:00",
+      "ended_at": "2025-06-02T08:33:25.513198+00:00"
+    },
+    "c074f358-a20c-452b-804c-d45cba1d0a3a": {
+      "run_id": "6158bbcc-8048-4576-b08b-a9415ccc369e",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:12.962177+00:00",
+      "ended_at": "2025-06-02T10:05:12.964165+00:00"
+    },
+    "ce7bcfe7-c5d4-443e-a7da-9a7f5a4c1488": {
+      "run_id": "6158bbcc-8048-4576-b08b-a9415ccc369e",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:12.965928+00:00",
+      "ended_at": "2025-06-02T10:05:12.967386+00:00"
+    },
+    "7cfa8497-0ba8-4b8f-8dc8-cf4455600a9e": {
+      "run_id": "6158bbcc-8048-4576-b08b-a9415ccc369e",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:12.969055+00:00",
+      "ended_at": "2025-06-02T10:05:12.971041+00:00"
+    },
+    "5953bee8-c2db-4df0-b076-60d29c52ea81": {
+      "run_id": "96c72d86-9846-4f52-8332-86d7ab79e5d2",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:20.969549+00:00",
+      "ended_at": "2025-06-02T10:09:20.971666+00:00"
+    },
+    "c1c34ede-465f-45c8-915e-7f78a590f4a0": {
+      "run_id": "96c72d86-9846-4f52-8332-86d7ab79e5d2",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:20.973502+00:00",
+      "ended_at": "2025-06-02T10:09:20.975426+00:00"
+    },
+    "cb876f88-2009-446d-bb59-64e66bde7e85": {
+      "run_id": "96c72d86-9846-4f52-8332-86d7ab79e5d2",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:20.977106+00:00",
+      "ended_at": "2025-06-02T10:09:20.979272+00:00"
     }
   },
   "runs": {}

@@ -18,7 +18,7 @@ from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
-@register_node(alias="GraphQLClient")
+@register_node()
 class GraphQLClientNode(Node):
     """Node for interacting with GraphQL APIs.
 
@@ -331,7 +331,7 @@ class GraphQLClientNode(Node):
         }
 
 
-@register_node(alias="AsyncGraphQLClient")
+@register_node()
 class AsyncGraphQLClientNode(AsyncNode):
     """Asynchronous node for interacting with GraphQL APIs.
 

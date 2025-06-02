@@ -29,7 +29,7 @@ def create_simple_workflow() -> Workflow:
     # Create node instances
     reader = CSVReader(file_path="../data/input.csv", headers=True)
     transformer = DataTransformer(transformations=["lambda x: x"])
-    writer = CSVWriter(file_path="../data/output.csv")
+    writer = CSVWriter(file_path="../outputs/output.csv")
 
     # Add nodes to workflow
     workflow.add_node(node_id="reader", node_or_type=reader)
@@ -105,7 +105,7 @@ def create_complex_workflow() -> Workflow:
 
     # Output
     json_writer = builder.add_node(
-        "JSONWriter", "final_output", {"file_path": "../data/outputs/output.json"}
+        "JSONWriter", "final_output", {"file_path": "../outputs/output.json"}
     )
 
     # Connect the workflow
@@ -155,7 +155,7 @@ def demonstrate_mermaid_visualization():
 
     # Save as markdown
     simple_workflow.save_mermaid_markdown(
-        "../data/outputs/simple_workflow_mermaid.md",
+        "../outputs/simple_workflow_mermaid.md",
         title="Simple ETL Pipeline Visualization",
     )
     print("Saved to: ../outputs/simple_workflow_mermaid.md")
@@ -170,7 +170,7 @@ def demonstrate_mermaid_visualization():
 
     # Save complex workflow
     complex_workflow.save_mermaid_markdown(
-        "../data/outputs/complex_workflow_mermaid.md",
+        "../outputs/complex_workflow_mermaid.md",
         title="Complex Processing Pipeline",
     )
     print("Saved to: ../outputs/complex_workflow_mermaid.md")
@@ -223,7 +223,7 @@ def demonstrate_mermaid_visualization():
         name="ProcessData", code="def execute(data):\n    return {'processed': data}"
     )
     transform_data = DataTransformer(transformations=["lambda x: {'final': x}"])
-    save_results = JSONWriter(file_path="../data/outputs/api_results.json")
+    save_results = JSONWriter(file_path="../outputs/api_results.json")
 
     # Add nodes to workflow
     api_workflow.add_node(node_id="fetch_data", node_or_type=fetch_data)
@@ -242,7 +242,7 @@ def demonstrate_mermaid_visualization():
 
     # Save API workflow
     api_workflow.save_mermaid_markdown(
-        "../data/outputs/api_workflow_mermaid.md",
+        "../outputs/api_workflow_mermaid.md",
         title="API Integration Workflow",
     )
     print("Saved to: ../outputs/api_workflow_mermaid.md")
@@ -255,7 +255,7 @@ def demonstrate_mermaid_visualization():
 
 if __name__ == "__main__":
     # Ensure output directory exists
-    os.makedirs("../data/outputs", exist_ok=True)
+    os.makedirs("../outputs", exist_ok=True)
 
     # Run the demonstration
     demonstrate_mermaid_visualization()

@@ -14,12 +14,12 @@ This document records all coding mistakes, anti-patterns, and issues encountered
 
 ## Statistics
 
-- **Total Issues Documented**: 48 categories
-- **Critical Issues Fixed**: 16
+- **Total Issues Documented**: 49 categories
+- **Critical Issues Fixed**: 17
 - **Test-Related Issues**: 18
-- **Architecture Issues**: 9
+- **Architecture Issues**: 10
 - **Performance Issues**: 6
-- **Sessions with Major Fixes**: 13+
+- **Sessions with Major Fixes**: 14+
 
 ---
 
@@ -563,7 +563,31 @@ class DataProcessor:
 ```
 **Fixed In**: Code formatting with Black and isort
 
-### 32. **God Classes/Functions**
+### 32. **Node Component Naming Without "Node" Suffix**
+**Problem**: Using aliases to hide the "Node" suffix makes it unclear to users what type of component they're working with.
+```python
+# BAD - Hiding the Node suffix with aliases
+@register_node(alias="RESTClient")
+class RESTClientNode(Node):
+    pass
+
+# Usage becomes confusing
+client = RESTClient()  # Is this a Node? A client library? A helper class?
+
+# GOOD - Keep Node in the name
+@register_node()
+class RESTClientNode(Node):
+    pass
+
+# Usage is clear
+client = RESTClientNode()  # Obviously a Node component
+```
+**Impact**: Users were confused about whether they were using a Node component or some other type of object.
+**Solution**: Removed all aliases that hide the "Node" suffix. All Node components must include "Node" in their name.
+**Principle**: Component type should be immediately clear from the name. Node components should always have "Node" in the name.
+**Fixed In**: Session 34 - REST client consolidation
+
+### 33. **God Classes/Functions**
 **Problem**: Classes or functions doing too many things.
 ```python
 # BAD - God class
@@ -871,6 +895,42 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/db")
 
 ---
 
+## Workflow Architecture Issues
+
+### 49. **Missing Data Source Nodes in Workflow Design**
+**Problem**: Creating workflows that expect external input injection instead of starting with proper data source nodes.
+```python
+# BAD - Workflow expects external input
+def create_workflow():
+    workflow = Workflow("processing_pipeline")
+    processor = ProcessorNode()  # Expects external document_content
+    workflow.add_node("processor", processor)
+    # No data source - validation fails
+
+    # Execution requires external input injection
+    runtime.execute(workflow, {"processor": {"document_content": "external data"}})
+
+# GOOD - Workflow starts with data source
+def create_workflow():
+    workflow = Workflow("complete_pipeline")
+    data_source = DocumentInputNode()  # Provides data autonomously
+    processor = ProcessorNode()
+    workflow.add_node("source", data_source)
+    workflow.add_node("processor", processor)
+    workflow.connect("source", "processor", {"document_content": "document_content"})
+
+    # Self-contained execution
+    runtime.execute(workflow, {})  # No external input needed
+```
+**Impact**: Workflow validation fails with "Node 'X' missing required inputs" because the workflow expects self-contained data flow.
+**Solution**: Always start workflows with proper data source nodes (CSVReader, DocumentInputNode, etc.) that can provide initial data autonomously.
+**Root Cause**: Misunderstanding workflow design pattern - workflows should be complete pipelines, not processing fragments.
+**Workflow Pattern**: Data Source → Processing Node 1 → Processing Node 2 → Output Node
+**Fixed In**: Session 35 - Hierarchical RAG workflow redesign
+**Lesson**: Workflow validation errors about missing inputs are correct behavior - they enforce proper workflow architecture.
+
+---
+
 ## Recommendations for Future Development
 
 1. **Implement comprehensive security review** for PythonCodeNode
@@ -886,6 +946,6 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/db")
 
 ---
 
-*Last Updated: 2025-06-01 (Session 31)*
-*Total Mistakes Documented: 48*
+*Last Updated: 2025-06-02 (Session 35)*
+*Total Mistakes Documented: 49*
 *Project Phase: Production Ready*

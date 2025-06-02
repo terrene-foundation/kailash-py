@@ -1,16 +1,12 @@
-"""HTTP client nodes for making requests to external APIs.
+"""Enhanced HTTP client nodes with authentication and advanced features.
 
-This module provides nodes for making HTTP requests to external services.
-Both synchronous and asynchronous versions are provided to support different workflow
-execution modes.
-
-Key Components:
-- HTTPRequestNode: Synchronous HTTP client node
-- AsyncHTTPRequestNode: Asynchronous HTTP client node
-- Authentication helpers and utilities
+This module provides an enhanced version of HTTPRequestNode that incorporates
+the best features from both the original HTTPRequestNode and HTTPClientNode.
 """
 
 import asyncio
+import base64
+import time
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -59,31 +55,35 @@ class HTTPResponse(BaseModel):
     url: str
 
 
-@register_node(alias="HTTPRequest")
+@register_node()
 class HTTPRequestNode(Node):
-    """Node for making HTTP requests to external APIs.
+    """Enhanced node for making HTTP requests to external APIs.
 
     This node provides a flexible interface for making HTTP requests with support for:
-    - All common HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
-    - JSON, form, and multipart request bodies
-    - Custom headers and query parameters
-    - Response parsing (JSON, text, binary)
-    - Basic error handling and retries
+        * All common HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
+        * Multiple authentication methods (Bearer, Basic, API Key, OAuth2)
+        * JSON, form, and multipart request bodies
+        * Custom headers and query parameters
+        * Response parsing (JSON, text, binary)
+        * Error handling and retries with recovery suggestions
+        * Rate limiting support
+        * Request/response logging
 
     Design Purpose:
-    - Enable workflow integration with external HTTP APIs
-    - Provide a consistent interface for HTTP operations
-    - Support common authentication patterns
-    - Handle response parsing and error handling
+        * Enable workflow integration with external HTTP APIs
+        * Provide a consistent interface for HTTP operations
+        * Support common authentication patterns
+        * Handle response parsing and error handling
+        * Offer enterprise-grade features like rate limiting
 
     Upstream Usage:
-    - Workflow: Creates and configures node for API integration
-    - Specialized API nodes: May extend this node for specific APIs
+        * Workflow: Creates and configures node for API integration
+        * Specialized API nodes: May extend this node for specific APIs
 
     Downstream Consumers:
-    - Data processing nodes: Consume API response data
-    - Decision nodes: Route workflow based on API responses
-    - Custom nodes: Process API-specific data formats
+        * Data processing nodes: Consume API response data
+        * Decision nodes: Route workflow based on API responses
+        * Custom nodes: Process API-specific data formats
     """
 
     def __init__(self, **kwargs):
@@ -101,6 +101,13 @@ class HTTPRequestNode(Node):
             verify_ssl (bool, optional): Whether to verify SSL certificates
             retry_count (int, optional): Number of times to retry failed requests
             retry_backoff (float, optional): Backoff factor for retries
+            auth_type (str, optional): Authentication type (bearer, basic, api_key, oauth2)
+            auth_token (str, optional): Authentication token/key
+            auth_username (str, optional): Username for basic auth
+            auth_password (str, optional): Password for basic auth
+            api_key_header (str, optional): Header name for API key auth
+            rate_limit_delay (float, optional): Delay between requests for rate limiting
+            log_requests (bool, optional): Whether to log request/response details
             **kwargs: Additional parameters passed to base Node
         """
         super().__init__(**kwargs)
@@ -116,7 +123,7 @@ class HTTPRequestNode(Node):
             "url": NodeParameter(
                 name="url",
                 type=str,
-                required=True,
+                required=False,
                 description="URL to send the request to",
             ),
             "method": NodeParameter(
@@ -189,6 +196,55 @@ class HTTPRequestNode(Node):
                 default=0.5,
                 description="Backoff factor for retries",
             ),
+            "auth_type": NodeParameter(
+                name="auth_type",
+                type=str,
+                required=False,
+                default=None,
+                description="Authentication type: bearer, basic, api_key, oauth2",
+            ),
+            "auth_token": NodeParameter(
+                name="auth_token",
+                type=str,
+                required=False,
+                default=None,
+                description="Authentication token/key for bearer, api_key, or oauth2",
+            ),
+            "auth_username": NodeParameter(
+                name="auth_username",
+                type=str,
+                required=False,
+                default=None,
+                description="Username for basic authentication",
+            ),
+            "auth_password": NodeParameter(
+                name="auth_password",
+                type=str,
+                required=False,
+                default=None,
+                description="Password for basic authentication",
+            ),
+            "api_key_header": NodeParameter(
+                name="api_key_header",
+                type=str,
+                required=False,
+                default="X-API-Key",
+                description="Header name for API key authentication",
+            ),
+            "rate_limit_delay": NodeParameter(
+                name="rate_limit_delay",
+                type=float,
+                required=False,
+                default=0,
+                description="Delay between requests to respect rate limits (seconds)",
+            ),
+            "log_requests": NodeParameter(
+                name="log_requests",
+                type=bool,
+                required=False,
+                default=False,
+                description="Log request and response details for debugging",
+            ),
         }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
@@ -218,6 +274,49 @@ class HTTPRequestNode(Node):
             ),
         }
 
+    def _apply_authentication(
+        self,
+        headers: dict,
+        auth_type: Optional[str],
+        auth_token: Optional[str],
+        auth_username: Optional[str],
+        auth_password: Optional[str],
+        api_key_header: str,
+    ) -> dict:
+        """Apply authentication to request headers.
+
+        Args:
+            headers: Existing headers dictionary
+            auth_type: Type of authentication (bearer, basic, api_key, oauth2)
+            auth_token: Token for bearer/api_key/oauth2 authentication
+            auth_username: Username for basic authentication
+            auth_password: Password for basic authentication
+            api_key_header: Header name for API key authentication
+
+        Returns:
+            Updated headers dictionary with authentication
+        """
+        if not auth_type:
+            return headers
+
+        auth_headers = headers.copy()
+
+        if auth_type.lower() == "bearer" and auth_token:
+            auth_headers["Authorization"] = f"Bearer {auth_token}"
+
+        elif auth_type.lower() == "basic" and auth_username and auth_password:
+            credentials = f"{auth_username}:{auth_password}"
+            encoded = base64.b64encode(credentials.encode()).decode()
+            auth_headers["Authorization"] = f"Basic {encoded}"
+
+        elif auth_type.lower() == "api_key" and auth_token:
+            auth_headers[api_key_header] = auth_token
+
+        elif auth_type.lower() == "oauth2" and auth_token:
+            auth_headers["Authorization"] = f"Bearer {auth_token}"
+
+        return auth_headers
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute an HTTP request.
 
@@ -233,6 +332,13 @@ class HTTPRequestNode(Node):
             verify_ssl (bool, optional): Whether to verify SSL certificates
             retry_count (int, optional): Number of times to retry failed requests
             retry_backoff (float, optional): Backoff factor for retries
+            auth_type (str, optional): Authentication type
+            auth_token (str, optional): Authentication token
+            auth_username (str, optional): Username for basic auth
+            auth_password (str, optional): Password for basic auth
+            api_key_header (str, optional): Header name for API key
+            rate_limit_delay (float, optional): Rate limit delay
+            log_requests (bool, optional): Log request/response details
 
         Returns:
             Dictionary containing:
@@ -244,6 +350,8 @@ class HTTPRequestNode(Node):
             NodeExecutionError: If the request fails or returns an error status
         """
         url = kwargs.get("url")
+        if not url:
+            raise NodeValidationError("URL parameter is required")
         method = kwargs.get("method", "GET").upper()
         headers = kwargs.get("headers", {})
         params = kwargs.get("params", {})
@@ -254,6 +362,24 @@ class HTTPRequestNode(Node):
         verify_ssl = kwargs.get("verify_ssl", True)
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
+        auth_type = kwargs.get("auth_type")
+        auth_token = kwargs.get("auth_token")
+        auth_username = kwargs.get("auth_username")
+        auth_password = kwargs.get("auth_password")
+        api_key_header = kwargs.get("api_key_header", "X-API-Key")
+        rate_limit_delay = kwargs.get("rate_limit_delay", 0)
+        log_requests = kwargs.get("log_requests", False)
+
+        # Apply authentication to headers
+        if auth_type:
+            headers = self._apply_authentication(
+                headers,
+                auth_type,
+                auth_token,
+                auth_username,
+                auth_password,
+                api_key_header,
+            )
 
         # Validate method
         try:
@@ -273,6 +399,10 @@ class HTTPRequestNode(Node):
                 f"Supported formats: {', '.join([f.value for f in ResponseFormat])}"
             )
 
+        # Apply rate limit delay if configured
+        if rate_limit_delay > 0:
+            time.sleep(rate_limit_delay)
+
         # Prepare request kwargs
         request_kwargs = {
             "url": url,
@@ -289,7 +419,13 @@ class HTTPRequestNode(Node):
             request_kwargs["data"] = data
 
         # Execute request with retries
-        self.logger.info(f"Making {method} request to {url}")
+        if log_requests:
+            self.logger.info(f"Request: {method} {url}")
+            self.logger.info(f"Headers: {headers}")
+            if data or json_data:
+                self.logger.info(f"Body: {json_data or data}")
+        else:
+            self.logger.info(f"Making {method} request to {url}")
 
         response = None
         last_error = None
@@ -300,16 +436,18 @@ class HTTPRequestNode(Node):
                 self.logger.info(
                     f"Retry attempt {attempt}/{retry_count} after {wait_time:.2f}s"
                 )
-                import time
-
                 time.sleep(wait_time)
 
             try:
-                import time
-
                 start_time = time.time()
                 response = self.session.request(method=method.value, **request_kwargs)
                 response_time = (time.time() - start_time) * 1000  # Convert to ms
+
+                # Log response if enabled
+                if log_requests:
+                    self.logger.info(f"Response: {response.status_code}")
+                    self.logger.info(f"Headers: {dict(response.headers)}")
+                    self.logger.info(f"Body: {response.text[:500]}...")
 
                 # Success, break the retry loop
                 break
@@ -320,9 +458,21 @@ class HTTPRequestNode(Node):
 
                 # Last attempt, no more retries
                 if attempt == retry_count:
-                    raise NodeExecutionError(
-                        f"HTTP request failed after {retry_count + 1} attempts: {str(e)}"
-                    ) from e
+                    # Enhanced error response with recovery suggestions
+                    return {
+                        "response": None,
+                        "status_code": None,
+                        "success": False,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "recovery_suggestions": [
+                            "Check network connectivity",
+                            "Verify URL is correct and accessible",
+                            "Check authentication credentials",
+                            "Increase timeout or retry settings",
+                            "Check API rate limits",
+                        ],
+                    }
 
         # Parse response based on format
         content_type = response.headers.get("Content-Type", "")
@@ -363,16 +513,70 @@ class HTTPRequestNode(Node):
         # Return results
         success = 200 <= response.status_code < 300
 
-        return {
+        # Add recovery suggestions for error responses
+        result = {
             "response": http_response,
             "status_code": response.status_code,
             "success": success,
         }
 
+        if not success:
+            result["recovery_suggestions"] = self._get_recovery_suggestions(
+                response.status_code
+            )
 
-@register_node(alias="AsyncHTTPRequest")
+        return result
+
+    def _get_recovery_suggestions(self, status_code: int) -> list:
+        """Get recovery suggestions based on status code.
+
+        Args:
+            status_code: HTTP status code
+
+        Returns:
+            List of recovery suggestions
+        """
+        if status_code == 401:
+            return [
+                "Check authentication credentials",
+                "Verify API key or token is valid",
+                "Ensure authentication method matches API requirements",
+            ]
+        elif status_code == 403:
+            return [
+                "Verify you have permission to access this resource",
+                "Check API key permissions/scopes",
+                "Ensure IP address is whitelisted if required",
+            ]
+        elif status_code == 404:
+            return [
+                "Verify the URL path is correct",
+                "Check if resource ID exists",
+                "Ensure API version in URL is correct",
+            ]
+        elif status_code == 429:
+            return [
+                "API rate limit exceeded - wait before retrying",
+                "Implement rate limiting in your requests",
+                "Check rate limit headers for reset time",
+            ]
+        elif status_code >= 500:
+            return [
+                "Server error - retry after a delay",
+                "Check API service status page",
+                "Contact API support if issue persists",
+            ]
+        else:
+            return [
+                "Check API documentation for this status code",
+                "Verify request format and parameters",
+                "Review response body for error details",
+            ]
+
+
+@register_node()
 class AsyncHTTPRequestNode(AsyncNode):
-    """Asynchronous node for making HTTP requests to external APIs.
+    """Asynchronous enhanced node for making HTTP requests to external APIs.
 
     This node provides the same functionality as HTTPRequestNode but uses
     asynchronous I/O for better performance, especially for concurrent requests.
@@ -418,6 +622,49 @@ class AsyncHTTPRequestNode(AsyncNode):
         # Same output schema as the synchronous version
         return HTTPRequestNode().get_output_schema()
 
+    def _apply_authentication(
+        self,
+        headers: dict,
+        auth_type: Optional[str],
+        auth_token: Optional[str],
+        auth_username: Optional[str],
+        auth_password: Optional[str],
+        api_key_header: str,
+    ) -> dict:
+        """Apply authentication to request headers.
+
+        Args:
+            headers: Existing headers dictionary
+            auth_type: Type of authentication (bearer, basic, api_key, oauth2)
+            auth_token: Token for bearer/api_key/oauth2 authentication
+            auth_username: Username for basic authentication
+            auth_password: Password for basic authentication
+            api_key_header: Header name for API key authentication
+
+        Returns:
+            Updated headers dictionary with authentication
+        """
+        if not auth_type:
+            return headers
+
+        auth_headers = headers.copy()
+
+        if auth_type.lower() == "bearer" and auth_token:
+            auth_headers["Authorization"] = f"Bearer {auth_token}"
+
+        elif auth_type.lower() == "basic" and auth_username and auth_password:
+            credentials = f"{auth_username}:{auth_password}"
+            encoded = base64.b64encode(credentials.encode()).decode()
+            auth_headers["Authorization"] = f"Basic {encoded}"
+
+        elif auth_type.lower() == "api_key" and auth_token:
+            auth_headers[api_key_header] = auth_token
+
+        elif auth_type.lower() == "oauth2" and auth_token:
+            auth_headers["Authorization"] = f"Bearer {auth_token}"
+
+        return auth_headers
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Synchronous version of the request, for compatibility.
 
@@ -450,6 +697,8 @@ class AsyncHTTPRequestNode(AsyncNode):
             NodeExecutionError: If the request fails or returns an error status
         """
         url = kwargs.get("url")
+        if not url:
+            raise NodeValidationError("URL parameter is required")
         method = kwargs.get("method", "GET").upper()
         headers = kwargs.get("headers", {})
         params = kwargs.get("params", {})
@@ -460,6 +709,24 @@ class AsyncHTTPRequestNode(AsyncNode):
         verify_ssl = kwargs.get("verify_ssl", True)
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
+        auth_type = kwargs.get("auth_type")
+        auth_token = kwargs.get("auth_token")
+        auth_username = kwargs.get("auth_username")
+        auth_password = kwargs.get("auth_password")
+        api_key_header = kwargs.get("api_key_header", "X-API-Key")
+        rate_limit_delay = kwargs.get("rate_limit_delay", 0)
+        log_requests = kwargs.get("log_requests", False)
+
+        # Apply authentication to headers
+        if auth_type:
+            headers = self._apply_authentication(
+                headers,
+                auth_type,
+                auth_token,
+                auth_username,
+                auth_password,
+                api_key_header,
+            )
 
         # Validate method
         try:
@@ -478,6 +745,10 @@ class AsyncHTTPRequestNode(AsyncNode):
                 f"Invalid response format: {response_format}. "
                 f"Supported formats: {', '.join([f.value for f in ResponseFormat])}"
             )
+
+        # Apply rate limit delay if configured
+        if rate_limit_delay > 0:
+            await asyncio.sleep(rate_limit_delay)
 
         # Create session if needed
         if self._session is None:
@@ -499,7 +770,13 @@ class AsyncHTTPRequestNode(AsyncNode):
             request_kwargs["data"] = data
 
         # Execute request with retries
-        self.logger.info(f"Making async {method} request to {url}")
+        if log_requests:
+            self.logger.info(f"Request: {method} {url}")
+            self.logger.info(f"Headers: {headers}")
+            if data or json_data:
+                self.logger.info(f"Body: {json_data or data}")
+        else:
+            self.logger.info(f"Making async {method} request to {url}")
 
         response = None
         last_error = None
@@ -513,8 +790,6 @@ class AsyncHTTPRequestNode(AsyncNode):
                 await asyncio.sleep(wait_time)
 
             try:
-                import time
-
                 start_time = time.time()
 
                 async with self._session.request(
@@ -524,6 +799,13 @@ class AsyncHTTPRequestNode(AsyncNode):
 
                     # Get content type
                     content_type = response.headers.get("Content-Type", "")
+
+                    # Log response if enabled
+                    if log_requests:
+                        self.logger.info(f"Response: {response.status}")
+                        self.logger.info(f"Headers: {dict(response.headers)}")
+                        text_preview = await response.text()
+                        self.logger.info(f"Body: {text_preview[:500]}...")
 
                     # Determine response format
                     actual_format = response_format
@@ -564,11 +846,18 @@ class AsyncHTTPRequestNode(AsyncNode):
                     # Return results
                     success = 200 <= response.status < 300
 
-                    return {
+                    result = {
                         "response": http_response,
                         "status_code": response.status,
                         "success": success,
                     }
+
+                    if not success:
+                        result["recovery_suggestions"] = self._get_recovery_suggestions(
+                            response.status
+                        )
+
+                    return result
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 last_error = e
@@ -576,14 +865,72 @@ class AsyncHTTPRequestNode(AsyncNode):
 
                 # Last attempt, no more retries
                 if attempt == retry_count:
-                    raise NodeExecutionError(
-                        f"Async HTTP request failed after {retry_count + 1} attempts: {str(e)}"
-                    ) from e
+                    # Enhanced error response with recovery suggestions
+                    return {
+                        "response": None,
+                        "status_code": None,
+                        "success": False,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "recovery_suggestions": [
+                            "Check network connectivity",
+                            "Verify URL is correct and accessible",
+                            "Check authentication credentials",
+                            "Increase timeout or retry settings",
+                            "Check API rate limits",
+                        ],
+                    }
 
         # Should not reach here, but just in case
         raise NodeExecutionError(
             f"Async HTTP request failed after {retry_count + 1} attempts."
         )
+
+    def _get_recovery_suggestions(self, status_code: int) -> list:
+        """Get recovery suggestions based on status code.
+
+        Args:
+            status_code: HTTP status code
+
+        Returns:
+            List of recovery suggestions
+        """
+        if status_code == 401:
+            return [
+                "Check authentication credentials",
+                "Verify API key or token is valid",
+                "Ensure authentication method matches API requirements",
+            ]
+        elif status_code == 403:
+            return [
+                "Verify you have permission to access this resource",
+                "Check API key permissions/scopes",
+                "Ensure IP address is whitelisted if required",
+            ]
+        elif status_code == 404:
+            return [
+                "Verify the URL path is correct",
+                "Check if resource ID exists",
+                "Ensure API version in URL is correct",
+            ]
+        elif status_code == 429:
+            return [
+                "API rate limit exceeded - wait before retrying",
+                "Implement rate limiting in your requests",
+                "Check rate limit headers for reset time",
+            ]
+        elif status_code >= 500:
+            return [
+                "Server error - retry after a delay",
+                "Check API service status page",
+                "Contact API support if issue persists",
+            ]
+        else:
+            return [
+                "Check API documentation for this status code",
+                "Verify request format and parameters",
+                "Review response body for error details",
+            ]
 
     async def __aenter__(self):
         """Context manager support for 'async with' statements."""

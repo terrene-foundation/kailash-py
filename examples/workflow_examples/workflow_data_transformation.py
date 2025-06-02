@@ -529,7 +529,7 @@ def main():
             print(f"\n{node_id}:")
             if isinstance(output, dict):
                 for key, value in output.items():
-                    if key == "data" and isinstance(value, list):
+                    if key == "examples/data" and isinstance(value, list):
                         print(f"  {key}: {len(value)} records")
                     elif key == "cleaning_report":
                         print("  Cleaning Report:")
@@ -553,7 +553,7 @@ def main():
                     else:
                         print(f"  {key}: {value}")
 
-        print("\n✓ All outputs written to data/outputs/")
+        print("\n✓ All outputs written to examples/data/outputs/")
 
     except Exception as e:
         print(f"\n✗ Transformation failed: {e}")

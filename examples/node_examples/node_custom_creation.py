@@ -581,7 +581,7 @@ def main():
                     if output["data"]:
                         print(f"  Sample: {output['data'][0]}")
                 for key, value in output.items():
-                    if key != "data":
+                    if key != "examples/data":
                         print(f"  {key}: {value}")
 
     except Exception as e:

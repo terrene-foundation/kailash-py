@@ -20,7 +20,7 @@ Unit Testing Nodes
        node = DataTransformer(
            transformations=["lambda x: x * 2"]
        )
-       
+
        result = node.execute(data=[1, 2, 3])
        assert result["data"] == [2, 4, 6]
 
@@ -35,8 +35,8 @@ Integration Testing
    def test_workflow_integration():
        workflow = Workflow("test_workflow")
        # ... setup workflow
-       
+
        runtime = TestingRuntime()
        results, run_id = runtime.execute(workflow)
-       
+
        assert results["final_node"]["status"] == "success"

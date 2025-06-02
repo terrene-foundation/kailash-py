@@ -16,8 +16,8 @@ def main():
     """Simple workflow: CSV -> Python Processing -> CSV"""
 
     # Setup paths
-    sample_directory = Path("tests/sample_data")
-    output_directory = Path("output")
+    sample_directory = Path("../tests/sample_data")
+    output_directory = Path("../outputs")
     output_directory.mkdir(exist_ok=True)
 
     # 1. Create a workflow
@@ -155,7 +155,7 @@ def main():
 
 if __name__ == "__main__":
     # Create sample data
-    sample_dir = Path("tests/sample_data")
+    sample_dir = Path("../tests/sample_data")
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     if not (sample_dir / "customer_value.csv").exists():

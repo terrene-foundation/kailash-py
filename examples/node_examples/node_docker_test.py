@@ -156,7 +156,7 @@ def main():
         node_data = json.load(f)
 
     # Load runtime inputs if available
-    runtime_inputs_path = Path("/data/inputs.json")
+    runtime_inputs_path = Path("/examples/data/inputs.json")
     runtime_inputs = {}
     if runtime_inputs_path.exists():
         with open(runtime_inputs_path, 'r') as f:
@@ -176,8 +176,8 @@ def main():
     result = node.run(**runtime_inputs)
 
     # Save results
-    os.makedirs("/data/output", exist_ok=True)
-    with open("/data/output/result.json", 'w') as f:
+    os.makedirs("/examples/data/output", exist_ok=True)
+    with open("/examples/data/output/result.json", 'w') as f:
         # Handle non-serializable objects
         try:
             json.dump(result, f, indent=2)
@@ -224,7 +224,7 @@ COPY node.json /app/node.json
 COPY entrypoint.py /app/entrypoint.py
 
 # Create data directories
-RUN mkdir -p /data/input /data/output
+RUN mkdir -p /examples/data/input /examples/data/output
 
 # Set entrypoint
 ENTRYPOINT ["/app/entrypoint.py"]

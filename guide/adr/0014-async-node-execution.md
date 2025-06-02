@@ -187,7 +187,7 @@ workflow.add_node("LLMAgent", "research_agent", config={
 })
 
 workflow.add_node("LLMAgent", "analysis_agent", config={
-    "provider": "anthropic", 
+    "provider": "anthropic",
     "model": "claude-3-sonnet",
     "role": "data_analyst",
     "async_execution": True
@@ -283,6 +283,6 @@ workflow.add_node("AgentSpawnerNode", "dynamic_agents", config={
 ## Related ADRs
 
 - [ADR-0022: MCP Integration Architecture](0022-mcp-integration-architecture.md) - Async context sharing protocols
-- [ADR-0023: A2A Communication Architecture](0023-a2a-communication-architecture.md) - Async agent communication patterns  
+- [ADR-0023: A2A Communication Architecture](0023-a2a-communication-architecture.md) - Async agent communication patterns
 - [ADR-0024: LLM Agent Architecture](0024-llm-agent-architecture.md) - Async LLM agent execution
 - [ADR-0015: API Integration Architecture](0015-api-integration-architecture.md) - Async API operations

@@ -51,13 +51,13 @@ The A2A architecture will be designed as:
 
 1. **Centralized Coordination**: All agents communicate through central coordinator
    - **Rejected**: Creates bottleneck and single point of failure
-   
+
 2. **Database-Based Communication**: Agents communicate via shared database
    - **Rejected**: Poor performance and doesn't support real-time coordination
-   
+
 3. **Workflow-Only Coordination**: Use existing workflow connections for agent communication
    - **Rejected**: Too rigid for dynamic agent interactions
-   
+
 4. **Third-Party Message Broker**: Use external system like RabbitMQ or Kafka
    - **Rejected**: Adds external dependency and complexity for simple use cases
 

@@ -50,7 +50,7 @@ def demonstrate_basic_task_tracking():
 
     transformer = PythonCodeNode.from_function(transform_data, name="transform_data")
 
-    writer = CSVWriter(name="write_results", file_path="../data/output.csv")
+    writer = CSVWriter(name="write_results", file_path="../outputs/output.csv")
 
     # Add nodes to workflow
     workflow.add_node(
@@ -60,7 +60,7 @@ def demonstrate_basic_task_tracking():
     workflow.add_node(
         node_id="writer",
         node_or_type=writer,
-        config={"file_path": "../data/output.csv"},
+        config={"file_path": "../outputs/output.csv"},
     )
 
     # Connect nodes

@@ -26,7 +26,7 @@ Complex Workflow with Conditional Logic
    # Add processing branches
    high_value = DataTransformer(transformations=["lambda x: x"])
    low_value = DataTransformer(transformations=["lambda x: x"])
-   
+
    workflow.add_node("process_high", high_value)
    workflow.add_node("process_low", low_value)
 

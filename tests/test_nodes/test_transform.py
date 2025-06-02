@@ -2,6 +2,12 @@
 
 import pytest
 
+from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+from kailash.nodes.transform.formatters import (
+    ChunkTextExtractorNode,
+    ContextFormatterNode,
+    QueryTextWrapperNode,
+)
 from kailash.nodes.transform.processors import DataTransformer, Filter, Map, Sort
 from kailash.sdk_exceptions import NodeExecutionError
 
@@ -459,3 +465,351 @@ class TestTransformNodeEdgeCases:
         result = node.execute()
 
         assert result["mapped_data"] == [15.0, 25.0, 35.0]
+
+
+class TestHierarchicalChunkerNode:
+    """Test HierarchicalChunkerNode for document chunking."""
+
+    def test_basic_document_chunking(self):
+        """Test basic document chunking functionality."""
+        node = HierarchicalChunkerNode()
+
+        documents = [
+            {
+                "id": "doc1",
+                "title": "Test Document",
+                "content": "This is the first sentence. This is the second sentence. This is the third sentence.",
+            }
+        ]
+
+        result = node.run(documents=documents, chunk_size=50, overlap=10)
+
+        assert "chunks" in result
+        assert isinstance(result["chunks"], list)
+        assert len(result["chunks"]) > 0
+
+        # Check chunk structure
+        chunk = result["chunks"][0]
+        assert "chunk_id" in chunk
+        assert "document_id" in chunk
+        assert "document_title" in chunk
+        assert "chunk_index" in chunk
+        assert "content" in chunk
+        assert "hierarchy_level" in chunk
+
+        assert chunk["document_id"] == "doc1"
+        assert chunk["document_title"] == "Test Document"
+        assert chunk["hierarchy_level"] == "paragraph"
+        assert chunk["chunk_index"] == 0
+
+    def test_multiple_documents_chunking(self):
+        """Test chunking multiple documents."""
+        node = HierarchicalChunkerNode()
+
+        documents = [
+            {
+                "id": "doc1",
+                "title": "First Document",
+                "content": "Short content for first document.",
+            },
+            {
+                "id": "doc2",
+                "title": "Second Document",
+                "content": "This is longer content for the second document with multiple sentences. It should be split into chunks based on the chunk size parameter.",
+            },
+        ]
+
+        result = node.run(documents=documents, chunk_size=80, overlap=20)
+
+        assert "chunks" in result
+        chunks = result["chunks"]
+
+        # Should have chunks from both documents
+        doc1_chunks = [c for c in chunks if c["document_id"] == "doc1"]
+        doc2_chunks = [c for c in chunks if c["document_id"] == "doc2"]
+
+        assert len(doc1_chunks) > 0
+        assert len(doc2_chunks) > 0
+
+        # Verify chunk IDs are unique and properly formatted
+        chunk_ids = [c["chunk_id"] for c in chunks]
+        assert len(chunk_ids) == len(set(chunk_ids))  # All unique
+
+        # Check chunk ID format
+        assert doc1_chunks[0]["chunk_id"].startswith("doc1_chunk_")
+        assert doc2_chunks[0]["chunk_id"].startswith("doc2_chunk_")
+
+    def test_empty_documents(self):
+        """Test behavior with empty documents list."""
+        node = HierarchicalChunkerNode()
+
+        result = node.run(documents=[])
+
+        assert "chunks" in result
+        assert result["chunks"] == []
+
+    def test_chunk_size_parameters(self):
+        """Test different chunk size parameters."""
+        node = HierarchicalChunkerNode()
+
+        document = {
+            "id": "test_doc",
+            "title": "Test",
+            "content": "This is a very long sentence that should be split into multiple chunks when the chunk size is small. This is another sentence that continues the content.",
+        }
+
+        # Test with small chunk size
+        result_small = node.run(documents=[document], chunk_size=50)
+        chunks_small = result_small["chunks"]
+
+        # Test with large chunk size
+        result_large = node.run(documents=[document], chunk_size=200)
+        chunks_large = result_large["chunks"]
+
+        # Small chunk size should produce more chunks
+        assert len(chunks_small) >= len(chunks_large)
+
+    def test_node_parameters(self):
+        """Test node parameter configuration."""
+        node = HierarchicalChunkerNode()
+        params = node.get_parameters()
+
+        expected_params = ["documents", "chunk_size", "overlap"]
+        for param_name in expected_params:
+            assert param_name in params
+
+        # Check default values
+        assert params["chunk_size"].default == 200
+        assert params["overlap"].default == 50
+        assert params["chunk_size"].type == int
+        assert params["overlap"].type == int
+
+
+class TestChunkTextExtractorNode:
+    """Test ChunkTextExtractorNode for text extraction."""
+
+    def test_extract_text_from_chunks(self):
+        """Test extracting text content from chunks."""
+        node = ChunkTextExtractorNode()
+
+        chunks = [
+            {"content": "First chunk content", "document_id": "doc1"},
+            {"content": "Second chunk content", "document_id": "doc1"},
+            {"content": "Third chunk content", "document_id": "doc2"},
+        ]
+
+        result = node.run(chunks=chunks)
+
+        assert "input_texts" in result
+        assert isinstance(result["input_texts"], list)
+        assert len(result["input_texts"]) == 3
+
+        expected_texts = [
+            "First chunk content",
+            "Second chunk content",
+            "Third chunk content",
+        ]
+        assert result["input_texts"] == expected_texts
+
+    def test_extract_from_empty_chunks(self):
+        """Test behavior with empty chunks list."""
+        node = ChunkTextExtractorNode()
+
+        result = node.run(chunks=[])
+
+        assert "input_texts" in result
+        assert result["input_texts"] == []
+
+    def test_extract_with_missing_content(self):
+        """Test behavior when chunks missing content field."""
+        node = ChunkTextExtractorNode()
+
+        chunks = [
+            {"content": "Valid content"},
+            {"no_content_field": "invalid"},  # Missing content field
+        ]
+
+        # Should handle KeyError gracefully or raise appropriate error
+        try:
+            result = node.run(chunks=chunks)
+            # If it doesn't raise an error, verify it handled it gracefully
+            assert "input_texts" in result
+        except KeyError:
+            # This is also acceptable behavior
+            pass
+
+    def test_node_parameters(self):
+        """Test node parameter configuration."""
+        node = ChunkTextExtractorNode()
+        params = node.get_parameters()
+
+        assert "chunks" in params
+        assert params["chunks"].type == list
+        assert params["chunks"].required is False
+
+
+class TestQueryTextWrapperNode:
+    """Test QueryTextWrapperNode for query wrapping."""
+
+    def test_wrap_query_string(self):
+        """Test wrapping a query string in a list."""
+        node = QueryTextWrapperNode()
+
+        query = "What are the main types of machine learning?"
+        result = node.run(query=query)
+
+        assert "input_texts" in result
+        assert isinstance(result["input_texts"], list)
+        assert len(result["input_texts"]) == 1
+        assert result["input_texts"][0] == query
+
+    def test_wrap_empty_query(self):
+        """Test wrapping an empty query."""
+        node = QueryTextWrapperNode()
+
+        result = node.run(query="")
+
+        assert "input_texts" in result
+        assert result["input_texts"] == [""]
+
+    def test_default_query_handling(self):
+        """Test behavior when no query is provided."""
+        node = QueryTextWrapperNode()
+
+        result = node.run()
+
+        assert "input_texts" in result
+        assert isinstance(result["input_texts"], list)
+        assert len(result["input_texts"]) == 1
+        # Should use empty string as default
+        assert result["input_texts"][0] == ""
+
+    def test_node_parameters(self):
+        """Test node parameter configuration."""
+        node = QueryTextWrapperNode()
+        params = node.get_parameters()
+
+        assert "query" in params
+        assert params["query"].type == str
+        assert params["query"].required is False
+
+
+class TestContextFormatterNode:
+    """Test ContextFormatterNode for LLM context formatting."""
+
+    def test_format_context_with_chunks(self):
+        """Test formatting context from relevant chunks."""
+        node = ContextFormatterNode()
+
+        relevant_chunks = [
+            {
+                "content": "Machine learning is a subset of AI.",
+                "document_title": "ML Basics",
+                "relevance_score": 0.95,
+            },
+            {
+                "content": "Deep learning uses neural networks.",
+                "document_title": "Deep Learning",
+                "relevance_score": 0.87,
+            },
+        ]
+
+        query = "What is machine learning?"
+        result = node.run(relevant_chunks=relevant_chunks, query=query)
+
+        assert "formatted_prompt" in result
+        assert "messages" in result
+        assert "context" in result
+
+        # Check formatted prompt contains query and context
+        prompt = result["formatted_prompt"]
+        assert query in prompt
+        assert "Machine learning is a subset of AI." in prompt
+        assert "Deep learning uses neural networks." in prompt
+        assert "ML Basics" in prompt
+        assert "0.950" in prompt  # Score should be formatted
+
+        # Check messages format for LLM
+        messages = result["messages"]
+        assert isinstance(messages, list)
+        assert len(messages) == 1
+        assert messages[0]["role"] == "user"
+        assert messages[0]["content"] == prompt
+
+        # Check context extraction
+        context = result["context"]
+        assert "Machine learning is a subset of AI." in context
+        assert "Deep learning uses neural networks." in context
+
+    def test_format_with_empty_chunks(self):
+        """Test formatting with empty relevant chunks."""
+        node = ContextFormatterNode()
+
+        query = "What is machine learning?"
+        result = node.run(relevant_chunks=[], query=query)
+
+        assert "formatted_prompt" in result
+        assert "messages" in result
+        assert "context" in result
+
+        # Should still create a prompt with the query
+        prompt = result["formatted_prompt"]
+        assert query in prompt
+
+        # Context should be empty
+        context = result["context"]
+        assert context == ""
+
+    def test_format_with_single_chunk(self):
+        """Test formatting with single relevant chunk."""
+        node = ContextFormatterNode()
+
+        relevant_chunks = [
+            {
+                "content": "Neural networks are computing systems inspired by biological neural networks.",
+                "document_title": "Neural Networks",
+                "relevance_score": 0.92,
+            }
+        ]
+
+        query = "How do neural networks work?"
+        result = node.run(relevant_chunks=relevant_chunks, query=query)
+
+        prompt = result["formatted_prompt"]
+        assert "Neural networks are computing systems" in prompt
+        assert "Neural Networks" in prompt
+        assert "0.920" in prompt
+        assert query in prompt
+
+    def test_score_formatting(self):
+        """Test that relevance scores are properly formatted."""
+        node = ContextFormatterNode()
+
+        relevant_chunks = [
+            {
+                "content": "Test content",
+                "document_title": "Test Doc",
+                "relevance_score": 0.123456789,  # Long decimal
+            }
+        ]
+
+        result = node.run(relevant_chunks=relevant_chunks, query="test query")
+
+        # Score should be formatted to 3 decimal places
+        prompt = result["formatted_prompt"]
+        assert "0.123" in prompt
+        assert "0.123456789" not in prompt
+
+    def test_node_parameters(self):
+        """Test node parameter configuration."""
+        node = ContextFormatterNode()
+        params = node.get_parameters()
+
+        expected_params = ["relevant_chunks", "query"]
+        for param_name in expected_params:
+            assert param_name in params
+
+        assert params["relevant_chunks"].type == list
+        assert params["query"].type == str
+        assert params["relevant_chunks"].required is False
+        assert params["query"].required is False

@@ -46,15 +46,15 @@ jobs:
             environment: 'github-pages',
             per_page: 100
           });
-          
+
           // Keep only the latest deployment and mark others as inactive
-          const sortedDeployments = deployments.data.sort((a, b) => 
+          const sortedDeployments = deployments.data.sort((a, b) =>
             new Date(b.created_at) - new Date(a.created_at)
           );
-          
+
           for (let i = 1; i < sortedDeployments.length; i++) {
             const deployment = sortedDeployments[i];
-            
+
             // Update deployment status to inactive
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
@@ -63,7 +63,7 @@ jobs:
               state: 'inactive',
               description: 'Superseded by newer deployment'
             });
-            
+
             console.log(`Marked deployment ${deployment.id} as inactive`);
           }
 

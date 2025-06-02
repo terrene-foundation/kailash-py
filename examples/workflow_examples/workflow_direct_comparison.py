@@ -18,7 +18,9 @@ def direct_execution_example():
     )
 
     # Create and configure nodes with all parameters
-    reader = CSVReader(file_path="tests/sample_data/customer_value.csv", headers=True)
+    reader = CSVReader(
+        file_path="../tests/sample_data/customer_value.csv", headers=True
+    )
 
     # Execute the reader directly
     result = reader.execute()
@@ -49,7 +51,9 @@ def workflow_execution_example():
     workflow = Workflow(workflow_id="csv_processing", name="CSV Processing")
 
     # Create nodes - writer doesn't need data at creation time
-    reader = CSVReader(file_path="tests/sample_data/customer_value.csv", headers=True)
+    reader = CSVReader(
+        file_path="../tests/sample_data/customer_value.csv", headers=True
+    )
 
     writer = CSVWriter(
         file_path="../outputs/workflow_output.csv",
@@ -81,10 +85,10 @@ def workflow_execution_example():
 def main():
     """Run both examples to show the difference."""
     # Ensure output directory exists
-    Path("output").mkdir(exist_ok=True)
+    Path("../outputs").mkdir(exist_ok=True)
 
     # Create sample data if it doesn't exist
-    sample_directory = Path("tests/sample_data")
+    sample_directory = Path("../tests/sample_data")
     sample_directory.mkdir(parents=True, exist_ok=True)
 
     if not (sample_directory / "customer_value.csv").exists():
@@ -106,10 +110,10 @@ def main():
     )
 
     # Direct execution
-    direct_data = direct_execution_example()
+    direct_execution_example()
 
     # Workflow execution
-    workflow_results = workflow_execution_example()
+    workflow_execution_example()
 
     print("\n=== Key Differences ===")
     print("1. Direct execution:")

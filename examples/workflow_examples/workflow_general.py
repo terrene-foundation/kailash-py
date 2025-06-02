@@ -21,8 +21,8 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
 
 # Define paths
-sample_directory = Path("tests/sample_data")
-output_directory = Path("output")
+sample_directory = Path("../tests/sample_data")
+output_directory = Path("../outputs")
 output_directory.mkdir(exist_ok=True)
 
 
@@ -301,7 +301,7 @@ def main():
 
 if __name__ == "__main__":
     # Create sample data if it doesn't exist
-    sample_directory = Path("tests/sample_data")
+    sample_directory = Path("../tests/sample_data")
     sample_directory.mkdir(parents=True, exist_ok=True)
 
     if not (sample_directory / "customer_value.csv").exists():
@@ -316,7 +316,7 @@ if __name__ == "__main__":
         )
 
         sample_data.to_csv(sample_directory / "customer_value.csv", index=False)
-        print("Sample data created at tests/sample_data/customer_value.csv\n")
+        print("Sample data created at tests/sample_examples/data/customer_value.csv\n")
 
     # Run the workflow example
     main()

@@ -48,10 +48,10 @@ The MCP integration will be designed as:
 
 1. **Custom Protocol**: Develop proprietary context sharing protocol
    - **Rejected**: Would create vendor lock-in and limit ecosystem integration
-   
+
 2. **API-Only Integration**: Use existing HTTP/REST nodes for MCP communication
    - **Rejected**: Too low-level, lacks MCP-specific features like context management
-   
+
 3. **Third-Party Library Wrapper**: Wrap existing MCP libraries
    - **Rejected**: Would create tight coupling and limit customization for Kailash workflows
 
@@ -86,7 +86,7 @@ The MCP integration will be designed as:
 
 ### Core Components
 
-1. **MCPClientNode**: 
+1. **MCPClientNode**:
    - Connect to MCP servers
    - Request resources and invoke tools
    - Handle authentication and session management

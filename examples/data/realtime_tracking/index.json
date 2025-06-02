@@ -293,6 +293,300 @@
       "status": "completed",
       "started_at": "2025-05-31T17:02:52.744343+00:00",
       "ended_at": "2025-05-31T17:02:52.746193+00:00"
+    },
+    "1027e90d-65e7-4210-bbd3-372548f62b56": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.894589+00:00",
+      "ended_at": "2025-06-02T07:09:13.897326+00:00"
+    },
+    "5149d1e3-f4d9-4c8c-b505-4047af7e59dc": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.899446+00:00",
+      "ended_at": "2025-06-02T07:09:13.901451+00:00"
+    },
+    "15564bf2-b1c6-4206-ae6a-3ce03dc83ba1": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.903168+00:00",
+      "ended_at": "2025-06-02T07:09:13.905071+00:00"
+    },
+    "ba3a7eab-f07e-4faf-b4b6-699917b5274d": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.906642+00:00",
+      "ended_at": "2025-06-02T07:09:13.908112+00:00"
+    },
+    "1ceb496d-9cd3-4dc5-81ea-96d137624c49": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.909504+00:00",
+      "ended_at": "2025-06-02T07:09:13.911666+00:00"
+    },
+    "5236af45-6af2-4ee7-8682-fd916576c24e": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.912987+00:00",
+      "ended_at": "2025-06-02T07:09:13.914976+00:00"
+    },
+    "55721b14-423f-4bea-afee-c91f2d712811": {
+      "run_id": "eb19651f-8fbb-4af8-acf8-0de998150106",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T07:09:13.916962+00:00",
+      "ended_at": "2025-06-02T07:09:13.919296+00:00"
+    },
+    "728aee48-2f92-4a95-9ee4-230464eb6809": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.550970+00:00",
+      "ended_at": "2025-06-02T08:26:43.553599+00:00"
+    },
+    "bf4b6f22-bbc5-4ce7-9888-5a61fe954557": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.555332+00:00",
+      "ended_at": "2025-06-02T08:26:43.557216+00:00"
+    },
+    "cde85f6f-8fc2-4e82-bce1-516c7c651985": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.558843+00:00",
+      "ended_at": "2025-06-02T08:26:43.560627+00:00"
+    },
+    "6e7d47c8-b7e7-4faf-9ff8-69e724f99485": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.562286+00:00",
+      "ended_at": "2025-06-02T08:26:43.564060+00:00"
+    },
+    "777d33c9-211f-4e84-9026-67978b2024dc": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.565838+00:00",
+      "ended_at": "2025-06-02T08:26:43.567794+00:00"
+    },
+    "07ffe7a9-bc42-4ce0-9b6d-d81fa43b6413": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.569367+00:00",
+      "ended_at": "2025-06-02T08:26:43.571617+00:00"
+    },
+    "09a0035a-818d-42ed-9180-cd1360135a17": {
+      "run_id": "0f0dae01-cc2f-4347-871a-7d18463c9bac",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:26:43.573414+00:00",
+      "ended_at": "2025-06-02T08:26:43.575569+00:00"
+    },
+    "34ec534f-41f9-433e-88ce-cc81e1b9a5dd": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.790667+00:00",
+      "ended_at": "2025-06-02T08:31:38.793071+00:00"
+    },
+    "9a44c13c-37cb-4b59-a3e0-e8e923b2832e": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.795032+00:00",
+      "ended_at": "2025-06-02T08:31:38.796927+00:00"
+    },
+    "0d971b88-55a0-407b-b544-e6de8d192fe6": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.798760+00:00",
+      "ended_at": "2025-06-02T08:31:38.800637+00:00"
+    },
+    "80daa99a-f4da-4e9f-aad0-36504ceeb7d0": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.802519+00:00",
+      "ended_at": "2025-06-02T08:31:38.804581+00:00"
+    },
+    "cd7166e0-c85e-439a-852b-571c2cc3c2ab": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.806344+00:00",
+      "ended_at": "2025-06-02T08:31:38.808337+00:00"
+    },
+    "376c2a41-5138-4f82-bca8-6d9ae738f62a": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.810052+00:00",
+      "ended_at": "2025-06-02T08:31:38.812190+00:00"
+    },
+    "5bb60ea0-97ea-40e0-aa6a-2508756d2492": {
+      "run_id": "bc318083-7cff-4a1a-b1bf-07909edc79dc",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:31:38.814046+00:00",
+      "ended_at": "2025-06-02T08:31:38.816393+00:00"
+    },
+    "32c31f3a-d55c-457d-b6e8-19c2bdd658e3": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.500520+00:00",
+      "ended_at": "2025-06-02T08:33:20.502844+00:00"
+    },
+    "8a15cb2f-30ad-4105-bb39-c6dd181b11e1": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.505108+00:00",
+      "ended_at": "2025-06-02T08:33:20.507280+00:00"
+    },
+    "26dcbe0d-7650-4255-812c-d151e39682fd": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.509088+00:00",
+      "ended_at": "2025-06-02T08:33:20.511143+00:00"
+    },
+    "a285eeac-a70f-488b-b985-4b80e2986a27": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.513054+00:00",
+      "ended_at": "2025-06-02T08:33:20.514996+00:00"
+    },
+    "f14715e3-cdca-4925-bb88-50adebbf111e": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.517102+00:00",
+      "ended_at": "2025-06-02T08:33:20.519353+00:00"
+    },
+    "5e5c07a0-cafc-42b8-a614-1e2022789dc6": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.521162+00:00",
+      "ended_at": "2025-06-02T08:33:20.523530+00:00"
+    },
+    "07e44f8a-d777-44ff-b722-254255aefda3": {
+      "run_id": "45866649-e9ee-45e5-81a8-73ab45f12541",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T08:33:20.525438+00:00",
+      "ended_at": "2025-06-02T08:33:20.527684+00:00"
+    },
+    "99c04535-94fd-4167-ac0d-a402fb8762e2": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.944223+00:00",
+      "ended_at": "2025-06-02T10:05:07.946569+00:00"
+    },
+    "ca9a32a0-94b4-46bc-baf5-0a5d1f167e3b": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.948509+00:00",
+      "ended_at": "2025-06-02T10:05:07.950228+00:00"
+    },
+    "6823b212-6c55-4158-b637-9d69fe2eae31": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.952368+00:00",
+      "ended_at": "2025-06-02T10:05:07.954785+00:00"
+    },
+    "3f04b7f2-ef5c-44cb-8648-65a753273441": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.956893+00:00",
+      "ended_at": "2025-06-02T10:05:07.958685+00:00"
+    },
+    "2c7b8bec-5796-4159-a3e9-138628e60f07": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.960578+00:00",
+      "ended_at": "2025-06-02T10:05:07.962676+00:00"
+    },
+    "f2121788-d013-435e-aae4-7913daa9b9b7": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.964835+00:00",
+      "ended_at": "2025-06-02T10:05:07.966897+00:00"
+    },
+    "31114a2f-2a20-48df-a292-1adc2a7423b0": {
+      "run_id": "01a2f9c6-faf3-4dec-bc23-a57334686377",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:05:07.968877+00:00",
+      "ended_at": "2025-06-02T10:05:07.971197+00:00"
+    },
+    "26e2855a-e05d-4665-a7a1-c925d52977cd": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.927456+00:00",
+      "ended_at": "2025-06-02T10:09:15.929904+00:00"
+    },
+    "b8aa2221-0690-4264-86ed-bdb9def1b524": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.932007+00:00",
+      "ended_at": "2025-06-02T10:09:15.934199+00:00"
+    },
+    "791c14e9-c9b4-4189-81b7-63cefa963ffe": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.936705+00:00",
+      "ended_at": "2025-06-02T10:09:15.938842+00:00"
+    },
+    "ba256c23-6155-4d5a-9a1c-38c6e26c96e4": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.941036+00:00",
+      "ended_at": "2025-06-02T10:09:15.943426+00:00"
+    },
+    "274a3e20-6ef5-47e1-9257-d36239b66de6": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.945346+00:00",
+      "ended_at": "2025-06-02T10:09:15.947659+00:00"
+    },
+    "4832880b-85ff-4104-924d-5b72e44a31a6": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.949663+00:00",
+      "ended_at": "2025-06-02T10:09:15.952128+00:00"
+    },
+    "36c15d2c-275c-4a1b-a125-82e2a7269f7c": {
+      "run_id": "87c34083-5520-40a8-a0de-e0c6f3f7969d",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-02T10:09:15.953943+00:00",
+      "ended_at": "2025-06-02T10:09:15.956344+00:00"
     }
   },
   "runs": {}

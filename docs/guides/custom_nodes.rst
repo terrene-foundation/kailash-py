@@ -22,7 +22,7 @@ Basic Custom Node
 
    class MyCustomNode(Node):
        """A custom node that processes data."""
-       
+
        def get_parameters(self) -> Dict[str, NodeParameter]:
            return {
                "input_data": NodeParameter(
@@ -39,10 +39,10 @@ Basic Custom Node
                    description="Multiplication factor"
                )
            }
-       
+
        def run(self, **kwargs) -> Dict[str, Any]:
            data = kwargs["input_data"]
            multiplier = kwargs.get("multiplier", 1.0)
-           
+
            result = [item * multiplier for item in data]
            return {"output": result}
