@@ -1,16 +1,16 @@
-"""Unit tests for EmbeddingGenerator node."""
+"""Unit tests for EmbeddingGeneratorNode node."""
 
 import pytest
 
-from kailash.nodes.ai import EmbeddingGenerator
+from kailash.nodes.ai import EmbeddingGeneratorNode
 
 
-class TestEmbeddingGenerator:
-    """Test cases for EmbeddingGenerator node."""
+class TestEmbeddingGeneratorNode:
+    """Test cases for EmbeddingGeneratorNode node."""
 
     def test_embed_single_text(self):
         """Test embedding a single text."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
         result = node.run(
             operation="embed_text",
             provider="mock",
@@ -30,7 +30,7 @@ class TestEmbeddingGenerator:
 
     def test_embed_batch_texts(self):
         """Test embedding multiple texts in batch."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         texts = [
             "First document about machine learning",
@@ -69,7 +69,7 @@ class TestEmbeddingGenerator:
 
     def test_calculate_cosine_similarity(self):
         """Test cosine similarity calculation."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         # Create two similar embeddings
         embedding_1 = [0.1, 0.2, 0.3, 0.4, 0.5]
@@ -92,7 +92,7 @@ class TestEmbeddingGenerator:
 
     def test_calculate_euclidean_distance(self):
         """Test Euclidean distance calculation."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         embedding_1 = [1.0, 2.0, 3.0]
         embedding_2 = [4.0, 5.0, 6.0]
@@ -110,7 +110,7 @@ class TestEmbeddingGenerator:
 
     def test_calculate_dot_product(self):
         """Test dot product calculation."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         embedding_1 = [1.0, 2.0, 3.0]
         embedding_2 = [2.0, 3.0, 4.0]
@@ -129,7 +129,7 @@ class TestEmbeddingGenerator:
 
     def test_embed_mcp_resource(self):
         """Test embedding content from MCP resource."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="embed_mcp_resource",
@@ -148,7 +148,7 @@ class TestEmbeddingGenerator:
 
     def test_different_providers(self):
         """Test different embedding providers."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         providers = [
             ("ollama", "nomic-embed-text", 768),  # Ollama embedding model
@@ -184,7 +184,7 @@ class TestEmbeddingGenerator:
 
     def test_custom_dimensions(self):
         """Test custom embedding dimensions."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         custom_dims = 768
         result = node.run(
@@ -201,7 +201,7 @@ class TestEmbeddingGenerator:
 
     def test_text_chunking(self):
         """Test text chunking for long documents."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         # Create a long text that will be chunked
         long_text = " ".join(["word"] * 1000)  # 1000 words
@@ -220,7 +220,7 @@ class TestEmbeddingGenerator:
 
     def test_normalization(self):
         """Test vector normalization."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="embed_text",
@@ -239,7 +239,7 @@ class TestEmbeddingGenerator:
 
     def test_caching_behavior(self):
         """Test embedding caching functionality."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         text = "This text will be cached"
 
@@ -271,7 +271,7 @@ class TestEmbeddingGenerator:
 
     def test_batch_with_different_sizes(self):
         """Test batch processing with different batch sizes."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         texts = [f"Document {i}" for i in range(10)]
 
@@ -290,7 +290,7 @@ class TestEmbeddingGenerator:
 
     def test_error_handling_missing_text(self):
         """Test error handling for missing input text."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="embed_text",
@@ -304,7 +304,7 @@ class TestEmbeddingGenerator:
 
     def test_error_handling_empty_batch(self):
         """Test error handling for empty batch."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="embed_batch",
@@ -318,7 +318,7 @@ class TestEmbeddingGenerator:
 
     def test_error_handling_mismatched_embeddings(self):
         """Test error handling for similarity with mismatched dimensions."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="calculate_similarity",
@@ -332,7 +332,7 @@ class TestEmbeddingGenerator:
 
     def test_error_handling_invalid_metric(self):
         """Test error handling for invalid similarity metric."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="calculate_similarity",
@@ -347,7 +347,7 @@ class TestEmbeddingGenerator:
 
     def test_error_handling_missing_embeddings(self):
         """Test error handling for missing embeddings in similarity calculation."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="calculate_similarity",
@@ -365,7 +365,7 @@ class TestEmbeddingGenerator:
 
     def test_error_handling_invalid_operation(self):
         """Test error handling for invalid operations."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="invalid_operation", provider="mock", model="test-model"
@@ -377,7 +377,7 @@ class TestEmbeddingGenerator:
 
     def test_usage_cost_estimation(self):
         """Test usage metrics and cost estimation."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="embed_text",
@@ -396,7 +396,7 @@ class TestEmbeddingGenerator:
 
     def test_batch_cost_estimation(self):
         """Test cost estimation for batch processing."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         texts = ["Text one", "Text two", "Text three"]
 
@@ -417,7 +417,7 @@ class TestEmbeddingGenerator:
 
     def test_timeout_configuration(self):
         """Test timeout configuration."""
-        node = EmbeddingGenerator()
+        node = EmbeddingGeneratorNode()
 
         result = node.run(
             operation="embed_text",
@@ -458,7 +458,7 @@ def sample_embeddings():
 
 def test_realistic_embedding_workflow(sample_texts):
     """Test realistic embedding workflow with multiple operations."""
-    node = EmbeddingGenerator()
+    node = EmbeddingGeneratorNode()
 
     # Step 1: Embed batch of texts
     batch_result = node.run(
@@ -499,7 +499,7 @@ def test_realistic_embedding_workflow(sample_texts):
 
 def test_similarity_matrix_calculation(sample_embeddings):
     """Test calculating similarity matrix for multiple embeddings."""
-    node = EmbeddingGenerator()
+    node = EmbeddingGeneratorNode()
 
     similarity_matrix = []
 

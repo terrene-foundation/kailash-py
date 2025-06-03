@@ -12,9 +12,9 @@ Design Philosophy:
 5. Type-safe parameter validation
 
 Node Categories:
-- CSVReader: Tabular data from CSV files
-- JSONReader: Structured data from JSON files
-- TextReader: Raw text from any text file
+- CSVReaderNode: Tabular data from CSV files
+- JSONReaderNode: Structured data from JSON files
+- TextReaderNode: Raw text from any text file
 
 Upstream Components:
 - FileSystem: Provides files to read
@@ -36,7 +36,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class CSVReader(Node):
+class CSVReaderNode(Node):
     """Reads data from a CSV file.
 
     This node provides robust CSV file reading capabilities with support for
@@ -78,19 +78,18 @@ class CSVReader(Node):
     - UnicodeDecodeError: Encoding mismatch
     - csv.Error: Malformed CSV data
 
-    Example::
-
-        # Read customer data with headers
-        reader = CSVReader(
-            file_path='customers.csv',
-            headers=True,
-            delimiter=','
-        )
-        result = reader.execute()
-        # result['data'] = [
-        #     {'id': '1', 'name': 'John', 'age': '30'},
-        #     {'id': '2', 'name': 'Jane', 'age': '25'}
-        # ]
+    Example:
+        >>> # Read customer data with headers
+        >>> reader = CSVReaderNode(
+        ...     file_path='customers.csv',
+        ...     headers=True,
+        ...     delimiter=','
+        ... )
+        >>> result = reader.execute()
+        >>> # result['data'] = [
+        >>> #     {'id': '1', 'name': 'John', 'age': '30'},
+        >>> #     {'id': '2', 'name': 'Jane', 'age': '25'}
+        >>> # ]
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -235,7 +234,7 @@ class CSVReader(Node):
 
 
 @register_node()
-class JSONReader(Node):
+class JSONReaderNode(Node):
     """Reads data from a JSON file.
 
     This node handles JSON file reading with support for complex nested
@@ -280,7 +279,7 @@ class JSONReader(Node):
 
     Example:
         # Read API response data
-        reader = JSONReader(file_path='api_response.json')
+        reader = JSONReaderNode(file_path='api_response.json')
         result = reader.execute()
         # result['data'] = {
         #     'status': 'success',
@@ -359,7 +358,7 @@ class JSONReader(Node):
 
 
 @register_node()
-class TextReader(Node):
+class TextReaderNode(Node):
     """Reads text from a file.
 
     This node provides simple text file reading with encoding support.
@@ -403,15 +402,14 @@ class TextReader(Node):
     - UnicodeDecodeError: Wrong encoding
     - MemoryError: File too large
 
-    Example::
-
-        # Read a log file
-        reader = TextReader(
-            file_path='application.log',
-            encoding='utf-8'
-        )
-        result = reader.execute()
-        # result['text'] = "2024-01-01 INFO: Application started\\n..."
+    Example:
+        >>> # Read a log file
+        >>> reader = TextReaderNode(
+        ...     file_path='application.log',
+        ...     encoding='utf-8'
+        ... )
+        >>> result = reader.execute()
+        >>> # result['text'] = "2024-01-01 INFO: Application started\\n..."
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:

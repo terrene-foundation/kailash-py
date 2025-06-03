@@ -116,7 +116,7 @@ class WorkflowAPI:
         """Setup API routes dynamically based on workflow."""
 
         # Main execution endpoint
-        @self.app.post("/execute", response_model=WorkflowResponse)
+        @self.app.post("/execute")
         async def execute_workflow(
             request: WorkflowRequest, background_tasks: BackgroundTasks
         ):
@@ -143,18 +143,34 @@ class WorkflowAPI:
         @self.app.get("/workflow/info")
         async def get_workflow_info():
             """Get workflow metadata and structure."""
-            graph_data = self.workflow_graph
+            workflow = self.workflow_graph
+
+            # Get node information
+            nodes = []
+            for node_id, node_instance in workflow.nodes.items():
+                nodes.append({"id": node_id, "type": node_instance.node_type})
+
+            # Get edge information
+            edges = []
+            for conn in workflow.connections:
+                edges.append(
+                    {
+                        "source": conn.source_node,
+                        "target": conn.target_node,
+                        "source_output": conn.source_output,
+                        "target_input": conn.target_input,
+                    }
+                )
+
             return {
-                "id": self.workflow_id,
-                "version": self.version,
-                "nodes": list(graph_data.nodes()),
-                "edges": list(graph_data.edges()),
-                "input_nodes": [
-                    n for n in graph_data.nodes() if graph_data.in_degree(n) == 0
-                ],
-                "output_nodes": [
-                    n for n in graph_data.nodes() if graph_data.out_degree(n) == 0
-                ],
+                "workflow_id": workflow.workflow_id,
+                "name": workflow.name,
+                "description": workflow.description,
+                "version": workflow.version,
+                "nodes": nodes,
+                "edges": edges,
+                "node_count": len(nodes),
+                "edge_count": len(edges),
             }
 
         # Health check
@@ -179,7 +195,7 @@ class WorkflowAPI:
 
             # Execute workflow with inputs
             results = await asyncio.to_thread(
-                self.runtime.execute, self.workflow_graph, request.inputs
+                self.runtime.execute, self.workflow_graph, parameters=request.inputs
             )
 
             # Handle tuple return from runtime

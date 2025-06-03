@@ -2,7 +2,7 @@
 
 import pytest
 
-from kailash.nodes.logic.operations import Merge, Switch
+from kailash.nodes.logic.operations import MergeNode, SwitchNode
 
 
 class TestSwitchNode:
@@ -10,7 +10,7 @@ class TestSwitchNode:
 
     def test_boolean_condition_true(self):
         """Test boolean condition with true result."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"status": "success"},
@@ -26,7 +26,7 @@ class TestSwitchNode:
 
     def test_boolean_condition_false(self):
         """Test boolean condition with false result."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"status": "error"},
@@ -41,7 +41,7 @@ class TestSwitchNode:
 
     def test_numeric_comparison(self):
         """Test numeric comparison operators."""
-        node = Switch()
+        node = SwitchNode()
 
         # Greater than
         result = node.execute(
@@ -66,7 +66,7 @@ class TestSwitchNode:
 
     def test_direct_value_condition(self):
         """Test condition on direct input value (not a field)."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(input_data="success", operator="==", value="success")
 
@@ -75,7 +75,7 @@ class TestSwitchNode:
 
     def test_contains_operator(self):
         """Test contains operator."""
-        node = Switch()
+        node = SwitchNode()
 
         # String contains
         result = node.execute(
@@ -97,7 +97,7 @@ class TestSwitchNode:
 
     def test_null_conditions(self):
         """Test null/not null conditions."""
-        node = Switch()
+        node = SwitchNode()
 
         # Is null
         result = node.execute(
@@ -117,7 +117,7 @@ class TestSwitchNode:
 
     def test_invalid_operator(self):
         """Test with invalid operator."""
-        node = Switch()
+        node = SwitchNode()
 
         # This should not raise an exception but log an error and return false
         result = node.execute(
@@ -132,7 +132,7 @@ class TestSwitchNode:
 
     def test_exception_in_evaluation(self):
         """Test handling exceptions during condition evaluation."""
-        node = Switch()
+        node = SwitchNode()
 
         # Should handle gracefully when a field doesn't exist
         result = node.execute(
@@ -146,7 +146,7 @@ class TestSwitchNode:
 
     def test_multi_case_switching(self):
         """Test multi-case switching."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"status": "warning"},
@@ -162,7 +162,7 @@ class TestSwitchNode:
 
     def test_multi_case_no_match(self):
         """Test multi-case with no matching case."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"status": "unknown"},
@@ -180,7 +180,7 @@ class TestSwitchNode:
 
     def test_case_sanitization(self):
         """Test case name sanitization for special characters."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"type": "special:value"},
@@ -194,7 +194,7 @@ class TestSwitchNode:
 
     def test_custom_case_prefix(self):
         """Test custom prefix for case output fields."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"status": "error"},
@@ -209,7 +209,7 @@ class TestSwitchNode:
 
     def test_custom_default_field(self):
         """Test custom field name for default case."""
-        node = Switch()
+        node = SwitchNode()
 
         result = node.execute(
             input_data={"status": "unknown"},
@@ -228,7 +228,7 @@ class TestMergeNode:
 
     def test_merge_two_dicts(self):
         """Test merging two dictionaries."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(
             data1={"a": 1, "b": 2}, data2={"c": 3, "d": 4}, merge_type="merge_dict"
@@ -238,7 +238,7 @@ class TestMergeNode:
 
     def test_merge_with_overlapping_keys(self):
         """Test merging dictionaries with overlapping keys."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(
             data1={"a": 1, "b": 2, "c": 3},
@@ -251,7 +251,7 @@ class TestMergeNode:
 
     def test_merge_multiple_dicts(self):
         """Test merging multiple dictionaries."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(
             data1={"a": 1},
@@ -267,7 +267,7 @@ class TestMergeNode:
 
     def test_concat_lists(self):
         """Test concatenating lists."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(data1=[1, 2], data2=[3, 4], merge_type="concat")
 
@@ -275,7 +275,7 @@ class TestMergeNode:
 
     def test_concat_multiple_lists(self):
         """Test concatenating multiple lists."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(
             data1=[1], data2=[2], data3=[3], data4=[4], merge_type="concat"
@@ -285,7 +285,7 @@ class TestMergeNode:
 
     def test_concat_non_lists(self):
         """Test concatenating non-list items."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(data1="Hello", data2="World", merge_type="concat")
 
@@ -294,7 +294,7 @@ class TestMergeNode:
 
     def test_zip_lists(self):
         """Test zipping lists."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(data1=[1, 2, 3], data2=["a", "b", "c"], merge_type="zip")
 
@@ -302,7 +302,7 @@ class TestMergeNode:
 
     def test_zip_multiple_lists(self):
         """Test zipping multiple lists."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(
             data1=[1, 2], data2=["a", "b"], data3=[True, False], merge_type="zip"
@@ -312,7 +312,7 @@ class TestMergeNode:
 
     def test_zip_with_non_list(self):
         """Test zipping with non-list items."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(data1=[1, 2, 3], data2="x", merge_type="zip")
 
@@ -321,7 +321,7 @@ class TestMergeNode:
 
     def test_merge_list_of_dicts_by_key(self):
         """Test merging lists of dicts by key."""
-        node = Merge()
+        node = MergeNode()
 
         data1 = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
 
@@ -344,7 +344,7 @@ class TestMergeNode:
 
     def test_merge_multiple_list_of_dicts_by_key(self):
         """Test merging multiple lists of dicts by key."""
-        node = Merge()
+        node = MergeNode()
 
         data1 = [{"id": 1, "name": "Alice"}]
         data2 = [{"id": 1, "age": 30}]
@@ -360,7 +360,7 @@ class TestMergeNode:
 
     def test_skip_none_values(self):
         """Test skipping None values during merge."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(
             data1={"a": 1},
@@ -374,7 +374,7 @@ class TestMergeNode:
 
     def test_with_all_none_values(self):
         """Test merging with all None values."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(data1=None, data2=None, skip_none=True)
 
@@ -382,7 +382,7 @@ class TestMergeNode:
 
     def test_single_input(self):
         """Test with only one input."""
-        node = Merge()
+        node = MergeNode()
 
         result = node.execute(data1={"single": "value"}, data2=None, skip_none=True)
 
@@ -391,7 +391,7 @@ class TestMergeNode:
 
     def test_unknown_merge_type(self):
         """Test with unknown merge type."""
-        node = Merge()
+        node = MergeNode()
 
         with pytest.raises(ValueError):
             node.execute(data1=[1, 2], data2=[3, 4], merge_type="unknown_type")

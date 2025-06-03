@@ -24,10 +24,10 @@ This session focused on fixing multiple issues in the Kailash Python SDK, partic
 - Resolved UnicodeDecodeError in visualization.py by replacing smart quotes with ASCII quotes
 - Fixed character 0x92 at position 6868
 
-### 5. Enhanced CSVWriter Workflow Compatibility
+### 5. Enhanced CSVWriterNode Workflow Compatibility
 - Made `data` parameter non-required at initialization
 - Created workflow example demonstrating proper data flow through connections
-- Ensured CSVWriter can receive data from upstream nodes
+- Ensured CSVWriterNode can receive data from upstream nodes
 
 ### 6. Implemented Output Schema Validation
 - Added `get_output_schema()` method to Node base class
@@ -37,7 +37,7 @@ This session focused on fixing multiple issues in the Kailash Python SDK, partic
 ### 7. Fixed Type Validation for Any Type
 - Updated base Node class to properly handle `typing.Any`
 - Added checks to skip type validation when parameter type is `Any`
-- Fixed JSONWriter tests to use correct parameters
+- Fixed JSONWriterNode tests to use correct parameters
 
 ### 8. Created Comprehensive Tests
 - Created updated test files with correct imports and class names
@@ -48,7 +48,7 @@ This session focused on fixing multiple issues in the Kailash Python SDK, partic
 
 ### Core Files:
 - `/src/kailash/nodes/base.py` - Added output schema support, fixed Any type handling
-- `/src/kailash/nodes/data/writers.py` - Fixed CSVWriter data parameter
+- `/src/kailash/nodes/data/writers.py` - Fixed CSVWriterNode data parameter
 - `/src/kailash/nodes/data/streaming.py` - Fixed NodeMetadata
 - `/src/kailash/nodes/data/vector_db.py` - Fixed NodeMetadata
 - `/src/kailash/tracking/models.py` - Updated to Pydantic v2

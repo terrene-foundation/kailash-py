@@ -54,12 +54,12 @@ class APIDemo:
         builder.add_node("ChunkTextExtractorNode", "chunk_extractor")
         builder.add_node("QueryTextWrapperNode", "query_wrapper")
         builder.add_node(
-            "EmbeddingGenerator",
+            "EmbeddingGeneratorNode",
             "chunk_embedder",
             {"provider": "mock", "model": "text-embedding-ada-002"},
         )
         builder.add_node(
-            "EmbeddingGenerator",
+            "EmbeddingGeneratorNode",
             "query_embedder",
             {"provider": "mock", "model": "text-embedding-ada-002"},
         )
@@ -67,7 +67,7 @@ class APIDemo:
             "RelevanceScorerNode", "scorer", {"top_k": 3, "similarity_method": "cosine"}
         )
         builder.add_node("ContextFormatterNode", "formatter")
-        builder.add_node("LLMAgent", "llm", {"provider": "mock", "model": "gpt-4"})
+        builder.add_node("LLMAgentNode", "llm", {"provider": "mock", "model": "gpt-4"})
 
         # Add connections
         builder.add_edge("doc_source", "chunker")

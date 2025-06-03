@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReader, CSVWriter
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime import LocalRuntime
 from kailash.workflow.graph import Workflow
 
@@ -263,7 +263,7 @@ def main():
     workflow = Workflow(workflow_id="python_code_demo", name="python_code_demo")
 
     # Add data reader
-    reader = CSVReader(file_path="../data/sample_metrics.csv", name="data_reader")
+    reader = CSVReaderNode(file_path="../data/sample_metrics.csv", name="data_reader")
     workflow.add_node("data_reader", reader)
 
     # Create and add custom nodes
@@ -278,7 +278,7 @@ def main():
     workflow.add_node("file_node", file_node)
 
     # Add data writer
-    writer = CSVWriter(file_path="../outputs/results.csv", name="result_writer")
+    writer = CSVWriterNode(file_path="../outputs/results.csv", name="result_writer")
     workflow.add_node("result_writer", writer)
 
     # Connect nodes in pipeline
@@ -289,7 +289,7 @@ def main():
 
     # Comment out code node due to security restrictions in this demo
     # workflow.connect("data_reader", "code_node", {"data": "data"})
-    # aggregation_writer = CSVWriter(file_path="../data/aggregated_metrics.csv", name="aggregation_writer")
+    # aggregation_writer = CSVWriterNode(file_path="../data/aggregated_metrics.csv", name="aggregation_writer")
     # workflow.add_node("aggregation_writer", aggregation_writer)
     # workflow.connect("code_node", "aggregation_writer", {"result": "data"})
 

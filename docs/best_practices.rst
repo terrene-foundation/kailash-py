@@ -120,9 +120,9 @@ Workflow Patterns
         builder = WorkflowBuilder()
 
         # Add nodes in sequence
-        builder.add_node("reader", "CSVReader", {"file_path": "input.csv"})
+        builder.add_node("reader", "CSVReaderNode", {"file_path": "input.csv"})
         builder.add_node("processor", "DataProcessor", {"operation": "clean"})
-        builder.add_node("writer", "CSVWriter", {"file_path": "output.csv"})
+        builder.add_node("writer", "CSVWriterNode", {"file_path": "output.csv"})
 
         # Connect nodes
         builder.add_edge("reader", "processor")
@@ -139,7 +139,7 @@ Workflow Patterns
         builder = WorkflowBuilder()
 
         # Input node
-        builder.add_node("input", "CSVReader", {"file_path": "data.csv"})
+        builder.add_node("input", "CSVReaderNode", {"file_path": "data.csv"})
 
         # Parallel processing branches
         builder.add_node("process_a", "ProcessorA", {})
@@ -164,7 +164,7 @@ Workflow Patterns
         """Create workflow with conditional logic."""
         builder = WorkflowBuilder()
 
-        builder.add_node("input", "CSVReader", {})
+        builder.add_node("input", "CSVReaderNode", {})
         builder.add_node("validator", "DataValidator", {})
         builder.add_node("clean_data", "DataCleaner", {})
         builder.add_node("reject_data", "DataRejector", {})

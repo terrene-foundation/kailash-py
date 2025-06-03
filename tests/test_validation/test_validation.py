@@ -6,13 +6,13 @@ from kailash.sdk_exceptions import NodeValidationError
 
 def test_validation():
     """Test that base class validation works correctly."""
-    # Create a node with typed inputs
-    node = PythonCodeNode(
-        name="validator",
-        code="result = x + y",
-        input_types={"x": int, "y": int},
-        output_type=int,
-    )
+
+    # For code strings, PythonCodeNode now passes through all inputs without validation
+    # Let's test with a function-based node instead which does validate
+    def add_numbers(x: int, y: int) -> int:
+        return x + y
+
+    node = PythonCodeNode.from_function(func=add_numbers, name="validator")
 
     print("Testing validation through execute() method...")
 
@@ -31,15 +31,26 @@ def test_validation():
     result = node.execute(x=5, y=10)
     print(f"✓ Normal execution: {result}")
 
-    print("\nTesting direct executor.execute_code() method...")
+    print("\nTesting code string node (no validation)...")
 
-    # Test direct executor.execute_code (bypasses validation)
-    result = node.executor.execute_code(node.code, {"x": 5, "y": 10})
+    # Create a code string node - these don't validate inputs
+    code_node = PythonCodeNode(
+        name="code_validator",
+        code="result = x + y",
+        input_types={"x": int, "y": int},
+        output_type=int,
+    )
+
+    # Code string nodes accept any inputs (no validation)
+    try:
+        result = code_node.execute(x=5)  # Missing y - will fail at execution
+        print("ERROR: Code execution should have failed")
+    except Exception as e:
+        print(f"✓ Code execution failed as expected: {type(e).__name__}")
+
+    # Direct executor.execute_code works the same way
+    result = code_node.executor.execute_code(code_node.code, {"x": 5, "y": 10})
     print(f"✓ Direct executor.execute_code: {result}")
-
-    # Test that executor.execute_code doesn't validate (it should work with dict)
-    result = node.executor.execute_code(node.code, {"x": 5, "y": 10})
-    print(f"✓ Executor.execute_code with dict works: {result}")
 
     print("\nAll validation tests passed!")
 

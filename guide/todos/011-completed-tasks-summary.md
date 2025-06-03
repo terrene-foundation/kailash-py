@@ -16,7 +16,7 @@ This document summarizes all tasks that have been completed as of 2025-05-29, in
 - **Date**: 2025-05-16
 - **Description**: Implemented registry system for node discovery
 
-### 3. Implement basic node types (CSVReader, JSONReader, TextReader)
+### 3. Implement basic node types (CSVReaderNode, JSONReaderNode, TextReaderNode)
 - **Status**: Completed (Issue #3)
 - **Date**: 2025-05-16
 - **Description**: Created basic data reader nodes

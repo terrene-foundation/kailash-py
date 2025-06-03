@@ -17,7 +17,7 @@ from examples.migrations.project_hmi.adapted.nodes_updated import (
     W1SendNodeV2,
 )
 from examples.migrations.project_hmi.adapted.shared import AgentState
-from kailash.nodes.logic.operations import Switch
+from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow.graph import Workflow
 from kailash.workflow.runner import WorkflowRunner
@@ -75,7 +75,7 @@ class HmiWorkflowV2:
         # Add the switch node for conditional routing
         workflow.add_node(
             "route_by_availability",
-            Switch(
+            SwitchNode(
                 condition_field="no_hmi_slot",
                 operator="==",
                 value=True,

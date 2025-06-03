@@ -1,7 +1,7 @@
 """
-Simple Switch Node Example
+Simple SwitchNode Example
 
-This example demonstrates the basic functionality of the Switch node to route
+This example demonstrates the basic functionality of the SwitchNode to route
 data based on conditions.
 """
 
@@ -9,9 +9,9 @@ import json
 import logging
 import os
 
-from kailash.nodes.data.readers import JSONReader
-from kailash.nodes.data.writers import JSONWriter
-from kailash.nodes.logic.operations import Switch
+from kailash.nodes.data.readers import JSONReaderNode
+from kailash.nodes.data.writers import JSONWriterNode
+from kailash.nodes.logic.operations import SwitchNode
 from kailash.workflow.graph import Workflow
 
 # Configure logging
@@ -66,13 +66,13 @@ def create_simple_switch_workflow() -> Workflow:
 
     # Data source node
     workflow.add_node(
-        "transactions_reader", JSONReader(file_path="../data/transactions.json")
+        "transactions_reader", JSONReaderNode(file_path="../data/transactions.json")
     )
 
     # Switch node to route by transaction status
     workflow.add_node(
         "status_router",
-        Switch(
+        SwitchNode(
             input_data=None,  # This will be connected later
             condition_field="status",
             cases=["completed", "pending", "failed"],
@@ -83,23 +83,23 @@ def create_simple_switch_workflow() -> Workflow:
     # Writer nodes for each status
     workflow.add_node(
         "completed_writer",
-        JSONWriter(file_path="../outputs/completed_transactions.json"),
+        JSONWriterNode(file_path="../outputs/completed_transactions.json"),
     )
 
     workflow.add_node(
         "pending_writer",
-        JSONWriter(file_path="../outputs/pending_transactions.json"),
+        JSONWriterNode(file_path="../outputs/pending_transactions.json"),
     )
 
     workflow.add_node(
         "failed_writer",
-        JSONWriter(file_path="../outputs/failed_transactions.json"),
+        JSONWriterNode(file_path="../outputs/failed_transactions.json"),
     )
 
     # Output node
     workflow.add_node(
         "results_writer",
-        JSONWriter(file_path="../outputs/simple_switch_results.json"),
+        JSONWriterNode(file_path="../outputs/simple_switch_results.json"),
     )
 
     # Connect the nodes

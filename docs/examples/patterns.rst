@@ -30,13 +30,13 @@ Error Handling Pattern
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   from kailash.nodes.logic import Switch
+   from kailash.nodes.logic import SwitchNode
 
    # Create workflow with error handling
    workflow = Workflow("error_handling", name="Error Handling Pattern")
 
    # Add switch for error routing
-   error_router = Switch()
+   error_router = SwitchNode()
    workflow.add_node("error_handler", error_router)
 
    # ... (error handling logic)

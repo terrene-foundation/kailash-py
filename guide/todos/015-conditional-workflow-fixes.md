@@ -1,12 +1,12 @@
 # Conditional Workflow and DataTransformer Implementation
 
-This document describes the implementation of the DataTransformer node and fixes to the Switch node for conditional workflow routing.
+This document describes the implementation of the DataTransformer node and fixes to the SwitchNode node for conditional workflow routing.
 
 ## Overview
 
-The conditional workflow example demonstrated how to use the Switch node to route data based on conditions, but there were several issues with the original implementation:
+The conditional workflow example demonstrated how to use the SwitchNode node to route data based on conditions, but there were several issues with the original implementation:
 
-1. The Switch node didn't properly handle lists of dictionaries with condition fields
+1. The SwitchNode node didn't properly handle lists of dictionaries with condition fields
 2. The DataTransformer node didn't exist, although it was referenced in examples
 3. The connections between nodes weren't properly configured
 
@@ -24,7 +24,7 @@ The conditional workflow example demonstrated how to use the Switch node to rout
 - Added comprehensive error handling with detailed messages
 - Ensured compatibility with other nodes in the workflow
 
-### 2. Enhanced Switch Node Implementation
+### 2. Enhanced SwitchNode Node Implementation
 
 - Added support for list data with condition field grouping
 - Improved case output field handling
@@ -52,14 +52,14 @@ The conditional workflow example demonstrated how to use the Switch node to rout
 
 - Complete multi-condition workflow example with nested routing
 - Add customer enrichment functionality back to the examples
-- Update ADRs to reflect changes to Switch node and DataTransformer implementation
+- Update ADRs to reflect changes to SwitchNode node and DataTransformer implementation
 - Add more complex transformation examples with multiple operations
 
 ## Code Improvements
 
 The main improvements made to the codebase were:
 
-1. Better support for list data in Switch nodes
+1. Better support for list data in SwitchNode nodes
 2. More flexible transformation operations with the DataTransformer
 3. Clearer examples demonstrating conditional workflow patterns
 4. Enhanced debugging and error reporting

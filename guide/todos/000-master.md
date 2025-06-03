@@ -1,16 +1,17 @@
 # Kailash Python SDK - Master Todo List
 
 ## 📊 Quick Stats
-- **Tests**: 746/746 passing (100%) | 0 failing | Some skipped ✅
+- **Tests**: 753/753 passing (100%) | 0 failing | Some skipped ✅
 - **Coverage**: All test categories at 100% coverage
 - **Examples**: All 45+ examples validated and running successfully! ✅
 - **Documentation**: ✅ **PERFECT BUILD!** 0 errors, 0 warnings! 🎉
 - **Code Quality**: All files formatted with black/isort, linting clean ✅
 - **PyPI Release**: v0.1.1 published (v0.1.0 yanked)! 📦
-- **AI Capabilities**: LLMAgent, EmbeddingGenerator, MCP nodes complete! 🤖
+- **AI Capabilities**: LLMAgentNode, EmbeddingGeneratorNode, MCP nodes complete! 🤖
 - **API Integration**: HTTPClientNode, RESTClientNode with full features! 🌐
 - **Provider Architecture**: Unified AI providers (LLM + Embeddings) ✅
 - **Hierarchical RAG**: Complete implementation with comprehensive testing! 🧠
+- **Node Naming**: All node classes now follow "Node" suffix convention! ✅
 
 ## Project Status Overview
 - **Foundation**: ✅ Complete - All core functionality implemented
@@ -169,7 +170,19 @@
 
 ## Recent Achievements Summary
 
-### Session 40 (Current) ✅
+### Session 41 (Current) ✅
+- **Node Naming Convention**: Renamed all node classes to follow "Node" suffix convention
+  - CSVReader → CSVReaderNode, JSONReader → JSONReaderNode, TextReader → TextReaderNode
+  - CSVWriter → CSVWriterNode, JSONWriter → JSONWriterNode, TextWriter → TextWriterNode
+  - Switch → SwitchNode, Merge → MergeNode
+  - LLMAgent → LLMAgentNode, EmbeddingGenerator → EmbeddingGeneratorNode
+- **Docstring Format Conversion**: Converted all Google-style docstrings from `::` to doctest `>>>` format
+- **Documentation Updates**: Updated all docstrings, docs, and READMEs to reflect new naming
+- **Test Suite Updates**: Fixed all tests to use new node names (753 tests passing)
+- **Example Updates**: Updated all 45+ examples to use new node names
+- **Code Quality**: All doctests now pass with proper format
+
+### Session 40 ✅
 - **WorkflowNode Implementation**: Created node that wraps entire workflows as reusable components
 - **Hierarchical Composition**: Enabled workflows within workflows for complex orchestration
 - **Dynamic Parameter Discovery**: Auto-detects inputs/outputs from wrapped workflow
@@ -244,19 +257,19 @@
 - Tested with real Ollama models
 
 ### Session 32 ✅
-- Completed Agentic AI foundation (LLMAgent, EmbeddingGenerator, MCP)
+- Completed Agentic AI foundation (LLMAgentNode, EmbeddingGeneratorNode, MCP)
 - Completed Enterprise Integration (HTTPClient, RESTClient)
 
 For complete history, see: [completed-archive.md](./completed-archive.md)
 
 ---
-*Last Updated: 2025-06-03 (Session 40 - WorkflowNode for Hierarchical Composition)*
-*Total Development Time: 22 days | Sessions: 40*
-*Test Progress: 761/761 passing (100%)* ✅
-*Examples: 46 working (with nested workflow examples)* ✅
-*Documentation: Perfect build with Google style docstrings!* 🎉
+*Last Updated: 2025-06-04 (Session 41 - Node Naming Convention & Doctest Format)*
+*Total Development Time: 23 days | Sessions: 41*
+*Test Progress: 753/753 passing (100%)* ✅
+*Examples: 46 working (all updated with new node names)* ✅
+*Documentation: Perfect build with doctest-formatted docstrings!* 🎉
 *RAG Architecture: Complete with 7 specialized nodes!* 🧠
 *API Wrapper: Any workflow → REST API in 3 lines!* 🚀
 *WorkflowNode: Workflows as reusable components!* 🔄
-*Code Quality: All linting issues resolved, pre-commit hooks passing!* ✅
+*Code Quality: All node classes follow "Node" suffix convention!* ✅
 *Next Focus: A2A Communication, Security, Performance*

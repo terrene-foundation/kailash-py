@@ -346,7 +346,7 @@ class TestTaskTrackingIntegration:
 
         # Create workflow with performance-intensive operations
         reader_id = builder.add_node(
-            "CSVReader", "reader", config={"file_path": str(large_dataset)}
+            "CSVReaderNode", "reader", config={"file_path": str(large_dataset)}
         )
 
         processor_id = builder.add_node(
@@ -367,7 +367,7 @@ result = df.groupby('category').agg({'value': 'mean'}).reset_index().to_dict('re
         )
 
         writer_id = builder.add_node(
-            "CSVWriter",
+            "CSVWriterNode",
             "writer",
             config={"file_path": str(temp_data_dir / "aggregated.csv")},
         )

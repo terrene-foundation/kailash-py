@@ -1,6 +1,6 @@
 ## Hierarchical RAG Workflow
 
-_Simple hierarchical RAG workflow using LLMAgent and EmbeddingGenerator with Ollama_
+_Simple hierarchical RAG workflow using LLMAgentNode and EmbeddingGeneratorNode with Ollama_
 
 ```mermaid
 flowchart TB
@@ -14,11 +14,11 @@ flowchart TB
     query_source["QuerySource<br/>query_source"]
     chunk_text_extractor["ChunkTextExtractor<br/>chunk_text_extractor"]
     query_text_wrapper["QueryTextWrapper<br/>query_text_wrapper"]
-    chunk_embedder["EmbeddingGenerator<br/>chunk_embedder"]
-    query_embedder["EmbeddingGenerator<br/>query_embedder"]
+    chunk_embedder["EmbeddingGeneratorNode<br/>chunk_embedder"]
+    query_embedder["EmbeddingGeneratorNode<br/>query_embedder"]
     relevance_scorer["RelevanceScorer<br/>relevance_scorer"]
     context_formatter["ContextFormatter<br/>context_formatter"]
-    llm_agent["LLMAgent<br/>llm_agent"]
+    llm_agent["LLMAgentNode<br/>llm_agent"]
 
     %% Output Data
     output_data([Output Data])
@@ -58,13 +58,13 @@ flowchart TB
 
 | Node ID | Type | Description |
 |---------|------|-------------|
-| chunk_embedder | EmbeddingGenerator | Vector embedding generator for RAG systems and semantic similarity operations. |
+| chunk_embedder | EmbeddingGeneratorNode | Vector embedding generator for RAG systems and semantic similarity operations. |
 | chunk_text_extractor | ChunkTextExtractorNode | Extracts text content from chunks for embedding generation. |
 | chunker | HierarchicalChunkerNode | Splits documents into hierarchical chunks for better retrieval. |
 | context_formatter | ContextFormatterNode | Formats relevant chunks into context for LLM. |
 | doc_source | DocumentSourceNode | Provides sample documents for hierarchical RAG processing. |
-| llm_agent | LLMAgent | Advanced Large Language Model agent with LangChain integration and MCP |
-| query_embedder | EmbeddingGenerator | Vector embedding generator for RAG systems and semantic similarity operations. |
+| llm_agent | LLMAgentNode | Advanced Large Language Model agent with LangChain integration and MCP |
+| query_embedder | EmbeddingGeneratorNode | Vector embedding generator for RAG systems and semantic similarity operations. |
 | query_source | QuerySourceNode | Provides sample queries for RAG processing. |
 | query_text_wrapper | QueryTextWrapperNode | Wraps query string in list for embedding generation. |
 | relevance_scorer | RelevanceScorerNode | Scores chunk relevance using various similarity methods including embeddings similarity. |

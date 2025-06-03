@@ -89,9 +89,9 @@ workflow = Workflow("hierarchical_rag", name="Hierarchical RAG Workflow")
 workflow.add_node("doc_source", DocumentSourceNode())
 workflow.add_node("query_source", QuerySourceNode())
 workflow.add_node("chunker", HierarchicalChunkerNode())
-workflow.add_node("embedder", EmbeddingGenerator(provider="ollama", model="nomic-embed-text"))
+workflow.add_node("embedder", EmbeddingGeneratorNode(provider="ollama", model="nomic-embed-text"))
 workflow.add_node("relevance_scorer", RelevanceScorerNode())
-workflow.add_node("llm_agent", LLMAgent(provider="ollama", model="llama3.2"))
+workflow.add_node("llm_agent", LLMAgentNode(provider="ollama", model="llama3.2"))
 
 # Connect and run
 # ... (see full example in documentation)

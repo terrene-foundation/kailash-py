@@ -12,7 +12,7 @@ Complex Workflow with Conditional Logic
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   from kailash.nodes.logic import Switch, Merge
+   from kailash.nodes.logic import SwitchNode, MergeNode
    from kailash.nodes.transform import DataTransformer
    from kailash.runtime.local import LocalRuntime
 
@@ -20,7 +20,7 @@ Complex Workflow with Conditional Logic
    workflow = Workflow("advanced_flow", name="Advanced Flow")
 
    # Add switch for conditional routing
-   switch = Switch()
+   switch = SwitchNode()
    workflow.add_node("router", switch)
 
    # Add processing branches
@@ -31,7 +31,7 @@ Complex Workflow with Conditional Logic
    workflow.add_node("process_low", low_value)
 
    # Add merge to combine results
-   merge = Merge()
+   merge = MergeNode()
    workflow.add_node("combine", merge)
 
    # Connect with conditional routing

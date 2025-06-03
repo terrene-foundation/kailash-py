@@ -102,7 +102,7 @@ class RelevanceScorerNode(Node):
     ) -> List[Dict]:
         """Score chunks using cosine similarity."""
         # Extract actual embedding vectors from the embedding objects
-        # EmbeddingGenerator returns embeddings in format: {"embedding": [...], "text": "...", "dimensions": X}
+        # EmbeddingGeneratorNode returns embeddings in format: {"embedding": [...], "text": "...", "dimensions": X}
 
         # Handle query embedding - should be the first (and only) embedding in the list
         query_embedding_obj = query_embeddings[0] if query_embeddings else {}

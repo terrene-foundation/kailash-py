@@ -15,7 +15,7 @@ from kailash.workflow.visualization import WorkflowVisualizer
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.1.1"
+__version__ = "0.1.4"
 
 __all__ = [
     "Workflow",

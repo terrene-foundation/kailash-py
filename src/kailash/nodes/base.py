@@ -214,24 +214,23 @@ class Node(ABC):
         - During workflow creation: Used for connection validation
         - During export: Included in workflow manifests
 
-        Example::
-
-            def get_parameters(self):
-                return {
-                    'input_file': NodeParameter(
-                        name='input_file',
-                        type=str,
-                        required=True,
-                        description='Path to input CSV file'
-                    ),
-                    'delimiter': NodeParameter(
-                        name='delimiter',
-                        type=str,
-                        required=False,
-                        default=',',
-                        description='CSV delimiter character'
-                    )
-                }
+        Example:
+            >>> def get_parameters(self):
+            ...     return {
+            ...         'input_file': NodeParameter(
+            ...             name='input_file',
+            ...             type=str,
+            ...             required=True,
+            ...             description='Path to input CSV file'
+            ...         ),
+            ...         'delimiter': NodeParameter(
+            ...             name='delimiter',
+            ...             type=str,
+            ...             required=False,
+            ...             default=',',
+            ...             description='CSV delimiter character'
+            ...         )
+            ...     }
 
         Returns:
             Dictionary mapping parameter names to their definitions
@@ -265,29 +264,28 @@ class Node(ABC):
         3. Workflow connection validation
         4. Export manifest generation
 
-        Example::
-
-            def get_output_schema(self):
-                return {
-                    'dataframe': NodeParameter(
-                        name='dataframe',
-                        type=dict,
-                        required=True,
-                        description='Processed data as dictionary'
-                    ),
-                    'row_count': NodeParameter(
-                        name='row_count',
-                        type=int,
-                        required=True,
-                        description='Number of rows processed'
-                    ),
-                    'processing_time': NodeParameter(
-                        name='processing_time',
-                        type=float,
-                        required=False,
-                        description='Time taken to process in seconds'
-                    )
-                }
+        Example:
+            >>> def get_output_schema(self):
+            ...     return {
+            ...         'dataframe': NodeParameter(
+            ...             name='dataframe',
+            ...             type=dict,
+            ...             required=True,
+            ...             description='Processed data as dictionary'
+            ...         ),
+            ...         'row_count': NodeParameter(
+            ...             name='row_count',
+            ...             type=int,
+            ...             required=True,
+            ...             description='Number of rows processed'
+            ...         ),
+            ...         'processing_time': NodeParameter(
+            ...             name='processing_time',
+            ...             type=float,
+            ...             required=False,
+            ...             description='Time taken to process in seconds'
+            ...         )
+            ...     }
 
         Returns:
             Dictionary mapping output names to their parameter definitions
@@ -325,15 +323,14 @@ class Node(ABC):
         - Error wrapping and logging
         - Execution timing and metrics
 
-        Example::
-
-            def run(self, input_file, delimiter=','):
-                df = pd.read_csv(input_file, delimiter=delimiter)
-                return {
-                    'dataframe': df.to_dict(),
-                    'row_count': len(df),
-                    'columns': list(df.columns)
-                }
+        Example:
+            >>> def run(self, input_file, delimiter=','):
+            ...     df = pd.read_csv(input_file, delimiter=delimiter)
+            ...     return {
+            ...         'dataframe': df.to_dict(),
+            ...         'row_count': len(df),
+            ...         'columns': list(df.columns)
+            ...     }
 
         Args:
             **kwargs: Validated input parameters matching get_parameters()
@@ -1010,11 +1007,11 @@ class NodeRegistry:
             - Logs the clearing action
             - Existing node instances remain valid
 
-        Warning::
-
-        - Subsequent get() calls will fail
-        - Workflows may not deserialize
-        - Should re-register needed nodes
+        Warning:
+            >>> # Warning: This affects all future operations
+            >>> # - Subsequent get() calls will fail
+            >>> # - Workflows may not deserialize
+            >>> # - Should re-register needed nodes
         """
         cls._nodes.clear()
         logging.info("Cleared all registered nodes")
@@ -1057,15 +1054,14 @@ def register_node(alias: Optional[str] = None):
         - Returns the unmodified class
         - Handles registration errors
 
-    Example::
-
-        @register_node(alias='CSV')
-        class CSVReaderNode(Node):
-            def get_parameters(self):
-                return {'file': NodeParameter(...)}
-
-            def run(self, file):
-                return pd.read_csv(file)
+    Example:
+        >>> @register_node(alias='CSV')
+        ... class CSVReaderNode(Node):
+        ...     def get_parameters(self):
+        ...         return {'file': NodeParameter(...)}
+        ...
+        ...     def run(self, file):
+        ...         return pd.read_csv(file)
     """
 
     def decorator(node_class: Type[Node]):

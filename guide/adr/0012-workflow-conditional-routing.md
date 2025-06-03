@@ -20,22 +20,22 @@ Without conditional routing, users must either:
 ## Decision
 We will implement workflow conditional routing through specialized nodes rather than modifying the core workflow execution engine, specifically:
 
-1. **Switch Node**: A specialized node that:
+1. **SwitchNode Node**: A specialized node that:
    - Evaluates conditions on input data
    - Routes data to different outputs based on the condition result
    - Supports both boolean (true/false) conditions and multi-case switching
    - Creates named output fields corresponding to condition results
 
-2. **Enhanced Merge Node**: A node that:
+2. **Enhanced MergeNode Node**: A node that:
    - Combines multiple data sources into a single output
    - Supports various merge strategies (concat, zip, merge_dict)
    - Can handle more than two inputs
    - Includes options for handling None values and conflicts
 
 The workflow graph structure remains a DAG, with conditional logic implemented through the connectivity pattern:
-- A Switch node with multiple outputs connected to different processing branches
+- A SwitchNode node with multiple outputs connected to different processing branches
 - Each branch processes data independently
-- Branches can reconnect using Merge nodes
+- Branches can reconnect using MergeNode nodes
 
 ## Rationale
 
@@ -81,7 +81,7 @@ We chose the node-based approach because it offers the best balance of power, si
 
 ### Negative
 - Conditional branching may create more complex workflow graphs
-- Users need to understand the Switch/Merge pattern for effective implementation
+- Users need to understand the SwitchNode/MergeNode pattern for effective implementation
 - Some conditional logic might be less efficient due to data duplication between branches
 - Complex conditions might be more difficult to express compared to code
 
@@ -89,9 +89,9 @@ We chose the node-based approach because it offers the best balance of power, si
 
 The implementation consists of the following components:
 
-1. **Switch Node**
+1. **SwitchNode Node**
 ```python
-class Switch(Node):
+class SwitchNode(Node):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         # Parameters include input_data, condition_field, operator, value, cases, etc.
 
@@ -101,9 +101,9 @@ class Switch(Node):
         # Always include condition_result
 ```
 
-2. **Enhanced Merge Node**
+2. **Enhanced MergeNode Node**
 ```python
-class Merge(Node):
+class MergeNode(Node):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         # Parameters include data1-data5, merge_type, key, skip_none
 
@@ -120,10 +120,10 @@ workflow = Workflow(name="Conditional Example")
 
 # Add nodes
 workflow.add_node("data_source", DataSourceNode())
-workflow.add_node("router", Switch(condition_field="status"))
+workflow.add_node("router", SwitchNode(condition_field="status"))
 workflow.add_node("success_handler", SuccessProcessor())
 workflow.add_node("error_handler", ErrorProcessor())
-workflow.add_node("results_merger", Merge(merge_type="merge_dict"))
+workflow.add_node("results_merger", MergeNode(merge_type="merge_dict"))
 
 # Connect with conditional branching
 workflow.connect("data_source", "router", {"output": "input_data"})
@@ -136,8 +136,8 @@ workflow.connect("error_handler", "results_merger", {"output": "data2"})
 ## Implementation Status
 
 As of 2025-05-30, conditional routing has been fully implemented:
-- Switch node supports boolean conditions and multi-case switching
-- Merge node handles multiple inputs with various merge strategies
+- SwitchNode node supports boolean conditions and multi-case switching
+- MergeNode node handles multiple inputs with various merge strategies
 - Comprehensive test coverage in `tests/test_nodes/test_switch_merge.py`
 - Working examples in `conditional_workflow_example.py` and `simple_switch_example.py`
 - Integration with workflow visualization showing conditional paths
@@ -145,7 +145,7 @@ As of 2025-05-30, conditional routing has been fully implemented:
 
 ## References
 - [NetworkX Directed Acyclic Graphs](https://networkx.org/documentation/stable/reference/classes/digraph.html)
-- [Switch Case statements in programming](https://en.wikipedia.org/wiki/Switch_statement)
+- [SwitchNode Case statements in programming](https://en.wikipedia.org/wiki/Switch_statement)
 - Related ADRs:
   - [ADR-0004: Workflow Representation](0004-workflow-representation.md)
   - [ADR-0005: Local Execution Strategy](0005-local-execution-strategy.md)

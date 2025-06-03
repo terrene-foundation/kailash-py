@@ -64,7 +64,7 @@ def simple_workflow(sample_csv_file: Path, temp_data_dir: Path) -> Workflow:
 
     # Add nodes
     reader_id = builder.add_node(
-        "CSVReader", "reader", config={"file_path": str(sample_csv_file)}
+        "CSVReaderNode", "reader", config={"file_path": str(sample_csv_file)}
     )
 
     filter_id = builder.add_node(
@@ -72,7 +72,9 @@ def simple_workflow(sample_csv_file: Path, temp_data_dir: Path) -> Workflow:
     )
 
     writer_id = builder.add_node(
-        "CSVWriter", "writer", config={"file_path": str(temp_data_dir / "output.csv")}
+        "CSVWriterNode",
+        "writer",
+        config={"file_path": str(temp_data_dir / "output.csv")},
     )
 
     # Connect nodes
@@ -91,7 +93,7 @@ def complex_workflow(
 
     # Add CSV reader
     csv_reader_id = builder.add_node(
-        "CSVReader", "csv_reader", config={"file_path": str(sample_csv_file)}
+        "CSVReaderNode", "csv_reader", config={"file_path": str(sample_csv_file)}
     )
 
     # Add filter
@@ -108,19 +110,19 @@ def complex_workflow(
 
     # Add outputs
     csv_writer_id = builder.add_node(
-        "CSVWriter",
+        "CSVWriterNode",
         "csv_writer",
         config={"file_path": str(temp_data_dir / "processed.csv")},
     )
 
     json_writer_id = builder.add_node(
-        "JSONWriter",
+        "JSONWriterNode",
         "json_writer",
         config={"file_path": str(temp_data_dir / "processed.json")},
     )
 
     report_writer_id = builder.add_node(
-        "TextWriter",
+        "TextWriterNode",
         "report_writer",
         config={
             "file_path": str(temp_data_dir / "report.txt"),
@@ -187,7 +189,7 @@ def error_workflow(temp_data_dir: Path) -> Workflow:
 
     # Add a reader that will fail
     reader_id = builder.add_node(
-        "CSVReader",
+        "CSVReaderNode",
         "bad_reader",
         config={"file_path": str(temp_data_dir / "nonexistent.csv")},
     )
@@ -200,7 +202,9 @@ def error_workflow(temp_data_dir: Path) -> Workflow:
     )
 
     writer_id = builder.add_node(
-        "CSVWriter", "writer", config={"file_path": str(temp_data_dir / "output.csv")}
+        "CSVWriterNode",
+        "writer",
+        config={"file_path": str(temp_data_dir / "output.csv")},
     )
 
     builder.add_connection(reader_id, "data", processor_id, "data")
@@ -233,7 +237,9 @@ def parallel_workflow(temp_data_dir: Path) -> Workflow:
 
     # Single input
     reader_id = builder.add_node(
-        "CSVReader", "reader", config={"file_path": str(temp_data_dir / "input.csv")}
+        "CSVReaderNode",
+        "reader",
+        config={"file_path": str(temp_data_dir / "input.csv")},
     )
 
     # Parallel processing branches
@@ -251,13 +257,13 @@ def parallel_workflow(temp_data_dir: Path) -> Workflow:
 
     # Parallel outputs
     writer1_id = builder.add_node(
-        "CSVWriter",
+        "CSVWriterNode",
         "writer_high",
         config={"file_path": str(temp_data_dir / "high_values.csv")},
     )
 
     writer2_id = builder.add_node(
-        "CSVWriter",
+        "CSVWriterNode",
         "writer_low",
         config={"file_path": str(temp_data_dir / "low_values.csv")},
     )
@@ -281,7 +287,7 @@ def yaml_workflow_config(temp_data_dir: Path) -> Path:
             "nodes": [
                 {
                     "id": "reader",
-                    "type": "CSVReader",
+                    "type": "CSVReaderNode",
                     "inputs": {"file_path": str(temp_data_dir / "input.csv")},
                 },
                 {
@@ -291,7 +297,7 @@ def yaml_workflow_config(temp_data_dir: Path) -> Path:
                 },
                 {
                     "id": "writer",
-                    "type": "CSVWriter",
+                    "type": "CSVWriterNode",
                     "inputs": {"file_path": str(temp_data_dir / "output.csv")},
                 },
             ],

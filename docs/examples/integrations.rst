@@ -12,7 +12,7 @@ SharePoint Integration
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   from kailash.nodes.data import SharePointGraphReader, CSVWriter
+   from kailash.nodes.data import SharePointGraphReader, CSVWriterNode
    from kailash.runtime.local import LocalRuntime
    import os
 
@@ -21,7 +21,7 @@ SharePoint Integration
 
    # Configure SharePoint reader
    sharepoint = SharePointGraphReader()
-   csv_writer = CSVWriter(file_path="sharepoint_files.csv")
+   csv_writer = CSVWriterNode(file_path="sharepoint_files.csv")
 
    workflow.add_node("read_sharepoint", sharepoint)
    workflow.add_node("save_csv", csv_writer)

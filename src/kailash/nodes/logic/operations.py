@@ -11,7 +11,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class Switch(Node):
+class SwitchNode(Node):
     """Routes data to different outputs based on conditions.
 
     The Switch node enables conditional branching in workflows by evaluating
@@ -23,25 +23,21 @@ class Switch(Node):
     3. Dynamic workflow paths based on data values
 
     The outputs of Switch nodes are typically connected to different processing
-    nodes, and those branches can be rejoined later using a Merge node.
+    nodes, and those branches can be rejoined later using a MergeNode.
 
-    Example usage::
+    Example usage:
+        >>> # Simple boolean condition
+        >>> switch_node = SwitchNode(condition_field="status", operator="==", value="success")
+        >>> switch_node.metadata.name
+        'SwitchNode'
 
-        # Simple boolean condition
-        switch_node = Switch(condition_field="status", operator="==", value="success")
-        workflow.add_node("router", switch_node)
-        workflow.connect("router", "success_handler", {"true_output": "input"})
-        workflow.connect("router", "error_handler", {"false_output": "input"})
-
-        # Multi-case switching
-        switch_node = Switch(
-            condition_field="status",
-            cases=["success", "warning", "error"]
-        )
-        workflow.connect("router", "success_handler", {"case_success": "input"})
-        workflow.connect("router", "warning_handler", {"case_warning": "input"})
-        workflow.connect("router", "error_handler", {"case_error": "input"})
-        workflow.connect("router", "default_handler", {"default": "input"})
+        >>> # Multi-case switching
+        >>> switch_node = SwitchNode(
+        ...     condition_field="status",
+        ...     cases=["success", "warning", "error"]
+        ... )
+        >>> 'cases' in switch_node.get_parameters()
+        True
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -360,7 +356,7 @@ class Switch(Node):
 
 
 @register_node()
-class Merge(Node):
+class MergeNode(Node):
     """Merges multiple data sources.
 
     This node can combine data from multiple input sources in various ways,
@@ -368,7 +364,7 @@ class Merge(Node):
 
     1. Combining results from parallel branches in a workflow
     2. Joining related data sets
-    3. Combining outputs after conditional branching with the Switch node
+    3. Combining outputs after conditional branching with the SwitchNode
     4. Aggregating collections of data
 
     The merge operation is determined by the merge_type parameter, which supports

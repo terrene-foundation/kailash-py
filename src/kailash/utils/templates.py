@@ -352,7 +352,7 @@ See `workflows/example_workflow.py` for a basic workflow example.
         # Create example workflow
         workflow_content = '''"""Example workflow for data processing."""
 from kailash.workflow import Workflow
-from kailash.nodes.data import CSVReader, CSVWriter
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import Filter, Sort
 from kailash.nodes.logic import Aggregator
 
@@ -363,11 +363,11 @@ workflow = Workflow(
 )
 
 # Add nodes
-workflow.add_node("reader", CSVReader(), file_path="examples/examples/data/input.csv")
+workflow.add_node("reader", CSVReaderNode(), file_path="examples/examples/data/input.csv")
 workflow.add_node("filter", Filter(), field="value", operator=">", value=100)
 workflow.add_node("sort", Sort(), field="value", reverse=True)
 workflow.add_node("aggregate", Aggregator(), group_by="category", operation="sum")
-workflow.add_node("writer", CSVWriter(), file_path="outputs/results.csv")
+workflow.add_node("writer", CSVWriterNode(), file_path="outputs/results.csv")
 
 # Connect nodes
 workflow.connect("reader", "filter", {"data": "data"})
@@ -471,9 +471,9 @@ Thumbs.db
         # Add data processing workflow
         workflow_content = '''"""Data processing pipeline workflow."""
 from kailash.workflow import Workflow
-from kailash.nodes.data import CSVReader, JSONReader, JSONWriter
+from kailash.nodes.data import CSVReaderNode, JSONReaderNode, JSONWriterNode
 from kailash.nodes.transform import Filter, Map, Sort
-from kailash.nodes.logic import Aggregator, Merge
+from kailash.nodes.logic import Aggregator, MergeNode
 
 # Create workflow
 workflow = Workflow(
@@ -482,20 +482,20 @@ workflow = Workflow(
 )
 
 # Data ingestion
-workflow.add_node("csv_reader", CSVReader(), file_path="examples/examples/data/sales_data.csv")
-workflow.add_node("json_reader", JSONReader(), file_path="examples/examples/data/product_data.json")
+workflow.add_node("csv_reader", CSVReaderNode(), file_path="examples/examples/data/sales_data.csv")
+workflow.add_node("json_reader", JSONReaderNode(), file_path="examples/examples/data/product_data.json")
 
 # Transform data
 workflow.add_node("filter_sales", Filter(), field="amount", operator=">", value=1000)
 workflow.add_node("calculate_profit", Map(), field="amount", operation="multiply", value=0.2)
-workflow.add_node("merge_data", Merge(), merge_type="merge_dict", key="product_id")
+workflow.add_node("merge_data", MergeNode(), merge_type="merge_dict", key="product_id")
 
 # Aggregate results
 workflow.add_node("group_by_category", Aggregator(), group_by="category", operation="sum")
 workflow.add_node("sort_results", Sort(), field="value", reverse=True)
 
 # Export results
-workflow.add_node("write_json", JSONWriter(), file_path="outputs/analysis_results.json")
+workflow.add_node("write_json", JSONWriterNode(), file_path="outputs/analysis_results.json")
 
 # Connect pipeline
 workflow.connect("csv_reader", "filter_sales", {"data": "data"})
@@ -537,7 +537,7 @@ workflow.connect("sort_results", "write_json", {"sorted_data": "data"})
         # Add ML workflow
         workflow_content = '''"""Machine learning pipeline workflow."""
 from kailash.workflow import Workflow
-from kailash.nodes.data import CSVReader, JSONWriter
+from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.nodes.transform import Filter, Map
 from kailash.nodes.ai import (
     TextClassifier,
@@ -553,7 +553,7 @@ workflow = Workflow(
 )
 
 # Data ingestion
-workflow.add_node("read_data", CSVReader(), file_path="examples/examples/data/text_data.csv")
+workflow.add_node("read_data", CSVReaderNode(), file_path="examples/examples/data/text_data.csv")
 
 # Preprocessing
 workflow.add_node("extract_text", Map(), field="content")
@@ -567,10 +567,10 @@ workflow.add_node("extract_entities", NamedEntityRecognizer(),
 workflow.add_node("summarize", TextSummarizer(), max_length=100)
 
 # Combine results
-workflow.add_node("merge_results", Merge(), merge_type="merge_dict")
+workflow.add_node("merge_results", MergeNode(), merge_type="merge_dict")
 
 # Export results
-workflow.add_node("save_results", JSONWriter(), file_path="outputs/ml_results.json")
+workflow.add_node("save_results", JSONWriterNode(), file_path="outputs/ml_results.json")
 
 # Connect pipeline
 workflow.connect("read_data", "extract_text", {"data": "data"})
@@ -604,7 +604,7 @@ workflow.connect("merge_results", "save_results", {"merged_data": "data"})
         # Add API workflow
         workflow_content = '''"""API integration workflow."""
 from kailash.workflow import Workflow
-from kailash.nodes.data import JSONReader, JSONWriter
+from kailash.nodes.data import JSONReaderNode, JSONWriterNode
 from kailash.nodes.transform import Map, Filter
 from kailash.nodes.logic import Conditional
 from kailash.nodes.ai import ChatAgent, FunctionCallingAgent
@@ -616,7 +616,7 @@ workflow = Workflow(
 )
 
 # Read configuration
-workflow.add_node("read_config", JSONReader(), file_path="examples/examples/data/api_config.json")
+workflow.add_node("read_config", JSONReaderNode(), file_path="examples/examples/data/api_config.json")
 
 # Process with AI agent
 workflow.add_node("chat_agent", ChatAgent(),
@@ -644,7 +644,7 @@ workflow.add_node("process_success", Map(), operation="identity")
 workflow.add_node("handle_error", Map(), operation="identity")
 
 # Save results
-workflow.add_node("save_results", JSONWriter(), file_path="outputs/api_results.json")
+workflow.add_node("save_results", JSONWriterNode(), file_path="outputs/api_results.json")
 
 # Connect workflow
 workflow.connect("read_config", "chat_agent", {"data": "messages"})

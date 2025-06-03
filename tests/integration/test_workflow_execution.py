@@ -136,10 +136,10 @@ class TestWorkflowExecution:
 
         # Create workflow with dynamic inputs
         reader_id = builder.add_node(
-            "CSVReader", "reader", config={"file_path": str(input_file)}
+            "CSVReaderNode", "reader", config={"file_path": str(input_file)}
         )
         writer_id = builder.add_node(
-            "CSVWriter", "writer", config={"file_path": str(output_file)}
+            "CSVWriterNode", "writer", config={"file_path": str(output_file)}
         )
 
         builder.add_connection(reader_id, "data", writer_id, "data")

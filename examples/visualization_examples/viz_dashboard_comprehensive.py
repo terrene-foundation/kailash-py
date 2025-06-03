@@ -16,8 +16,8 @@ import json
 import time
 from pathlib import Path
 
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.transform.processors import Filter
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
@@ -38,11 +38,11 @@ def create_sample_workflow():
     workflow = Workflow("dashboard_demo_workflow", "Dashboard Demo Workflow")
 
     # Create sample data processing workflow
-    reader = CSVReader(node_id="data_reader", file_path="../data/customers.csv")
+    reader = CSVReaderNode(node_id="data_reader", file_path="../data/customers.csv")
 
     filter_node = Filter(node_id="data_filter", field="age", operator=">", value=25)
 
-    writer = CSVWriter(
+    writer = CSVWriterNode(
         node_id="data_writer", file_path="../outputs/dashboard_demo_output.csv"
     )
 

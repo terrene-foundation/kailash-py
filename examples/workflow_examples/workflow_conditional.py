@@ -1,8 +1,8 @@
 """
-Conditional Workflow Example using Switch and Merge nodes.
+Conditional Workflow Example using SwitchNode and MergeNode.
 
 This example demonstrates how to create a workflow with conditional branching
-using the Switch node to route data based on conditions and the Merge node
+using the SwitchNode to route data based on conditions and the MergeNode
 to combine the results from different branches.
 """
 
@@ -10,9 +10,9 @@ import json
 import logging
 import os
 
-from kailash.nodes.data.readers import CSVReader, JSONReader
-from kailash.nodes.data.writers import JSONWriter
-from kailash.nodes.logic.operations import Merge, Switch
+from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
+from kailash.nodes.data.writers import JSONWriterNode
+from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.nodes.transform.processors import DataTransformer
 from kailash.workflow.graph import Workflow
 
@@ -112,18 +112,18 @@ def create_conditional_workflow() -> Workflow:
     # 1. Create nodes
     # Data source nodes
     workflow.add_node(
-        "transactions_reader", JSONReader(file_path="../data/transactions.json")
+        "transactions_reader", JSONReaderNode(file_path="../data/transactions.json")
     )
 
     workflow.add_node(
         "customers_reader",
-        CSVReader(file_path="../data/customers.csv", index_column="customer_id"),
+        CSVReaderNode(file_path="../data/customers.csv", index_column="customer_id"),
     )
 
     # Switch node to route by transaction status
     workflow.add_node(
         "status_router",
-        Switch(
+        SwitchNode(
             input_data=None,  # This will be connected later
             condition_field="status",
             cases=["completed", "pending", "failed"],
@@ -165,23 +165,23 @@ def create_conditional_workflow() -> Workflow:
     # Output writers for each transaction status
     workflow.add_node(
         "completed_writer",
-        JSONWriter(file_path="../outputs/completed_transactions.json"),
+        JSONWriterNode(file_path="../outputs/completed_transactions.json"),
     )
 
     workflow.add_node(
         "pending_writer",
-        JSONWriter(file_path="../outputs/pending_transactions.json"),
+        JSONWriterNode(file_path="../outputs/pending_transactions.json"),
     )
 
     workflow.add_node(
         "failed_writer",
-        JSONWriter(file_path="../outputs/failed_transactions.json"),
+        JSONWriterNode(file_path="../outputs/failed_transactions.json"),
     )
 
     # Output node for all transactions
     workflow.add_node(
         "results_writer",
-        JSONWriter(file_path="../outputs/processed_transactions.json"),
+        JSONWriterNode(file_path="../outputs/processed_transactions.json"),
     )
 
     # 2. Connect the nodes
@@ -223,12 +223,12 @@ def create_multi_condition_workflow() -> Workflow:
 
     # Data source nodes
     workflow.add_node(
-        "transactions_reader", JSONReader(file_path="../data/transactions.json")
+        "transactions_reader", JSONReaderNode(file_path="../data/transactions.json")
     )
 
     workflow.add_node(
         "customers_reader",
-        CSVReader(file_path="../data/customers.csv", index_column="customer_id"),
+        CSVReaderNode(file_path="../data/customers.csv", index_column="customer_id"),
     )
 
     # Initial customer join node
@@ -244,7 +244,7 @@ def create_multi_condition_workflow() -> Workflow:
     # First level routing - by status
     workflow.add_node(
         "status_router",
-        Switch(
+        SwitchNode(
             input_data=None,  # This will be connected later
             condition_field="status",
             cases=["completed", "pending", "failed"],
@@ -254,7 +254,7 @@ def create_multi_condition_workflow() -> Workflow:
     # Second level routing - for completed transactions by tier
     workflow.add_node(
         "tier_router",
-        Switch(
+        SwitchNode(
             input_data=None,  # This will be connected later
             condition_field="customer_tier",
             cases=["gold", "silver", "bronze"],
@@ -311,14 +311,14 @@ def create_multi_condition_workflow() -> Workflow:
     # Merge nodes
     workflow.add_node(
         "tier_merger",
-        Merge(
+        MergeNode(
             data1=None, data2=None, merge_type="concat"  # These will be connected later
         ),
     )
 
     workflow.add_node(
         "final_merger",
-        Merge(
+        MergeNode(
             data1=None, data2=None, merge_type="concat"  # These will be connected later
         ),
     )
@@ -326,7 +326,7 @@ def create_multi_condition_workflow() -> Workflow:
     # Output
     workflow.add_node(
         "results_writer",
-        JSONWriter(file_path="../outputs/multi_condition_results.json"),
+        JSONWriterNode(file_path="../outputs/multi_condition_results.json"),
     )
 
     # Connect nodes - First connect data sources for joining

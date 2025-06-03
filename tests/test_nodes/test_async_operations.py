@@ -12,7 +12,7 @@ from typing import Any, Dict
 import pytest
 
 from kailash.nodes.base_async import AsyncNode
-from kailash.nodes.logic.async_operations import AsyncMerge, AsyncSwitch
+from kailash.nodes.logic.async_operations import AsyncMergeNode, AsyncSwitchNode
 from kailash.runtime.parallel import ParallelRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError
 from kailash.workflow import Workflow
@@ -51,7 +51,7 @@ class SimpleAsyncNode(AsyncNode):
 async def test_async_merge_concat():
     """Test AsyncMerge with concat operation."""
     # Setup
-    merge_node = AsyncMerge(merge_type="concat")
+    merge_node = AsyncMergeNode(merge_type="concat")
 
     # Execute
     result = await merge_node.execute_async(
@@ -67,7 +67,7 @@ async def test_async_merge_concat():
 async def test_async_merge_dict():
     """Test AsyncMerge with merge_dict operation."""
     # Setup
-    merge_node = AsyncMerge(merge_type="merge_dict")
+    merge_node = AsyncMergeNode(merge_type="merge_dict")
 
     # Execute
     result = await merge_node.execute_async(
@@ -85,7 +85,7 @@ async def test_async_merge_dict():
 async def test_async_merge_with_lists_of_dicts():
     """Test AsyncMerge with lists of dictionaries."""
     # Setup
-    merge_node = AsyncMerge(merge_type="merge_dict", key="id")
+    merge_node = AsyncMergeNode(merge_type="merge_dict", key="id")
 
     # Execute
     result = await merge_node.execute_async(
@@ -106,7 +106,7 @@ async def test_async_merge_with_lists_of_dicts():
 async def test_async_switch_boolean_condition():
     """Test AsyncSwitch with boolean condition."""
     # Setup
-    switch_node = AsyncSwitch()
+    switch_node = AsyncSwitchNode()
 
     # Execute with true condition
     result1 = await switch_node.execute_async(
@@ -135,7 +135,7 @@ async def test_async_switch_boolean_condition():
 async def test_async_switch_multi_case():
     """Test AsyncSwitch with multiple cases."""
     # Setup
-    switch_node = AsyncSwitch()
+    switch_node = AsyncSwitchNode()
 
     # Execute
     result = await switch_node.execute_async(
@@ -162,7 +162,7 @@ async def test_parallel_runtime_execution():
     # Add nodes
     workflow.add_node("source1", SimpleAsyncNode(value=5))
     workflow.add_node("source2", SimpleAsyncNode(value=10))
-    workflow.add_node("merge", AsyncMerge())
+    workflow.add_node("merge", AsyncMergeNode())
 
     # Connect nodes
     workflow.connect("source1", "merge", {"output": "data1"})

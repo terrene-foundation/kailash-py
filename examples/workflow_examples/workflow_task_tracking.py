@@ -14,8 +14,8 @@ from typing import Any, Dict
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import RunSummary, TaskRun, TaskStatus, TaskSummary
@@ -37,7 +37,7 @@ def demonstrate_basic_task_tracking():
     )
 
     # Create nodes
-    reader = CSVReader(name="read_data", file_path="../data/input.csv")
+    reader = CSVReaderNode(name="read_data", file_path="../data/input.csv")
 
     def transform_data(data: list) -> Dict[str, Any]:
         """Simple data transformation."""
@@ -50,7 +50,7 @@ def demonstrate_basic_task_tracking():
 
     transformer = PythonCodeNode.from_function(transform_data, name="transform_data")
 
-    writer = CSVWriter(name="write_results", file_path="../outputs/output.csv")
+    writer = CSVWriterNode(name="write_results", file_path="../outputs/output.csv")
 
     # Add nodes to workflow
     workflow.add_node(
@@ -87,7 +87,7 @@ def demonstrate_basic_task_tracking():
     print(f"Created run: {run_id}")
 
     # Create tasks for each node
-    reader_task = TaskRun(run_id=run_id, node_id="reader", node_type="CSVReader")
+    reader_task = TaskRun(run_id=run_id, node_id="reader", node_type="CSVReaderNode")
     task_manager.save_task(reader_task)
 
     transformer_task = TaskRun(
@@ -95,7 +95,7 @@ def demonstrate_basic_task_tracking():
     )
     task_manager.save_task(transformer_task)
 
-    writer_task = TaskRun(run_id=run_id, node_id="writer", node_type="CSVWriter")
+    writer_task = TaskRun(run_id=run_id, node_id="writer", node_type="CSVWriterNode")
     task_manager.save_task(writer_task)
 
     # Execute workflow with task tracking
@@ -185,7 +185,7 @@ def demonstrate_task_progress_tracking():
     processor = PythonCodeNode.from_function(long_process, name="long_processor")
 
     # Create reader
-    reader = CSVReader(name="data_reader", file_path="../data/large_input.csv")
+    reader = CSVReaderNode(name="data_reader", file_path="../data/large_input.csv")
 
     # Add nodes
     workflow.add_node(

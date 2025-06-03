@@ -88,8 +88,8 @@ class NodeMapper:
             resources=ResourceSpec(cpu="100m", memory="256Mi"),
         )
 
-        self.mappings["CSVReader"] = ContainerMapping(
-            python_node="CSVReader",
+        self.mappings["CSVReaderNode"] = ContainerMapping(
+            python_node="CSVReaderNode",
             container_image="kailash/csv-reader:latest",
             command=["python", "-m", "kailash.nodes.data.csv_reader"],
             resources=ResourceSpec(cpu="100m", memory="512Mi"),

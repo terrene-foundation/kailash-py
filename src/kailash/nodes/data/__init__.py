@@ -57,9 +57,9 @@ All nodes provide detailed error messages for:
 Example Workflows:
     # Traditional ETL
     workflow = Workflow()
-    workflow.add_node('read', CSVReader(file_path='input.csv'))
+    workflow.add_node('read', CSVReaderNode(file_path='input.csv'))
     workflow.add_node('transform', DataTransform())
-    workflow.add_node('write', JSONWriter(file_path='output.json'))
+    workflow.add_node('write', JSONWriterNode(file_path='output.json'))
     workflow.connect('read', 'transform')
     workflow.connect('transform', 'write')
 
@@ -80,7 +80,7 @@ Example Workflows:
     workflow.connect('process', 'publish')
 """
 
-from kailash.nodes.data.readers import CSVReader, JSONReader, TextReader
+from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode, TextReaderNode
 from kailash.nodes.data.retrieval import RelevanceScorerNode
 from kailash.nodes.data.sharepoint_graph import (
     SharePointGraphReader,
@@ -99,18 +99,18 @@ from kailash.nodes.data.vector_db import (
     TextSplitterNode,
     VectorDatabaseNode,
 )
-from kailash.nodes.data.writers import CSVWriter, JSONWriter, TextWriter
+from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriterNode
 
 __all__ = [
     # Readers
-    "CSVReader",
-    "JSONReader",
-    "TextReader",
+    "CSVReaderNode",
+    "JSONReaderNode",
+    "TextReaderNode",
     "SharePointGraphReader",
     # Writers
-    "CSVWriter",
-    "JSONWriter",
-    "TextWriter",
+    "CSVWriterNode",
+    "JSONWriterNode",
+    "TextWriterNode",
     "SharePointGraphWriter",
     # Sources
     "DocumentSourceNode",

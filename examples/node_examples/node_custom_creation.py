@@ -544,8 +544,8 @@ def main():
 
     try:
         # Create a CSV reader to provide input data
-        from kailash.nodes.data.readers import CSVReader
-        from kailash.nodes.data.writers import CSVWriter
+        from kailash.nodes.data.readers import CSVReaderNode
+        from kailash.nodes.data.writers import CSVWriterNode
 
         # Save sample data to CSV
         sample_file = Path("../data/sample_reviews.csv")
@@ -553,8 +553,8 @@ def main():
         pd.DataFrame(sample_reviews).to_csv(sample_file, index=False)
 
         # Create reader node
-        reader = CSVReader(file_path=str(sample_file), headers=True)
-        writer = CSVWriter(file_path="../outputs/sentiment_summary.csv")
+        reader = CSVReaderNode(file_path=str(sample_file), headers=True)
+        writer = CSVWriterNode(file_path="../outputs/sentiment_summary.csv")
 
         # Add to workflow
         workflow.add_node(node_id="reader", node_or_type=reader)

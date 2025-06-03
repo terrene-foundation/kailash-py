@@ -14,7 +14,7 @@
   },
   "nodes": {
     "reader": {
-      "type": "CSVReader",
+      "type": "CSVReaderNode",
       "config": {
         "config": {
           "file_path": "../data/customers.csv"
@@ -93,7 +93,7 @@
       }
     },
     "writer": {
-      "type": "CSVWriter",
+      "type": "CSVWriterNode",
       "config": {
         "config": {
           "file_path": "../data/customer_segments.csv"

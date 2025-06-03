@@ -1,339 +1,203 @@
-# Rules for Claude.md - Kailash Python SDK
-
-## Project Purpose and Background
-
-The Kailash Python SDK is designed to solve a collaboration problem between
-AI Business Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation.
-
-The SDK provides a framework for creating nodes and workflows that align with
-Kailash's container-node architecture while allowing ABCs to prototype rapidly
-without deep technical knowledge.
-
-## Coding Standards and Conventions
-
-### General Principles
-
-1. **Clean Architecture**: Follow the principles of clean architecture with clear separation of concerns.
-2. **Pythonic Style**: Write code that follows Python best practices and idioms.
-3. **Type Hints**: Use type hints throughout the codebase to enhance IDE support and documentation.
-4. **Documentation**: All classes, methods, and functions must have docstrings.
-5. **Error Handling**: Use explicit error handling with descriptive error messages.
-
-### Style Guidelines
-
-1. **Naming Conventions**:
-   - Classes: `PascalCase`
-   - Functions/Methods: `snake_case`
-   - Variables: `snake_case`
-   - Constants: `UPPER_SNAKE_CASE`
-   - Private attributes/methods: `_leading_underscore`
-
-2. **Code Formatting**:
-   - Line length: 88 characters (Black standard)
-   - Use spaces, not tabs (4 spaces per indentation level)
-   - Follow PEP 8 for other formatting guidelines
-
-3. **Imports**:
-   - Group imports in the following order:
-     1. Standard library imports
-     2. Third-party library imports
-     3. Local application imports
-   - Sort them according to isort conventions
-   - Use absolute imports within the package
-
-## Documentation Requirements
-
-1. **Module Docstrings**: Every module should have a docstring explaining its purpose.
-2. **Class Docstrings**: Every class should have a docstring explaining its purpose, behavior, and usage.
-3. **Method Docstrings**: Every public method should have a docstring in the following format:
-   ```python
-   def method(self, arg1, arg2=None):
-       """
-       Short description of the method.
-
-       Longer description if necessary.
-
-       Args:
-           arg1 (type): Description of arg1
-           arg2 (type, optional): Description of arg2. Defaults to None.
-
-       Returns:
-           type: Description of return value
-
-       Raises:
-           ExceptionType: Description of when this exception is raised
-       """
-   ```
-
-4. **Docstrings must comprehensively include the following**
-   - Design purpose and philosophy: Explaining why each component exists
-   - Upstream dependencies: What components create/use this class
-   - Downstream consumers: What components depend on this class
-   - Usage patterns: Common ways the component is used
-   - Implementation details: How the component works internally
-   - Error handling: What exceptions are raised and when
-   - Side effects: Any state changes or external impacts
-   - Examples: Concrete usage examples where helpful
-
-
-## Project Structure
-
-The project structure is recorded in `guide/prd/0000-project_structure.md`. Refer to it when necessary.
-
-## Design Principles
-
-1. **Composition Over Inheritance**:
-   - Prefer composing functionality over deep inheritance hierarchies
-   - Keep inheritance hierarchies shallow (max 2-3 levels)
-
-2. **Single Responsibility Principle**:
-   - Each class should have a single responsibility
-   - Each module should have a clear, focused purpose
-
-3. **Interface Segregation**:
-   - Define clear interfaces through abstract base classes
-   - Keep interfaces small and focused
-
-4. **Dependency Inversion**:
-   - Depend on abstractions, not concretions
-   - Use dependency injection where appropriate
-
-5. **Fail Fast**:
-   - Validate inputs early
-   - Provide clear error messages
-   - Do not silently ignore errors
-
-6. **Clear Component Naming**:
-   - Node components MUST include "Node" suffix in their class names
-   - Do NOT use aliases that hide the component type (e.g., @register_node(alias="RESTClient"))
-   - Users should immediately understand what type of component they're using
-   - Examples: RESTClientNode, HTTPRequestNode, GraphQLClientNode (NOT RESTClient, HTTPRequest, etc.)
-
-## Dependencies
-
-Keep dependencies minimal and explicit:
-
-1. **Core Dependencies**:
-   - `networkx`: For graph representation and operations
-   - `pydantic`: For data validation and schema definition
-   - `matplotlib`: For visualization
-   - `pyyaml`: For YAML serialization/deserialization
-
-2. **Optional Dependencies**:
-   - `pygraphviz`: For advanced visualization (if installed)
-   - `pytest`: For testing
-   - `black` and `isort`: For code formatting
-
-## Implementation Guidelines
-
-1. **Error Handling**:
-   - Define custom exception classes in `exceptions.py`
-   - Use specific exception types for different error conditions
-   - Include context information in exception messages
-
-2. **Configuration**:
-   - Use environment variables for configuration
-   - Provide sensible defaults
-   - Support configuration overrides
-
-3. **Extensibility**:
-   - Design for extension through plugins or custom nodes
-   - Document extension points
-
-4. **Node Naming Standards**:
-   - ALWAYS use full class names with "Node" suffix for all Node components
-   - NEVER create aliases that remove "Node" from the name
-   - Bad: `@register_node(alias="HTTPRequest")` for `HTTPRequestNode`
-   - Good: `@register_node()` for `HTTPRequestNode`
-   - This ensures users always know they're working with a Node component
-
-5. **Performance**:
-   - Optimize for developer experience first
-   - Address performance bottlenecks as identified
-
-6. **Backward Compatibility**:
-   - Maintain compatibility with existing Kailash architecture
-   - Document any breaking changes clearly
-
-## Must Follow: Code Generation Guidelines
-
-1. **PRD Requirements**
-   - Always reference the PRDs in `guide/prd` when generating codes and implementing features.
-   - Update the PRD if requirements change during development
-   - Link ADRs to relevant sections of the PRD
-
-2. **Architecture Decision Records (ADRs)**
-   - All significant architectural decisions should be documented using ADRs:
-     - **README.md**: Follow the instructions in `guide/adr/README.md` for creating and managing ADRs.
-     - **Format**: Follow the ADR template in `guide/adr/`
-     - **Numbering**: Use sequential numbering (e.g., ADR-0001)
-     - **Status**: Mark each ADR as Proposed, Accepted, Deprecated, or Superseded
-     - **Summary**: Update or add a summary of ADRs in guide/adr/README.md
-
-3. **Todos Management**:
-   - Use the TodoRead and TodoWrite tools to manage active tasks during sessions.
-   - **Two-File Todo System** for better Claude Code context management:
-     - **Master File**: `guide/todos/000-master.md` - Active tasks and current priorities only
-     - **Archive File**: `guide/todos/completed-archive.md` - Complete historical record
-
-   **Master File Structure** (`guide/todos/000-master.md`):
-   ```markdown
-   # Project Status Overview
-   - **Category**: Status - Brief description
-
-   ## 🔥 URGENT PRIORITY - Current Client Needs
-   - **High-impact tasks for active client projects**
-
-   ## High Priority - Active Tasks
-   - **Task Name**
-     - Description: Clear, actionable description
-     - Status: To Do | In Progress | Completed
-     - Priority: High | Medium | Low
-     - Details: Implementation specifics or context
-
-   ## Medium/Low Priority Tasks
-   [Same format as above]
-
-   ## Recent Achievements
-   - Brief summary of latest completed work (last 2-3 sessions)
-   - Link to completed-archive.md for full history
-   ```
-
-   **Archive File Structure** (`guide/todos/completed-archive.md`):
-   ```markdown
-   # Completed Tasks Archive
-
-   ## Development Sessions History
-   ### Session XX (Date) ✅
-   - Detailed breakdown of completed tasks
-   - Session statistics and achievements
-   - Links to relevant PRs and commits
-   ```
-
-   - **Organization Principles**:
-     - **Master file**: Focus on current/upcoming work, keep under 300 lines for Claude Code efficiency
-     - **Archive file**: Complete historical record for reference and project documentation
-     - **Recent achievements**: Brief summary in master, detailed history in archive
-     - **Client-driven priorities**: Place urgent client needs at the top of master file
-     - **Session documentation**: Record completed work in archive with proper categorization
-
-   - Other todo files in the same directory should record summaries of completed development cycles
-   - Always queue these verification tasks at the end of each development cycle:
-     - Test examples affected by recent changes
-     - Run unit, integration, and documentation tests
-     - Verify local GitHub Actions tests pass
-     - Update ADRs, todos, and README as needed
-
-4. **Examples**:
-   - Always create example nodes and workflows in the `examples/` directory.
-   - Examples are organized into categories:
-     - `node_examples/` - Individual node usage examples
-     - `workflow_examples/` - Workflow patterns and use cases
-     - `integration_examples/` - API and external system integrations
-     - `visualization_examples/` - Workflow visualization and reporting
-   - Follow naming conventions: `{category}_{description}.py` (e.g., `node_custom_creation.py`, `workflow_basic.py`)
-   - Ensure examples demonstrate best practices and common usage patterns.
-   - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls in examples.
-   - **Testing Examples**: Use `examples/_utils/test_all_examples.py` as the entrypoint to test all examples:
-     ```bash
-     cd examples
-     python _utils/test_all_examples.py
-     ```
-   - This script automatically discovers and validates all example files across all categories
-   - Create a basic, simple, and complex examples, such as:
-     - Basic Node Example: Create a simple node that reads data from a file and writes it to another file
-     - Simple Workflow Example: Create a simple workflow that connects two nodes (e.g., a data reader and a transformer)
-     - Complex Workflow Example: Create a complex workflow that includes multiple nodes, data transformations, and AI model execution
-
-5. **Troubleshooting**:
-   - Always refer to `guide/mistakes/000-master.md` when troubleshooting issues
-
-6. **Unit Tests**:
-   - Ensure that examples have been tested and validated before creating unit tests
-   - Create unit tests for all components using pytest
-   - Maintain >80% code coverage
-   - Place tests in a separate `tests/` directory mirroring the package structure
-   - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
-
-7. **Integration Tests**:
-   - Ensure that unit tests have been created for all components before creating integration tests
-   - Create integration tests for workflow execution
-   - Test export functionality for compatibility with Kailash
-   - Read the `guide/mistakes/000-master.md` file to avoid common pitfalls.
-
-8. **Sphinx Documentation**
-   - Complete API documentation framework in `docs/`
-   - Build with: `cd docs && python build_docs.py`
-   - Auto-deployed via GitHub Actions to GitHub Pages
-   - All public APIs must have comprehensive docstrings with examples
-   - Use Napoleon with Google-style for docstrings
-   - Uses ReStructuredText (reST) format for Sphinx compatibility, which means that code blocks must be preceded by :: followed by a newline, and indentation must be consistent.
-
-9. **Documentation Tests**:
-   - Include examples in docstrings that can be verified with doctest
-
-10. **Mistakes**: Record all coding mistakes in `guide/mistakes/000-master.md`
-    - Include:
-      - Description of the mistake
-      - Code example that caused the issue
-      - Solution or fix applied
-
-11. **Update README.md**:
-    - Overview of the project
-    - Installation instructions
-    - Quick start guide
-    - Usage examples
-    - API reference
-    - Contribution guidelines
-    - Reference to the PRD and ADRs
-
-12. **Update ADRs**:
-    - Ensure all architectural decisions are documented in the ADRs.
-    - Link relevant ADRs to the PRD and README.md.
-    - Update ADRs as new decisions are made or existing ones are modified.
-
-13. **Update Claude.md**:
-    - If there are any changes to the coding standards, conventions, or design principles, update the Claude.md file accordingly.
-    - Update the project structure if there are any changes to the directory layout or file organization.
-
-14. ** Update CHANGELOG.md**:
-    - Record all changes made in the current development cycle.
-    - Include:
-      - New features
-      - Bug fixes
-      - Improvements
-      - Breaking changes
-    - Use a clear and consistent format for each entry.
-
-15. **Pre-commit Hooks and Code Quality**:
-    - **Pre-commit Setup**: Use automated pre-commit hooks to enforce coding standards
-    - **Automated Hooks Configuration** (`.pre-commit-config.yaml`):
-      - **Black**: Code formatting (88 character line length)
-      - **isort**: Import sorting (Black-compatible profile)
-      - **Ruff**: Fast Python linting with auto-fixes
-      - **pytest**: Unit tests (subset for speed)
-      - **Trivy**: Security vulnerability scanning
-      - **detect-secrets**: Secret detection with baseline
-      - **doc8**: Documentation linting
-      - **mypy**: Type checking
-      - **Built-in checks**: Whitespace, file endings, syntax validation
-    - **Development Workflow**:
-      - Hooks run automatically on every commit
-      - Failed hooks prevent commits (encourages fixing issues immediately)
-      - Manual formatting commands still available when needed
-      - See `guide/development/pre-commit-hooks.md` for comprehensive documentation
-
-16. **Github Actions**:
-    - Use Github Actions for continuous integration.
-    - Test locally before pushing changes.
-
-17. **Github Issues and Project Update**:
-    - Use the Github Issues and Projects to track tasks and progress.
-    - Create issues for each task in the Todo list, describing the task and linking to the relevant ADR or PRD.
-    - Update the project board as tasks are completed.
-
-# important-instruction-reminders
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+# Kailash Python SDK - LLM Instructions
+
+## 🚨 CRITICAL: Check These First!
+
+### 1. TODO LIST - ALWAYS CHECK FIRST
+**`guide/todos/000-master.md`** - Current tasks and priorities
+- Check what's in progress
+- See urgent priorities
+- Understand project status
+
+### 2. API Reference
+**STOP!** Before generating ANY code:
+1. Open `guide/reference/api-registry.yaml` for exact APIs
+2. Check `guide/reference/validation-guide.md` for rules
+3. Never guess method names or parameters
+
+## Quick Links
+- **TODO LIST (CRITICAL)**: `guide/todos/000-master.md` ← CHECK FIRST!
+- **API Reference**: `guide/reference/api-registry.yaml`
+- **Common Patterns**: `guide/reference/cheatsheet.md`
+- **Validation**: `guide/reference/validate_kailash_code.py`
+- **Mistakes Log**: `guide/mistakes/000-master.md`
+- **Project Structure**: `guide/prd/0000-project_structure.md`
+
+## Core Rules (MEMORIZE THESE)
+1. **ALL node classes end with "Node"**: `CSVReaderNode` ✓, `CSVReader` ✗
+2. **ALL methods use snake_case**: `add_node()` ✓, `addNode()` ✗
+3. **ALL config keys use underscores**: `file_path` ✓, `filePath` ✗
+4. **Workflow execution patterns**: `runtime.execute(workflow)` ✓, `workflow.execute(runtime)` ✗
+5. **Parameter order is STRICT**: Check exact signatures in api-registry.yaml
+6. **Docstring examples use doctest format**: `>>> code` ✓, `:: code` ✗
+
+## 📋 TODO Management System (CRITICAL)
+
+The todo system in `guide/todos/` is the central task tracking system:
+
+### File Structure:
+- **`000-master.md`** - ACTIVE TODO LIST (Always check first!)
+  - Current tasks and priorities
+  - Tasks in progress
+  - Urgent client needs
+  - Recent achievements
+
+- **`completed-archive.md`** - Historical record
+  - All completed tasks from past sessions
+  - Detailed implementation notes
+  - Session summaries and statistics
+
+- **Numbered files** (001-xxx.md) - Session-specific logs
+  - How todos were approached and resolved
+  - Challenges faced and solutions found
+  - Lessons learned for future reference
+
+### When to Update:
+- **Start of session**: Check 000-master.md for priorities
+- **Starting a task**: Mark as "In Progress"
+- **Completing a task**: Mark as "Completed" immediately
+- **Finding new tasks**: Add to appropriate priority level
+- **End of session**: Move completed tasks to archive
+
+## Project Context
+The Kailash Python SDK enables AI Business Coaches (ABCs) to create workflows using a node-based architecture. It provides a Python-friendly interface while maintaining compatibility with Kailash's container-node system.
+
+## Primary Workflows
+
+### 1. Development Workflow (Any Task)
+# START: Check todos and plan
+1. Check guide/todos/000-master.md for priorities
+2. Mark task as "In Progress"
+3. Check relevant ADRs and reference docs
+
+# IMPLEMENT: Write code
+4. Use guide/reference/api-registry.yaml for exact APIs
+5. Follow patterns from guide/reference/cheatsheet.md
+6. Write examples FIRST:
+   - Create basic example in examples/{category}_examples/
+   - Create complex example showing advanced usage
+   - Validate: python guide/reference/validate_kailash_code.py your_examples.py
+   - Run examples to ensure they work
+7. Implement the actual feature/fix
+
+# TEST: Verify everything works
+8. Write tests based on your examples:
+   - Break down examples into test components
+   - Test edge cases not covered in examples
+   - Run new tests: pytest tests/test_your_module.py
+9. Run ALL examples: cd examples && python _utils/test_all_examples.py
+10. Run ALL tests: pytest
+11. Run doctests: python -m doctest -v src/kailash/**/*.py
+12. Run linting: black . && isort . && ruff check .
+
+# DOCUMENT: Update all docs
+13. Update guide/todos/000-master.md (mark completed, add new tasks)
+14. Document mistakes in guide/mistakes/000-master.md
+15. Update reference docs if APIs changed:
+    - guide/reference/api-registry.yaml
+    - guide/reference/api-validation-schema.json
+    - guide/reference/cheatsheet.md
+16. Update READMEs and Sphinx docs if needed
+17. Update CHANGELOG.md
+
+# FINALIZE: Prepare for commit
+18. Build Sphinx: cd docs && python build_docs.py
+19. Review all changes
+20. Commit with descriptive message
+21. Push to GitHub
+
+### 2. Specific Task Patterns
+
+#### Creating Examples
+- Location: `examples/{category}_examples/`
+- Naming: `{category}_{description}.py`
+- Must pass validation and test_all_examples.py
+
+#### Writing Tests
+- Location: `tests/` (mirror src structure)
+- Coverage: Maintain >80%
+- Run full test suite before committing
+
+#### Adding New Features
+- Start with ADR if architectural change
+- Update all reference documentation
+- Create examples showing usage
+- Write comprehensive tests
+
+## Common Task Checklists
+
+### □ Adding a New Node
+- [ ] Name ends with "Node" (e.g., `MyCustomNode`)
+- [ ] Inherits from `Node` or `AsyncNode`
+- [ ] Has `get_parameters()` and `run()` methods (required)
+- [ ] Has `get_output_schema()` method (optional, for output validation)
+- [ ] Update `guide/reference/api-registry.yaml`
+- [ ] Create example in `examples/node_examples/`
+- [ ] Write unit tests
+- [ ] Update docs
+
+### □ Creating a Workflow Example
+- [ ] Import from correct paths (check api-registry.yaml)
+- [ ] Use exact method names (snake_case)
+- [ ] Include all required parameters
+- [ ] Validate with `validate_kailash_code.py`
+- [ ] Test with `test_all_examples.py`
+
+### □ Updating API
+- [ ] Update `guide/reference/api-registry.yaml`
+- [ ] Update `guide/reference/api-validation-schema.json`
+- [ ] Update examples in `guide/reference/cheatsheet.md`
+- [ ] Run validation tests
+- [ ] Update CHANGELOG.md
+
+## Quick Validation Commands
+```bash
+# Validate a single file
+python guide/reference/validate_kailash_code.py myfile.py
+
+# Test all examples
+cd examples && python _utils/test_all_examples.py
+
+# Run unit tests
+pytest tests/ -v
+
+# Run pre-commit checks
+pre-commit run --all-files
+
+# Build documentation
+cd docs && python build_docs.py
+```
+
+## Directory Structure
+```
+kailash_python_sdk/
+├── src/kailash/          # Source code
+├── tests/                # Unit tests
+├── examples/             # Example code
+├── docs/                 # Sphinx documentation
+├── guide/                # Development guides
+│   ├── todos/           # TODO TRACKING (CHECK FIRST!)
+│   │   ├── 000-master.md      # Active tasks
+│   │   ├── completed-archive.md # Historical record
+│   │   └── 001-xxx.md         # Session logs
+│   ├── reference/        # LLM reference docs
+│   ├── instructions/     # Detailed instructions
+│   ├── adr/             # Architecture decisions
+│   ├── prd/             # Product requirements
+│   └── mistakes/        # Common mistakes log
+```
+
+## Important Reminders
+- **Do only what's asked** - nothing more, nothing less
+- **Never create unnecessary files** - prefer editing existing ones
+- **Always validate generated code** before submitting
+- **Follow the Development Workflow** above for all tasks
+- **All key references are in Quick Links** at the top
+
+## Need More Detail?
+
+For deep dives into specific topics, see `guide/instructions/`:
+- Coding conventions → `coding-standards.md`
+- Documentation formats → `documentation-requirements.md`
+- Testing patterns → `testing-guidelines.md`
+- Development process → `workflow-procedures.md`
+- Release & maintenance → `maintenance-procedures.md`

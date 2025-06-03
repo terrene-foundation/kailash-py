@@ -29,9 +29,9 @@ The core class for building and managing workflows.
    workflow = Workflow("data_pipeline")
 
    # Add nodes
-   workflow.add_node("CSVReader", "input", config={"file_path": "data.csv"})
+   workflow.add_node("CSVReaderNode", "input", config={"file_path": "data.csv"})
    workflow.add_node("DataFilter", "filter", config={"column": "active", "value": True})
-   workflow.add_node("CSVWriter", "output", config={"file_path": "filtered.csv"})
+   workflow.add_node("CSVWriterNode", "output", config={"file_path": "filtered.csv"})
 
    # Connect nodes
    workflow.connect_sequential(["input", "filter", "output"])
@@ -59,7 +59,7 @@ Builder pattern for constructing workflows programmatically.
    builder = WorkflowBuilder("etl_pipeline")
 
    workflow = (builder
-       .add_node("CSVReader", "extract", config={"file_path": "input.csv"})
+       .add_node("CSVReaderNode", "extract", config={"file_path": "input.csv"})
        .add_node("DataTransformer", "transform", config={
            "operations": [
                {"type": "rename", "old": "id", "new": "customer_id"},
@@ -195,7 +195,7 @@ Execute multiple branches concurrently:
    workflow = Workflow("parallel")
 
    # Source node
-   workflow.add_node("CSVReader", "source", config={"file_path": "data.csv"})
+   workflow.add_node("CSVReaderNode", "source", config={"file_path": "data.csv"})
 
    # Parallel branches
    workflow.add_node("DataFilter", "filter1", config={"column": "type", "value": "A"})
@@ -203,7 +203,7 @@ Execute multiple branches concurrently:
    workflow.add_node("DataFilter", "filter3", config={"column": "type", "value": "C"})
 
    # Merge results
-   workflow.add_node("Merge", "combine", config={"strategy": "concat"})
+   workflow.add_node("MergeNode", "combine", config={"strategy": "concat"})
 
    # Connect
    for filter_id in ["filter1", "filter2", "filter3"]:
@@ -220,7 +220,7 @@ Route data based on conditions:
    workflow = Workflow("conditional")
 
    # Add switch node
-   workflow.add_node("Switch", "router", config={
+   workflow.add_node("SwitchNode", "router", config={
        "condition": "priority",
        "routes": {
            "high": "priority == 'high'",
@@ -301,9 +301,9 @@ Build workflows dynamically based on configuration:
    # Use configuration
    config = {
        "steps": [
-           {"type": "CSVReader", "id": "input", "config": {"file_path": "data.csv"}},
+           {"type": "CSVReaderNode", "id": "input", "config": {"file_path": "data.csv"}},
            {"type": "DataFilter", "id": "filter", "config": {"column": "active", "value": True}},
-           {"type": "CSVWriter", "id": "output", "config": {"file_path": "output.csv"}}
+           {"type": "CSVWriterNode", "id": "output", "config": {"file_path": "output.csv"}}
        ],
        "connections": [
            {"from": "input", "to": "filter"},
@@ -390,11 +390,11 @@ Best Practices
 .. code-block:: python
 
    # Good
-   workflow.add_node("CSVReader", "read_customer_data", ...)
+   workflow.add_node("CSVReaderNode", "read_customer_data", ...)
    workflow.add_node("DataFilter", "filter_active_customers", ...)
 
    # Avoid
-   workflow.add_node("CSVReader", "node1", ...)
+   workflow.add_node("CSVReaderNode", "node1", ...)
    workflow.add_node("DataFilter", "node2", ...)
 
 2. **Validate Early**

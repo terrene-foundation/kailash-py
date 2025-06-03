@@ -15,8 +15,8 @@ import pandas as pd
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
 
@@ -158,7 +158,7 @@ def main():
 
     # Step 1: Create nodes
     # CSV reader node
-    csv_reader = CSVReader(
+    csv_reader = CSVReaderNode(
         file_path=str(sample_directory / "customer_value.csv"),
         headers=True,
         delimiter=",",
@@ -171,13 +171,13 @@ def main():
     summary_node = create_summary_node()
 
     # CSV writer nodes (data will come from connections)
-    csv_writer_filtered = CSVWriter(
+    csv_writer_filtered = CSVWriterNode(
         file_path=str(output_directory / "filtered_customers.csv"),
         delimiter=",",
         headers=None,  # headers will be auto-detected from dict data
     )
 
-    csv_writer_summary = CSVWriter(
+    csv_writer_summary = CSVWriterNode(
         file_path=str(output_directory / "customer_summary.csv"),
         delimiter=",",
         headers=None,  # headers will be auto-detected from dict data
@@ -283,7 +283,7 @@ def main():
     print("\n=== Direct Node Execution (outside workflow) ===")
 
     # Read data directly
-    csv_reader_direct = CSVReader(
+    csv_reader_direct = CSVReaderNode(
         file_path=str(sample_directory / "customer_value.csv"), headers=True
     )
     csv_result = csv_reader_direct.execute()

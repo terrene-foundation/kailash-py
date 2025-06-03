@@ -26,7 +26,7 @@ builder = WorkflowBuilder()
 
 # Add nodes
 reader_id = builder.add_node(
-    "CSVReader",
+    "CSVReaderNode",
     "reader",
     config={{"file_path": "{sample_csv_file}"}}
 )
@@ -38,7 +38,7 @@ filter_id = builder.add_node(
 )
 
 writer_id = builder.add_node(
-    "CSVWriter",
+    "CSVWriterNode",
     "writer",
     config={{"file_path": "{temp_data_dir / 'output.csv'}"}}
 )
@@ -74,9 +74,9 @@ workflow = builder.build("cli_test_workflow")
 from kailash.workflow import WorkflowBuilder
 
 builder = WorkflowBuilder()
-reader_id = builder.add_node("CSVReader", "reader", config={{"file_path": "{sample_csv_file}"}})
+reader_id = builder.add_node("CSVReaderNode", "reader", config={{"file_path": "{sample_csv_file}"}})
 filter_id = builder.add_node("Filter", "filter", config={{"field": "value", "operator": ">", "value": 100}})
-writer_id = builder.add_node("CSVWriter", "writer", config={{"file_path": "{temp_data_dir / 'output.csv'}"}})
+writer_id = builder.add_node("CSVWriterNode", "writer", config={{"file_path": "{temp_data_dir / 'output.csv'}"}})
 builder.add_connection(reader_id, "data", filter_id, "data")
 builder.add_connection(filter_id, "filtered_data", writer_id, "data")
 workflow = builder.build("validation_test")
@@ -101,9 +101,9 @@ workflow = builder.build("validation_test")
 from kailash.workflow import WorkflowBuilder
 
 builder = WorkflowBuilder()
-reader_id = builder.add_node("CSVReader", "reader", config={{"file_path": "{sample_csv_file}"}})
+reader_id = builder.add_node("CSVReaderNode", "reader", config={{"file_path": "{sample_csv_file}"}})
 filter_id = builder.add_node("Filter", "filter", config={{"field": "value", "operator": ">", "value": 100}})
-writer_id = builder.add_node("CSVWriter", "writer", config={{"file_path": "{temp_data_dir / 'output.csv'}"}})
+writer_id = builder.add_node("CSVWriterNode", "writer", config={{"file_path": "{temp_data_dir / 'output.csv'}"}})
 builder.add_connection(reader_id, "data", filter_id, "data")
 builder.add_connection(filter_id, "filtered_data", writer_id, "data")
 workflow = builder.build("export_test")
@@ -142,19 +142,19 @@ workflow = builder.build("export_test")
 
         assert result.returncode == 0
         assert "Available nodes:" in result.stdout
-        assert "CSVReader" in result.stdout
+        assert "CSVReaderNode" in result.stdout
         assert "Filter" in result.stdout
 
     def test_cli_describe_node(self):
         """Test describing a specific node via CLI."""
         result = subprocess.run(
-            [sys.executable, "-m", "kailash", "nodes", "info", "CSVReader"],
+            [sys.executable, "-m", "kailash", "nodes", "info", "CSVReaderNode"],
             capture_output=True,
             text=True,
         )
 
         assert result.returncode == 0
-        assert "CSVReader" in result.stdout
+        assert "CSVReaderNode" in result.stdout
         assert "Parameters:" in result.stdout or "Inputs:" in result.stdout
         assert "file_path" in result.stdout
 
@@ -247,9 +247,9 @@ workflow = builder.build("export_test")
 from kailash.workflow import WorkflowBuilder
 
 builder = WorkflowBuilder()
-reader_id = builder.add_node("CSVReader", "reader", config={{"file_path": "{sample_csv_file}"}})
+reader_id = builder.add_node("CSVReaderNode", "reader", config={{"file_path": "{sample_csv_file}"}})
 filter_id = builder.add_node("Filter", "filter", config={{"field": "value", "operator": ">", "value": 100}})
-writer_id = builder.add_node("CSVWriter", "writer", config={{"file_path": "{temp_data_dir / 'filtered.csv'}"}})
+writer_id = builder.add_node("CSVWriterNode", "writer", config={{"file_path": "{temp_data_dir / 'filtered.csv'}"}})
 builder.add_connection(reader_id, "data", filter_id, "data")
 builder.add_connection(filter_id, "filtered_data", writer_id, "data")
 workflow = builder.build("params_test")

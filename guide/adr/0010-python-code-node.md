@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-The Kailash Python SDK provides a framework for creating nodes and workflows that align with Kailash's container-node architecture. While predefined node types (CSVReader, JSONWriter, etc.) cover many common use cases, users often need to implement custom logic that doesn't fit neatly into existing node categories.
+The Kailash Python SDK provides a framework for creating nodes and workflows that align with Kailash's container-node architecture. While predefined node types (CSVReaderNode, JSONWriterNode, etc.) cover many common use cases, users often need to implement custom logic that doesn't fit neatly into existing node categories.
 
 We need to provide a flexible mechanism for users to:
 1. Execute arbitrary Python code within workflows

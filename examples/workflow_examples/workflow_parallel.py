@@ -11,7 +11,7 @@ import time
 from typing import Any, Dict
 
 from kailash.nodes.base_async import AsyncNode
-from kailash.nodes.logic.async_operations import AsyncMerge, AsyncSwitch
+from kailash.nodes.logic.async_operations import AsyncMergeNode, AsyncSwitchNode
 from kailash.runtime.parallel import ParallelRuntime
 from kailash.workflow import Workflow
 
@@ -361,7 +361,7 @@ async def create_and_run_workflow():
     workflow.connect("filter_high_value", "enrich_data", {"output": "input"})
 
     # Add merge node to combine all processed data
-    workflow.add_node("merge_all", AsyncMerge(merge_type="concat", chunk_size=100))
+    workflow.add_node("merge_all", AsyncMergeNode(merge_type="concat", chunk_size=100))
 
     # Connect processors and enrichment to merge
     workflow.connect("process_b", "merge_all", {"output": "data1"})
@@ -376,7 +376,8 @@ async def create_and_run_workflow():
 
     # Add switch node to route data based on count
     workflow.add_node(
-        "route_by_size", AsyncSwitch(condition_field="count", operator=">", value=300)
+        "route_by_size",
+        AsyncSwitchNode(condition_field="count", operator=">", value=300),
     )
 
     # Connect summary to switch

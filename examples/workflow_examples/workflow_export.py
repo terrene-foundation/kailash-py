@@ -17,8 +17,8 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.utils.export import ExportConfig, WorkflowExporter, export_workflow
 from kailash.workflow.graph import Workflow
@@ -39,7 +39,7 @@ def create_sample_workflow():
     workflow.metadata["author"] = "John Doe"
 
     # Create nodes
-    csv_reader = CSVReader(file_path="../data/customers.csv", headers=True)
+    csv_reader = CSVReaderNode(file_path="../data/customers.csv", headers=True)
 
     # Create transformer using PythonCodeNode
     def transform_data(data: list) -> Dict[str, Any]:
@@ -87,7 +87,7 @@ def create_sample_workflow():
         output_schema=output_schema,
     )
 
-    csv_writer = CSVWriter(file_path="../data/export_results.csv")
+    csv_writer = CSVWriterNode(file_path="../data/export_results.csv")
 
     # Add nodes to workflow with configuration
     workflow.add_node(
@@ -299,7 +299,7 @@ def demonstrate_export_validation():
     workflow = Workflow(workflow_id="test_workflow", name="test_workflow")
 
     # Add an incomplete node
-    csv_reader = CSVReader(file_path="../data/test.csv", headers=True)
+    csv_reader = CSVReaderNode(file_path="../data/test.csv", headers=True)
     workflow.add_node(node_id="reader", node_or_type=csv_reader)
     # Note: No configuration provided for reader
 

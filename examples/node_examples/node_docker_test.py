@@ -551,13 +551,13 @@ ENTRYPOINT ["/app/entrypoint.py"]
 def create_test_workflow():
     """Create a sample workflow for testing."""
     from kailash.nodes.code.python import PythonCodeNode
-    from kailash.nodes.data.readers import CSVReader
-    from kailash.nodes.data.writers import CSVWriter
+    from kailash.nodes.data.readers import CSVReaderNode
+    from kailash.nodes.data.writers import CSVWriterNode
 
     workflow = Workflow(workflow_id="docker_test_workflow", name="docker_test_workflow")
 
     # Create nodes
-    reader = CSVReader(file_path="../data/customers.csv", headers=True)
+    reader = CSVReaderNode(file_path="../data/customers.csv", headers=True)
 
     def process_data(data):
         """Simple data processing function."""
@@ -579,7 +579,7 @@ def create_test_workflow():
         output_schema=output_schema,
     )
 
-    writer = CSVWriter(file_path="../outputs/processed_output.csv")
+    writer = CSVWriterNode(file_path="../outputs/processed_output.csv")
 
     # Add nodes to workflow
     workflow.add_node("reader", reader)

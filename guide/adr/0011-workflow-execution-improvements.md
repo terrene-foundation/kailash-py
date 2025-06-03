@@ -23,7 +23,7 @@ We will implement several improvements to the workflow execution system:
 
 1. **Enhanced Node Execution Contract**:
    - Add `execute(**runtime_inputs)` method signature to all nodes
-   - Merge runtime inputs with stored configuration
+   - MergeNode runtime inputs with stored configuration
    - Validate combined parameters
    - Maintain backward compatibility with existing node implementations
 
@@ -81,7 +81,7 @@ We will implement several improvements to the workflow execution system:
    - Enhanced type validation to handle Any types correctly
    - Improved error reporting for validation failures
 
-2. **CSVWriter and Other Writer Nodes**:
+2. **CSVWriterNode and Other Writer Nodes**:
    - Made `data` parameter non-required for workflow usage
    - Updated validation to check for required parameters at execution time
 

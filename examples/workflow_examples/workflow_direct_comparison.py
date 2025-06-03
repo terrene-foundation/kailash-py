@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
 
@@ -18,7 +18,7 @@ def direct_execution_example():
     )
 
     # Create and configure nodes with all parameters
-    reader = CSVReader(
+    reader = CSVReaderNode(
         file_path="../tests/sample_data/customer_value.csv", headers=True
     )
 
@@ -27,7 +27,7 @@ def direct_execution_example():
     print(f"Direct execution: Read {len(result['data'])} rows")
 
     # Create writer with data available upfront
-    writer = CSVWriter(
+    writer = CSVWriterNode(
         file_path="../outputs/direct_output.csv",
         data=result["data"],  # Data provided at creation time
         # Don't provide headers=True for dict data - let it auto-detect
@@ -51,11 +51,11 @@ def workflow_execution_example():
     workflow = Workflow(workflow_id="csv_processing", name="CSV Processing")
 
     # Create nodes - writer doesn't need data at creation time
-    reader = CSVReader(
+    reader = CSVReaderNode(
         file_path="../tests/sample_data/customer_value.csv", headers=True
     )
 
-    writer = CSVWriter(
+    writer = CSVWriterNode(
         file_path="../outputs/workflow_output.csv",
         # Note: No data parameter - it will come from the connection
         # Don't provide headers=True for dict data - let it auto-detect

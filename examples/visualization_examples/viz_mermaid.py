@@ -12,7 +12,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import CSVReader, CSVWriter, JSONReader, JSONWriter
+from kailash.nodes.data import (
+    CSVReaderNode,
+    CSVWriterNode,
+    JSONReaderNode,
+    JSONWriterNode,
+)
 from kailash.nodes.transform import DataTransformer
 from kailash.workflow import MermaidVisualizer, Workflow
 from kailash.workflow.builder import WorkflowBuilder
@@ -27,9 +32,9 @@ def create_simple_workflow() -> Workflow:
     )
 
     # Create node instances
-    reader = CSVReader(file_path="../data/input.csv", headers=True)
+    reader = CSVReaderNode(file_path="../data/input.csv", headers=True)
     transformer = DataTransformer(transformations=["lambda x: x"])
-    writer = CSVWriter(file_path="../outputs/output.csv")
+    writer = CSVWriterNode(file_path="../outputs/output.csv")
 
     # Add nodes to workflow
     workflow.add_node(node_id="reader", node_or_type=reader)
@@ -49,12 +54,12 @@ def create_complex_workflow() -> Workflow:
 
     # Input nodes (using config for builder pattern)
     csv_reader = builder.add_node(
-        "CSVReader",
+        "CSVReaderNode",
         "customer_reader",
         {"file_path": "../data/customers.csv", "headers": True},
     )
     json_reader = builder.add_node(
-        "JSONReader",
+        "JSONReaderNode",
         "transaction_reader",
         {"file_path": "../data/transactions.json"},
     )
@@ -71,7 +76,7 @@ def create_complex_workflow() -> Workflow:
 
     # Conditional routing
     switch = builder.add_node(
-        "Switch",
+        "SwitchNode",
         "quality_router",
         {"field": "quality", "cases": ["high", "low", "error"]},
     )
@@ -101,11 +106,11 @@ def create_complex_workflow() -> Workflow:
     )
 
     # Merge results
-    merger = builder.add_node("Merge", "result_merger", {})
+    merger = builder.add_node("MergeNode", "result_merger", {})
 
     # Output
     json_writer = builder.add_node(
-        "JSONWriter", "final_output", {"file_path": "../outputs/output.json"}
+        "JSONWriterNode", "final_output", {"file_path": "../outputs/output.json"}
     )
 
     # Connect the workflow
@@ -114,7 +119,7 @@ def create_complex_workflow() -> Workflow:
 
     builder.add_connection(validator, "validated_data", switch, "input")
 
-    # Switch outputs to different paths
+    # SwitchNode outputs to different paths
     builder.add_connection(switch, "case_high", high_quality, "data")
     builder.add_connection(switch, "case_low", low_quality, "data")
     builder.add_connection(switch, "case_error", error_handler, "data")
@@ -123,7 +128,7 @@ def create_complex_workflow() -> Workflow:
     builder.add_connection(high_quality, "transformed_data", aggregator, "data")
     builder.add_connection(aggregator, "transformed_data", normalizer, "data")
 
-    # Merge all paths
+    # MergeNode all paths
     builder.add_connection(normalizer, "transformed_data", merger, "input1")
     builder.add_connection(low_quality, "filtered_data", merger, "input2")
     builder.add_connection(error_handler, "handled_errors", merger, "input3")
@@ -218,12 +223,12 @@ def demonstrate_mermaid_visualization():
     )
 
     # Create node instances
-    fetch_data = JSONReader(file_path="../data/transactions.json")
+    fetch_data = JSONReaderNode(file_path="../data/transactions.json")
     process_data = PythonCodeNode(
         name="ProcessData", code="def execute(data):\n    return {'processed': data}"
     )
     transform_data = DataTransformer(transformations=["lambda x: {'final': x}"])
-    save_results = JSONWriter(file_path="../outputs/api_results.json")
+    save_results = JSONWriterNode(file_path="../outputs/api_results.json")
 
     # Add nodes to workflow
     api_workflow.add_node(node_id="fetch_data", node_or_type=fetch_data)

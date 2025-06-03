@@ -144,6 +144,7 @@ class CodeExecutor:
             "filter",
             "float",
             "int",
+            "isinstance",  # Common type checking
             "len",
             "list",
             "map",
@@ -546,48 +547,47 @@ class PythonCodeNode(Node):
     - State management for class-based nodes
     - AST-based security validation
 
-    Example::
+    Example:
+        >>> # Function-based node
+        >>> def custom_filter(data: pd.DataFrame, threshold: float) -> pd.DataFrame:
+        ...     return data[data['value'] > threshold]
 
-        # Function-based node
-        def custom_filter(data: pd.DataFrame, threshold: float) -> pd.DataFrame:
-            return data[data['value'] > threshold]
+        >>> node = PythonCodeNode.from_function(
+        ...     func=custom_filter,
+        ...     name="threshold_filter"
+        ... )
 
-        node = PythonCodeNode.from_function(
-            func=custom_filter,
-            name="threshold_filter"
-        )
+        >>> # Class-based stateful node
+        >>> class MovingAverage:
+        ...     def __init__(self, window_size: int = 3):
+        ...         self.window_size = window_size
+        ...         self.values = []
+        ...
+        ...     def process(self, value: float) -> float:
+        ...         self.values.append(value)
+        ...         if len(self.values) > self.window_size:
+        ...             self.values.pop(0)
+        ...         return sum(self.values) / len(self.values)
 
-        # Class-based stateful node
-        class MovingAverage:
-            def __init__(self, window_size: int = 3):
-                self.window_size = window_size
-                self.values = []
+        >>> node = PythonCodeNode.from_class(
+        ...     cls=MovingAverage,
+        ...     name="moving_avg"
+        ... )
 
-            def process(self, value: float) -> float:
-                self.values.append(value)
-                if len(self.values) > self.window_size:
-                    self.values.pop(0)
-                return sum(self.values) / len(self.values)
+        >>> # Code string node
+        >>> code = '''
+        ... result = []
+        ... for item in data:
+        ...     if item > threshold:
+        ...         result.append(item * 2)
+        ... '''
 
-        node = PythonCodeNode.from_class(
-            cls=MovingAverage,
-            name="moving_avg"
-        )
-
-        # Code string node
-        code = '''
-        result = []
-        for item in data:
-            if item > threshold:
-                result.append(item * 2)
-        '''
-
-        node = PythonCodeNode(
-            name="custom_processor",
-            code=code,
-            input_types={'data': list, 'threshold': float},
-            output_type=list
-        )
+        >>> node = PythonCodeNode(
+        ...     name="custom_processor",
+        ...     code=code,
+        ...     input_types={'data': list, 'threshold': float},
+        ...     output_type=list
+        ... )
     """
 
     def __init__(
@@ -726,6 +726,25 @@ class PythonCodeNode(Node):
                     )
 
         return parameters
+
+    def validate_inputs(self, **kwargs) -> Dict[str, Any]:
+        """Validate runtime inputs.
+
+        For code-based nodes, we accept any inputs since the code
+        can use whatever variables it needs.
+
+        Args:
+            **kwargs: Runtime inputs
+
+        Returns:
+            All inputs as-is for code nodes, validated inputs for function/class nodes
+        """
+        # If using code string, pass through all inputs
+        if self.code:
+            return kwargs
+
+        # Otherwise use standard validation for function/class nodes
+        return super().validate_inputs(**kwargs)
 
     def get_output_schema(self) -> Dict[str, "NodeParameter"]:
         """Define output parameters for this node.

@@ -22,13 +22,13 @@ This file documents all the initial tasks that were completed during the foundat
   - Discovery API
   - Catalog metadata
 
-### 3. Implement basic node types (CSVReader, JSONReader, TextReader)
+### 3. Implement basic node types (CSVReaderNode, JSONReaderNode, TextReaderNode)
 - **Status**: Completed (Issue #3) - Closed on 2025-05-16
 - **Description**: Created the basic data reader nodes that serve as data sources for workflows
 - **Deliverables**:
-  - CSVReader implementation
-  - JSONReader implementation
-  - TextReader implementation
+  - CSVReaderNode implementation
+  - JSONReaderNode implementation
+  - TextReaderNode implementation
   - Unit tests for each reader
 
 ### 4. Create Workflow class for DAG definition

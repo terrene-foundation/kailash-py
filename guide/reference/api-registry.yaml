@@ -1,0 +1,483 @@
+# Kailash SDK API Registry
+# LLM-optimized reference for quick API lookup
+# Version: 0.1.3
+
+workflow:
+  class: kailash.Workflow
+  description: "Core workflow management class"
+  import: "from kailash import Workflow"
+  methods:
+    add_node:
+      signature: "add_node(node_id: str, node_or_type: Any, **config) -> None"
+      description: "Add a node to the workflow"
+      params:
+        node_id: "Unique identifier for the node"
+        node_or_type: "Node instance, Node class, or node type name"
+        config: "Configuration as keyword arguments"
+      example: |
+        workflow.add_node('reader', CSVReaderNode(), file_path='data.csv')
+    
+    connect:
+      signature: "connect(source_node: str, target_node: str, mapping: Optional[Dict[str, str]] = None) -> None"
+      description: "Connect two nodes in the workflow"
+      params:
+        source_node: "Source node ID"
+        target_node: "Target node ID"
+        mapping: "Dictionary mapping source outputs to target inputs"
+      example: |
+        workflow.connect('reader', 'processor', mapping={'data': 'data'})
+        workflow.connect('processor', 'writer')
+    
+    execute:
+      signature: "execute(inputs: Optional[Dict[str, Any]] = None, task_manager: Optional[TaskManager] = None) -> Dict[str, Any]"
+      description: "Execute the workflow directly"
+      params:
+        inputs: "Initial inputs to the workflow"
+        task_manager: "Optional task manager for tracking"
+      example: |
+        # Direct execution
+        results = workflow.execute(inputs={'input_data': [1, 2, 3]})
+        
+        # Or through runtime
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow, inputs={'input_data': [1, 2, 3]})
+    
+    validate:
+      signature: "validate() -> bool"
+      description: "Validate workflow structure and connections"
+      example: |
+        workflow.validate()  # Raises exception if invalid
+    
+    to_dict:
+      signature: "to_dict() -> dict"
+      description: "Export workflow as dictionary"
+      example: |
+        workflow_dict = workflow.to_dict()
+    
+    from_dict:
+      signature: "from_dict(data: dict) -> Workflow"
+      description: "Create workflow from dictionary"
+      example: |
+        workflow = Workflow.from_dict(workflow_dict)
+
+workflow_builder:
+  class: kailash.WorkflowBuilder
+  description: "Fluent API for building workflows"
+  import: "from kailash import WorkflowBuilder"
+  methods:
+    create:
+      signature: "create(name: str, description: str = '') -> WorkflowBuilder"
+      description: "Start building a new workflow"
+      example: |
+        builder = WorkflowBuilder().create('my_pipeline', 'Data processing pipeline')
+    
+    add_node:
+      signature: "add_node(node_id: str, node_class: Type[Node], config: dict = None) -> WorkflowBuilder"
+      description: "Add a node to the workflow"
+      example: |
+        builder.add_node('reader', CSVReaderNode, {'file_path': 'data.csv'})
+    
+    connect:
+      signature: "connect(from_node: str, to_node: str, **kwargs) -> WorkflowBuilder"
+      description: "Connect nodes in the workflow"
+      example: |
+        builder.connect('reader', 'processor')
+    
+    build:
+      signature: "build() -> Workflow"
+      description: "Build and return the workflow"
+      example: |
+        workflow = builder.build()
+
+runtime:
+  local_runtime:
+    class: kailash.LocalRuntime
+    description: "Execute workflows locally"
+    import: "from kailash import LocalRuntime"
+    usage: |
+      runtime = LocalRuntime()
+      results, run_id = runtime.execute(workflow)
+  
+  docker_runtime:
+    class: kailash.runtime.DockerRuntime
+    description: "Execute workflows in Docker containers"
+    import: "from kailash.runtime import DockerRuntime"
+    usage: |
+      runtime = DockerRuntime(base_image='python:3.9')
+      results = workflow.execute(runtime)
+
+nodes:
+  # Data Input/Output Nodes
+  csv_reader:
+    class: kailash.nodes.data.CSVReaderNode
+    description: "Read CSV files"
+    import: "from kailash.nodes.data import CSVReaderNode"
+    config:
+      file_path: "str - Path to CSV file (required)"
+      delimiter: "str - CSV delimiter (default: ',')"
+      has_header: "bool - First row contains headers (default: True)"
+      encoding: "str - File encoding (default: 'utf-8')"
+    outputs:
+      default: "List[Dict] - Parsed CSV data as list of dictionaries"
+    example: |
+      workflow.add_node('reader', CSVReaderNode(), file_path='data.csv', delimiter=',')
+  
+  csv_writer:
+    class: kailash.nodes.data.CSVWriterNode
+    description: "Write data to CSV files"
+    import: "from kailash.nodes.data import CSVWriterNode"
+    config:
+      file_path: "str - Output CSV file path (required)"
+      delimiter: "str - CSV delimiter (default: ',')"
+      write_header: "bool - Write header row (default: True)"
+    inputs:
+      default: "List[Dict] - Data to write"
+    example: |
+      workflow.add_node('writer', CSVWriterNode(), file_path='output.csv')
+  
+  json_reader:
+    class: kailash.nodes.data.JSONReaderNode
+    description: "Read JSON files"
+    import: "from kailash.nodes.data import JSONReaderNode"
+    config:
+      file_path: "str - Path to JSON file (required)"
+      encoding: "str - File encoding (default: 'utf-8')"
+    outputs:
+      default: "Any - Parsed JSON data"
+    example: |
+      workflow.add_node('reader', JSONReaderNode(), file_path='data.json')
+  
+  json_writer:
+    class: kailash.nodes.data.JSONWriterNode
+    description: "Write data to JSON files"
+    import: "from kailash.nodes.data import JSONWriterNode"
+    config:
+      file_path: "str - Output JSON file path (required)"
+      indent: "int - JSON indentation (default: 2)"
+      ensure_ascii: "bool - Escape non-ASCII (default: False)"
+    inputs:
+      default: "Any - Data to write"
+    example: |
+      workflow.add_node('writer', JSONWriterNode(), file_path='output.json', indent=4)
+  
+  text_reader:
+    class: kailash.nodes.data.TextReaderNode
+    description: "Read text files"
+    import: "from kailash.nodes.data import TextReaderNode"
+    config:
+      file_path: "str - Path to text file (required)"
+      encoding: "str - File encoding (default: 'utf-8')"
+    outputs:
+      default: "str - Text content"
+    example: |
+      workflow.add_node('reader', TextReaderNode(), file_path='document.txt')
+  
+  text_writer:
+    class: kailash.nodes.data.TextWriterNode
+    description: "Write text to files"
+    import: "from kailash.nodes.data import TextWriterNode"
+    config:
+      file_path: "str - Output text file path (required)"
+      encoding: "str - File encoding (default: 'utf-8')"
+      append: "bool - Append to file (default: False)"
+    inputs:
+      default: "str - Text to write"
+    example: |
+      workflow.add_node('writer', TextWriterNode(), file_path='output.txt')
+  
+  # AI/ML Nodes
+  llm_agent:
+    class: kailash.nodes.ai.LLMAgentNode
+    description: "Interact with language models"
+    import: "from kailash.nodes.ai import LLMAgentNode"
+    config:
+      provider: "str - LLM provider ('openai', 'anthropic', 'ollama')"
+      model: "str - Model name (e.g., 'gpt-4', 'claude-3')"
+      api_key: "str - API key (or use env var)"
+      temperature: "float - Sampling temperature (default: 0.7)"
+      max_tokens: "int - Maximum tokens (default: 1000)"
+      system_prompt: "str - System prompt (optional)"
+    inputs:
+      prompt: "str - User prompt"
+      context: "Any - Additional context (optional)"
+    outputs:
+      response: "str - Model response"
+      metadata: "dict - Response metadata"
+    example: |
+      workflow.add_node('llm', LLMAgentNode(), 
+          provider='openai',
+          model='gpt-4',
+          temperature=0.7,
+          system_prompt='You are a helpful assistant.'
+      )
+  
+  embedding_generator:
+    class: kailash.nodes.ai.EmbeddingGeneratorNode
+    description: "Generate text embeddings"
+    import: "from kailash.nodes.ai import EmbeddingGeneratorNode"
+    config:
+      provider: "str - Embedding provider"
+      model: "str - Embedding model name"
+      api_key: "str - API key (or use env var)"
+      batch_size: "int - Batch size for processing (default: 100)"
+    inputs:
+      texts: "List[str] - Texts to embed"
+    outputs:
+      embeddings: "List[List[float]] - Text embeddings"
+      metadata: "dict - Embedding metadata"
+    example: |
+      workflow.add_node('embedder', EmbeddingGeneratorNode(),
+          provider='openai',
+          model='text-embedding-ada-002'
+      )
+  
+  # API Nodes
+  http_request:
+    class: kailash.nodes.api.HTTPRequestNode
+    description: "Make HTTP requests"
+    import: "from kailash.nodes.api import HTTPRequestNode"
+    config:
+      url: "str - Request URL (required)"
+      method: "str - HTTP method (default: 'GET')"
+      headers: "dict - Request headers (optional)"
+      params: "dict - Query parameters (optional)"
+      timeout: "int - Request timeout in seconds (default: 30)"
+    inputs:
+      data: "Any - Request body (for POST/PUT)"
+    outputs:
+      response: "dict - Response data"
+      status_code: "int - HTTP status code"
+      headers: "dict - Response headers"
+    example: |
+      workflow.add_node('http', HTTPRequestNode(),
+          url='https://api.example.com/data',
+          method='GET',
+          headers={'Authorization': 'Bearer token'}
+      )
+  
+  rest_client:
+    class: kailash.nodes.api.RESTClientNode
+    description: "RESTful API client with advanced features"
+    import: "from kailash.nodes.api import RESTClientNode"
+    config:
+      base_url: "str - Base URL for API"
+      auth_type: "str - Authentication type ('bearer', 'basic', 'api_key')"
+      auth_config: "dict - Authentication configuration"
+      rate_limit: "int - Requests per second (optional)"
+      retry_config: "dict - Retry configuration (optional)"
+    inputs:
+      endpoint: "str - API endpoint"
+      method: "str - HTTP method"
+      data: "Any - Request data (optional)"
+    outputs:
+      response: "Any - API response"
+      metadata: "dict - Response metadata"
+    example: |
+      node = RESTClientNode()
+      config = {
+          'base_url': 'https://api.example.com',
+          'auth_type': 'bearer',
+          'auth_config': {'token': 'your-token'},
+          'rate_limit': 10
+      }
+  
+  # Transform Nodes
+  data_transformer:
+    class: kailash.nodes.transform.DataTransformerNode
+    description: "Transform data using operations"
+    import: "from kailash.nodes.transform import DataTransformerNode"
+    config:
+      operations: "List[dict] - List of transformation operations"
+    inputs:
+      data: "Any - Data to transform"
+    outputs:
+      transformed: "Any - Transformed data"
+    operations:
+      - filter: "Filter data based on conditions"
+      - map: "Map/transform each item"
+      - reduce: "Aggregate data"
+      - sort: "Sort data"
+      - group: "Group data by key"
+    example: |
+      node = DataTransformerNode()
+      config = {
+          'operations': [
+              {'type': 'filter', 'condition': 'age > 18'},
+              {'type': 'map', 'expression': 'name.upper()'},
+              {'type': 'sort', 'key': 'age', 'reverse': True}
+          ]
+      }
+  
+  # Logic Nodes
+  switch:
+    class: kailash.nodes.logic.SwitchNode
+    description: "Route data based on conditions"
+    import: "from kailash.nodes.logic import SwitchNode"
+    config:
+      conditions: "List[dict] - Routing conditions"
+      default_output: "str - Default output port (optional)"
+    inputs:
+      data: "Any - Data to evaluate"
+    outputs:
+      (dynamic): "Multiple outputs based on conditions"
+    example: |
+      node = SwitchNode()
+      config = {
+          'conditions': [
+              {'output': 'small', 'expression': 'value < 10'},
+              {'output': 'medium', 'expression': 'value < 100'},
+              {'output': 'large', 'expression': 'value >= 100'}
+          ],
+          'default_output': 'unknown'
+      }
+  
+  merge:
+    class: kailash.nodes.logic.MergeNode
+    description: "Merge multiple data streams"
+    import: "from kailash.nodes.logic import MergeNode"
+    config:
+      merge_type: "str - Merge strategy ('concat', 'zip', 'dict')"
+      wait_for_all: "bool - Wait for all inputs (default: True)"
+    inputs:
+      (multiple): "Multiple named inputs"
+    outputs:
+      merged: "Any - Merged data"
+    example: |
+      node = MergeNode()
+      config = {
+          'merge_type': 'dict',
+          'wait_for_all': True
+      }
+  
+  workflow_node:
+    class: kailash.nodes.logic.WorkflowNode
+    description: "Execute nested workflows"
+    import: "from kailash.nodes.logic import WorkflowNode"
+    config:
+      workflow: "Workflow - Nested workflow instance"
+      input_mapping: "dict - Map inputs to nested workflow"
+      output_mapping: "dict - Map outputs from nested workflow"
+    inputs:
+      (dynamic): "Based on input_mapping"
+    outputs:
+      (dynamic): "Based on output_mapping"
+    example: |
+      nested_workflow = Workflow('nested')
+      # ... build nested workflow ...
+      
+      node = WorkflowNode()
+      config = {
+          'workflow': nested_workflow,
+          'input_mapping': {'data': 'nested_input'},
+          'output_mapping': {'nested_output': 'result'}
+      }
+  
+  # Code Execution
+  python_code:
+    class: kailash.nodes.code.PythonCodeNode
+    description: "Execute custom Python code"
+    import: "from kailash.nodes.code import PythonCodeNode"
+    config:
+      code: "str - Python code to execute"
+      requirements: "List[str] - Required packages (optional)"
+      timeout: "int - Execution timeout in seconds (default: 30)"
+    inputs:
+      (dynamic): "Defined in code"
+    outputs:
+      (dynamic): "Returned from code"
+    example: |
+      node = PythonCodeNode()
+      config = {
+          'code': '''
+      def execute(data):
+          # Process data
+          result = [x * 2 for x in data]
+          return {'doubled': result}
+      ''',
+          'requirements': ['numpy', 'pandas']
+      }
+
+# API Wrapper
+api_wrapper:
+  workflow_api:
+    class: kailash.api.WorkflowAPI
+    description: "Expose workflows as REST APIs"
+    import: "from kailash.api import WorkflowAPI"
+    methods:
+      create:
+        signature: "create(workflow: Workflow, config: dict = None) -> WorkflowAPI"
+        description: "Create API from workflow"
+        example: |
+          api = WorkflowAPI.create(workflow, {
+              'endpoint': '/process',
+              'method': 'POST',
+              'input_schema': {...},
+              'output_schema': {...}
+          })
+      
+      run:
+        signature: "run(host: str = '0.0.0.0', port: int = 8000)"
+        description: "Start the API server"
+        example: |
+          api.run(host='localhost', port=8080)
+
+# Node Registration
+node_registry:
+  register_node:
+    description: "Decorator to register custom nodes"
+    import: "from kailash.nodes import register_node"
+    usage: |
+      @register_node()
+      class MyCustomNode(Node):
+          def validate_config(self, config):
+              # Validate configuration
+              pass
+          
+          def execute(self, inputs):
+              # Process inputs and return outputs
+              return {'result': processed_data}
+
+# Visualization
+visualization:
+  workflow_visualizer:
+    class: kailash.WorkflowVisualizer
+    description: "Visualize workflows"
+    import: "from kailash import WorkflowVisualizer"
+    methods:
+      visualize:
+        signature: "visualize(workflow: Workflow, output_path: str = None)"
+        description: "Generate workflow visualization"
+        example: |
+          visualizer = WorkflowVisualizer()
+          visualizer.visualize(workflow, 'workflow.png')
+  
+  mermaid_visualizer:
+    class: kailash.workflow.MermaidVisualizer
+    description: "Generate Mermaid diagrams"
+    import: "from kailash.workflow import MermaidVisualizer"
+    usage: |
+      mermaid_code = MermaidVisualizer.generate(workflow)
+
+# Tracking and Metrics
+tracking:
+  task_tracker:
+    class: kailash.tracking.TaskTracker
+    description: "Track workflow execution"
+    import: "from kailash.tracking import TaskTracker"
+    usage: |
+      tracker = TaskTracker()
+      # Automatically tracks when used with runtime
+
+# Utilities
+utils:
+  export:
+    description: "Export workflows to various formats"
+    import: "from kailash.utils.export import export_workflow"
+    formats:
+      - yaml: "YAML format for Kailash"
+      - json: "JSON format"
+      - docker: "Docker Compose format"
+      - kubernetes: "Kubernetes manifests"
+    example: |
+      from kailash.utils.export import export_workflow
+      export_workflow(workflow, 'output.yaml', format='yaml')

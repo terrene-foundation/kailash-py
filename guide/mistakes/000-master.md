@@ -114,7 +114,7 @@ workflow.add_node("processor", ProcessorNode())
 workflow.execute()  # Fails - no data sources
 
 # GOOD - Include source nodes
-workflow.add_node("reader", CSVReader())
+workflow.add_node("reader", CSVReaderNode())
 workflow.add_node("processor", ProcessorNode())
 workflow.connect("reader", "processor")
 ```
@@ -923,7 +923,7 @@ def create_workflow():
     runtime.execute(workflow, {})  # No external input needed
 ```
 **Impact**: Workflow validation fails with "Node 'X' missing required inputs" because the workflow expects self-contained data flow.
-**Solution**: Always start workflows with proper data source nodes (CSVReader, DocumentInputNode, etc.) that can provide initial data autonomously.
+**Solution**: Always start workflows with proper data source nodes (CSVReaderNode, DocumentInputNode, etc.) that can provide initial data autonomously.
 **Root Cause**: Misunderstanding workflow design pattern - workflows should be complete pipelines, not processing fragments.
 **Workflow Pattern**: Data Source → Processing Node 1 → Processing Node 2 → Output Node
 **Fixed In**: Session 35 - Hierarchical RAG workflow redesign

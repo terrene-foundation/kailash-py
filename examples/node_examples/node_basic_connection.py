@@ -7,13 +7,13 @@ import pandas as pd
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReader
+from kailash.nodes.data import CSVReaderNode
 
 # Setup paths
 sample_directory = Path("../data")
 
-# Method 1: Using pre-built CSVReader node
-csv_reader_node = CSVReader(
+# Method 1: Using pre-built CSVReaderNode
+csv_reader_node = CSVReaderNode(
     file_path=sample_directory / "customer_value.csv", headers=True, delimiter=","
 )
 

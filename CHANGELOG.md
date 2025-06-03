@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-06-04
+
+### Changed
+- **Node Naming Convention Standardization** (ADR-0020)
+  - Renamed all node classes to follow consistent "Node" suffix pattern
+  - CSVReader → CSVReaderNode, JSONReader → JSONReaderNode, TextReader → TextReaderNode
+  - CSVWriter → CSVWriterNode, JSONWriter → JSONWriterNode, TextWriter → TextWriterNode
+  - Switch → SwitchNode, Merge → MergeNode
+  - LLMAgent → LLMAgentNode, EmbeddingGenerator → EmbeddingGeneratorNode
+  - Updated all imports, tests, examples, and documentation throughout codebase
+  - Created ADR-0020 documenting the naming convention decision
+  - This is a **BREAKING CHANGE** - users must update their code to use new class names
+
+- **Docstring Format Conversion**
+  - Converted all Google-style docstring examples from `::` format to doctest `>>>` format
+  - All docstring examples are now executable with Python's doctest module
+  - Fixed doctest failures and ensured all examples pass validation
+  - Improves documentation testability and consistency
+
+### Fixed
+- Double "Node" suffix errors in imports (e.g., CSVReaderNodeNode → CSVReaderNode)
+- WorkflowAPI test assertions updated for nested response structure
+- Background execution test initialization in workflow API
+- All linting issues resolved (black, isort, ruff)
+- Doctest failures in SwitchNode examples
+
+### Documentation
+- Created comprehensive migration guide in ADR-0020
+- Updated all documentation to reflect new node names
+- Enhanced CLAUDE.md with node naming convention enforcement
+- Updated README and all example files
+
+### Developer Experience
+- All 753 tests passing (up from 746)
+- All 46 examples validated and working
+- Documentation builds without warnings or errors
+- Pre-commit hooks passing for code quality
+
 ## [0.1.3] - 2025-06-03
 
 ### Added
@@ -154,7 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release of Kailash Python SDK
 - Core workflow engine with node-based architecture
-- Data nodes: CSVReader, JSONReader, CSVWriter, JSONWriter, SQLReader, SQLWriter
+- Data nodes: CSVReaderNode, JSONReaderNode, CSVWriterNode, JSONWriterNode, SQLReader, SQLWriter
 - Transform nodes: DataFrameFilter, DataFrameAggregator, DataFrameJoiner, DataFrameTransformer
 - Logic nodes: ConditionalNode, SwitchNode, MergeNode
 - AI/ML nodes: ModelPredictorNode, TextGeneratorNode, EmbeddingNode
@@ -174,7 +212,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe code execution in isolated environments
 - Authentication support for API nodes
 
-[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.0...v0.1.1
