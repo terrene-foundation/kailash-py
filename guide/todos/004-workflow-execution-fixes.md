@@ -8,7 +8,7 @@ This document summarizes the fixes made to address workflow execution issues, pa
 2. **Output schema support** - Added validation for node outputs
 3. **PythonCodeNode schema support** - Added input/output schema definition
 4. **Workflow execution patterns** - Fixed configuration passing through workflows
-5. **CSVWriter configuration** - Made data parameter non-required for workflow usage
+5. **CSVWriterNode configuration** - Made data parameter non-required for workflow usage
 6. **Type validation for Any type** - Fixed isinstance() with typing.Any
 7. **Workflow configuration handling** - Proper merging of configuration and runtime inputs
 
@@ -36,7 +36,7 @@ This document summarizes the fixes made to address workflow execution issues, pa
 
 ### 4. Data Writers (`src/kailash/nodes/data/writers.py`)
 
-- Made `data` parameter non-required for CSVWriter for workflow compatibility
+- Made `data` parameter non-required for CSVWriterNode for workflow compatibility
 - Fixed parameter handling for workflow usage
 
 ### 5. Tracking Models (`src/kailash/tracking/models.py`)

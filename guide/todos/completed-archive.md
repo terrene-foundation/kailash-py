@@ -103,7 +103,7 @@ This file contains the complete history of completed development tasks from the 
   - Created ai_providers.py with unified interface for LLM and embeddings
   - Reduced code duplication for providers supporting both capabilities
   - Implemented providers: Ollama, OpenAI (both), Anthropic (LLM), Cohere, HuggingFace (embeddings)
-  - Updated EmbeddingGenerator to use new provider architecture
+  - Updated EmbeddingGeneratorNode to use new provider architecture
   - Maintained backward compatibility with legacy providers
   - Enhanced comprehensive example to demonstrate unified architecture
   - Successfully tested with real Ollama embeddings (snowflake-arctic-embed2, avr/sfr-embedding-mistral)
@@ -124,8 +124,8 @@ This file contains the complete history of completed development tasks from the 
   - MCPServer node for hosting MCP resources and tools
   - MCPResource node for managing shared resources (CRUD operations)
   - Graceful fallback when mcp package not installed
-  - Integration with LLMAgent for context sharing
-- **LLMAgent Node Implementation**:
+  - Integration with LLMAgentNode for context sharing
+- **LLMAgentNode Node Implementation**:
   - Provider architecture supporting OpenAI, Anthropic, Ollama, Azure
   - Conversation memory and context management
   - Tool calling and function execution
@@ -134,7 +134,7 @@ This file contains the complete history of completed development tasks from the 
   - MCP protocol support
   - Clean provider pattern (ADR-0017) for extensibility
   - Tested with real Ollama models
-- **EmbeddingGenerator Node Implementation**:
+- **EmbeddingGeneratorNode Node Implementation**:
   - Support for OpenAI, HuggingFace, Sentence Transformers
   - Batch processing for efficiency
   - Vector similarity calculations (cosine, euclidean, dot product)
@@ -153,7 +153,7 @@ This file contains the complete history of completed development tasks from the 
   - HATEOAS link following
   - Pagination metadata extraction
 - **Documentation Enhanced**:
-  - Added comprehensive docstrings to LLMAgent with examples
+  - Added comprehensive docstrings to LLMAgentNode with examples
   - Added detailed provider documentation with usage patterns
   - Combined agentic AI examples into comprehensive demo
   - All docstring examples tested and verified
@@ -196,7 +196,7 @@ This file contains the complete history of completed development tasks from the 
 ✅ **README Code Examples & SDK Issue Investigation**:
 - **README Example Fixes** ✅ Complete
   - Fixed PythonCodeNode to return {"result": {...}} matching output schema
-  - Added required file_path parameter to CSVWriter
+  - Added required file_path parameter to CSVWriterNode
   - Fixed DataTransformer imports (transform module, not data)
   - Added transformations parameter to all DataTransformer instances
   - Fixed state access to use _state attribute
@@ -611,7 +611,7 @@ This file contains the complete history of completed development tasks from the 
 - ✅ Data processing workflows with CSV, JSON readers/writers
 - ✅ Error handling and resilience patterns
 - ✅ Parallel execution with proper timing and coordination
-- ✅ Conditional routing with Switch/Merge nodes
+- ✅ Conditional routing with SwitchNode/MergeNode nodes
 - ✅ Custom node development and extension
 - ✅ Schema validation and type conversion
 - ✅ Task tracking and workflow monitoring

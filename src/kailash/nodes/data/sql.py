@@ -63,20 +63,19 @@ class SQLDatabaseNode(Node):
     - TimeoutError: Query execution timeout
     - PermissionError: Access denied
 
-    Example::
-
-        # Query customer data
-        sql_node = SQLDatabaseNode(
-            connection_string='postgresql://user:pass@host/db',
-            query='SELECT * FROM customers WHERE active = ?',
-            parameters=[True],
-            result_format='dict'
-        )
-        result = sql_node.execute()
-        # result['data'] = [
-        #     {'id': 1, 'name': 'John', 'active': True},
-        #     {'id': 2, 'name': 'Jane', 'active': True}
-        # ]
+    Example:
+        >>> # Query customer data
+        >>> sql_node = SQLDatabaseNode(
+        ...     connection_string='postgresql://user:pass@host/db',
+        ...     query='SELECT * FROM customers WHERE active = ?',
+        ...     parameters=[True],
+        ...     result_format='dict'
+        ... )
+        >>> result = sql_node.execute()
+        >>> # result['data'] = [
+        >>> #     {'id': 1, 'name': 'John', 'active': True},
+        >>> #     {'id': 2, 'name': 'Jane', 'active': True}
+        >>> # ]
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -259,18 +258,17 @@ class SQLQueryBuilderNode(Node):
     3. Multi-table joins
     4. Aggregation queries
 
-    Example::
-
-        builder = SQLQueryBuilderNode(
-            table='customers',
-            select=['name', 'email'],
-            where={'active': True, 'country': 'USA'},
-            order_by=['name'],
-            limit=100
-        )
-        result = builder.execute()
-        # result['query'] = 'SELECT name, email FROM customers WHERE active = ? AND country = ? ORDER BY name LIMIT 100'
-        # result['parameters'] = [True, 'USA']
+    Example:
+        >>> builder = SQLQueryBuilderNode(
+        ...     table='customers',
+        ...     select=['name', 'email'],
+        ...     where={'active': True, 'country': 'USA'},
+        ...     order_by=['name'],
+        ...     limit=100
+        ... )
+        >>> result = builder.execute()
+        >>> # result['query'] = 'SELECT name, email FROM customers WHERE active = ? AND country = ? ORDER BY name LIMIT 100'
+        >>> # result['parameters'] = [True, 'USA']
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:

@@ -47,11 +47,11 @@ class TestComplexWorkflows:
 
         # Add data source nodes
         csv_reader_id = builder.add_node(
-            "CSVReader", "csv_reader", config={"file_path": str(csv_data)}
+            "CSVReaderNode", "csv_reader", config={"file_path": str(csv_data)}
         )
 
         json_reader_id = builder.add_node(
-            "JSONReader", "json_reader", config={"file_path": str(json_data)}
+            "JSONReaderNode", "json_reader", config={"file_path": str(json_data)}
         )
 
         builder.add_node(
@@ -157,7 +157,7 @@ class TestComplexWorkflows:
 
         # Add nodes
         reader_id = builder.add_node(
-            "CSVReader", "reader", config={"file_path": str(test_data)}
+            "CSVReaderNode", "reader", config={"file_path": str(test_data)}
         )
 
         # Add conditional router
@@ -230,7 +230,7 @@ class TestComplexWorkflows:
 
         # Add reader
         reader_id = builder.add_node(
-            "CSVReader", "reader", config={"file_path": str(large_data)}
+            "CSVReaderNode", "reader", config={"file_path": str(large_data)}
         )
 
         # Add parallel processing branches
@@ -343,7 +343,7 @@ class TestComplexWorkflows:
 
         # Add nodes for iterative processing
         reader_id = builder.add_node(
-            "CSVReader", "reader", config={"file_path": str(initial_data)}
+            "CSVReaderNode", "reader", config={"file_path": str(initial_data)}
         )
 
         # Process data (multiply by factor)
@@ -445,13 +445,13 @@ class TestComplexWorkflows:
         for source in config["data_sources"]:
             if source["type"] == "csv":
                 node_id = builder.add_node(
-                    "CSVReader",
+                    "CSVReaderNode",
                     source["id"],
                     config={"file_path": str(temp_data_dir / source["path"])},
                 )
             elif source["type"] == "json":
                 node_id = builder.add_node(
-                    "JSONReader",
+                    "JSONReaderNode",
                     source["id"],
                     config={"file_path": str(temp_data_dir / source["path"])},
                 )
@@ -532,7 +532,7 @@ class TestComplexWorkflows:
 
         # Add nodes with potential errors
         reader_id = builder.add_node(
-            "CSVReader", "reader", config={"file_path": str(test_data)}
+            "CSVReaderNode", "reader", config={"file_path": str(test_data)}
         )
 
         # Add processor that may fail on invalid data
@@ -691,11 +691,11 @@ class TestComplexWorkflows:
 
         # Add data loading
         train_loader_id = builder.add_node(
-            "CSVReader", "train_loader", config={"file_path": str(train_data)}
+            "CSVReaderNode", "train_loader", config={"file_path": str(train_data)}
         )
 
         test_loader_id = builder.add_node(
-            "CSVReader", "test_loader", config={"file_path": str(test_data)}
+            "CSVReaderNode", "test_loader", config={"file_path": str(test_data)}
         )
 
         # Add feature preprocessing

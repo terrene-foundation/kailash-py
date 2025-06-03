@@ -13,8 +13,8 @@ from .ai_providers import (
     get_available_providers,
     get_provider,
 )
-from .embedding_generator import EmbeddingGenerator
-from .llm_agent import LLMAgent
+from .embedding_generator import EmbeddingGeneratorNode
+from .llm_agent import LLMAgentNode
 from .models import (
     ModelPredictor,
     NamedEntityRecognizer,
@@ -30,9 +30,9 @@ __all__ = [
     "RetrievalAgent",
     "FunctionCallingAgent",
     "PlanningAgent",
-    "LLMAgent",
+    "LLMAgentNode",
     # Embedding and Vector Operations
-    "EmbeddingGenerator",
+    "EmbeddingGeneratorNode",
     # Provider Infrastructure
     "LLMProvider",
     "OllamaProvider",

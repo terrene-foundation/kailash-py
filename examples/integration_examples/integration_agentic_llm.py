@@ -1,4 +1,4 @@
-"""Advanced agentic AI workflow with LLMAgent and EmbeddingGenerator integration."""
+"""Advanced agentic AI workflow with LLMAgentNode and EmbeddingGeneratorNode integration."""
 
 import os
 import sys
@@ -6,7 +6,7 @@ import sys
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from kailash.nodes.ai import EmbeddingGenerator, LLMAgent
+from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.mcp import MCPResource
 
 
@@ -100,7 +100,7 @@ def main():
     # 2. Generate Embeddings for Knowledge Base
     print("\n🔗 Step 2: Generating Embeddings for Semantic Search")
 
-    embedder = EmbeddingGenerator()
+    embedder = EmbeddingGeneratorNode()
 
     # Embed knowledge base sections
     kb_sections = [
@@ -133,7 +133,7 @@ def main():
     # 3. Basic Q&A Agent with MCP Context
     print("\n💬 Step 3: Basic Q&A Agent with MCP Context")
 
-    llm_agent = LLMAgent()
+    llm_agent = LLMAgentNode()
     qa_result = llm_agent.run(
         provider="anthropic",
         model="claude-3-sonnet",
@@ -407,8 +407,8 @@ def main():
     )
 
     print("✅ Agentic AI Components Demonstrated:")
-    print("   🤖 LLMAgent: Q&A, tool-calling, RAG, memory, multi-modal")
-    print("   🔗 EmbeddingGenerator: Batch processing, caching, similarity")
+    print("   🤖 LLMAgentNode: Q&A, tool-calling, RAG, memory, multi-modal")
+    print("   🔗 EmbeddingGeneratorNode: Batch processing, caching, similarity")
     print("   📦 MCP Integration: Context sharing, resource management")
     print("   💭 Conversation Memory: Persistent multi-turn dialogs")
     print("   🔧 Tool Calling: Dynamic function execution")

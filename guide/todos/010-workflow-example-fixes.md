@@ -10,13 +10,13 @@ Fixed multiple issues in workflow_example.py to demonstrate the correct way to c
 **Problem**: The original code was passing class references to add_node() instead of node instances
 ```python
 # Wrong
-workflow.add_node(CSVReader)
+workflow.add_node(CSVReaderNode)
 ```
 
 **Solution**: Pass actual node instances
 ```python
 # Correct
-csv_reader = CSVReader(file_path='data.csv')
+csv_reader = CSVReaderNode(file_path='data.csv')
 workflow.add_node(csv_reader, node_id='csv_reader')
 ```
 
@@ -94,8 +94,8 @@ results, run_id = runtime.execute(workflow)
 
 ```python
 # 1. Create nodes
-reader = CSVReader(file_path='input.csv')
-writer = CSVWriter(file_path='output.csv')  # No data parameter
+reader = CSVReaderNode(file_path='input.csv')
+writer = CSVWriterNode(file_path='output.csv')  # No data parameter
 
 # 2. Add to workflow
 workflow.add_node(reader, node_id='reader')

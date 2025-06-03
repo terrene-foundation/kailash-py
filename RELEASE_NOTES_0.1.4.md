@@ -1,0 +1,77 @@
+# Kailash Python SDK v0.1.4 Release Notes
+
+## 🚨 Breaking Changes
+
+This release includes a major standardization of node class naming. **All node classes now consistently end with "Node"**. Users must update their code to use the new class names.
+
+### Migration Required
+
+The following classes have been renamed:
+
+| Old Name | New Name |
+|----------|----------|
+| `CSVReader` | `CSVReaderNode` |
+| `CSVWriter` | `CSVWriterNode` |
+| `JSONReader` | `JSONReaderNode` |
+| `JSONWriter` | `JSONWriterNode` |
+| `TextReader` | `TextReaderNode` |
+| `TextWriter` | `TextWriterNode` |
+| `Switch` | `SwitchNode` |
+| `Merge` | `MergeNode` |
+| `LLMAgent` | `LLMAgentNode` |
+| `EmbeddingGenerator` | `EmbeddingGeneratorNode` |
+
+### Quick Migration Guide
+
+```python
+# Old code
+from kailash.nodes.data.readers import CSVReader
+reader = CSVReader(file_path="data.csv")
+
+# New code
+from kailash.nodes.data.readers import CSVReaderNode
+reader = CSVReaderNode(file_path="data.csv")
+```
+
+For a complete migration guide, see [ADR-0020](guide/adr/0020-node-naming-convention.md).
+
+## ✨ Improvements
+
+### Docstring Format Standardization
+- All docstring examples converted from Google-style (`::`) to doctest format (`>>>`)
+- Examples are now executable with Python's doctest module
+- Improved documentation testability
+
+### Code Quality
+- All 753 tests passing (up from 746)
+- All 46 examples validated and working
+- Full compliance with black, isort, and ruff linting
+- Documentation builds without warnings
+
+## 🐛 Bug Fixes
+- Fixed double "Node" suffix errors in imports
+- Updated WorkflowAPI test assertions for nested response structure
+- Fixed background execution test initialization
+- Resolved all doctest failures
+
+## 📚 Documentation
+- Created comprehensive migration guide (ADR-0020)
+- Updated all documentation to reflect new naming
+- Enhanced development instructions in CLAUDE.md
+- Updated README and all example files
+
+## 🔧 Developer Experience
+- Consistent naming convention across entire SDK
+- Better IDE autocomplete with clear node identification
+- Improved searchability for node classes
+- Enhanced documentation with executable examples
+
+## 📦 Installation
+
+```bash
+pip install kailash==0.1.4
+```
+
+## 🙏 Acknowledgments
+
+Thank you to all contributors who helped standardize the SDK's naming conventions and improve documentation quality!

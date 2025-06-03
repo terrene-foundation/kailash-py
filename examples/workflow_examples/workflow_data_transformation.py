@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter, JSONWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
@@ -397,7 +397,7 @@ def create_transformation_pipeline():
     )
 
     # Create nodes
-    reader = CSVReader(file_path="../data/raw_customers.csv", headers=True)
+    reader = CSVReaderNode(file_path="../data/raw_customers.csv", headers=True)
 
     cleaner = create_data_cleaner()
     feature_engineer = create_feature_engineer()
@@ -405,13 +405,17 @@ def create_transformation_pipeline():
     quality_checker = create_quality_checker()
 
     # Writers for different outputs
-    cleaned_writer = CSVWriter(file_path="../data/outputs/cleaned_customers.csv")
+    cleaned_writer = CSVWriterNode(file_path="../data/outputs/cleaned_customers.csv")
 
-    features_writer = CSVWriter(file_path="../data/outputs/customers_with_features.csv")
+    features_writer = CSVWriterNode(
+        file_path="../data/outputs/customers_with_features.csv"
+    )
 
-    aggregated_writer = CSVWriter(file_path="../data/outputs/customer_segments.csv")
+    aggregated_writer = CSVWriterNode(file_path="../data/outputs/customer_segments.csv")
 
-    quality_report_writer = JSONWriter(file_path="../data/outputs/quality_report.json")
+    quality_report_writer = JSONWriterNode(
+        file_path="../data/outputs/quality_report.json"
+    )
 
     # Add nodes to workflow
     workflow.add_node(node_id="reader", node_or_type=reader)

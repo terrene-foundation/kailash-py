@@ -56,18 +56,17 @@ class SharePointGraphReader(Node):
     3. Search for files by name
     4. Navigate folder structures
 
-    Example::
-
-        reader = SharePointGraphReader()
-        result = reader.execute(
-            tenant_id="your-tenant-id",
-            client_id="your-client-id",
-            client_secret="your-secret",
-            site_url="https://company.sharepoint.com/sites/project",
-            operation="list_files",
-            library_name="Documents",
-            folder_path="Reports/2024"
-        )
+    Example:
+        >>> reader = SharePointGraphReader()
+        >>> result = reader.execute(
+        ...     tenant_id="your-tenant-id",
+        ...     client_id="your-client-id",
+        ...     client_secret="your-secret",
+        ...     site_url="https://company.sharepoint.com/sites/project",
+        ...     operation="list_files",
+        ...     library_name="Documents",
+        ...     folder_path="Reports/2024"
+        ... )
     """
 
     def get_metadata(self) -> NodeMetadata:
@@ -471,19 +470,18 @@ class SharePointGraphWriter(Node):
     This node handles file uploads to SharePoint document libraries,
     supporting folder structures and metadata.
 
-    Example::
-
-        writer = SharePointGraphWriter()
-        result = writer.execute(
-            tenant_id="your-tenant-id",
-            client_id="your-client-id",
-            client_secret="your-secret",
-            site_url="https://company.sharepoint.com/sites/project",
-            local_path="report.pdf",
-            library_name="Documents",
-            folder_path="Reports/2024",
-            sharepoint_name="Q4_Report_2024.pdf"
-        )
+    Example:
+        >>> writer = SharePointGraphWriter()
+        >>> result = writer.execute(
+        ...     tenant_id="your-tenant-id",
+        ...     client_id="your-client-id",
+        ...     client_secret="your-secret",
+        ...     site_url="https://company.sharepoint.com/sites/project",
+        ...     local_path="report.pdf",
+        ...     library_name="Documents",
+        ...     folder_path="Reports/2024",
+        ...     sharepoint_name="Q4_Report_2024.pdf"
+        ... )
     """
 
     def get_metadata(self) -> NodeMetadata:

@@ -68,7 +68,7 @@ Workflows can be defined in Python files:
    def create_workflow():
        workflow = Workflow("my_workflow")
 
-       workflow.add_node("CSVReader", "input", config={
+       workflow.add_node("CSVReaderNode", "input", config={
            "file_path": "${INPUT_FILE:-data.csv}"
        })
 
@@ -77,7 +77,7 @@ Workflows can be defined in Python files:
            "value": "active"
        })
 
-       workflow.add_node("CSVWriter", "output", config={
+       workflow.add_node("CSVWriterNode", "output", config={
            "file_path": "${OUTPUT_FILE:-output.csv}"
        })
 
@@ -198,7 +198,7 @@ Get detailed information about nodes or workflows.
 .. code-block:: bash
 
    # Node information
-   kailash info node CSVReader
+   kailash info node CSVReaderNode
 
    # Workflow information
    kailash info workflow my_workflow.py

@@ -77,7 +77,7 @@ Our `.pre-commit-config.yaml` includes the following hooks:
 - Trailing whitespace removal
 - End-of-file fixing
 - YAML/TOML/JSON syntax validation
-- Merge conflict detection
+- MergeNode conflict detection
 - Large file detection (>1MB)
 - Debug statement detection
 

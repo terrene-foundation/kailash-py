@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-746%20passing-brightgreen.svg" alt="Tests: 746 passing">
+  <img src="https://img.shields.io/badge/tests-753%20passing-brightgreen.svg" alt="Tests: 753 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -31,6 +31,7 @@
 - 🤖 **AI-Powered**: Complete LLM agents, embeddings, and hierarchical RAG architecture
 - 🧠 **Retrieval-Augmented Generation**: Full RAG pipeline with intelligent document processing
 - 🌐 **REST API Wrapper**: Expose any workflow as a production-ready API in 3 lines
+- 🚪 **Multi-Workflow Gateway**: Manage multiple workflows through unified API with MCP integration
 
 ## 🎯 Who Is This For?
 
@@ -64,7 +65,7 @@ uv sync
 
 ```python
 from kailash.workflow import Workflow
-from kailash.nodes.data import CSVReader
+from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 import pandas as pd
@@ -73,7 +74,7 @@ import pandas as pd
 workflow = Workflow("customer_analysis", name="customer_analysis")
 
 # Add data reader
-reader = CSVReader(file_path="customers.csv")
+reader = CSVReaderNode(file_path="customers.csv")
 workflow.add_node("read_customers", reader)
 
 # Add custom processing using Python code
@@ -111,7 +112,7 @@ workflow.save("customer_analysis.yaml", format="yaml")
 
 ```python
 from kailash.workflow import Workflow
-from kailash.nodes.data import SharePointGraphReader, CSVWriter
+from kailash.nodes.data import SharePointGraphReader, CSVWriterNode
 import os
 
 # Create workflow for SharePoint file processing
@@ -122,7 +123,7 @@ sharepoint = SharePointGraphReader()
 workflow.add_node("read_sharepoint", sharepoint)
 
 # Process downloaded files
-csv_writer = CSVWriter(file_path="sharepoint_output.csv")
+csv_writer = CSVWriterNode(file_path="sharepoint_output.csv")
 workflow.add_node("save_locally", csv_writer)
 
 # Connect nodes
@@ -150,8 +151,8 @@ results, run_id = runtime.execute(workflow, inputs=inputs)
 
 ```python
 from kailash.workflow import Workflow
-from kailash.nodes.ai.embedding_generator import EmbeddingGenerator
-from kailash.nodes.ai.llm_agent import LLMAgent
+from kailash.nodes.ai.embedding_generator import EmbeddingGeneratorNode
+from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 from kailash.nodes.data.retrieval import RelevanceScorerNode
 from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
@@ -172,17 +173,17 @@ chunk_text_extractor = ChunkTextExtractorNode()
 query_text_wrapper = QueryTextWrapperNode()
 
 # AI processing with Ollama
-chunk_embedder = EmbeddingGenerator(
+chunk_embedder = EmbeddingGeneratorNode(
     provider="ollama", model="nomic-embed-text", operation="embed_batch"
 )
-query_embedder = EmbeddingGenerator(
+query_embedder = EmbeddingGeneratorNode(
     provider="ollama", model="nomic-embed-text", operation="embed_batch"
 )
 
 # Retrieval and response generation
 relevance_scorer = RelevanceScorerNode()
 context_formatter = ContextFormatterNode()
-llm_agent = LLMAgent(provider="ollama", model="llama3.2", temperature=0.7)
+llm_agent = LLMAgentNode(provider="ollama", model="llama3.2", temperature=0.7)
 
 # Add all nodes to workflow
 for name, node in {
@@ -275,6 +276,80 @@ api.run(port=8000)  # That's it! Your workflow is now a REST API
 
 See the [API demo example](examples/integration_examples/integration_api_demo.py) for complete usage patterns.
 
+### Multi-Workflow API Gateway - Manage Multiple Workflows
+
+Run multiple workflows through a single unified API gateway with dynamic routing and MCP integration:
+
+```python
+from kailash.api.gateway import WorkflowAPIGateway
+from kailash.api.mcp_integration import MCPIntegration
+
+# Create gateway
+gateway = WorkflowAPIGateway(
+    title="Enterprise Platform",
+    description="Unified API for all workflows"
+)
+
+# Register multiple workflows
+gateway.register_workflow("sales", sales_workflow)
+gateway.register_workflow("analytics", analytics_workflow)
+gateway.register_workflow("reports", reporting_workflow)
+
+# Add AI-powered tools via MCP
+mcp = MCPIntegration("ai_tools")
+mcp.add_tool("analyze", analyze_function)
+mcp.add_tool("predict", predict_function)
+gateway.register_mcp_server("ai", mcp)
+
+# Run unified server
+gateway.run(port=8000)
+```
+
+#### Gateway Features
+
+- **Unified Access Point**: All workflows accessible through one server
+  - `/sales/execute` - Execute sales workflow
+  - `/analytics/execute` - Execute analytics workflow
+  - `/workflows` - List all available workflows
+  - `/health` - Check health of all services
+
+- **MCP Integration**: AI-powered tools available to all workflows
+  ```python
+  # Use MCP tools in workflows
+  from kailash.api.mcp_integration import MCPToolNode
+
+  tool_node = MCPToolNode(
+      mcp_server="ai_tools",
+      tool_name="analyze"
+  )
+  workflow.add_node("ai_analysis", tool_node)
+  ```
+
+- **Flexible Deployment Patterns**:
+  ```python
+  # Pattern 1: Single Gateway (most cases)
+  gateway.register_workflow("workflow1", wf1)
+  gateway.register_workflow("workflow2", wf2)
+
+  # Pattern 2: Hybrid (heavy workflows separate)
+  gateway.register_workflow("light", light_wf)
+  gateway.proxy_workflow("heavy", "http://gpu-service:8080")
+
+  # Pattern 3: High Availability
+  # Run multiple gateway instances behind load balancer
+
+  # Pattern 4: Kubernetes
+  # Deploy with horizontal pod autoscaling
+  ```
+
+- **Production Features**:
+  - WebSocket support for real-time updates
+  - Health monitoring across all workflows
+  - Dynamic workflow registration/unregistration
+  - Built-in CORS and authentication support
+
+See the [Gateway examples](examples/integration_examples/gateway_comprehensive_demo.py) for complete implementation patterns.
+
 ## 📚 Documentation
 
 | Resource | Description |
@@ -296,14 +371,14 @@ The SDK includes a rich set of pre-built nodes for common operations:
 <td width="50%">
 
 **Data Operations**
-- `CSVReader` - Read CSV files
-- `JSONReader` - Read JSON files
+- `CSVReaderNode` - Read CSV files
+- `JSONReaderNode` - Read JSON files
 - `DocumentSourceNode` - Sample document provider
 - `QuerySourceNode` - Sample query provider
 - `RelevanceScorerNode` - Multi-method similarity
 - `SQLDatabaseNode` - Query databases
-- `CSVWriter` - Write CSV files
-- `JSONWriter` - Write JSON files
+- `CSVWriterNode` - Write CSV files
+- `JSONWriterNode` - Write JSON files
 
 </td>
 <td width="50%">
@@ -319,8 +394,8 @@ The SDK includes a rich set of pre-built nodes for common operations:
 - `Aggregator` - Aggregate data
 
 **Logic Nodes**
-- `Switch` - Conditional routing
-- `Merge` - Combine multiple inputs
+- `SwitchNode` - Conditional routing
+- `MergeNode` - Combine multiple inputs
 - `WorkflowNode` - Wrap workflows as reusable nodes
 
 </td>
@@ -329,8 +404,8 @@ The SDK includes a rich set of pre-built nodes for common operations:
 <td width="50%">
 
 **AI/ML Nodes**
-- `LLMAgent` - Multi-provider LLM with memory & tools
-- `EmbeddingGenerator` - Vector embeddings with caching
+- `LLMAgentNode` - Multi-provider LLM with memory & tools
+- `EmbeddingGeneratorNode` - Vector embeddings with caching
 - `MCPClient/MCPServer` - Model Context Protocol
 - `TextClassifier` - Text classification
 - `SentimentAnalyzer` - Sentiment analysis
@@ -370,14 +445,14 @@ The SDK includes a rich set of pre-built nodes for common operations:
 #### Workflow Management
 ```python
 from kailash.workflow import Workflow
-from kailash.nodes.logic import Switch
+from kailash.nodes.logic import SwitchNode
 from kailash.nodes.transform import DataTransformer
 
 # Create complex workflows with branching logic
 workflow = Workflow("data_pipeline", name="data_pipeline")
 
-# Add conditional branching with Switch node
-switch = Switch()
+# Add conditional branching with SwitchNode
+switch = SwitchNode()
 workflow.add_node("route", switch)
 
 # Different paths based on validation
@@ -703,13 +778,13 @@ chunk_text_extractor = ChunkTextExtractorNode()
 query_text_wrapper = QueryTextWrapperNode()
 
 # Create embedding generators
-chunk_embedder = EmbeddingGenerator(
+chunk_embedder = EmbeddingGeneratorNode(
     provider="ollama",
     model="nomic-embed-text",
     operation="embed_batch"
 )
 
-query_embedder = EmbeddingGenerator(
+query_embedder = EmbeddingGeneratorNode(
     provider="ollama",
     model="nomic-embed-text",
     operation="embed_batch"
@@ -720,7 +795,7 @@ relevance_scorer = RelevanceScorerNode(similarity_method="cosine")
 context_formatter = ContextFormatterNode()
 
 # Create LLM agent for final answer generation
-llm_agent = LLMAgent(
+llm_agent = LLMAgentNode(
     provider="ollama",
     model="llama3.2",
     temperature=0.7,
@@ -839,10 +914,10 @@ kailash/
 The SDK features a unified provider architecture for AI capabilities:
 
 ```python
-from kailash.nodes.ai import LLMAgent, EmbeddingGenerator
+from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
 
 # Multi-provider LLM support
-agent = LLMAgent()
+agent = LLMAgentNode()
 result = agent.run(
     provider="ollama",  # or "openai", "anthropic", "mock"
     model="llama3.1:8b-instruct-q8_0",
@@ -851,7 +926,7 @@ result = agent.run(
 )
 
 # Vector embeddings with the same providers
-embedder = EmbeddingGenerator()
+embedder = EmbeddingGeneratorNode()
 embedding = embedder.run(
     provider="ollama",  # Same providers support embeddings
     model="snowflake-arctic-embed2",

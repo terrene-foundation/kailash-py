@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader, JSONReader
-from kailash.nodes.data.writers import CSVWriter, JSONWriter
+from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
+from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.storage.filesystem import FileSystemStorage
@@ -247,11 +247,13 @@ def main():
         print("Creating workflow nodes...")
 
         # Data readers
-        customer_reader = CSVReader(
+        customer_reader = CSVReaderNode(
             file_path=str(data_dir / "customers.csv"), headers=True
         )
 
-        transaction_reader = JSONReader(file_path=str(data_dir / "transactions.json"))
+        transaction_reader = JSONReaderNode(
+            file_path=str(data_dir / "transactions.json")
+        )
 
         # Processing nodes
         validator = create_data_validator()
@@ -260,13 +262,17 @@ def main():
         reporter = create_report_generator()
 
         # Output writers
-        detailed_writer = CSVWriter(file_path=str(output_dir / "detailed_analysis.csv"))
+        detailed_writer = CSVWriterNode(
+            file_path=str(output_dir / "detailed_analysis.csv")
+        )
 
-        segment_writer = CSVWriter(file_path=str(output_dir / "customer_segments.csv"))
+        segment_writer = CSVWriterNode(
+            file_path=str(output_dir / "customer_segments.csv")
+        )
 
         # Note: JSONWriter expects data parameter, but in workflow mode
         # data comes from connections, so we need to fix this usage
-        report_writer = JSONWriter(
+        report_writer = JSONWriterNode(
             file_path=str(output_dir / "analysis_report.json"),
             data={},  # Placeholder, will be overridden by workflow
         )

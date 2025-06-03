@@ -11,8 +11,8 @@ Usage:
 import time
 from pathlib import Path
 
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.transform.processors import Filter
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
@@ -32,11 +32,11 @@ def create_simple_workflow():
     workflow = Workflow("simple_dashboard_demo", "Simple Dashboard Demo")
 
     # Simple 3-node workflow
-    reader = CSVReader(node_id="reader", file_path="../data/customers.csv")
+    reader = CSVReaderNode(node_id="reader", file_path="../data/customers.csv")
 
     filter_node = Filter(node_id="filter", field="age", operator=">", value=18)
 
-    writer = CSVWriter(
+    writer = CSVWriterNode(
         node_id="writer", file_path="../outputs/simple_dashboard_output.csv"
     )
 

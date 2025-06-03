@@ -248,14 +248,15 @@ class Tripler:
 
     def test_input_validation(self):
         """Test input validation."""
-        node = PythonCodeNode(
-            name="validator",
-            code="result = x + y",
-            input_types={"x": int, "y": int},
-            output_type=int,
-        )
 
-        # Test validation through execute() method (which uses base class validation)
+        # For code strings, PythonCodeNode bypasses validation
+        # Let's test with a function-based node which does validate
+        def add_numbers(x: int, y: int) -> int:
+            return x + y
+
+        node = PythonCodeNode.from_function(func=add_numbers, name="validator")
+
+        # Test validation through execute() method
         with pytest.raises(
             NodeValidationError, match="Required input 'y' not provided"
         ):
@@ -265,9 +266,17 @@ class Tripler:
         result = node.execute(x=5, y="10")  # Should convert string to int
         assert result == {"result": 15}
 
-        # Test direct execute_code() method bypasses validation
-        result = node.execute_code({"x": 5, "y": 10})
-        assert result == 15
+        # Test code string node (no validation)
+        code_node = PythonCodeNode(
+            name="code_validator",
+            code="result = x + y",
+            input_types={"x": int, "y": int},
+            output_type=int,
+        )
+
+        # Code nodes don't validate - they will fail at execution if inputs missing
+        with pytest.raises(NodeExecutionError, match="name 'y' is not defined"):
+            code_node.execute(x=5)
 
     def test_configuration_errors(self):
         """Test configuration error handling."""

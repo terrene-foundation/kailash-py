@@ -92,7 +92,7 @@ Import Errors
 
     # Correct import patterns
     from kailash.nodes.base import Node
-    from kailash.nodes.data.readers import CSVReader
+    from kailash.nodes.data.readers import CSVReaderNode
     from kailash.workflow.builder import WorkflowBuilder
 
     # Check if package is properly installed

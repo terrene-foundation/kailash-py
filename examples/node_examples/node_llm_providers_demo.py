@@ -1,4 +1,4 @@
-"""Demonstration of LLMAgent with multiple provider support."""
+"""Demonstration of LLMAgentNode with multiple provider support."""
 
 import os
 import sys
@@ -6,13 +6,13 @@ import sys
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from kailash.nodes.ai import LLMAgent
+from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.ai.ai_providers import PROVIDERS, get_provider
 
 
 def main():
     """Demonstrate the clean provider architecture."""
-    print("🤖 LLMAgent Provider Architecture Demo")
+    print("🤖 LLMAgentNode Provider Architecture Demo")
     print("=" * 50)
 
     # Show available providers
@@ -33,7 +33,7 @@ def main():
 
     # 1. Mock Provider (always available)
     print("\n1. Mock Provider:")
-    mock_result = LLMAgent().run(
+    mock_result = LLMAgentNode().run(
         provider="mock",
         model="mock-model",
         messages=[{"role": "user", "content": test_message}],
@@ -48,7 +48,7 @@ def main():
     try:
         provider = get_provider("ollama")
         if provider.is_available():
-            ollama_result = LLMAgent().run(
+            ollama_result = LLMAgentNode().run(
                 provider="ollama",
                 model="llama3.1:8b-instruct-q8_0",
                 messages=[{"role": "user", "content": test_message}],
@@ -72,7 +72,7 @@ def main():
     print("\n3. OpenAI Provider:")
     if os.getenv("OPENAI_API_KEY"):
         try:
-            openai_result = LLMAgent().run(
+            openai_result = LLMAgentNode().run(
                 provider="openai",
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": test_message}],
@@ -93,7 +93,7 @@ def main():
     print("\n4. Anthropic Provider:")
     if os.getenv("ANTHROPIC_API_KEY"):
         try:
-            anthropic_result = LLMAgent().run(
+            anthropic_result = LLMAgentNode().run(
                 provider="anthropic",
                 model="claude-3-haiku-20240307",
                 messages=[{"role": "user", "content": test_message}],
@@ -120,13 +120,13 @@ def main():
     print("   1. Create a class inheriting from LLMProvider in ai_providers.py")
     print("   2. Implement is_available() and chat() methods")
     print("   3. Add to PROVIDERS registry")
-    print("   4. Use with: LLMAgent().run(provider='your_provider', ...)")
+    print("   4. Use with: LLMAgentNode().run(provider='your_provider', ...)")
 
     print("\n" + "=" * 50)
     print("🎯 Architecture Benefits:")
     print("   ✅ Clean separation of concerns")
     print("   ✅ Easy to add new providers")
-    print("   ✅ No provider-specific code in LLMAgent")
+    print("   ✅ No provider-specific code in LLMAgentNode")
     print("   ✅ Each provider manages its own dependencies")
     print("   ✅ Consistent interface across all providers")
     print("   ✅ Graceful fallbacks when providers unavailable")

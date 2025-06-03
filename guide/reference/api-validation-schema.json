@@ -1,0 +1,250 @@
+{
+  "version": "0.1.3",
+  "validation_rules": {
+    "class_naming": {
+      "rule": "All node classes MUST end with 'Node' suffix",
+      "valid_pattern": ".*Node$",
+      "examples": {
+        "correct": ["CSVReaderNode", "HTTPRequestNode", "LLMAgentNode"],
+        "incorrect": ["CSVReader", "HTTPRequest", "LLM", "LLMAgent", "Switch", "Merge"]
+      }
+    },
+    "method_naming": {
+      "rule": "All methods use snake_case",
+      "valid_pattern": "^[a-z_]+$",
+      "examples": {
+        "correct": ["add_node", "execute", "connect", "validate_config"],
+        "incorrect": ["addNode", "runWorkflow", "validateConfig"]
+      }
+    },
+    "parameter_naming": {
+      "rule": "All parameters use snake_case with underscores",
+      "valid_pattern": "^[a-z_]+$",
+      "examples": {
+        "correct": ["file_path", "system_prompt", "has_header", "max_tokens"],
+        "incorrect": ["filePath", "systemPrompt", "hasHeader", "maxTokens"]
+      }
+    }
+  },
+  "exact_signatures": {
+    "Workflow": {
+      "__init__": {
+        "signature": "__init__(self, name: str, description: str = '')",
+        "params": [
+          {"name": "name", "type": "str", "required": true},
+          {"name": "description", "type": "str", "required": false, "default": ""}
+        ]
+      },
+      "add_node": {
+        "signature": "add_node(self, node_id: str, node: Node, config: dict = None) -> Workflow",
+        "params": [
+          {"name": "node_id", "type": "str", "required": true, "position": 1},
+          {"name": "node", "type": "Node", "required": true, "position": 2},
+          {"name": "config", "type": "dict", "required": false, "position": 3, "default": null}
+        ],
+        "returns": "Workflow"
+      },
+      "connect": {
+        "signature": "connect(self, from_node: str, to_node: str, from_output: str = 'default', to_input: str = 'default') -> Workflow",
+        "params": [
+          {"name": "from_node", "type": "str", "required": true, "position": 1},
+          {"name": "to_node", "type": "str", "required": true, "position": 2},
+          {"name": "from_output", "type": "str", "required": false, "position": 3, "default": "default"},
+          {"name": "to_input", "type": "str", "required": false, "position": 4, "default": "default"}
+        ],
+        "returns": "Workflow"
+      },
+      "execute": {
+        "signature": "execute(self, runtime: Runtime, inputs: dict = None) -> dict",
+        "params": [
+          {"name": "runtime", "type": "Runtime", "required": true, "position": 1},
+          {"name": "inputs", "type": "dict", "required": false, "position": 2, "default": null}
+        ],
+        "returns": "dict"
+      }
+    }
+  },
+  "node_configs": {
+    "CSVReaderNode": {
+      "class": "kailash.nodes.data.CSVReaderNode",
+      "required_config": ["file_path"],
+      "optional_config": {
+        "delimiter": {"type": "str", "default": ","},
+        "has_header": {"type": "bool", "default": true},
+        "encoding": {"type": "str", "default": "utf-8"}
+      },
+      "config_validation": {
+        "file_path": "^[a-zA-Z0-9_\\-\\./]+\\.csv$"
+      }
+    },
+    "CSVWriterNode": {
+      "class": "kailash.nodes.data.CSVWriterNode",
+      "required_config": ["file_path"],
+      "optional_config": {
+        "delimiter": {"type": "str", "default": ","},
+        "write_header": {"type": "bool", "default": true}
+      }
+    },
+    "JSONReaderNode": {
+      "class": "kailash.nodes.data.JSONReaderNode",
+      "required_config": ["file_path"],
+      "optional_config": {
+        "encoding": {"type": "str", "default": "utf-8"}
+      }
+    },
+    "JSONWriterNode": {
+      "class": "kailash.nodes.data.JSONWriterNode",
+      "required_config": ["file_path"],
+      "optional_config": {
+        "indent": {"type": "int", "default": 2},
+        "ensure_ascii": {"type": "bool", "default": false}
+      }
+    },
+    "TextReaderNode": {
+      "class": "kailash.nodes.data.TextReaderNode",
+      "required_config": ["file_path"],
+      "optional_config": {
+        "encoding": {"type": "str", "default": "utf-8"}
+      }
+    },
+    "TextWriterNode": {
+      "class": "kailash.nodes.data.TextWriterNode",
+      "required_config": ["file_path"],
+      "optional_config": {
+        "encoding": {"type": "str", "default": "utf-8"},
+        "append": {"type": "bool", "default": false}
+      }
+    },
+    "EmbeddingGeneratorNode": {
+      "class": "kailash.nodes.ai.EmbeddingGeneratorNode",
+      "required_config": ["provider", "model"],
+      "optional_config": {
+        "api_key": {"type": "str", "default": null},
+        "batch_size": {"type": "int", "default": 100, "min": 1}
+      }
+    },
+    "SwitchNode": {
+      "class": "kailash.nodes.logic.SwitchNode",
+      "required_config": ["conditions"],
+      "optional_config": {
+        "default_output": {"type": "str", "default": null}
+      }
+    },
+    "MergeNode": {
+      "class": "kailash.nodes.logic.MergeNode",
+      "required_config": [],
+      "optional_config": {
+        "merge_type": {"type": "str", "default": "dict", "enum": ["concat", "zip", "dict"]},
+        "wait_for_all": {"type": "bool", "default": true}
+      }
+    },
+    "LLMAgentNode": {
+      "class": "kailash.nodes.ai.LLMAgentNode",
+      "required_config": ["provider", "model"],
+      "optional_config": {
+        "api_key": {"type": "str", "default": null},
+        "temperature": {"type": "float", "default": 0.7, "min": 0.0, "max": 2.0},
+        "max_tokens": {"type": "int", "default": 1000, "min": 1},
+        "system_prompt": {"type": "str", "default": null}
+      },
+      "valid_providers": ["openai", "anthropic", "ollama", "bedrock", "vertex"],
+      "provider_models": {
+        "openai": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"],
+        "anthropic": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
+        "ollama": ["llama2", "mixtral", "codellama"]
+      }
+    },
+    "HTTPRequestNode": {
+      "class": "kailash.nodes.api.HTTPRequestNode",
+      "required_config": ["url"],
+      "optional_config": {
+        "method": {"type": "str", "default": "GET", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"]},
+        "headers": {"type": "dict", "default": {}},
+        "params": {"type": "dict", "default": {}},
+        "timeout": {"type": "int", "default": 30, "min": 1}
+      }
+    },
+    "DataTransformerNode": {
+      "class": "kailash.nodes.transform.DataTransformerNode",
+      "required_config": ["operations"],
+      "operations_schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {"enum": ["filter", "map", "reduce", "sort", "group"]},
+            "condition": {"type": "str", "required_for": ["filter"]},
+            "expression": {"type": "str", "required_for": ["map"]},
+            "key": {"type": "str", "required_for": ["sort", "group"]},
+            "reverse": {"type": "bool", "default": false, "for": ["sort"]}
+          }
+        }
+      }
+    },
+    "PythonCodeNode": {
+      "class": "kailash.nodes.code.PythonCodeNode",
+      "required_config": ["code"],
+      "optional_config": {
+        "requirements": {"type": "array", "items": "str", "default": []},
+        "timeout": {"type": "int", "default": 30}
+      },
+      "code_requirements": {
+        "must_define": "execute",
+        "function_signature": "def execute(...) -> dict"
+      }
+    }
+  },
+  "import_mappings": {
+    "Workflow": "from kailash import Workflow",
+    "WorkflowBuilder": "from kailash import WorkflowBuilder",
+    "LocalRuntime": "from kailash import LocalRuntime",
+    "CSVReaderNode": "from kailash.nodes.data import CSVReaderNode",
+    "CSVWriterNode": "from kailash.nodes.data import CSVWriterNode",
+    "JSONReaderNode": "from kailash.nodes.data import JSONReaderNode",
+    "JSONWriterNode": "from kailash.nodes.data import JSONWriterNode",
+    "TextReaderNode": "from kailash.nodes.data import TextReaderNode",
+    "TextWriterNode": "from kailash.nodes.data import TextWriterNode",
+    "LLMAgentNode": "from kailash.nodes.ai import LLMAgentNode",
+    "EmbeddingGeneratorNode": "from kailash.nodes.ai import EmbeddingGeneratorNode",
+    "HTTPRequestNode": "from kailash.nodes.api import HTTPRequestNode",
+    "RESTClientNode": "from kailash.nodes.api import RESTClientNode",
+    "DataTransformerNode": "from kailash.nodes.transform import DataTransformerNode",
+    "SwitchNode": "from kailash.nodes.logic import SwitchNode",
+    "MergeNode": "from kailash.nodes.logic import MergeNode",
+    "WorkflowNode": "from kailash.nodes.logic import WorkflowNode",
+    "PythonCodeNode": "from kailash.nodes.code import PythonCodeNode"
+  },
+  "common_mistakes": {
+    "missing_node_suffix": {
+      "pattern": "(CSVReader|JSONWriter|HTTPRequest|RESTClient|LLMAgent|Switch|Merge|EmbeddingGenerator|TextReader|TextWriter)(?!Node)",
+      "fix": "Add 'Node' suffix to the class name",
+      "example": "CSVReader → CSVReaderNode, LLMAgent → LLMAgentNode"
+    },
+    "camel_case_methods": {
+      "pattern": "(addNode|runWorkflow|executeWorkflow|connectNodes)",
+      "fix": "Use snake_case instead",
+      "mapping": {
+        "addNode": "add_node",
+        "runWorkflow": "execute",
+        "executeWorkflow": "execute",
+        "connectNodes": "connect"
+      }
+    },
+    "missing_runtime": {
+      "pattern": "workflow\\.execute\\(\\)",
+      "fix": "Pass a runtime instance: workflow.execute(runtime)",
+      "correct": "workflow.execute(LocalRuntime())"
+    },
+    "wrong_config_keys": {
+      "patterns": {
+        "filePath": "file_path",
+        "fileName": "file_name",
+        "systemPrompt": "system_prompt",
+        "maxTokens": "max_tokens",
+        "hasHeader": "has_header",
+        "writeHeader": "write_header"
+      }
+    }
+  }
+}

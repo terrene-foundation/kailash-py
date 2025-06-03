@@ -1,16 +1,16 @@
-"""Unit tests for LLMAgent node."""
+"""Unit tests for LLMAgentNode node."""
 
 import pytest
 
-from kailash.nodes.ai import LLMAgent
+from kailash.nodes.ai import LLMAgentNode
 
 
-class TestLLMAgent:
-    """Test cases for LLMAgent node."""
+class TestLLMAgentNode:
+    """Test cases for LLMAgentNode node."""
 
     def test_basic_qa_mock_provider(self):
         """Test basic Q&A with mock provider."""
-        node = LLMAgent()
+        node = LLMAgentNode()
         result = node.run(
             provider="mock",
             model="gpt-4",
@@ -28,7 +28,7 @@ class TestLLMAgent:
 
     def test_tool_calling_agent(self):
         """Test agent with tool calling capabilities."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         tools = [
             {
@@ -78,7 +78,7 @@ class TestLLMAgent:
 
     def test_conversation_memory(self):
         """Test conversation memory functionality."""
-        node = LLMAgent()
+        node = LLMAgentNode()
         conversation_id = "test_conversation_123"
 
         # First turn
@@ -110,7 +110,7 @@ class TestLLMAgent:
 
     def test_mcp_context_integration(self):
         """Test MCP context integration."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="mock",
@@ -135,7 +135,7 @@ class TestLLMAgent:
 
     def test_rag_configuration(self):
         """Test RAG (Retrieval-Augmented Generation) configuration."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="mock",
@@ -154,7 +154,7 @@ class TestLLMAgent:
 
     def test_generation_config(self):
         """Test custom generation configuration."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         generation_config = {"temperature": 0.9, "max_tokens": 1000, "top_p": 0.95}
 
@@ -170,7 +170,7 @@ class TestLLMAgent:
 
     def test_streaming_configuration(self):
         """Test streaming response configuration."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="mock",
@@ -185,7 +185,7 @@ class TestLLMAgent:
 
     def test_multiple_providers(self):
         """Test different provider configurations."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         providers = [
             ("ollama", "llama3.2"),  # Ollama provider
@@ -219,7 +219,7 @@ class TestLLMAgent:
 
     def test_langchain_availability_check(self):
         """Test LangChain availability detection."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         # Test with mock provider - should work without LangChain
         result = node.run(
@@ -233,7 +233,7 @@ class TestLLMAgent:
 
     def test_error_handling_invalid_provider(self):
         """Test error handling for invalid provider."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="invalid_provider",
@@ -246,7 +246,7 @@ class TestLLMAgent:
 
     def test_missing_required_parameters(self):
         """Test handling of missing required parameters."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         # Missing provider
         with pytest.raises(KeyError):
@@ -262,7 +262,7 @@ class TestLLMAgent:
 
     def test_conversation_without_memory_config(self):
         """Test conversation handling without explicit memory config."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="mock",
@@ -276,7 +276,7 @@ class TestLLMAgent:
 
     def test_complex_multi_modal_scenario(self):
         """Test complex scenario with multiple features."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         tools = [
             {
@@ -317,7 +317,7 @@ class TestLLMAgent:
 
     def test_usage_metrics_calculation(self):
         """Test usage metrics and cost calculation."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="mock",
@@ -340,7 +340,7 @@ class TestLLMAgent:
 
     def test_system_prompt_handling(self):
         """Test system prompt handling."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         custom_system_prompt = (
             "You are a specialized AI assistant for financial analysis."
@@ -358,7 +358,7 @@ class TestLLMAgent:
 
     def test_timeout_and_retry_config(self):
         """Test timeout and retry configuration."""
-        node = LLMAgent()
+        node = LLMAgentNode()
 
         result = node.run(
             provider="mock",
@@ -421,7 +421,7 @@ def sample_tools():
 
 def test_agent_with_realistic_scenario(sample_conversation_history, sample_tools):
     """Test agent with realistic data analysis scenario."""
-    node = LLMAgent()
+    node = LLMAgentNode()
 
     result = node.run(
         provider="mock",

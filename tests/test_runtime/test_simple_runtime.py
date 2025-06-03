@@ -3,7 +3,7 @@
 from typing import Any, Dict
 
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import CSVReader, CSVWriter
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking import TaskManager
 from kailash.tracking.storage.filesystem import FileSystemStorage
@@ -70,11 +70,11 @@ class TestBasicRuntime:
     def test_data_nodes(self):
         """Test data reader/writer nodes exist."""
         # Just test that these can be imported and instantiated
-        reader = CSVReader(name="CSVReader", file_path="test.csv")
-        assert reader.metadata.name == "CSVReader"
+        reader = CSVReaderNode(name="CSVReaderNode", file_path="test.csv")
+        assert reader.metadata.name == "CSVReaderNode"
 
-        writer = CSVWriter(name="CSVWriter", file_path="output.csv")
-        assert writer.metadata.name == "CSVWriter"
+        writer = CSVWriterNode(name="CSVWriterNode", file_path="output.csv")
+        assert writer.metadata.name == "CSVWriterNode"
 
     def test_task_manager(self, tmp_path):
         """Test task manager creation."""

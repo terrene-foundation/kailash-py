@@ -40,7 +40,7 @@ following components:
    - `update_in()`: Update a nested path in a state object and return a new state
    - `batch_update()`: Apply multiple updates atomically
    - `get_in()`: Get a value from a nested path
-   - `merge()`: Merge top-level updates into a state
+   - `merge()`: MergeNode top-level updates into a state
 
 2. **WorkflowStateWrapper**: A wrapper class that provides a friendly API for the state
    management methods and maintains immutability throughout updates.

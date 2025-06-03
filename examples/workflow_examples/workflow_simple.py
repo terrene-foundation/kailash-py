@@ -7,7 +7,7 @@ import pandas as pd
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReader, CSVWriter
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
 
     # 1. Create and execute CSV reader
     print("Step 1: Reading CSV data...")
-    csv_reader = CSVReader(
+    csv_reader = CSVReaderNode(
         file_path=sample_dir / "customer_value.csv", headers=True, delimiter=","
     )
 
@@ -149,7 +149,7 @@ def main():
     print("Step 4: Saving results to CSV...")
 
     # Save filtered data
-    filtered_writer = CSVWriter(
+    filtered_writer = CSVWriterNode(
         file_path=str(output_dir / "high_value_customers.csv")
         # headers will be auto-detected from the dict keys
     )
@@ -158,7 +158,7 @@ def main():
     print(f"✓ Saved filtered data to {output_dir / 'high_value_customers.csv'}")
 
     # Save summary
-    summary_writer = CSVWriter(
+    summary_writer = CSVWriterNode(
         file_path=str(output_dir / "regional_summary.csv")
         # headers will be auto-detected from the dict keys
     )

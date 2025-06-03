@@ -6,7 +6,7 @@ import sys
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from kailash.nodes.ai import EmbeddingGenerator, LLMAgent
+from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.mcp import MCPClient, MCPResource, MCPServer
 from kailash.workflow import WorkflowBuilder
 
@@ -115,7 +115,7 @@ def main():
     ]
 
     # Generate embeddings for knowledge base
-    embedder = EmbeddingGenerator()
+    embedder = EmbeddingGeneratorNode()
     kb_embeddings = embedder.run(
         operation="embed_batch",
         provider="openai",
@@ -166,13 +166,13 @@ def main():
     server_config = {"name": "kailash-workflow-server", "transport": "stdio"}
 
     # Data Analysis Agent
-    analysis_agent = LLMAgent()
+    analysis_agent = LLMAgentNode()
 
     # Strategy Agent
-    strategy_agent = LLMAgent()
+    strategy_agent = LLMAgentNode()
 
     # Recommendation Agent
-    recommendation_agent = LLMAgent()
+    recommendation_agent = LLMAgentNode()
 
     # 4. Execute Multi-Agent Workflow
     print("\n🔄 Step 4: Executing Multi-Agent Workflow")

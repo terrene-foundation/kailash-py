@@ -28,7 +28,7 @@ Key design elements:
 
 ```python
 workflow = Workflow(name="data_processing")
-workflow.add_node("reader", CSVReader(), file_path="data.csv")
+workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
 workflow.add_node("filter", Filter(), field="value", operator=">", value=100)
 workflow.connect("reader", "filter", {"data": "data"})
 ```

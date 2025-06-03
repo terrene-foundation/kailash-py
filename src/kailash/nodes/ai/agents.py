@@ -333,7 +333,7 @@ class PlanningAgent(Node):
             # Data processing workflow
             potential_steps = [
                 {
-                    "tool": "CSVReader",
+                    "tool": "CSVReaderNode",
                     "description": "Read input data",
                     "parameters": {"file_path": "input.csv"},
                 },
@@ -348,7 +348,7 @@ class PlanningAgent(Node):
                     "parameters": {"group_by": "category", "operation": "sum"},
                 },
                 {
-                    "tool": "CSVWriter",
+                    "tool": "CSVWriterNode",
                     "description": "Write results",
                     "parameters": {"file_path": "output.csv"},
                 },
@@ -357,7 +357,7 @@ class PlanningAgent(Node):
             # Text analysis workflow
             potential_steps = [
                 {
-                    "tool": "TextReader",
+                    "tool": "TextReaderNode",
                     "description": "Read text data",
                     "parameters": {"file_path": "text.txt"},
                 },
@@ -372,7 +372,7 @@ class PlanningAgent(Node):
                     "parameters": {"max_length": 200},
                 },
                 {
-                    "tool": "JSONWriter",
+                    "tool": "JSONWriterNode",
                     "description": "Save analysis results",
                     "parameters": {"file_path": "analysis.json"},
                 },

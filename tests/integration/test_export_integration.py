@@ -89,7 +89,7 @@ class TestExportIntegration:
 
         # Create workflow with real nodes that use template-like values
         template_reader_id = builder.add_node(
-            "CSVReader", "template_reader", config={"file_path": "${INPUT_PATH}"}
+            "CSVReaderNode", "template_reader", config={"file_path": "${INPUT_PATH}"}
         )
 
         template_processor_id = builder.add_node(

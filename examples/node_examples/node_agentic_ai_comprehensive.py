@@ -2,7 +2,7 @@
 Comprehensive demonstration of agentic AI nodes with both mock and real implementations.
 
 This example shows:
-1. All available agentic AI nodes (LLMAgent, EmbeddingGenerator, MCP nodes)
+1. All available agentic AI nodes (LLMAgentNode, EmbeddingGeneratorNode, MCP nodes)
 2. Mock provider for testing/development
 3. Real Ollama integration for production use
 4. Complete feature coverage including tool calling, RAG, and MCP
@@ -23,7 +23,7 @@ import time
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from kailash.nodes.ai import EmbeddingGenerator, LLMAgent
+from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.mcp import MCPClient, MCPResource, MCPServer
 
 
@@ -48,11 +48,11 @@ def check_ollama_availability():
 
 
 def demonstrate_llm_agent_mock():
-    """Demonstrate LLMAgent with mock provider (no dependencies)."""
-    print("\n1️⃣  LLMAgent with Mock Provider")
+    """Demonstrate LLMAgentNode with mock provider (no dependencies)."""
+    print("\n1️⃣  LLMAgentNode with Mock Provider")
     print("=" * 50)
 
-    agent = LLMAgent()
+    agent = LLMAgentNode()
 
     # Basic Q&A
     print("\n📝 Basic Q&A:")
@@ -113,15 +113,15 @@ def demonstrate_llm_agent_mock():
 
 
 def demonstrate_llm_agent_ollama():
-    """Demonstrate LLMAgent with real Ollama provider."""
-    print("\n2️⃣  LLMAgent with Ollama Provider (Real LLM)")
+    """Demonstrate LLMAgentNode with real Ollama provider."""
+    print("\n2️⃣  LLMAgentNode with Ollama Provider (Real LLM)")
     print("=" * 50)
 
     if not check_ollama_availability():
         print("   Skipping Ollama demonstration...")
         return
 
-    agent = LLMAgent()
+    agent = LLMAgentNode()
 
     # Basic comparison: Mock vs Real
     print("\n🔄 Comparing Mock vs Real Responses:")
@@ -185,11 +185,11 @@ def demonstrate_llm_agent_ollama():
 
 
 def demonstrate_embedding_generator():
-    """Demonstrate EmbeddingGenerator for vector operations."""
-    print("\n3️⃣  EmbeddingGenerator Node")
+    """Demonstrate EmbeddingGeneratorNode for vector operations."""
+    print("\n3️⃣  EmbeddingGeneratorNode Node")
     print("=" * 50)
 
-    embedder = EmbeddingGenerator()
+    embedder = EmbeddingGeneratorNode()
 
     # Check if Ollama embeddings are available via LLM providers
     ollama_available = False
@@ -529,7 +529,7 @@ def demonstrate_integrated_workflow():
 
     # Step 2: Generate embeddings for relevant documents
     print("\n📊 Step 2: Generate Document Embeddings")
-    embedder = EmbeddingGenerator()
+    embedder = EmbeddingGeneratorNode()
     documents = [
         "Q4 revenue exceeded targets by 15% due to holiday sales",
         "Customer acquisition cost decreased by 20% with new marketing strategy",
@@ -545,9 +545,9 @@ def demonstrate_integrated_workflow():
         mcp_resource_id="q4-analysis-embeddings",
     )
 
-    # Step 3: Use LLMAgent with context and embeddings
+    # Step 3: Use LLMAgentNode with context and embeddings
     print("\n🤖 Step 3: Generate Analysis with Context")
-    agent = LLMAgent()
+    agent = LLMAgentNode()
 
     # Choose provider based on availability
     provider = "mock"
@@ -683,8 +683,8 @@ def main():
     print("\n\n✨ Summary")
     print("=" * 50)
     print("You've seen demonstrations of:")
-    print("✅ LLMAgent - With mock and real (Ollama) providers")
-    print("✅ EmbeddingGenerator - Vector embeddings and similarity")
+    print("✅ LLMAgentNode - With mock and real (Ollama) providers")
+    print("✅ EmbeddingGeneratorNode - Vector embeddings and similarity")
     print("✅ MCP Ecosystem - Context sharing across AI components")
     print("✅ Integrated Workflows - Combining multiple nodes")
     print("✅ Provider Architecture - Extensible LLM support")

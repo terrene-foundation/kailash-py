@@ -96,7 +96,7 @@ Step 3: Add Nodes
 
    # Add a CSV reader node
    reader = workflow.add_node(
-       node_type="CSVReader",
+       node_type="CSVReaderNode",
        node_id="read_customers",
        config={
            "file_path": "customers.csv"
@@ -116,7 +116,7 @@ Step 3: Add Nodes
 
    # Add a CSV writer node
    writer = workflow.add_node(
-       node_type="CSVWriter",
+       node_type="CSVWriterNode",
        node_id="save_results",
        config={
            "file_path": "active_customers.csv"
@@ -157,7 +157,7 @@ Here's the complete script:
    workflow = Workflow("customer_processing")
 
    # Add nodes
-   workflow.add_node("CSVReader", "read_data", config={
+   workflow.add_node("CSVReaderNode", "read_data", config={
        "file_path": "customers.csv"
    })
 
@@ -166,7 +166,7 @@ Here's the complete script:
        "value": "active"
    })
 
-   workflow.add_node("CSVWriter", "save_data", config={
+   workflow.add_node("CSVWriterNode", "save_data", config={
        "file_path": "active_customers.csv"
    })
 
@@ -192,9 +192,9 @@ Data Nodes
 
 For reading and writing data:
 
-- **CSVReader/Writer**: Handle CSV files
-- **JSONReader/Writer**: Handle JSON files
-- **TextReader/Writer**: Handle text files
+- **CSVReaderNode/CSVWriterNode**: Handle CSV files
+- **JSONReaderNode/JSONWriterNode**: Handle JSON files
+- **TextReaderNode/TextWriterNode**: Handle text files
 - **SQLReader/Writer**: Database operations
 - **SharePointReader/Writer**: SharePoint integration
 
@@ -213,8 +213,8 @@ Logic Nodes
 
 For workflow control:
 
-- **Switch**: Conditional routing based on data
-- **Merge**: Combine multiple data streams
+- **SwitchNode**: Conditional routing based on data
+- **MergeNode**: Combine multiple data streams
 - **Validator**: Validate data against schemas
 
 AI/ML Nodes
@@ -223,8 +223,8 @@ AI/ML Nodes
 For AI and machine learning:
 
 - **TextClassifier**: Classify text data
-- **EmbeddingGenerator**: Generate embeddings
-- **LLMAgent**: Interact with language models
+- **EmbeddingGeneratorNode**: Generate embeddings
+- **LLMAgentNode**: Interact with language models
 
 API Nodes
 ---------
@@ -264,7 +264,7 @@ Data Processing Pipeline
    workflow = Workflow("etl_pipeline")
 
    # Extract
-   workflow.add_node("CSVReader", "extract", config={
+   workflow.add_node("CSVReaderNode", "extract", config={
        "file_path": "raw_data.csv"
    })
 
@@ -294,7 +294,7 @@ API Integration
    workflow = Workflow("api_integration")
 
    # Read input data
-   workflow.add_node("JSONReader", "read_requests", config={
+   workflow.add_node("JSONReaderNode", "read_requests", config={
        "file_path": "api_requests.json"
    })
 
@@ -306,7 +306,7 @@ API Integration
    })
 
    # Save responses
-   workflow.add_node("JSONWriter", "save_responses", config={
+   workflow.add_node("JSONWriterNode", "save_responses", config={
        "file_path": "api_responses.json"
    })
 

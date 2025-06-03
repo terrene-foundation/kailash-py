@@ -150,7 +150,7 @@ The API nodes are designed to integrate seamlessly with agentic workflows:
 1. **Agent Tool Integration**: API nodes can be exposed as tools to LLM agents
 ```python
 # LLM Agent with API tool integration
-workflow.add_node("LLMAgent", "research_agent", config={
+workflow.add_node("LLMAgentNode", "research_agent", config={
     "provider": "openai",
     "model": "gpt-4",
     "tools": [
@@ -171,12 +171,12 @@ workflow.add_node("LLMAgent", "research_agent", config={
 2. **Multi-Agent API Coordination**: API calls coordinated between multiple agents
 ```python
 # Agent A fetches data, Agent B processes results
-workflow.add_node("LLMAgent", "data_fetcher", config={
+workflow.add_node("LLMAgentNode", "data_fetcher", config={
     "role": "data_collector",
     "api_tools": ["search_api", "database_api"]
 })
 
-workflow.add_node("LLMAgent", "data_processor", config={
+workflow.add_node("LLMAgentNode", "data_processor", config={
     "role": "data_analyzer",
     "receives_from": ["data_fetcher"],
     "api_tools": ["analysis_api"]

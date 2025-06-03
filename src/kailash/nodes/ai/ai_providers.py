@@ -1159,18 +1159,17 @@ def get_provider(
         ValueError: If the provider name is not recognized or doesn't support the requested type.
 
     Examples:
+        >>> # Get any provider
+        >>> provider = get_provider("openai")
+        >>> if provider.supports_chat():
+        ...     # Use for chat
+        ...     pass
+        >>> if provider.supports_embeddings():
+        ...     # Use for embeddings
+        ...     pass
 
-        Get any provider::
-
-        provider = get_provider("openai")
-        if provider.supports_chat():
-            # Use for chat
-        if provider.supports_embeddings():
-            # Use for embeddings
-
-        Get chat-only provider:
-
-        chat_provider = get_provider("anthropic", "chat")
+        >>> # Get chat-only provider
+        >>> chat_provider = get_provider("anthropic", "chat")
         response = chat_provider.chat(messages, model="claude-3-sonnet")
 
         Get embedding-only provider:
@@ -1223,18 +1222,15 @@ def get_available_providers(
         Dict mapping provider names to their availability and capabilities.
 
     Examples:
+        >>> # Get all providers
+        >>> all_providers = get_available_providers()
+        >>> for name, info in all_providers.items():
+        ...     print(f"{name}: Available={info['available']}, Chat={info['chat']}, Embeddings={info['embeddings']}")
 
-        Get all providers::
+        >>> # Get only chat providers
+        >>> chat_providers = get_available_providers("chat")
 
-        all_providers = get_available_providers()
-        for name, info in all_providers.items():
-            print(f"{name}: Available={info['available']}, Chat={info['chat']}, Embeddings={info['embeddings']}")
-
-        Get only chat providers:
-
-        chat_providers = get_available_providers("chat")
-
-        Get only embedding providers:
+        >>> # Get only embedding providers
 
         embed_providers = get_available_providers("embeddings")
     """

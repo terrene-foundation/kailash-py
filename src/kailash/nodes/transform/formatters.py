@@ -90,7 +90,7 @@ Context:
 
 Please provide a comprehensive answer based on the information provided above."""
 
-        # Create messages list for LLMAgent
+        # Create messages list for LLMAgentNode
         messages = [{"role": "user", "content": prompt}]
 
         return {"formatted_prompt": prompt, "messages": messages, "context": context}

@@ -8,7 +8,7 @@ This document tracks the implementation status of nodes in the Kailash Python SD
 
 ### 🤖 Agentic AI Nodes (COMPLETE)
 
-#### ✅ LLMAgent Node
+#### ✅ LLMAgentNode Node
 - **Status**: ✅ **COMPLETE**
 - **Features**:
   - Multi-provider support (OpenAI, Anthropic, Ollama, Azure OpenAI)
@@ -19,7 +19,7 @@ This document tracks the implementation status of nodes in the Kailash Python SD
 - **Client Impact**: Core requirement for agentic projects fulfilled
 - **Location**: `src/kailash/nodes/ai/llm_agent.py`
 
-#### ✅ EmbeddingGenerator Node
+#### ✅ EmbeddingGeneratorNode Node
 - **Status**: ✅ **COMPLETE**
 - **Features**:
   - Multi-provider support (OpenAI, HuggingFace, Ollama, Azure)
@@ -136,8 +136,8 @@ This document tracks the implementation status of nodes in the Kailash Python SD
 #### Phase 1: Agentic AI Foundation ✅ COMPLETE
 **Status**: 100% Complete - All client agentic workflow requirements met
 
-- ✅ **LLMAgent Node** - Multi-provider LLM integration
-- ✅ **EmbeddingGenerator Node** - Vector operations and similarity
+- ✅ **LLMAgentNode Node** - Multi-provider LLM integration
+- ✅ **EmbeddingGeneratorNode Node** - Vector operations and similarity
 - ✅ **MCP Nodes** - Model Context Protocol support
 - ✅ **Hierarchical RAG Architecture** - Complete RAG pipeline (7 nodes)
 
@@ -196,8 +196,8 @@ This document tracks the implementation status of nodes in the Kailash Python SD
 ### ✅ ACHIEVED MILESTONES
 
 #### Phase 1-3 Success Criteria: COMPLETE ✅
-- ✅ LLMAgent integrates with multiple providers (OpenAI, Anthropic, Ollama, Azure)
-- ✅ EmbeddingGenerator supports OpenAI, HuggingFace, Ollama, and Azure
+- ✅ LLMAgentNode integrates with multiple providers (OpenAI, Anthropic, Ollama, Azure)
+- ✅ EmbeddingGeneratorNode supports OpenAI, HuggingFace, Ollama, and Azure
 - ✅ Complete hierarchical RAG pipeline with 7 specialized nodes
 - ✅ Client agentic workflows fully supported without workarounds
 - ✅ Performance exceeds requirements (sub-second for most operations)

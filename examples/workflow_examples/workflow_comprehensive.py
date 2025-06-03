@@ -27,8 +27,13 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.data import CSVReader, CSVWriter, JSONReader, JSONWriter
-from kailash.nodes.logic import Switch
+from kailash.nodes.data import (
+    CSVReaderNode,
+    CSVWriterNode,
+    JSONReaderNode,
+    JSONWriterNode,
+)
+from kailash.nodes.logic import SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
@@ -119,7 +124,7 @@ def demonstrate_basic_workflow(data_dir: Path, output_dir: Path):
 
     # 1. Create nodes
     # CSV Reader node
-    reader = CSVReader(name="csv_reader", file_path=str(data_dir / "customers.csv"))
+    reader = CSVReaderNode(name="csv_reader", file_path=str(data_dir / "customers.csv"))
 
     # Let's simplify our approach by using standard nodes instead of PythonCodeNode
     # Replace PythonCodeNode with CSVReader/CSVWriter and Filter nodes
@@ -190,7 +195,7 @@ def demonstrate_basic_workflow(data_dir: Path, output_dir: Path):
     filter_node = ActiveFilter(name="active_filter")
 
     # CSV Writer node
-    writer = CSVWriter(
+    writer = CSVWriterNode(
         name="csv_writer",
         file_path=str(output_dir / "processed_customers.csv"),
         headers=None,
@@ -228,12 +233,12 @@ def demonstrate_conditional_workflow(data_dir: Path, output_dir: Path):
 
     # 1. Create nodes
     # JSON Reader node
-    reader = JSONReader(
+    reader = JSONReaderNode(
         name="json_reader", file_path=str(data_dir / "transactions.json")
     )
 
     # Switch node for routing based on transaction status
-    switch = Switch(
+    switch = SwitchNode(
         name="status_router",
         condition_field="status",
         cases=["Completed", "Pending", "Failed"],
@@ -296,14 +301,14 @@ def demonstrate_conditional_workflow(data_dir: Path, output_dir: Path):
     failed_processor = FailedProcessor(name="failed_processor")
 
     # Writers for each category
-    completed_writer = JSONWriter(
+    completed_writer = JSONWriterNode(
         name="completed_writer",
         file_path=str(output_dir / "completed_transactions.json"),
     )
-    pending_writer = JSONWriter(
+    pending_writer = JSONWriterNode(
         name="pending_writer", file_path=str(output_dir / "pending_transactions.json")
     )
-    failed_writer = JSONWriter(
+    failed_writer = JSONWriterNode(
         name="failed_writer", file_path=str(output_dir / "failed_transactions.json")
     )
 
@@ -352,7 +357,7 @@ def demonstrate_error_handling_workflow(data_dir: Path, output_dir: Path):
 
     # 1. Create nodes
     # CSV Reader node
-    reader = CSVReader(name="csv_reader", file_path=str(data_dir / "customers.csv"))
+    reader = CSVReaderNode(name="csv_reader", file_path=str(data_dir / "customers.csv"))
 
     # Node that might fail
     class RiskyTransformer(Node):
@@ -407,12 +412,12 @@ def demonstrate_error_handling_workflow(data_dir: Path, output_dir: Path):
     error_handler = ErrorHandler(name="error_handler")
 
     # CSV Writer nodes
-    success_writer = CSVWriter(
+    success_writer = CSVWriterNode(
         name="success_writer",
         file_path=str(output_dir / "successfully_processed.csv"),
         headers=None,
     )
-    error_writer = CSVWriter(
+    error_writer = CSVWriterNode(
         name="error_writer",
         file_path=str(output_dir / "error_processed.csv"),
         headers=None,
@@ -444,7 +449,7 @@ def demonstrate_error_handling_workflow(data_dir: Path, output_dir: Path):
     run_id = task_manager.create_run(workflow_name=workflow.name)
 
     # Create tasks for tracking
-    reader_task = TaskRun(run_id=run_id, node_id="reader", node_type="CSVReader")
+    reader_task = TaskRun(run_id=run_id, node_id="reader", node_type="CSVReaderNode")
     transformer_task = TaskRun(
         run_id=run_id, node_id="transformer", node_type="PythonCodeNode"
     )

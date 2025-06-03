@@ -377,6 +377,34 @@
       "status": "failed",
       "started_at": null,
       "ended_at": "2025-06-03T06:22:23.319452+00:00"
+    },
+    "c32e008a-5f9b-4639-9b54-858c74a4b870": {
+      "run_id": "681ebfd8-a9c9-4d14-a556-8a0a3b7f1399",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-06-03T16:07:00.138169+00:00",
+      "ended_at": null
+    },
+    "89552dad-7a09-4c3e-9a64-65345f0b5b3c": {
+      "run_id": "681ebfd8-a9c9-4d14-a556-8a0a3b7f1399",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-06-03T16:07:00.141930+00:00"
+    },
+    "460bd261-f071-4c36-95dd-9130b442bb11": {
+      "run_id": "0b9bd82d-6caf-4f19-bbeb-394d7ac6f094",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-06-03T16:26:00.105344+00:00",
+      "ended_at": null
+    },
+    "592411c5-6691-459a-8830-a823b0a6b306": {
+      "run_id": "0b9bd82d-6caf-4f19-bbeb-394d7ac6f094",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-06-03T16:26:00.108674+00:00"
     }
   },
   "runs": {}

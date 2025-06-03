@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from kailash.nodes.data.readers import CSVReader, JSONReader, TextReader
-from kailash.nodes.data.writers import CSVWriter, JSONWriter, TextWriter
+from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode, TextReaderNode
+from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriterNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
@@ -32,7 +32,7 @@ class TestCSVReaderNode:
             writer.writerow({"name": "Alice", "age": "30", "city": "New York"})
             writer.writerow({"name": "Bob", "age": "25", "city": "San Francisco"})
 
-        node = CSVReader(file_path=str(csv_path))
+        node = CSVReaderNode(file_path=str(csv_path))
         result = node.execute()
 
         assert "data" in result
@@ -52,7 +52,7 @@ class TestCSVReaderNode:
             writer.writeheader()
             writer.writerow({"name": "Item1", "value": "100"})
 
-        node = CSVReader(file_path=str(csv_path), delimiter="\t")
+        node = CSVReaderNode(file_path=str(csv_path), delimiter="\t")
         result = node.execute()
 
         assert len(result["data"]) == 1
@@ -60,7 +60,7 @@ class TestCSVReaderNode:
 
     def test_read_csv_file_not_found(self):
         """Test reading non-existent CSV file."""
-        node = CSVReader(file_path="/nonexistent/file.csv")
+        node = CSVReaderNode(file_path="/nonexistent/file.csv")
 
         with pytest.raises(NodeExecutionError):
             node.execute()
@@ -72,7 +72,7 @@ class TestCSVReaderNode:
         with open(invalid_path, "wb") as f:
             f.write(b"\x00\x01\x02\x03")  # Binary data
 
-        node = CSVReader(file_path=str(invalid_path))
+        node = CSVReaderNode(file_path=str(invalid_path))
 
         # May or may not raise an exception - depends on encoding handling
         # Just verify it doesn't crash catastrophically
@@ -96,7 +96,7 @@ class TestJSONReaderNode:
         with open(json_path, "w") as f:
             json.dump(data, f)
 
-        node = JSONReader(file_path=str(json_path))
+        node = JSONReaderNode(file_path=str(json_path))
         result = node.execute()
 
         assert result["data"] == data
@@ -109,7 +109,7 @@ class TestJSONReaderNode:
         with open(json_path, "w") as f:
             json.dump(data, f)
 
-        node = JSONReader(file_path=str(json_path))
+        node = JSONReaderNode(file_path=str(json_path))
         result = node.execute()
 
         assert result["data"] == data
@@ -122,7 +122,7 @@ class TestJSONReaderNode:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
 
-        node = JSONReader(file_path=str(json_path), encoding="utf-8")
+        node = JSONReaderNode(file_path=str(json_path), encoding="utf-8")
         result = node.execute()
 
         assert result["data"] == data
@@ -134,7 +134,7 @@ class TestJSONReaderNode:
         with open(json_path, "w") as f:
             f.write("{ invalid json }")
 
-        node = JSONReader(file_path=str(json_path))
+        node = JSONReaderNode(file_path=str(json_path))
 
         with pytest.raises(NodeExecutionError):
             node.execute()
@@ -151,7 +151,7 @@ class TestTextReaderNode:
         with open(text_path, "w") as f:
             f.write(content)
 
-        node = TextReader(file_path=str(text_path))
+        node = TextReaderNode(file_path=str(text_path))
         result = node.execute()
 
         assert result["text"] == content
@@ -164,7 +164,7 @@ class TestTextReaderNode:
         with open(text_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        node = TextReader(file_path=str(text_path), encoding="utf-8")
+        node = TextReaderNode(file_path=str(text_path), encoding="utf-8")
         result = node.execute()
 
         assert result["text"] == content
@@ -174,7 +174,7 @@ class TestTextReaderNode:
         text_path = temp_dir / "empty.txt"
         text_path.touch()
 
-        node = TextReader(file_path=str(text_path))
+        node = TextReaderNode(file_path=str(text_path))
         result = node.execute()
 
         assert result["text"] == ""
@@ -188,7 +188,9 @@ class TestCSVWriterNode:
         csv_path = temp_dir / "output.csv"
         data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
 
-        node = CSVWriter(file_path=str(csv_path), data=data, fieldnames=["name", "age"])
+        node = CSVWriterNode(
+            file_path=str(csv_path), data=data, fieldnames=["name", "age"]
+        )
         result = node.execute()
 
         assert result["file_path"] == str(csv_path)
@@ -207,7 +209,7 @@ class TestCSVWriterNode:
         csv_path = temp_dir / "output.csv"
         data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
 
-        node = CSVWriter(file_path=str(csv_path), data=data)
+        node = CSVWriterNode(file_path=str(csv_path), data=data)
         node.execute()
 
         # Should auto-detect fieldnames from first row
@@ -221,7 +223,7 @@ class TestCSVWriterNode:
         csv_path = temp_dir / "output.tsv"
         data = [{"name": "Alice", "age": 30}]
 
-        node = CSVWriter(file_path=str(csv_path), data=data, delimiter="\t")
+        node = CSVWriterNode(file_path=str(csv_path), data=data, delimiter="\t")
         node.execute()
 
         with open(csv_path, "r") as f:
@@ -232,7 +234,7 @@ class TestCSVWriterNode:
         """Test writing empty data."""
         csv_path = temp_dir / "empty.csv"
 
-        node = CSVWriter(file_path=str(csv_path), data=[])
+        node = CSVWriterNode(file_path=str(csv_path), data=[])
 
         # May or may not raise an exception - empty CSV might be valid
         try:
@@ -245,7 +247,7 @@ class TestCSVWriterNode:
 
     def test_write_csv_invalid_path(self):
         """Test writing to invalid path."""
-        node = CSVWriter(file_path="/invalid/path/file.csv", data=[{"test": 1}])
+        node = CSVWriterNode(file_path="/invalid/path/file.csv", data=[{"test": 1}])
 
         with pytest.raises(NodeExecutionError):
             node.execute()
@@ -259,7 +261,7 @@ class TestJSONWriterNode:
         json_path = temp_dir / "output.json"
         data = {"name": "Test", "value": 42}
 
-        node = JSONWriter(file_path=str(json_path), data=data)
+        node = JSONWriterNode(file_path=str(json_path), data=data)
         result = node.execute()
 
         assert result["file_path"] == str(json_path)
@@ -274,7 +276,7 @@ class TestJSONWriterNode:
         json_path = temp_dir / "output.json"
         data = [1, 2, 3, 4, 5]
 
-        node = JSONWriter(file_path=str(json_path), data=data)
+        node = JSONWriterNode(file_path=str(json_path), data=data)
         node.execute()
 
         with open(json_path, "r") as f:
@@ -286,7 +288,7 @@ class TestJSONWriterNode:
         json_path = temp_dir / "output.json"
         data = {"name": "Test", "nested": {"key": "value"}}
 
-        node = JSONWriter(file_path=str(json_path), data=data, indent=2)
+        node = JSONWriterNode(file_path=str(json_path), data=data, indent=2)
         node.execute()
 
         with open(json_path, "r") as f:
@@ -300,7 +302,7 @@ class TestJSONWriterNode:
         json_path = temp_dir / "output.json"
         data = {"message": "Hello 世界"}
 
-        node = JSONWriter(
+        node = JSONWriterNode(
             file_path=str(json_path), data=data, encoding="utf-8", ensure_ascii=False
         )
         node.execute()
@@ -318,7 +320,7 @@ class TestTextWriterNode:
         text_path = temp_dir / "output.txt"
         content = "Hello\nWorld"
 
-        node = TextWriter(file_path=str(text_path), text=content)
+        node = TextWriterNode(file_path=str(text_path), text=content)
         result = node.execute()
 
         assert result["file_path"] == str(text_path)
@@ -333,7 +335,7 @@ class TestTextWriterNode:
         text_path = temp_dir / "output.txt"
         content = "Hello 世界"
 
-        node = TextWriter(file_path=str(text_path), text=content, encoding="utf-8")
+        node = TextWriterNode(file_path=str(text_path), text=content, encoding="utf-8")
         node.execute()
 
         with open(text_path, "r", encoding="utf-8") as f:
@@ -344,7 +346,7 @@ class TestTextWriterNode:
         """Test writing empty content."""
         text_path = temp_dir / "empty.txt"
 
-        node = TextWriter(file_path=str(text_path), text="")
+        node = TextWriterNode(file_path=str(text_path), text="")
         result = node.execute()
 
         assert result["bytes_written"] == 0
@@ -359,7 +361,7 @@ class TestTextWriterNode:
         with open(text_path, "w") as f:
             f.write("Old content")
 
-        node = TextWriter(file_path=str(text_path), text="New content")
+        node = TextWriterNode(file_path=str(text_path), text="New content")
         node.execute()
 
         with open(text_path, "r") as f:

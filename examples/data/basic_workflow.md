@@ -7,8 +7,8 @@ flowchart TB
     input_data([Input Data])
 
     %% Data Input nodes
-    csv_reader["CSVReader<br/>csv_reader"]
-    json_reader["JSONReader<br/>json_reader"]
+    csv_reader["CSVReaderNode<br/>csv_reader"]
+    json_reader["JSONReaderNode<br/>json_reader"]
 
     %% Processing nodes
     data_joiner["PythonCode<br/>data_joiner"]
@@ -17,8 +17,8 @@ flowchart TB
     aggregator["PythonCode<br/>aggregator"]
 
     %% Data Output nodes
-    csv_writer["CSVWriter<br/>csv_writer"]
-    json_writer["JSONWriter<br/>json_writer"]
+    csv_writer["CSVWriterNode<br/>csv_writer"]
+    json_writer["JSONWriterNode<br/>json_writer"]
 
     %% Output Data
     output_data([Output Data])
@@ -55,12 +55,12 @@ flowchart TB
 |---------|------|-------------|
 | aggregator | PythonCodeNode | Node for executing arbitrary Python code. |
 | classifier | PythonCodeNode | Node for executing arbitrary Python code. |
-| csv_reader | CSVReader | Reads data from a CSV file. |
-| csv_writer | CSVWriter | Writes data to a CSV file. |
+| csv_reader | CSVReaderNode | Reads data from a CSV file. |
+| csv_writer | CSVWriterNode | Writes data to a CSV file. |
 | data_joiner | PythonCodeNode | Node for executing arbitrary Python code. |
 | data_transformer | PythonCodeNode | Node for executing arbitrary Python code. |
-| json_reader | JSONReader | Reads data from a JSON file. |
-| json_writer | JSONWriter | Writes data to a JSON file. |
+| json_reader | JSONReaderNode | Reads data from a JSON file. |
+| json_writer | JSONWriterNode | Writes data to a JSON file. |
 
 ### Connections
 

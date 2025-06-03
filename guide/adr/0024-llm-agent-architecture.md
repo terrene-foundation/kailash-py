@@ -24,7 +24,7 @@ The current mock implementations (`ChatAgent`, `RetrievalAgent`, etc.) are place
 
 Implement a comprehensive LLM Agent architecture consisting of:
 
-1. **LLMAgent Node**: Core agent with real model integration
+1. **LLMAgentNode Node**: Core agent with real model integration
 2. **Provider Abstraction**: Unified interface for multiple LLM providers
 3. **Memory Management**: Conversation history and context persistence
 4. **Tool Integration**: Function calling and external tool execution
@@ -92,7 +92,7 @@ The LLM Agent architecture will be designed as:
 
 ### Core Components
 
-1. **LLMAgent Node**:
+1. **LLMAgentNode Node**:
    - Unified interface for LLM interactions
    - Provider abstraction layer
    - Conversation memory management
@@ -121,7 +121,7 @@ The LLM Agent architecture will be designed as:
 
 1. **OpenAI Integration**:
 ```python
-workflow.add_node("LLMAgent", "ai_assistant", config={
+workflow.add_node("LLMAgentNode", "ai_assistant", config={
     "provider": "openai",
     "model": "gpt-4",
     "api_key": "${OPENAI_API_KEY}",
@@ -140,7 +140,7 @@ workflow.add_node("LLMAgent", "ai_assistant", config={
 
 2. **Anthropic Integration**:
 ```python
-workflow.add_node("LLMAgent", "claude_agent", config={
+workflow.add_node("LLMAgentNode", "claude_agent", config={
     "provider": "anthropic",
     "model": "claude-3-sonnet-20240229",
     "api_key": "${ANTHROPIC_API_KEY}",
@@ -156,7 +156,7 @@ workflow.add_node("LLMAgent", "claude_agent", config={
 
 3. **LangChain Integration**:
 ```python
-workflow.add_node("LLMAgent", "langchain_agent", config={
+workflow.add_node("LLMAgentNode", "langchain_agent", config={
     "provider": "langchain",
     "agent_type": "openai-functions",
     "llm": {

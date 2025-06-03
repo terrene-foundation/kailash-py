@@ -28,9 +28,9 @@ Save this as ``quickstart.py``:
    w = Workflow("quickstart")
 
    # Add nodes
-   w.add_node("CSVReader", "read", config={"file_path": "data.csv"})
+   w.add_node("CSVReaderNode", "read", config={"file_path": "data.csv"})
    w.add_node("DataFilter", "filter", config={"column": "age", "value": 18, "operation": ">="})
-   w.add_node("CSVWriter", "write", config={"file_path": "adults.csv"})
+   w.add_node("CSVWriterNode", "write", config={"file_path": "adults.csv"})
 
    # Connect nodes
    w.connect_sequential(["read", "filter", "write"])
@@ -62,7 +62,7 @@ Process customer data with filtering and transformation:
    w = Workflow("customer_pipeline")
 
    # Read customer data
-   w.add_node("CSVReader", "customers", config={
+   w.add_node("CSVReaderNode", "customers", config={
        "file_path": "customers.csv"
    })
 
@@ -86,7 +86,7 @@ Process customer data with filtering and transformation:
    })
 
    # Save results
-   w.add_node("CSVWriter", "save", config={
+   w.add_node("CSVWriterNode", "save", config={
        "file_path": "customer_segments.csv"
    })
 
@@ -106,7 +106,7 @@ Enrich data using external APIs:
    w = Workflow("api_enrichment")
 
    # Read companies to enrich
-   w.add_node("JSONReader", "companies", config={
+   w.add_node("JSONReaderNode", "companies", config={
        "file_path": "companies.json"
    })
 
@@ -122,7 +122,7 @@ Enrich data using external APIs:
    })
 
    # Save enriched data
-   w.add_node("JSONWriter", "save", config={
+   w.add_node("JSONWriterNode", "save", config={
        "file_path": "enriched_companies.json"
    })
 
@@ -141,7 +141,7 @@ Analyze customer feedback with AI:
    w = Workflow("feedback_analysis")
 
    # Read feedback data
-   w.add_node("CSVReader", "feedback", config={
+   w.add_node("CSVReaderNode", "feedback", config={
        "file_path": "customer_feedback.csv"
    })
 
@@ -152,7 +152,7 @@ Analyze customer feedback with AI:
    })
 
    # Categorize by sentiment
-   w.add_node("Switch", "route", config={
+   w.add_node("SwitchNode", "route", config={
        "condition": "sentiment_score",
        "routes": {
            "positive": "score > 0.6",
@@ -162,12 +162,12 @@ Analyze customer feedback with AI:
    })
 
    # Save positive feedback
-   w.add_node("CSVWriter", "save_positive", config={
+   w.add_node("CSVWriterNode", "save_positive", config={
        "file_path": "positive_feedback.csv"
    })
 
    # Save negative feedback for review
-   w.add_node("JSONWriter", "save_negative", config={
+   w.add_node("JSONWriterNode", "save_negative", config={
        "file_path": "needs_review.json"
    })
 
@@ -200,13 +200,13 @@ Common Nodes
 .. code-block:: python
 
    # Reading
-   w.add_node("CSVReader", "csv_in", config={"file_path": "data.csv"})
-   w.add_node("JSONReader", "json_in", config={"file_path": "data.json"})
-   w.add_node("TextReader", "txt_in", config={"file_path": "data.txt"})
+   w.add_node("CSVReaderNode", "csv_in", config={"file_path": "data.csv"})
+   w.add_node("JSONReaderNode", "json_in", config={"file_path": "data.json"})
+   w.add_node("TextReaderNode", "txt_in", config={"file_path": "data.txt"})
 
    # Writing
-   w.add_node("CSVWriter", "csv_out", config={"file_path": "output.csv"})
-   w.add_node("JSONWriter", "json_out", config={"file_path": "output.json"})
+   w.add_node("CSVWriterNode", "csv_out", config={"file_path": "output.csv"})
+   w.add_node("JSONWriterNode", "json_out", config={"file_path": "output.json"})
 
 **Data Processing**
 
@@ -238,7 +238,7 @@ Common Nodes
 .. code-block:: python
 
    # Conditional routing
-   w.add_node("Switch", "router", config={
+   w.add_node("SwitchNode", "router", config={
        "condition": "category",
        "routes": {
            "high": "value > 1000",
@@ -248,7 +248,7 @@ Common Nodes
    })
 
    # Merge streams
-   w.add_node("Merge", "combine", config={
+   w.add_node("MergeNode", "combine", config={
        "strategy": "concat"  # or "join", "union"
    })
 
@@ -348,8 +348,8 @@ Tips & Tricks
        "na_values": ["N/A", "null"]
    }
 
-   w.add_node("CSVReader", "read1", config={"file_path": "file1.csv", **csv_config})
-   w.add_node("CSVReader", "read2", config={"file_path": "file2.csv", **csv_config})
+   w.add_node("CSVReaderNode", "read1", config={"file_path": "file1.csv", **csv_config})
+   w.add_node("CSVReaderNode", "read2", config={"file_path": "file2.csv", **csv_config})
 
 4. **Error Handling**
 

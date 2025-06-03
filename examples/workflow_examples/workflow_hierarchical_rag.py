@@ -17,8 +17,8 @@ Architecture: Uses autonomous data source nodes and proper node connections
 without relying on external input injection.
 """
 
-from kailash.nodes.ai.embedding_generator import EmbeddingGenerator
-from kailash.nodes.ai.llm_agent import LLMAgent
+from kailash.nodes.ai.embedding_generator import EmbeddingGeneratorNode
+from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.data.retrieval import RelevanceScorerNode
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
@@ -37,7 +37,7 @@ def create_hierarchical_rag_workflow():
     workflow = Workflow(
         workflow_id="hierarchical_rag_example",
         name="Hierarchical RAG Workflow",
-        description="Simple hierarchical RAG workflow using LLMAgent and EmbeddingGenerator with Ollama",
+        description="Simple hierarchical RAG workflow using LLMAgentNode and EmbeddingGeneratorNode with Ollama",
         version="1.0.0",
     )
 
@@ -47,14 +47,14 @@ def create_hierarchical_rag_workflow():
     query_source = QuerySourceNode()
 
     # Create embedding generators with proper Ollama configuration
-    chunk_embedder = EmbeddingGenerator(
+    chunk_embedder = EmbeddingGeneratorNode(
         provider="ollama",
         model="nomic-embed-text",
         api_key="not-needed",
         operation="embed_batch",
     )
 
-    query_embedder = EmbeddingGenerator(
+    query_embedder = EmbeddingGeneratorNode(
         provider="ollama",
         model="nomic-embed-text",
         api_key="not-needed",
@@ -70,7 +70,7 @@ def create_hierarchical_rag_workflow():
     context_formatter = ContextFormatterNode()
 
     # Create LLM agent for final answer generation
-    llm_agent = LLMAgent(
+    llm_agent = LLMAgentNode(
         provider="ollama",
         model="llama3.2",
         api_key="not-needed",

@@ -6,12 +6,12 @@ import pandas as pd
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import CSVReader
+from kailash.nodes.data import CSVReaderNode
 
 sample_directory = Path("../data")
 
 # CSV Node (pre-created)
-csv_reader_node = CSVReader(
+csv_reader_node = CSVReaderNode(
     metadata=NodeMetadata(
         id="csv_node_1",
         name="customer_value_csv_read_node",

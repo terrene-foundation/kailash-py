@@ -7,7 +7,7 @@ import pandas as pd
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReader, CSVWriter
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime import LocalRuntime
 from kailash.workflow import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
@@ -23,7 +23,7 @@ def create_data_pipeline():
     )
 
     # 1. Input: CSV Reader
-    csv_reader = CSVReader(
+    csv_reader = CSVReaderNode(
         file_path=Path("tests/sample_examples/data/customer_value.csv"),
         headers=True,
         delimiter=",",
@@ -116,12 +116,12 @@ def create_data_pipeline():
     output_dir = Path("../outputs")
     output_dir.mkdir(exist_ok=True)
 
-    enriched_writer = CSVWriter(
+    enriched_writer = CSVWriterNode(
         file_path=str(output_dir / "enriched_customers.csv"), headers=True
     )
     enriched_writer.id = "enriched_output"
 
-    summary_writer = CSVWriter(
+    summary_writer = CSVWriterNode(
         file_path=str(output_dir / "customer_summary.csv"), headers=True
     )
     summary_writer.id = "summary_output"

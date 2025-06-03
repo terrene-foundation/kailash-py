@@ -70,5 +70,5 @@ All tests are now passing with the consolidated implementation:
 ## Next Steps
 
 1. Update LocalRuntime to work with the consolidated Workflow API
-2. Add tests for conditional workflow with Switch/Merge nodes
+2. Add tests for conditional workflow with SwitchNode/MergeNode nodes
 3. Document the new consolidated API in the developer guide

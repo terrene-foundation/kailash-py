@@ -55,7 +55,7 @@ The final deliverables should include:
 #### Node Types
 - **Data Connectors**: CSV/JSON/DB readers and writers
 - **Transformations**: Data processors and filters
-- **Logic Nodes**: Conditionals (Switch/Merge) and operations
+- **Logic Nodes**: Conditionals (SwitchNode/MergeNode) and operations
 - **AI/ML Nodes**: ML model integration and agents
 - **Code Nodes**: Custom Python code execution
 
@@ -194,8 +194,8 @@ class TaskManager:
 ### Basic Workflow with Direct Creation
 
 ```python
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.transform.processors import DataTransformer
 from kailash.workflow import Workflow
 
@@ -209,7 +209,7 @@ workflow = Workflow(
 # Add nodes
 workflow._add_node_internal(
     "reader",
-    "CSVReader",
+    "CSVReaderNode",
     {"file_path": "customers.csv", "headers": True}
 )
 
@@ -221,7 +221,7 @@ workflow._add_node_internal(
 
 workflow._add_node_internal(
     "writer",
-    "CSVWriter",
+    "CSVWriterNode",
     {"file_path": "processed_customers.csv"}
 )
 
@@ -242,11 +242,11 @@ from kailash.workflow.builder import WorkflowBuilder
 builder = WorkflowBuilder()
 
 # Add nodes
-reader_id = builder.add_node("CSVReader", "reader",
+reader_id = builder.add_node("CSVReaderNode", "reader",
                            {"file_path": "customers.csv", "headers": True})
 transformer_id = builder.add_node("DataTransformer", "transformer",
                                 {"transformations": ["lambda x: {**x, 'tier': 'premium' if x['value'] > 100 else 'standard'}"]})
-writer_id = builder.add_node("CSVWriter", "writer",
+writer_id = builder.add_node("CSVWriterNode", "writer",
                            {"file_path": "processed_customers.csv"})
 
 # Add connections
@@ -258,7 +258,7 @@ workflow = builder.build("customer_workflow", name="Customer Processing")
 results = workflow.execute()
 ```
 
-### Conditional Workflow with Switch/Merge
+### Conditional Workflow with SwitchNode/MergeNode
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -267,10 +267,10 @@ from kailash.workflow.builder import WorkflowBuilder
 builder = WorkflowBuilder()
 
 # Add nodes
-reader_id = builder.add_node("JSONReader", "reader",
+reader_id = builder.add_node("JSONReaderNode", "reader",
                            {"file_path": "transactions.json"})
 
-switch_id = builder.add_node("Switch", "status_router",
+switch_id = builder.add_node("SwitchNode", "status_router",
                            {"field": "status", "cases": ["completed", "pending", "failed"]})
 
 # Add processing nodes for each case
@@ -282,7 +282,7 @@ failed_id = builder.add_node("DataTransformer", "failed_processor",
                            {"transformations": ["lambda x: {**x, 'retry_count': x.get('retry_count', 0) + 1}"]})
 
 # Add merge node to combine results
-merge_id = builder.add_node("Merge", "result_merger", {})
+merge_id = builder.add_node("MergeNode", "result_merger", {})
 
 # Connect nodes
 builder.add_connection(reader_id, "data", switch_id, "input")
@@ -320,7 +320,7 @@ results = workflow.execute()
 ### 7.1 API Improvements
 - **Workflow Creation**: Now requires `workflow_id` parameter for better identification and tracking
 - **Node Output Schemas**: PythonCodeNode functions must define output schemas for proper validation
-- **CSVWriter Headers**: Fixed to accept None (auto-detect) or list of column names, not boolean
+- **CSVWriterNode Headers**: Fixed to accept None (auto-detect) or list of column names, not boolean
 
 ### 7.2 Enhanced Features
 - **Asynchronous Execution**: Added AsyncNode base class and async variants of logic nodes
@@ -351,4 +351,4 @@ All example files have been updated to reflect current API:
 1. **String Data in Numeric Operations**: Use `pd.to_numeric(df[column], errors='coerce')` before numeric operations
 2. **Missing Output Schemas**: All PythonCodeNode functions must define output schemas using NodeParameter objects
 3. **Workflow ID Required**: Always provide workflow_id when creating Workflow instances
-4. **CSVWriter Headers**: Pass None for auto-detection or explicit list of column names
+4. **CSVWriterNode Headers**: Pass None for auto-detection or explicit list of column names

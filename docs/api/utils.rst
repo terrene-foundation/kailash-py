@@ -64,7 +64,7 @@ Export Formats
 
      nodes:
        - id: read_data
-         type: CSVReader
+         type: CSVReaderNode
          config:
            file_path: "input.csv"
 
@@ -77,7 +77,7 @@ Export Formats
                value: active
 
        - id: save_data
-         type: CSVWriter
+         type: CSVWriterNode
          config:
            file_path: "output.csv"
 
@@ -98,7 +98,7 @@ Export Formats
        "nodes": [
          {
            "id": "read_data",
-           "type": "CSVReader",
+           "type": "CSVReaderNode",
            "config": {
              "file_path": "input.csv"
            }
@@ -192,8 +192,8 @@ Complete RAG Pipeline Example
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   from kailash.nodes.ai.embedding_generator import EmbeddingGenerator
-   from kailash.nodes.ai.llm_agent import LLMAgent
+   from kailash.nodes.ai.embedding_generator import EmbeddingGeneratorNode
+   from kailash.nodes.ai.llm_agent import LLMAgentNode
    from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
    from kailash.nodes.data.retrieval import RelevanceScorerNode
    from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
@@ -214,17 +214,17 @@ Complete RAG Pipeline Example
    query_text_wrapper = QueryTextWrapperNode()
 
    # AI processing with Ollama
-   chunk_embedder = EmbeddingGenerator(
+   chunk_embedder = EmbeddingGeneratorNode(
        provider="ollama", model="nomic-embed-text", operation="embed_batch"
    )
-   query_embedder = EmbeddingGenerator(
+   query_embedder = EmbeddingGeneratorNode(
        provider="ollama", model="nomic-embed-text", operation="embed_batch"
    )
 
    # Retrieval and response generation
    relevance_scorer = RelevanceScorerNode()
    context_formatter = ContextFormatterNode()
-   llm_agent = LLMAgent(provider="ollama", model="llama3.2", temperature=0.7)
+   llm_agent = LLMAgentNode(provider="ollama", model="llama3.2", temperature=0.7)
 
    # Add all nodes to workflow
    for name, node in {
@@ -286,7 +286,7 @@ NodeRegistry
    print(f"Available nodes: {available_nodes}")
 
    # Get node class
-   CSVReader = NodeRegistry.get_node("CSVReader")
+   CSVReaderNode = NodeRegistry.get_node("CSVReaderNode")
 
    # Check if node exists
    if NodeRegistry.has_node("CustomNode"):
@@ -355,7 +355,7 @@ Validate node and workflow configurations:
        "encoding": "utf-8"
    }
 
-   is_valid = validator.validate_node_config("CSVReader", node_config)
+   is_valid = validator.validate_node_config("CSVReaderNode", node_config)
 
    # Validate with schema
    schema = {

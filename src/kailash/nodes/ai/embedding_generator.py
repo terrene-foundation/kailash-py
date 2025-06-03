@@ -7,7 +7,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class EmbeddingGenerator(Node):
+class EmbeddingGeneratorNode(Node):
     """
     Vector embedding generator for RAG systems and semantic similarity operations.
 
@@ -61,46 +61,42 @@ class EmbeddingGenerator(Node):
     - Updates usage statistics and cost tracking
 
     Examples:
+        >>> # Single text embedding
+        >>> embedder = EmbeddingGeneratorNode()
+        >>> result = embedder.run(
+        ...     provider="openai",
+        ...     model="text-embedding-3-large",
+        ...     input_text="This is a sample document to embed",
+        ...     operation="embed_text"
+        ... )
 
-        Single text embedding::
+        >>> # Batch document embedding
+        >>> batch_embedder = EmbeddingGeneratorNode()
+        >>> result = batch_embedder.run(
+        ...     provider="huggingface",
+        ...     model="sentence-transformers/all-MiniLM-L6-v2",
+        ...     input_texts=[
+        ...         "First document content...",
+        ...         "Second document content...",
+        ...         "Third document content..."
+        ...     ],
+        ...     operation="embed_batch",
+        ...     batch_size=32,
+        ...     cache_enabled=True
+        ... )
 
-        embedder = EmbeddingGenerator()
-        result = embedder.run(
-            provider="openai",
-            model="text-embedding-3-large",
-            input_text="This is a sample document to embed",
-            operation="embed_text"
-        )
-
-        Batch document embedding:
-
-        batch_embedder = EmbeddingGenerator()
-        result = batch_embedder.run(
-            provider="huggingface",
-            model="sentence-transformers/all-MiniLM-L6-v2",
-            input_texts=[
-                "First document content...",
-                "Second document content...",
-                "Third document content..."
-            ],
-            operation="embed_batch",
-            batch_size=32,
-            cache_enabled=True
-        )
-
-        Similarity calculation:
-
-        similarity = EmbeddingGenerator()
-        result = similarity.run(
-            operation="calculate_similarity",
-            embedding_1=[0.1, 0.2, 0.3, ...],
-            embedding_2=[0.15, 0.25, 0.35, ...],
-            similarity_metric="cosine"
-        )
+        >>> # Similarity calculation
+        >>> similarity = EmbeddingGeneratorNode()
+        >>> result = similarity.run(
+        ...     operation="calculate_similarity",
+        ...     embedding_1=[0.1, 0.2, 0.3],  # ... removed for doctest
+        ...     embedding_2=[0.15, 0.25, 0.35],  # ... removed for doctest
+        ...     similarity_metric="cosine"
+        ... )
 
         Cached embedding with MCP integration:
 
-        mcp_embedder = EmbeddingGenerator()
+        mcp_embedder = EmbeddingGeneratorNode()
         result = mcp_embedder.run(
             provider="azure",
             model="text-embedding-3-small",

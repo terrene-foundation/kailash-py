@@ -13,14 +13,14 @@ from kailash.nodes.base_async import AsyncNode
 
 
 @register_node()
-class AsyncMerge(AsyncNode):
+class AsyncMergeNode(AsyncNode):
     """Asynchronously merges multiple data sources.
 
     Note: We implement run() to fulfill the Node abstract base class requirement,
     but it's just a pass-through to async_run().
 
 
-    This node extends the standard Merge node with asynchronous execution capabilities,
+    This node extends the standard MergeNode with asynchronous execution capabilities,
     making it more efficient for:
 
     1. Combining large datasets from parallel branches
@@ -28,13 +28,13 @@ class AsyncMerge(AsyncNode):
     3. Processing streaming data in chunks
     4. Aggregating results from various API calls
 
-    The merge operation supports the same types as the standard Merge node:
+    The merge operation supports the same types as the standard MergeNode:
     concat (list concatenation), zip (parallel iteration), and merge_dict
     (dictionary merging with optional key-based joining).
 
     Usage example:
-        # Create an AsyncMerge node in a workflow
-        async_merge = AsyncMerge(merge_type="merge_dict", key="id")
+        # Create an AsyncMergeNode in a workflow
+        async_merge = AsyncMergeNode(merge_type="merge_dict", key="id")
         workflow.add_node("data_combine", async_merge)
 
         # Connect multiple data sources
@@ -44,7 +44,7 @@ class AsyncMerge(AsyncNode):
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
-        """Define parameters for the AsyncMerge node."""
+        """Define parameters for the AsyncMergeNode."""
         # Reuse parameters from SyncMerge
         return {
             "data1": NodeParameter(
@@ -107,7 +107,7 @@ class AsyncMerge(AsyncNode):
         }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
-        """Define the output schema for AsyncMerge."""
+        """Define the output schema for AsyncMergeNode."""
         return {
             "merged_data": NodeParameter(
                 name="merged_data",
@@ -155,7 +155,7 @@ class AsyncMerge(AsyncNode):
 
         # Check if we have at least one valid input
         if not data_inputs:
-            self.logger.warning("No valid data inputs provided to AsyncMerge node")
+            self.logger.warning("No valid data inputs provided to AsyncMergeNode")
             return {"merged_data": None}
 
         # If only one input was provided, return it directly
@@ -207,7 +207,7 @@ class AsyncMerge(AsyncNode):
         # This will be properly wrapped by the execute() method
         # which will call it in a sync context
         raise RuntimeError(
-            "AsyncMerge.run() was called directly. Use execute() or execute_async() instead."
+            "AsyncMergeNode.run() was called directly. Use execute() or execute_async() instead."
         )
 
     async def _async_concat(self, data_inputs: List[Any], chunk_size: int) -> Any:
@@ -349,25 +349,25 @@ class AsyncMerge(AsyncNode):
 
 
 @register_node()
-class AsyncSwitch(AsyncNode):
+class AsyncSwitchNode(AsyncNode):
     """Asynchronously routes data to different outputs based on conditions.
 
     Note: We implement run() to fulfill the Node abstract base class requirement,
     but it's just a pass-through to async_run().
 
-    This node extends the standard Switch node with asynchronous execution capabilities,
+    This node extends the standard SwitchNode with asynchronous execution capabilities,
     making it more efficient for:
 
     1. Processing conditional routing with I/O-bound condition evaluation
     2. Handling large datasets that need to be routed based on complex criteria
     3. Integrating with other asynchronous nodes in a workflow
 
-    The basic functionality is the same as the synchronous Switch node but optimized
+    The basic functionality is the same as the synchronous SwitchNode but optimized
     for asynchronous execution.
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
-        """Define parameters for the AsyncSwitch node."""
+        """Define parameters for the AsyncSwitchNode."""
         return {
             "input_data": NodeParameter(
                 name="input_data",
@@ -603,7 +603,7 @@ class AsyncSwitch(AsyncNode):
         # This will be properly wrapped by the execute() method
         # which will call it in a sync context
         raise RuntimeError(
-            "AsyncSwitch.run() was called directly. Use execute() or execute_async() instead."
+            "AsyncSwitchNode.run() was called directly. Use execute() or execute_async() instead."
         )
 
     async def _evaluate_condition(

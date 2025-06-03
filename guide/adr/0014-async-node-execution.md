@@ -179,14 +179,14 @@ As of 2025-05-30, asynchronous node execution has been fully implemented:
 workflow = Workflow("multi_agent_analysis")
 
 # Async agents can run concurrently
-workflow.add_node("LLMAgent", "research_agent", config={
+workflow.add_node("LLMAgentNode", "research_agent", config={
     "provider": "openai",
     "model": "gpt-4",
     "role": "research_specialist",
     "async_execution": True
 })
 
-workflow.add_node("LLMAgent", "analysis_agent", config={
+workflow.add_node("LLMAgentNode", "analysis_agent", config={
     "provider": "anthropic",
     "model": "claude-3-sonnet",
     "role": "data_analyst",
@@ -236,12 +236,12 @@ workflow.add_node("MCPClientNode", "context_manager", config={
 1. **Pipeline Parallelism**: Agents working on different stages simultaneously
 ```python
 # Stage 1: Multiple agents processing input in parallel
-workflow.add_node("LLMAgent", "preprocessor_1", config={"stage": 1, "async": True})
-workflow.add_node("LLMAgent", "preprocessor_2", config={"stage": 1, "async": True})
+workflow.add_node("LLMAgentNode", "preprocessor_1", config={"stage": 1, "async": True})
+workflow.add_node("LLMAgentNode", "preprocessor_2", config={"stage": 1, "async": True})
 
 # Stage 2: Synthesis agent waits for all preprocessors
 workflow.add_node("AsyncMerge", "stage1_merge", config={"wait_strategy": "all"})
-workflow.add_node("LLMAgent", "synthesizer", config={"stage": 2, "async": True})
+workflow.add_node("LLMAgentNode", "synthesizer", config={"stage": 2, "async": True})
 ```
 
 2. **Consensus Building**: Async coordination for agent agreement

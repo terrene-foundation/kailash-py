@@ -50,10 +50,10 @@ sources.
 Readers
 -------
 
-CSVReader
-~~~~~~~~~
+CSVReaderNode
+~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.readers.CSVReader
+.. autoclass:: kailash.nodes.data.readers.CSVReaderNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -63,12 +63,12 @@ CSVReader
 .. code-block:: python
 
    from kailash import Workflow
-   from kailash.nodes.data import CSVReader
+   from kailash.nodes.data import CSVReaderNode
 
    workflow = Workflow("csv_example")
 
    # Create the CSV reader node
-   csv_reader = CSVReader(
+   csv_reader = CSVReaderNode(
        file_path="customers.csv",
        encoding="utf-8"
    )
@@ -76,10 +76,10 @@ CSVReader
    # Add the node to the workflow
    workflow.add_node("read_customers", csv_reader)
 
-JSONReader
-~~~~~~~~~~
+JSONReaderNode
+~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.readers.JSONReader
+.. autoclass:: kailash.nodes.data.readers.JSONReaderNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -88,15 +88,15 @@ JSONReader
 
 .. code-block:: python
 
-   workflow.add_node("JSONReader", "read_config", config={
+   workflow.add_node("JSONReaderNode", "read_config", config={
        "file_path": "config.json",
        "encoding": "utf-8"
    })
 
-TextReader
-~~~~~~~~~~
+TextReaderNode
+~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.readers.TextReader
+.. autoclass:: kailash.nodes.data.readers.TextReaderNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -106,10 +106,10 @@ TextReader
 Writers
 -------
 
-CSVWriter
-~~~~~~~~~
+CSVWriterNode
+~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.writers.CSVWriter
+.. autoclass:: kailash.nodes.data.writers.CSVWriterNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -118,24 +118,24 @@ CSVWriter
 
 .. code-block:: python
 
-   workflow.add_node("CSVWriter", "save_results", config={
+   workflow.add_node("CSVWriterNode", "save_results", config={
        "file_path": "output/results.csv",
        "index": False,
        "encoding": "utf-8"
    })
 
-JSONWriter
-~~~~~~~~~~
+JSONWriterNode
+~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.writers.JSONWriter
+.. autoclass:: kailash.nodes.data.writers.JSONWriterNode
    :members:
    :undoc-members:
    :show-inheritance:
 
-TextWriter
-~~~~~~~~~~
+TextWriterNode
+~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.nodes.data.writers.TextWriter
+.. autoclass:: kailash.nodes.data.writers.TextWriterNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -310,10 +310,10 @@ Logic Nodes
 
 Logic nodes control workflow execution flow.
 
-Switch
-------
+SwitchNode
+----------
 
-.. autoclass:: kailash.nodes.logic.operations.Switch
+.. autoclass:: kailash.nodes.logic.operations.SwitchNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -322,7 +322,7 @@ Switch
 
 .. code-block:: python
 
-   workflow.add_node("Switch", "route_by_value", config={
+   workflow.add_node("SwitchNode", "route_by_value", config={
        "condition": "customer_segment",
        "routes": {
            "premium": "lifetime_value > 10000",
@@ -331,10 +331,10 @@ Switch
        }
    })
 
-Merge
------
+MergeNode
+---------
 
-.. autoclass:: kailash.nodes.logic.operations.Merge
+.. autoclass:: kailash.nodes.logic.operations.MergeNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -343,7 +343,7 @@ Merge
 
 .. code-block:: python
 
-   workflow.add_node("Merge", "combine_streams", config={
+   workflow.add_node("MergeNode", "combine_streams", config={
        "strategy": "concat",  # or "join", "union"
        "join_on": "customer_id",  # for join strategy
        "how": "left"  # for join strategy
@@ -467,10 +467,10 @@ TextClassifier
        "batch_size": 32
    })
 
-EmbeddingGenerator
-------------------
+EmbeddingGeneratorNode
+----------------------
 
-.. autoclass:: kailash.nodes.ai.embedding_generator.EmbeddingGenerator
+.. autoclass:: kailash.nodes.ai.embedding_generator.EmbeddingGeneratorNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -479,10 +479,10 @@ EmbeddingGenerator
 
 .. code-block:: python
 
-   from kailash.nodes.ai import EmbeddingGenerator
+   from kailash.nodes.ai import EmbeddingGeneratorNode
 
    # Single text embedding
-   embedder = EmbeddingGenerator()
+   embedder = EmbeddingGeneratorNode()
    result = embedder.run(
        provider="openai",
        model="text-embedding-3-large",
@@ -508,10 +508,10 @@ EmbeddingGenerator
        similarity_metric="cosine"
    )
 
-LLMAgent
---------
+LLMAgentNode
+------------
 
-.. autoclass:: kailash.nodes.ai.llm_agent.LLMAgent
+.. autoclass:: kailash.nodes.ai.llm_agent.LLMAgentNode
    :members:
    :undoc-members:
    :show-inheritance:
@@ -520,10 +520,10 @@ LLMAgent
 
 .. code-block:: python
 
-   from kailash.nodes.ai import LLMAgent
+   from kailash.nodes.ai import LLMAgentNode
 
    # Basic question-answering
-   agent = LLMAgent()
+   agent = LLMAgentNode()
    result = agent.run(
        provider="openai",
        model="gpt-4",

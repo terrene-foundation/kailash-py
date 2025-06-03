@@ -18,7 +18,7 @@ Fixed multiple issues in the README examples:
 - This matches the node's expected output schema
 
 #### SharePoint Integration
-- Added required `file_path` parameter to CSVWriter: `CSVWriter(file_path="sharepoint_output.csv")`
+- Added required `file_path` parameter to CSVWriterNode: `CSVWriterNode(file_path="sharepoint_output.csv")`
 
 #### Workflow Management
 - Fixed import: `from kailash.nodes.transform import DataTransformer` (not from data module)

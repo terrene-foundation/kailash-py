@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.absolute()))
 
 # Import Kailash components
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.docker import DockerRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
@@ -59,7 +59,7 @@ def create_workflow(input_file, output_file):
     workflow = Workflow(name="docker_example_workflow")
 
     # Create reader node
-    reader = CSVReader(name="customer_reader")
+    reader = CSVReaderNode(name="customer_reader")
 
     # Create processor nodes
     def clean_data(data):
@@ -113,7 +113,7 @@ def create_workflow(input_file, output_file):
     )
 
     # Create writer node
-    writer = CSVWriter(name="customer_writer")
+    writer = CSVWriterNode(name="customer_writer")
 
     # Add nodes to workflow
     workflow.add_node("reader", reader, {"file_path": input_file})

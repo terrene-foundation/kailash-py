@@ -15,8 +15,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader, JSONReader
-from kailash.nodes.data.writers import CSVWriter, JSONWriter
+from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
+from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
 from kailash.workflow.graph import Workflow
@@ -31,8 +31,8 @@ def create_sample_workflow():
     )
 
     # Create nodes
-    csv_reader = CSVReader(file_path="../data/customers.csv", headers=True)
-    json_reader = JSONReader(file_path="../data/transactions.json")
+    csv_reader = CSVReaderNode(file_path="../data/customers.csv", headers=True)
+    json_reader = JSONReaderNode(file_path="../data/transactions.json")
 
     # Create joiner using PythonCodeNode
     def join_data(customer_data: list, transaction_data: list) -> Dict[str, Any]:
@@ -131,8 +131,8 @@ def create_sample_workflow():
         output_schema=aggregator_output_schema,
     )
 
-    csv_writer = CSVWriter(file_path="../data/results.csv")
-    json_writer = JSONWriter(file_path="../data/summary.json", data={})
+    csv_writer = CSVWriterNode(file_path="../data/results.csv")
+    json_writer = JSONWriterNode(file_path="../data/summary.json", data={})
 
     # Add nodes to workflow
     workflow.add_node(node_id="csv_reader", node_or_type=csv_reader)

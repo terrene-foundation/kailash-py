@@ -22,8 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
@@ -96,13 +96,13 @@ def main():
     print("Creating workflow nodes...")
 
     # Create input node - reads CSV data
-    csv_reader = CSVReader(file_path=str(data_dir / "customers.csv"), headers=True)
+    csv_reader = CSVReaderNode(file_path=str(data_dir / "customers.csv"), headers=True)
 
     # Create transformation node
     transformer = create_data_transformer()
 
     # Create output node - writes processed data
-    csv_writer = CSVWriter(file_path=str(output_dir / "processed_customers.csv"))
+    csv_writer = CSVWriterNode(file_path=str(output_dir / "processed_customers.csv"))
 
     # Add nodes to workflow
     workflow.add_node(node_id="reader", node_or_type=csv_reader)

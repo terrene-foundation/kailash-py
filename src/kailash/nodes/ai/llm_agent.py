@@ -7,7 +7,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class LLMAgent(Node):
+class LLMAgentNode(Node):
     """
     Advanced Large Language Model agent with LangChain integration and MCP
     support.
@@ -64,63 +64,59 @@ class LLMAgent(Node):
     - Logs agent interactions and performance metrics
 
     Examples:
+        >>> # Basic Q&A agent with OpenAI
+        >>> agent = LLMAgentNode()
+        >>> result = agent.run(
+        ...     provider="openai",
+        ...     model="gpt-4",
+        ...     messages=[
+        ...         {"role": "user", "content": "Analyze the customer data and provide insights"}
+        ...     ],
+        ...     system_prompt="You are a data analyst expert.",
+        ...     mcp_context=["data://customer_reports/*"]
+        ... )
 
-        Basic Q&A agent with OpenAI::
+        >>> # Tool-calling agent
+        >>> tool_agent = LLMAgentNode()
+        >>> result = tool_agent.run(
+        ...     provider="anthropic",
+        ...     model="claude-3-sonnet",
+        ...     messages=[{"role": "user", "content": "Create a report and email it"}],
+        ...     tools=[
+        ...         {
+        ...             "name": "create_report",
+        ...             "description": "Generate a data report",
+        ...             "parameters": {"type": "object", "properties": {"format": {"type": "string"}}}
+        ...         },
+        ...         {
+        ...             "name": "send_email",
+        ...             "description": "Send email with attachment",
+        ...             "parameters": {"type": "object", "properties": {"recipient": {"type": "string"}}}
+        ...         }
+        ...     ],
+        ...     conversation_id="report_session_123"
+        ... )
 
-        agent = LLMAgent()
-        result = agent.run(
-            provider="openai",
-            model="gpt-4",
-            messages=[
-                {"role": "user", "content": "Analyze the customer data and provide insights"}
-            ],
-            system_prompt="You are a data analyst expert.",
-            mcp_context=["data://customer_reports/*"]
-        )
-
-        Tool-calling agent::
-
-        tool_agent = LLMAgent()
-        result = tool_agent.run(
-            provider="anthropic",
-            model="claude-3-sonnet",
-            messages=[{"role": "user", "content": "Create a report and email it"}],
-            tools=[
-                {
-                    "name": "create_report",
-                    "description": "Generate a data report",
-                    "parameters": {"type": "object", "properties": {"format": {"type": "string"}}}
-                },
-                {
-                    "name": "send_email",
-                    "description": "Send email with attachment",
-                    "parameters": {"type": "object", "properties": {"recipient": {"type": "string"}}}
-                }
-            ],
-            conversation_id="report_session_123"
-        )
-
-        RAG agent with MCP integration::
-
-        rag_agent = LLMAgent()
-        result = rag_agent.run(
-            provider="azure",
-            model="gpt-4-turbo",
-            messages=[{"role": "user", "content": "What are the compliance requirements?"}],
-            rag_config={
-                "enabled": True,
-                "top_k": 5,
-                "similarity_threshold": 0.8
-            },
-            mcp_servers=[
-                {
-                    "name": "compliance-server",
-                    "transport": "stdio",
-                    "command": "python",
-                    "args": ["-m", "compliance_mcp"]
-                }
-            ]
-        )
+        >>> # RAG agent with MCP integration
+        >>> rag_agent = LLMAgentNode()
+        >>> result = rag_agent.run(
+        ...     provider="azure",
+        ...     model="gpt-4-turbo",
+        ...     messages=[{"role": "user", "content": "What are the compliance requirements?"}],
+        ...     rag_config={
+        ...         "enabled": True,
+        ...         "top_k": 5,
+        ...         "similarity_threshold": 0.8
+        ...     },
+        ...     mcp_servers=[
+        ...         {
+        ...             "name": "compliance-server",
+        ...             "transport": "stdio",
+        ...             "command": "python",
+        ...             "args": ["-m", "compliance_mcp"]
+        ...         }
+        ...     ]
+        ... )
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -262,190 +258,189 @@ class LLMAgent(Node):
 
         Examples:
 
-            Basic usage with OpenAI::
+            Basic usage with OpenAI:
 
-                agent = LLMAgent()
-                result = agent.run(
-                    provider="openai",
-                    model="gpt-4",
-                    messages=[
-                        {"role": "user", "content": "Explain quantum computing"}
-                    ],
-                    generation_config={
-                        "temperature": 0.7,
-                        "max_tokens": 500,
-                        "top_p": 0.9,
-                        "frequency_penalty": 0.0,
-                        "presence_penalty": 0.0
-                    }
-                )
-                print(result["response"]["content"])
+            >>> agent = LLMAgentNode()
+            >>> result = agent.run(
+            ...     provider="openai",
+            ...     model="gpt-4",
+            ...     messages=[
+            ...         {"role": "user", "content": "Explain quantum computing"}
+            ...     ],
+            ...     generation_config={
+            ...         "temperature": 0.7,
+            ...         "max_tokens": 500,
+            ...         "top_p": 0.9,
+            ...         "frequency_penalty": 0.0,
+            ...         "presence_penalty": 0.0
+            ...     }
+            ... )
+            >>> print(result["response"]["content"])  # doctest: +SKIP
 
-            Using Ollama with custom model::
+            Using Ollama with custom model:
 
-                result = agent.run(
-                    provider="ollama",
-                    model="llama3.1:8b-instruct-q8_0",
-                    messages=[
-                        {"role": "user", "content": "Write a Python function"}
-                    ],
-                    generation_config={
-                        "temperature": 0.5,
-                        "max_tokens": 1000,
-                        "top_p": 0.95,
-                        "seed": 42  # For reproducible outputs
-                    }
-                )
+            >>> result = agent.run(
+            ...     provider="ollama",
+            ...     model="llama3.1:8b-instruct-q8_0",
+            ...     messages=[
+            ...         {"role": "user", "content": "Write a Python function"}
+            ...     ],
+            ...     generation_config={
+            ...         "temperature": 0.5,
+            ...         "max_tokens": 1000,
+            ...         "top_p": 0.95,
+            ...         "seed": 42  # For reproducible outputs
+            ...     }
+            ... )  # doctest: +SKIP
 
-            With system prompt and conversation memory::
+            With system prompt and conversation memory:
 
-                result = agent.run(
-                    provider="anthropic",
-                    model="claude-3-sonnet-20240229",
-                    system_prompt="You are a helpful coding assistant.",
-                    messages=[
-                        {"role": "user", "content": "Help me optimize this code"}
-                    ],
-                    conversation_id="coding-session-123",
-                    memory_config={
-                        "type": "buffer",  # or "summary", "buffer_window"
-                        "max_tokens": 4000,
-                        "persistence": "memory"  # or "disk", "database"
-                    }
-                )
+            >>> result = agent.run(
+            ...     provider="anthropic",
+            ...     model="claude-3-sonnet-20240229",
+            ...     system_prompt="You are a helpful coding assistant.",
+            ...     messages=[
+            ...         {"role": "user", "content": "Help me optimize this code"}
+            ...     ],
+            ...     conversation_id="coding-session-123",
+            ...     memory_config={
+            ...         "type": "buffer",  # or "summary", "buffer_window"
+            ...         "max_tokens": 4000,
+            ...         "persistence": "memory"  # or "disk", "database"
+            ...     }
+            ... )  # doctest: +SKIP
 
-            With tool calling::
+            With tool calling:
 
-                result = agent.run(
-                    provider="openai",
-                    model="gpt-4-turbo",
-                    messages=[
-                        {"role": "user", "content": "Get the weather in NYC"}
-                    ],
-                    tools=[
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "get_weather",
-                                "description": "Get weather for a location",
-                                "parameters": {
-                                    "type": "object",
-                                    "properties": {
-                                        "location": {"type": "string"},
-                                        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
-                                    },
-                                    "required": ["location"]
-                                }
-                            }
-                        }
-                    ],
-                    generation_config={
-                        "temperature": 0,  # Use 0 for tool calling
-                        "tool_choice": "auto"  # or "none", {"type": "function", "function": {"name": "get_weather"}}
-                    }
-                )
+            >>> result = agent.run(
+            ...     provider="openai",
+            ...     model="gpt-4-turbo",
+            ...     messages=[
+            ...         {"role": "user", "content": "Get the weather in NYC"}
+            ...     ],
+            ...     tools=[
+            ...         {
+            ...             "type": "function",
+            ...             "function": {
+            ...                 "name": "get_weather",
+            ...                 "description": "Get weather for a location",
+            ...                 "parameters": {
+            ...                     "type": "object",
+            ...                     "properties": {
+            ...                         "location": {"type": "string"},
+            ...                         "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+            ...                     },
+            ...                     "required": ["location"]
+            ...                 }
+            ...             }
+            ...         }
+            ...     ],
+            ...     generation_config={
+            ...         "temperature": 0,  # Use 0 for tool calling
+            ...         "tool_choice": "auto"  # or "none", {"type": "function", "function": {"name": "get_weather"}}
+            ...     }
+            ... )  # doctest: +SKIP
 
-            With RAG (Retrieval Augmented Generation)::
+            With RAG (Retrieval Augmented Generation):
 
-                result = agent.run(
-                    provider="openai",
-                    model="gpt-4",
-                    messages=[
-                        {"role": "user", "content": "What is our refund policy?"}
-                    ],
-                    rag_config={
-                        "enabled": True,
-                        "top_k": 5,  # Number of documents to retrieve
-                        "similarity_threshold": 0.7,  # Minimum similarity score
-                        "embeddings": {
-                            "model": "text-embedding-ada-002",
-                            "dimension": 1536
-                        },
-                        "reranking": {
-                            "enabled": True,
-                            "model": "cross-encoder/ms-marco-MiniLM-L-12-v2"
-                        }
-                    }
-                )
+            >>> result = agent.run(
+            ...     provider="openai",
+            ...     model="gpt-4",
+            ...     messages=[
+            ...         {"role": "user", "content": "What is our refund policy?"}
+            ...     ],
+            ...     rag_config={
+            ...         "enabled": True,
+            ...         "top_k": 5,  # Number of documents to retrieve
+            ...         "similarity_threshold": 0.7,  # Minimum similarity score
+            ...         "embeddings": {
+            ...             "model": "text-embedding-ada-002",
+            ...             "dimension": 1536
+            ...         },
+            ...         "reranking": {
+            ...             "enabled": True,
+            ...             "model": "cross-encoder/ms-marco-MiniLM-L-12-v2"
+            ...         }
+            ...     }
+            ... )  # doctest: +SKIP
 
-            With MCP (Model Context Protocol) integration::
+            With MCP (Model Context Protocol) integration:
 
-                result = agent.run(
-                    provider="anthropic",
-                    model="claude-3-opus-20240229",
-                    messages=[
-                        {"role": "user", "content": "Analyze the sales data"}
-                    ],
-                    mcp_servers=[
-                        {
-                            "name": "data-server",
-                            "transport": "stdio",
-                            "command": "python",
-                            "args": ["-m", "mcp_data_server"],
-                            "env": {"API_KEY": "secret"}
-                        }
-                    ],
-                    mcp_context=[
-                        "data://sales/2024/q4",
-                        "data://customers/segments",
-                        "resource://templates/analysis"
-                    ]
-                )
+            >>> result = agent.run(
+            ...     provider="anthropic",
+            ...     model="claude-3-opus-20240229",
+            ...     messages=[
+            ...         {"role": "user", "content": "Analyze the sales data"}
+            ...     ],
+            ...     mcp_servers=[
+            ...         {
+            ...             "name": "data-server",
+            ...             "transport": "stdio",
+            ...             "command": "python",
+            ...             "args": ["-m", "mcp_data_server"],
+            ...             "env": {"API_KEY": "secret"}
+            ...         }
+            ...     ],
+            ...     mcp_context=[
+            ...         "data://sales/2024/q4",
+            ...         "data://customers/segments",
+            ...         "resource://templates/analysis"
+            ...     ]
+            ... )  # doctest: +SKIP
 
-            Advanced configuration with all features::
+            Advanced configuration with all features:
 
-                result = agent.run(
-                    provider="openai",
-                    model="gpt-4-turbo",
-                    messages=[
-                        {"role": "user", "content": "Complex analysis request"}
-                    ],
-                    system_prompt="You are an expert data analyst.",
-                    conversation_id="analysis-session-456",
-                    memory_config={
-                        "type": "buffer_window",
-                        "max_tokens": 3000,
-                        "window_size": 10  # Keep last 10 exchanges
-                    },
-                    tools=[...],  # Tool definitions
-                    rag_config={
-                        "enabled": True,
-                        "top_k": 3,
-                        "similarity_threshold": 0.8
-                    },
-                    mcp_servers=[...],  # MCP server configs
-                    mcp_context=["data://reports/*"],
-                    generation_config={
-                        "temperature": 0.7,
-                        "max_tokens": 2000,
-                        "top_p": 0.9,
-                        "frequency_penalty": 0.1,
-                        "presence_penalty": 0.1,
-                        "stop": ["\\n\\n", "END"],  # Stop sequences
-                        "logit_bias": {123: -100}  # Token biases
-                    },
-                    streaming=False,
-                    timeout=120,
-                    max_retries=3
-                )
+            >>> result = agent.run(
+            ...     provider="openai",
+            ...     model="gpt-4-turbo",
+            ...     messages=[
+            ...         {"role": "user", "content": "Complex analysis request"}
+            ...     ],
+            ...     system_prompt="You are an expert data analyst.",
+            ...     conversation_id="analysis-session-456",
+            ...     memory_config={
+            ...         "type": "buffer_window",
+            ...         "max_tokens": 3000,
+            ...         "window_size": 10  # Keep last 10 exchanges
+            ...     },
+            ...     tools=[],  # Tool definitions would go here
+            ...     rag_config={
+            ...         "enabled": True,
+            ...         "top_k": 3,
+            ...         "similarity_threshold": 0.8
+            ...     },
+            ...     mcp_servers=[],  # MCP server configs would go here
+            ...     mcp_context=["data://reports/*"],
+            ...     generation_config={
+            ...         "temperature": 0.7,
+            ...         "max_tokens": 2000,
+            ...         "top_p": 0.9,
+            ...         "frequency_penalty": 0.1,
+            ...         "presence_penalty": 0.1,
+            ...         "stop": ["\\n\\n", "END"],  # Stop sequences
+            ...         "logit_bias": {123: -100}  # Token biases
+            ...     },
+            ...     streaming=False,
+            ...     timeout=120,
+            ...     max_retries=3
+            ... )  # doctest: +SKIP
 
-            Error handling::
+            Error handling:
 
-                result = agent.run(
-                    provider="openai",
-                    model="gpt-4",
-                    messages=[{"role": "user", "content": "Hello"}]
-                )
-
-                if result["success"]:
-                    print(f"Response: {result['response']['content']}")
-                    print(f"Tokens used: {result['usage']['total_tokens']}")
-                    print(f"Estimated cost: ${result['usage']['estimated_cost_usd']}")
-                else:
-                    print(f"Error: {result['error']}")
-                    print(f"Type: {result['error_type']}")
-                    for suggestion in result['recovery_suggestions']:
-                        print(f"- {suggestion}")
+            >>> result = agent.run(
+            ...     provider="openai",
+            ...     model="gpt-4",
+            ...     messages=[{"role": "user", "content": "Hello"}]
+            ... )
+            >>> if result["success"]:
+            ...     print(f"Response: {result['response']['content']}")
+            ...     print(f"Tokens used: {result['usage']['total_tokens']}")
+            ...     print(f"Estimated cost: ${result['usage']['estimated_cost_usd']}")
+            ... else:
+            ...     print(f"Error: {result['error']}")
+            ...     print(f"Type: {result['error_type']}")
+            ...     for suggestion in result['recovery_suggestions']:
+            ...         print(f"- {suggestion}")  # doctest: +SKIP
         """
         provider = kwargs["provider"]
         model = kwargs["model"]
@@ -606,34 +601,34 @@ class LLMAgent(Node):
                 loaded_from (str): Source of the memory data
 
         Examples:
-            Buffer memory (keep everything)::
+            Buffer memory (keep everything):
 
-                memory = self._load_conversation_memory(
-                    "chat-123",
-                    {"type": "buffer", "max_tokens": 4000}
-                )
+            >>> memory = self._load_conversation_memory(
+            ...     "chat-123",
+            ...     {"type": "buffer", "max_tokens": 4000}
+            ... )  # doctest: +SKIP
 
-            Window memory (keep last 5 exchanges)::
+            Window memory (keep last 5 exchanges):
 
-                memory = self._load_conversation_memory(
-                    "chat-456",
-                    {
-                        "type": "buffer_window",
-                        "window_size": 5,
-                        "max_tokens": 2000
-                    }
-                )
+            >>> memory = self._load_conversation_memory(
+            ...     "chat-456",
+            ...     {
+            ...         "type": "buffer_window",
+            ...         "window_size": 5,
+            ...         "max_tokens": 2000
+            ...     }
+            ... )  # doctest: +SKIP
 
-            Summary memory (summarize old content)::
+            Summary memory (summarize old content):
 
-                memory = self._load_conversation_memory(
-                    "chat-789",
-                    {
-                        "type": "summary",
-                        "max_tokens": 1000,
-                        "summary_method": "abstractive"
-                    }
-                )
+            >>> memory = self._load_conversation_memory(
+            ...     "chat-789",
+            ...     {
+            ...         "type": "summary",
+            ...         "max_tokens": 1000,
+            ...         "summary_method": "abstractive"
+            ...     }
+            ... )  # doctest: +SKIP
         """
         if not conversation_id:
             return {"messages": [], "token_count": 0}
@@ -699,33 +694,33 @@ class LLMAgent(Node):
                 metadata (Dict): Additional resource metadata
 
         Examples:
-            Connect to stdio MCP server::
+            Connect to stdio MCP server:
 
-                context = self._retrieve_mcp_context(
-                    mcp_servers=[{
-                        "name": "data-server",
-                        "transport": "stdio",
-                        "command": "python",
-                        "args": ["-m", "mcp_data_server"],
-                        "env": {"API_KEY": "secret"}
-                    }],
-                    mcp_context=["data://sales/2024/q4"]
-                )
+            >>> context = self._retrieve_mcp_context(
+            ...     mcp_servers=[{
+            ...         "name": "data-server",
+            ...         "transport": "stdio",
+            ...         "command": "python",
+            ...         "args": ["-m", "mcp_data_server"],
+            ...         "env": {"API_KEY": "secret"}
+            ...     }],
+            ...     mcp_context=["data://sales/2024/q4"]
+            ... )  # doctest: +SKIP
 
-            Connect to HTTP MCP server::
+            Connect to HTTP MCP server:
 
-                context = self._retrieve_mcp_context(
-                    mcp_servers=[{
-                        "name": "api-server",
-                        "transport": "http",
-                        "url": "https://mcp.example.com",
-                        "headers": {"Authorization": "Bearer token"}
-                    }],
-                    mcp_context=[
-                        "resource://customers/segments",
-                        "prompt://analysis/financial"
-                    ]
-                )
+            >>> context = self._retrieve_mcp_context(
+            ...     mcp_servers=[{
+            ...         "name": "api-server",
+            ...         "transport": "http",
+            ...         "url": "https://mcp.example.com",
+            ...         "headers": {"Authorization": "Bearer token"}
+            ...     }],
+            ...     mcp_context=[
+            ...         "resource://customers/segments",
+            ...         "prompt://analysis/financial"
+            ...     ]
+            ... )  # doctest: +SKIP
         """
         if not (mcp_servers or mcp_context):
             return []
@@ -807,65 +802,65 @@ class LLMAgent(Node):
                 search_time_ms (float): Search duration
 
         Examples:
-            Basic RAG retrieval::
+            Basic RAG retrieval:
 
-                rag_result = self._perform_rag_retrieval(
-                    messages=[{"role": "user", "content": "What is the refund policy?"}],
-                    rag_config={
-                        "enabled": True,
-                        "top_k": 5,
-                        "similarity_threshold": 0.7
-                    },
-                    mcp_context=[]
-                )
+            >>> rag_result = self._perform_rag_retrieval(
+            ...     messages=[{"role": "user", "content": "What is the refund policy?"}],
+            ...     rag_config={
+            ...         "enabled": True,
+            ...         "top_k": 5,
+            ...         "similarity_threshold": 0.7
+            ...     },
+            ...     mcp_context=[]
+            ... )  # doctest: +SKIP
 
-            Advanced RAG with reranking::
+            Advanced RAG with reranking:
 
-                rag_result = self._perform_rag_retrieval(
-                    messages=[{"role": "user", "content": "Technical specifications"}],
-                    rag_config={
-                        "enabled": True,
-                        "top_k": 10,
-                        "similarity_threshold": 0.6,
-                        "embeddings": {
-                            "model": "text-embedding-ada-002",
-                            "dimension": 1536,
-                            "provider": "openai"
-                        },
-                        "reranking": {
-                            "enabled": True,
-                            "model": "cross-encoder/ms-marco-MiniLM-L-12-v2",
-                            "top_n": 3
-                        },
-                        "vector_store": {
-                            "type": "pinecone",
-                            "index_name": "products",
-                            "namespace": "technical-docs"
-                        }
-                    },
-                    mcp_context=[]
-                )
+            >>> rag_result = self._perform_rag_retrieval(
+            ...     messages=[{"role": "user", "content": "Technical specifications"}],
+            ...     rag_config={
+            ...         "enabled": True,
+            ...         "top_k": 10,
+            ...         "similarity_threshold": 0.6,
+            ...         "embeddings": {
+            ...             "model": "text-embedding-ada-002",
+            ...             "dimension": 1536,
+            ...             "provider": "openai"
+            ...         },
+            ...         "reranking": {
+            ...             "enabled": True,
+            ...             "model": "cross-encoder/ms-marco-MiniLM-L-12-v2",
+            ...             "top_n": 3
+            ...         },
+            ...         "vector_store": {
+            ...             "type": "pinecone",
+            ...             "index_name": "products",
+            ...             "namespace": "technical-docs"
+            ...         }
+            ...     },
+            ...     mcp_context=[]
+            ... )  # doctest: +SKIP
 
-            Hybrid search with filters::
+            Hybrid search with filters:
 
-                rag_result = self._perform_rag_retrieval(
-                    messages=[{"role": "user", "content": "Python tutorials"}],
-                    rag_config={
-                        "enabled": True,
-                        "top_k": 5,
-                        "similarity_threshold": 0.7,
-                        "filters": {
-                            "category": "tutorial",
-                            "language": "python",
-                            "level": ["beginner", "intermediate"]
-                        },
-                        "hybrid_search": {
-                            "enabled": True,
-                            "alpha": 0.7  # 70% vector, 30% keyword
-                        }
-                    },
-                    mcp_context=[]
-                )
+            >>> rag_result = self._perform_rag_retrieval(
+            ...     messages=[{"role": "user", "content": "Python tutorials"}],
+            ...     rag_config={
+            ...         "enabled": True,
+            ...         "top_k": 5,
+            ...         "similarity_threshold": 0.7,
+            ...         "filters": {
+            ...             "category": "tutorial",
+            ...             "language": "python",
+            ...             "level": ["beginner", "intermediate"]
+            ...         },
+            ...         "hybrid_search": {
+            ...             "enabled": True,
+            ...             "alpha": 0.7  # 70% vector, 30% keyword
+            ...         }
+            ...     },
+            ...     mcp_context=[]
+            ... )  # doctest: +SKIP
         """
         if not rag_config.get("enabled", False):
             return {"documents": [], "scores": []}

@@ -14,11 +14,11 @@ In direct execution, you create nodes with all parameters and call `execute()` i
 
 ```python
 # Create reader with file path
-reader = CSVReader(file_path='input.csv')
+reader = CSVReaderNode(file_path='input.csv')
 result = reader.execute()
 
 # Create writer with data already available
-writer = CSVWriter(
+writer = CSVWriterNode(
     file_path='output.csv',
     data=result['data']  # Data provided at creation
 )
@@ -40,8 +40,8 @@ In workflow execution, nodes are connected and data flows through the graph.
 workflow = Workflow(name="Data Pipeline")
 
 # Create nodes (writer doesn't need data yet)
-reader = CSVReader(file_path='input.csv')
-writer = CSVWriter(file_path='output.csv')  # No data parameter
+reader = CSVReaderNode(file_path='input.csv')
+writer = CSVWriterNode(file_path='output.csv')  # No data parameter
 
 # Add nodes to workflow
 workflow.add_node(reader, node_id='reader')
@@ -88,8 +88,8 @@ results, run_id = runtime.execute(workflow)
 
 ```python
 from kailash.workflow import Workflow
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
@@ -97,7 +97,7 @@ from kailash.runtime.local import LocalRuntime
 workflow = Workflow(name="Customer Processing")
 
 # Create nodes
-reader = CSVReader(file_path='customers.csv')
+reader = CSVReaderNode(file_path='customers.csv')
 
 # Create custom filter node
 def filter_customers(data: list, threshold: float) -> dict:
@@ -109,7 +109,7 @@ filter_node = PythonCodeNode.from_function(
     name="customer_filter"
 )
 
-writer = CSVWriter(file_path='filtered_customers.csv')
+writer = CSVWriterNode(file_path='filtered_customers.csv')
 
 # Add nodes with configuration
 workflow.add_node(reader, node_id='reader')

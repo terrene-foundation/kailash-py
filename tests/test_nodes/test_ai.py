@@ -394,7 +394,7 @@ class TestPlanningAgentNode:
 
     def test_data_processing_plan(self):
         """Test planning for data processing tasks."""
-        tools = ["CSVReader", "Filter", "Aggregator", "CSVWriter"]
+        tools = ["CSVReaderNode", "Filter", "Aggregator", "CSVWriterNode"]
 
         node = PlanningAgent(
             goal="process customer data and generate summary", available_tools=tools
@@ -408,7 +408,12 @@ class TestPlanningAgentNode:
 
     def test_text_analysis_plan(self):
         """Test planning for text analysis tasks."""
-        tools = ["TextReader", "SentimentAnalyzer", "TextSummarizer", "JSONWriter"]
+        tools = [
+            "TextReaderNode",
+            "SentimentAnalyzer",
+            "TextSummarizer",
+            "JSONWriterNode",
+        ]
 
         node = PlanningAgent(
             goal="analyze text sentiment and summarize", available_tools=tools

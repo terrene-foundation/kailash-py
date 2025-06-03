@@ -55,7 +55,7 @@ Successfully fixed all remaining integration test failures, achieving a historic
 - **Solution**: Changed test to expect error during build(), not add_node()
 
 ### 9. Dynamic Inputs Test (1 test)
-- **Problem**: CSVReader requires file_path in config
+- **Problem**: CSVReaderNode requires file_path in config
 - **Solution**: Added file_path configuration to node creation
 
 ### 10. Task Tracking Test (1 test)
@@ -73,7 +73,7 @@ Successfully fixed all remaining integration test failures, achieving a historic
 8. ✅ Validation (5/5)
 9. ✅ Tracking Manager (19/19)
 10. ✅ Runtime Systems (21/21)
-11. ✅ Switch/Merge (28/28)
+11. ✅ SwitchNode/MergeNode (28/28)
 12. ✅ Error Propagation (9/9)
 13. ✅ Integration Tests (65/65) ← NEW!
 14. ✅ Performance Tests (8/8) ← NEW!

@@ -25,11 +25,11 @@ def get_document(document: str = "customer_value.csv") -> dict:
     :param document: Name of the document to get.
     :return: The document.
     """
-    from kailash.nodes.data import CSVReader
+    from kailash.nodes.data import CSVReaderNode
 
     sample_directory = Path("../tests/sample_data")
 
-    csv_reader_node = CSVReader(
+    csv_reader_node = CSVReaderNode(
         file_path=sample_directory / document, headers=True, delimiter=","
     )
 

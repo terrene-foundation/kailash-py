@@ -12,9 +12,9 @@ Design Philosophy:
 5. Progress tracking and feedback
 
 Node Categories:
-- CSVWriter: Tabular data to CSV files
-- JSONWriter: Structured data to JSON files
-- TextWriter: Raw text to any text file
+- CSVWriterNode: Tabular data to CSV files
+- JSONWriterNode: Structured data to JSON files
+- TextWriterNode: Raw text to any text file
 
 Upstream Components:
 - Reader nodes: Provide data to transform
@@ -37,7 +37,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class CSVWriter(Node):
+class CSVWriterNode(Node):
     """Writes data to a CSV file.
 
     This node handles CSV file writing with support for both dictionary
@@ -81,19 +81,18 @@ class CSVWriter(Node):
     - TypeError: Invalid data structure
     - UnicodeEncodeError: Encoding issues
 
-    Example::
-
-        # Write customer data
-        writer = CSVWriter(
-            file_path='output.csv',
-            data=[
-                {'id': 1, 'name': 'John', 'age': 30},
-                {'id': 2, 'name': 'Jane', 'age': 25}
-            ],
-            delimiter=','
-        )
-        result = writer.execute()
-        # result = {'rows_written': 2, 'file_path': 'output.csv'}
+    Example:
+        >>> # Write customer data
+        >>> writer = CSVWriterNode(
+        ...     file_path='output.csv',
+        ...     data=[
+        ...         {'id': 1, 'name': 'John', 'age': 30},
+        ...         {'id': 2, 'name': 'Jane', 'age': 25}
+        ...     ],
+        ...     delimiter=','
+        ... )
+        >>> result = writer.execute()
+        >>> # result = {'rows_written': 2, 'file_path': 'output.csv'}
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -218,7 +217,7 @@ class CSVWriter(Node):
 
 
 @register_node()
-class JSONWriter(Node):
+class JSONWriterNode(Node):
     """Writes data to a JSON file.
 
     This node handles JSON serialization with support for complex
@@ -262,20 +261,19 @@ class JSONWriter(Node):
     - OSError: Path or disk issues
     - JSONEncodeError: Encoding problems
 
-    Example::
-
-        # Write API response
-        writer = JSONWriter(
-            file_path='response.json',
-            data={
-                'status': 'success',
-                'results': [1, 2, 3],
-                'metadata': {'version': '1.0'}
-            },
-            indent=2
-        )
-        result = writer.execute()
-        # result = {'file_path': 'response.json'}
+    Example:
+        >>> # Write API response
+        >>> writer = JSONWriterNode(
+        ...     file_path='response.json',
+        ...     data={
+        ...         'status': 'success',
+        ...         'results': [1, 2, 3],
+        ...         'metadata': {'version': '1.0'}
+        ...     },
+        ...     indent=2
+        ... )
+        >>> result = writer.execute()
+        >>> # result = {'file_path': 'response.json'}
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -370,7 +368,7 @@ class JSONWriter(Node):
 
 
 @register_node()
-class TextWriter(Node):
+class TextWriterNode(Node):
     """Writes text to a file.
 
     This node provides flexible text file writing with support for
@@ -414,17 +412,16 @@ class TextWriter(Node):
     - UnicodeEncodeError: Encoding mismatch
     - MemoryError: Text too large
 
-    Example::
-
-        # Append to log file
-        writer = TextWriter(
-            file_path='app.log',
-            text='ERROR: Connection failed\\n',
-            encoding='utf-8',
-            append=True
-        )
-        result = writer.execute()
-        # result = {'file_path': 'app.log', 'bytes_written': 25}
+    Example:
+        >>> # Append to log file
+        >>> writer = TextWriterNode(
+        ...     file_path='app.log',
+        ...     text='ERROR: Connection failed\\n',
+        ...     encoding='utf-8',
+        ...     append=True
+        ... )
+        >>> result = writer.execute()
+        >>> # result = {'file_path': 'app.log', 'bytes_written': 25}
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:

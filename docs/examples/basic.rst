@@ -12,15 +12,15 @@ Simple Data Processing
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   from kailash.nodes.data import CSVReader, CSVWriter
+   from kailash.nodes.data import CSVReaderNode, CSVWriterNode
    from kailash.runtime.local import LocalRuntime
 
    # Create workflow
    workflow = Workflow("simple_processing", name="Simple Processing")
 
    # Add nodes
-   reader = CSVReader(file_path="input.csv")
-   writer = CSVWriter(file_path="output.csv")
+   reader = CSVReaderNode(file_path="input.csv")
+   writer = CSVWriterNode(file_path="output.csv")
 
    workflow.add_node("read", reader)
    workflow.add_node("write", writer)

@@ -6,7 +6,7 @@ import pytest
 
 from kailash import Workflow
 from kailash.nodes import PythonCodeNode
-from kailash.nodes.data import CSVReader, CSVWriter, JSONReader
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode
 from kailash.runtime.local import LocalRuntime
 
 
@@ -64,12 +64,12 @@ class TestPythonCodeNodeIntegration:
         # Add nodes with config
         output_file = tmp_path / "output.csv"
 
-        csv_reader = CSVReader(name="csv_reader", file_path=str(csv_file))
-        json_reader = JSONReader(name="json_reader", file_path=str(json_file))
+        csv_reader = CSVReaderNode(name="csv_reader", file_path=str(csv_file))
+        json_reader = JSONReaderNode(name="json_reader", file_path=str(json_file))
         processor = PythonCodeNode.from_function(
             func=process_with_config, name="processor"
         )
-        writer = CSVWriter(name="writer", file_path=str(output_file))
+        writer = CSVWriterNode(name="writer", file_path=str(output_file))
 
         workflow.add_node("csv_reader", csv_reader)
         workflow.add_node("json_reader", json_reader)
@@ -134,9 +134,9 @@ class TestPythonCodeNodeIntegration:
 
         output_file = tmp_path / "stats_output.csv"
 
-        reader = CSVReader(name="reader", file_path=str(csv_file))
+        reader = CSVReaderNode(name="reader", file_path=str(csv_file))
         stats_node = PythonCodeNode.from_class(class_type=RunningStats, name="stats")
-        writer = CSVWriter(name="writer", file_path=str(output_file))
+        writer = CSVWriterNode(name="writer", file_path=str(output_file))
 
         workflow.add_node("reader", reader)
         workflow.add_node("stats", stats_node)
@@ -193,14 +193,14 @@ result = grouped.to_dict('records')
 
         output_file = tmp_path / "aggregated.csv"
 
-        reader = CSVReader(name="reader", file_path=str(csv_file))
+        reader = CSVReaderNode(name="reader", file_path=str(csv_file))
         aggregator = PythonCodeNode(
             name="aggregator",
             code=code,
             input_types={"data": pd.DataFrame},
             output_type=pd.DataFrame,
         )
-        writer = CSVWriter(name="writer", file_path=str(output_file))
+        writer = CSVWriterNode(name="writer", file_path=str(output_file))
 
         workflow.add_node("reader", reader)
         workflow.add_node("aggregator", aggregator)
@@ -256,10 +256,10 @@ result = grouped.to_dict('records')
 
         output_file = tmp_path / "pipeline_output.csv"
 
-        reader = CSVReader(name="reader", file_path=str(csv_file))
+        reader = CSVReaderNode(name="reader", file_path=str(csv_file))
         normalizer = PythonCodeNode.from_function(normalize, name="normalizer")
         feature_eng = PythonCodeNode.from_function(add_features, name="features")
-        writer = CSVWriter(name="writer", file_path=str(output_file))
+        writer = CSVWriterNode(name="writer", file_path=str(output_file))
 
         workflow.add_node("reader", reader)
         workflow.add_node("normalizer", normalizer)
@@ -301,11 +301,11 @@ result = grouped.to_dict('records')
 
         output_file = tmp_path / "should_not_exist.csv"
 
-        reader = CSVReader(name="reader", file_path=str(csv_file))
+        reader = CSVReaderNode(name="reader", file_path=str(csv_file))
         processor = PythonCodeNode.from_function(
             failing_processor, name="failing_processor"
         )
-        writer = CSVWriter(name="writer", file_path=str(output_file))
+        writer = CSVWriterNode(name="writer", file_path=str(output_file))
 
         workflow.add_node("reader", reader)
         workflow.add_node("processor", processor)

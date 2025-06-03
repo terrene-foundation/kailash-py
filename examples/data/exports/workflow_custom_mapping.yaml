@@ -11,7 +11,7 @@ metadata:
   - analytics
 nodes:
   reader:
-    type: CSVReader
+    type: CSVReaderNode
     config:
       config:
         file_path: ../data/customers.csv
@@ -72,7 +72,7 @@ nodes:
       x: 300.0
       y: 100.0
   writer:
-    type: CSVWriter
+    type: CSVWriterNode
     config:
       config:
         file_path: ../data/customer_segments.csv

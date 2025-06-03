@@ -4,10 +4,10 @@ metadata:
   description: ''
   version: 1.0.0
   author: ''
-  created_at: '2025-06-03T06:22:32.041813+00:00'
+  created_at: '2025-06-03T16:26:09.546924+00:00'
 nodes:
   reader:
-    type: CSVReader
+    type: CSVReaderNode
     config: {}
     container:
       image: kailash/csv-reader:latest

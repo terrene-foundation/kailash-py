@@ -163,12 +163,12 @@ PythonCodeNodes integrate seamlessly with other Kailash nodes:
 workflow = Workflow(name="data_pipeline")
 
 # Add nodes
-reader = CSVReader(name="reader")
+reader = CSVReaderNode(name="reader")
 custom_processor = PythonCodeNode.from_function(
     func=my_processing_function,
     name="processor"
 )
-writer = CSVWriter(name="writer")
+writer = CSVWriterNode(name="writer")
 
 # Connect nodes
 workflow.add_edge(reader, custom_processor)

@@ -83,7 +83,7 @@ Key Features
 🔧 **Comprehensive Node Library**
    - Data I/O: CSV, JSON, Text, SQL, SharePoint
    - Transform: Filter, Map, Sort, Custom processors
-   - Logic: Switch, Merge, Conditional routing
+   - Logic: SwitchNode, MergeNode, Conditional routing
    - AI/ML: Classification, Embeddings, NLP
    - API: REST, GraphQL, HTTP with auth
    - Code: Secure Python code execution
@@ -128,7 +128,7 @@ Quick Example
    workflow = Workflow("data_processing")
 
    # Add nodes
-   reader = workflow.add_node("CSVReader", "read_data", config={
+   reader = workflow.add_node("CSVReaderNode", "read_data", config={
        "file_path": "customers.csv"
    })
 
@@ -137,7 +137,7 @@ Quick Example
        "value": "active"
    })
 
-   writer = workflow.add_node("CSVWriter", "save_results", config={
+   writer = workflow.add_node("CSVWriterNode", "save_results", config={
        "file_path": "active_customers.csv"
    })
 

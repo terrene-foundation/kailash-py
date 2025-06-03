@@ -139,7 +139,7 @@ PROVIDERS["gemini"] = GeminiProvider
 ## Migration Path
 
 1. **Phase 1**: Implement unified architecture with backward compatibility ✅ Complete
-2. **Phase 2**: Update LLMAgent and EmbeddingGenerator to use unified providers ✅ Complete
+2. **Phase 2**: Update LLMAgentNode and EmbeddingGeneratorNode to use unified providers ✅ Complete
 3. **Phase 3**: Deprecate separate `llm_providers.py` in favor of `ai_providers.py`
 4. **Phase 4**: Remove legacy code after deprecation period
 

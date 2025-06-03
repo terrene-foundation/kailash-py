@@ -15,8 +15,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from kailash.nodes.data.readers import CSVReader
-from kailash.nodes.data.writers import CSVWriter
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.transform.processors import Filter
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
@@ -36,9 +36,11 @@ def create_long_running_workflow():
     workflow = Workflow("realtime_monitoring_demo", "Real-time Demo Workflow")
 
     # Create simple multi-step workflow for demo
-    reader1 = CSVReader(node_id="reader_customers", file_path="../data/customers.csv")
+    reader1 = CSVReaderNode(
+        node_id="reader_customers", file_path="../data/customers.csv"
+    )
 
-    reader2 = CSVReader(
+    reader2 = CSVReaderNode(
         node_id="reader_backup",
         file_path="../data/customers.csv",  # Use same file for simplicity
     )
@@ -53,15 +55,15 @@ def create_long_running_workflow():
     )
 
     # Output writers
-    adults_writer = CSVWriter(
+    adults_writer = CSVWriterNode(
         node_id="adults_writer", file_path="../outputs/realtime_adults.csv"
     )
 
-    seniors_writer = CSVWriter(
+    seniors_writer = CSVWriterNode(
         node_id="seniors_writer", file_path="../outputs/realtime_seniors.csv"
     )
 
-    all_writer = CSVWriter(
+    all_writer = CSVWriterNode(
         node_id="all_writer", file_path="../outputs/realtime_all.csv"
     )
 

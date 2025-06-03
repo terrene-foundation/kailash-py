@@ -14,7 +14,7 @@ import pandas as pd
 # Ensure module is in path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from kailash.nodes.data import CSVReader, CSVWriter
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 
 # Import from the Kailash SDK
@@ -47,9 +47,11 @@ print("=== Basic Workflow Example ===")
 workflow = Workflow(workflow_id="simple_workflow", name="Simple Data Pipeline")
 
 # Create nodes
-reader = CSVReader(name="csv_reader", file_path=str(data_dir / "sample_data.csv"))
+reader = CSVReaderNode(name="csv_reader", file_path=str(data_dir / "sample_data.csv"))
 
-writer = CSVWriter(name="csv_writer", file_path=str(output_dir / "processed_data.csv"))
+writer = CSVWriterNode(
+    name="csv_writer", file_path=str(output_dir / "processed_data.csv")
+)
 
 # Add nodes to workflow
 workflow.add_node(node_id="reader", node_or_type=reader)

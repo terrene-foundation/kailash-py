@@ -168,7 +168,7 @@ The project is entering a new phase focused on agentic AI capabilities:
    - **MCP Integration**: Model Context Protocol for advanced context sharing
    - **A2A Communication**: Agent-to-Agent coordination and message passing
    - **LLM Agent Node**: Real integration with OpenAI, Anthropic, Azure OpenAI
-   - **EmbeddingGenerator**: Vector embeddings for RAG systems
+   - **EmbeddingGeneratorNode**: Vector embeddings for RAG systems
 
 2. **Client Requirements**: Active projects using LangChain/Langgraph need production-ready:
    - Multi-agent workflow coordination

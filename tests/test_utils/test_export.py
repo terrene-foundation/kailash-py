@@ -32,7 +32,9 @@ class TestWorkflowExporter:
         # Create a simple workflow with real nodes
         builder = WorkflowBuilder()
         # Use CSVReader which is registered
-        builder.add_node("CSVReader", "csv_reader", config={"file_path": "test.csv"})
+        builder.add_node(
+            "CSVReaderNode", "csv_reader", config={"file_path": "test.csv"}
+        )
         workflow = builder.build("test_workflow")
 
         # Initialize exporter
@@ -46,7 +48,7 @@ class TestWorkflowExporter:
             assert isinstance(result, str)
             # Basic check that it contains workflow metadata
             assert "csv_reader" in result  # Check for the node we added
-            assert "CSVReader" in result  # Check for the node type
+            assert "CSVReaderNode" in result  # Check for the node type
         except (AttributeError, NotImplementedError):
             # Method might not be implemented yet
             pytest.skip("export methods not implemented")

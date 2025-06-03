@@ -99,9 +99,9 @@ class TestErrorPropagation:
         workflow = Workflow(workflow_id="chain_error", name="Chain Error Test")
 
         # Add nodes
-        from kailash.nodes.data.readers import CSVReader
+        from kailash.nodes.data.readers import CSVReaderNode
 
-        reader = CSVReader(name="reader", file_path=str(test_csv))
+        reader = CSVReaderNode(name="reader", file_path=str(test_csv))
         workflow.add_node("reader", reader)
 
         error_node = ErrorNode(name="error", error_message="Processing failed")
@@ -111,9 +111,11 @@ class TestErrorPropagation:
         workflow.connect("reader", "error", {"data": "unused"})
 
         # Add a dependent node so error propagates
-        from kailash.nodes.data.writers import CSVWriter
+        from kailash.nodes.data.writers import CSVWriterNode
 
-        writer = CSVWriter(name="writer", file_path=str(temp_data_dir / "output.csv"))
+        writer = CSVWriterNode(
+            name="writer", file_path=str(temp_data_dir / "output.csv")
+        )
         workflow.add_node("writer", writer)
         workflow.connect("error", "writer", {"data": "data"})
 
