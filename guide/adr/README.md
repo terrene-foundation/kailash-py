@@ -127,15 +127,15 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 **Priority**: 🔴 **URGENT** - Client-driven requirements for agentic workflows
 
 #### Accepted
+- [0022-mcp-integration-architecture.md](0022-mcp-integration-architecture.md) - Model Context Protocol (MCP) Integration Architecture
+- [0024-llm-agent-architecture.md](0024-llm-agent-architecture.md) - LLM Agent Architecture for Real Integration
+- [0025-hierarchical-document-processing.md](0025-hierarchical-document-processing.md) - Hierarchical Document Processing for RAG
 - [0026-unified-ai-provider-architecture.md](0026-unified-ai-provider-architecture.md) - Unified AI Provider Architecture (LLM + Embeddings)
 - [0027-node-organization-architecture.md](0027-node-organization-architecture.md) - Node Organization and Registration Architecture
 - [0028-workflow-api-wrapper-architecture.md](0028-workflow-api-wrapper-architecture.md) - Workflow API Wrapper Architecture (REST API exposure)
 
 #### Proposed
-- [0022-mcp-integration-architecture.md](0022-mcp-integration-architecture.md) - Model Context Protocol (MCP) Integration Architecture
 - [0023-a2a-communication-architecture.md](0023-a2a-communication-architecture.md) - Agent-to-Agent (A2A) Communication Architecture
-- [0024-llm-agent-architecture.md](0024-llm-agent-architecture.md) - LLM Agent Architecture for Real Integration
-- [0025-hierarchical-document-processing.md](0025-hierarchical-document-processing.md) - Hierarchical Document Processing for RAG
 
 ### Package & Documentation (Accepted)
 - [0020-package-distribution-strategy.md](0020-package-distribution-strategy.md) - Package Distribution Strategy
@@ -150,15 +150,15 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 
 ## Project Status
 
-As of 2025-06-02, the Kailash Python SDK has achieved major milestones:
-- **100% test pass rate** (571/640 tests passing, 89%)
-- **15/15 test categories** at 100% coverage
+As of 2025-06-03, the Kailash Python SDK has achieved major milestones:
+- **100% test pass rate** (678/678 tests passing)
 - **All core architectural decisions** implemented and validated
-- **Real-time dashboard and monitoring** components complete
-- **PyPI release v0.1.1** published with clean distribution
+- **Hierarchical RAG** fully implemented with 7 specialized nodes
+- **Workflow API Wrapper** enabling REST API exposure in 3 lines of code
+- **PyPI release v0.1.2** ready with comprehensive improvements
 - **Documentation structure** reorganized with 0 build warnings/errors
 - **GitHub Actions** passing completely with documentation pipeline
-- **Agentic AI ADRs** created for urgent client requirements (MCP, A2A, LLM Agent)
+- **Code Quality** All linting issues resolved, pre-commit hooks configured
 
 ### Next Phase: Agentic AI Implementation (Q1 2025)
 

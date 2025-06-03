@@ -944,8 +944,58 @@ def create_workflow():
 9. **Add load testing** for high-throughput scenarios
 10. **Create migration guides** for API changes
 
+### 50. **Bare Except Clauses**
+**Problem**: Using bare `except:` throughout the codebase catching all exceptions indiscriminately.
+```python
+# Bad - catches SystemExit, KeyboardInterrupt, etc.
+try:
+    value = float(old_version) + 0.1
+except:
+    # This catches EVERYTHING including system signals
+    value = "default"
+```
+
+**Solution**: Always catch specific exceptions:
+```python
+# Good - catches only expected exceptions
+try:
+    value = float(old_version) + 0.1
+except (ValueError, TypeError):
+    value = "default"
+```
+
+**Impact**: Security vulnerabilities, hidden bugs, poor error handling
+**Fixed In**: Session 39 - Replaced all bare except clauses
+
+### 51. **Unused Variables in Examples**
+**Problem**: Examples had unused variables that confused users about their purpose.
+```python
+# Bad - builder created but never used
+builder = WorkflowBuilder("demo")
+# ... rest of example doesn't use builder
+```
+
+**Solution**: Comment out with explanation or remove:
+```python
+# Good - clear that it's for reference only
+# builder = WorkflowBuilder("demo")  # Not used in this example, shown for reference
+```
+
+**Impact**: Confused users, failed linting checks
+**Fixed In**: Session 39
+
+### 52. **PyTorch model.eval() False Positive**
+**Problem**: Linting tools flagged `model.eval()` as dangerous eval() usage.
+```python
+# This is NOT the Python eval() function!
+model_obj.eval()  # PyTorch method to set model to evaluation mode
+```
+
+**Solution**: Exclude file from eval() checks or add noqa comment.
+**Learning**: Understand context before applying linting rules blindly.
+
 ---
 
-*Last Updated: 2025-06-02 (Session 35)*
-*Total Mistakes Documented: 49*
+*Last Updated: 2025-06-03 (Session 39)*
+*Total Mistakes Documented: 52*
 *Project Phase: Production Ready*
