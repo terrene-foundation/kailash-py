@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-06-03
+
+### Added
+- **WorkflowNode for Hierarchical Workflow Composition** (ADR-0028)
+  - New WorkflowNode class enabling workflows to be wrapped as reusable nodes
+  - Automatic parameter discovery from workflow entry nodes
+  - Dynamic output mapping from workflow exit nodes
+  - Support for loading workflows from instances, files (YAML/JSON), or dictionaries
+  - Custom input/output parameter mapping capabilities
+  - Lazy runtime loading to avoid circular imports
+  - 15 comprehensive tests covering all WorkflowNode features
+  - Complete example demonstrating 5 different usage patterns
+- **Workflow API Wrapper** - Transform any workflow into a REST API
+  - WorkflowAPI class for instant API creation from workflows
+  - Automatic REST endpoints: /execute, /workflow/info, /health, /docs
+  - Synchronous and asynchronous execution modes
+  - Specialized APIs for domain-specific workflows (RAG, data processing)
+  - Production-ready with SSL, workers, and customizable configurations
+  - WebSocket support for real-time updates
+  - Complete OpenAPI documentation generation
+
+### Changed
+- **Documentation Improvements**
+  - Updated README with WorkflowNode examples and API Wrapper section
+  - Added hierarchical workflow composition examples
+  - Enhanced API documentation with workflow wrapping patterns
+  - Updated test count badge to reflect 761 passing tests
+- **Example Organization**
+  - Consolidated workflow nesting examples into single comprehensive file
+  - Replaced file I/O dependent nodes with mock nodes for reliability
+  - Added 5 workflow composition patterns in workflow_nested_composition.py
+
+### Fixed
+- Parameter validation in WorkflowNode to support dynamic workflow structures
+- Import ordering and unused imports in test files
+- Mock node implementations to avoid file system dependencies in examples
+
 ## [0.1.2] - 2025-06-03
 
 ### Added
@@ -137,6 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe code execution in isolated environments
 - Authentication support for API nodes
 
-[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.1.0

@@ -1,0 +1,29 @@
+version: '1.0'
+metadata:
+  name: Main Workflow
+  description: ''
+  version: 1.0.0
+  author: ''
+  created_at: '2025-06-03T07:46:38.416753+00:00'
+nodes:
+  math:
+    type: WorkflowNode
+    config: {}
+    container:
+      image: kailash/workflownode:latest
+      command:
+      - python
+      - -m
+      - kailash.nodes.workflownode
+      args: []
+      env: {}
+    resources:
+      cpu: 100m
+      memory: 128Mi
+      cpu_limit: null
+      memory_limit: null
+      gpu: null
+    position:
+      x: 0.0
+      y: 100.0
+connections: []

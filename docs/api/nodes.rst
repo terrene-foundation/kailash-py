@@ -2,7 +2,8 @@
 Nodes
 =====
 
-This section provides comprehensive documentation for all node types available in the Kailash SDK.
+This section provides comprehensive documentation for all node types available
+in the Kailash SDK.
 
 .. contents:: Table of Contents
    :local:
@@ -43,7 +44,8 @@ Data Nodes
    Track implementation progress in the `GitHub issues <https://github.com/your-org/kailash-sdk/issues>`_.
 
 
-Data nodes handle input/output operations for various file formats and data sources.
+Data nodes handle input/output operations for various file formats and data
+sources.
 
 Readers
 -------
@@ -215,7 +217,8 @@ DataFilter
 - Null value handling
 - Performance optimized for large datasets
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom filtering logic in the meantime.
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
+filtering logic in the meantime.
 
 **Example Usage:**
 
@@ -246,7 +249,8 @@ DataMapper
 - Data type conversion
 - Nested data structure handling
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom mapping logic in the meantime.
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
+mapping logic in the meantime.
 
 **Example Usage:**
 
@@ -272,7 +276,8 @@ DataSorter
 - Memory-efficient sorting for large datasets
 - Stable sorting algorithms
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom sorting logic in the meantime.
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
+sorting logic in the meantime.
 
 DataTransformer
 ---------------
@@ -344,6 +349,49 @@ Merge
        "how": "left"  # for join strategy
    })
 
+WorkflowNode
+------------
+
+.. autoclass:: kailash.nodes.logic.workflow.WorkflowNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.workflow import Workflow
+   from kailash.nodes.logic import WorkflowNode
+
+   # Create a reusable workflow
+   data_processor = Workflow("data_processor")
+   # ... add nodes to workflow ...
+
+   # Wrap it as a node
+   processor_node = WorkflowNode(workflow=data_processor)
+
+   # Use in another workflow
+   main_workflow = Workflow("main")
+   main_workflow.add_node("process", processor_node)
+
+   # Load from file
+   file_processor = WorkflowNode(
+       workflow_path="workflows/processor.yaml",
+       name="file_processor"
+   )
+
+   # Custom parameter mapping
+   custom_processor = WorkflowNode(
+       workflow=data_processor,
+       input_mapping={
+           "rows": {"node": "reader", "parameter": "num_rows", "type": int}
+       },
+       output_mapping={
+           "count": {"node": "writer", "output": "row_count", "type": int}
+       }
+   )
+
 Validator
 ---------
 
@@ -356,7 +404,8 @@ Validator
 - Custom validation rules
 - Error reporting and data cleansing
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom validation logic in the meantime.
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
+validation logic in the meantime.
 
 AI/ML Nodes
 ===========
@@ -366,7 +415,8 @@ AI and machine learning nodes for intelligent processing.
 Provider Architecture
 ---------------------
 
-The AI nodes use a unified provider architecture that supports multiple LLM and embedding providers:
+The AI nodes use a unified provider architecture that supports multiple LLM
+and embedding providers:
 
 .. automodule:: kailash.nodes.ai.ai_providers
    :members: get_provider, get_available_providers
@@ -603,7 +653,8 @@ GraphQLClient
 - Schema introspection
 - Subscription support
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with GraphQL libraries in the meantime.
+**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` with GraphQL
+libraries in the meantime.
 
 MCP Nodes
 =========

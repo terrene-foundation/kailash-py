@@ -169,7 +169,32 @@
 
 ## Recent Achievements Summary
 
-### Session 37 (Current) ✅
+### Session 40 (Current) ✅
+- **WorkflowNode Implementation**: Created node that wraps entire workflows as reusable components
+- **Hierarchical Composition**: Enabled workflows within workflows for complex orchestration
+- **Dynamic Parameter Discovery**: Auto-detects inputs/outputs from wrapped workflow
+- **Multiple Loading Methods**: Support for direct instance, file (YAML/JSON), or dictionary
+- **Custom Mapping**: Implemented input/output mapping for fine-grained control
+- **Comprehensive Testing**: 15 unit tests covering all WorkflowNode functionality
+- **Examples Consolidated**: Combined workflow examples and fixed file I/O dependencies
+
+### Session 39 ✅
+- **Comprehensive Linting Fixes**: Fixed all E722 bare except clauses throughout codebase
+- **Code Quality Improvements**: Resolved F841 unused variables, F401 unused imports, E712 comparisons
+- **Documentation Cleanup**: Fixed carriage returns in RST files (337 errors resolved)
+- **Pre-commit Configuration**: Updated to exclude legitimate eval() usage in processors.py
+- **Test Validation**: All 678 pytest tests passing, all 46 examples working
+- **Version Bump**: Updated to v0.1.2 with comprehensive release notes
+
+### Session 38 ✅
+- **Lean API Wrapper**: Created WorkflowAPI class to expose any workflow as REST API
+- **FastAPI Integration**: Added FastAPI and uvicorn dependencies for production-ready APIs
+- **API Examples**: Consolidated 4 examples into comprehensive integration_api_demo.py
+- **Multiple Execution Modes**: Support for sync, async, and streaming workflow execution
+- **Specialized APIs**: Created HierarchicalRAGAPI for domain-specific endpoints
+- **3-Line Deployment**: Simplified API deployment - workflow → API → run()
+
+### Session 37 ✅
 - **Complete Hierarchical RAG Architecture**: Implemented full RAG pipeline with 7 specialized nodes
 - **RAG Node Components**: DocumentSourceNode, QuerySourceNode, HierarchicalChunkerNode, RelevanceScorerNode, ChunkTextExtractorNode, QueryTextWrapperNode, ContextFormatterNode
 - **Comprehensive Testing**: Added 29 new tests covering all RAG components with 100% pass rate
@@ -225,12 +250,13 @@
 For complete history, see: [completed-archive.md](./completed-archive.md)
 
 ---
-*Last Updated: 2025-06-03 (Session 39 - Code Quality & v0.1.2 Release)*
-*Total Development Time: 22 days | Sessions: 39*
-*Test Progress: 678/678 passing (100%)* ✅
-*Examples: 46 working (consolidated API examples)* ✅
+*Last Updated: 2025-06-03 (Session 40 - WorkflowNode for Hierarchical Composition)*
+*Total Development Time: 22 days | Sessions: 40*
+*Test Progress: 761/761 passing (100%)* ✅
+*Examples: 46 working (with nested workflow examples)* ✅
 *Documentation: Perfect build with Google style docstrings!* 🎉
 *RAG Architecture: Complete with 7 specialized nodes!* 🧠
 *API Wrapper: Any workflow → REST API in 3 lines!* 🚀
+*WorkflowNode: Workflows as reusable components!* 🔄
 *Code Quality: All linting issues resolved, pre-commit hooks passing!* ✅
 *Next Focus: A2A Communication, Security, Performance*

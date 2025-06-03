@@ -132,7 +132,7 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 - [0025-hierarchical-document-processing.md](0025-hierarchical-document-processing.md) - Hierarchical Document Processing for RAG
 - [0026-unified-ai-provider-architecture.md](0026-unified-ai-provider-architecture.md) - Unified AI Provider Architecture (LLM + Embeddings)
 - [0027-node-organization-architecture.md](0027-node-organization-architecture.md) - Node Organization and Registration Architecture
-- [0028-workflow-api-wrapper-architecture.md](0028-workflow-api-wrapper-architecture.md) - Workflow API Wrapper Architecture (REST API exposure)
+- [0028-workflow-node-hierarchical-composition.md](0028-workflow-node-hierarchical-composition.md) - WorkflowNode for Hierarchical Workflow Composition
 
 #### Proposed
 - [0023-a2a-communication-architecture.md](0023-a2a-communication-architecture.md) - Agent-to-Agent (A2A) Communication Architecture

@@ -10,11 +10,11 @@ import networkx as nx
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from kailash.nodes import Node
+from kailash.nodes.base import Node
 
 try:
     # For normal runtime, use the actual registry
-    from kailash.nodes import NodeRegistry
+    from kailash.nodes.base import NodeRegistry
 except ImportError:
     # For tests, use the mock registry
     from kailash.workflow.mock_registry import MockRegistry as NodeRegistry
