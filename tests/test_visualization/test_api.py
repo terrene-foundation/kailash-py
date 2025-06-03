@@ -671,8 +671,8 @@ class TestAPIIntegration:
 
         time.sleep(0.3)
 
-        current_metrics = api.get_current_metrics()
-        history = api.get_metrics_history()
+        api.get_current_metrics()
+        api.get_metrics_history()
 
         # 5. Generate reports
         html_report = api.generate_report(
@@ -836,12 +836,12 @@ class TestAPIIntegration:
                     # Worker 0, 3, 6... - Get runs and details
                     runs = api.get_runs(limit=2)
                     for run in runs[:1]:  # Just first run
-                        details = api.get_run_details(run["run_id"])
+                        api.get_run_details(run["run_id"])
                         results.append(f"worker_{worker_id}_details")
 
                 elif worker_id % 3 == 1:
                     # Worker 1, 4, 7... - Generate reports
-                    report_path = api.generate_report(
+                    api.generate_report(
                         run_ids[0],
                         format="json",
                         output_path=tmp_path / f"concurrent_report_{worker_id}.json",
@@ -850,7 +850,7 @@ class TestAPIIntegration:
 
                 else:
                     # Worker 2, 5, 8... - Dashboard operations
-                    dashboard_path = api.generate_dashboard(
+                    api.generate_dashboard(
                         tmp_path / f"concurrent_dashboard_{worker_id}.html"
                     )
                     results.append(f"worker_{worker_id}_dashboard")

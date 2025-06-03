@@ -222,11 +222,11 @@ class TestErrorPropagation:
             def run(self, **kwargs) -> Dict[str, Any]:
                 return {"result": kwargs.get("required_param")}
 
-        workflow = Workflow(workflow_id="validation_error", name="Validation Error")
+        Workflow(workflow_id="validation_error", name="Validation Error")
 
         # Add node without required parameter
         with pytest.raises(NodeConfigurationError) as exc_info:
-            node = ValidationNode(name="validation")  # Missing required_param
+            ValidationNode(name="validation")  # Missing required_param
 
         assert "Required parameter 'required_param' not provided" in str(exc_info.value)
 

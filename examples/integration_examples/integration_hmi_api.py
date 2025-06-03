@@ -23,7 +23,6 @@ from kailash.nodes.api import (
     RESTClientNode,
 )
 from kailash.nodes.base import Node, NodeParameter
-from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError
 
 # Kailash SDK imports
@@ -438,14 +437,17 @@ class MHCInsuranceNode(Node):
                 }
 
                 # Get covered providers
-                providers_result = self.rate_limited_client.run(
-                    base_url=oauth_config["api_base_url"],
-                    resource="providers",
-                    method="POST",
-                    headers=auth_headers,
-                    data={"nric": patient_nric, "dob": patient_dob},
-                )
+                # In a real implementation, we would use the API result:
+                # providers_result = self.rate_limited_client.run(
+                #     base_url=oauth_config["api_base_url"],
+                #     resource="providers",
+                #     method="POST",
+                #     headers=auth_headers,
+                #     data={"nric": patient_nric, "dob": patient_dob},
+                # )
+                # covered_providers = providers_result.get("data", [])
 
+                # For demo purposes, using mock data:
                 covered_providers = [
                     {
                         "provider_id": "HMI_001",
@@ -519,7 +521,7 @@ def example_hmi_workflow():
     )
 
     # Execute the workflow
-    runtime = LocalRuntime()
+    # runtime = LocalRuntime()  # Not used in this demo
 
     print("\n1. Patient Information:")
     patient_info = {
@@ -574,12 +576,13 @@ def example_hmi_workflow():
             )
 
         print("\n4. Step 3: Check insurance coverage")
-        oauth_config = {
-            "token_url": config.mhc_token_url,
-            "api_base_url": config.mhc_api_base_url,
-            "client_id": config.mhc_client_id,
-            "client_secret": config.mhc_client_secret,
-        }
+        # OAuth config would be used in real implementation
+        # oauth_config = {
+        #     "token_url": config.mhc_token_url,
+        #     "api_base_url": config.mhc_api_base_url,
+        #     "client_id": config.mhc_client_id,
+        #     "client_secret": config.mhc_client_secret,
+        # }
 
         insurance_result = insurance_check.execute(
             patient_nric=patient_info["nric"], patient_dob=patient_info["dob"]
@@ -637,7 +640,7 @@ def example_rate_limiting_strategies():
         },
     ]
 
-    runtime = LocalRuntime()
+    # runtime = LocalRuntime()  # Not used in this demo
 
     for strategy in strategies:
         print(f"\n{strategy['name']} Strategy:")

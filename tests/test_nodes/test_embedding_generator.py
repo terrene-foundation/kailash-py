@@ -173,7 +173,7 @@ class TestEmbeddingGenerator:
                     assert result["success"] is True
                     # Ollama dimensions may vary, so we just check it's positive
                     assert result["dimensions"] > 0
-                except:
+                except Exception:
                     # If Ollama is not available, the test should fail gracefully
                     assert result["success"] is False or "Ollama" in result.get(
                         "error", ""

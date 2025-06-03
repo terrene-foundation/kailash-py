@@ -128,11 +128,14 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 
 #### Accepted
 - [0026-unified-ai-provider-architecture.md](0026-unified-ai-provider-architecture.md) - Unified AI Provider Architecture (LLM + Embeddings)
+- [0027-node-organization-architecture.md](0027-node-organization-architecture.md) - Node Organization and Registration Architecture
+- [0028-workflow-api-wrapper-architecture.md](0028-workflow-api-wrapper-architecture.md) - Workflow API Wrapper Architecture (REST API exposure)
 
 #### Proposed
 - [0022-mcp-integration-architecture.md](0022-mcp-integration-architecture.md) - Model Context Protocol (MCP) Integration Architecture
 - [0023-a2a-communication-architecture.md](0023-a2a-communication-architecture.md) - Agent-to-Agent (A2A) Communication Architecture
 - [0024-llm-agent-architecture.md](0024-llm-agent-architecture.md) - LLM Agent Architecture for Real Integration
+- [0025-hierarchical-document-processing.md](0025-hierarchical-document-processing.md) - Hierarchical Document Processing for RAG
 
 ### Package & Documentation (Accepted)
 - [0020-package-distribution-strategy.md](0020-package-distribution-strategy.md) - Package Distribution Strategy

@@ -261,7 +261,7 @@ class DataTransformer(Node):
                     local_vars["result"] = result
 
                     # Execute the code block
-                    exec(transform_str, safe_globals, local_vars)
+                    exec(transform_str, safe_globals, local_vars)  # noqa: S102
 
                     # Extract the result from local context
                     result = local_vars.get("result", result)
@@ -271,7 +271,7 @@ class DataTransformer(Node):
                     # For lambda functions like: "lambda x: x * 2"
                     if transform_str.strip().startswith("lambda"):
                         # First, compile the lambda function
-                        lambda_func = eval(transform_str, safe_globals)
+                        lambda_func = eval(transform_str, safe_globals)  # noqa: S307
 
                         # Apply the lambda function based on input data
                         if isinstance(result, list):
@@ -324,7 +324,9 @@ class DataTransformer(Node):
                     else:
                         local_vars = input_data.copy()
                         local_vars["result"] = result
-                        result = eval(transform_str, safe_globals, local_vars)
+                        result = eval(
+                            transform_str, safe_globals, local_vars
+                        )  # noqa: S307
 
             except Exception as e:
                 tb = traceback.format_exc()

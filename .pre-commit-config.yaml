@@ -69,6 +69,7 @@ repos:
         name: Check for deprecated log.warn
       - id: python-no-eval
         name: Check for eval() usage
+        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py)$
       - id: python-use-type-annotations
         name: Require type annotations
       - id: python-check-blanket-noqa
@@ -130,7 +131,7 @@ repos:
         name: Check documentation style
         args: [--max-line-length=88]
         files: \.(rst|md)$
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*_mermaid\.md)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*_mermaid\.md|docs/build_output\.txt)$
 
   # Type checking with mypy (temporarily disabled due to type errors)
   # - repo: https://github.com/pre-commit/mirrors-mypy

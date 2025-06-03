@@ -128,9 +128,7 @@ class TestStorageIntegration:
 
             # Create a few tasks for basic performance test
             for i in range(10):
-                task = fs_tracker.create_task(
-                    f"Perf Task {i}", f"Performance test task {i}"
-                )
+                fs_tracker.create_task(f"Perf Task {i}", f"Performance test task {i}")
 
             fs_create_time = time.time() - fs_start
 

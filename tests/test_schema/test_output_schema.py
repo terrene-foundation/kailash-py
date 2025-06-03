@@ -275,7 +275,7 @@ def test_schema_violation_during_execution():
         node = BrokenOutputNode()
 
         # This should fail during execution
-        result = node.execute()
+        node.execute()
         print("✗ Should have failed for schema violation")
         return False
 

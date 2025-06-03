@@ -386,16 +386,16 @@ The AI nodes use a unified provider architecture that supports multiple LLM and 
 .. code-block:: python
 
    from kailash.nodes.ai import get_available_providers
-   
+
    # Check all providers
    providers = get_available_providers()
    for name, info in providers.items():
        if info['available']:
            print(f"{name}: ✓ Chat={info['chat']}, Embeddings={info['embeddings']}")
-   
+
    # Check only LLM providers
    llm_providers = get_available_providers("chat")
-   
+
    # Check only embedding providers
    embed_providers = get_available_providers("embeddings")
 
@@ -430,7 +430,7 @@ EmbeddingGenerator
 .. code-block:: python
 
    from kailash.nodes.ai import EmbeddingGenerator
-   
+
    # Single text embedding
    embedder = EmbeddingGenerator()
    result = embedder.run(
@@ -439,7 +439,7 @@ EmbeddingGenerator
        input_text="This is a sample document to embed",
        operation="embed_text"
    )
-   
+
    # Batch embedding with caching
    result = embedder.run(
        provider="huggingface",
@@ -449,7 +449,7 @@ EmbeddingGenerator
        batch_size=32,
        cache_enabled=True
    )
-   
+
    # Calculate similarity between embeddings
    result = embedder.run(
        operation="calculate_similarity",
@@ -471,7 +471,7 @@ LLMAgent
 .. code-block:: python
 
    from kailash.nodes.ai import LLMAgent
-   
+
    # Basic question-answering
    agent = LLMAgent()
    result = agent.run(
@@ -480,7 +480,7 @@ LLMAgent
        prompt="What is the capital of France?",
        operation="qa"
    )
-   
+
    # Conversation with memory
    result = agent.run(
        provider="anthropic",
@@ -492,7 +492,7 @@ LLMAgent
            "window_size": 10
        }
    )
-   
+
    # Tool calling with functions
    result = agent.run(
        provider="openai",
@@ -532,7 +532,7 @@ HTTPRequestNode
 .. code-block:: python
 
    from kailash.nodes.api import HTTPRequestNode
-   
+
    # Simple GET request
    workflow.add_node("HTTPRequestNode", "fetch_data", config={
        "url": "https://api.example.com/data",
@@ -542,7 +542,7 @@ HTTPRequestNode
        },
        "timeout": 30
    })
-   
+
    # POST with authentication
    workflow.add_node("HTTPRequestNode", "create_resource", config={
        "url": "https://api.example.com/resources",
@@ -568,7 +568,7 @@ RESTClientNode
 .. code-block:: python
 
    from kailash.nodes.api import RESTClientNode
-   
+
    # GET a resource
    workflow.add_node("RESTClientNode", "get_user", config={
        "base_url": "https://api.example.com",
@@ -578,7 +578,7 @@ RESTClientNode
        "auth_type": "bearer",
        "auth_token": "${API_TOKEN}"
    })
-   
+
    # Create a new resource
    workflow.add_node("RESTClientNode", "create_user", config={
        "base_url": "https://api.example.com",
@@ -623,7 +623,7 @@ MCPClient
 .. code-block:: python
 
    from kailash.nodes.mcp import MCPClient
-   
+
    # List available resources
    client = MCPClient()
    result = client.run(
@@ -634,14 +634,14 @@ MCPClient
        },
        operation="list_resources"
    )
-   
+
    # Read a specific resource
    result = client.run(
        server_config=server_config,
        operation="read_resource",
        resource_uri="file:///path/to/document.txt"
    )
-   
+
    # Call a tool on the server
    result = client.run(
        server_config=server_config,

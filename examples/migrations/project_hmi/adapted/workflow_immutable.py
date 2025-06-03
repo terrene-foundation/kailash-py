@@ -150,7 +150,7 @@ class HmiWorkflowImmutable:
         runtime = AsyncLocalRuntime(debug=True)
 
         # Wrap the state with WorkflowStateWrapper
-        state_wrapper = self.workflow1.create_state_wrapper(state)
+        self.workflow1.create_state_wrapper(state)
 
         # Run the workflow asynchronously
         try:

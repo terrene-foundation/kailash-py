@@ -93,7 +93,7 @@ class SentimentAnalyzerNode(Node):
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute sentiment analysis."""
         data = kwargs["data"]
-        model = kwargs.get("model", "vader")
+        kwargs.get("model", "vader")
         batch_size = kwargs.get("batch_size", 100)
         include_scores = kwargs.get("include_scores", True)
 
@@ -289,7 +289,7 @@ class DataValidatorNode(Node):
                 # Convert column to numeric for comparison
                 try:
                     df[column] = pd.to_numeric(df[column], errors="coerce")
-                except:
+                except (ValueError, TypeError):
                     pass
 
                 if min_val is not None:

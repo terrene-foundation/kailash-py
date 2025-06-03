@@ -270,7 +270,6 @@ class FileSystemStorage(StorageBackend):
         run = WorkflowRun.model_validate(run_data)
 
         # Generate new run ID to avoid conflicts
-        original_run_id = run.run_id
         run.run_id = str(uuid4())
 
         # Save run

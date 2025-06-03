@@ -23,7 +23,7 @@ from kailash.nodes.base import Node
 # Skip Docker tests due to syntax issues in docker.py
 DockerRuntime = None
 DockerNodeWrapper = None
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime.local import LocalRuntime  # noqa: E402
 
 # Simplified exception imports
 

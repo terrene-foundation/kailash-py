@@ -181,7 +181,7 @@ def demonstrate_basic_workflow(data_dir: Path, output_dir: Path):
                     df["active"] = df["active"].map(
                         {"True": True, "False": False, True: True, False: False}
                     )
-                active_customers = df[df["active"] == True]
+                active_customers = df[df["active"]]
             else:
                 # If no active column, return all customers
                 active_customers = df

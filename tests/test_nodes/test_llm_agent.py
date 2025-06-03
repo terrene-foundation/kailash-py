@@ -208,7 +208,7 @@ class TestLLMAgent:
                     ollama.list()
                     assert result["success"] is True
                     assert result["metadata"]["provider"] == provider
-                except:
+                except Exception:
                     # If Ollama is not available, it should fail gracefully
                     assert result["success"] is False or "Ollama" in result.get(
                         "error", ""

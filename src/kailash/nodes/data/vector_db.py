@@ -584,7 +584,7 @@ class VectorDatabaseNode(Node):
         """
         vectors = inputs.get("vectors", [])
         ids = inputs.get("ids", [])
-        metadata = inputs.get("metadata", [])
+        # metadata = inputs.get("metadata", [])  # TODO: Implement metadata storage
 
         if not vectors or not ids:
             raise ValueError("Vectors and IDs are required for upsert")
@@ -611,7 +611,7 @@ class VectorDatabaseNode(Node):
         """
         query_vector = inputs.get("query_vector")
         k = inputs.get("k", 10)
-        filter_dict = inputs.get("filter", {})
+        # filter_dict = inputs.get("filter", {})  # TODO: Implement filter-based queries
 
         if not query_vector:
             raise ValueError("Query vector is required")

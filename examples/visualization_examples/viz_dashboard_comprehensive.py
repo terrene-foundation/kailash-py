@@ -291,7 +291,7 @@ async def demonstrate_fastapi_server(task_manager: TaskManager):
         print("  🌐 FastAPI available - server integration demo")
 
         # Create API server
-        api_server = DashboardAPIServer(task_manager)
+        DashboardAPIServer(task_manager)
 
         print("     🔧 API server created successfully")
         print("     📚 Available endpoints:")

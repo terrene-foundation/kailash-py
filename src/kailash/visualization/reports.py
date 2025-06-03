@@ -639,7 +639,7 @@ class WorkflowPerformanceReporter:
 
         summary = analysis["summary"]
         bottlenecks = analysis["bottlenecks"]
-        resource_analysis = analysis["resource_analysis"]
+        analysis["resource_analysis"]
         error_analysis = analysis["error_analysis"]
 
         # Efficiency insights

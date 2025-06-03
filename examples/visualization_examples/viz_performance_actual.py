@@ -230,7 +230,7 @@ def visualize_performance():
 
     workflow_viz = WorkflowVisualizer(workflow)
     dashboard_dir = output_dir / "dashboard"
-    dashboard_outputs = workflow_viz.create_performance_dashboard(
+    workflow_viz.create_performance_dashboard(
         run_id=run2_id, task_manager=task_manager, output_dir=dashboard_dir
     )
 

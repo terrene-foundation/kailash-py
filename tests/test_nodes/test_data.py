@@ -208,7 +208,7 @@ class TestCSVWriterNode:
         data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
 
         node = CSVWriter(file_path=str(csv_path), data=data)
-        result = node.execute()
+        node.execute()
 
         # Should auto-detect fieldnames from first row
         with open(csv_path, "r") as f:
@@ -222,7 +222,7 @@ class TestCSVWriterNode:
         data = [{"name": "Alice", "age": 30}]
 
         node = CSVWriter(file_path=str(csv_path), data=data, delimiter="\t")
-        result = node.execute()
+        node.execute()
 
         with open(csv_path, "r") as f:
             content = f.read()
@@ -236,7 +236,7 @@ class TestCSVWriterNode:
 
         # May or may not raise an exception - empty CSV might be valid
         try:
-            result = node.execute()
+            node.execute()
             # Successfully handled empty data - that's acceptable
             pass
         except NodeValidationError:
@@ -275,7 +275,7 @@ class TestJSONWriterNode:
         data = [1, 2, 3, 4, 5]
 
         node = JSONWriter(file_path=str(json_path), data=data)
-        result = node.execute()
+        node.execute()
 
         with open(json_path, "r") as f:
             saved_data = json.load(f)
@@ -287,7 +287,7 @@ class TestJSONWriterNode:
         data = {"name": "Test", "nested": {"key": "value"}}
 
         node = JSONWriter(file_path=str(json_path), data=data, indent=2)
-        result = node.execute()
+        node.execute()
 
         with open(json_path, "r") as f:
             content = f.read()
@@ -303,7 +303,7 @@ class TestJSONWriterNode:
         node = JSONWriter(
             file_path=str(json_path), data=data, encoding="utf-8", ensure_ascii=False
         )
-        result = node.execute()
+        node.execute()
 
         with open(json_path, "r", encoding="utf-8") as f:
             saved_data = json.load(f)
@@ -334,7 +334,7 @@ class TestTextWriterNode:
         content = "Hello 世界"
 
         node = TextWriter(file_path=str(text_path), text=content, encoding="utf-8")
-        result = node.execute()
+        node.execute()
 
         with open(text_path, "r", encoding="utf-8") as f:
             saved_content = f.read()
@@ -360,7 +360,7 @@ class TestTextWriterNode:
             f.write("Old content")
 
         node = TextWriter(file_path=str(text_path), text="New content")
-        result = node.execute()
+        node.execute()
 
         with open(text_path, "r") as f:
             content = f.read()

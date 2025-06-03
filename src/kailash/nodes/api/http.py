@@ -428,7 +428,6 @@ class HTTPRequestNode(Node):
             self.logger.info(f"Making {method} request to {url}")
 
         response = None
-        last_error = None
 
         for attempt in range(retry_count + 1):
             if attempt > 0:
@@ -453,7 +452,6 @@ class HTTPRequestNode(Node):
                 break
 
             except requests.RequestException as e:
-                last_error = e
                 self.logger.warning(f"Request failed: {str(e)}")
 
                 # Last attempt, no more retries
@@ -779,7 +777,6 @@ class AsyncHTTPRequestNode(AsyncNode):
             self.logger.info(f"Making async {method} request to {url}")
 
         response = None
-        last_error = None
 
         for attempt in range(retry_count + 1):
             if attempt > 0:
@@ -860,7 +857,6 @@ class AsyncHTTPRequestNode(AsyncNode):
                     return result
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                last_error = e
                 self.logger.warning(f"Async request failed: {str(e)}")
 
                 # Last attempt, no more retries

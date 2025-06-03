@@ -29,9 +29,9 @@ TestRunner = None
 TestCase = None
 TestResult = None
 
-from kailash.nodes.base import Node
-from kailash.sdk_exceptions import NodeValidationError
-from kailash.workflow.graph import Workflow
+from kailash.nodes.base import Node  # noqa: E402
+from kailash.sdk_exceptions import NodeValidationError  # noqa: E402
+from kailash.workflow.graph import Workflow  # noqa: E402
 
 
 class SimpleNode(Node):

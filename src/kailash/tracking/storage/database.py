@@ -320,7 +320,7 @@ class DatabaseStorage(StorageBackend):
                     # Try to sanitize it
                     try:
                         data["input_data"] = {"value": data["input_data"]}
-                    except:
+                    except Exception:
                         data["input_data"] = None
         if data.get("output_data"):
             try:
@@ -331,7 +331,7 @@ class DatabaseStorage(StorageBackend):
                     # Try to sanitize it
                     try:
                         data["output_data"] = {"value": data["output_data"]}
-                    except:
+                    except Exception:
                         data["output_data"] = None
 
         task = TaskRun.model_validate(data)
@@ -405,7 +405,7 @@ class DatabaseStorage(StorageBackend):
                         # Try to sanitize it by wrapping in quotes if needed
                         try:
                             data["input_data"] = {"value": data["input_data"]}
-                        except:
+                        except Exception:
                             data["input_data"] = None
             if data.get("output_data"):
                 try:
@@ -419,7 +419,7 @@ class DatabaseStorage(StorageBackend):
                         # Try to sanitize it
                         try:
                             data["output_data"] = {"value": data["output_data"]}
-                        except:
+                        except Exception:
                             data["output_data"] = None
 
             tasks.append(TaskRun.model_validate(data))

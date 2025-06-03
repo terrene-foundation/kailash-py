@@ -192,10 +192,10 @@ class SQLDatabaseNode(Node):
         """
         connection_string = kwargs["connection_string"]
         query = kwargs["query"]
-        parameters = kwargs.get("parameters", [])
+        # parameters = kwargs.get("parameters", [])  # TODO: Implement parameterized queries
         result_format = kwargs.get("result_format", "dict")
-        timeout = kwargs.get("timeout", 30)
-        transaction_mode = kwargs.get("transaction_mode", "auto")
+        # timeout = kwargs.get("timeout", 30)  # TODO: Implement query timeout
+        # transaction_mode = kwargs.get("transaction_mode", "auto")  # TODO: Implement transaction handling
 
         # This is a placeholder implementation
         # In a real implementation, you would:

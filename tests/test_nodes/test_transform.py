@@ -581,8 +581,8 @@ class TestHierarchicalChunkerNode:
         # Check default values
         assert params["chunk_size"].default == 200
         assert params["overlap"].default == 50
-        assert params["chunk_size"].type == int
-        assert params["overlap"].type == int
+        assert params["chunk_size"].type == int  # noqa: E721
+        assert params["overlap"].type == int  # noqa: E721
 
 
 class TestChunkTextExtractorNode:
@@ -644,7 +644,7 @@ class TestChunkTextExtractorNode:
         params = node.get_parameters()
 
         assert "chunks" in params
-        assert params["chunks"].type == list
+        assert params["chunks"].type == list  # noqa: E721
         assert params["chunks"].required is False
 
 
@@ -690,7 +690,7 @@ class TestQueryTextWrapperNode:
         params = node.get_parameters()
 
         assert "query" in params
-        assert params["query"].type == str
+        assert params["query"].type == str  # noqa: E721
         assert params["query"].required is False
 
 
@@ -809,7 +809,7 @@ class TestContextFormatterNode:
         for param_name in expected_params:
             assert param_name in params
 
-        assert params["relevant_chunks"].type == list
-        assert params["query"].type == str
+        assert params["relevant_chunks"].type == list  # noqa: E721
+        assert params["query"].type == str  # noqa: E721
         assert params["relevant_chunks"].required is False
         assert params["query"].required is False

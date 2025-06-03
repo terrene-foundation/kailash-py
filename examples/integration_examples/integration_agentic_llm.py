@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from kailash.nodes.ai import EmbeddingGenerator, LLMAgent
 from kailash.nodes.mcp import MCPResource
-from kailash.workflow import WorkflowBuilder
 
 
 def main():
@@ -16,8 +15,8 @@ def main():
     print("🤖 Advanced Agentic AI Integration Example")
     print("=" * 55)
 
-    # Create a workflow builder
-    builder = WorkflowBuilder("agentic_ai_demo")
+    # Create a workflow builder (not used in this example, shown for reference)
+    # builder = WorkflowBuilder("agentic_ai_demo")
 
     # 1. Setup MCP Resources for AI Context
     print("\n📦 Step 1: Setting up MCP Resources for AI Context")

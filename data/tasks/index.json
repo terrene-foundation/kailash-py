@@ -272,6 +272,111 @@
       "status": "failed",
       "started_at": null,
       "ended_at": "2025-06-02T16:32:07.358187+00:00"
+    },
+    "42c2b465-c1d7-4ac9-b819-b7bd74af93d0": {
+      "run_id": "49609812-7e40-4ad4-850a-e0e65e4edc05",
+      "node_id": "customer_reader",
+      "status": "completed",
+      "started_at": "2025-06-03T02:33:09.906481+00:00",
+      "ended_at": "2025-06-03T02:33:09.907966+00:00"
+    },
+    "30f7e4f9-4e28-48da-a242-31dc6f093377": {
+      "run_id": "49609812-7e40-4ad4-850a-e0e65e4edc05",
+      "node_id": "transaction_reader",
+      "status": "completed",
+      "started_at": "2025-06-03T02:33:09.908848+00:00",
+      "ended_at": "2025-06-03T02:33:09.910152+00:00"
+    },
+    "d3a7a7bc-423a-4d94-8d97-4326c67efaf5": {
+      "run_id": "49609812-7e40-4ad4-850a-e0e65e4edc05",
+      "node_id": "validator",
+      "status": "failed",
+      "started_at": "2025-06-03T02:33:09.910892+00:00",
+      "ended_at": "2025-06-03T02:33:09.914026+00:00"
+    },
+    "c80737f2-8b52-4ce5-8f58-fbf4ecfa46e2": {
+      "run_id": "5b9cdc44-3840-4603-8ae0-22e1d64568a1",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-06-03T02:33:10.548762+00:00",
+      "ended_at": null
+    },
+    "3b95851a-8e6b-4656-9e32-d90e2972dcee": {
+      "run_id": "5b9cdc44-3840-4603-8ae0-22e1d64568a1",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-06-03T02:33:10.551765+00:00"
+    },
+    "94541b9b-4799-4462-8ae7-48e95e55a846": {
+      "run_id": "d94b97fa-cb03-4382-ab89-bfc48aec4dfc",
+      "node_id": "customer_reader",
+      "status": "completed",
+      "started_at": "2025-06-03T03:10:25.075869+00:00",
+      "ended_at": "2025-06-03T03:10:25.077359+00:00"
+    },
+    "10574e9f-44ad-4c2e-92ac-dd7d26399e7b": {
+      "run_id": "d94b97fa-cb03-4382-ab89-bfc48aec4dfc",
+      "node_id": "transaction_reader",
+      "status": "completed",
+      "started_at": "2025-06-03T03:10:25.078425+00:00",
+      "ended_at": "2025-06-03T03:10:25.080146+00:00"
+    },
+    "cdf0a5ad-f2ea-4ae1-af57-44a9a1e29728": {
+      "run_id": "d94b97fa-cb03-4382-ab89-bfc48aec4dfc",
+      "node_id": "validator",
+      "status": "failed",
+      "started_at": "2025-06-03T03:10:25.081332+00:00",
+      "ended_at": "2025-06-03T03:10:25.084792+00:00"
+    },
+    "a2eb94c3-a8dc-4704-b8c4-f98879af3234": {
+      "run_id": "fd2550bd-da33-4f37-8a36-afaf5fde3f24",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-06-03T03:10:25.680694+00:00",
+      "ended_at": null
+    },
+    "cf2711d7-ae89-47b9-a22d-e1321920fca3": {
+      "run_id": "fd2550bd-da33-4f37-8a36-afaf5fde3f24",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-06-03T03:10:25.683614+00:00"
+    },
+    "722ef780-93ff-4919-8cfc-71bd06dced36": {
+      "run_id": "df261f46-4d7e-4c01-8be6-41e84fd9ca84",
+      "node_id": "customer_reader",
+      "status": "completed",
+      "started_at": "2025-06-03T06:22:22.720411+00:00",
+      "ended_at": "2025-06-03T06:22:22.722535+00:00"
+    },
+    "fec1be14-745d-4e9a-adb8-ce6ce6eb0e47": {
+      "run_id": "df261f46-4d7e-4c01-8be6-41e84fd9ca84",
+      "node_id": "transaction_reader",
+      "status": "completed",
+      "started_at": "2025-06-03T06:22:22.723480+00:00",
+      "ended_at": "2025-06-03T06:22:22.724746+00:00"
+    },
+    "e9daaaa8-7e2d-4672-95f9-21e876c05056": {
+      "run_id": "df261f46-4d7e-4c01-8be6-41e84fd9ca84",
+      "node_id": "validator",
+      "status": "failed",
+      "started_at": "2025-06-03T06:22:22.725551+00:00",
+      "ended_at": "2025-06-03T06:22:22.728716+00:00"
+    },
+    "0db02ec2-94e2-4005-9c69-a019c6d2e837": {
+      "run_id": "41eb91e7-6214-4857-9755-b092350a5018",
+      "node_id": "reader",
+      "status": "running",
+      "started_at": "2025-06-03T06:22:23.316321+00:00",
+      "ended_at": null
+    },
+    "ea512f70-f58c-4dac-9fa0-b690ee5ceef6": {
+      "run_id": "41eb91e7-6214-4857-9755-b092350a5018",
+      "node_id": "transformer",
+      "status": "failed",
+      "started_at": null,
+      "ended_at": "2025-06-03T06:22:23.319452+00:00"
     }
   },
   "runs": {}

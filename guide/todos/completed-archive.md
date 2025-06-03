@@ -10,7 +10,7 @@ This file contains the complete history of completed development tasks from the 
   - Verified all imports already updated to use unified architecture
 - **Functional Overlap Analysis** ✅ Complete
   - `OllamaEmbeddingProvider` → `OllamaProvider` (unified LLM + embedding)
-  - `OpenAIEmbeddingProvider` → `OpenAIProvider` (unified LLM + embedding)  
+  - `OpenAIEmbeddingProvider` → `OpenAIProvider` (unified LLM + embedding)
   - `CohereEmbeddingProvider` → `CohereProvider` (embedding only)
   - `HuggingFaceEmbeddingProvider` → `HuggingFaceProvider` (embedding only)
   - `MockEmbeddingProvider` → `MockProvider` (unified LLM + embedding)

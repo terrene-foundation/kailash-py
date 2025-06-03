@@ -404,6 +404,8 @@ ENTRYPOINT ["/app/entrypoint.py"]
             result = subprocess.run(
                 cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            # Result could be used for logging output if needed
+            _ = result
 
             logger.info(f"Container for node {self.node_id} ran successfully")
             return True

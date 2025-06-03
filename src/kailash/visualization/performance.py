@@ -136,7 +136,7 @@ class PerformanceVisualizer:
 
         # Calculate timeline bounds
         min_time = min(t.started_at for t in tasks_with_times)
-        max_time = max(t.ended_at for t in tasks_with_times)
+        max(t.ended_at for t in tasks_with_times)
 
         # Create timeline bars
         y_positions = []
@@ -266,8 +266,8 @@ class PerformanceVisualizer:
                 )
 
         # Memory usage chart
-        bars2 = ax2.bar(x, memory_usage, color="lightgreen", edgecolor="black")
-        bars2_delta = ax2.bar(
+        ax2.bar(x, memory_usage, color="lightgreen", edgecolor="black")
+        ax2.bar(
             x,
             memory_delta,
             bottom=memory_usage,
@@ -482,7 +482,7 @@ class PerformanceVisualizer:
         width = 0.35
 
         # I/O bytes chart
-        bars1 = ax1.bar(
+        ax1.bar(
             x - width / 2,
             io_read_bytes,
             width,
@@ -490,7 +490,7 @@ class PerformanceVisualizer:
             color="lightblue",
             edgecolor="black",
         )
-        bars2 = ax1.bar(
+        ax1.bar(
             x + width / 2,
             io_write_bytes,
             width,
@@ -507,7 +507,7 @@ class PerformanceVisualizer:
         ax1.grid(True, axis="y", alpha=0.3)
 
         # I/O operations count chart
-        bars3 = ax2.bar(
+        ax2.bar(
             x - width / 2,
             io_read_count,
             width,
@@ -515,7 +515,7 @@ class PerformanceVisualizer:
             color="lightblue",
             edgecolor="black",
         )
-        bars4 = ax2.bar(
+        ax2.bar(
             x + width / 2,
             io_write_count,
             width,

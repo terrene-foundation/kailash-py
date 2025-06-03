@@ -12,8 +12,9 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK documentation! This SDK provides a comprehensive
-framework for building workflow-based applications with a container-node architecture.
+Welcome to the Kailash Python SDK documentation! This SDK provides a
+comprehensive framework for building workflow-based applications with a
+container-node architecture.
 
 .. toctree::
    :maxdepth: 2
@@ -38,6 +39,7 @@ framework for building workflow-based applications with a container-node archite
 
    api/nodes
    api/workflow
+   api/workflow_api
    api/runtime
    api/tracking
    api/visualization
@@ -63,12 +65,13 @@ framework for building workflow-based applications with a container-node archite
 Overview
 ========
 
-The Kailash Python SDK is designed to bridge the gap between AI Business Coaches
-(ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It provides:
+The Kailash Python SDK is designed to bridge the gap between AI Business
+Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It provides:
 
-- **Node-Based Architecture**: Build complex workflows by connecting reusable nodes
-- **Extensive Node Library**: Pre-built nodes for data I/O, transformation, AI/ML,
-  APIs, and more
+- **Node-Based Architecture**: Build complex workflows by connecting
+  reusable nodes
+- **Extensive Node Library**: Pre-built nodes for data I/O, transformation,
+  AI/ML, APIs, and more
 - **Flexible Runtime**: Execute workflows locally, in Docker, or distributed
   environments
 - **Task Tracking**: Monitor workflow execution with detailed metrics and logs
@@ -97,6 +100,12 @@ Key Features
    - Docker runtime for isolation
    - Async execution for I/O operations
    - Parallel processing for performance
+
+🌐 **REST API Wrapper**
+   - Expose any workflow as REST API
+   - Automatic OpenAPI documentation
+   - Multiple execution modes (sync/async/stream)
+   - Production-ready with FastAPI
 
 📈 **Monitoring & Analytics**
    - Real-time task tracking

@@ -2,7 +2,8 @@
 Quickstart
 ==========
 
-Get up and running with Kailash SDK in 5 minutes! This guide shows you how to build practical workflows quickly.
+Get up and running with Kailash SDK in 5 minutes! This guide shows you how to
+build practical workflows quickly.
 
 5-Minute Setup
 ==============
