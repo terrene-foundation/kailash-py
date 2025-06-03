@@ -318,6 +318,11 @@ The SDK includes a rich set of pre-built nodes for common operations:
 - `Filter` - Filter records
 - `Aggregator` - Aggregate data
 
+**Logic Nodes**
+- `Switch` - Conditional routing
+- `Merge` - Combine multiple inputs
+- `WorkflowNode` - Wrap workflows as reusable nodes
+
 </td>
 </tr>
 <tr>
@@ -384,6 +389,35 @@ workflow.add_node("handle_errors", error_handler)
 # Connect with switch routing
 workflow.connect("route", "process_valid")
 workflow.connect("route", "handle_errors")
+```
+
+#### Hierarchical Workflow Composition
+```python
+from kailash.workflow import Workflow
+from kailash.nodes.logic import WorkflowNode
+from kailash.runtime.local import LocalRuntime
+
+# Create a reusable data processing workflow
+inner_workflow = Workflow("data_processor", name="Data Processor")
+# ... add nodes to inner workflow ...
+
+# Wrap the workflow as a node
+processor_node = WorkflowNode(
+    workflow=inner_workflow,
+    name="data_processor"
+)
+
+# Use in a larger workflow
+main_workflow = Workflow("main", name="Main Pipeline")
+main_workflow.add_node("process", processor_node)
+main_workflow.add_node("analyze", analyzer_node)
+
+# Connect workflows
+main_workflow.connect("process", "analyze")
+
+# Execute - parameters automatically mapped to inner workflow
+runtime = LocalRuntime()
+results, _ = runtime.execute(main_workflow)
 ```
 
 #### Immutable State Management
