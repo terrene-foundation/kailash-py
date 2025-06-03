@@ -88,7 +88,7 @@ class TestFunctionWrapper:
         assert wrapper.name == "multiply"
         assert wrapper.doc == "Multiply two numbers."
         assert wrapper.get_input_types() == {"x": int, "y": int}
-        assert wrapper.get_output_type() == int
+        assert wrapper.get_output_type() == int  # noqa: E721
 
     def test_wrap_function_without_annotations(self):
         """Test wrapping a function without type annotations."""

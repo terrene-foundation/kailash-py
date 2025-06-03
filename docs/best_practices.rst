@@ -63,7 +63,8 @@ When creating custom nodes, follow these patterns:
 
 **Key Principles:**
 
-1. **Use Pydantic for Configuration**: Define configuration schemas using Pydantic models
+1. **Use Pydantic for Configuration**: Define configuration schemas using
+   Pydantic models
 2. **Input Validation**: Always validate inputs before processing
 3. **Structured Output**: Return consistent output formats with success indicators
 4. **Error Handling**: Catch and handle exceptions gracefully

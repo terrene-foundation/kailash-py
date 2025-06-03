@@ -137,7 +137,7 @@ def demonstrate_filtered_list_runs():
     print("   ✓ Created failed workflow run")
 
     # Running workflow (simulated)
-    running_workflow = create_sample_workflow("running_workflow", "Long running")
+    create_sample_workflow("running_workflow", "Long running")
     run_id = task_manager.create_run(workflow_name="running_workflow")
     task_manager.update_run_status(run_id, "running")
     print("   ✓ Created running workflow run")

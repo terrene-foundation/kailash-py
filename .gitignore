@@ -73,3 +73,4 @@ examples/output/
 .env.test.local
 .env.production.local
 .claude
+docs/build_output.txt

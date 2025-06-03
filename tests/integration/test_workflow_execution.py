@@ -197,7 +197,6 @@ class TestWorkflowExecution:
 
         # Track open file handles before execution
         # psutil not available in test environment
-        initial_files = 0
 
         # Execute workflow
         result, run_id = runner.run(simple_workflow)

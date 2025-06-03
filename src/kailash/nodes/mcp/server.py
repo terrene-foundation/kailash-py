@@ -171,11 +171,17 @@ class MCPServer(Node):
         try:
             # Import MCP SDK (graceful fallback if not installed)
             try:
-                from mcp.server import Server
-                from mcp.server.fastmcp import FastMCP
-                from mcp.types import Prompt, Resource, Tool
+                import importlib.util
 
-                mcp_available = True
+                mcp_spec = importlib.util.find_spec("mcp")
+                if mcp_spec is not None:
+                    from mcp.server import Server  # noqa: F401
+                    from mcp.server.fastmcp import FastMCP  # noqa: F401
+                    from mcp.types import Prompt, Resource, Tool  # noqa: F401
+
+                    mcp_available = True
+                else:
+                    mcp_available = False
             except ImportError:
                 mcp_available = False
 

@@ -29,7 +29,7 @@ else:
     MOCK_EVERYTHING = False
 
 # We'll import our modules after patching to prevent import errors
-from examples.migrations.project_hmi.adapted.shared import (
+from examples.migrations.project_hmi.adapted.shared import (  # noqa: E402
     AgentState,
     DoctorInfo,
     SlotInfo,
@@ -376,7 +376,7 @@ if __name__ == "__main__":
         # Run with just mocked APIs for reliable testing
         try:
             # Only import workflow classes when dependencies are available
-            from examples.migrations.project_hmi.adapted.workflow_immutable import (
+            from examples.migrations.project_hmi.adapted.workflow_immutable import (  # noqa: F401
                 HmiWorkflowImmutable,
                 create_initial_state,
             )

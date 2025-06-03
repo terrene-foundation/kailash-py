@@ -43,7 +43,7 @@ NODE_TYPES = [
 for node_type in NODE_TYPES:
     try:
         NodeRegistry._registry[node_type] = MockNode
-    except:
+    except Exception:
         pass
 
 

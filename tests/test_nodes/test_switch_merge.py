@@ -332,11 +332,6 @@ class TestMergeNode:
         )
 
         # Should merge items with same id, and include items with unique ids
-        expected = [
-            {"id": 1, "name": "Alice", "age": 30},
-            {"id": 2, "name": "Bob"},
-            {"id": 3, "name": "Charlie", "age": 25},
-        ]
 
         # Check each item is present (order may vary)
         assert len(result["merged_data"]) == 3
@@ -399,4 +394,4 @@ class TestMergeNode:
         node = Merge()
 
         with pytest.raises(ValueError):
-            result = node.execute(data1=[1, 2], data2=[3, 4], merge_type="unknown_type")
+            node.execute(data1=[1, 2], data2=[3, 4], merge_type="unknown_type")

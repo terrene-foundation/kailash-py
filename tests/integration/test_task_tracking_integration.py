@@ -107,9 +107,7 @@ class TestTaskTrackingIntegration:
         builder = WorkflowBuilder()
 
         # Create workflow with long-running node
-        node_id = builder.add_node(
-            "LongRunningProcessor", "processor", config={"iterations": 10}
-        )
+        builder.add_node("LongRunningProcessor", "processor", config={"iterations": 10})
 
         workflow = builder.build("progress_tracking_test")
 
@@ -141,7 +139,7 @@ class TestTaskTrackingIntegration:
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(run_workflow, i) for i in range(3)]
-            results = [f.result() for f in futures]
+            [f.result() for f in futures]
 
         # Verify all executions were tracked
         tasks = task_manager.get_workflow_tasks(simple_workflow.workflow_id)
@@ -212,7 +210,7 @@ class TestTaskTrackingIntegration:
         builder = WorkflowBuilder()
 
         # Create node that fails first time but succeeds on retry
-        node_id = builder.add_node(
+        builder.add_node(
             "RetryableProcessor",
             "processor",
             config={"data": {"attempts": 0}, "max_attempts": 3},

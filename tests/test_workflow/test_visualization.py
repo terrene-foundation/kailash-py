@@ -228,7 +228,7 @@ class TestWorkflowVisualizer:
         visualizer = WorkflowVisualizer(workflow)
 
         # Test that the node labels are properly extracted
-        with patch.object(visualizer, "_draw_graph") as mock_draw:
+        with patch.object(visualizer, "_draw_graph"):
             visualizer.visualize()
 
             # Check that labels were created

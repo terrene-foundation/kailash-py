@@ -285,7 +285,7 @@ workflow = builder.build("params_test")
 
         for i in range(3):
             builder = WorkflowBuilder()
-            node_id = builder.add_node(f"Processor{i}", f"processor_{i}")
+            builder.add_node(f"Processor{i}", f"processor_{i}")
             workflow = builder.build(f"batch_workflow_{i}")
 
             manifest = KailashManifest(

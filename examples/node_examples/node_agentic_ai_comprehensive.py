@@ -250,7 +250,7 @@ def demonstrate_embedding_generator():
                 provider = "ollama"
                 print(f"✅ Found Ollama embedding models: {available_embeddings}")
                 print(f"   Using: {embedding_model}")
-        except:
+        except Exception:
             print("⚠️  Ollama not available, using mock embeddings")
 
     # Single text embedding
@@ -516,7 +516,7 @@ def demonstrate_integrated_workflow():
     # Step 1: Create context resource
     print("\n📝 Step 1: Create Business Context")
     resource_node = MCPResource()
-    context_result = resource_node.run(
+    resource_node.run(
         operation="create",
         resource_type="context",
         resource_id="q4-analysis",
@@ -536,7 +536,7 @@ def demonstrate_integrated_workflow():
         "Churn rate remains stable at 5% monthly",
     ]
 
-    embed_result = embedder.run(
+    embedder.run(
         operation="embed_batch",
         input_texts=documents,
         provider="mock",
@@ -562,7 +562,7 @@ def demonstrate_integrated_workflow():
             provider = "ollama"
             model = "llama3.1:8b-instruct-q8_0"
             print("   Using Ollama for real analysis...")
-    except:
+    except Exception:
         print("   Using mock provider for demonstration...")
 
     analysis_result = agent.run(
@@ -635,7 +635,7 @@ def demonstrate_provider_architecture():
             openai_provider = get_provider("openai")
             if openai_provider.is_available():
                 print("   OpenAI provider supports both LLM and embeddings")
-        except:
+        except Exception:
             pass
 
     except ImportError:

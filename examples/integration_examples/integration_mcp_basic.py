@@ -7,7 +7,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from kailash.nodes.mcp import MCPClient, MCPResource
-from kailash.workflow import WorkflowBuilder
 
 
 def main():
@@ -15,8 +14,8 @@ def main():
     print("🚀 MCP Basic Integration Example")
     print("=" * 50)
 
-    # Create a workflow builder
-    builder = WorkflowBuilder("mcp_basic_demo")
+    # Create a workflow builder (not used in this example, shown for reference)
+    # builder = WorkflowBuilder("mcp_basic_demo")
 
     # 1. Create MCP Resources
     print("\n📦 Step 1: Creating MCP Resources")

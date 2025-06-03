@@ -107,7 +107,7 @@ def demonstrate_state_management():
     logger.info("=== State Management Demonstration ===")
 
     # Create a state manager
-    state_manager = StateManager()
+    StateManager()
 
     # Create initial state
     initial_state = {
@@ -202,7 +202,7 @@ def main():
     logger.info("=== Kailash SDK State Management Examples ===\n")
 
     # Demonstrate basic state management
-    final_state = demonstrate_state_management()
+    demonstrate_state_management()
 
     # Demonstrate stateful workflow
     workflow, results = demonstrate_stateful_workflow()

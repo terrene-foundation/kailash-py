@@ -34,7 +34,7 @@ class TestNodeCommunication:
             workflow = builder.build("simple_communication_test")
 
             # Execute workflow
-            runtime = LocalRuntime()
+            LocalRuntime()
             runner = WorkflowRunner()
             result = runner.run(workflow)
 

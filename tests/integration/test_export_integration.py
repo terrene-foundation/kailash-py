@@ -23,7 +23,7 @@ class TestExportIntegration:
         """Test exporting a simple workflow to Kailash format."""
         # Create simple workflow for testing
         builder = WorkflowBuilder()
-        node_id = builder.add_node("MockNode", "test_node", config={"value": 10})
+        builder.add_node("MockNode", "test_node", config={"value": 10})
         workflow = builder.build("test_workflow")
 
         # Export to file using WorkflowExporter
@@ -31,7 +31,7 @@ class TestExportIntegration:
         export_path = temp_data_dir / "exported_workflow.json"
 
         try:
-            exported_data = exporter.export_workflow(workflow, export_path)
+            exporter.export_workflow(workflow, export_path)
         except (AttributeError, NotImplementedError):
             pytest.skip("export_workflow method not implemented")
 
@@ -67,7 +67,7 @@ class TestExportIntegration:
         """Test exporting workflow as executable Python code."""
         # Create simple workflow
         builder = WorkflowBuilder()
-        node_id = builder.add_node("MockNode", "test_node", config={"value": 10})
+        builder.add_node("MockNode", "test_node", config={"value": 10})
         workflow = builder.build("test_workflow")
 
         # Test code export if available
@@ -139,7 +139,7 @@ class TestExportIntegration:
         """Test export format validation."""
         # Create simple workflow for validation testing
         builder = WorkflowBuilder()
-        workflow = builder.build("validation_test")
+        builder.build("validation_test")
 
         # Test validation concept
         export_path = temp_data_dir / "validation_test.json"
@@ -159,7 +159,7 @@ class TestExportIntegration:
         """Test exporting workflow with execution results included."""
         # Create simple workflow for execution results testing
         builder = WorkflowBuilder()
-        workflow = builder.build("results_test")
+        builder.build("results_test")
 
         # Create test execution results
         execution_result = {
@@ -271,7 +271,7 @@ Workflow bundle
 
         # Create modified workflow data
         builder = WorkflowBuilder()
-        modified_workflow = builder.build("modified_workflow")
+        builder.build("modified_workflow")
 
         # Create incremental export metadata
         incremental_metadata = {

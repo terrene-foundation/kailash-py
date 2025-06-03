@@ -203,26 +203,6 @@ class TaskRun(BaseModel):
 
         # Check other validation rules as needed
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        data = self.model_dump()
-
-        # Convert datetime objects to strings
-        if data.get("started_at"):
-            data["started_at"] = data["started_at"].isoformat()
-        if data.get("ended_at"):
-            data["ended_at"] = data["ended_at"].isoformat()
-        if data.get("completed_at"):
-            data["completed_at"] = data["completed_at"].isoformat()
-        if data.get("created_at"):
-            data["created_at"] = data["created_at"].isoformat()
-
-        # Convert metrics to dict if present
-        if self.metrics:
-            data["metrics"] = self.metrics.to_dict()
-
-        return data
-
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TaskRun":
         """Create from dictionary representation."""

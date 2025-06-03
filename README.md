@@ -30,6 +30,7 @@
 - ⚡ **Fast Installation**: Uses `uv` for lightning-fast Python package management
 - 🤖 **AI-Powered**: Complete LLM agents, embeddings, and hierarchical RAG architecture
 - 🧠 **Retrieval-Augmented Generation**: Full RAG pipeline with intelligent document processing
+- 🌐 **REST API Wrapper**: Expose any workflow as a production-ready API in 3 lines
 
 ## 🎯 Who Is This For?
 
@@ -213,6 +214,66 @@ results, run_id = runtime.execute(workflow)
 
 print("RAG Response:", results["llm_agent"]["response"])
 ```
+
+### Workflow API Wrapper - Expose Workflows as REST APIs
+
+Transform any Kailash workflow into a production-ready REST API in just 3 lines of code:
+
+```python
+from kailash.api.workflow_api import WorkflowAPI
+
+# Take any workflow and expose it as an API
+api = WorkflowAPI(workflow)
+api.run(port=8000)  # That's it! Your workflow is now a REST API
+```
+
+#### Features
+
+- **Automatic REST Endpoints**:
+  - `POST /execute` - Execute workflow with inputs
+  - `GET /workflow/info` - Get workflow metadata
+  - `GET /health` - Health check endpoint
+  - Automatic OpenAPI docs at `/docs`
+
+- **Multiple Execution Modes**:
+  ```python
+  # Synchronous execution (wait for results)
+  curl -X POST http://localhost:8000/execute \
+    -d '{"inputs": {...}, "mode": "sync"}'
+
+  # Asynchronous execution (get execution ID)
+  curl -X POST http://localhost:8000/execute \
+    -d '{"inputs": {...}, "mode": "async"}'
+
+  # Check async status
+  curl http://localhost:8000/status/{execution_id}
+  ```
+
+- **Specialized APIs** for specific domains:
+  ```python
+  from kailash.api.workflow_api import create_workflow_api
+
+  # Create a RAG-specific API with custom endpoints
+  api = create_workflow_api(rag_workflow, api_type="rag")
+  # Adds /documents and /query endpoints
+  ```
+
+- **Production Ready**:
+  ```python
+  # Development
+  api.run(reload=True, log_level="debug")
+
+  # Production with SSL
+  api.run(
+      host="0.0.0.0",
+      port=443,
+      ssl_keyfile="key.pem",
+      ssl_certfile="cert.pem",
+      workers=4
+  )
+  ```
+
+See the [API demo example](examples/integration_examples/integration_api_demo.py) for complete usage patterns.
 
 ## 📚 Documentation
 

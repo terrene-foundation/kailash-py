@@ -404,7 +404,7 @@ class MCPResource(Node):
             try:
                 version_num = float(old_version) + 0.1
                 updates["version"] = f"{version_num:.1f}"
-            except:
+            except (ValueError, TypeError):
                 import datetime
 
                 updates["version"] = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

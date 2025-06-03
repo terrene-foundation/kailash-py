@@ -815,8 +815,8 @@ class Workflow:
 
                 # Try to find another key with a BaseModel
                 for key, value in last_node_results.items():
-                    if isinstance(value, BaseModel) and type(value) == type(
-                        state_model
+                    if isinstance(value, BaseModel) and isinstance(
+                        value, type(state_model)
                     ):
                         return value, results
 

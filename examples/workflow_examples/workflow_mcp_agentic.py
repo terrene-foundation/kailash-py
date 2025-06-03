@@ -17,7 +17,7 @@ def main():
     print("=" * 50)
 
     # Create workflow builder
-    builder = WorkflowBuilder("mcp_agentic_complete")
+    WorkflowBuilder("mcp_agentic_complete")
 
     # 1. Setup MCP Server with Workflow Resources
     print("\n🖥️  Step 1: Setting up MCP Server")
@@ -162,7 +162,7 @@ def main():
     print("\n🤝 Step 3: Setting up Agent Coordination")
 
     # Configure MCP client for agent communication
-    mcp_client = MCPClient()
+    MCPClient()
     server_config = {"name": "kailash-workflow-server", "transport": "stdio"}
 
     # Data Analysis Agent
@@ -243,7 +243,7 @@ def main():
 
     # Sort by relevance
     relevant_knowledge.sort(key=lambda x: x["similarity"], reverse=True)
-    context_docs = [doc["content"] for doc in relevant_knowledge[:3]]
+    [doc["content"] for doc in relevant_knowledge[:3]]
 
     strategy_result = strategy_agent.run(
         provider="openai",

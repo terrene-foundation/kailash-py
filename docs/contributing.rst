@@ -4,7 +4,8 @@
 Contributing
 ============
 
-We welcome contributions to the Kailash Python SDK! This guide will help you get started.
+We welcome contributions to the Kailash Python SDK! This guide will help you
+get started.
 
 Getting Started
 ---------------

@@ -86,8 +86,8 @@ class TestWorkflow:
     def test_add_node(self):
         """Test adding nodes to workflow."""
         builder = WorkflowBuilder()
-        node1_id = builder.add_node("MockNode", "node1")
-        node2_id = builder.add_node("MockNode", "node2")
+        builder.add_node("MockNode", "node1")
+        builder.add_node("MockNode", "node2")
 
         workflow = builder.build("test")
 
@@ -127,7 +127,7 @@ class TestWorkflow:
     def test_get_node(self):
         """Test getting node by ID."""
         builder = WorkflowBuilder()
-        node_id = builder.add_node("MockNode", "node1")
+        builder.add_node("MockNode", "node1")
         workflow = builder.build("test")
 
         # Mock the node
@@ -265,8 +265,8 @@ class TestWorkflowBuilder:
         """Test adding connection between nodes."""
         builder = WorkflowBuilder()
 
-        node1_id = builder.add_node("MockNode", "node1")
-        node2_id = builder.add_node("MockNode", "node2")
+        builder.add_node("MockNode", "node1")
+        builder.add_node("MockNode", "node2")
 
         builder.add_connection(
             from_node="node1", from_output="output", to_node="node2", to_input="input"

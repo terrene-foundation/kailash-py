@@ -54,7 +54,7 @@ class TestComplexWorkflows:
             "JSONReader", "json_reader", config={"file_path": str(json_data)}
         )
 
-        api_reader_id = builder.add_node(
+        builder.add_node(
             "APIDataReader",
             "api_reader",
             config={
@@ -132,7 +132,7 @@ class TestComplexWorkflows:
 
         # Execute workflow
         runner = LocalRuntime()
-        result = runner.run(workflow)
+        runner.run(workflow)
 
         # Verify outputs exist
         assert (temp_data_dir / "final_aggregated.csv").exists()
@@ -208,7 +208,7 @@ class TestComplexWorkflows:
 
         # Execute workflow
         runner = LocalRuntime()
-        result = runner.run(workflow)
+        runner.run(workflow)
 
         # Since mock_result is True, should go to high_value branch
         assert (temp_data_dir / "high_values.csv").exists()
@@ -320,7 +320,7 @@ class TestComplexWorkflows:
         # Execute workflow with parallel execution
         runner = LocalRuntime(max_parallel_jobs=4)
         start_time = time.time()
-        result = runner.run(workflow)
+        runner.run(workflow)
         execution_time = time.time() - start_time
 
         # Verify all outputs were created
@@ -402,7 +402,7 @@ class TestComplexWorkflows:
 
         # Execute workflow
         runner = LocalRuntime()
-        result = runner.run(workflow)
+        runner.run(workflow)
 
         # Check that some intermediate files were created
         intermediate_files = list(temp_data_dir.glob("intermediate_*.csv"))
@@ -516,7 +516,7 @@ class TestComplexWorkflows:
 
         # Execute workflow
         runner = LocalRuntime()
-        result = runner.run(workflow)
+        runner.run(workflow)
 
         # Verify outputs
         assert (temp_data_dir / "output.csv").exists()
@@ -583,7 +583,7 @@ class TestComplexWorkflows:
 
         # Execute workflow with error handling
         runner = LocalRuntime(continue_on_error=True)
-        result = runner.run(workflow)
+        runner.run(workflow)
 
         # Check that workflow completed despite errors
         assert (temp_data_dir / "processed.csv").exists()
@@ -772,7 +772,7 @@ class TestComplexWorkflows:
 
         # Execute ML pipeline
         runner = LocalRuntime()
-        result = runner.run(workflow)
+        runner.run(workflow)
 
         # Verify outputs
         assert (temp_data_dir / "predictions.csv").exists()
