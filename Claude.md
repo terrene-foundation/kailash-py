@@ -17,6 +17,9 @@
 ## Quick Links
 - **TODO LIST (CRITICAL)**: `guide/todos/000-master.md` ← CHECK FIRST!
 - **API Reference**: `guide/reference/api-registry.yaml`
+- **Node Catalog**: `guide/reference/node-catalog.md` ← All 66 nodes documented
+- **Pattern Library**: `guide/reference/pattern-library.md` ← Workflow patterns
+- **Templates**: `guide/reference/templates/` ← Ready-to-use code
 - **Common Patterns**: `guide/reference/cheatsheet.md`
 - **Validation**: `guide/reference/validate_kailash_code.py`
 - **Mistakes Guide**: `guide/mistakes/consolidated-guide.md` ← Quick reference
@@ -116,6 +119,9 @@ The consolidated guide should only contain:
     - guide/reference/api-registry.yaml
     - guide/reference/api-validation-schema.json
     - guide/reference/cheatsheet.md
+    - guide/reference/node-catalog.md (if new nodes added)
+    - guide/reference/pattern-library.md (if new patterns discovered)
+    - guide/reference/templates/ (if new common use cases identified)
 16. Update READMEs and Sphinx docs if needed
 17. Update CHANGELOG.md
 
@@ -151,6 +157,7 @@ The consolidated guide should only contain:
 - [ ] Has `get_parameters()` and `run()` methods (required)
 - [ ] Has `get_output_schema()` method (optional, for output validation)
 - [ ] Update `guide/reference/api-registry.yaml`
+- [ ] Update `guide/reference/node-catalog.md` with node details
 - [ ] Create example in `examples/node_examples/`
 - [ ] Write unit tests
 - [ ] Update docs
