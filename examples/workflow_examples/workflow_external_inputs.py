@@ -17,69 +17,67 @@ from kailash.runtime import LocalRuntime
 
 class DataProcessor(Node):
     """Simple node that processes input data."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
                 type=list,
                 required=True,
-                description="Input data to process"
+                description="Input data to process",
             ),
             "multiplier": NodeParameter(
                 name="multiplier",
                 type=float,
                 required=False,
                 default=2.0,
-                description="Multiplier for numeric values"
-            )
+                description="Multiplier for numeric values",
+            ),
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         data = kwargs["data"]
         multiplier = kwargs.get("multiplier", 2.0)
-        
+
         # Process the data
         processed = []
         for item in data:
             if isinstance(item, dict) and "value" in item:
-                processed.append({
-                    **item,
-                    "processed_value": item["value"] * multiplier
-                })
+                processed.append(
+                    {**item, "processed_value": item["value"] * multiplier}
+                )
             elif isinstance(item, (int, float)):
                 processed.append({"original": item, "processed": item * multiplier})
             else:
                 processed.append(item)
-        
+
         return {"processed_data": processed}
 
 
 def example_1_source_node_pattern():
     """Traditional pattern: Workflow starts with a source node."""
     print("\n=== Example 1: Source Node Pattern ===")
-    
+
     # Create workflow
     workflow = Workflow("source_pattern", "Source Node Example")
-    
+
     # Add source node that reads from file
     csv_reader = CSVReaderNode(
-        file_path=Path(__file__).parent / "data" / "sample_data.csv",
-        headers=True
+        file_path=Path(__file__).parent / "data" / "sample_data.csv", headers=True
     )
     workflow.add_node("reader", csv_reader)
-    
+
     # Add processor
     processor = DataProcessor()
     workflow.add_node("processor", processor, multiplier=3.0)
-    
+
     # Connect nodes
     workflow.connect("reader", "processor", {"data": "data"})
-    
+
     # Execute - no external parameters needed
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow)
-    
+
     print(f"Results: {results}")
     print("Note: Data came from the CSV file, no external input needed")
 
@@ -87,33 +85,27 @@ def example_1_source_node_pattern():
 def example_2_external_input_pattern():
     """Modern pattern: Workflow receives external data via parameters."""
     print("\n=== Example 2: External Input Pattern ===")
-    
+
     # Create workflow
     workflow = Workflow("external_pattern", "External Input Example")
-    
+
     # Add processor as first node
     processor = DataProcessor()
     workflow.add_node("processor", processor)
-    
+
     # Prepare external data
     external_data = [
         {"id": 1, "value": 10},
         {"id": 2, "value": 20},
-        {"id": 3, "value": 30}
+        {"id": 3, "value": 30},
     ]
-    
+
     # Execute with external data
     runtime = LocalRuntime()
     results, run_id = runtime.execute(
-        workflow,
-        parameters={
-            "processor": {
-                "data": external_data,
-                "multiplier": 5.0
-            }
-        }
+        workflow, parameters={"processor": {"data": external_data, "multiplier": 5.0}}
     )
-    
+
     print(f"External data: {external_data}")
     print(f"Results: {results}")
     print("Note: Data was passed directly to the processor node")
@@ -122,32 +114,32 @@ def example_2_external_input_pattern():
 def example_3_hybrid_pattern():
     """Hybrid pattern: Source node with runtime parameter override."""
     print("\n=== Example 3: Hybrid Pattern ===")
-    
+
     # Create workflow
     workflow = Workflow("hybrid_pattern", "Hybrid Example")
-    
+
     # Add CSV reader with default file
     default_file = Path(__file__).parent / "data" / "default.csv"
     workflow.add_node("reader", CSVReaderNode(), file_path=str(default_file))
-    
+
     # Add processor
     workflow.add_node("processor", DataProcessor())
-    
+
     # Connect nodes
     workflow.connect("reader", "processor", {"data": "data"})
-    
+
     # Execute with parameter override
     runtime = LocalRuntime()
     custom_file = Path(__file__).parent / "data" / "custom.csv"
-    
+
     results, run_id = runtime.execute(
         workflow,
         parameters={
             "reader": {"file_path": str(custom_file)},  # Override default file
-            "processor": {"multiplier": 10.0}  # Override processing parameter
-        }
+            "processor": {"multiplier": 10.0},  # Override processing parameter
+        },
     )
-    
+
     print(f"Default file: {default_file}")
     print(f"Custom file: {custom_file}")
     print(f"Results: {results}")
@@ -157,42 +149,34 @@ def example_3_hybrid_pattern():
 def example_4_multi_entry_workflow():
     """Complex pattern: Multiple entry points in a workflow."""
     print("\n=== Example 4: Multi-Entry Workflow ===")
-    
+
     # Create workflow
     workflow = Workflow("multi_entry", "Multi-Entry Example")
-    
+
     # Add multiple processors that can receive external data
     processor1 = DataProcessor()
     processor2 = DataProcessor()
     merger = DataProcessor()  # Merges results
-    
+
     workflow.add_node("processor1", processor1)
     workflow.add_node("processor2", processor2)
     workflow.add_node("merger", merger)
-    
+
     # Connect processors to merger
     workflow.connect("processor1", "merger", {"processed_data": "data"})
     workflow.connect("processor2", "merger", {"processed_data": "data"})
-    
+
     # Execute with data for multiple entry points
     runtime = LocalRuntime()
     results, run_id = runtime.execute(
         workflow,
         parameters={
-            "processor1": {
-                "data": [1, 2, 3],
-                "multiplier": 2.0
-            },
-            "processor2": {
-                "data": [4, 5, 6],
-                "multiplier": 3.0
-            },
-            "merger": {
-                "multiplier": 0.5  # Final processing
-            }
-        }
+            "processor1": {"data": [1, 2, 3], "multiplier": 2.0},
+            "processor2": {"data": [4, 5, 6], "multiplier": 3.0},
+            "merger": {"multiplier": 0.5},  # Final processing
+        },
     )
-    
+
     print(f"Results: {results}")
     print("Note: Multiple nodes received external inputs simultaneously")
 
@@ -201,13 +185,13 @@ def main():
     """Run all examples."""
     print("Kailash SDK - External Input Patterns")
     print("=" * 50)
-    
+
     # Run examples
     example_1_source_node_pattern()
     example_2_external_input_pattern()
     example_3_hybrid_pattern()
     example_4_multi_entry_workflow()
-    
+
     print("\n" + "=" * 50)
     print("Key Takeaways:")
     print("1. Workflows can start with source nodes OR processing nodes")

@@ -74,7 +74,7 @@ class FilterNode(Node):
         ...     value=3
         ... )
         >>> assert result["filtered_data"] == [4, 5]
-        >>> 
+        >>>
         >>> # Filter list of dictionaries by field
         >>> users = [
         ...     {"name": "Alice", "age": 30},
@@ -89,7 +89,7 @@ class FilterNode(Node):
         ... )
         >>> assert len(result["filtered_data"]) == 2
         >>> assert result["filtered_data"][0]["name"] == "Alice"
-        >>> 
+        >>>
         >>> # String contains filtering
         >>> items = [
         ...     {"title": "Python Programming"},
@@ -103,7 +103,7 @@ class FilterNode(Node):
         ...     value="Python"
         ... )
         >>> assert len(result["filtered_data"]) == 2
-        >>> 
+        >>>
         >>> # Null value handling
         >>> data_with_nulls = [
         ...     {"value": 10},

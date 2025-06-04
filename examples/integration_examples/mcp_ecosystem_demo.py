@@ -16,8 +16,7 @@ import time
 
 # Create the demo app
 app = FastAPI(
-    title="MCP Ecosystem Demo",
-    description="Zero-code workflow builder for Kailash SDK"
+    title="MCP Ecosystem Demo", description="Zero-code workflow builder for Kailash SDK"
 )
 
 # Mock data storage
@@ -26,22 +25,21 @@ workflow_stats = {"total": 0, "running": 0, "completed": 0, "failed": 0}
 mcp_servers = {
     "github-mcp": {
         "status": "connected",
-        "tools": ["list_issues", "create_pr", "list_repos"]
+        "tools": ["list_issues", "create_pr", "list_repos"],
     },
-    "slack-mcp": {
-        "status": "connected", 
-        "tools": ["send_message", "list_channels"]
-    },
+    "slack-mcp": {"status": "connected", "tools": ["send_message", "list_channels"]},
     "filesystem-mcp": {
         "status": "connected",
-        "tools": ["read_file", "write_file", "list_files"]
-    }
+        "tools": ["read_file", "write_file", "list_files"],
+    },
 }
+
 
 @app.get("/")
 async def home():
     """Serve the demo UI with live interactive components"""
-    return HTMLResponse("""
+    return HTMLResponse(
+        """
 <!DOCTYPE html>
 <html>
 <head>
@@ -515,12 +513,15 @@ async def home():
     </script>
 </body>
 </html>
-    """)
+    """
+    )
+
 
 @app.get("/api/servers")
 async def get_servers():
     """Get MCP server status"""
     return mcp_servers
+
 
 @app.post("/api/deploy/{workflow_id}")
 async def deploy_workflow(workflow_id: str):
@@ -529,87 +530,87 @@ async def deploy_workflow(workflow_id: str):
         "github-slack": {
             "name": "GitHub to Slack Notifier",
             "description": "Monitor GitHub and notify Slack",
-            "nodes": ["github-mcp.list_issues", "slack-mcp.send_message"]
+            "nodes": ["github-mcp.list_issues", "slack-mcp.send_message"],
         },
         "data-pipeline": {
             "name": "Data Processing Pipeline",
             "description": "ETL workflow for data processing",
-            "nodes": ["CSVReaderNode", "PythonCodeNode", "JSONWriterNode"]
+            "nodes": ["CSVReaderNode", "PythonCodeNode", "JSONWriterNode"],
         },
         "ai-assistant": {
             "name": "AI Research Assistant",
             "description": "Research and summarize topics",
-            "nodes": ["web-search", "llm-summarize", "file-save"]
-        }
+            "nodes": ["web-search", "llm-summarize", "file-save"],
+        },
     }
-    
+
     if workflow_id not in templates:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     # Mock deployment
     import time
+
     workflow_instance_id = f"{workflow_id}_{int(time.time())}"
     workflows[workflow_instance_id] = {
         "template": workflow_id,
         "status": "deployed",
         "created": time.time(),
-        "runs": 0
+        "runs": 0,
     }
-    
+
     # Update stats
     workflow_stats["total"] += 1
-    
+
     return {
         "success": True,
         "workflow_id": workflow_instance_id,
-        "message": f"Successfully deployed {templates[workflow_id]['name']}"
+        "message": f"Successfully deployed {templates[workflow_id]['name']}",
     }
+
 
 @app.get("/api/workflows")
 async def list_workflows():
     """List deployed workflows"""
-    return {
-        "workflows": workflows,
-        "count": len(workflows)
-    }
+    return {"workflows": workflows, "count": len(workflows)}
+
 
 @app.get("/api/stats")
 async def get_stats():
     """Get workflow execution statistics"""
     return workflow_stats
 
+
 @app.post("/api/workflows/{workflow_id}/execute")
 async def execute_workflow(workflow_id: str):
     """Simulate workflow execution"""
     if workflow_id not in workflows:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # Update stats
     workflow_stats["running"] += 1
-    
+
     # Simulate async execution
     import asyncio
+
     async def complete_execution():
         await asyncio.sleep(2)  # Simulate work
         workflow_stats["running"] -= 1
         workflow_stats["completed"] += 1
         workflows[workflow_id]["last_run"] = time.time()
         workflows[workflow_id]["runs"] = workflows[workflow_id].get("runs", 0) + 1
-    
+
     # Start execution in background
     asyncio.create_task(complete_execution())
-    
-    return {
-        "success": True,
-        "message": f"Workflow {workflow_id} started execution"
-    }
+
+    return {"success": True, "message": f"Workflow {workflow_id} started execution"}
+
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 MCP Ecosystem Demo Server")
-    print("="*60)
+    print("=" * 60)
     print("\n📍 Open your browser to: http://localhost:8000")
     print("📚 API Documentation: http://localhost:8000/docs")
     print("\nPress Ctrl+C to stop the server\n")
-    
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

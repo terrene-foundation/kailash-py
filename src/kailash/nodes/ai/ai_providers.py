@@ -71,11 +71,11 @@ class BaseAIProvider(ABC):
         ...     def __init__(self):
         ...         super().__init__()
         ...         self._capabilities = {"chat": True, "embeddings": False}
-        ...     
+        ...
         ...     def is_available(self) -> bool:
         ...         # Check API key, dependencies, etc.
         ...         return True
-        >>> 
+        >>>
         >>> provider = MyProvider()
         >>> assert provider.supports_chat() == True
         >>> assert provider.supports_embeddings() == False
@@ -181,7 +181,7 @@ class LLMProvider(BaseAIProvider):
         >>> class MyLLMProvider(LLMProvider):
         ...     def is_available(self) -> bool:
         ...         return True  # Check actual availability
-        ...     
+        ...
         ...     def chat(self, messages, **kwargs):
         ...         # Simulate LLM response
         ...         return {
@@ -190,7 +190,7 @@ class LLMProvider(BaseAIProvider):
         ...             "model": kwargs.get("model", "default"),
         ...             "usage": {"prompt_tokens": 10, "completion_tokens": 5}
         ...         }
-        >>> 
+        >>>
         >>> provider = MyLLMProvider()
         >>> messages = [
         ...     {"role": "system", "content": "You are helpful."},
@@ -279,18 +279,18 @@ class EmbeddingProvider(BaseAIProvider):
         >>> class MyEmbeddingProvider(EmbeddingProvider):
         ...     def is_available(self) -> bool:
         ...         return True
-        ...     
+        ...
         ...     def embed(self, texts, **kwargs):
         ...         # Simulate embedding generation
         ...         return [[0.1, 0.2, 0.3] for _ in texts]
-        ...     
+        ...
         ...     def get_model_info(self):
         ...         return {
         ...             "name": "my-embedding-model",
         ...             "dimensions": 3,
         ...             "max_tokens": 512
         ...         }
-        >>> 
+        >>>
         >>> provider = MyEmbeddingProvider()
         >>> embeddings = provider.embed(["Hello", "World"])
         >>> assert len(embeddings) == 2

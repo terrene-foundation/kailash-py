@@ -87,7 +87,7 @@ class RESTClientNode(Node):
     Examples:
         >>> # Initialize REST client
         >>> client = RESTClientNode()
-        >>> 
+        >>>
         >>> # Get a single resource
         >>> result = client.run(
         ...     base_url="https://api.example.com/v1",
@@ -99,7 +99,7 @@ class RESTClientNode(Node):
         >>> assert result["status_code"] == 200
         >>> user = result["content"]
         >>> assert user["id"] == 123
-        >>> 
+        >>>
         >>> # List resources with pagination
         >>> result = client.run(
         ...     base_url="https://api.example.com/v1",
@@ -108,7 +108,7 @@ class RESTClientNode(Node):
         ...     query_params={"page": 1, "per_page": 20, "category": "electronics"}
         ... )
         >>> assert len(result["content"]) <= 20
-        >>> 
+        >>>
         >>> # Create a new resource
         >>> result = client.run(
         ...     base_url="https://api.example.com/v1",
@@ -119,7 +119,7 @@ class RESTClientNode(Node):
         ... )
         >>> assert result["status_code"] == 201
         >>> assert "id" in result["content"]
-        >>> 
+        >>>
         >>> # Update a resource
         >>> result = client.run(
         ...     base_url="https://api.example.com/v1",
@@ -129,7 +129,7 @@ class RESTClientNode(Node):
         ...     data={"email": "newemail@example.com"}
         ... )
         >>> assert result["status_code"] == 200
-        >>> 
+        >>>
         >>> # Delete a resource
         >>> result = client.run(
         ...     base_url="https://api.example.com/v1",

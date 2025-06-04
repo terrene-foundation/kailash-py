@@ -115,28 +115,28 @@ class CSVReaderNode(Node):
         >>> #     {"id": "1", "name": "John Doe", "age": "30"},
         >>> #     {"id": "2", "name": "Jane Smith", "age": "25"}
         >>> # ]
-        >>> 
+        >>>
         >>> # Reading with custom delimiter
         >>> result = reader.run(
         ...     file_path="data.tsv",
         ...     delimiter="\\t",
         ...     headers=True
         ... )
-        >>> 
+        >>>
         >>> # Reading without headers (returns list of lists)
         >>> result = reader.run(
         ...     file_path="data.csv",
         ...     headers=False
         ... )
         >>> assert all(isinstance(row, list) for row in result["data"])
-        >>> 
+        >>>
         >>> # Reading with specific encoding
         >>> result = reader.run(
         ...     file_path="european_data.csv",
         ...     encoding="iso-8859-1",
         ...     headers=True
         ... )
-        >>> 
+        >>>
         >>> # Handling quoted fields
         >>> result = reader.run(
         ...     file_path="complex.csv",

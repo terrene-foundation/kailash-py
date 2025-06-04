@@ -61,14 +61,14 @@ class WorkflowNode(Node):
         >>> node = WorkflowNode(workflow=inner_workflow)
         >>> node.metadata.name
         'WorkflowNode'
-        
+
         >>> # Get parameters from wrapped workflow
         >>> params = node.get_parameters()
         >>> 'reader_file_path' in params
         True
         >>> 'inputs' in params
         True
-        
+
         >>> # Loading from dictionary
         >>> workflow_dict = {
         ...     "name": "simple",

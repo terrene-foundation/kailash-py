@@ -17,41 +17,40 @@ from typing import Dict, Any, List
 INPUT_FILE = "data/input.csv"
 OUTPUT_FILE = "outputs/output.json"
 
+
 def transform_data(data: List[Dict]) -> Dict[str, Any]:
     """Transform your data here"""
     transformed = []
-    
+
     for record in data:
         # Example: Convert names to uppercase
         new_record = record.copy()
-        if 'name' in new_record:
-            new_record['name'] = new_record['name'].upper()
+        if "name" in new_record:
+            new_record["name"] = new_record["name"].upper()
         transformed.append(new_record)
-    
+
     return {"data": transformed}
+
 
 def main():
     """Create and run the ETL workflow"""
     # Create workflow
     workflow = Workflow()
-    
+
     # Add nodes
     reader = CSVReaderNode(file_path=INPUT_FILE)
     workflow.add_node("reader", reader)
-    
-    transformer = PythonCodeNode.from_function(
-        func=transform_data,
-        name="transformer"
-    )
+
+    transformer = PythonCodeNode.from_function(func=transform_data, name="transformer")
     workflow.add_node("transformer", transformer)
-    
+
     writer = JSONWriterNode(file_path=OUTPUT_FILE)
     workflow.add_node("writer", writer)
-    
+
     # Connect nodes
     workflow.connect("reader", "transformer", {"data": "data"})
     workflow.connect("transformer", "writer", {"data": "data"})
-    
+
     # Run workflow
     try:
         results, run_id = workflow.run()
@@ -61,6 +60,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         return 1
+
 
 if __name__ == "__main__":
     exit(main())

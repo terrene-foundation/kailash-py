@@ -131,7 +131,7 @@ class HTTPRequestNode(Node):
         ... )
         >>> assert result["status_code"] == 200
         >>> assert isinstance(result["content"], dict)
-        >>> 
+        >>>
         >>> # POST request with JSON body
         >>> result = node.run(
         ...     url="https://api.example.com/users",
@@ -141,7 +141,7 @@ class HTTPRequestNode(Node):
         ... )
         >>> assert result["status_code"] in [200, 201]
         >>> assert result["headers"]["content-type"].startswith("application/json")
-        >>> 
+        >>>
         >>> # Form data submission
         >>> result = node.run(
         ...     url="https://api.example.com/form",
@@ -149,7 +149,7 @@ class HTTPRequestNode(Node):
         ...     data={"field1": "value1", "field2": "value2"},
         ...     headers={"Content-Type": "application/x-www-form-urlencoded"}
         ... )
-        >>> 
+        >>>
         >>> # File upload with multipart
         >>> result = node.run(
         ...     url="https://api.example.com/upload",
@@ -157,7 +157,7 @@ class HTTPRequestNode(Node):
         ...     files={"file": ("data.csv", b"col1,col2\\n1,2", "text/csv")},
         ...     data={"description": "Sample data"}
         ... )
-        >>> 
+        >>>
         >>> # Error handling example
         >>> result = node.run(
         ...     url="https://api.example.com/protected",

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class MyCustomNode(Node):
     """
     A custom node that performs specific business logic.
-    
+
     This node demonstrates:
     - Parameter definition with types and defaults
     - Input validation
@@ -29,11 +29,11 @@ class MyCustomNode(Node):
     - Output schema validation
     - Logging best practices
     """
-    
+
     def get_parameters(self) -> Dict[str, Any]:
         """
         Define the parameters your node accepts.
-        
+
         Returns:
             Dictionary of parameter definitions with:
             - type: Python type (str, int, float, bool, list, dict)
@@ -49,9 +49,8 @@ class MyCustomNode(Node):
                 "type": str,
                 "required": True,
                 "description": "Operation to perform",
-                "enum": ["transform", "filter", "aggregate"]
+                "enum": ["transform", "filter", "aggregate"],
             },
-            
             # Optional parameters with defaults
             "threshold": {
                 "type": float,
@@ -59,31 +58,28 @@ class MyCustomNode(Node):
                 "default": 0.5,
                 "description": "Threshold value for filtering",
                 "min": 0.0,
-                "max": 1.0
+                "max": 1.0,
             },
-            
             "case_sensitive": {
                 "type": bool,
                 "required": False,
                 "default": True,
-                "description": "Whether string operations are case-sensitive"
+                "description": "Whether string operations are case-sensitive",
             },
-            
             "fields": {
                 "type": list,
                 "required": False,
                 "default": [],
-                "description": "List of fields to process"
+                "description": "List of fields to process",
             },
-            
             "options": {
                 "type": dict,
                 "required": False,
                 "default": {},
-                "description": "Additional options for processing"
-            }
+                "description": "Additional options for processing",
+            },
         }
-    
+
     def validate_inputs(self, data: Any, **kwargs) -> None:
         """
         Validate inputs before processing.
@@ -92,47 +88,49 @@ class MyCustomNode(Node):
         # Check data is not None
         if data is None:
             raise ValueError("Input data cannot be None")
-        
+
         # Check data type
         if not isinstance(data, (list, dict)):
             raise ValueError(f"Expected list or dict, got {type(data).__name__}")
-        
+
         # Validate based on operation
         operation = kwargs.get("operation")
         if operation == "filter" and "threshold" not in kwargs:
             raise ValueError("Filter operation requires threshold parameter")
-        
+
         # Custom validation for your use case
         if isinstance(data, list) and len(data) == 0:
             logger.warning("Processing empty list")
-    
+
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Execute the node's logic.
-        
+
         Args:
             context: Workflow context containing data from connected nodes
             **kwargs: Parameters passed to the node
-            
+
         Returns:
             Dictionary with output data
         """
         # Extract parameters
         operation = kwargs.get("operation")
-        threshold = kwargs.get("threshold", self.get_parameters()["threshold"]["default"])
+        threshold = kwargs.get(
+            "threshold", self.get_parameters()["threshold"]["default"]
+        )
         case_sensitive = kwargs.get("case_sensitive", True)
         fields = kwargs.get("fields", [])
         options = kwargs.get("options", {})
-        
+
         # Get input data from context
         data = context.get("data", context)
-        
+
         # Validate inputs
         self.validate_inputs(data, **kwargs)
-        
+
         # Log operation
         logger.info(f"Executing {operation} operation with threshold={threshold}")
-        
+
         try:
             # Perform operation based on type
             if operation == "transform":
@@ -143,7 +141,7 @@ class MyCustomNode(Node):
                 result = self._aggregate_data(data, fields, options)
             else:
                 raise ValueError(f"Unknown operation: {operation}")
-            
+
             # Return results
             return {
                 "data": result,
@@ -153,26 +151,27 @@ class MyCustomNode(Node):
                     "parameters_used": {
                         "threshold": threshold,
                         "case_sensitive": case_sensitive,
-                        "fields": fields
-                    }
-                }
+                        "fields": fields,
+                    },
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"Error in {operation} operation: {str(e)}")
             # Decide whether to raise or return error
             # Option 1: Raise to stop workflow
             raise
-            
+
             # Option 2: Return error for graceful handling
             # return {
             #     "error": str(e),
             #     "error_type": type(e).__name__,
             #     "data": None
             # }
-    
-    def _transform_data(self, data: Any, fields: List[str], 
-                       case_sensitive: bool, options: Dict) -> Any:
+
+    def _transform_data(
+        self, data: Any, fields: List[str], case_sensitive: bool, options: Dict
+    ) -> Any:
         """Transform data according to options"""
         if isinstance(data, list):
             transformed = []
@@ -182,7 +181,11 @@ class MyCustomNode(Node):
                     # Example transformation: uppercase specified fields
                     for field in fields:
                         if field in new_item and isinstance(new_item[field], str):
-                            new_item[field] = new_item[field].upper() if not case_sensitive else new_item[field]
+                            new_item[field] = (
+                                new_item[field].upper()
+                                if not case_sensitive
+                                else new_item[field]
+                            )
                     transformed.append(new_item)
                 else:
                     transformed.append(item)
@@ -192,13 +195,18 @@ class MyCustomNode(Node):
             transformed = data.copy()
             for field in fields:
                 if field in transformed and isinstance(transformed[field], str):
-                    transformed[field] = transformed[field].upper() if not case_sensitive else transformed[field]
+                    transformed[field] = (
+                        transformed[field].upper()
+                        if not case_sensitive
+                        else transformed[field]
+                    )
             return transformed
         else:
             return data
-    
-    def _filter_data(self, data: Any, threshold: float, 
-                    fields: List[str], options: Dict) -> Any:
+
+    def _filter_data(
+        self, data: Any, threshold: float, fields: List[str], options: Dict
+    ) -> Any:
         """Filter data based on threshold"""
         if isinstance(data, list):
             filtered = []
@@ -232,16 +240,14 @@ class MyCustomNode(Node):
         else:
             # For non-list data, return as-is
             return data
-    
-    def _aggregate_data(self, data: Any, fields: List[str], 
-                       options: Dict) -> Dict[str, Any]:
+
+    def _aggregate_data(
+        self, data: Any, fields: List[str], options: Dict
+    ) -> Dict[str, Any]:
         """Aggregate data to produce summary statistics"""
         if isinstance(data, list):
-            aggregated = {
-                "count": len(data),
-                "field_stats": {}
-            }
-            
+            aggregated = {"count": len(data), "field_stats": {}}
+
             # Calculate stats for specified fields
             for field in fields:
                 values = []
@@ -251,28 +257,25 @@ class MyCustomNode(Node):
                             values.append(float(item[field]))
                         except (ValueError, TypeError):
                             continue
-                
+
                 if values:
                     aggregated["field_stats"][field] = {
                         "count": len(values),
                         "sum": sum(values),
                         "avg": sum(values) / len(values),
                         "min": min(values),
-                        "max": max(values)
+                        "max": max(values),
                     }
-            
+
             return aggregated
         else:
             # For non-list data, return basic info
-            return {
-                "count": 1,
-                "data_type": type(data).__name__
-            }
-    
+            return {"count": 1, "data_type": type(data).__name__}
+
     def get_output_schema(self) -> Optional[Dict[str, Any]]:
         """
         Define the expected output schema for validation.
-        
+
         Returns:
             JSON Schema dictionary or None if no validation needed
         """
@@ -281,22 +284,19 @@ class MyCustomNode(Node):
             "properties": {
                 "data": {
                     "description": "Processed data",
-                    "oneOf": [
-                        {"type": "array"},
-                        {"type": "object"}
-                    ]
+                    "oneOf": [{"type": "array"}, {"type": "object"}],
                 },
                 "metadata": {
                     "type": "object",
                     "properties": {
                         "operation": {"type": "string"},
                         "records_processed": {"type": "integer", "minimum": 0},
-                        "parameters_used": {"type": "object"}
+                        "parameters_used": {"type": "object"},
                     },
-                    "required": ["operation", "records_processed"]
-                }
+                    "required": ["operation", "records_processed"],
+                },
             },
-            "required": ["data", "metadata"]
+            "required": ["data", "metadata"],
         }
 
 
@@ -304,31 +304,24 @@ class MyCustomNode(Node):
 if __name__ == "__main__":
     from kailash.workflow import Workflow
     from kailash.runtime.local import LocalRuntime
-    
+
     # Create workflow
     workflow = Workflow()
-    
+
     # Add custom node
     custom_node = MyCustomNode(
-        config={
-            "operation": "filter",
-            "threshold": 0.7,
-            "fields": ["score", "rating"]
-        }
+        config={"operation": "filter", "threshold": 0.7, "fields": ["score", "rating"]}
     )
     workflow.add_node("processor", custom_node)
-    
+
     # Execute with sample data
     runtime = LocalRuntime()
     sample_data = [
         {"name": "Item1", "score": 0.8, "rating": 0.9},
         {"name": "Item2", "score": 0.6, "rating": 0.7},
-        {"name": "Item3", "score": 0.9, "rating": 0.5}
+        {"name": "Item3", "score": 0.9, "rating": 0.5},
     ]
-    
-    results = runtime.execute(
-        workflow,
-        parameters={"processor": {"data": sample_data}}
-    )
-    
+
+    results = runtime.execute(workflow, parameters={"processor": {"data": sample_data}})
+
     print("Results:", results)

@@ -37,14 +37,14 @@ class AsyncMergeNode(AsyncNode):
         >>> async_merge = AsyncMergeNode(merge_type="merge_dict", key="id")
         >>> async_merge.metadata.name
         'AsyncMergeNode'
-        
+
         >>> # Using in a workflow
         >>> from kailash.workflow.graph import Workflow
         >>> workflow = Workflow("wf-001", "async_example")
         >>> workflow.add_node("data_combine", async_merge)
         >>> "data_combine" in workflow.nodes
         True
-        
+
         >>> # Async execution with concat
         >>> import asyncio
         >>> async_merge = AsyncMergeNode(merge_type="concat")
@@ -390,7 +390,7 @@ class AsyncSwitchNode(AsyncNode):
         {'status': 'active', 'data': 'test'}
         >>> result['false_output'] is None
         True
-        
+
         >>> # Multi-case switching
         >>> async_switch = AsyncSwitchNode(
         ...     condition_field="priority",
