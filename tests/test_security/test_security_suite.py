@@ -110,6 +110,7 @@ class TestPathTraversalPrevention:
         finally:
             # Clean up temp directory
             import shutil
+
             shutil.rmtree(temp_dir)
 
 
@@ -178,8 +179,8 @@ class TestDataNodeSecurity:
 
                 # Invalid path should be blocked
                 with pytest.raises(PathTraversalError):
-                    reader_bad = CSVReaderNode(file_path="../../../etc/passwd")
-                    reader_bad.run()
+                    reader_bad = CSVReaderNode()
+                    reader_bad.run(file_path="../../../etc/passwd")
             finally:
                 # Reset to default config
                 set_security_config(SecurityConfig())
@@ -202,8 +203,8 @@ class TestDataNodeSecurity:
 
                 # Invalid path should be blocked
                 with pytest.raises(PathTraversalError):
-                    reader_bad = JSONReaderNode(file_path="../../etc/shadow")
-                    reader_bad.run()
+                    reader_bad = JSONReaderNode()
+                    reader_bad.run(file_path="../../etc/shadow")
             finally:
                 set_security_config(SecurityConfig())
 
@@ -216,18 +217,16 @@ class TestDataNodeSecurity:
             try:
                 # Valid write should work
                 output_file = Path(temp_dir) / "output.csv"
-                writer = CSVWriterNode(
-                    file_path=str(output_file), data=[{"name": "John", "age": 30}]
-                )
-                result = writer.run()
+                writer = CSVWriterNode(file_path=str(output_file))
+                result = writer.run(data=[{"name": "John", "age": 30}])
                 assert "rows_written" in result
 
                 # Invalid write path should be blocked
                 with pytest.raises(PathTraversalError):
-                    writer_bad = CSVWriterNode(
+                    writer_bad = CSVWriterNode()
+                    writer_bad.run(
                         file_path="../../../tmp/malicious.csv", data=[{"name": "evil"}]
                     )
-                    writer_bad.run()
             finally:
                 set_security_config(SecurityConfig())
 
@@ -331,7 +330,7 @@ class TestCommandInjectionPrevention:
 
     def test_dangerous_command_detection(self):
         """Test detection of dangerous command patterns."""
-        config = SecurityConfig()
+        config = SecurityConfig(enable_command_validation=True)
 
         # Should block dangerous commands
         with pytest.raises(CommandInjectionError):
