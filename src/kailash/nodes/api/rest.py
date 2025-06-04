@@ -20,29 +20,124 @@ from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 @register_node()
 class RESTClientNode(Node):
-    """Node for interacting with REST APIs.
+    """
+    Node for interacting with REST APIs using resource-oriented patterns.
 
-    This node provides a higher-level interface for interacting with REST APIs,
-    with built-in support for:
-        * Resource-based operations (e.g., GET /users/{id})
-        * Common REST patterns (list, get, create, update, delete)
-        * Pagination handling
-        * Response schema validation
-        * Error response handling
+    This node provides a higher-level abstraction over HTTP operations, specifically
+    designed for REST APIs. It understands REST conventions and provides convenient
+    methods for resource-based operations, making it easier to integrate RESTful
+    services into Kailash workflows.
 
-    Design Purpose:
-        * Simplify REST API integration in workflows
-        * Provide consistent interfaces for common REST operations
-        * Support standard REST conventions and patterns
-        * Handle common REST-specific error cases
+    Design Philosophy:
+        The RESTClientNode embraces REST principles and conventions, providing an
+        intuitive interface for resource manipulation. It abstracts common patterns
+        like path parameter substitution, pagination, and error handling while
+        maintaining flexibility for API-specific requirements. The design promotes
+        clean, maintainable API integration code.
 
-    Upstream Usage:
-        * Workflow: Creates and configures for specific REST APIs
-        * API integration workflows: Uses for external service integration
+    Upstream Dependencies:
+        - Workflow orchestrators defining API endpoints
+        - Configuration nodes providing API credentials
+        - Data transformation nodes preparing resources
+        - Authentication nodes managing tokens
+        - Schema validation nodes defining expected formats
 
     Downstream Consumers:
-        * Data processing nodes: Consume API response data
-        * Custom nodes: Process API-specific data formats
+        - Data processing nodes working with API responses
+        - Pagination handlers managing result sets
+        - Error recovery nodes handling failures
+        - Caching nodes storing resource data
+        - Analytics nodes tracking API usage patterns
+
+    Configuration:
+        The node supports REST-specific configuration:
+        - Base URL for API endpoints
+        - Resource paths with parameter placeholders
+        - Default headers and authentication
+        - API versioning strategies
+        - Pagination parameters
+        - Response format expectations
+
+    Implementation Details:
+        - Built on HTTPRequestNode for core functionality
+        - Automatic URL construction from base + resource
+        - Path parameter substitution (e.g., /users/{id})
+        - Query parameter handling with encoding
+        - Standard REST method mapping
+        - Response format negotiation
+        - Error response parsing for API-specific errors
+        - Link header parsing for pagination
+
+    Error Handling:
+        - 404 errors for missing resources
+        - 422 validation errors with field details
+        - 401/403 authentication/authorization errors
+        - Rate limiting (429) with retry headers
+        - 5xx server errors with backoff
+        - Network failures with retry logic
+        - Malformed response handling
+
+    Side Effects:
+        - Performs HTTP requests to external APIs
+        - May modify remote resources (POST/PUT/DELETE)
+        - Consumes API rate limits
+        - May trigger webhooks or notifications
+        - Updates internal request metrics
+
+    Examples:
+        >>> # Initialize REST client
+        >>> client = RESTClientNode()
+        >>> 
+        >>> # Get a single resource
+        >>> result = client.run(
+        ...     base_url="https://api.example.com/v1",
+        ...     resource="users/{id}",
+        ...     method="GET",
+        ...     path_params={"id": 123},
+        ...     headers={"Authorization": "Bearer token"}
+        ... )
+        >>> assert result["status_code"] == 200
+        >>> user = result["content"]
+        >>> assert user["id"] == 123
+        >>> 
+        >>> # List resources with pagination
+        >>> result = client.run(
+        ...     base_url="https://api.example.com/v1",
+        ...     resource="products",
+        ...     method="GET",
+        ...     query_params={"page": 1, "per_page": 20, "category": "electronics"}
+        ... )
+        >>> assert len(result["content"]) <= 20
+        >>> 
+        >>> # Create a new resource
+        >>> result = client.run(
+        ...     base_url="https://api.example.com/v1",
+        ...     resource="posts",
+        ...     method="POST",
+        ...     data={"title": "New Post", "content": "Post content"},
+        ...     headers={"Content-Type": "application/json"}
+        ... )
+        >>> assert result["status_code"] == 201
+        >>> assert "id" in result["content"]
+        >>> 
+        >>> # Update a resource
+        >>> result = client.run(
+        ...     base_url="https://api.example.com/v1",
+        ...     resource="users/{id}",
+        ...     method="PATCH",
+        ...     path_params={"id": 123},
+        ...     data={"email": "newemail@example.com"}
+        ... )
+        >>> assert result["status_code"] == 200
+        >>> 
+        >>> # Delete a resource
+        >>> result = client.run(
+        ...     base_url="https://api.example.com/v1",
+        ...     resource="comments/{id}",
+        ...     method="DELETE",
+        ...     path_params={"id": 456}
+        ... )
+        >>> assert result["status_code"] in [200, 204]
     """
 
     def __init__(self, **kwargs):

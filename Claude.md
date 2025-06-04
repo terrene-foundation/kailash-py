@@ -93,43 +93,47 @@ The consolidated guide should only contain:
 # IMPLEMENT: Write code
 4. Use guide/reference/api-registry.yaml for exact APIs
 5. Follow patterns from guide/reference/cheatsheet.md
-6. Write examples FIRST:
+6. Write detailed docstrings following guide/instructions/documentation-requirements.md:
+   - Include all 8 required sections (design, dependencies, usage, implementation, etc.)
+   - Use Google-style format with doctest examples (>>> syntax)
+   - Document all parameters, returns, raises, and side effects
+7. Write examples FIRST:
    - Create basic example in examples/{category}_examples/
    - Create complex example showing advanced usage
    - Validate: python guide/reference/validate_kailash_code.py your_examples.py
    - Run examples to ensure they work
-7. Implement the actual feature/fix
+8. Implement the actual feature/fix
 
 # TEST: Verify everything works
-8. Write tests based on your examples:
+9. Write tests based on your examples:
    - Break down examples into test components
    - Test edge cases not covered in examples
    - Run new tests: pytest tests/test_your_module.py
-9. Run ALL examples: cd examples && python _utils/test_all_examples.py
-10. Run ALL tests: pytest
-11. Run doctests: python -m doctest -v src/kailash/**/*.py
-12. Run linting: black . && isort . && ruff check .
+10. Run ALL examples: cd examples && python _utils/test_all_examples.py
+11. Run ALL tests: pytest
+12. Run doctests: python -m doctest -v src/kailash/**/*.py
+13. Run linting: black . && isort . && ruff check .
 
 # DOCUMENT: Update all docs
-13. Update guide/todos/000-master.md (mark completed, add new tasks)
-14. Document mistakes:
+14. Update guide/todos/000-master.md (mark completed, add new tasks)
+15. Document mistakes:
     - Add to guide/mistakes/000-master.md (full details)
     - Update guide/mistakes/consolidated-guide.md (quick reference)
-15. Update reference docs if APIs changed:
+16. Update reference docs if APIs changed:
     - guide/reference/api-registry.yaml
     - guide/reference/api-validation-schema.json
     - guide/reference/cheatsheet.md
     - guide/reference/node-catalog.md (if new nodes added)
     - guide/reference/pattern-library.md (if new patterns discovered)
     - guide/reference/templates/ (if new common use cases identified)
-16. Update READMEs and Sphinx docs if needed
-17. Update CHANGELOG.md
+17. Update READMEs and Sphinx docs if needed
+18. Update CHANGELOG.md
 
 # FINALIZE: Prepare for commit
-18. Build Sphinx: cd docs && python build_docs.py
-19. Review all changes
-20. Commit with descriptive message
-21. Push to GitHub
+19. Build Sphinx: cd docs && python build_docs.py
+20. Review all changes
+21. Commit with descriptive message
+22. Push to GitHub
 
 ### 2. Specific Task Patterns
 

@@ -32,6 +32,8 @@
 - 🧠 **Retrieval-Augmented Generation**: Full RAG pipeline with intelligent document processing
 - 🌐 **REST API Wrapper**: Expose any workflow as a production-ready API in 3 lines
 - 🚪 **Multi-Workflow Gateway**: Manage multiple workflows through unified API with MCP integration
+- 🤖 **Self-Organizing Agents**: Autonomous agent pools with intelligent team formation and convergence detection
+- 🧠 **Agent-to-Agent Communication**: Shared memory pools and intelligent caching for coordinated multi-agent systems
 
 ## 🎯 Who Is This For?
 
@@ -350,6 +352,133 @@ gateway.run(port=8000)
 
 See the [Gateway examples](examples/integration_examples/gateway_comprehensive_demo.py) for complete implementation patterns.
 
+### Self-Organizing Agent Pools - Autonomous Multi-Agent Systems
+
+Build intelligent agent systems that can autonomously form teams, share information, and solve complex problems collaboratively:
+
+```python
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.ai.intelligent_agent_orchestrator import (
+    OrchestrationManagerNode,
+    IntelligentCacheNode,
+    ConvergenceDetectorNode
+)
+from kailash.nodes.ai.self_organizing import (
+    AgentPoolManagerNode,
+    TeamFormationNode,
+    ProblemAnalyzerNode
+)
+from kailash.nodes.ai.a2a import SharedMemoryPoolNode, A2AAgentNode
+
+# Create self-organizing agent workflow
+workflow = Workflow("self_organizing_research")
+
+# Shared infrastructure
+memory_pool = SharedMemoryPoolNode(
+    memory_size_limit=1000,
+    attention_window=50
+)
+workflow.add_node("memory", memory_pool)
+
+# Intelligent caching to prevent redundant operations
+cache = IntelligentCacheNode(
+    ttl=3600,  # 1 hour cache
+    similarity_threshold=0.8,
+    max_entries=1000
+)
+workflow.add_node("cache", cache)
+
+# Problem analysis and team formation
+problem_analyzer = ProblemAnalyzerNode()
+team_former = TeamFormationNode(
+    formation_strategy="capability_matching",
+    optimization_rounds=3
+)
+workflow.add_node("analyzer", problem_analyzer)
+workflow.add_node("team_former", team_former)
+
+# Self-organizing agent pool
+pool_manager = AgentPoolManagerNode(
+    max_active_agents=20,
+    agent_timeout=120
+)
+workflow.add_node("pool", pool_manager)
+
+# Convergence detection for stopping criteria
+convergence = ConvergenceDetectorNode(
+    quality_threshold=0.85,
+    improvement_threshold=0.02,
+    max_iterations=10
+)
+workflow.add_node("convergence", convergence)
+
+# Orchestration manager coordinates the entire system
+orchestrator = OrchestrationManagerNode(
+    max_iterations=10,
+    quality_threshold=0.85,
+    parallel_execution=True
+)
+workflow.add_node("orchestrator", orchestrator)
+
+# Execute with complex business problem
+runtime = LocalRuntime()
+result, _ = runtime.execute(workflow, parameters={
+    "orchestrator": {
+        "query": "Analyze market trends and develop growth strategy for fintech",
+        "agent_pool_size": 12,
+        "mcp_servers": [
+            {"name": "market_data", "command": "python", "args": ["-m", "market_mcp"]},
+            {"name": "financial", "command": "python", "args": ["-m", "finance_mcp"]},
+            {"name": "research", "command": "python", "args": ["-m", "research_mcp"]}
+        ],
+        "context": {
+            "domain": "fintech",
+            "depth": "comprehensive",
+            "output_format": "strategic_report"
+        }
+    }
+})
+
+print(f"Solution Quality: {result['orchestrator']['quality_score']:.2%}")
+print(f"Agents Used: {result['orchestrator']['agents_deployed']}")
+print(f"Iterations: {result['orchestrator']['iterations_completed']}")
+print(f"Final Strategy: {result['orchestrator']['final_solution']['strategy']}")
+```
+
+#### Key Self-Organizing Features
+
+- **Autonomous Team Formation**: Agents automatically form optimal teams based on:
+  - Capability matching for skill-specific tasks
+  - Swarm-based formation for exploration
+  - Market-based allocation for resource constraints
+  - Hierarchical organization for complex problems
+
+- **Intelligent Information Sharing**:
+  - **SharedMemoryPoolNode**: Selective attention mechanisms for relevant information
+  - **IntelligentCacheNode**: Semantic similarity detection prevents redundant operations
+  - **A2AAgentNode**: Direct agent-to-agent communication with context awareness
+
+- **Convergence Detection**: Automatic termination when:
+  - Solution quality exceeds threshold (e.g., 85% confidence)
+  - Improvement rate drops below minimum (e.g., <2% per iteration)
+  - Maximum iterations reached
+  - Time limits exceeded
+
+- **MCP Integration**: Agents can access external tools and data sources:
+  - File systems, databases, APIs
+  - Web scraping and research tools
+  - Specialized domain knowledge bases
+  - Real-time data streams
+
+- **Performance Optimization**:
+  - Multi-level caching strategies
+  - Parallel agent execution
+  - Resource management and monitoring
+  - Cost tracking for API usage
+
+See the [Self-Organizing Agents examples](examples/integration_examples/) for complete implementation patterns and the [Agent Systems Guide](docs/guides/self_organizing_agents.rst) for detailed documentation.
+
 ### Zero-Code MCP Ecosystem - Visual Workflow Builder
 
 Build and deploy workflows through an interactive web interface without writing any code:
@@ -450,6 +579,21 @@ The SDK includes a rich set of pre-built nodes for common operations:
 - `TextClassifier` - Text classification
 - `SentimentAnalyzer` - Sentiment analysis
 - `NamedEntityRecognizer` - NER extraction
+
+**Self-Organizing Agent Nodes**
+- `SharedMemoryPoolNode` - Agent memory sharing
+- `A2AAgentNode` - Agent-to-agent communication
+- `A2ACoordinatorNode` - Multi-agent coordination
+- `IntelligentCacheNode` - Semantic caching system
+- `MCPAgentNode` - MCP-enabled agents
+- `QueryAnalysisNode` - Query complexity analysis
+- `OrchestrationManagerNode` - System orchestration
+- `ConvergenceDetectorNode` - Solution convergence
+- `AgentPoolManagerNode` - Agent pool management
+- `ProblemAnalyzerNode` - Problem decomposition
+- `TeamFormationNode` - Optimal team creation
+- `SolutionEvaluatorNode` - Multi-criteria evaluation
+- `SelfOrganizingAgentNode` - Adaptive individual agents
 
 </td>
 <td width="50%">
@@ -1084,7 +1228,7 @@ pre-commit run pytest-check
 <td width="40%">
 
 ### ✅ Completed
-- Core node system with 15+ node types
+- Core node system with 66+ node types
 - Workflow builder with DAG validation
 - Local & async execution engines
 - Task tracking with metrics
@@ -1095,6 +1239,11 @@ pre-commit run pytest-check
 - API integration with rate limiting
 - OAuth 2.0 authentication
 - SharePoint Graph API integration
+- **Self-organizing agent pools with 13 specialized nodes**
+- **Agent-to-agent communication and shared memory**
+- **Intelligent caching and convergence detection**
+- **MCP integration for external tool access**
+- **Multi-strategy team formation algorithms**
 - **Real-time performance metrics collection**
 - **Performance visualization dashboards**
 - **Real-time monitoring dashboard with WebSocket streaming**

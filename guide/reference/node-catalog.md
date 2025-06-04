@@ -1,6 +1,6 @@
 # Kailash Python SDK - Node Catalog
 
-Last Updated: 2025-06-04
+Last Updated: 2025-06-05
 
 This comprehensive catalog documents all available nodes in the Kailash Python SDK, organized by category.
 
@@ -36,38 +36,54 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
 
 ## AI Nodes
 
-### EmbeddingGeneratorNode
-- **Module**: `kailash.nodes.ai.embedding_generator`
-- **Purpose**: Generate text embeddings using various models
+### LLMAgentNode
+- **Module**: `kailash.nodes.ai.llm_agent`
+- **Purpose**: Interact with Large Language Models with unified provider architecture
 - **Parameters**:
-  - `text`: Input text to embed
-  - `model`: Embedding model to use
-  - `dimensions`: Output embedding dimensions
+  - `provider`: Provider name (openai, anthropic, ollama, mock)
+  - `model`: LLM model to use
+  - `prompt` or `messages`: Input prompt or conversation messages
+  - `temperature`: Sampling temperature
+  - `max_tokens`: Maximum response tokens
+  - `operation`: Operation type (qa, conversation, tool_calling)
 - **Example**:
   ```python
-  node = EmbeddingGeneratorNode(
-      config={"model": "text-embedding-ada-002"}
+  node = LLMAgentNode()
+  result = node.run(
+      provider="openai",
+      model="gpt-4",
+      prompt="Explain quantum computing",
+      temperature=0.7,
+      max_tokens=1000
   )
   ```
 
-### LLMAgentNode
-- **Module**: `kailash.nodes.ai.llm_agent`
-- **Purpose**: Interact with Large Language Models
+### EmbeddingGeneratorNode
+- **Module**: `kailash.nodes.ai.embedding_generator`
+- **Purpose**: Generate text embeddings using various models with caching
 - **Parameters**:
-  - `prompt`: Input prompt
-  - `model`: LLM model to use
-  - `temperature`: Sampling temperature
-  - `max_tokens`: Maximum response tokens
+  - `provider`: Provider name (openai, ollama, cohere, huggingface, mock)
+  - `model`: Embedding model to use
+  - `input_text` or `input_texts`: Text to embed (single or batch)
+  - `operation`: Operation type (embed_text, embed_batch, calculate_similarity)
+  - `batch_size`: Batch size for processing
+  - `cache_enabled`: Enable caching of embeddings
 - **Example**:
   ```python
-  node = LLMAgentNode(
-      config={
-          "model": "gpt-4",
-          "temperature": 0.7,
-          "max_tokens": 1000
-      }
+  node = EmbeddingGeneratorNode()
+  result = node.run(
+      provider="openai",
+      model="text-embedding-3-large",
+      input_text="This is a sample document",
+      operation="embed_text"
   )
   ```
+
+### ChatAgent & RetrievalAgent
+- **ChatAgent Module**: `kailash.nodes.ai.agents`
+- **RetrievalAgent Module**: `kailash.nodes.ai.agents`
+- **Purpose**: Specialized agents for conversation and document retrieval
+- **Features**: Built on unified provider architecture with enhanced capabilities
 
 ### AI Model Nodes (Need Renaming)
 - **TextClassifier** → Should be `TextClassifierNode`
@@ -155,6 +171,11 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `agent_id`: ID of the agent
   - `capabilities`: List of agent capabilities
   - `required_capabilities`: Capabilities required for search
+- **Features**:
+  - Agent registry with capability indexing
+  - Performance tracking and load balancing
+  - Dynamic agent discovery and matching
+  - Real-time availability monitoring
 - **Example**:
   ```python
   pool_manager = AgentPoolManagerNode()
@@ -173,6 +194,11 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `problem_description`: Description of problem to solve
   - `context`: Additional context about the problem
   - `decomposition_strategy`: Strategy for decomposing problem
+- **Features**:
+  - Problem complexity assessment
+  - Capability requirement analysis
+  - Multi-level problem decomposition
+  - Resource estimation and planning
 - **Example**:
   ```python
   analyzer = ProblemAnalyzerNode()
@@ -190,6 +216,11 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `available_agents`: List of available agents
   - `formation_strategy`: Team formation strategy
   - `constraints`: Constraints for team formation
+- **Formation Strategies**:
+  - `capability_matching`: Match agents to required skills
+  - `swarm_based`: Self-organizing exploration teams
+  - `market_based`: Auction-based agent allocation
+  - `hierarchical`: Structured teams with clear roles
 - **Example**:
   ```python
   formation_engine = TeamFormationNode()
@@ -208,6 +239,11 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `team_context`: Current team information
   - `collaboration_mode`: Mode (cooperative, competitive, mixed)
   - `autonomy_level`: Level of autonomous decision making
+- **Features**:
+  - Autonomous team joining and role adaptation
+  - Dynamic capability learning and evolution
+  - Context-aware collaboration patterns
+  - Performance-based specialization
 - **Example**:
   ```python
   agent = SelfOrganizingAgentNode()
@@ -227,6 +263,11 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `problem_requirements`: Original problem requirements
   - `team_performance`: Team performance metrics
   - `evaluation_criteria`: Custom evaluation criteria
+- **Features**:
+  - Multi-criteria solution assessment
+  - Quality threshold monitoring
+  - Iterative improvement detection
+  - Team performance correlation analysis
 - **Example**:
   ```python
   evaluator = SolutionEvaluatorNode()
@@ -788,8 +829,26 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `prefix`: Text prefix
   - `suffix`: Text suffix
 
+### FilterNode ✅
+- **Module**: `kailash.nodes.transform.processors`
+- **Purpose**: Filters data based on configurable conditions and operators
+- **Parameters**:
+  - `data`: Input data to filter (list)
+  - `field`: Field name for dict-based filtering (optional)
+  - `operator`: Comparison operator (==, !=, >, <, >=, <=, contains)
+  - `value`: Value to compare against
+- **Example**:
+  ```python
+  filter_node = FilterNode()
+  result = filter_node.run(
+      data=[1, 2, 3, 4, 5],
+      operator=">",
+      value=3
+  )  # Returns: {"filtered_data": [4, 5]}
+  ```
+- **Backward Compatibility**: Available as `Filter` alias
+
 ### Transform Processor Nodes (Need Renaming)
-- **Filter** → Should be `FilterNode`
 - **Map** → Should be `MapNode`
 - **DataTransformer** → Should be `DataTransformerNode`
 - **Sort** → Should be `SortNode`

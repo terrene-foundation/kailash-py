@@ -24,6 +24,27 @@ from .models import (
     TextSummarizer,
 )
 
+# Import A2A communication nodes
+from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
+
+# Import self-organizing nodes
+from .self_organizing import (
+    AgentPoolManagerNode,
+    ProblemAnalyzerNode,
+    SelfOrganizingAgentNode,
+    SolutionEvaluatorNode,
+    TeamFormationNode,
+)
+
+# Import intelligent orchestration nodes
+from .intelligent_agent_orchestrator import (
+    ConvergenceDetectorNode,
+    IntelligentCacheNode,
+    MCPAgentNode,
+    OrchestrationManagerNode,
+    QueryAnalysisNode,
+)
+
 __all__ = [
     # Agents
     "ChatAgent",
@@ -31,6 +52,22 @@ __all__ = [
     "FunctionCallingAgent",
     "PlanningAgent",
     "LLMAgentNode",
+    # A2A Communication
+    "A2AAgentNode",
+    "SharedMemoryPoolNode",
+    "A2ACoordinatorNode",
+    # Self-Organizing Agents
+    "AgentPoolManagerNode",
+    "ProblemAnalyzerNode",
+    "SelfOrganizingAgentNode",
+    "SolutionEvaluatorNode",
+    "TeamFormationNode",
+    # Intelligent Orchestration
+    "ConvergenceDetectorNode",
+    "IntelligentCacheNode",
+    "MCPAgentNode",
+    "OrchestrationManagerNode",
+    "QueryAnalysisNode",
     # Embedding and Vector Operations
     "EmbeddingGeneratorNode",
     # Provider Infrastructure
