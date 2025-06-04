@@ -15,15 +15,9 @@ import json
 import random
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from kailash import Workflow
-from kailash.nodes.ai.self_organizing import (
-    AgentPoolManagerNode,
-    ProblemAnalyzerNode,
-    SelfOrganizingAgentNode,
-    TeamFormationNode,
-)
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.runtime import LocalRuntime
 
@@ -413,7 +407,7 @@ class AdaptiveTopologyNode(Node):
         problem_type = kwargs["problem_type"]
         team_members = kwargs["team_members"]
         performance_history = kwargs.get("performance_history", [])
-        constraints = kwargs.get("constraints", {})
+        kwargs.get("constraints", {})
 
         # Select best topology based on problem type
         topology_scores = {}
@@ -637,7 +631,7 @@ def demonstrate_emergent_specialization():
     workflow = Workflow(workflow_id="emergent_spec", name="Emergent Specialization")
     workflow.add_node("specialization_tracker", EmergentSpecializationNode())
 
-    runtime = LocalRuntime()
+    LocalRuntime()
     tracker = workflow._node_instances["specialization_tracker"]
 
     # Simulate agent performing tasks over time
@@ -679,7 +673,7 @@ def demonstrate_emergent_specialization():
                     print(f"    {spec}: {score:.2f}")
             print(f"  Recommended focus: {result['recommended_focus']}")
 
-    print(f"\nFinal specialization analysis:")
+    print("\nFinal specialization analysis:")
     final_result = tracker.run(
         agent_id=agent_id, task_type="assessment", performance_score=0.8
     )
@@ -699,7 +693,7 @@ def demonstrate_dynamic_coalitions():
     workflow = Workflow(workflow_id="coalitions", name="Dynamic Coalitions")
     workflow.add_node("coalition_manager", DynamicCoalitionNode())
 
-    runtime = LocalRuntime()
+    LocalRuntime()
     manager = workflow._node_instances["coalition_manager"]
 
     # Create diverse agents
@@ -778,7 +772,7 @@ def demonstrate_dynamic_coalitions():
     time.sleep(1)  # Simulate passage of time
     evaluation_result = manager.run(action="evaluate")
 
-    print(f"\nCoalition performance evaluation:")
+    print("\nCoalition performance evaluation:")
     for coalition_id, eval_data in evaluation_result["evaluations"].items():
         print(f"  {coalition_id}:")
         print(f"    Performance: {eval_data['performance']:.2f}")
@@ -795,7 +789,7 @@ def demonstrate_adaptive_topology():
     workflow = Workflow(workflow_id="topology", name="Adaptive Topology")
     workflow.add_node("topology_designer", AdaptiveTopologyNode())
 
-    runtime = LocalRuntime()
+    LocalRuntime()
     designer = workflow._node_instances["topology_designer"]
 
     # Test different problem types
@@ -950,7 +944,7 @@ def main():
         json.dump(results, f, indent=2, default=str)
 
     print(
-        f"\nPattern results saved to: examples/outputs/self_organizing_patterns_results.json"
+        "\nPattern results saved to: examples/outputs/self_organizing_patterns_results.json"
     )
 
 

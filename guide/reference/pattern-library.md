@@ -14,6 +14,7 @@ This pattern library documents common workflow patterns, best practices, and des
 - [Composition Patterns](#composition-patterns)
 - [Self-Organizing Agent Patterns](#self-organizing-agent-patterns)
 - [Deployment Patterns](#deployment-patterns)
+- [Security Patterns](#security-patterns)
 - [Best Practices](#best-practices)
 
 ## Core Patterns
@@ -854,6 +855,176 @@ for connection in config["connections"]:
         connection.get("output_key")
     )
 ```
+
+## Security Patterns
+
+### 16. Secure File Processing Pattern
+**Purpose**: Safely process files with path validation and sanitization
+
+```python
+from kailash.security import SecurityConfig, set_security_config, safe_open
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
+from kailash.nodes.mixins import SecurityMixin
+from kailash.nodes.base import Node
+
+# Configure security policy
+security_config = SecurityConfig(
+    allowed_directories=["/app/data", "/tmp/kailash"],
+    max_file_size=50 * 1024 * 1024,  # 50MB
+    execution_timeout=300.0,  # 5 minutes
+    enable_audit_logging=True
+)
+set_security_config(security_config)
+
+# Create secure workflow
+workflow = Workflow("secure_data_processing")
+
+# File operations automatically use security validation
+workflow.add_node("reader", CSVReaderNode(), file_path="/app/data/input.csv")
+workflow.add_node("processor", SecureProcessorNode())
+workflow.add_node("writer", CSVWriterNode(), file_path="/app/data/output.csv")
+
+workflow.connect("reader", "processor")
+workflow.connect("processor", "writer")
+```
+
+**Applications**:
+- Production data processing with security constraints
+- Multi-tenant file processing with isolation
+- Compliance-required workflows (GDPR, HIPAA)
+
+### 17. Secure Code Execution Pattern
+**Purpose**: Execute user-provided code with sandboxing and resource limits
+
+```python
+from kailash.security import SecurityConfig
+from kailash.nodes.code.python import PythonCodeNode
+
+# Configure secure execution
+secure_config = SecurityConfig(
+    execution_timeout=60.0,  # 1 minute limit
+    memory_limit=256 * 1024 * 1024,  # 256MB limit
+    enable_audit_logging=True
+)
+
+# Secure code execution node
+secure_code_node = PythonCodeNode(
+    code="""
+    # User-provided code runs in sandbox
+    result = sum(range(input_value))
+    """,
+    security_config=secure_config
+)
+
+workflow = Workflow("secure_computation")
+workflow.add_node("compute", secure_code_node)
+
+# Execute with resource monitoring
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "compute": {"input_value": 1000}
+})
+```
+
+**Applications**:
+- User-generated analytics scripts
+- Dynamic data transformations
+- Sandbox environments for untrusted code
+
+### 18. Secure Node Development Pattern
+**Purpose**: Create custom nodes with built-in security features
+
+```python
+from kailash.nodes.mixins import SecurityMixin
+from kailash.nodes.base import Node, NodeParameter
+
+class SecureDataProcessorNode(SecurityMixin, Node):
+    """Custom node with integrated security."""
+    
+    def get_parameters(self):
+        return {
+            "input_data": NodeParameter(
+                type=list,
+                description="Data to process",
+                required=True
+            )
+        }
+    
+    def run(self, **kwargs):
+        # Automatic input validation and sanitization
+        safe_params = self.validate_and_sanitize_inputs(kwargs)
+        
+        # Log security event
+        self.log_security_event("Processing data", level="INFO")
+        
+        # Process data safely
+        processed_data = self.secure_process(safe_params["input_data"])
+        
+        return {"processed": processed_data}
+    
+    def secure_process(self, data):
+        """Process data with security considerations."""
+        # Validate data size
+        if len(data) > 10000:
+            raise SecurityError("Data too large for processing")
+        
+        # Process with size limits
+        return [item for item in data if self.is_safe_item(item)]
+    
+    def is_safe_item(self, item):
+        """Check if item is safe to process."""
+        return not any(dangerous in str(item) for dangerous in ['<script>', 'eval(', 'exec('])
+```
+
+**Applications**:
+- Custom business logic nodes requiring security
+- Third-party integration nodes
+- Nodes handling sensitive data
+
+### 19. Authentication Security Pattern
+**Purpose**: Secure API authentication with credential protection
+
+```python
+import os
+from kailash.nodes.api.auth import OAuth2Node, APIKeyNode
+from kailash.nodes.api.rest import RESTClientNode
+
+# Secure credential management using environment variables
+workflow = Workflow("secure_api_integration")
+
+# OAuth2 with environment-based credentials
+oauth_node = OAuth2Node(
+    token_url="https://auth.example.com/token",
+    client_id=os.getenv("API_CLIENT_ID"),  # From environment
+    client_secret=os.getenv("API_CLIENT_SECRET"),  # From environment
+    scope="read:data"
+)
+
+# API key with secure storage
+api_key_node = APIKeyNode(
+    api_key=os.getenv("API_KEY"),  # From environment
+    placement="header",
+    key_name="Authorization",
+    prefix="Bearer"
+)
+
+# REST client with authentication
+rest_node = RESTClientNode(
+    base_url="https://api.example.com",
+    auth_type="oauth2",
+    auth_config={"oauth2_node": oauth_node}
+)
+
+workflow.add_node("auth", oauth_node)
+workflow.add_node("api", rest_node)
+workflow.connect("auth", "api")
+```
+
+**Applications**:
+- Enterprise API integrations
+- Multi-service authentication workflows
+- Credential rotation and management
 
 ## Best Practices
 

@@ -276,7 +276,7 @@ def main():
     # Step 5: Build consensus
     print("Step 5: Building consensus on Q3 performance...")
 
-    consensus_result = coordinator.run(
+    coordinator.run(
         action="consensus",
         consensus_proposal={
             "session_id": "q3_performance_review",
@@ -319,7 +319,7 @@ def main():
     print("=" * 50)
     print(f"Agents registered: {len(coordinator.registered_agents)}")
     print(f"Tasks delegated: {len(delegations)}")
-    print(f"Consensus reached: Yes")
+    print("Consensus reached: Yes")
     print(f"Total insights generated: {collective_insights['total_available']}")
 
 

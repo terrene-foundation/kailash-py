@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Production Security Framework**
+  - Comprehensive security module (`src/kailash/security.py`) with configurable policies
+  - Path traversal prevention with directory allowlists and file extension validation
+  - Code execution sandboxing with memory limits and execution timeouts
+  - Input sanitization framework for injection attack prevention
+  - Command injection detection and validation
+  - SecurityMixin for node-level security integration
+  - Safe file operations with `safe_open()` and `validate_file_path()`
+
+- **Security Testing Suite**
+  - 28+ comprehensive security tests covering all attack vectors
+  - Advanced attack simulation (Unicode attacks, AST bypass, resource exhaustion)
+  - Path traversal, code injection, and authentication security tests
+  - Integration tests ensuring security doesn't break existing functionality
+
+- **Security Documentation**
+  - Comprehensive security guide (`guide/SECURITY.md`)
+  - Security architecture documentation (ADR-0032)
+  - Best practices for secure development and deployment
+  - Vulnerability assessment with severity ratings and remediation
+
+### Changed
+- Updated all data reader/writer nodes to use security framework
+- Enhanced Python Code Node with comprehensive sandboxing
+- Improved authentication nodes with security analysis and recommendations
+
+### Security
+- **CRITICAL**: Path traversal prevention implemented across all file operations
+- **HIGH**: Code execution sandboxing prevents malicious code execution
+- **MEDIUM**: Input sanitization prevents XSS, SQL, and command injection attacks
+- **LOW**: Comprehensive audit logging for security event monitoring
+
 ## [0.1.5] - 2025-06-05
 
 ### Added

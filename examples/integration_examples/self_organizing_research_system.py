@@ -13,7 +13,7 @@ any research question by automatically assembling the right team.
 
 import json
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from kailash import Workflow
 from kailash.nodes.ai.a2a import SharedMemoryPoolNode
@@ -387,7 +387,7 @@ class SelfOrganizingResearchSystem:
             )
 
             # Step 4: Execute collaborative problem solving
-            print(f"\n4. Team collaborating on solution...")
+            print("\n4. Team collaborating on solution...")
 
             # Update agent statuses
             for agent in current_team:
@@ -408,13 +408,13 @@ class SelfOrganizingResearchSystem:
 
                 # Execute phase
                 for agent in phase_agents:
-                    agent_node = self.workflow._node_instances[agent["id"]]
+                    self.workflow._node_instances[agent["id"]]
 
                     # Create task based on phase
                     task = f"Work on {phase['phase']} for: {problem_description}"
 
                     # Agent reads from memory
-                    memories = problem_memory.run(
+                    problem_memory.run(
                         action="read",
                         agent_id=agent["id"],
                         attention_filter={
@@ -485,7 +485,7 @@ class SelfOrganizingResearchSystem:
                     )
 
             # Step 5: Synthesize team solutions
-            print(f"\n5. Synthesizing team solutions...")
+            print("\n5. Synthesizing team solutions...")
 
             # Read all solution fragments
             all_solutions = self.workflow._node_instances["solution_memory"].run(
@@ -520,7 +520,7 @@ class SelfOrganizingResearchSystem:
             }
 
             # Step 6: Evaluate solution
-            print(f"\n6. Evaluating solution quality...")
+            print("\n6. Evaluating solution quality...")
 
             evaluation_result, _ = runtime.execute(
                 self.workflow,
@@ -549,7 +549,7 @@ class SelfOrganizingResearchSystem:
             print(
                 f"   - Meets threshold: {'Yes' if evaluation['meets_threshold'] else 'No'}"
             )
-            print(f"   - Quality breakdown:")
+            print("   - Quality breakdown:")
             for aspect, score in evaluation["quality_scores"].items():
                 print(f"     - {aspect}: {score:.2f}")
 
@@ -578,11 +578,11 @@ class SelfOrganizingResearchSystem:
 
             # Check if we should continue
             if evaluation["meets_threshold"]:
-                print(f"\n✓ Solution meets quality threshold!")
+                print("\n✓ Solution meets quality threshold!")
                 results["final_solution"] = integrated_solution
                 break
             elif evaluation["needs_iteration"]:
-                print(f"\n→ Solution needs improvement. Recommendations:")
+                print("\n→ Solution needs improvement. Recommendations:")
                 for action in evaluation["recommended_actions"]:
                     print(f"   - {action}")
 
@@ -660,7 +660,7 @@ class SelfOrganizingResearchSystem:
             print("\nFinal Solution:")
             print(f"  Approach: {results['final_solution']['approach']}")
             print(f"  Confidence: {results['final_solution']['confidence']:.2f}")
-            print(f"  Key Findings:")
+            print("  Key Findings:")
             for finding in results["final_solution"]["findings"]:
                 print(f"    - {finding}")
 

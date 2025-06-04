@@ -9,7 +9,6 @@ This advanced example demonstrates:
 5. Consensus building for final conclusions
 """
 
-import json
 import time
 from typing import Dict, List
 
@@ -192,13 +191,6 @@ class ResearchSystem:
 
     def connect_components(self):
         """Connect all components in the workflow."""
-        agents = [
-            self.lit_review_agent,
-            self.data_collector,
-            self.stats_analyst,
-            self.domain_expert,
-            self.synthesizer,
-        ]
 
         # Connect all agents to all memory pools (use node IDs)
         agent_ids = [
@@ -446,7 +438,7 @@ class ResearchSystem:
             "criteria": "Based on literature, data, statistical rigor, and domain expertise",
         }
 
-        consensus_result = self.coordinator.run(
+        self.coordinator.run(
             action="consensus", consensus_proposal=consensus_proposal
         )
 
@@ -564,7 +556,7 @@ def main():
         print(f"  {event['phase']}: started at {event['start']:.1f}s")
 
     # Save detailed results
-    print(f"\nDetailed results saved to: examples/outputs/a2a_research_results.json")
+    print("\nDetailed results saved to: examples/outputs/a2a_research_results.json")
 
     # Query specific insights
     print("\n" + "-" * 60)

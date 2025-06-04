@@ -92,7 +92,7 @@ def demonstrate_pool_management(workflow: Workflow, agent_specs: List[Dict]):
     print("1. AGENT POOL MANAGEMENT")
     print("=" * 50)
 
-    runtime = LocalRuntime()
+    LocalRuntime()
     pool_manager = workflow._node_instances["pool_manager"]
 
     # Register all agents
@@ -277,7 +277,7 @@ def demonstrate_collaboration(
             )
             print(f"  ✓ Contribution: {response[:100]}...")
         else:
-            print(f"  ✗ Failed")
+            print("  ✗ Failed")
 
     # Synthesize solutions
     integrated_solution = {
@@ -289,11 +289,11 @@ def demonstrate_collaboration(
         "findings": [
             f"Combined insights from {len(solutions)} specialized agents",
             f"Leveraged capabilities: {', '.join(set(cap for sol in solutions for cap in sol['capabilities']))}",
-            f"Multi-perspective analysis completed",
+            "Multi-perspective analysis completed",
         ],
     }
 
-    print(f"\nIntegrated solution:")
+    print("\nIntegrated solution:")
     print(f"  Confidence: {integrated_solution['confidence']:.2f}")
     print(f"  Contributors: {integrated_solution['contributions']}")
     print("  Key findings:")
@@ -386,8 +386,8 @@ def main():
     print("SUMMARY")
     print("=" * 50)
 
-    print(f"\n✓ Successfully demonstrated self-organizing agents")
-    print(f"✓ Formed teams using multiple strategies")
+    print("\n✓ Successfully demonstrated self-organizing agents")
+    print("✓ Formed teams using multiple strategies")
     print(f"✓ Achieved {evaluation['overall_score']:.0%} solution quality")
     print(
         f"✓ {'Met' if evaluation['meets_threshold'] else 'Did not meet'} quality threshold"
@@ -411,7 +411,7 @@ def main():
     with open("examples/outputs/self_organizing_simple_results.json", "w") as f:
         json.dump(results, f, indent=2, default=str)
 
-    print(f"\nResults saved to: examples/outputs/self_organizing_simple_results.json")
+    print("\nResults saved to: examples/outputs/self_organizing_simple_results.json")
 
 
 if __name__ == "__main__":

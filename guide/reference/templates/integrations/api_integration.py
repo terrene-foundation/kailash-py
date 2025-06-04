@@ -11,7 +11,7 @@ Customization Points:
 """
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from kailash.nodes.api.auth import APIKeyNode, BasicAuthNode, OAuth2Node
 from kailash.nodes.api.rate_limiting import RateLimitedAPINode
@@ -316,7 +316,7 @@ def main():
             result = results.get("process_response", results.get("process", {}))
             if result.get("success"):
                 metadata = result.get("metadata", {})
-                print(f"\nSummary:")
+                print("\nSummary:")
                 print(f"- Records fetched: {metadata.get('total_count', 0)}")
                 print(f"- API version: {metadata.get('api_version', 'unknown')}")
                 print(

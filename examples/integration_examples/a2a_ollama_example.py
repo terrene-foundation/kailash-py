@@ -450,7 +450,7 @@ def demonstrate_consensus_building():
     ]
 
     for agent_id, vote, reason in votes:
-        result = coordinator.run(
+        coordinator.run(
             action="consensus",
             consensus_proposal={"session_id": "ai_impact_consensus"},
             agent_id=agent_id,

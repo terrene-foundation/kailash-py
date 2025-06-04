@@ -440,6 +440,13 @@
       "status": "failed",
       "started_at": null,
       "ended_at": "2025-06-04T09:01:07.500374+00:00"
+    },
+    "9fe3e09d-f66b-498d-857e-a9820117ba59": {
+      "run_id": "e7e2cda5-96a4-4729-a55e-0aad34b030b2",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-04T18:33:32.447585+00:00",
+      "ended_at": "2025-06-04T18:33:32.451275+00:00"
     }
   },
   "runs": {}

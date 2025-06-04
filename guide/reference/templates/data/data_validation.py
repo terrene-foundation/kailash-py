@@ -12,7 +12,7 @@ Customization Points:
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
@@ -454,7 +454,7 @@ def main():
             report = results["report_gen"]["validation_report"]
             summary = report["summary"]
 
-            print(f"\nValidation Summary:")
+            print("\nValidation Summary:")
             print(f"- Total records: {summary['total_records']}")
             print(
                 f"- Valid records: {summary['valid_records']} ({summary['validation_rate']:.1%})"

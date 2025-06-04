@@ -6,19 +6,14 @@ This is a corrected version that works with the actual Kailash SDK API.
 """
 
 import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import HTTPException
 from fastapi.responses import HTMLResponse
 
 from kailash.api.gateway import WorkflowAPIGateway
-from kailash.api.mcp_integration import MCPIntegration, MCPToolNode
-from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mcp.client import MCPClient
-from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
 
 logging.basicConfig(level=logging.INFO)

@@ -7,12 +7,10 @@ without requiring external dependencies.
 """
 
 import asyncio
-import json
 import time
-from typing import Any, Dict, List
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
 # Create the demo app
@@ -591,7 +589,6 @@ async def execute_workflow(workflow_id: str):
     workflow_stats["running"] += 1
 
     # Simulate async execution
-    import asyncio
 
     async def complete_execution():
         await asyncio.sleep(2)  # Simulate work

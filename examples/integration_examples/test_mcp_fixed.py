@@ -107,7 +107,7 @@ def test_mcp_registry():
             # Register a mock server
             config = {"command": "echo", "args": ["test"], "transport": "stdio"}
 
-            result = await registry.register_server("test-server", config)
+            await registry.register_server("test-server", config)
 
             # Check registration
             assert "test-server" in registry.servers

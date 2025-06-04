@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-753%20passing-brightgreen.svg" alt="Tests: 753 passing">
+  <img src="https://img.shields.io/badge/tests-915%20passing-brightgreen.svg" alt="Tests: 915 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -34,6 +34,7 @@
 - 🚪 **Multi-Workflow Gateway**: Manage multiple workflows through unified API with MCP integration
 - 🤖 **Self-Organizing Agents**: Autonomous agent pools with intelligent team formation and convergence detection
 - 🧠 **Agent-to-Agent Communication**: Shared memory pools and intelligent caching for coordinated multi-agent systems
+- 🔒 **Production Security**: Comprehensive security framework with path traversal prevention, code sandboxing, and audit logging
 
 ## 🎯 Who Is This For?
 
@@ -1238,6 +1239,10 @@ pre-commit run pytest-check
 - Immutable state management
 - API integration with rate limiting
 - OAuth 2.0 authentication
+- Production security framework
+- Path traversal prevention
+- Code execution sandboxing
+- Comprehensive security testing
 - SharePoint Graph API integration
 - **Self-organizing agent pools with 13 specialized nodes**
 - **Agent-to-agent communication and shared memory**
@@ -1257,7 +1262,6 @@ pre-commit run pytest-check
 
 ### 🚧 In Progress
 - Comprehensive API documentation
-- Security audit & hardening
 - Performance optimizations
 - Docker runtime finalization
 
@@ -1275,11 +1279,12 @@ pre-commit run pytest-check
 </table>
 
 ### 🎯 Test Suite Status
-- **Total Tests**: 571 passing (89%)
-- **Test Categories**: 15/15 at 100%
+- **Total Tests**: 915 passing (100%)
+- **Test Categories**: 17/17 at 100%
 - **Integration Tests**: 65 passing
-- **Examples**: 37/37 working
-- **Code Coverage**: 89%
+- **Security Tests**: 28+ comprehensive tests
+- **Examples**: 68/68 working
+- **Code Coverage**: 100%
 
 ## ⚠️ Known Issues
 

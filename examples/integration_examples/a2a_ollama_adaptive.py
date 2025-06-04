@@ -5,7 +5,6 @@ This example automatically detects available Ollama models and adapts
 the multi-agent system to use what's installed.
 """
 
-import json
 import subprocess
 from typing import Dict, List
 
@@ -250,7 +249,7 @@ def demonstrate_adaptive_system():
     # Run collaborative task
     topic = "The future of human-AI collaboration in creative fields"
     print(f"\n{'='*60}")
-    print(f"COLLABORATIVE ANALYSIS")
+    print("COLLABORATIVE ANALYSIS")
     print(f"Topic: {topic}")
     print(f"{'='*60}")
 
@@ -341,7 +340,7 @@ def demonstrate_adaptive_system():
             m for m in all_memories["memories"] if m["importance"] >= 0.7
         ]
         if high_importance:
-            print(f"\n💡 Top insights (importance >= 0.7):")
+            print("\n💡 Top insights (importance >= 0.7):")
             for mem in high_importance[:3]:
                 print(f"\n- [{mem['agent_id']}]: {mem['content'][:150]}...")
 
@@ -351,7 +350,7 @@ def demonstrate_adaptive_system():
         print("CONSENSUS BUILDING")
         print("=" * 60)
 
-        proposal = f"AI will fundamentally transform creative fields by augmenting human creativity"
+        proposal = "AI will fundamentally transform creative fields by augmenting human creativity"
         print(f"\nProposal: {proposal}")
 
         # Start consensus

@@ -55,7 +55,7 @@ flowchart LR
 |---------|------|-------------|
 | aggregator | PythonCodeNode | Node for executing arbitrary Python code. |
 | classifier | PythonCodeNode | Node for executing arbitrary Python code. |
-| csv_reader | CSVReaderNode | Reads data from a CSV file. |
+| csv_reader | CSVReaderNode | Reads data from CSV files with automatic header detection and type inference. |
 | csv_writer | CSVWriterNode | Writes data to a CSV file. |
 | data_joiner | PythonCodeNode | Node for executing arbitrary Python code. |
 | data_transformer | PythonCodeNode | Node for executing arbitrary Python code. |

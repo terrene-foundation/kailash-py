@@ -688,6 +688,80 @@ tracking:
       tracker = TaskTracker()
       # Automatically tracks when used with runtime
 
+# Security
+security:
+  SecurityConfig:
+    class: kailash.security.SecurityConfig
+    description: "Configuration for security policies and limits"
+    import: "from kailash.security import SecurityConfig"
+    constructor:
+      signature: "SecurityConfig(allowed_directories=None, max_file_size=100MB, execution_timeout=300.0, memory_limit=512MB, allowed_file_extensions=None, enable_audit_logging=True, enable_path_validation=True, enable_command_validation=True)"
+      params:
+        allowed_directories: "List of directories where file operations are permitted"
+        max_file_size: "Maximum file size in bytes (default: 100MB)"
+        execution_timeout: "Maximum execution time in seconds (default: 5 minutes)"
+        memory_limit: "Maximum memory usage in bytes (default: 512MB)"
+        allowed_file_extensions: "List of allowed file extensions"
+        enable_audit_logging: "Whether to log security events"
+        enable_path_validation: "Whether to validate file paths"
+        enable_command_validation: "Whether to validate command strings"
+    example: |
+      from kailash.security import SecurityConfig, set_security_config
+      config = SecurityConfig(
+          allowed_directories=["/app/data", "/tmp/kailash"],
+          max_file_size=50 * 1024 * 1024,
+          execution_timeout=60.0,
+          enable_audit_logging=True
+      )
+      set_security_config(config)
+
+  security_functions:
+    validate_file_path:
+      signature: "validate_file_path(file_path: Union[str, Path], config: Optional[SecurityConfig] = None, operation: str = 'access') -> Path"
+      description: "Validate and sanitize file paths to prevent traversal attacks"
+      import: "from kailash.security import validate_file_path"
+      example: |
+        from kailash.security import validate_file_path
+        safe_path = validate_file_path("/app/data/file.txt")
+
+    safe_open:
+      signature: "safe_open(file_path: Union[str, Path], mode: str = 'r', config: Optional[SecurityConfig] = None, **kwargs)"
+      description: "Safely open a file with security validation"
+      import: "from kailash.security import safe_open"
+      example: |
+        from kailash.security import safe_open
+        with safe_open("data/file.txt", "r") as f:
+            content = f.read()
+
+    sanitize_input:
+      signature: "sanitize_input(value: Any, max_length: int = 10000, allowed_types: Optional[List[type]] = None, config: Optional[SecurityConfig] = None) -> Any"
+      description: "Sanitize input values to prevent injection attacks"
+      import: "from kailash.security import sanitize_input"
+      example: |
+        from kailash.security import sanitize_input
+        clean_input = sanitize_input(user_input)
+
+    validate_command_string:
+      signature: "validate_command_string(command: str, config: Optional[SecurityConfig] = None) -> str"
+      description: "Validate command strings to prevent injection attacks"
+      import: "from kailash.security import validate_command_string"
+      example: |
+        from kailash.security import validate_command_string
+        safe_command = validate_command_string("python script.py")
+
+  SecurityMixin:
+    class: kailash.nodes.mixins.SecurityMixin
+    description: "Mixin that adds security features to nodes"
+    import: "from kailash.nodes.mixins import SecurityMixin"
+    usage: |
+      from kailash.nodes.mixins import SecurityMixin
+      from kailash.nodes.base import Node
+      
+      class MySecureNode(SecurityMixin, Node):
+          def run(self, **kwargs):
+              safe_params = self.validate_and_sanitize_inputs(kwargs)
+              return self.process_safely(safe_params)
+
 # Utilities
 utils:
   export:

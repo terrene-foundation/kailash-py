@@ -10,7 +10,10 @@ This directory contains internal documentation for developers and contributors t
 - **`features/`** - Feature documentation and specifications
 - **`mistakes/`** - Common mistakes and lessons learned
 - **`prd/`** - Product Requirements Documents
+- **`reference/`** - Reference documentation and templates
+- **`instructions/`** - Detailed development instructions
 - **`todos/`** - Task tracking and development history
+- **`SECURITY.md`** - Comprehensive security documentation and guidelines
 
 ### In project root:
 - **`CLAUDE.md`** - AI assistant guidelines and project conventions (required by Claude Code)

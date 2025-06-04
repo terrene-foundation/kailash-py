@@ -24,11 +24,9 @@ Real-World Applications:
 - Collaborative decision making
 """
 
-import json
 import os
 import sys
 import time
-from typing import Dict, List
 
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -136,7 +134,7 @@ def demo_intelligent_cache():
     # Show cache statistics
     stats = cache.run(action="stats")
     if stats["success"]:
-        print(f"\n📊 Cache Statistics:")
+        print("\n📊 Cache Statistics:")
         print(f"   Total entries: {stats['stats']['total_entries']}")
         print(f"   Hit rate: {stats['stats']['hit_rate']:.2%}")
         print(f"   Cost saved: ${stats['stats']['estimated_cost_saved']:.2f}")
@@ -175,7 +173,7 @@ def demo_query_analysis():
 
     if analysis["success"]:
         result = analysis["analysis"]
-        print(f"\n📋 Analysis Results:")
+        print("\n📋 Analysis Results:")
         print(f"   Complexity Score: {result['complexity_score']:.2f}")
         print(
             f"   Required Capabilities: {len(result['required_capabilities'])} capabilities"
@@ -244,13 +242,13 @@ def demo_mcp_agent():
         model="mock-model",
     )
 
-    print(f"\n🔬 Agent Execution Result:")
+    print("\n🔬 Agent Execution Result:")
     if result.get("success"):
         print(f"   Agent: {result['self_organization']['agent_id']}")
         print(
             f"   Capabilities: {', '.join(result['self_organization']['capabilities'])}"
         )
-        print(f"   Task completed: ✅")
+        print("   Task completed: ✅")
         print(f"   MCP tools available: {len(result.get('mcp_tool_results', []))}")
         if "content" in result:
             print(f"   Response preview: {result['content'][:100]}...")
@@ -298,7 +296,7 @@ def demo_convergence_detection():
     )
 
     if convergence["success"]:
-        print(f"\n📈 Convergence Analysis:")
+        print("\n📈 Convergence Analysis:")
         print(f"   Should continue: {convergence['should_continue']}")
         print(f"   Reason: {convergence['reason']}")
         print(f"   Confidence: {convergence['confidence']:.2%}")
@@ -306,7 +304,7 @@ def demo_convergence_detection():
         print(f"   Improvement trend: {convergence['improvement_trend']['trend']}")
 
         if convergence["recommendations"]:
-            print(f"   Recommendations:")
+            print("   Recommendations:")
             for rec in convergence["recommendations"]:
                 print(f"     - {rec}")
 
@@ -327,7 +325,7 @@ def demo_full_orchestration():
     implementation timeline. Focus on AI/ML applications in healthcare and fintech sectors.
     """
 
-    print(f"\n🚀 Executing Full Orchestration...")
+    print("\n🚀 Executing Full Orchestration...")
     print(f"Query: {business_query[:100]}...")
 
     # Mock MCP servers for the demo
@@ -374,9 +372,9 @@ def demo_full_orchestration():
 
     execution_time = time.time() - start_time
 
-    print(f"\n📊 Orchestration Results:")
+    print("\n📊 Orchestration Results:")
     if result.get("success"):
-        print(f"   ✅ Execution completed successfully")
+        print("   ✅ Execution completed successfully")
         print(f"   Session ID: {result['session_id']}")
         print(f"   Quality Score: {result['quality_score']:.3f}")
         print(f"   Iterations: {result['iterations_completed']}")
@@ -385,7 +383,7 @@ def demo_full_orchestration():
         # Performance metrics
         if "performance_metrics" in result:
             metrics = result["performance_metrics"]
-            print(f"\n📈 Performance Metrics:")
+            print("\n📈 Performance Metrics:")
             print(f"   Cache Hit Rate: {metrics['cache_hit_rate']:.2%}")
             print(f"   External Calls Saved: ${metrics['external_calls_saved']:.2f}")
             print(f"   Agent Utilization: {metrics['agent_utilization']:.2%}")
@@ -393,7 +391,7 @@ def demo_full_orchestration():
         # Solution summary
         if "final_solution" in result:
             solution = result["final_solution"]
-            print(f"\n💡 Solution Summary:")
+            print("\n💡 Solution Summary:")
             print(f"   Team Size: {solution.get('team_size', 'N/A')}")
             print(f"   Confidence: {solution.get('confidence', 0):.2%}")
             print(
@@ -464,11 +462,11 @@ def demo_workflow_integration():
 
         if query_result.get("query_analyzer", {}).get("success"):
             analysis = query_result["query_analyzer"]["analysis"]
-            print(f"   ✅ Query analysis completed")
+            print("   ✅ Query analysis completed")
             print(f"   Complexity: {analysis['complexity_score']:.2f}")
             print(f"   Required capabilities: {len(analysis['required_capabilities'])}")
         else:
-            print(f"   ❌ Query analysis failed")
+            print("   ❌ Query analysis failed")
 
     except Exception as e:
         print(f"   ⚠️ Workflow execution error: {e}")

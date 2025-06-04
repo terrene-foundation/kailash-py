@@ -2,12 +2,12 @@
 
 ## Validation Summary
 **Status**: ✅ All templates validated and working  
-**Last Updated**: 2025-06-04  
-**Templates Tested**: 9/9 passed
+**Last Updated**: 2025-06-05  
+**Templates Tested**: 11/11 passed
 
 ## Template Categories
 
-### ✅ Working Templates (9 total)
+### ✅ Working Templates (11 total)
 
 #### Simple Templates (Recommended for beginners)
 1. **simple_etl.py** - Minimal ETL workflow
@@ -21,6 +21,10 @@
 7. **custom_node.py** - Full-featured custom node with validation
 8. **api_integration.py** - Advanced API patterns with auth
 9. **data_validation.py** - Comprehensive data quality validation
+
+#### Security Templates
+10. **secure_node.py** - Custom node with integrated security features
+11. **secure_etl.py** - ETL workflow with comprehensive security measures
 
 ## Import Validation
 All templates successfully import without errors:

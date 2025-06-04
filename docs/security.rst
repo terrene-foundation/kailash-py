@@ -18,8 +18,10 @@ The Kailash Python SDK includes several security features to protect your workfl
    - Limited namespace access
    - No access to system modules by default
    - Configurable allowed imports
-   - Execution timeouts (planned)
-   - Memory limits (planned)
+   - Execution timeouts (implemented)
+   - Memory limits (implemented on Unix systems)
+   - AST-based code safety validation
+   - Input sanitization
 
 2. **Input Validation**
 
@@ -35,6 +37,17 @@ The Kailash Python SDK includes several security features to protect your workfl
    - Support for environment variables
    - No hardcoded credentials in code
    - Integration with secret managers (planned)
+
+4. **Production Security Framework**
+
+   The SDK includes a comprehensive security framework (``kailash.security``):
+
+   - Configurable security policies with ``SecurityConfig``
+   - Path traversal prevention for all file operations
+   - Command injection detection and validation
+   - Secure file operations with ``safe_open()``
+   - SecurityMixin for node-level security integration
+   - Comprehensive audit logging
 
 Security Best Practices
 -----------------------
@@ -161,11 +174,13 @@ Planned security enhancements:
 
 - ✅ Basic input validation
 - ✅ Path traversal prevention
-- ⏳ Execution timeouts for PythonCodeNode
-- ⏳ Memory limits for code execution
+- ✅ Execution timeouts for PythonCodeNode
+- ✅ Memory limits for code execution
+- ✅ Comprehensive security framework
+- ✅ Audit logging
+- ✅ SecurityMixin for node-level security
 - ⏳ Enhanced sandboxing with PyPy sandbox
 - ⏳ Integration with secret managers
-- ⏳ Audit logging
 - ⏳ Role-based access control
 - ⏳ Workflow signing and verification
 

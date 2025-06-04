@@ -8,7 +8,7 @@ This demo illustrates:
 4. Memory relevance scoring
 """
 
-from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
+from kailash.nodes.ai import A2ACoordinatorNode, SharedMemoryPoolNode
 
 
 def demo_shared_memory():

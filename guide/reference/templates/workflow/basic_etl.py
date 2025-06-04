@@ -149,7 +149,7 @@ def main():
         # Print summary
         if "transform" in results:
             summary = results["transform"].get("summary", {})
-            print(f"\nSummary:")
+            print("\nSummary:")
             print(f"- Total records processed: {summary.get('total_records', 0)}")
             print(f"- Average value: {summary.get('average_value', 0):.2f}")
 
@@ -157,7 +157,7 @@ def main():
         if "validate" in results:
             errors = results["validate"].get("errors", [])
             if errors:
-                print(f"\nValidation errors found:")
+                print("\nValidation errors found:")
                 for error in errors[:5]:  # Show first 5 errors
                     print(f"  - {error}")
                 if len(errors) > 5:
