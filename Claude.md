@@ -19,16 +19,22 @@
 - **API Reference**: `guide/reference/api-registry.yaml`
 - **Common Patterns**: `guide/reference/cheatsheet.md`
 - **Validation**: `guide/reference/validate_kailash_code.py`
-- **Mistakes Log**: `guide/mistakes/000-master.md`
+- **Mistakes Guide**: `guide/mistakes/consolidated-guide.md` ← Quick reference
+- **Mistakes Full Log**: `guide/mistakes/000-master.md` ← Detailed history
 - **Project Structure**: `guide/prd/0000-project_structure.md`
 
 ## Core Rules (MEMORIZE THESE)
 1. **ALL node classes end with "Node"**: `CSVReaderNode` ✓, `CSVReader` ✗
 2. **ALL methods use snake_case**: `add_node()` ✓, `addNode()` ✗
 3. **ALL config keys use underscores**: `file_path` ✓, `filePath` ✗
-4. **Workflow execution patterns**: `runtime.execute(workflow)` ✓, `workflow.execute(runtime)` ✗
+4. **Workflow execution pattern**: Always use `runtime.execute(workflow, parameters={...})` ✓
 5. **Parameter order is STRICT**: Check exact signatures in api-registry.yaml
 6. **Docstring examples use doctest format**: `>>> code` ✓, `:: code` ✗
+7. **get_parameters() defines ALL node parameters**: Both config AND runtime
+8. **Config vs Runtime**: Config=HOW (static), Runtime=WHAT (dynamic data)
+9. **Execution inputs**: Use `runtime.execute(workflow, parameters={...})` only
+10. **Initial workflow data**: Can use source nodes OR pass via parameters to ANY node
+11. **Use Workflow.connect()**: NOT WorkflowBuilder (different API, causes confusion)
 
 ## 📋 TODO Management System (CRITICAL)
 
@@ -61,6 +67,18 @@ The todo system in `guide/todos/` is the central task tracking system:
 ## Project Context
 The Kailash Python SDK enables AI Business Coaches (ABCs) to create workflows using a node-based architecture. It provides a Python-friendly interface while maintaining compatibility with Kailash's container-node system.
 
+## Maintaining Mistakes Documentation
+
+When documenting mistakes:
+1. **Full Documentation** (`000-master.md`): Add complete details, code examples, impact, solution
+2. **Quick Reference** (`consolidated-guide.md`): Update if the mistake represents a common pattern that Claude Code needs to avoid
+
+The consolidated guide should only contain:
+- Critical API patterns (with ✅/❌ examples)
+- Common pitfalls by category
+- Quick fixes for frequent errors
+- Validation checklist items
+
 ## Primary Workflows
 
 ### 1. Development Workflow (Any Task)
@@ -91,7 +109,9 @@ The Kailash Python SDK enables AI Business Coaches (ABCs) to create workflows us
 
 # DOCUMENT: Update all docs
 13. Update guide/todos/000-master.md (mark completed, add new tasks)
-14. Document mistakes in guide/mistakes/000-master.md
+14. Document mistakes:
+    - Add to guide/mistakes/000-master.md (full details)
+    - Update guide/mistakes/consolidated-guide.md (quick reference)
 15. Update reference docs if APIs changed:
     - guide/reference/api-registry.yaml
     - guide/reference/api-validation-schema.json

@@ -267,6 +267,337 @@ def validate_kailash_code(code_snippet):
     return errors
 ```
 
+## Workflow Execution with Inputs
+
+### Primary Execution Method: Runtime.execute()
+
+The standard way to execute workflows in Kailash SDK is through a runtime:
+
+```python
+# ✅ CORRECT - Use 'parameters' keyword argument
+runtime = LocalRuntime()
+results, run_id = runtime.execute(
+    workflow,
+    parameters={
+        "node_id": {
+            "param1": "value1",
+            "param2": 123
+        }
+    }
+)
+
+# ❌ WRONG - Don't pass inputs as positional argument
+results, run_id = runtime.execute(workflow, {"key": "value"})  # WRONG!
+```
+
+### Note about Workflow.execute()
+
+While the Workflow class has an `execute()` method, it is not commonly used in practice. All examples and production code use `runtime.execute()` for workflow execution because it provides:
+- Task tracking and monitoring
+- Proper error handling
+- Run ID generation
+- Performance metrics
+
+**Recommendation**: Always use `runtime.execute()` for executing workflows.
+
+### Key Differences
+
+| Method | Input Parameter | Return Value | Usage |
+|--------|----------------|--------------|--------|
+| `runtime.execute(workflow, parameters=...)` | `parameters` (node-specific) | `(results, run_id)` | Production workflows |
+| `workflow.execute(inputs=...)` | `inputs` (initial data) | `results` only | Simple testing |
+
+### Parameters Structure
+
+When using `runtime.execute()`, the `parameters` dict maps node IDs to their inputs:
+
+```python
+parameters = {
+    "reader_node": {
+        "file_path": "override.csv"  # Override node's config
+    },
+    "filter_node": {
+        "threshold": 500  # Runtime parameter override
+    }
+}
+
+results, run_id = runtime.execute(workflow, parameters=parameters)
+```
+
+### How Inputs Flow to First Nodes
+
+**IMPORTANT**: Workflows in Kailash SDK can receive initial inputs through multiple mechanisms:
+
+#### 1. Source Nodes (Traditional Pattern)
+```python
+# Source nodes generate their own data
+csv_reader = CSVReaderNode(file_path="data.csv")
+workflow.add_node("reader", csv_reader)
+# No external input needed - node reads from file
+```
+
+#### 2. External Data via Parameters (Dynamic Pattern)
+```python
+# Processing nodes can receive data from runtime.execute()
+filter_node = FilterNode()
+workflow.add_node("filter", filter_node)
+
+# Pass data directly to the node
+results, run_id = runtime.execute(
+    workflow,
+    parameters={
+        "filter": {
+            "data": [1, 2, 3, 4, 5],  # External data
+            "threshold": 3
+        }
+    }
+)
+```
+
+#### 3. Hybrid Pattern (Source + Parameters)
+```python
+# Source nodes can also accept parameter overrides
+workflow.add_node("reader", CSVReaderNode(), file_path="default.csv")
+
+# Override at runtime
+results, run_id = runtime.execute(
+    workflow,
+    parameters={
+        "reader": {"file_path": "custom.csv"}  # Override default
+    }
+)
+```
+
+**Key Point**: There's no requirement for workflows to start with source nodes. Any node can be the entry point and receive data through the `parameters` mechanism.
+
+### Common Mistakes
+
+```python
+# ❌ WRONG - Mixing up parameter names
+runtime.execute(workflow, inputs={"data": [1, 2, 3]})  # Should be 'parameters'
+workflow.execute(parameters={"node": {}})  # Should be 'inputs'
+
+# ❌ WRONG - Passing as positional argument
+runtime.execute(workflow, {"data": [1, 2, 3]})  # Must use parameters=...
+
+# ❌ WRONG - Wrong return value unpacking
+results = runtime.execute(workflow)  # Returns tuple, not just results
+results, run_id = workflow.execute(inputs={})  # Returns only results
+```
+
+## WorkflowBuilder vs Workflow Connection Methods
+
+**IMPORTANT**: There's an inconsistency between connection methods:
+
+### Workflow.connect() (Recommended)
+```python
+# Uses mapping dictionary
+workflow.connect("source", "target", mapping={"output": "input"})
+workflow.connect("node1", "node2")  # Default: {"output": "input"}
+```
+
+### WorkflowBuilder.add_connection() (Different API)
+```python
+# Requires 4 parameters - NO mapping dict
+builder.add_connection("source", "output", "target", "input")
+```
+
+**Recommendation**: Use `Workflow` directly with `connect()` method for consistency. The `WorkflowBuilder` has a different API that may cause confusion.
+
+## Configuration vs Runtime Parameters
+
+### Critical Distinction
+There are two types of parameters when working with nodes:
+
+1. **Configuration Parameters** - Set when adding the node to workflow
+2. **Runtime Parameters** - Passed during execution via inputs
+
+### Understanding get_parameters() Method
+
+**IMPORTANT**: The `get_parameters()` method defines ALL parameters a node can accept, both configuration AND runtime parameters. It does NOT distinguish between them - that distinction happens at the workflow level:
+
+```python
+class MyNode(Node):
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            # This could be configuration OR runtime depending on usage
+            "file_path": NodeParameter(name="file_path", type=str, required=True),
+            "data": NodeParameter(name="data", type=Any, required=False),
+            "threshold": NodeParameter(name="threshold", type=float, required=False)
+        }
+```
+
+The same parameter can be:
+- **Configuration**: Set via `add_node(..., config={...})`
+- **Runtime**: Passed via connections from other nodes
+- **Both**: Configuration provides default, runtime overrides it
+
+### How It Works in Practice
+
+```python
+# Node defines ALL possible parameters
+class FilterNode(Node):
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "data": NodeParameter(name="data", type=list, required=True),
+            "column": NodeParameter(name="column", type=str, required=True),
+            "threshold": NodeParameter(name="threshold", type=float, required=True)
+        }
+
+# Usage Option 1: All as configuration (static workflow)
+workflow.add_node("filter", FilterNode(), 
+    config={
+        "data": [{"value": 100}, {"value": 200}],  # Static data
+        "column": "value",
+        "threshold": 150
+    }
+)
+
+# Usage Option 2: Mixed (typical pattern)
+workflow.add_node("filter", FilterNode(),
+    config={
+        "column": "value",      # Configuration: which column to filter
+        "threshold": 150        # Configuration: filter threshold
+    }
+)
+# "data" comes from connection at runtime
+workflow.connect("reader", "filter", {"output": "data"})
+
+# During execution:
+# 1. Node receives config: {"column": "value", "threshold": 150}
+# 2. Node receives runtime: {"data": [...from reader...]}
+# 3. Merged inputs: {"column": "value", "threshold": 150, "data": [...]}
+```
+
+### Configuration Parameters (Static)
+These are set once when adding a node to the workflow and remain constant:
+
+```python
+# ✅ CORRECT - Configuration parameters as kwargs
+workflow.add_node("reader", CSVReaderNode(), 
+    file_path="data.csv",         # Configuration parameter
+    delimiter=",",                # Configuration parameter  
+    has_header=True              # Configuration parameter
+)
+
+workflow.add_node("llm", LLMAgentNode(),
+    provider="openai",           # Configuration parameter
+    model="gpt-4",              # Configuration parameter
+    temperature=0.7             # Configuration parameter
+)
+
+# ❌ WRONG - Don't pass runtime data as configuration
+workflow.add_node("processor", DataProcessor(),
+    data=[1, 2, 3]  # WRONG: data should come from connections
+)
+```
+
+### Runtime Parameters (Dynamic)
+These are passed between nodes during execution:
+
+```python
+# ✅ CORRECT - Runtime parameters flow through connections
+workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")
+workflow.add_node("processor", ProcessorNode())
+workflow.connect("reader", "processor", mapping={"data": "data"})  # data flows at runtime
+
+# The processor node receives 'data' as a runtime parameter:
+class ProcessorNode(Node):
+    def run(self, **kwargs):
+        data = kwargs["data"]  # Runtime parameter from connection
+        return {"processed": transform(data)}
+```
+
+### Key Rules
+
+1. **File paths, API keys, models = Configuration**
+   ```python
+   # These are configuration parameters
+   file_path="data.csv"
+   api_key="sk-..."
+   model="gpt-4"
+   base_url="https://api.example.com"
+   ```
+
+2. **Data to process = Runtime**
+   ```python
+   # These flow through connections
+   data, text, documents, records, items
+   ```
+
+3. **Node behavior settings = Configuration**
+   ```python
+   # These control HOW the node operates
+   temperature=0.7
+   max_tokens=1000
+   delimiter=","
+   chunk_size=500
+   ```
+
+4. **Processing inputs/outputs = Runtime**
+   ```python
+   # These are WHAT the node processes
+   input_text, query, prompt, response
+   ```
+
+### Common Mistake Pattern
+```python
+# ❌ WRONG - Trying to pass runtime data as configuration
+workflow.add_node("analyzer", TextAnalyzer(),
+    text="Analyze this text"  # WRONG: text should come from connections
+)
+
+# ✅ CORRECT - Runtime data flows through connections
+workflow.add_node("reader", TextReaderNode(), file_path="document.txt")
+workflow.add_node("analyzer", TextAnalyzer())
+workflow.connect("reader", "analyzer", mapping={"content": "text"})
+```
+
+### How to Identify Parameter Type
+
+Ask yourself:
+- **"Does this change between workflow runs?"** → Runtime parameter
+- **"Is this data to be processed?"** → Runtime parameter  
+- **"Does this configure HOW the node works?"** → Configuration parameter
+- **"Is this a resource location or credential?"** → Configuration parameter
+
+### Examples by Node Type
+
+#### Data Nodes
+```python
+# Configuration: WHERE to read/write
+workflow.add_node("csv", CSVReaderNode(), 
+    file_path="data.csv",      # Config: file location
+    delimiter=","              # Config: how to parse
+)
+# Runtime: WHAT data flows through
+# The actual CSV data is a runtime parameter
+```
+
+#### AI Nodes  
+```python
+# Configuration: HOW to process
+workflow.add_node("llm", LLMAgentNode(),
+    provider="openai",         # Config: which service
+    model="gpt-4",            # Config: which model
+    system_prompt="..."       # Config: behavior
+)
+# Runtime: WHAT to process
+# The actual prompt/text is a runtime parameter
+```
+
+#### API Nodes
+```python
+# Configuration: WHERE and HOW to connect
+workflow.add_node("api", HTTPRequestNode(),
+    url="https://api.example.com/endpoint",  # Config: endpoint
+    method="POST",                            # Config: HTTP method
+    headers={"Auth": "Bearer ..."}           # Config: auth
+)
+# Runtime: WHAT data to send/receive
+# The request body and response are runtime parameters
+```
+
 ## Remember: When in Doubt, Check the Registry
 
 Always refer to `api-registry.yaml` for:

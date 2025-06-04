@@ -24,15 +24,15 @@ from kailash.nodes.code import PythonCodeNode
 # Create workflow
 workflow = Workflow("my_pipeline")
 
-# Add nodes
-workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")
+# Add nodes with CONFIGURATION parameters (static settings)
+workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")  # WHERE to read
 workflow.add_node("processor", DataTransformerNode(), 
-    operations=[{"type": "filter", "condition": "age > 18"}]
+    operations=[{"type": "filter", "condition": "age > 18"}]  # HOW to process
 )
-workflow.add_node("writer", CSVWriterNode(), file_path="output.csv")
+workflow.add_node("writer", CSVWriterNode(), file_path="output.csv")  # WHERE to write
 
-# Connect nodes
-workflow.connect("reader", "processor", mapping={"data": "data"})
+# Connect nodes - RUNTIME data flows through these connections
+workflow.connect("reader", "processor", mapping={"data": "data"})  # data flows at runtime
 workflow.connect("processor", "writer", mapping={"data": "data"})
 
 # Execute with runtime (RECOMMENDED)
@@ -189,30 +189,68 @@ workflow.connect("source3", "merge", mapping={"data": "input3"})
 
 ## Execution Options
 
-### Basic Execution
+### Standard Execution Pattern
 ```python
-# Option 1: Execute through runtime
+# Always use runtime for workflow execution
 runtime = LocalRuntime()
+
+# Basic execution (no parameter overrides)
 results, run_id = runtime.execute(workflow)
 
-# Option 2: Direct execution (without runtime)
-results = workflow.execute(inputs={})
+# Execution with parameter overrides
+results, run_id = runtime.execute(
+    workflow,
+    parameters={
+        "reader": {"file_path": "custom.csv"},  # Override node config
+        "filter": {"threshold": 100}            # Runtime parameter
+    }
+)
 ```
 
-### With Initial Inputs
+### Parameters Structure
 ```python
-# Through runtime
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, inputs={
-    "initial_data": [1, 2, 3],
-    "config": {"threshold": 0.5}
+# The 'parameters' dict maps node IDs to their parameter overrides
+parameters = {
+    "node_id_1": {
+        "param1": "value1",
+        "param2": 123
+    },
+    "node_id_2": {
+        "param": "override_value"
+    }
+}
+```
+
+### Passing Initial Data to Workflows
+```python
+# Option 1: Source nodes (self-contained)
+workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
+# No external input needed
+
+# Option 2: External data injection (flexible)
+workflow.add_node("processor", DataProcessor())
+runtime.execute(workflow, parameters={
+    "processor": {"data": [1, 2, 3], "config": {...}}
 })
 
-# Direct execution
-results = workflow.execute(inputs={
-    "initial_data": [1, 2, 3],
-    "config": {"threshold": 0.5}
+# Option 3: Hybrid (source + override)
+workflow.add_node("reader", CSVReaderNode(), file_path="default.csv")
+runtime.execute(workflow, parameters={
+    "reader": {"file_path": "custom.csv"}  # Override at runtime
 })
+```
+
+### Common Execution Mistakes
+```python
+# ❌ WRONG - Using wrong parameter name
+runtime.execute(workflow, inputs={"data": [1, 2, 3]})  # Should be 'parameters'
+
+# ❌ WRONG - Passing as positional argument
+runtime.execute(workflow, {"node": {"param": "value"}})  # Must use parameters=...
+
+# ❌ WRONG - Wrong return value handling
+results = runtime.execute(workflow)  # Returns tuple (results, run_id)
+results, run_id = workflow.execute(inputs={})  # Returns only results
 ```
 
 ### Access Results
@@ -228,7 +266,7 @@ final_results = results.get("_final_outputs", {})
 ```python
 try:
     workflow.validate()  # Check workflow structure
-    results = workflow.execute(runtime)
+    results = workflow.execute(inputs={})
 except WorkflowValidationError as e:
     print(f"Workflow structure error: {e}")
 except NodeExecutionError as e:

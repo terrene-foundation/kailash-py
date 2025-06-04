@@ -70,16 +70,16 @@ class APIDemo:
         builder.add_node("LLMAgentNode", "llm", {"provider": "mock", "model": "gpt-4"})
 
         # Add connections
-        builder.add_edge("doc_source", "chunker")
-        builder.add_edge("chunker", "chunk_extractor")
-        builder.add_edge("chunk_extractor", "chunk_embedder")
-        builder.add_edge("query_source", "query_wrapper")
-        builder.add_edge("query_wrapper", "query_embedder")
-        builder.add_edge("chunk_embedder", "scorer", "chunk_embeddings")
-        builder.add_edge("query_embedder", "scorer", "query_embedding")
-        builder.add_edge("scorer", "formatter", "relevant_chunks")
-        builder.add_edge("query_source", "formatter", "query")
-        builder.add_edge("formatter", "llm")
+        builder.add_connection("doc_source", "chunker")
+        builder.add_connection("chunker", "chunk_extractor")
+        builder.add_connection("chunk_extractor", "chunk_embedder")
+        builder.add_connection("query_source", "query_wrapper")
+        builder.add_connection("query_wrapper", "query_embedder")
+        builder.add_connection("chunk_embedder", "scorer", {"embeddings": "chunk_embeddings"})
+        builder.add_connection("query_embedder", "scorer", {"embedding": "query_embedding"})
+        builder.add_connection("scorer", "formatter", {"scores": "relevant_chunks"})
+        builder.add_connection("query_source", "formatter", {"text": "query"})
+        builder.add_connection("formatter", "llm")
 
         # Set metadata
         builder.set_metadata(
@@ -114,7 +114,7 @@ class APIDemo:
         print("   Filter: > 5")
 
         try:
-            result = self.runtime.execute(workflow, test_data)
+            result = self.runtime.execute(workflow, parameters=test_data)
             if isinstance(result, tuple):
                 result = result[0]
             filtered = result.get("filter_data", {}).get("filtered_data", [])
