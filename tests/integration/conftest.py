@@ -68,7 +68,7 @@ def simple_workflow(sample_csv_file: Path, temp_data_dir: Path) -> Workflow:
     )
 
     filter_id = builder.add_node(
-        "Filter", "filter", config={"field": "value", "operator": ">", "value": 100}
+        "FilterNode", "filter", config={"field": "value", "operator": ">", "value": 100}
     )
 
     writer_id = builder.add_node(
@@ -98,7 +98,7 @@ def complex_workflow(
 
     # Add filter
     filter_id = builder.add_node(
-        "Filter", "filter", config={"field": "value", "operator": ">", "value": 150}
+        "FilterNode", "filter", config={"field": "value", "operator": ">", "value": 150}
     )
 
     # Add AI processor
@@ -196,7 +196,7 @@ def error_workflow(temp_data_dir: Path) -> Workflow:
 
     # Add a processor that will fail
     processor_id = builder.add_node(
-        "Filter",
+        "FilterNode",
         "bad_filter",
         config={"field": "value", "operator": "invalid_op", "value": 100},
     )
@@ -244,13 +244,13 @@ def parallel_workflow(temp_data_dir: Path) -> Workflow:
 
     # Parallel processing branches
     filter1_id = builder.add_node(
-        "Filter",
+        "FilterNode",
         "filter_high",
         config={"field": "value", "operator": ">", "value": 500},
     )
 
     filter2_id = builder.add_node(
-        "Filter",
+        "FilterNode",
         "filter_low",
         config={"field": "value", "operator": "<=", "value": 500},
     )
@@ -292,7 +292,7 @@ def yaml_workflow_config(temp_data_dir: Path) -> Path:
                 },
                 {
                     "id": "processor",
-                    "type": "Filter",
+                    "type": "FilterNode",
                     "inputs": {"field": "value", "operator": ">", "value": 100},
                 },
                 {
