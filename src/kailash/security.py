@@ -313,15 +313,18 @@ def validate_command_string(
 
     # Check for common injection patterns
     dangerous_patterns = [
-        r";.*rm\s",  # Command chaining with rm
-        r"\|.*>",  # Pipe to file redirect
-        r"&&.*rm",  # Logical AND with rm
+        r";",  # Command chaining
+        r"&&",  # Logical AND command chaining
+        r"\|\|",  # Logical OR command chaining
+        r"\|",  # Pipe operations
         r"\$\(",  # Command substitution
         r"`.*`",  # Backtick command substitution
         r">\s*/dev/",  # Redirect to devices
         r"<.*>",  # Input/output redirection
         r"\beval\b",  # eval command
         r"\bexec\b",  # exec command
+        r"rm\s+.*(\/|\*)",  # rm with dangerous paths
+        r"cat\s+\/etc\/",  # reading system files
     ]
 
     for pattern in dangerous_patterns:
