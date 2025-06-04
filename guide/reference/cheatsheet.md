@@ -1,5 +1,12 @@
 # Kailash SDK Quick Reference Cheatsheet
 
+## Quick Links to Resources
+- **[Node Catalog](node-catalog.md)** - All 66 available nodes with parameters
+- **[Pattern Library](pattern-library.md)** - Common workflow patterns and best practices
+- **[Templates](templates/)** - Ready-to-use code templates
+- **[API Registry](api-registry.yaml)** - Complete API reference
+- **[Validation Guide](validation-guide.md)** - Avoid common mistakes
+
 ## Installation
 ```bash
 pip install kailash
