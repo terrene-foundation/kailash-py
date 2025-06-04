@@ -191,7 +191,7 @@ class CSVWriterNode(Node):
             - External tools can process output
             - Metrics available for monitoring
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         data = kwargs["data"]
         headers = kwargs.get("headers")
         delimiter = kwargs.get("delimiter", ",")
@@ -361,7 +361,7 @@ class JSONWriterNode(Node):
             - Version control can track
             - APIs can import data
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         data = kwargs["data"]
         indent = kwargs.get("indent", 2)
 
@@ -524,7 +524,7 @@ class TextWriterNode(Node):
             - Log analyzers can process
             - Metrics available for monitoring
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         text = kwargs["text"]
         encoding = kwargs.get("encoding", "utf-8")
         append = kwargs.get("append", False)

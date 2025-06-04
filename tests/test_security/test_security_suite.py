@@ -172,15 +172,15 @@ class TestDataNodeSecurity:
             set_security_config(config)
 
             try:
-                # Valid path should work
+                # Valid path should work - configure file_path
                 reader = CSVReaderNode(file_path=str(csv_file))
                 result = reader.run()
                 assert "data" in result
 
-                # Invalid path should be blocked
+                # Invalid path should be blocked during execution
                 with pytest.raises(PathTraversalError):
-                    reader_bad = CSVReaderNode()
-                    reader_bad.run(file_path="../../../etc/passwd")
+                    reader_bad = CSVReaderNode(file_path="../../../etc/passwd")
+                    reader_bad.run()
             finally:
                 # Reset to default config
                 set_security_config(SecurityConfig())
@@ -196,15 +196,15 @@ class TestDataNodeSecurity:
             set_security_config(config)
 
             try:
-                # Valid path should work
+                # Valid path should work - configure file_path
                 reader = JSONReaderNode(file_path=str(json_file))
                 result = reader.run()
                 assert "data" in result
 
-                # Invalid path should be blocked
+                # Invalid path should be blocked during execution
                 with pytest.raises(PathTraversalError):
-                    reader_bad = JSONReaderNode()
-                    reader_bad.run(file_path="../../etc/shadow")
+                    reader_bad = JSONReaderNode(file_path="../../etc/shadow")
+                    reader_bad.run()
             finally:
                 set_security_config(SecurityConfig())
 
@@ -215,18 +215,16 @@ class TestDataNodeSecurity:
             set_security_config(config)
 
             try:
-                # Valid write should work
+                # Valid write should work - configure file_path
                 output_file = Path(temp_dir) / "output.csv"
                 writer = CSVWriterNode(file_path=str(output_file))
                 result = writer.run(data=[{"name": "John", "age": 30}])
                 assert "rows_written" in result
 
-                # Invalid write path should be blocked
+                # Invalid write path should be blocked during execution
                 with pytest.raises(PathTraversalError):
-                    writer_bad = CSVWriterNode()
-                    writer_bad.run(
-                        file_path="../../../tmp/malicious.csv", data=[{"name": "evil"}]
-                    )
+                    writer_bad = CSVWriterNode(file_path="../../../tmp/malicious.csv")
+                    writer_bad.run(data=[{"name": "evil"}])
             finally:
                 set_security_config(SecurityConfig())
 
@@ -308,7 +306,9 @@ result = user_input + " processed"
         # The sanitization removes dangerous punctuation but may leave some text
         # Key is that it can't be executed as code due to removed quotes/semicolons
         assert ";" not in result_str  # Semicolon should be removed
-        assert "rm -rf /" in result_str  # But the text content remains (just not executable)
+        assert (
+            "rm -rf /" in result_str
+        )  # But the text content remains (just not executable)
 
     def test_builtin_function_restriction(self):
         """Test restriction of dangerous builtin functions."""
@@ -339,11 +339,11 @@ class TestCommandInjectionPrevention:
         # Test that dangerous commands are properly detected and raise exceptions
         dangerous_commands = [
             "ls -la; rm -rf /",
-            "echo hello && cat /etc/passwd", 
+            "echo hello && cat /etc/passwd",
             "$(cat /etc/shadow)",
-            "`whoami`"
+            "`whoami`",
         ]
-        
+
         for cmd in dangerous_commands:
             # Due to some pytest interaction issue, test by catching the exception directly
             try:
@@ -354,7 +354,9 @@ class TestCommandInjectionPrevention:
                 # This is expected - the dangerous command was detected
                 pass
             except Exception as e:
-                pytest.fail(f"Unexpected exception for command {cmd}: {type(e).__name__}: {e}")
+                pytest.fail(
+                    f"Unexpected exception for command {cmd}: {type(e).__name__}: {e}"
+                )
 
     def test_safe_command_allowed(self):
         """Test that safe commands are allowed."""

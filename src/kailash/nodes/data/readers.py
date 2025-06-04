@@ -246,7 +246,7 @@ class CSVReaderNode(Node):
             - Analyzers can process row-by-row
             - data_indexed is useful for lookups and joins
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         headers = kwargs.get("headers", True)
         delimiter = kwargs.get("delimiter", ",")
         index_column = kwargs.get("index_column")
@@ -406,7 +406,7 @@ class JSONReaderNode(Node):
             - Compatible with JSONWriter for round-trip
             - Transform nodes can process nested data
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
 
         # Validate file path for security
         validated_path = validate_file_path(file_path, operation="JSON read")
@@ -547,7 +547,7 @@ class TextReaderNode(Node):
             - Pattern nodes can search content
             - Writers can save processed text
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         encoding = kwargs.get("encoding", "utf-8")
 
         # Validate file path for security

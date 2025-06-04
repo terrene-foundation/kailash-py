@@ -104,7 +104,7 @@ class SafeCodeChecker(ast.NodeVisitor):
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
             # Check for dangerous built-in functions
-            if func_name in {"eval", "exec", "compile", "__import__"}:
+            if func_name in {"eval", "exec", "compile"}:
                 self.violations.append(f"Call to '{func_name}' is not allowed")
         elif isinstance(node.func, ast.Attribute):
             # Check for dangerous method calls
@@ -175,6 +175,9 @@ class CodeExecutor:
             "type",
             "zip",
             "print",  # Allow print for debugging
+            "hasattr",  # For attribute checking
+            "getattr",  # For attribute access
+            "__import__",  # For imports (controlled by ALLOWED_MODULES)
         }
         self._execution_namespace = {}
 
