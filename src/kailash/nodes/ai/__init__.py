@@ -1,5 +1,7 @@
 """AI and ML nodes for the Kailash SDK."""
 
+# Import A2A communication nodes
+from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from .agents import ChatAgent, FunctionCallingAgent, PlanningAgent, RetrievalAgent
 
 # Import from unified ai_providers module
@@ -14,6 +16,15 @@ from .ai_providers import (
     get_provider,
 )
 from .embedding_generator import EmbeddingGeneratorNode
+
+# Import intelligent orchestration nodes
+from .intelligent_agent_orchestrator import (
+    ConvergenceDetectorNode,
+    IntelligentCacheNode,
+    MCPAgentNode,
+    OrchestrationManagerNode,
+    QueryAnalysisNode,
+)
 from .llm_agent import LLMAgentNode
 from .models import (
     ModelPredictor,
@@ -24,9 +35,6 @@ from .models import (
     TextSummarizer,
 )
 
-# Import A2A communication nodes
-from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
-
 # Import self-organizing nodes
 from .self_organizing import (
     AgentPoolManagerNode,
@@ -34,15 +42,6 @@ from .self_organizing import (
     SelfOrganizingAgentNode,
     SolutionEvaluatorNode,
     TeamFormationNode,
-)
-
-# Import intelligent orchestration nodes
-from .intelligent_agent_orchestrator import (
-    ConvergenceDetectorNode,
-    IntelligentCacheNode,
-    MCPAgentNode,
-    OrchestrationManagerNode,
-    QueryAnalysisNode,
 )
 
 __all__ = [

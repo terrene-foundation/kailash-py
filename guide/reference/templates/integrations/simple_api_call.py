@@ -6,12 +6,13 @@ Use Case: Fetching data from external APIs
 This template shows how to use HTTP nodes for API integration.
 """
 
-from kailash.workflow.graph import Workflow
+import os
+from typing import Any, Dict
+
 from kailash.nodes.api.http import HTTPRequestNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.writers import JSONWriterNode
-from typing import Dict, Any
-import os
+from kailash.workflow.graph import Workflow
 
 # Configuration
 API_URL = "https://api.example.com/data"  # Replace with your API

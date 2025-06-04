@@ -9,13 +9,14 @@ Customization Points:
 - MERGE_STRATEGY: How to combine results from different paths
 """
 
-from kailash.workflow import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data.readers import JSONReaderNode
-from kailash.nodes.logic.operations import SwitchNode, MergeNode
+from typing import Any, Dict, List
+
 from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.data.readers import JSONReaderNode
 from kailash.nodes.data.writers import JSONWriterNode
-from typing import Dict, Any, List
+from kailash.nodes.logic.operations import MergeNode, SwitchNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
 
 # Configuration (customize these)
 INPUT_FILE = "data/customers.json"

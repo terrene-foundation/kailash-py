@@ -6,14 +6,15 @@ Use Case: Process data differently based on status or category
 Based on actual working examples from the SDK.
 """
 
-from kailash.workflow.graph import Workflow
+import json
+import os
+from typing import Any, Dict, List
+
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import JSONReaderNode
 from kailash.nodes.data.writers import JSONWriterNode
 from kailash.nodes.logic.operations import SwitchNode
-from kailash.nodes.code.python import PythonCodeNode
-from typing import Dict, Any, List
-import os
-import json
+from kailash.workflow.graph import Workflow
 
 # Configuration
 INPUT_FILE = "data/items.json"

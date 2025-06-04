@@ -4,9 +4,9 @@ Test script to validate template structure and imports.
 This doesn't run the workflows but checks they can be imported.
 """
 
+import importlib.util
 import os
 import sys
-import importlib.util
 from pathlib import Path
 
 

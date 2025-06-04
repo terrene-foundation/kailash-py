@@ -6,13 +6,14 @@ This is a minimal version that demonstrates the core concepts
 without requiring external dependencies.
 """
 
+import asyncio
 import json
+import time
+from typing import Any, Dict, List
+
+import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import HTMLResponse
-import uvicorn
-from typing import Dict, List, Any
-import asyncio
-import time
 
 # Create the demo app
 app = FastAPI(

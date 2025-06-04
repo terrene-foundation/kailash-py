@@ -5,11 +5,12 @@ This example automatically detects available Ollama models and adapts
 the multi-agent system to use what's installed.
 """
 
-import subprocess
 import json
-from typing import List, Dict
+import subprocess
+from typing import Dict, List
+
 from kailash import Workflow
-from kailash.nodes.ai import A2AAgentNode, SharedMemoryPoolNode, A2ACoordinatorNode
+from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from kailash.runtime import LocalRuntime
 
 

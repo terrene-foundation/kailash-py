@@ -10,9 +10,10 @@ Customization Points:
 - get_output_schema(): Define output validation (optional)
 """
 
-from kailash.nodes.base import Node
-from typing import Dict, Any, List, Optional
 import logging
+from typing import Any, Dict, List, Optional
+
+from kailash.nodes.base import Node
 
 # Set up logging for your node
 logger = logging.getLogger(__name__)
@@ -302,8 +303,8 @@ class MyCustomNode(Node):
 
 # Example usage in a workflow
 if __name__ == "__main__":
-    from kailash.workflow import Workflow
     from kailash.runtime.local import LocalRuntime
+    from kailash.workflow import Workflow
 
     # Create workflow
     workflow = Workflow()

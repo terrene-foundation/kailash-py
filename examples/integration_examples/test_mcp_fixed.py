@@ -16,12 +16,12 @@ def test_imports():
 
     try:
         # Import the fixed implementation
-        from mcp_ecosystem_fixed import SimpleMCPGateway, MCPServerRegistry
+        from mcp_ecosystem_fixed import MCPServerRegistry, SimpleMCPGateway
 
         # Import required Kailash components
         from kailash.api.gateway import WorkflowAPIGateway
-        from kailash.workflow import Workflow
         from kailash.nodes.code.python import PythonCodeNode
+        from kailash.workflow import Workflow
 
         print("✓ All imports successful")
         return True
@@ -67,8 +67,8 @@ def test_workflow_creation():
     print("\nTesting workflow creation...")
 
     try:
-        from kailash.workflow import Workflow
         from kailash.nodes.code.python import PythonCodeNode
+        from kailash.workflow import Workflow
 
         # Create workflow with required parameters
         workflow = Workflow(workflow_id="test_workflow", name="Test Workflow")
@@ -97,8 +97,9 @@ def test_mcp_registry():
     print("\nTesting MCP registry...")
 
     try:
-        from mcp_ecosystem_fixed import MCPServerRegistry
         import asyncio
+
+        from mcp_ecosystem_fixed import MCPServerRegistry
 
         async def test_async():
             registry = MCPServerRegistry()

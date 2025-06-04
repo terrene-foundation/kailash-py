@@ -8,17 +8,18 @@ This is a corrected version that works with the actual Kailash SDK API.
 import asyncio
 import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-import uvicorn
 
 from kailash.api.gateway import WorkflowAPIGateway
 from kailash.api.mcp_integration import MCPIntegration, MCPToolNode
-from kailash.nodes.mcp.client import MCPClient
 from kailash.nodes.base import Node, NodeParameter
-from kailash.workflow import Workflow
+from kailash.nodes.mcp.client import MCPClient
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -252,8 +253,8 @@ result = {
 
             elif workflow_id == "data-pipeline":
                 # Create data pipeline workflow
-                from kailash.nodes.data.readers import CSVReaderNode
                 from kailash.nodes.code.python import PythonCodeNode
+                from kailash.nodes.data.readers import CSVReaderNode
                 from kailash.nodes.data.writers import JSONWriterNode
 
                 workflow = Workflow(

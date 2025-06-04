@@ -6,12 +6,13 @@ Use Case: Simple data processing from CSV to JSON
 This is a minimal template to get started quickly.
 """
 
-from kailash.workflow.graph import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data.readers import CSVReaderNode
+from typing import Any, Dict, List
+
 from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import JSONWriterNode
-from typing import Dict, Any, List
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.graph import Workflow
 
 # Configuration
 INPUT_FILE = "data/input.csv"

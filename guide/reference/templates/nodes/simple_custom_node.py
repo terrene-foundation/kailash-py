@@ -6,8 +6,9 @@ Use Case: When you need custom processing logic
 This template shows the essential parts of a custom node.
 """
 
+from typing import Any, Dict
+
 from kailash.nodes.base import Node, NodeParameter
-from typing import Dict, Any
 
 
 class MyCustomNode(Node):
