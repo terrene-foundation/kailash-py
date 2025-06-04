@@ -7,8 +7,8 @@ flowchart LR
     input_data([Input Data])
 
     %% Data Input nodes
-    csv_reader["CSVReaderNode<br/>csv_reader"]
-    json_reader["JSONReaderNode<br/>json_reader"]
+    csv_reader["CSVReader<br/>csv_reader"]
+    json_reader["JSONReader<br/>json_reader"]
 
     %% Processing nodes
     data_joiner["PythonCode<br/>data_joiner"]
@@ -17,8 +17,8 @@ flowchart LR
     aggregator["PythonCode<br/>aggregator"]
 
     %% Data Output nodes
-    csv_writer["CSVWriterNode<br/>csv_writer"]
-    json_writer["JSONWriterNode<br/>json_writer"]
+    csv_writer["CSVWriter<br/>csv_writer"]
+    json_writer["JSONWriter<br/>json_writer"]
 
     %% Output Data
     output_data([Output Data])

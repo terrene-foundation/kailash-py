@@ -13,6 +13,7 @@ This section contains various examples demonstrating how to use the Kailash Pyth
    advanced
    integrations
    patterns
+   mcp_ecosystem
 
 For the complete collection of runnable examples, visit the
 `examples directory <https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_

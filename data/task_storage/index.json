@@ -62,6 +62,13 @@
       "status": "pending",
       "started_at": null,
       "ended_at": null
+    },
+    "4d130004-8146-4fab-b2c2-c0237f8cfa9c": {
+      "run_id": "7779fe9d-3fda-43dc-927c-9311972ec15c",
+      "node_id": "persistent_node",
+      "status": "pending",
+      "started_at": null,
+      "ended_at": null
     }
   },
   "runs": {}
