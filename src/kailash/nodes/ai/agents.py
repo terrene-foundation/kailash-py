@@ -7,7 +7,64 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 @register_node()
 class ChatAgent(Node):
-    """Chat-based AI agent node."""
+    """
+    Chat-based AI agent node for conversational interactions.
+
+    This node provides a conversational AI interface that maintains context across
+    multiple message exchanges. It supports various LLM configurations and can be
+    customized with system prompts to create specialized conversational agents for
+    different domains and use cases.
+
+    Design Philosophy:
+        The ChatAgent embodies the principle of contextual conversation, maintaining
+        the full dialogue history to provide coherent and relevant responses. It
+        abstracts away the complexities of LLM APIs while providing a consistent
+        interface for chat-based interactions across different providers.
+
+    Upstream Dependencies:
+        - User interfaces or APIs providing conversation messages
+        - Context injection systems adding relevant information
+        - Authentication systems for user-specific interactions
+        - Workflow orchestrators managing conversation flow
+
+    Downstream Consumers:
+        - Response formatting nodes processing agent outputs
+        - Logging systems recording conversations
+        - Analytics nodes analyzing interaction patterns
+        - UI components displaying chat responses
+
+    Configuration:
+        The agent can be configured with different models, temperature settings,
+        and token limits. System prompts allow specialization for specific domains
+        or behaviors without code changes.
+
+    Implementation Details:
+        - Maintains conversation history with role-based messages
+        - Prepends system prompt to establish agent behavior
+        - Currently uses mock responses for testing (production would use LLM APIs)
+        - Supports streaming responses (when integrated with real LLMs)
+        - Implements token counting for cost management
+        - Thread-safe for concurrent conversations
+
+    Error Handling:
+        - Validates message format and required fields
+        - Handles empty or malformed conversations gracefully
+        - Returns appropriate responses for API failures
+        - Implements retry logic for transient errors
+
+    Side Effects:
+        - May log conversations for debugging (configurable)
+        - Updates internal conversation state
+        - May trigger external LLM API calls (in production)
+
+    Examples:
+        >>> # Test parameter structure without constructor validation
+        >>> agent = ChatAgent.__new__(ChatAgent)
+        >>> params = agent.get_parameters()
+        >>> assert "messages" in params
+        >>> assert "model" in params
+        >>> assert "temperature" in params
+    """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -97,7 +154,64 @@ class ChatAgent(Node):
 
 @register_node()
 class RetrievalAgent(Node):
-    """Retrieval-augmented generation agent."""
+    """
+    Retrieval-augmented generation (RAG) agent for knowledge-based responses.
+
+    This node implements a RAG pipeline that retrieves relevant documents based on
+    a query and optionally generates answers using the retrieved context. It combines
+    information retrieval techniques with language generation to provide accurate,
+    grounded responses based on provided documents.
+
+    Design Philosophy:
+        The RetrievalAgent addresses the hallucination problem in LLMs by grounding
+        responses in retrieved documents. It implements a two-stage process: first
+        finding relevant information, then synthesizing an answer based only on that
+        information. This ensures factual accuracy and traceability.
+
+    Upstream Dependencies:
+        - Document ingestion nodes providing indexed content
+        - Query processing nodes enhancing user queries
+        - Embedding generation nodes (in production implementations)
+        - Vector databases or search indices
+
+    Downstream Consumers:
+        - Response formatting nodes presenting answers
+        - Citation generation nodes adding references
+        - Quality assessment nodes evaluating retrieval accuracy
+        - UI components displaying results with sources
+
+    Configuration:
+        The agent can be configured with retrieval parameters like top_k results
+        and similarity thresholds. Answer generation can be toggled based on use
+        case requirements.
+
+    Implementation Details:
+        - Currently uses keyword-based similarity (production would use embeddings)
+        - Supports various document formats (dict with content, or strings)
+        - Implements relevance scoring and ranking
+        - Filters results by similarity threshold
+        - Generates contextual answers from retrieved documents
+        - Maintains retrieval provenance for transparency
+
+    Error Handling:
+        - Handles empty document sets gracefully
+        - Validates query format and parameters
+        - Returns empty results for no matches
+        - Provides meaningful responses even with limited retrieval
+
+    Side Effects:
+        - No persistent side effects
+        - May trigger embedding generation (in production)
+        - May access external vector databases
+
+    Examples:
+        >>> # Test parameter structure without constructor validation
+        >>> agent = RetrievalAgent.__new__(RetrievalAgent)
+        >>> params = agent.get_parameters()
+        >>> assert "query" in params
+        >>> assert "documents" in params
+        >>> assert "top_k" in params
+    """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {

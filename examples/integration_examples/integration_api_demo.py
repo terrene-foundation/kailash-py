@@ -75,8 +75,12 @@ class APIDemo:
         builder.add_connection("chunk_extractor", "chunk_embedder")
         builder.add_connection("query_source", "query_wrapper")
         builder.add_connection("query_wrapper", "query_embedder")
-        builder.add_connection("chunk_embedder", "scorer", {"embeddings": "chunk_embeddings"})
-        builder.add_connection("query_embedder", "scorer", {"embedding": "query_embedding"})
+        builder.add_connection(
+            "chunk_embedder", "scorer", {"embeddings": "chunk_embeddings"}
+        )
+        builder.add_connection(
+            "query_embedder", "scorer", {"embedding": "query_embedding"}
+        )
         builder.add_connection("scorer", "formatter", {"scores": "relevant_chunks"})
         builder.add_connection("query_source", "formatter", {"text": "query"})
         builder.add_connection("formatter", "llm")

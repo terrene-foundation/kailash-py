@@ -17,12 +17,69 @@ class BaseAIProvider(ABC):
 
     This abstract class defines the common interface and shared functionality
     for providers that may support LLM operations, embedding operations, or both.
+    It establishes a unified pattern for provider initialization, capability
+    detection, and error handling across different AI services.
 
     Design Philosophy:
-    - Single source of truth for provider availability
-    - Shared client management and initialization
-    - Common error handling patterns
-    - Flexible support for providers with different capabilities
+        The BaseAIProvider follows the principle of "capability-based architecture"
+        where providers declare their capabilities explicitly. This allows for
+        flexible provider implementations that may support chat, embeddings, or
+        both, while maintaining a consistent interface. The design promotes:
+        - Single source of truth for provider availability
+        - Shared client management and initialization
+        - Common error handling patterns
+        - Flexible support for providers with different capabilities
+
+    Upstream Dependencies:
+        - Configuration systems providing API keys and credentials
+        - Environment variable loaders for secure credential management
+        - Package managers ensuring required dependencies
+        - Network infrastructure for API access
+
+    Downstream Consumers:
+        - LLMAgentNode: Uses chat capabilities for conversational AI
+        - EmbeddingGeneratorNode: Uses embedding capabilities for vector generation
+        - Provider selection logic choosing appropriate implementations
+        - Error handling systems catching provider-specific exceptions
+
+    Configuration:
+        Each provider implementation handles its own configuration needs,
+        typically through environment variables or explicit parameters.
+        Common patterns include API keys, endpoints, and model selections.
+
+    Implementation Details:
+        - Lazy initialization of clients to avoid unnecessary connections
+        - Cached availability checks to reduce repeated validation
+        - Capability dictionary for runtime feature detection
+        - Abstract methods enforce implementation of core functionality
+        - Thread-safe design for concurrent usage
+
+    Error Handling:
+        - Provider availability checked before operations
+        - Graceful degradation when providers are unavailable
+        - Standardized error responses across different providers
+        - Detailed error messages for debugging
+
+    Side Effects:
+        - May establish network connections to AI services
+        - May consume API quotas during availability checks
+        - Caches client instances for performance
+
+    Examples:
+        >>> # Provider implementation
+        >>> class MyProvider(BaseAIProvider):
+        ...     def __init__(self):
+        ...         super().__init__()
+        ...         self._capabilities = {"chat": True, "embeddings": False}
+        ...
+        ...     def is_available(self) -> bool:
+        ...         # Check API key, dependencies, etc.
+        ...         return True
+        >>>
+        >>> provider = MyProvider()
+        >>> assert provider.supports_chat() == True
+        >>> assert provider.supports_embeddings() == False
+        >>> assert provider.is_available() == True
     """
 
     def __init__(self):
@@ -70,8 +127,78 @@ class LLMProvider(BaseAIProvider):
     """
     Abstract base class for providers that support LLM chat operations.
 
-    Providers that support chat operations should inherit from this class
-    and implement the chat() method.
+    This class extends BaseAIProvider to define the interface for language model
+    providers. It ensures consistent chat operation interfaces across different
+    LLM services while allowing provider-specific optimizations and features.
+
+    Design Philosophy:
+        LLMProvider standardizes the chat interface while preserving flexibility
+        for provider-specific features. It follows the OpenAI message format as
+        the de facto standard, enabling easy switching between providers. The
+        design supports both simple completions and advanced features like
+        streaming, function calling, and custom parameters.
+
+    Upstream Dependencies:
+        - BaseAIProvider: Inherits core provider functionality
+        - Message formatting systems preparing chat inputs
+        - Token counting utilities for cost management
+        - Rate limiting systems managing API quotas
+
+    Downstream Consumers:
+        - LLMAgentNode: Primary consumer for chat operations
+        - ChatAgent: Uses for conversational interactions
+        - A2AAgentNode: Leverages for agent communication
+        - Response processing nodes handling outputs
+
+    Configuration:
+        Provider-specific parameters are passed through kwargs, allowing:
+        - Model selection (model parameter)
+        - Temperature and sampling parameters
+        - Token limits and stop sequences
+        - Provider-specific features (tools, functions, etc.)
+
+    Implementation Details:
+        - Standardized message format: List[Dict[str, str]]
+        - Messages contain 'role' and 'content' fields minimum
+        - Supports system, user, and assistant roles
+        - Response format standardized across providers
+        - Streaming support through callbacks (implementation-specific)
+
+    Error Handling:
+        - Invalid message format validation
+        - API error standardization
+        - Rate limit handling with retry guidance
+        - Token limit exceeded handling
+        - Network error recovery strategies
+
+    Side Effects:
+        - API calls consume tokens/credits
+        - May log conversations for debugging
+        - Updates internal usage metrics
+        - May trigger rate limiting
+
+    Examples:
+        >>> class MyLLMProvider(LLMProvider):
+        ...     def is_available(self) -> bool:
+        ...         return True  # Check actual availability
+        ...
+        ...     def chat(self, messages, **kwargs):
+        ...         # Simulate LLM response
+        ...         return {
+        ...             "success": True,
+        ...             "content": "Response to: " + messages[-1]["content"],
+        ...             "model": kwargs.get("model", "default"),
+        ...             "usage": {"prompt_tokens": 10, "completion_tokens": 5}
+        ...         }
+        >>>
+        >>> provider = MyLLMProvider()
+        >>> messages = [
+        ...     {"role": "system", "content": "You are helpful."},
+        ...     {"role": "user", "content": "Hello!"}
+        ... ]
+        >>> response = provider.chat(messages, model="gpt-4")
+        >>> assert response["success"] == True
+        >>> assert "content" in response
     """
 
     def __init__(self):
@@ -97,8 +224,79 @@ class EmbeddingProvider(BaseAIProvider):
     """
     Abstract base class for providers that support embedding generation.
 
-    Providers that support embedding operations should inherit from this class
-    and implement the embed() and get_model_info() methods.
+    This class extends BaseAIProvider to define the interface for embedding
+    providers. It standardizes how text is converted to vector representations
+    across different embedding services while supporting provider-specific
+    optimizations and model configurations.
+
+    Design Philosophy:
+        EmbeddingProvider abstracts the complexity of different embedding models
+        and services behind a simple, consistent interface. It handles batching,
+        dimension management, and normalization while allowing providers to
+        optimize for their specific architectures. The design supports both
+        sentence and document embeddings with appropriate chunking strategies.
+
+    Upstream Dependencies:
+        - BaseAIProvider: Inherits core provider functionality
+        - Text preprocessing nodes preparing embedding inputs
+        - Chunking strategies for long documents
+        - Tokenization utilities for size management
+
+    Downstream Consumers:
+        - EmbeddingGeneratorNode: Primary consumer for vector generation
+        - Vector databases storing embeddings
+        - Similarity search implementations
+        - Clustering and classification systems
+
+    Configuration:
+        Provider-specific parameters include:
+        - Model selection for different embedding sizes/qualities
+        - Batch size limits for efficiency
+        - Normalization preferences
+        - Dimension specifications
+
+    Implementation Details:
+        - Batch processing for efficiency
+        - Automatic text truncation/chunking for model limits
+        - Vector normalization options
+        - Dimension validation and consistency
+        - Cache-friendly operations for repeated texts
+
+    Error Handling:
+        - Empty text handling
+        - Text length validation
+        - Batch size limit enforcement
+        - Model availability checking
+        - Dimension mismatch detection
+
+    Side Effects:
+        - API calls consume embedding quotas
+        - May cache embeddings for efficiency
+        - Updates usage metrics
+        - May trigger rate limiting
+
+    Examples:
+        >>> class MyEmbeddingProvider(EmbeddingProvider):
+        ...     def is_available(self) -> bool:
+        ...         return True
+        ...
+        ...     def embed(self, texts, **kwargs):
+        ...         # Simulate embedding generation
+        ...         return [[0.1, 0.2, 0.3] for _ in texts]
+        ...
+        ...     def get_model_info(self):
+        ...         return {
+        ...             "name": "my-embedding-model",
+        ...             "dimensions": 3,
+        ...             "max_tokens": 512
+        ...         }
+        >>>
+        >>> provider = MyEmbeddingProvider()
+        >>> embeddings = provider.embed(["Hello", "World"])
+        >>> assert len(embeddings) == 2
+        >>> assert len(embeddings[0]) == 3
+        >>> info = provider.get_model_info()
+        >>> assert info["dimensions"] == 3
     """
 
     def __init__(self):

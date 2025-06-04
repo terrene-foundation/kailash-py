@@ -57,33 +57,114 @@ class HTTPResponse(BaseModel):
 
 @register_node()
 class HTTPRequestNode(Node):
-    """Enhanced node for making HTTP requests to external APIs.
+    """
+    Enhanced node for making HTTP requests to external APIs.
 
-    This node provides a flexible interface for making HTTP requests with support for:
-        * All common HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
-        * Multiple authentication methods (Bearer, Basic, API Key, OAuth2)
-        * JSON, form, and multipart request bodies
-        * Custom headers and query parameters
-        * Response parsing (JSON, text, binary)
-        * Error handling and retries with recovery suggestions
-        * Rate limiting support
-        * Request/response logging
+    This node provides a comprehensive HTTP client with enterprise-grade features for
+    integrating external APIs into Kailash workflows. It supports all common HTTP
+    operations with built-in authentication, error handling, and response parsing,
+    making it the foundation for API integration in the SDK.
 
-    Design Purpose:
-        * Enable workflow integration with external HTTP APIs
-        * Provide a consistent interface for HTTP operations
-        * Support common authentication patterns
-        * Handle response parsing and error handling
-        * Offer enterprise-grade features like rate limiting
+    Design Philosophy:
+        The HTTPRequestNode embodies the principle of "API integration made simple."
+        It abstracts the complexity of HTTP operations behind a clean interface while
+        providing advanced features when needed. The design prioritizes flexibility,
+        reliability, and ease of use, supporting everything from simple REST calls
+        to complex authentication flows and multipart uploads.
 
-    Upstream Usage:
-        * Workflow: Creates and configures node for API integration
-        * Specialized API nodes: May extend this node for specific APIs
+    Upstream Dependencies:
+        - Workflow orchestrators configuring API endpoints
+        - Authentication nodes providing credentials
+        - Configuration systems supplying API settings
+        - Data transformation nodes preparing request payloads
+        - Rate limiting controllers managing API quotas
 
     Downstream Consumers:
-        * Data processing nodes: Consume API response data
-        * Decision nodes: Route workflow based on API responses
-        * Custom nodes: Process API-specific data formats
+        - Data processing nodes consuming API responses
+        - Decision nodes routing based on HTTP status
+        - Error handling nodes managing failures
+        - Caching nodes storing API results
+        - Analytics nodes tracking API usage
+
+    Configuration:
+        The node supports extensive configuration options:
+        - URL with template variable support
+        - All standard HTTP methods
+        - Custom headers and query parameters
+        - Multiple body formats (JSON, form, multipart)
+        - Authentication methods (Bearer, Basic, API Key, OAuth2)
+        - Timeout and retry settings
+        - Response format preferences
+
+    Implementation Details:
+        - Uses requests library for synchronous operations
+        - Automatic response format detection based on Content-Type
+        - Built-in JSON parsing with error handling
+        - Support for binary responses (files, images)
+        - Connection pooling for performance
+        - Comprehensive error messages with recovery hints
+        - Optional request/response logging
+        - Metrics collection for monitoring
+
+    Error Handling:
+        - Connection errors with retry suggestions
+        - Timeout handling with configurable limits
+        - HTTP error status codes with detailed messages
+        - JSON parsing errors with fallback to text
+        - Authentication failures with setup guidance
+        - Rate limit detection and backoff
+
+    Side Effects:
+        - Makes external HTTP requests
+        - May consume API rate limits
+        - Logs requests/responses when enabled
+        - Updates internal metrics
+        - May modify external resources (POST/PUT/DELETE)
+
+    Examples:
+        >>> # Simple GET request
+        >>> node = HTTPRequestNode()
+        >>> result = node.run(
+        ...     url="https://api.example.com/users",
+        ...     method="GET",
+        ...     headers={"Accept": "application/json"}
+        ... )
+        >>> assert result["status_code"] == 200
+        >>> assert isinstance(result["content"], dict)
+        >>>
+        >>> # POST request with JSON body
+        >>> result = node.run(
+        ...     url="https://api.example.com/users",
+        ...     method="POST",
+        ...     json_data={"name": "John", "email": "john@example.com"},
+        ...     headers={"Authorization": "Bearer token123"}
+        ... )
+        >>> assert result["status_code"] in [200, 201]
+        >>> assert result["headers"]["content-type"].startswith("application/json")
+        >>>
+        >>> # Form data submission
+        >>> result = node.run(
+        ...     url="https://api.example.com/form",
+        ...     method="POST",
+        ...     data={"field1": "value1", "field2": "value2"},
+        ...     headers={"Content-Type": "application/x-www-form-urlencoded"}
+        ... )
+        >>>
+        >>> # File upload with multipart
+        >>> result = node.run(
+        ...     url="https://api.example.com/upload",
+        ...     method="POST",
+        ...     files={"file": ("data.csv", b"col1,col2\\n1,2", "text/csv")},
+        ...     data={"description": "Sample data"}
+        ... )
+        >>>
+        >>> # Error handling example
+        >>> result = node.run(
+        ...     url="https://api.example.com/protected",
+        ...     method="GET"
+        ... )
+        >>> if result["status_code"] == 401:
+        ...     print("Authentication required")
     """
 
     def __init__(self, **kwargs):

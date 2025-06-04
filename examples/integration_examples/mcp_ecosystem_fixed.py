@@ -8,17 +8,18 @@ This is a corrected version that works with the actual Kailash SDK API.
 import asyncio
 import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-import uvicorn
 
 from kailash.api.gateway import WorkflowAPIGateway
 from kailash.api.mcp_integration import MCPIntegration, MCPToolNode
-from kailash.nodes.mcp.client import MCPClient
 from kailash.nodes.base import Node, NodeParameter
-from kailash.workflow import Workflow
+from kailash.nodes.mcp.client import MCPClient
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,15 +27,15 @@ logger = logging.getLogger(__name__)
 
 class MCPServerRegistry:
     """Registry for MCP servers with discovery capabilities"""
-    
+
     def __init__(self):
         self.servers: Dict[str, Dict] = {}
         self.clients: Dict[str, MCPClient] = {}
-        
+
     async def register_server(self, server_id: str, config: Dict[str, Any]):
         """Register an MCP server"""
         logger.info(f"Registering MCP server: {server_id}")
-        
+
         # Create client
         client = MCPClient(
             server_config={
@@ -42,10 +43,10 @@ class MCPServerRegistry:
                 "transport": config.get("transport", "stdio"),
                 "command": config.get("command"),
                 "args": config.get("args", []),
-                "env": config.get("env", {})
+                "env": config.get("env", {}),
             }
         )
-        
+
         # Since we're using mock implementation, simulate discovery
         mock_tools = [
             {
@@ -55,10 +56,10 @@ class MCPServerRegistry:
                     "type": "object",
                     "properties": {
                         "repo": {"type": "string"},
-                        "state": {"type": "string", "default": "open"}
+                        "state": {"type": "string", "default": "open"},
                     },
-                    "required": ["repo"]
-                }
+                    "required": ["repo"],
+                },
             },
             {
                 "name": "send_message",
@@ -67,44 +68,43 @@ class MCPServerRegistry:
                     "type": "object",
                     "properties": {
                         "channel": {"type": "string"},
-                        "text": {"type": "string"}
+                        "text": {"type": "string"},
                     },
-                    "required": ["channel", "text"]
-                }
-            }
+                    "required": ["channel", "text"],
+                },
+            },
         ]
-        
+
         # Store server info
         self.servers[server_id] = {
             "config": config,
             "tools": mock_tools if server_id in ["github-mcp", "slack-mcp"] else [],
-            "status": "connected"
+            "status": "connected",
         }
         self.clients[server_id] = client
-        
+
         logger.info(f"Server {server_id} registered successfully")
         return True
 
 
 class SimpleMCPGateway:
     """Simplified MCP Gateway using Kailash SDK"""
-    
+
     def __init__(self):
         # Create the API gateway with proper initialization
         self.gateway = WorkflowAPIGateway(
-            title="MCP Ecosystem Gateway",
-            description="Zero-code MCP workflow builder"
+            title="MCP Ecosystem Gateway", description="Zero-code MCP workflow builder"
         )
-        
+
         self.mcp_registry = MCPServerRegistry()
         self.workflows = {}
-        
+
         # Add custom routes
         self._setup_routes()
-        
+
     def _setup_routes(self):
         """Setup custom API routes"""
-        
+
         @self.gateway.app.get("/mcp/servers")
         async def list_servers():
             """List registered MCP servers"""
@@ -113,23 +113,24 @@ class SimpleMCPGateway:
                     {
                         "id": server_id,
                         "status": info["status"],
-                        "tools": len(info.get("tools", []))
+                        "tools": len(info.get("tools", [])),
                     }
                     for server_id, info in self.mcp_registry.servers.items()
                 ]
             }
-            
+
         @self.gateway.app.post("/mcp/register")
         async def register_server(server_config: Dict[str, Any]):
             """Register a new MCP server"""
             server_id = server_config["id"]
             success = await self.mcp_registry.register_server(server_id, server_config)
             return {"success": success, "server_id": server_id}
-            
+
         @self.gateway.app.get("/")
         async def home():
             """Home page with UI"""
-            return HTMLResponse("""
+            return HTMLResponse(
+                """
 <!DOCTYPE html>
 <html>
 <head>
@@ -198,8 +199,9 @@ class SimpleMCPGateway:
     </script>
 </body>
 </html>
-            """)
-            
+            """
+            )
+
         @self.gateway.app.post("/deploy/{workflow_id}")
         async def deploy_workflow(workflow_id: str):
             """Deploy a pre-built workflow"""
@@ -207,13 +209,13 @@ class SimpleMCPGateway:
                 # Create a sample workflow
                 workflow = Workflow(
                     workflow_id="github_slack_" + str(len(self.workflows)),
-                    name="GitHub to Slack Notifier"
+                    name="GitHub to Slack Notifier",
                 )
-                
+
                 # Add mock nodes
                 # In real implementation, would use actual MCPToolNode
                 from kailash.nodes.code.python import PythonCodeNode
-                
+
                 github_node = PythonCodeNode(
                     name="github_mock",
                     code="""
@@ -224,9 +226,9 @@ result = {
         {'id': 2, 'title': 'Feature request', 'state': 'open'}
     ]
 }
-"""
+""",
                 )
-                
+
                 slack_node = PythonCodeNode(
                     name="slack_mock",
                     code="""
@@ -236,71 +238,77 @@ result = {
     'message': f'Found {len(issues)} open issues',
     'sent': True
 }
-"""
+""",
                 )
-                
+
                 workflow.add_node("github", github_node)
                 workflow.add_node("slack", slack_node)
                 workflow.connect("github", "slack")
-                
+
                 # Register with gateway
                 self.gateway.register_workflow(workflow_id, workflow)
                 self.workflows[workflow_id] = workflow
-                
+
                 return {"success": True, "message": f"Workflow {workflow_id} deployed"}
-                
+
             elif workflow_id == "data-pipeline":
                 # Create data pipeline workflow
-                from kailash.nodes.data.readers import CSVReaderNode
                 from kailash.nodes.code.python import PythonCodeNode
+                from kailash.nodes.data.readers import CSVReaderNode
                 from kailash.nodes.data.writers import JSONWriterNode
-                
+
                 workflow = Workflow(
                     workflow_id="data_pipeline_" + str(len(self.workflows)),
-                    name="Data Processing Pipeline"
+                    name="Data Processing Pipeline",
                 )
-                
+
                 # Note: These would need actual file paths in real usage
                 reader = CSVReaderNode(file_path="data/input.csv")
                 processor = PythonCodeNode(
                     name="data_processor",
-                    code="result = {'processed': len(data), 'data': data}"
+                    code="result = {'processed': len(data), 'data': data}",
                 )
                 writer = JSONWriterNode(file_path="outputs/result.json")
-                
+
                 workflow.add_node("reader", reader)
                 workflow.add_node("processor", processor)
                 workflow.add_node("writer", writer)
-                
+
                 workflow.connect("reader", "processor")
                 workflow.connect("processor", "writer")
-                
+
                 self.gateway.register_workflow(workflow_id, workflow)
                 self.workflows[workflow_id] = workflow
-                
+
                 return {"success": True, "message": f"Workflow {workflow_id} deployed"}
-                
+
             else:
                 raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     async def start(self):
         """Start the gateway"""
         # Register some mock MCP servers
-        await self.mcp_registry.register_server("github-mcp", {
-            "command": "npx",
-            "args": ["@modelcontextprotocol/server-github"],
-            "transport": "stdio"
-        })
-        
-        await self.mcp_registry.register_server("slack-mcp", {
-            "command": "python",
-            "args": ["-m", "mcp_server_slack"],
-            "transport": "stdio"
-        })
-        
+        await self.mcp_registry.register_server(
+            "github-mcp",
+            {
+                "command": "npx",
+                "args": ["@modelcontextprotocol/server-github"],
+                "transport": "stdio",
+            },
+        )
+
+        await self.mcp_registry.register_server(
+            "slack-mcp",
+            {
+                "command": "python",
+                "args": ["-m", "mcp_server_slack"],
+                "transport": "stdio",
+            },
+        )
+
         logger.info("Starting MCP Ecosystem Gateway...")
         logger.info("Web UI available at: http://localhost:8000")
-        
+
         # Use the gateway's run method
         self.gateway.run(port=8000)
 

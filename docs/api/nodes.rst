@@ -205,52 +205,60 @@ Transform Nodes
 
 Transform nodes manipulate and process data.
 
-DataFilter
+FilterNode
 ----------
 
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
-
-**Planned Features:**
-- Column-based filtering with multiple operators
-- Complex condition support (AND/OR logic)
-- Null value handling
-- Performance optimized for large datasets
-
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
-filtering logic in the meantime.
+.. autoclass:: kailash.nodes.transform.processors.FilterNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 **Example Usage:**
 
 .. code-block:: python
 
-   # Simple equality filter
-   workflow.add_node("Filter", "filter_active", config={
-       "column": "status",
-       "value": "active"
-   })
+   from kailash.nodes.transform import FilterNode
 
-   # Complex filter with operator
-   workflow.add_node("Filter", "filter_high_value", config={
-       "column": "revenue",
-       "value": 10000,
-       "operation": ">="
-   })
+   # Filter numbers greater than a value
+   result = filter_node.run(
+       data=[1, 2, 3, 4, 5],
+       operator=">",
+       value=3
+   )  # Returns: {"filtered_data": [4, 5]}
 
-DataMapper
-----------
+   # Filter dictionaries by field
+   users = [
+       {"name": "Alice", "age": 30},
+       {"name": "Bob", "age": 25},
+       {"name": "Charlie", "age": 35}
+   ]
+   result = filter_node.run(
+       data=users,
+       field="age",
+       operator=">=",
+       value=30
+   )  # Returns users 30 and older
 
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
+   # String contains filtering
+   items = [
+       {"title": "Python Programming"},
+       {"title": "Java Development"},
+       {"title": "Python for Data Science"}
+   ]
+   result = filter_node.run(
+       data=items,
+       field="title",
+       operator="contains",
+       value="Python"
+   )  # Returns items with "Python" in title
 
-**Planned Features:**
-- Column mapping and transformation
-- Lambda function support
-- Data type conversion
-- Nested data structure handling
+Map
+---
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
-mapping logic in the meantime.
+.. autoclass:: kailash.nodes.transform.processors.Map
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 **Example Usage:**
 
@@ -264,20 +272,29 @@ mapping logic in the meantime.
        }
    })
 
-DataSorter
-----------
+Sort
+----
 
-.. note::
-   🚧 **Coming Soon** - This node is planned for a future release.
+.. autoclass:: kailash.nodes.transform.processors.Sort
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-**Planned Features:**
-- Multi-column sorting
-- Custom sort key functions
-- Memory-efficient sorting for large datasets
-- Stable sorting algorithms
+**Example Usage:**
 
-**Alternative:** Use the :doc:`PythonCodeNode <../api/nodes>` for custom
-sorting logic in the meantime.
+.. code-block:: python
+
+   # Sort by field in ascending order
+   workflow.add_node("Sort", "sort_by_age", config={
+       "field": "age",
+       "reverse": False
+   })
+
+   # Sort by multiple criteria
+   workflow.add_node("Sort", "sort_complex", config={
+       "field": "priority",
+       "reverse": True  # Highest priority first
+   })
 
 DataTransformer
 ---------------
@@ -299,6 +316,41 @@ DataTransformer
            {"type": "drop", "columns": ["temp_field", "debug_info"]}
        ]
    })
+
+Text Processing
+---------------
+
+HierarchicalChunkerNode
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.transform.chunkers.HierarchicalChunkerNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+ChunkTextExtractorNode
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.transform.formatters.ChunkTextExtractorNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+QueryTextWrapperNode
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.transform.formatters.QueryTextWrapperNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+ContextFormatterNode
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.transform.formatters.ContextFormatterNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Logic Nodes
 ===========
@@ -563,6 +615,204 @@ LLMAgentNode
            }
        }]
    )
+
+Self-Organizing Agents
+======================
+
+The Kailash SDK includes advanced self-organizing agent capabilities for autonomous
+team formation and intelligent problem solving.
+
+Agent-to-Agent Communication
+----------------------------
+
+SharedMemoryPoolNode
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.a2a.SharedMemoryPoolNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+A2AAgentNode
+~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.a2a.A2AAgentNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+A2ACoordinatorNode
+~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.a2a.A2ACoordinatorNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Intelligent Orchestration
+--------------------------
+
+IntelligentCacheNode
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.intelligent_agent_orchestrator.IntelligentCacheNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+MCPAgentNode
+~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.intelligent_agent_orchestrator.MCPAgentNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+QueryAnalysisNode
+~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.intelligent_agent_orchestrator.QueryAnalysisNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+OrchestrationManagerNode
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.intelligent_agent_orchestrator.OrchestrationManagerNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+ConvergenceDetectorNode
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.intelligent_agent_orchestrator.ConvergenceDetectorNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Self-Organizing Agent Pool
+--------------------------
+
+AgentPoolManagerNode
+~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.self_organizing.AgentPoolManagerNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+ProblemAnalyzerNode
+~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.self_organizing.ProblemAnalyzerNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+TeamFormationNode
+~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.self_organizing.TeamFormationNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+SolutionEvaluatorNode
+~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.self_organizing.SolutionEvaluatorNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+SelfOrganizingAgentNode
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.self_organizing.SelfOrganizingAgentNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Complete Example:**
+
+.. code-block:: python
+
+   from kailash import Workflow
+   from kailash.nodes.ai.intelligent_agent_orchestrator import OrchestrationManagerNode
+   from kailash.runtime import LocalRuntime
+
+   # Create a complete self-organizing agent workflow
+   workflow = Workflow("self_organizing_demo")
+   
+   # Add the orchestration manager
+   orchestrator = OrchestrationManagerNode()
+   workflow.add_node("orchestrator", orchestrator)
+   
+   # Execute with a complex business query
+   runtime = LocalRuntime()
+   result, _ = runtime.execute(workflow, parameters={
+       "orchestrator": {
+           "query": "Analyze market trends and develop a growth strategy",
+           "agent_pool_size": 8,
+           "mcp_servers": [
+               {"name": "market_data", "command": "mcp-market-server"},
+               {"name": "financial_data", "command": "mcp-finance-server"}
+           ],
+           "quality_threshold": 0.85,
+           "max_iterations": 3
+       }
+   })
+   
+   print(f"Solution quality: {result['orchestrator']['quality_score']:.2%}")
+   print(f"Iterations completed: {result['orchestrator']['iterations_completed']}")
+
+Agent Providers
+---------------
+
+ChatAgent
+~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.agents.ChatAgent
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+RetrievalAgent
+~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.agents.RetrievalAgent
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Provider Infrastructure
+-----------------------
+
+BaseAIProvider
+~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.ai_providers.BaseAIProvider
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+LLMProvider
+~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.ai_providers.LLMProvider
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+EmbeddingProvider
+~~~~~~~~~~~~~~~~~
+
+.. autoclass:: kailash.nodes.ai.ai_providers.EmbeddingProvider
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 API Nodes
 =========

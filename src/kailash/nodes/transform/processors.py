@@ -7,8 +7,117 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class Filter(Node):
-    """Filters data based on a condition."""
+class FilterNode(Node):
+    """
+    Filters data based on configurable conditions and operators.
+
+    This node provides flexible data filtering capabilities for lists and collections,
+    supporting various comparison operators and field-based filtering for structured
+    data. It's designed to work seamlessly in data processing pipelines, reducing
+    datasets to items that match specific criteria.
+
+    Design Philosophy:
+        The FilterNode embodies the principle of "declarative data selection." Rather
+        than writing custom filtering code, users declare their filtering criteria
+        through simple configuration. The design supports both simple value filtering
+        and complex field-based filtering for dictionaries, making it versatile for
+        various data structures.
+
+    Upstream Dependencies:
+        - Data source nodes providing lists to filter
+        - Transform nodes producing structured data
+        - Aggregation nodes generating collections
+        - API nodes returning result sets
+        - File readers loading datasets
+
+    Downstream Consumers:
+        - Processing nodes working with filtered subsets
+        - Aggregation nodes summarizing filtered data
+        - Writer nodes exporting filtered results
+        - Visualization nodes displaying subsets
+        - Decision nodes based on filter results
+
+    Configuration:
+        The node supports flexible filtering options:
+        - Field selection for dictionary filtering
+        - Multiple comparison operators
+        - Type-aware comparisons
+        - Null value handling
+        - String contains operations
+
+    Implementation Details:
+        - Handles lists of any type (dicts, primitives, objects)
+        - Type coercion for numeric comparisons
+        - Null-safe operations
+        - String conversion for contains operator
+        - Preserves original data structure
+        - Zero-copy filtering (returns references)
+
+    Error Handling:
+        - Graceful handling of type mismatches
+        - Null value comparison logic
+        - Empty data returns empty result
+        - Invalid field names return no matches
+        - Operator errors fail safely
+
+    Side Effects:
+        - No side effects (pure function)
+        - Does not modify input data
+        - Returns new filtered list
+
+    Examples:
+        >>> # Filter list of numbers
+        >>> filter_node = FilterNode()
+        >>> result = filter_node.run(
+        ...     data=[1, 2, 3, 4, 5],
+        ...     operator=">",
+        ...     value=3
+        ... )
+        >>> assert result["filtered_data"] == [4, 5]
+        >>>
+        >>> # Filter list of dictionaries by field
+        >>> users = [
+        ...     {"name": "Alice", "age": 30},
+        ...     {"name": "Bob", "age": 25},
+        ...     {"name": "Charlie", "age": 35}
+        ... ]
+        >>> result = filter_node.run(
+        ...     data=users,
+        ...     field="age",
+        ...     operator=">=",
+        ...     value=30
+        ... )
+        >>> assert len(result["filtered_data"]) == 2
+        >>> assert result["filtered_data"][0]["name"] == "Alice"
+        >>>
+        >>> # String contains filtering
+        >>> items = [
+        ...     {"title": "Python Programming"},
+        ...     {"title": "Java Development"},
+        ...     {"title": "Python for Data Science"}
+        ... ]
+        >>> result = filter_node.run(
+        ...     data=items,
+        ...     field="title",
+        ...     operator="contains",
+        ...     value="Python"
+        ... )
+        >>> assert len(result["filtered_data"]) == 2
+        >>>
+        >>> # Null value handling
+        >>> data_with_nulls = [
+        ...     {"value": 10},
+        ...     {"value": None},
+        ...     {"value": 20}
+        ... ]
+        >>> result = filter_node.run(
+        ...     data=data_with_nulls,
+        ...     field="value",
+        ...     operator="!=",
+        ...     value=None
+        ... )
+        >>> assert len(result["filtered_data"]) == 2
+    """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -67,8 +176,10 @@ class Filter(Node):
         try:
             # Handle None values - they fail most comparisons
             if item_value is None:
-                if operator in ["==", "!="]:
-                    return (operator == "==") == (compare_value is None)
+                if operator == "==":
+                    return compare_value is None
+                elif operator == "!=":
+                    return compare_value is not None
                 else:
                     return False  # None fails all other comparisons
 
@@ -379,3 +490,7 @@ class Sort(Node):
             sorted_data = sorted(data, reverse=reverse)
 
         return {"sorted_data": sorted_data}
+
+
+# Backward compatibility aliases
+Filter = FilterNode

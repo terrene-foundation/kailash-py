@@ -6,10 +6,17 @@ from kailash.nodes.transform.formatters import (
     ContextFormatterNode,
     QueryTextWrapperNode,
 )
-from kailash.nodes.transform.processors import DataTransformer, Filter, Map, Sort
+from kailash.nodes.transform.processors import (
+    DataTransformer,
+    Filter,
+    FilterNode,
+    Map,
+    Sort,
+)
 
 __all__ = [
     "Filter",
+    "FilterNode",
     "Map",
     "Sort",
     "DataTransformer",

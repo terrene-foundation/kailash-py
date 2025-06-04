@@ -32,15 +32,25 @@ class AsyncMergeNode(AsyncNode):
     concat (list concatenation), zip (parallel iteration), and merge_dict
     (dictionary merging with optional key-based joining).
 
-    Usage example:
-        # Create an AsyncMergeNode in a workflow
-        async_merge = AsyncMergeNode(merge_type="merge_dict", key="id")
-        workflow.add_node("data_combine", async_merge)
+    Example usage:
+        >>> # Create an AsyncMergeNode
+        >>> async_merge = AsyncMergeNode(merge_type="merge_dict", key="id")
+        >>> async_merge.metadata.name
+        'AsyncMergeNode'
 
-        # Connect multiple data sources
-        workflow.connect("api_results", "data_combine", {"output": "data1"})
-        workflow.connect("database_query", "data_combine", {"results": "data2"})
-        workflow.connect("file_processor", "data_combine", {"processed_data": "data3"})
+        >>> # Using in a workflow
+        >>> from kailash.workflow.graph import Workflow
+        >>> workflow = Workflow("wf-001", "async_example")
+        >>> workflow.add_node("data_combine", async_merge)
+        >>> "data_combine" in workflow.nodes
+        True
+
+        >>> # Async execution with concat
+        >>> import asyncio
+        >>> async_merge = AsyncMergeNode(merge_type="concat")
+        >>> result = asyncio.run(async_merge.execute_async(data1=[1, 2], data2=[3, 4]))
+        >>> result['merged_data']
+        [1, 2, 3, 4]
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -364,6 +374,35 @@ class AsyncSwitchNode(AsyncNode):
 
     The basic functionality is the same as the synchronous SwitchNode but optimized
     for asynchronous execution.
+
+    Example usage:
+        >>> # Boolean condition routing
+        >>> import asyncio
+        >>> async_switch = AsyncSwitchNode(
+        ...     condition_field="status",
+        ...     operator="==",
+        ...     value="active"
+        ... )
+        >>> result = asyncio.run(async_switch.execute_async(
+        ...     input_data={"status": "active", "data": "test"}
+        ... ))
+        >>> result['true_output']
+        {'status': 'active', 'data': 'test'}
+        >>> result['false_output'] is None
+        True
+
+        >>> # Multi-case switching
+        >>> async_switch = AsyncSwitchNode(
+        ...     condition_field="priority",
+        ...     cases=["high", "medium", "low"]
+        ... )
+        >>> result = asyncio.run(async_switch.execute_async(
+        ...     input_data={"priority": "high", "task": "urgent"}
+        ... ))
+        >>> result['case_high']
+        {'priority': 'high', 'task': 'urgent'}
+        >>> result['default']
+        {'priority': 'high', 'task': 'urgent'}
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:

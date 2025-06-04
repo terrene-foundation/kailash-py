@@ -5,8 +5,6 @@ workflow gateway, from simple single-instance to complex Kubernetes deployments.
 """
 
 
-
-
 def pattern_1_single_gateway():
     """Pattern 1: Single Gateway (Most Cases).
 

@@ -52,24 +52,32 @@ class WorkflowNode(Node):
     - Runtime executing the inner workflow
     - Results passed to subsequent nodes
 
-    Usage Patterns:
-    1. Direct workflow wrapping:
-       ```python
-       inner_workflow = Workflow("data_processing")
-       # ... build workflow ...
-       node = WorkflowNode(workflow=inner_workflow)
-       ```
+    Example usage:
+        >>> # Direct workflow wrapping
+        >>> from kailash.workflow.graph import Workflow
+        >>> from kailash.nodes.data.readers import CSVReaderNode
+        >>> inner_workflow = Workflow("wf-001", "data_processing")
+        >>> inner_workflow.add_node("reader", CSVReaderNode(file_path="data.csv"))
+        >>> node = WorkflowNode(workflow=inner_workflow)
+        >>> node.metadata.name
+        'WorkflowNode'
 
-    2. Loading from file:
-       ```python
-       node = WorkflowNode(workflow_path="workflows/processor.yaml")
-       ```
+        >>> # Get parameters from wrapped workflow
+        >>> params = node.get_parameters()
+        >>> 'reader_file_path' in params
+        True
+        >>> 'inputs' in params
+        True
 
-    3. Loading from dictionary:
-       ```python
-       workflow_dict = {"nodes": {...}, "connections": [...]}
-       node = WorkflowNode(workflow_dict=workflow_dict)
-       ```
+        >>> # Loading from dictionary
+        >>> workflow_dict = {
+        ...     "name": "simple",
+        ...     "nodes": {"node1": {"type": "CSVReaderNode", "config": {"file_path": "test.csv"}}},
+        ...     "connections": []
+        ... }
+        >>> node = WorkflowNode(workflow_dict=workflow_dict)
+        >>> node._workflow.name
+        'simple'
 
     Implementation Details:
     - Parameters derived from workflow entry nodes

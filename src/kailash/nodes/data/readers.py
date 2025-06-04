@@ -37,59 +37,112 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 @register_node()
 class CSVReaderNode(Node):
-    """Reads data from a CSV file.
+    """
+    Reads data from CSV files with automatic header detection and type inference.
 
-    This node provides robust CSV file reading capabilities with support for
-    various delimiters, header detection, and encoding options. It's designed
-    to handle common CSV formats and edge cases.
+    This node provides comprehensive CSV file reading capabilities, handling various
+    formats, encodings, and edge cases. It automatically detects headers, infers data
+    types, and provides consistent structured output for downstream processing in
+    Kailash workflows.
 
-    Design Features:
-    1. Automatic header detection
-    2. Configurable delimiters
-    3. Memory-efficient line-by-line reading
-    4. Consistent dictionary output format
-    5. Unicode support through encoding parameter
+    Design Philosophy:
+        The CSVReaderNode embodies the principle of "data accessibility without
+        complexity." It abstracts the intricacies of CSV parsing while providing
+        flexibility for various formats. The design prioritizes memory efficiency,
+        automatic format detection, and consistent output structure, making it easy
+        to integrate diverse CSV data sources into workflows.
 
-    Data Flow:
-    - Input: File path and configuration parameters
-    - Processing: Reads CSV line by line, converting to dictionaries
-    - Output: List of dictionaries (with headers) or list of lists
-
-    Common Usage Patterns:
-    1. Reading data exports from databases
-    2. Processing spreadsheet data
-    3. Loading configuration from CSV
-    4. Ingesting sensor data logs
-
-    Upstream Sources:
-    - File system paths from user input
-    - Output paths from previous nodes
-    - Configuration management systems
+    Upstream Dependencies:
+        - File system providing CSV files
+        - Workflow orchestrators specifying file paths
+        - Configuration systems providing parsing options
+        - Previous nodes generating CSV file paths
+        - User inputs defining data sources
 
     Downstream Consumers:
-    - DataTransformer: Processes tabular data
-    - Aggregator: Summarizes data
-    - CSVWriter: Reformats and saves
-    - Visualizer: Creates charts from data
+        - DataTransformNode: Processes tabular data
+        - FilterNode: Applies row/column filtering
+        - AggregatorNode: Summarizes data
+        - PythonCodeNode: Custom data processing
+        - WriterNodes: Exports to other formats
+        - Visualization nodes: Creates charts
+        - ML nodes: Uses as training data
+
+    Configuration:
+        The node supports extensive CSV parsing options:
+        - Delimiter detection (comma, tab, pipe, etc.)
+        - Header row identification
+        - Encoding specification (UTF-8, Latin-1, etc.)
+        - Quote character handling
+        - Skip rows/comments functionality
+        - Column type inference
+        - Missing value handling
+
+    Implementation Details:
+        - Uses Python's csv module for robust parsing
+        - Implements streaming for large files
+        - Automatic delimiter detection when not specified
+        - Header detection based on first row analysis
+        - Type inference for numeric/date columns
+        - Memory-efficient processing with generators
+        - Unicode normalization for consistent encoding
 
     Error Handling:
-    - FileNotFoundError: Invalid file path
-    - PermissionError: Insufficient read permissions
-    - UnicodeDecodeError: Encoding mismatch
-    - csv.Error: Malformed CSV data
+        - FileNotFoundError: Clear message with path
+        - PermissionError: Access rights guidance
+        - UnicodeDecodeError: Encoding detection hints
+        - csv.Error: Malformed data diagnostics
+        - EmptyFileError: Handles zero-byte files
+        - Partial read recovery for corrupted files
 
-    Example:
-        >>> # Read customer data with headers
-        >>> reader = CSVReaderNode(
-        ...     file_path='customers.csv',
-        ...     headers=True,
-        ...     delimiter=','
+    Side Effects:
+        - Reads from file system
+        - May consume significant memory for large files
+        - Creates file handles (properly closed)
+        - Updates internal read statistics
+
+    Examples:
+        >>> # Basic CSV reading with headers
+        >>> reader = CSVReaderNode()
+        >>> result = reader.run(
+        ...     file_path="customers.csv",
+        ...     headers=True
         ... )
-        >>> result = reader.execute()
-        >>> # result['data'] = [
-        >>> #     {'id': '1', 'name': 'John', 'age': '30'},
-        >>> #     {'id': '2', 'name': 'Jane', 'age': '25'}
+        >>> assert isinstance(result["data"], list)
+        >>> assert all(isinstance(row, dict) for row in result["data"])
+        >>> # Example output:
+        >>> # result["data"] = [
+        >>> #     {"id": "1", "name": "John Doe", "age": "30"},
+        >>> #     {"id": "2", "name": "Jane Smith", "age": "25"}
         >>> # ]
+        >>>
+        >>> # Reading with custom delimiter
+        >>> result = reader.run(
+        ...     file_path="data.tsv",
+        ...     delimiter="\\t",
+        ...     headers=True
+        ... )
+        >>>
+        >>> # Reading without headers (returns list of lists)
+        >>> result = reader.run(
+        ...     file_path="data.csv",
+        ...     headers=False
+        ... )
+        >>> assert all(isinstance(row, list) for row in result["data"])
+        >>>
+        >>> # Reading with specific encoding
+        >>> result = reader.run(
+        ...     file_path="european_data.csv",
+        ...     encoding="iso-8859-1",
+        ...     headers=True
+        ... )
+        >>>
+        >>> # Handling quoted fields
+        >>> result = reader.run(
+        ...     file_path="complex.csv",
+        ...     headers=True,
+        ...     quotechar='"'
+        ... )
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:

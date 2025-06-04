@@ -1,6 +1,6 @@
 # Kailash Python SDK - Pattern Library
 
-Last Updated: 2025-06-04
+Last Updated: 2025-06-05
 
 This pattern library documents common workflow patterns, best practices, and design patterns for building effective workflows with the Kailash Python SDK.
 
@@ -12,6 +12,7 @@ This pattern library documents common workflow patterns, best practices, and des
 - [Error Handling Patterns](#error-handling-patterns)
 - [Performance Patterns](#performance-patterns)
 - [Composition Patterns](#composition-patterns)
+- [Self-Organizing Agent Patterns](#self-organizing-agent-patterns)
 - [Deployment Patterns](#deployment-patterns)
 - [Best Practices](#best-practices)
 
@@ -566,6 +567,238 @@ steps = [
 
 dynamic_workflow = create_processing_workflow(steps)
 ```
+
+## Self-Organizing Agent Patterns
+
+### 15. Basic Self-Organizing Agent Pool Pattern
+**Purpose**: Create autonomous agent teams that solve problems collaboratively
+
+```python
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.ai.intelligent_agent_orchestrator import (
+    OrchestrationManagerNode, IntelligentCacheNode
+)
+from kailash.nodes.ai.a2a import SharedMemoryPoolNode
+
+workflow = Workflow()
+
+# Shared infrastructure
+memory = workflow.add_node(SharedMemoryPoolNode(name="memory"))
+cache = workflow.add_node(IntelligentCacheNode(name="cache", ttl=3600))
+
+# Orchestration with self-organization
+orchestrator = workflow.add_node(OrchestrationManagerNode(
+    name="orchestrator",
+    max_iterations=5,
+    quality_threshold=0.8,
+    time_limit_minutes=10
+))
+
+# Execute with MCP servers
+runtime = LocalRuntime()
+result, _ = runtime.execute(workflow, parameters={
+    "orchestrator": {
+        "query": "Analyze market trends and recommend strategy",
+        "mcp_servers": [
+            {"name": "market_data", "command": "market-mcp"},
+            {"name": "financial", "command": "finance-mcp"}
+        ],
+        "agent_pool_size": 10
+    }
+})
+```
+
+**Use Cases**:
+- Research and analysis
+- Strategic planning
+- Complex problem solving
+
+### 16. MCP-Enhanced Agent Pattern
+**Purpose**: Agents with external tool access via MCP
+
+```python
+from kailash.nodes.ai.intelligent_agent_orchestrator import MCPAgentNode
+
+# Create specialized agents with MCP access
+research_agent = workflow.add_node(MCPAgentNode(
+    name="research_agent",
+    mcp_server="research_tools",
+    capabilities=["research", "analysis", "summarization"],
+    shared_cache=cache,
+    shared_memory=memory
+))
+
+data_agent = workflow.add_node(MCPAgentNode(
+    name="data_agent",
+    mcp_server="data_tools",
+    capabilities=["data_access", "sql", "visualization"],
+    shared_cache=cache,
+    shared_memory=memory
+))
+
+# Agents automatically share tool results through cache
+```
+
+**Benefits**:
+- Tool capability sharing
+- Prevents redundant API calls
+- Cost optimization
+
+### 17. Team Formation Strategy Pattern
+**Purpose**: Different strategies for forming agent teams
+
+```python
+from kailash.nodes.ai.self_organizing import TeamFormationNode
+
+# Capability-based team formation
+team_former = workflow.add_node(TeamFormationNode(
+    name="team_former",
+    formation_strategy="capability_matching"  # Best for skill-specific tasks
+))
+
+# Alternative strategies:
+# "swarm_based" - For exploration/discovery
+# "market_based" - For resource-constrained scenarios
+# "hierarchical" - For complex multi-level problems
+```
+
+### 18. Convergence Detection Pattern
+**Purpose**: Automatically determine when to stop iterating
+
+```python
+from kailash.nodes.ai.intelligent_agent_orchestrator import ConvergenceDetectorNode
+
+convergence = workflow.add_node(ConvergenceDetectorNode(
+    name="convergence",
+    quality_threshold=0.85,      # Stop when quality >= 85%
+    improvement_threshold=0.02,   # Stop if improvement < 2%
+    max_iterations=10,           # Hard limit
+    timeout=600,                 # 10 minute timeout
+    min_iterations=3             # Always run at least 3 times
+))
+```
+
+### 19. Information Reuse Pattern
+**Purpose**: Intelligent caching across agent operations
+
+```python
+# Cache expensive operations with semantic matching
+cache_result = cache.run(
+    action="cache",
+    cache_key="market_analysis_2024",
+    data={"trends": [...], "predictions": [...]},
+    metadata={
+        "source": "market_mcp",
+        "cost": 2.50,
+        "semantic_tags": ["market", "analysis", "trends"]
+    },
+    ttl=3600  # 1 hour TTL
+)
+
+# Later agents can retrieve by semantic similarity
+similar_result = cache.run(
+    action="get",
+    query="stock market analysis trends",
+    similarity_threshold=0.8
+)
+```
+
+### 20. Coordinated Multi-Agent Pattern
+**Purpose**: Agents working on different aspects of a problem
+
+```python
+from kailash.nodes.ai.a2a import A2ACoordinatorNode
+
+coordinator = workflow.add_node(A2ACoordinatorNode(name="coordinator"))
+
+# Register agents with specialized roles
+coordinator.run(
+    action="register",
+    agent_info={
+        "agent_id": "analyst_001",
+        "capabilities": ["data_analysis", "statistics"],
+        "availability": "ready"
+    }
+)
+
+# Delegate tasks based on capabilities
+result = coordinator.run(
+    action="delegate",
+    task={"type": "analysis", "description": "Analyze sales data"},
+    coordination_strategy="best_match"
+)
+
+# Build consensus on solutions
+consensus = coordinator.run(
+    action="consensus",
+    proposals=[proposal1, proposal2, proposal3],
+    voting_agents=["analyst_001", "strategist_002", "researcher_003"]
+)
+```
+
+**Use Cases**:
+- Distributed problem solving
+- Multi-perspective analysis
+- Democratic decision making
+
+### 21. MCP Ecosystem Integration Pattern
+**Purpose**: Zero-code workflow builder with MCP server integration
+
+```python
+from kailash.api.gateway import WorkflowGateway
+from kailash.nodes.ai.intelligent_agent_orchestrator import OrchestrationManagerNode
+from kailash.nodes.mcp import MCPClientNode
+
+# Create MCP-enabled workflow gateway
+gateway = WorkflowGateway(port=8000)
+
+# Register MCP servers for external tool access
+mcp_config = {
+    "research_tools": {
+        "command": "python", 
+        "args": ["-m", "research_mcp_server"],
+        "capabilities": ["web_search", "document_analysis"]
+    },
+    "data_tools": {
+        "command": "python",
+        "args": ["-m", "data_mcp_server"], 
+        "capabilities": ["sql_query", "visualization"]
+    }
+}
+
+# Create orchestrated workflow with MCP integration
+workflow = Workflow()
+orchestrator = workflow.add_node(OrchestrationManagerNode(
+    name="mcp_orchestrator",
+    mcp_servers=list(mcp_config.keys()),
+    agent_pool_size=15,
+    enable_caching=True
+))
+
+# Register workflow with gateway
+gateway.register_workflow("mcp_research", workflow, mcp_config=mcp_config)
+gateway.start()
+
+# Provides web UI for:
+# - Drag-and-drop workflow building
+# - MCP server management
+# - Real-time execution monitoring
+# - Interactive result visualization
+```
+
+**Features**:
+- Zero-code workflow creation via web UI
+- Automatic MCP server discovery and integration
+- Real-time collaboration between agents and external tools
+- Visual workflow builder with live statistics
+- Cost optimization through intelligent caching
+
+**Use Cases**:
+- Research and analysis workflows
+- Data pipeline automation
+- Multi-tool orchestration
+- Interactive data exploration
 
 ## Deployment Patterns
 

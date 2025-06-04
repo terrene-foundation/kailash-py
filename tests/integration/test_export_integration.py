@@ -93,7 +93,7 @@ class TestExportIntegration:
         )
 
         template_processor_id = builder.add_node(
-            "Filter",
+            "FilterNode",
             "template_processor",
             config={"field": "value", "operator": ">", "value": "${THRESHOLD_VALUE}"},
         )
