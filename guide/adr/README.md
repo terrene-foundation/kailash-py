@@ -122,6 +122,7 @@ ADRs should be treated as immutable once accepted. If a decision needs to be cha
 - [0016-immutable-state-management.md](0016-immutable-state-management.md) - Immutable State Management
 - [0018-performance-metrics-architecture.md](0018-performance-metrics-architecture.md) - Performance Metrics Architecture
 - [0019-real-time-dashboard-architecture.md](0019-real-time-dashboard-architecture.md) - Real-time Dashboard Architecture
+- [0029-mcp-ecosystem-architecture.md](0029-mcp-ecosystem-architecture.md) - MCP Ecosystem Zero-Code Workflow Builder Architecture
 
 ### Agentic AI Architecture
 **Priority**: 🔴 **URGENT** - Client-driven requirements for agentic workflows

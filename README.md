@@ -350,6 +350,46 @@ gateway.run(port=8000)
 
 See the [Gateway examples](examples/integration_examples/gateway_comprehensive_demo.py) for complete implementation patterns.
 
+### Zero-Code MCP Ecosystem - Visual Workflow Builder
+
+Build and deploy workflows through an interactive web interface without writing any code:
+
+```python
+from kailash.api.gateway import WorkflowAPIGateway
+from kailash.api.mcp_integration import MCPServerRegistry
+
+# Run the MCP ecosystem demo
+# cd examples/integration_examples
+# ./run_ecosystem.sh
+
+# Or run programmatically:
+python examples/integration_examples/mcp_ecosystem_demo.py
+```
+
+#### Features
+
+- **Drag-and-Drop Builder**: Visual interface for creating workflows
+  - Drag nodes from palette (CSV Reader, Python Code, JSON Writer, etc.)
+  - Drop onto canvas to build workflows
+  - Deploy with one click
+
+- **Live Dashboard**: Real-time monitoring and statistics
+  - Connected MCP server status
+  - Running workflow count
+  - Execution logs with timestamps
+
+- **Pre-built Templates**: One-click deployment
+  - GitHub → Slack Notifier
+  - Data Processing Pipeline (CSV → Transform → JSON)
+  - AI Research Assistant
+
+- **Technology Stack**: Lightweight and fast
+  - Backend: FastAPI + Kailash SDK
+  - Frontend: Vanilla HTML/CSS/JavaScript (no frameworks)
+  - Zero build process required
+
+See the [MCP Ecosystem example](examples/integration_examples/) for the complete zero-code workflow deployment platform.
+
 ## 📚 Documentation
 
 | Resource | Description |

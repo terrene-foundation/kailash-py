@@ -180,7 +180,8 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── 0013-simplify-conditional-logic-nodes.md
 │   │   ├── 0014-async-node-execution.md
 │   │   ├── 0015-api-integration-architecture.md
-│   │   └── 0016-immutable-state-management.md
+│   │   ├── 0016-immutable-state-management.md
+│   │   └── 0029-mcp-ecosystem-architecture.md
 │   ├── features/            # Feature documentation
 │   │   ├── api_integration.md
 │   │   ├── python_code_node.md
@@ -209,9 +210,27 @@ kailash_python_sdk/           # Project root directory
 │   │   ├── workflow_error_handling.py
 │   │   └── workflow_task_tracking.py
 │   ├── integration_examples/ # API and system integrations
+│   │   ├── README.md        # MCP Ecosystem documentation
+│   │   ├── ECOSYSTEM_DEMO.md # UI features documentation
+│   │   ├── RUN_MCP_ECOSYSTEM.md # Running instructions
+│   │   ├── mcp_ecosystem_demo.py # Interactive web UI demo
+│   │   ├── mcp_ecosystem_fixed.py # Full Kailash integration
+│   │   ├── run_ecosystem.sh # Convenience run script
+│   │   ├── test_mcp_fixed.py # Test suite
 │   │   ├── integration_api_comprehensive.py
 │   │   ├── integration_api_simple.py
-│   │   └── integration_sharepoint_graph.py
+│   │   ├── integration_api_demo.py
+│   │   ├── integration_gateway_basic.py
+│   │   ├── integration_gateway_complex.py
+│   │   ├── integration_hmi_api.py
+│   │   ├── integration_mcp_basic.py
+│   │   ├── integration_mcp_server.py
+│   │   ├── integration_multi_workflow_gateway.py
+│   │   ├── integration_sharepoint_graph.py
+│   │   ├── integration_agentic_llm.py
+│   │   ├── deployment_patterns.py
+│   │   ├── gateway_comprehensive_demo.py
+│   │   └── test_gateway_simple.py
 │   ├── visualization_examples/ # Visualization and reporting
 │   │   ├── viz_workflow_graphs.py
 │   │   ├── viz_mermaid.py
