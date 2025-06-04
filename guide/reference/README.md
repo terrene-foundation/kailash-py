@@ -84,6 +84,7 @@ Copy-paste ready code templates for common scenarios
 5. **Two execution patterns**: `runtime.execute(workflow)` OR `workflow.execute(inputs={})`
 6. **Connection uses mapping**: `workflow.connect("from", "to", mapping={"out": "in"})`
 7. **Parameter order is STRICT**: Check actual implementation, not just documentation
+8. **Configuration vs Runtime parameters**: Config = HOW (file paths, settings), Runtime = WHAT (data flows through connections)
 
 ## Quick Start Example
 
@@ -94,8 +95,10 @@ from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 
 # Create and execute a simple workflow
 workflow = Workflow("example_id", "example")
+# Configuration parameters: WHERE to read/write (static settings)
 workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")
 workflow.add_node("writer", CSVWriterNode(), file_path="output.csv")
+# Runtime parameters: data flows through connections at execution
 workflow.connect("reader", "writer", mapping={"data": "data"})
 
 # Option 1: Execute through runtime
