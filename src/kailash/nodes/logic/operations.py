@@ -370,6 +370,31 @@ class MergeNode(Node):
     The merge operation is determined by the merge_type parameter, which supports
     concat (list concatenation), zip (parallel iteration), and merge_dict (dictionary
     merging with optional key-based joining for lists of dictionaries).
+
+    Example usage:
+        >>> # Simple list concatenation
+        >>> merge_node = MergeNode(merge_type="concat")
+        >>> result = merge_node.execute(data1=[1, 2], data2=[3, 4])
+        >>> result['merged_data']
+        [1, 2, 3, 4]
+
+        >>> # Dictionary merging
+        >>> merge_node = MergeNode(merge_type="merge_dict")
+        >>> result = merge_node.execute(
+        ...     data1={"a": 1, "b": 2},
+        ...     data2={"b": 3, "c": 4}
+        ... )
+        >>> result['merged_data']
+        {'a': 1, 'b': 3, 'c': 4}
+
+        >>> # List of dicts merging by key
+        >>> merge_node = MergeNode(merge_type="merge_dict", key="id")
+        >>> result = merge_node.execute(
+        ...     data1=[{"id": 1, "name": "Alice"}],
+        ...     data2=[{"id": 1, "age": 30}]
+        ... )
+        >>> result['merged_data']
+        [{'id': 1, 'name': 'Alice', 'age': 30}]
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
