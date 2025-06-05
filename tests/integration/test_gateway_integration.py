@@ -13,6 +13,8 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.workflow import Workflow
 
 
+@pytest.mark.slow
+@pytest.mark.integration
 class TestGatewayIntegration:
     """Integration tests for the workflow gateway."""
 
