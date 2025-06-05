@@ -261,10 +261,17 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          # Use all available cores on self-hosted runners
+          # Use all available cores on self-hosted runners if pytest-xdist is available
           if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
             echo "Running on self-hosted runner with $(nproc 2>/dev/null || sysctl -n hw.ncpu) cores"
-            uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto
+            # Check if pytest-xdist is available
+            if uv run python -c "import pytest_xdist" 2>/dev/null; then
+              echo "Using parallel testing with pytest-xdist"
+              uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto
+            else
+              echo "pytest-xdist not available, running tests sequentially"
+              uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
+            fi
           else
             echo "Running on GitHub-hosted runner"
             uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
