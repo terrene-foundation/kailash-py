@@ -52,9 +52,15 @@ jobs:
                 ;;
             esac
           else
-            # For automatic runs (push/PR), always use GitHub runners
-            echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
-            echo "Using GitHub-hosted runner (automatic trigger)"
+            # For PRs from the main development branch, use local runner for speed
+            if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.head_ref }}" == "feat/complete-sdk-implementation" ]]; then
+              echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
+              echo "Using local Mac runner for trusted PR branch"
+            else
+              # For other automatic runs, use GitHub runners
+              echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
+              echo "Using GitHub-hosted runner (automatic trigger)"
+            fi
           fi
       - name: Determine test level
         id: determine
