@@ -7,6 +7,16 @@ on:
     branches: [ main ]
     types: [opened, synchronize, reopened]
   workflow_dispatch:
+    inputs:
+      runner-type:
+        description: 'Choose runner type'
+        required: false
+        default: 'github'
+        type: choice
+        options:
+        - github      # Use GitHub's runners
+        - local-mac   # Use your Mac
+        - self-hosted # Use any self-hosted runner
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -20,7 +30,32 @@ jobs:
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
       skip-reason: ${{ steps.determine.outputs.skip-reason }}
+      runner-label: ${{ steps.runner.outputs.label }}
     steps:
+      - name: Determine runner to use
+        id: runner
+        run: |
+          # For manual runs, use the selected runner
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ github.event.inputs.runner-type }}" in
+              local-mac)
+                echo 'label=["self-hosted", "macOS", "ARM64", "Esperies-Mini"]' >> $GITHUB_OUTPUT
+                echo "Using local Mac runner (Esperies-Mini)"
+                ;;
+              self-hosted)
+                echo 'label=["self-hosted", "linux", "x64"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted Linux runner"
+                ;;
+              *)
+                echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
+                echo "Using GitHub-hosted runner"
+                ;;
+            esac
+          else
+            # For automatic runs (push/PR), always use GitHub runners
+            echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
+            echo "Using GitHub-hosted runner (automatic trigger)"
+          fi
       - name: Determine test level
         id: determine
         uses: actions/github-script@v7
@@ -101,8 +136,16 @@ jobs:
     name: Basic Tests
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'basic'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
     steps:
+      - name: Display runner info
+        run: |
+          echo "🏃 Running on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}"
+          if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
+            echo "📍 Runner hostname: $(hostname)"
+            echo "💻 CPU cores: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'unknown')"
+          fi
+      
       - uses: actions/checkout@v4
 
       - name: Setup Python
@@ -131,7 +174,7 @@ jobs:
     name: Lint and Format Check
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -172,8 +215,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.11', '3.12']
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +237,14 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
+          # Use all available cores on self-hosted runners
+          if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
+            echo "Running on self-hosted runner with $(nproc 2>/dev/null || sysctl -n hw.ncpu) cores"
+            uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto
+          else
+            echo "Running on GitHub-hosted runner"
+            uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
+          fi
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
@@ -234,7 +283,7 @@ jobs:
     name: Validate Examples
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
     steps:
       - uses: actions/checkout@v4
 
