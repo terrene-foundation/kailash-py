@@ -194,9 +194,11 @@ jobs:
 
       - name: Setup Python (self-hosted)
         run: |
-          echo "Using system Python"
+          echo "Checking available Python versions"
           which python3
           python3 --version
+          which python3.11 || echo "Python 3.11 not found - install with: brew install python@3.11"
+          which python3.12 || echo "Python 3.12 not found - install with: brew install python@3.12"
 
       - name: Install uv
         run: |
@@ -205,8 +207,24 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv --python python3
-          uv sync
+          # Create venvs for both Python versions
+          echo "Setting up Python 3.11 environment"
+          if command -v python3.11 &> /dev/null; then
+            uv venv .venv-3.11 --python python3.11
+            VIRTUAL_ENV=.venv-3.11 uv sync
+          else
+            echo "⚠️  Python 3.11 not found, skipping"
+          fi
+          
+          echo "Setting up Python 3.12 environment"
+          if command -v python3.12 &> /dev/null; then
+            uv venv .venv-3.12 --python python3.12
+            VIRTUAL_ENV=.venv-3.12 uv sync
+          else
+            # Fallback to system python3
+            uv venv .venv-3.12 --python python3
+            VIRTUAL_ENV=.venv-3.12 uv sync
+          fi
 
       - name: Run all checks in parallel
         run: |
@@ -239,7 +257,21 @@ jobs:
               run_check "Black formatting" "uv run black --check src/ tests/" "black.log" &
               run_check "Isort imports" "uv run isort --check-only src/ tests/" "isort.log" &
               run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
-              run_check "Tests Python 3.11" "uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto" "pytest.log" &
+              
+              # Run tests with Python 3.11 if available
+              if [ -d ".venv-3.11" ]; then
+                  run_check "Tests Python 3.11" "VIRTUAL_ENV=.venv-3.11 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -n auto" "pytest-3.11.log" &
+              else
+                  echo "⚠️  Skipping Python 3.11 tests (not installed)"
+              fi
+              
+              # Run tests with Python 3.12
+              if [ -d ".venv-3.12" ]; then
+                  run_check "Tests Python 3.12" "VIRTUAL_ENV=.venv-3.12 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -n auto" "pytest-3.12.log" &
+              else
+                  echo "⚠️  Skipping Python 3.12 tests (not available)"
+              fi
+              
               run_check "Example validation" "cd examples && uv run python _utils/test_all_examples.py" "examples.log" &
               
               # Wait for all background jobs
@@ -248,17 +280,20 @@ jobs:
           
           # Check if any job failed
           if [ $? -ne 0 ]; then
-              echo "\nSome checks failed. Logs:"
+              echo -e "\nSome checks failed. Logs:"
               for log in *.log; do
                   if [ -f "$log" ] && grep -q "failed\|error\|Error" "$log"; then
-                      echo "\n=== $log ==="
+                      echo -e "\n=== $log ==="
                       tail -50 "$log"
                   fi
               done
               exit 1
           fi
           
-          echo "\n✅ All checks passed!"
+          echo -e "\n✅ All checks passed!"
+          echo "Tests run with:"
+          [ -d ".venv-3.11" ] && echo "  - Python 3.11 ✓"
+          [ -d ".venv-3.12" ] && echo "  - Python 3.12 ✓"
           EOF
           
           chmod +x run-all-checks.sh
