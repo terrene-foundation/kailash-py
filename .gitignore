@@ -82,3 +82,5 @@ examples/output/
 .env.production.local
 .claude
 docs/build_output.txt
+
+# Prevent root-level data files (already covered above)
