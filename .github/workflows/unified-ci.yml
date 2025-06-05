@@ -177,11 +177,100 @@ jobs:
           uv run pytest tests/test_ci_setup.py -v
           uv run python -m kailash --version
 
-  # Full test suite for PRs and manual triggers
+  # Combined job for self-hosted runners to maximize parallelism
+  all-checks-parallel:
+    name: All Checks (Parallel)
+    needs: determine-context
+    if: needs.determine-context.outputs.test-level == 'full' && contains(needs.determine-context.outputs.runner-label, 'self-hosted')
+    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python (self-hosted)
+        run: |
+          echo "Using system Python"
+          which python3
+          python3 --version
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv venv --python python3
+          uv sync
+
+      - name: Run all checks in parallel
+        run: |
+          echo "Running all checks in parallel on $(sysctl -n hw.ncpu) cores"
+          
+          # Create a script to run all checks
+          cat > run-all-checks.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          # Function to run a check and capture its status
+          run_check() {
+              local name="$1"
+              local cmd="$2"
+              local logfile="$3"
+              
+              echo "Starting $name..."
+              if eval "$cmd" > "$logfile" 2>&1; then
+                  echo "✅ $name passed"
+                  return 0
+              else
+                  echo "❌ $name failed"
+                  echo "See $logfile for details"
+                  return 1
+              fi
+          }
+          
+          # Run all checks in parallel
+          (
+              run_check "Black formatting" "uv run black --check src/ tests/" "black.log" &
+              run_check "Isort imports" "uv run isort --check-only src/ tests/" "isort.log" &
+              run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
+              run_check "Tests Python 3.11" "uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto" "pytest.log" &
+              run_check "Example validation" "cd examples && uv run python _utils/test_all_examples.py" "examples.log" &
+              
+              # Wait for all background jobs
+              wait
+          )
+          
+          # Check if any job failed
+          if [ $? -ne 0 ]; then
+              echo "\nSome checks failed. Logs:"
+              for log in *.log; do
+                  if [ -f "$log" ] && grep -q "failed\|error\|Error" "$log"; then
+                      echo "\n=== $log ==="
+                      tail -50 "$log"
+                  fi
+              done
+              exit 1
+          fi
+          
+          echo "\n✅ All checks passed!"
+          EOF
+          
+          chmod +x run-all-checks.sh
+          ./run-all-checks.sh
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # Full test suite for PRs and manual triggers (GitHub-hosted runners)
   lint-and-format:
     name: Lint and Format Check
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full'
+    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
     runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
     steps:
       - uses: actions/checkout@v4
@@ -226,7 +315,7 @@ jobs:
   test-matrix:
     name: Test Python ${{ matrix.python-version }}
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full'
+    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
     strategy:
       fail-fast: false
       matrix:
@@ -313,7 +402,7 @@ jobs:
   validate-examples:
     name: Validate Examples
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full'
+    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
     runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
     steps:
       - uses: actions/checkout@v4
@@ -349,7 +438,7 @@ jobs:
   # Summary job for PR status
   pr-summary:
     name: PR Summary
-    needs: [lint-and-format, test-matrix, security-scan, validate-examples]
+    needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -357,17 +446,32 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const jobs = [
-              { name: 'Lint and Format', status: '${{ needs.lint-and-format.result }}' },
-              { name: 'Tests', status: '${{ needs.test-matrix.result }}' },
-              { name: 'Security', status: '${{ needs.security-scan.result }}' },
-              { name: 'Examples', status: '${{ needs.validate-examples.result }}' }
-            ];
+            // Check if running on self-hosted runner
+            const allChecksStatus = '${{ needs.all-checks-parallel.result }}';
+            const isParallel = allChecksStatus !== 'skipped';
+            
+            let jobs = [];
+            if (isParallel) {
+              // Self-hosted runner (all checks in one job)
+              jobs = [
+                { name: 'All Checks (Parallel)', status: allChecksStatus },
+                { name: 'Security', status: '${{ needs.security-scan.result }}' }
+              ];
+            } else {
+              // GitHub-hosted runners (separate jobs)
+              jobs = [
+                { name: 'Lint and Format', status: '${{ needs.lint-and-format.result }}' },
+                { name: 'Tests', status: '${{ needs.test-matrix.result }}' },
+                { name: 'Security', status: '${{ needs.security-scan.result }}' },
+                { name: 'Examples', status: '${{ needs.validate-examples.result }}' }
+              ];
+            }
 
             let comment = '## 🤖 CI Pipeline Results\n\n';
             let allPassed = true;
 
             for (const job of jobs) {
+              if (job.status === 'skipped') continue;
               const icon = job.status === 'success' ? '✅' : '❌';
               comment += `${icon} **${job.name}**: ${job.status}\n`;
               if (job.status !== 'success') allPassed = false;
