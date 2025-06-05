@@ -27,9 +27,9 @@ Key drivers:
 
 ## Implementation Status
 
-**Status**: ✅ Fully Implemented and Validated  
-**Validation**: Real-world testing with Ollama models (llama3.2, mistral, phi)  
-**Examples**: 11 comprehensive A2A examples demonstrating all capabilities  
+**Status**: ✅ Fully Implemented and Validated
+**Validation**: Real-world testing with Ollama models (llama3.2, mistral, phi)
+**Examples**: 11 comprehensive A2A examples demonstrating all capabilities
 **Code Location**: `src/kailash/nodes/ai/self_organizing.py`
 
 ## Decision
@@ -69,21 +69,21 @@ Implement a Self-Organizing Agent Pool (SOAP) system with the following architec
 ```python
 class AgentPoolManager:
     """Manages the pool of available agents."""
-    
+
     def __init__(self):
         self.agent_registry = {}  # agent_id -> capabilities
         self.availability_tracker = {}  # agent_id -> status
         self.performance_metrics = {}  # agent_id -> metrics
         self.capability_index = defaultdict(set)  # capability -> agent_ids
-        
-    def register_agent(self, agent_id: str, capabilities: List[str], 
+
+    def register_agent(self, agent_id: str, capabilities: List[str],
                       metadata: Dict[str, Any]):
         """Register an agent with its capabilities."""
-        
-    def find_agents_by_capability(self, required_capabilities: List[str], 
+
+    def find_agents_by_capability(self, required_capabilities: List[str],
                                  min_performance: float = 0.7) -> List[str]:
         """Find agents matching required capabilities."""
-        
+
     def update_agent_performance(self, agent_id: str, task_result: Dict):
         """Update agent performance metrics."""
 ```
@@ -93,7 +93,7 @@ class AgentPoolManager:
 ```python
 class ProblemAnalyzer:
     """Analyzes problems to determine required capabilities."""
-    
+
     def analyze_problem(self, problem_description: str) -> Dict[str, Any]:
         """Extract required capabilities, complexity, and constraints."""
         return {
@@ -115,14 +115,14 @@ class ProblemAnalyzer:
 ```python
 class TeamFormationEngine:
     """Forms optimal teams based on problem requirements."""
-    
+
     def form_team(self, problem_analysis: Dict, available_agents: List[Dict]) -> Dict:
         """Form a team using various strategies."""
-        
+
     def evaluate_team_fitness(self, team: List[str], requirements: Dict) -> float:
         """Evaluate how well a team matches requirements."""
-        
-    def optimize_team_composition(self, initial_team: List[str], 
+
+    def optimize_team_composition(self, initial_team: List[str],
                                 feedback: Dict) -> List[str]:
         """Optimize team based on performance feedback."""
 ```
@@ -167,7 +167,7 @@ Multiple agents explore different solution approaches simultaneously:
 ```python
 class ParallelExplorationPattern:
     """Multiple agents explore solutions in parallel."""
-    
+
     def execute(self, agents: List[Agent], problem: Dict) -> List[Solution]:
         # Each agent explores independently
         # Periodic synchronization to share insights
@@ -179,7 +179,7 @@ Agents iteratively improve solutions:
 ```python
 class SequentialRefinementPattern:
     """Agents sequentially refine solutions."""
-    
+
     def execute(self, agents: List[Agent], initial_solution: Solution) -> Solution:
         # Each agent improves the solution
         # Specialized agents handle specific aspects
@@ -191,7 +191,7 @@ Agents collaborate to reach agreement:
 ```python
 class ConsensusBuildingPattern:
     """Agents build consensus on solutions."""
-    
+
     def execute(self, agents: List[Agent], proposals: List[Solution]) -> Solution:
         # Agents evaluate all proposals
         # Voting or negotiation determines winner
@@ -205,7 +205,7 @@ class ConsensusBuildingPattern:
 ```python
 from kailash import Workflow
 from kailash.nodes.ai import (
-    AgentPoolManagerNode, 
+    AgentPoolManagerNode,
     ProblemAnalyzerNode,
     TeamFormationNode,
     SelfOrganizingAgentNode
@@ -213,13 +213,13 @@ from kailash.nodes.ai import (
 
 class SelfOrganizingResearchSystem:
     """Research system with self-organizing agents."""
-    
+
     def __init__(self, agent_pool_size: int = 20):
         self.workflow = Workflow(
             workflow_id="self_organizing_research",
             name="Self-Organizing Research System"
         )
-        
+
         # Core infrastructure
         self.workflow.add_node(
             "agent_pool_manager",
@@ -234,7 +234,7 @@ class SelfOrganizingResearchSystem:
                 }
             }
         )
-        
+
         self.workflow.add_node(
             "problem_analyzer",
             ProblemAnalyzerNode(),
@@ -243,7 +243,7 @@ class SelfOrganizingResearchSystem:
                 "decomposition_strategy": "hierarchical"
             }
         )
-        
+
         self.workflow.add_node(
             "team_formation_engine",
             TeamFormationNode(),
@@ -253,10 +253,10 @@ class SelfOrganizingResearchSystem:
                 "team_size_limits": {"min": 2, "max": 10}
             }
         )
-        
+
         # Create agent pool
         self._create_agent_pool(agent_pool_size)
-        
+
     def _create_agent_pool(self, size: int):
         """Create pool of self-organizing agents."""
         capabilities_pool = [
@@ -267,11 +267,11 @@ class SelfOrganizingResearchSystem:
             ["writing", "synthesis"],
             ["visualization", "reporting"]
         ]
-        
+
         for i in range(size):
             agent_id = f"research_agent_{i:03d}"
             capabilities = capabilities_pool[i % len(capabilities_pool)]
-            
+
             self.workflow.add_node(
                 agent_id,
                 SelfOrganizingAgentNode(),
@@ -286,11 +286,11 @@ class SelfOrganizingResearchSystem:
                     }
                 }
             )
-            
+
     def solve_problem(self, problem_description: str) -> Dict:
         """Solve a problem using self-organizing agents."""
         runtime = LocalRuntime()
-        
+
         # Step 1: Analyze the problem
         analysis_result, _ = runtime.execute(
             self.workflow,
@@ -301,9 +301,9 @@ class SelfOrganizingResearchSystem:
                 }
             }
         )
-        
+
         problem_analysis = analysis_result["problem_analyzer"]["analysis"]
-        
+
         # Step 2: Form initial team
         formation_result, _ = runtime.execute(
             self.workflow,
@@ -314,17 +314,17 @@ class SelfOrganizingResearchSystem:
                 }
             }
         )
-        
+
         team = formation_result["team_formation_engine"]["team"]
-        
+
         # Step 3: Execute collaborative solution
         solution = self._execute_team_collaboration(
             team, problem_analysis, runtime
         )
-        
+
         # Step 4: Evaluate and iterate if needed
         evaluation = self._evaluate_solution(solution, problem_analysis)
-        
+
         iteration_count = 0
         while evaluation["quality_score"] < problem_analysis["quality_threshold"] and iteration_count < 3:
             # Reform team or adjust strategy
@@ -334,7 +334,7 @@ class SelfOrganizingResearchSystem:
             )
             evaluation = self._evaluate_solution(solution, problem_analysis)
             iteration_count += 1
-            
+
         return {
             "problem": problem_description,
             "solution": solution,
@@ -350,19 +350,19 @@ class SelfOrganizingResearchSystem:
 ```python
 class EmergentSpecializationNode(Node):
     """Agents develop specializations based on success patterns."""
-    
+
     def run(self, **kwargs):
         agent_history = kwargs["agent_history"]
         task_outcomes = kwargs["task_outcomes"]
-        
+
         # Analyze which tasks the agent excels at
         specialization_scores = self._analyze_performance_patterns(
             agent_history, task_outcomes
         )
-        
+
         # Update agent capabilities based on emergent specialization
         new_capabilities = self._derive_specialization(specialization_scores)
-        
+
         return {
             "emerged_specializations": new_capabilities,
             "confidence_scores": specialization_scores
@@ -373,18 +373,18 @@ class EmergentSpecializationNode(Node):
 ```python
 class DynamicCoalitionNode(Node):
     """Forms temporary coalitions for specific objectives."""
-    
+
     def run(self, **kwargs):
         objective = kwargs["objective"]
         agent_pool = kwargs["agent_pool"]
         time_limit = kwargs.get("time_limit", 300)
-        
+
         # Agents form coalitions based on shared interests
         coalitions = self._form_coalitions(objective, agent_pool)
-        
+
         # Coalitions compete/collaborate
         results = self._execute_coalition_dynamics(coalitions, time_limit)
-        
+
         return {
             "winning_coalition": results["winner"],
             "coalition_solutions": results["solutions"]
@@ -395,11 +395,11 @@ class DynamicCoalitionNode(Node):
 ```python
 class AdaptiveTopologyNode(Node):
     """Team structure adapts based on problem characteristics."""
-    
+
     def run(self, **kwargs):
         problem_type = kwargs["problem_type"]
         team_members = kwargs["team_members"]
-        
+
         if problem_type == "exploratory":
             topology = self._create_mesh_topology(team_members)
         elif problem_type == "hierarchical":
@@ -408,7 +408,7 @@ class AdaptiveTopologyNode(Node):
             topology = self._create_star_topology(team_members)
         else:
             topology = self._create_hybrid_topology(team_members)
-            
+
         return {
             "topology": topology,
             "communication_channels": self._derive_channels(topology)

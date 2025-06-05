@@ -1,6 +1,6 @@
 .. _examples-basic:
 
-==============
+
 Basic Examples
 ==============
 
@@ -32,4 +32,5 @@ Simple Data Processing
    runtime = LocalRuntime()
    results, run_id = runtime.execute(workflow)
 
-For more examples, see the `examples directory <https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_.
+For more examples, see the `examples directory
+<https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_.

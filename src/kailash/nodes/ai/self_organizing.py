@@ -1305,7 +1305,7 @@ class SelfOrganizingAgentNode(A2AAgentNode):
 
         # Add self-organization instructions to system prompt
         so_prompt = f"""You are a self-organizing agent with capabilities: {', '.join(capabilities)}.
-        
+
 Current team context: {json.dumps(team_context, indent=2)}
 Collaboration mode: {collaboration_mode}
 

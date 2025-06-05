@@ -2,15 +2,14 @@
 
 .. _guides-custom-nodes:
 
-=====================
+
 Creating Custom Nodes
 =====================
 
 This guide explains how to create custom nodes for the Kailash Python SDK.
 
 .. note::
-   For a complete example, see the :doc:`../best_practices` guide and the
-   `node examples <https://github.com/terrene-foundation/kailash-py/tree/main/examples/node_examples>`_.
+   For a complete example, see the :doc:`../best_practices` guide and the `node examples <https://github.com/terrene-foundation/kailash-py/tree/main/examples/node_examples>`_.
 
 Basic Custom Node
 -----------------

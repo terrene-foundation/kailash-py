@@ -424,7 +424,7 @@ def get_user(id):
     query = f"SELECT * FROM users WHERE id = {id}"
     cursor.execute(query)
     user = cursor.fetchone()
-    
+
     if user:
         return {
             'id': user[0],
@@ -445,13 +445,13 @@ def get_user(id):
     code2 = """
 async function processUserData(users) {
     const results = [];
-    
+
     for (let i = 0; i < users.length; i++) {
         const user = users[i];
         const profile = await fetchUserProfile(user.id);
         const posts = await fetchUserPosts(user.id);
         const friends = await fetchUserFriends(user.id);
-        
+
         results.push({
             ...user,
             profile,
@@ -459,7 +459,7 @@ async function processUserData(users) {
             friends
         });
     }
-    
+
     return results;
 }
 """

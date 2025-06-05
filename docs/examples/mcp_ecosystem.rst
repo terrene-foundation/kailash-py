@@ -1,7 +1,8 @@
 MCP Ecosystem Example
 =====================
 
-The MCP (Model Context Protocol) ecosystem example demonstrates how to build a zero-code workflow deployment platform using the Kailash SDK.
+The MCP (Model Context Protocol) ecosystem example demonstrates how to build a
+zero-code workflow deployment platform using the Kailash SDK.
 
 Overview
 --------
@@ -21,10 +22,10 @@ Quick Start
 
     # Navigate to examples
     cd examples/integration_examples
-    
+
     # Run the ecosystem
     ./run_ecosystem.sh
-    
+
     # Open browser to http://localhost:8000
 
 Architecture
@@ -88,7 +89,7 @@ Deploy a workflow via API:
 .. code-block:: python
 
     import requests
-    
+
     # Deploy the GitHub to Slack workflow
     response = requests.post("http://localhost:8000/api/deploy/github-slack")
     print(response.json())
@@ -109,7 +110,8 @@ The ecosystem is implemented in two versions:
 1. **mcp_ecosystem_demo.py** - Simplified demo with mock MCP servers
 2. **mcp_ecosystem_fixed.py** - Full integration with Kailash SDK
 
-Both demonstrate the same concepts but the fixed version creates actual Kailash workflows.
+Both demonstrate the same concepts but the fixed version creates actual Kailash
+workflows.
 
 Technology Stack
 ----------------

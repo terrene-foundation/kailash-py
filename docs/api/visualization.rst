@@ -2,7 +2,8 @@
 Visualization
 =============
 
-This section covers the real-time monitoring, dashboard, and performance visualization capabilities in the Kailash SDK.
+This section covers the real-time monitoring, dashboard, and performance visualization
+capabilities in the Kailash SDK.
 
 .. contents:: Table of Contents
    :local:
@@ -11,7 +12,8 @@ This section covers the real-time monitoring, dashboard, and performance visuali
 Overview
 ========
 
-The visualization system provides comprehensive real-time monitoring and performance analysis for workflow execution:
+The visualization system provides comprehensive real-time monitoring and performance
+analysis for workflow execution:
 
 - **Real-time Dashboards**: Live monitoring with streaming metrics
 - **Performance Reports**: Multi-format comprehensive reports
@@ -71,7 +73,7 @@ Supported output formats for performance reports.
    :show-inheritance:
 
 Performance Insights
-=====================
+====================
 
 Structured performance analysis and recommendations.
 
@@ -104,7 +106,7 @@ FastAPI-based server for real-time metrics streaming.
    :show-inheritance:
 
 Performance Visualizer
-=======================
+======================
 
 Static performance analysis and chart generation.
 
@@ -117,7 +119,7 @@ Usage Examples
 ==============
 
 Basic Real-time Monitoring
----------------------------
+--------------------------
 
 .. code-block:: python
 
@@ -194,7 +196,7 @@ API-based Monitoring
    api.stop_monitoring()
 
 WebSocket Streaming Server
----------------------------
+--------------------------
 
 .. code-block:: python
 
@@ -311,7 +313,7 @@ The visualization system follows a modular architecture:
        G --> J
 
 Best Practices
-===============
+==============
 
 **Real-time Monitoring**
    - Use appropriate update intervals (1-5 seconds for active monitoring)

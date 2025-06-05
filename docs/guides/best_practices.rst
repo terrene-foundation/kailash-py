@@ -2,7 +2,7 @@
 
 .. _guides-best-practices:
 
-==============
+
 Best Practices
 ==============
 

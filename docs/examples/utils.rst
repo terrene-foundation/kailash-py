@@ -2,7 +2,7 @@
 
 .. _examples-utils:
 
-================
+
 Utility Examples
 ================
 

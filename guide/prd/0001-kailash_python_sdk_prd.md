@@ -100,6 +100,28 @@ The final deliverables should include:
 - Conversion between Python nodes and Kailash containers
 - Support deployment manifests
 
+### 2.6 Access Control and Authentication System
+
+#### Authentication
+- JWT-based authentication with access/refresh token pattern
+- Multi-tenant architecture with complete tenant isolation
+- Role-based access control (Admin, Editor, Viewer)
+- API key authentication for service accounts
+- Integration with external identity providers
+
+#### Authorization
+- Fine-grained permissions at workflow and node levels
+- Permission-based execution routing
+- Data masking for sensitive fields
+- Tenant-level resource isolation
+- Audit logging of all access attempts
+
+#### Runtime Integration
+- AccessControlledRuntime with transparent security layer
+- Backward compatibility (existing workflows unchanged)
+- Optional access control (disabled by default)
+- Performance optimization (minimal overhead when disabled)
+
 ## 3. API Specifications
 
 ### 3.1 Node API
@@ -187,6 +209,43 @@ class TaskManager:
 
     def list_tasks(self, run_id: str) -> List[TaskSummary]:
         """List all tasks for a workflow run."""
+```
+
+### 3.6 Access Control API
+
+```python
+# User Context
+@dataclass
+class UserContext:
+    user_id: str
+    tenant_id: str
+    email: str
+    roles: List[str]
+
+# Permission System
+class AccessControlManager:
+    def add_rule(self, rule: PermissionRule):
+        """Add a permission rule."""
+
+    def check_workflow_access(self, user: UserContext, workflow_id: str,
+                             permission: WorkflowPermission) -> AccessDecision:
+        """Check workflow access."""
+
+    def check_node_access(self, user: UserContext, node_id: str,
+                         permission: NodePermission) -> AccessDecision:
+        """Check node access."""
+
+# Access-Controlled Runtime
+class AccessControlledRuntime:
+    def __init__(self, user_context: UserContext):
+        """Create runtime with user context."""
+
+    def execute(self, workflow: Workflow, parameters: Optional[Dict] = None) -> Tuple[Any, str]:
+        """Execute workflow with access control."""
+
+# Node Access Control
+def add_access_control(node_instance, **acl_config):
+    """Add access control to a node instance."""
 ```
 
 ## 4. Example Usage

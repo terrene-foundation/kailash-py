@@ -943,16 +943,16 @@ class MyCustomNode(Node):
             "param1": {"type": str, "required": True},
             "param2": {"type": int, "default": 10}
         }
-    
+
     def run(self, context, **kwargs):
         param1 = kwargs.get("param1")
         param2 = kwargs.get("param2", 10)
-        
+
         # Node logic here
         result = f"{param1} processed with {param2}"
-        
+
         return {"result": result}
-    
+
     def get_output_schema(self):
         return {
             "type": "object",

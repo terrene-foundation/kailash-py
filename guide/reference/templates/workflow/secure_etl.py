@@ -78,7 +78,7 @@ def is_safe_value(value):
     '''Check if value is safe for processing'''
     if not isinstance(value, (str, int, float)):
         return False
-    
+
     # Check for potentially dangerous patterns
     dangerous_patterns = ['<script>', 'javascript:', 'eval(', 'exec(']
     value_str = str(value)
@@ -102,7 +102,7 @@ for row in data:
             # Log security issue and skip dangerous values
             print(f"Skipped dangerous value: {key}={value}")
             safe_row[key] = None
-    
+
     safe_data.append(safe_row)
 
 # Filter out rows with too many null values (security measure)

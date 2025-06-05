@@ -214,7 +214,7 @@ class SecureCredentialStore:
     def store_credential(self, key: str, value: str) -> None:
         encrypted_value = self._encrypt(value)
         self._storage.set(key, encrypted_value)
-    
+
     def get_credential(self, key: str) -> str:
         encrypted_value = self._storage.get(key)
         return self._decrypt(encrypted_value)
@@ -504,6 +504,6 @@ For security issues, contact:
 
 ---
 
-**Last Updated**: 2025-06-05  
-**Next Review**: 2025-07-05  
+**Last Updated**: 2025-06-05
+**Next Review**: 2025-07-05
 **Document Version**: 1.0

@@ -1,8 +1,8 @@
 .. _examples-patterns:
 
-==================
+
 Workflow Patterns
-==================
+=================
 
 This section demonstrates common workflow patterns and best practices.
 
@@ -58,4 +58,5 @@ State Management Pattern
 
    # ... (stateful operations)
 
-For more patterns, see the `workflow examples <https://github.com/terrene-foundation/kailash-py/tree/main/examples/workflow_examples>`_.
+For more patterns, see the `workflow examples
+<https://github.com/terrene-foundation/kailash-py/tree/main/examples/workflow_examples>`_.

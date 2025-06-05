@@ -2,7 +2,7 @@
 
 .. _guides-performance:
 
-========================
+
 Performance Optimization
 ========================
 

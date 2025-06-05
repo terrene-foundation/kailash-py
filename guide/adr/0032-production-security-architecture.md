@@ -1,8 +1,8 @@
 # ADR-0032: Production Security Architecture
 
-**Date**: 2025-06-05  
-**Status**: Accepted  
-**Deciders**: Development Team  
+**Date**: 2025-06-05
+**Status**: Accepted
+**Deciders**: Development Team
 **Technical Story**: Security & Production Hardening Implementation
 
 ## Context

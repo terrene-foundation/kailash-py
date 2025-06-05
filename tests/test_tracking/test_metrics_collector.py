@@ -70,7 +70,7 @@ class TestMetricsCollector:
         with collector.collect(node_id="test_node") as context:
             # Simulate some work
             time.sleep(0.1)
-            result = 42
+            # result = 42  # Not used
 
         metrics = context.result()
 
@@ -92,7 +92,7 @@ class TestMetricsCollector:
                 total += i
 
             # Do some memory allocation
-            data = [i for i in range(10000)]
+            # data = [i for i in range(10000)]  # Not used
 
             time.sleep(0.05)  # Allow monitoring thread to collect samples
 

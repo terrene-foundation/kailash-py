@@ -71,7 +71,7 @@ csv_reader = CSVReaderNode(config={"file_path": "data.csv"})
 data = csv_reader.execute()
 
 # Process data
-processed_data = [{"id": row["id"], "name": row["name"].upper()} 
+processed_data = [{"id": row["id"], "name": row["name"].upper()}
                   for row in data["data"]]
 
 # Write results
@@ -358,10 +358,10 @@ try:
 except Exception as e:
     self._failures += 1
     self._last_failure = time.time()
-    
+
     if self._failures >= 5:
         self._circuit_open = True
-    
+
     result = {"error": str(e), "failures": self._failures}
 """,
         "imports": ["time"]
@@ -394,7 +394,7 @@ for attempt in range(max_retries):
     except Exception as e:
         if attempt == max_retries - 1:
             raise
-        
+
         # Exponential backoff with jitter
         delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
         time.sleep(delay)
@@ -533,11 +533,11 @@ main_workflow.connect("data_prep", "ml_pipeline")
 def create_processing_workflow(steps):
     """Dynamically create workflow based on configuration"""
     workflow = Workflow()
-    
+
     previous_node = None
     for i, step in enumerate(steps):
         node_id = f"step_{i}"
-        
+
         # Create node based on step type
         if step["type"] == "transform":
             node = PythonCodeNode(config={"code": step["code"]})
@@ -549,14 +549,14 @@ def create_processing_workflow(steps):
             node = PythonCodeNode(
                 config={"code": step["aggregation_code"]}
             )
-        
+
         workflow.add_node(node_id, node)
-        
+
         if previous_node:
             workflow.connect(previous_node, node_id)
-        
+
         previous_node = node_id
-    
+
     return workflow
 
 # Create custom workflow
@@ -757,13 +757,13 @@ gateway = WorkflowGateway(port=8000)
 # Register MCP servers for external tool access
 mcp_config = {
     "research_tools": {
-        "command": "python", 
+        "command": "python",
         "args": ["-m", "research_mcp_server"],
         "capabilities": ["web_search", "document_analysis"]
     },
     "data_tools": {
         "command": "python",
-        "args": ["-m", "data_mcp_server"], 
+        "args": ["-m", "data_mcp_server"],
         "capabilities": ["sql_query", "visualization"]
     }
 }
@@ -856,6 +856,65 @@ for connection in config["connections"]:
     )
 ```
 
+### 17. Workflow Studio Visual Development Pattern
+**Purpose**: Use visual interface for workflow development and deployment
+
+```python
+# Export workflow from Python for visual editing
+from kailash.utils.export import WorkflowExporter
+
+# Create workflow programmatically
+workflow = create_data_processing_workflow()
+
+# Export for Studio import
+workflow.save("workflow.yaml", format="yaml")
+
+# Import to Studio via API
+import requests
+with open("workflow.yaml", "rb") as f:
+    response = requests.post(
+        "https://studio.kailash.ai/api/workflows/import",
+        files={"workflow": f},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+# Or use Studio API client
+from kailash.api.studio import StudioClient
+client = StudioClient(api_key="your-api-key")
+client.upload_workflow(workflow)
+```
+
+**Studio Features**:
+- Drag-and-drop node palette with 66+ nodes
+- Real-time parameter validation
+- Visual connection mapping
+- Live execution monitoring
+- Export to Python/YAML/JSON
+
+### 18. Multi-Tenant Deployment Pattern
+**Purpose**: Deploy isolated workflow environments for multiple tenants
+
+```bash
+# Deploy new tenant with isolated resources
+./studio/deploy-tenant.sh \
+  --tenant-id acme-corp \
+  --domain acme.studio.kailash.ai \
+  --database-schema acme \
+  --redis-db 2
+
+# This creates:
+# - Isolated Docker container
+# - PostgreSQL schema for tenant data
+# - Redis database for caching
+# - Nginx routing configuration
+```
+
+**Tenant Isolation**:
+- Separate workflow storage per tenant
+- Isolated execution environments
+- Per-tenant resource limits
+- Independent authentication
+
 ## Security Patterns
 
 ### 16. Secure File Processing Pattern
@@ -941,7 +1000,7 @@ from kailash.nodes.base import Node, NodeParameter
 
 class SecureDataProcessorNode(SecurityMixin, Node):
     """Custom node with integrated security."""
-    
+
     def get_parameters(self):
         return {
             "input_data": NodeParameter(
@@ -950,28 +1009,28 @@ class SecureDataProcessorNode(SecurityMixin, Node):
                 required=True
             )
         }
-    
+
     def run(self, **kwargs):
         # Automatic input validation and sanitization
         safe_params = self.validate_and_sanitize_inputs(kwargs)
-        
+
         # Log security event
         self.log_security_event("Processing data", level="INFO")
-        
+
         # Process data safely
         processed_data = self.secure_process(safe_params["input_data"])
-        
+
         return {"processed": processed_data}
-    
+
     def secure_process(self, data):
         """Process data with security considerations."""
         # Validate data size
         if len(data) > 10000:
             raise SecurityError("Data too large for processing")
-        
+
         # Process with size limits
         return [item for item in data if self.is_safe_item(item)]
-    
+
     def is_safe_item(self, item):
         """Check if item is safe to process."""
         return not any(dangerous in str(item) for dangerous in ['<script>', 'eval(', 'exec('])

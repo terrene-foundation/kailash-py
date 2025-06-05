@@ -197,6 +197,15 @@ pre-commit run --all-files
 # Build documentation
 cd docs && python build_docs.py
 ```
+## Frontend Development
+
+For frontend applications integrating with Kailash SDK, see `guide/frontend/`:
+- Architecture patterns → `architecture.md`
+- Component development → `components.md`
+- API integration → `api-integration.md`
+- UI/UX guidelines → `styling.md`
+- Testing strategies → `testing.md`
+- Debugging tools → `debugging.md`
 
 ## Directory Structure
 ```
@@ -214,7 +223,12 @@ kailash_python_sdk/
 │   ├── instructions/     # Detailed instructions
 │   ├── adr/             # Architecture decisions
 │   ├── prd/             # Product requirements
+│   ├── frontend/        # Frontend development guide
 │   └── mistakes/        # Common mistakes log
+├── studio/               # Kailash Workflow Studio (React app)
+│   ├── src/             # Frontend source code
+│   ├── public/          # Static assets
+│   └── tests/           # Frontend tests
 ```
 
 ## Important Reminders

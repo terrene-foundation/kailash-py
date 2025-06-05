@@ -1,7 +1,8 @@
 Self-Organizing Agent Pools Guide
 =================================
 
-This guide explains how to create and manage self-organizing agent pools that can autonomously collaborate to solve complex problems.
+This guide explains how to create and manage self-organizing agent pools that can
+autonomously collaborate to solve complex problems.
 
 .. contents:: Table of Contents
    :local:
@@ -13,7 +14,7 @@ Overview
 Self-organizing agent pools enable multiple AI agents to:
 
 - **Autonomously form teams** based on problem requirements
-- **Share information** through intelligent caching and memory pools  
+- **Share information** through intelligent caching and memory pools
 - **Access external tools** via MCP (Model Context Protocol) integration
 - **Evaluate solutions** and determine when to stop iterating
 - **Coordinate efficiently** without centralized control
@@ -28,7 +29,8 @@ Core Infrastructure
    Central memory system with selective attention mechanisms for information sharing.
 
 **IntelligentCacheNode**
-   Prevents redundant external calls through semantic similarity detection and TTL-based caching.
+   Prevents redundant external calls through semantic similarity detection and
+   TTL-based caching.
 
 **AgentPoolManagerNode**
    Manages agent registry, capabilities, and performance tracking.
@@ -40,7 +42,8 @@ Self-Organization Components
    Decomposes problems into capability requirements and subtasks.
 
 **TeamFormationNode**
-   Forms optimal teams using various strategies (capability matching, swarm-based, market-based, hierarchical).
+   Forms optimal teams using various strategies (capability matching,
+   swarm-based, market-based, hierarchical).
 
 **SelfOrganizingAgentNode**
    Individual agents that adapt roles based on team context.
@@ -80,14 +83,14 @@ Basic Usage Pattern
        TeamFormationNode
    )
    from kailash.nodes.ai.a2a import SharedMemoryPoolNode
-   
+
    # Create workflow
    workflow = Workflow("Self-Organizing System")
-   
+
    # Add shared infrastructure
    memory = workflow.add_node(SharedMemoryPoolNode(name="memory"))
    cache = workflow.add_node(IntelligentCacheNode(name="cache", ttl=3600))
-   
+
    # Add orchestration
    orchestrator = workflow.add_node(OrchestrationManagerNode(
        name="orchestrator",
@@ -95,7 +98,7 @@ Basic Usage Pattern
        quality_threshold=0.8,
        time_limit_minutes=10
    ))
-   
+
    # Execute
    runtime = LocalRuntime()
    result, _ = runtime.execute(workflow, parameters={
@@ -127,10 +130,10 @@ Configure agents with specific MCP servers for tool access:
        shared_cache=cache,
        shared_memory=memory
    ))
-   
+
    data_agent = workflow.add_node(MCPAgentNode(
        name="data_agent",
-       mcp_server="database", 
+       mcp_server="database",
        capabilities=["data_access", "sql", "analytics"],
        shared_cache=cache,
        shared_memory=memory
@@ -150,7 +153,7 @@ Configure intelligent caching to prevent redundant operations:
        similarity_threshold=0.8,  # Semantic matching threshold
        max_entries=1000
    ))
-   
+
    # Cache expensive operations
    cache_result = cache.run(
        action="cache",
@@ -247,37 +250,37 @@ Here's a comprehensive example of a self-organizing research system:
    from kailash.nodes.ai.intelligent_agent_orchestrator import *
    from kailash.nodes.ai.self_organizing import *
    from kailash.nodes.ai.a2a import *
-   
+
    def create_research_system():
        """Create a self-organizing research system."""
        workflow = Workflow("Research System")
-       
+
        # Shared infrastructure
        memory = workflow.add_node(SharedMemoryPoolNode(
            name="memory",
            memory_size_limit=1000,
            attention_window=50
        ))
-       
+
        cache = workflow.add_node(IntelligentCacheNode(
            name="cache",
            ttl=7200,  # 2 hours
            similarity_threshold=0.75
        ))
-       
+
        # Analysis components
        query_analyzer = workflow.add_node(QueryAnalysisNode(name="analyzer"))
        problem_analyzer = workflow.add_node(ProblemAnalyzerNode(name="problem"))
-       
+
        # Agent pool
        pool = workflow.add_node(AgentPoolManagerNode(name="pool"))
-       
+
        # Team formation
        team_former = workflow.add_node(TeamFormationNode(
            name="team_former",
            formation_strategy="capability_matching"
        ))
-       
+
        # Specialized agents
        for i in range(5):
            agent = workflow.add_node(MCPAgentNode(
@@ -286,39 +289,39 @@ Here's a comprehensive example of a self-organizing research system:
                shared_cache=cache,
                shared_memory=memory
            ))
-       
+
        # Evaluation and convergence
        evaluator = workflow.add_node(SolutionEvaluatorNode(
            name="evaluator",
            criteria=["accuracy", "completeness", "clarity"]
        ))
-       
+
        convergence = workflow.add_node(ConvergenceDetectorNode(
            name="convergence",
            quality_threshold=0.9,
            max_iterations=8
        ))
-       
+
        # Orchestration
        orchestrator = workflow.add_node(OrchestrationManagerNode(
            name="orchestrator",
            max_iterations=10,
            quality_threshold=0.85
        ))
-       
+
        # Connect workflow
        workflow.connect("analyzer", "problem")
        workflow.connect("problem", "team_former")
        workflow.connect("team_former", "orchestrator")
        workflow.connect("orchestrator", "evaluator")
        workflow.connect("evaluator", "convergence")
-       
+
        return workflow
-   
+
    # Use the system
    workflow = create_research_system()
    runtime = LocalRuntime()
-   
+
    result, _ = runtime.execute(workflow, parameters={
        "orchestrator": {
            "query": "Research quantum computing applications in finance",
@@ -343,28 +346,28 @@ Best Practices
 
 2. **Cache Configuration**
    Set appropriate TTLs based on data volatility:
-   
+
    - Static data: 24-48 hours
    - Market data: 15-60 minutes
    - Real-time data: 1-5 minutes
 
 3. **Team Size**
    Balance team size with coordination overhead:
-   
+
    - Simple tasks: 3-5 agents
    - Medium complexity: 5-10 agents
    - Complex problems: 10-20 agents
 
 4. **Convergence Tuning**
    Balance quality vs. time:
-   
+
    - High stakes: quality_threshold=0.9+, max_iterations=20+
    - Time sensitive: timeout=300s, min_iterations=2
    - Exploratory: improvement_threshold=0.01, no timeout
 
 5. **Memory Management**
    Use attention mechanisms to filter relevant information:
-   
+
    - Set appropriate attention_window sizes
    - Use semantic tags for better filtering
    - Implement memory cleanup for long-running systems
@@ -429,7 +432,7 @@ Debug Agent Interactions
    # Enable debug logging
    import logging
    logging.basicConfig(level=logging.DEBUG)
-   
+
    # Track agent communications
    memory_contents = memory.run(action="list", limit=10)
    print(f"Recent memories: {len(memory_contents['memories'])}")
@@ -464,14 +467,14 @@ Error Handling
 
    try:
        result, _ = runtime.execute(workflow, parameters={...})
-       
+
        if result.get("orchestrator", {}).get("success"):
            solution = result["orchestrator"]["final_solution"]
            print(f"Solution confidence: {solution.get('confidence', 0):.2%}")
        else:
            error = result.get("orchestrator", {}).get("error", "Unknown error")
            print(f"Execution failed: {error}")
-           
+
    except Exception as e:
        print(f"Workflow error: {e}")
        # Access partial results if available

@@ -217,13 +217,13 @@ class TestA2AAgentNode:
 
         response = """
         After analyzing the data, here are my findings:
-        
+
         Critical: The system shows signs of overload during peak hours.
-        
+
         I discovered a pattern in user engagement that correlates with time of day.
-        
+
         Minor note: Some data points are missing from Tuesday.
-        
+
         Key finding: Response times have improved by 20% after optimization.
         """
 

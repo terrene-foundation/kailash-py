@@ -54,7 +54,7 @@ For quick access to the most important information:
 ## When to Use These Documents
 
 - **Starting a new feature?** → Check Workflow Procedures
-- **Writing code?** → Follow Coding Standards  
+- **Writing code?** → Follow Coding Standards
 - **Adding documentation?** → See Documentation Requirements
 - **Creating tests?** → Use Testing Guidelines
 - **Releasing or maintaining?** → Follow Maintenance Procedures

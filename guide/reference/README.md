@@ -4,7 +4,7 @@ This directory contains lean, LLM-optimized reference documentation for the Kail
 
 ## Contents
 
-### 1. **[API Registry](api-registry.yaml)** 
+### 1. **[API Registry](api-registry.yaml)**
 Complete YAML-based API reference with:
 - All classes, methods, and signatures
 - Configuration schemas for every node type
@@ -20,7 +20,7 @@ Concise, example-driven guide covering:
 - Custom node creation
 - Environment setup
 
-### 3. **[Validation Guide](validation-guide.md)** 
+### 3. **[Validation Guide](validation-guide.md)**
 Critical rules to prevent common LLM mistakes:
 - Exact method names and signatures
 - Correct class naming (Node suffix)
@@ -122,7 +122,7 @@ results = workflow.execute(inputs={})
 
 These references are extracted from the main codebase and should be updated when:
 - New nodes are added
-- API signatures change  
+- API signatures change
 - New patterns emerge
 - Common use cases are identified
 

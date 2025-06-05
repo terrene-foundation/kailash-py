@@ -321,7 +321,7 @@ Text Processing
 ---------------
 
 HierarchicalChunkerNode
-~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.nodes.transform.chunkers.HierarchicalChunkerNode
    :members:
@@ -650,7 +650,7 @@ A2ACoordinatorNode
    :show-inheritance:
 
 Intelligent Orchestration
---------------------------
+-------------------------
 
 IntelligentCacheNode
 ~~~~~~~~~~~~~~~~~~~~
@@ -745,11 +745,11 @@ SelfOrganizingAgentNode
 
    # Create a complete self-organizing agent workflow
    workflow = Workflow("self_organizing_demo")
-   
+
    # Add the orchestration manager
    orchestrator = OrchestrationManagerNode()
    workflow.add_node("orchestrator", orchestrator)
-   
+
    # Execute with a complex business query
    runtime = LocalRuntime()
    result, _ = runtime.execute(workflow, parameters={
@@ -764,7 +764,7 @@ SelfOrganizingAgentNode
            "max_iterations": 3
        }
    })
-   
+
    print(f"Solution quality: {result['orchestrator']['quality_score']:.2%}")
    print(f"Iterations completed: {result['orchestrator']['iterations_completed']}")
 

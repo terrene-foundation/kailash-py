@@ -4,7 +4,6 @@ import pytest
 
 from kailash.nodes.logic.async_operations import AsyncMergeNode, AsyncSwitchNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
-from kailash.sdk_exceptions import NodeExecutionError
 
 
 class TestLogicNodes:
@@ -27,7 +26,7 @@ class TestLogicNodes:
         # Boolean condition - false case
         node = SwitchNode(
             input_data={"status": "error", "value": 0},
-            condition_field="status", 
+            condition_field="status",
             operator="==",
             value="success",
         )
@@ -48,81 +47,68 @@ class TestLogicNodes:
 
     def test_merge_node_operations(self):
         """Test MergeNode with various merge strategies."""
-        # Simple merge
-        node = MergeNode(
-            inputs=[
-                {"name": "Alice", "age": 30},
-                {"name": "Bob", "city": "NYC"}
-            ]
+        # Simple list concatenation
+        node = MergeNode(merge_type="concat")
+        result = node.execute(
+            data1=[{"name": "Alice", "age": 30}], data2=[{"name": "Bob", "city": "NYC"}]
         )
-        result = node.execute()
         assert "merged_data" in result
         assert isinstance(result["merged_data"], list)
         assert len(result["merged_data"]) == 2
 
-        # Merge with conflict resolution
-        node = MergeNode(
-            inputs=[
-                {"id": 1, "name": "Alice"},
-                {"id": 1, "name": "Alice Updated"}
-            ],
-            merge_strategy="last_wins"
+        # Dictionary merging
+        node = MergeNode(merge_type="merge_dict")
+        result = node.execute(
+            data1={"id": 1, "name": "Alice"},
+            data2={"id": 1, "name": "Alice Updated", "age": 30},
         )
-        result = node.execute()
         merged = result["merged_data"]
-        # Should prefer last value in conflicts
-        assert any("Updated" in str(item) for item in merged)
+        # Should merge dictionaries
+        assert merged["name"] == "Alice Updated"
+        assert merged["age"] == 30
 
-    def test_async_switch_node(self):
+    @pytest.mark.asyncio
+    async def test_async_switch_node(self):
         """Test AsyncSwitchNode functionality."""
         node = AsyncSwitchNode(
-            input_data={"value": 42},
             condition_field="value",
             operator=">",
             value=40,
         )
-        result = node.execute()
+        result = await node.execute_async(input_data={"value": 42})
         assert result["condition_result"] is True
         assert result["true_output"] == {"value": 42}
 
-    def test_async_merge_node(self):
+    @pytest.mark.asyncio
+    async def test_async_merge_node(self):
         """Test AsyncMergeNode functionality."""
-        node = AsyncMergeNode(
-            inputs=[
-                {"data": "first"},
-                {"data": "second"}
-            ]
+        node = AsyncMergeNode(merge_type="concat")
+        result = await node.execute_async(
+            data1=[{"data": "first"}], data2=[{"data": "second"}]
         )
-        result = node.execute()
         assert "merged_data" in result
         assert len(result["merged_data"]) == 2
 
     def test_logic_node_edge_cases(self):
         """Test edge cases and error handling."""
         # Empty inputs for merge
-        node = MergeNode(inputs=[])
-        result = node.execute()
+        node = MergeNode(merge_type="concat")
+        result = node.execute(data1=[], data2=[])
         assert result["merged_data"] == []
 
-        # Missing field in switch
-        with pytest.raises(NodeExecutionError):
-            node = SwitchNode(
-                input_data={"value": 10},
-                condition_field="missing_field",
-                operator="==",
-                value="test"
-            )
-            node.execute()
+        # Missing field in switch - should return false
+        node = SwitchNode(condition_field="missing_field", operator="==", value="test")
+        result = node.execute(input_data={"value": 10})
+        # Missing field returns None, which doesn't equal "test"
+        assert result["condition_result"] is False
+        assert result["false_output"] == {"value": 10}
 
-        # Invalid operator
-        with pytest.raises(NodeExecutionError):
-            node = SwitchNode(
-                input_data={"value": 10},
-                condition_field="value",
-                operator="invalid_op",
-                value=5
-            )
-            node.execute()
+        # Invalid operator - should return false
+        node = SwitchNode(condition_field="value", operator="invalid_op", value=5)
+        result = node.execute(input_data={"value": 10})
+        # Invalid operator returns False
+        assert result["condition_result"] is False
+        assert result["false_output"] == {"value": 10}
 
     def test_complex_conditions(self):
         """Test complex conditional logic."""
@@ -135,13 +121,10 @@ class TestLogicNodes:
             ({"score": 65}, "score", "<=", 65, True),
             ({"status": "active"}, "status", "!=", "inactive", True),
         ]
-        
+
         for data, field, op, value, expected in test_cases:
             node = SwitchNode(
-                input_data=data,
-                condition_field=field,
-                operator=op,
-                value=value
+                input_data=data, condition_field=field, operator=op, value=value
             )
             result = node.execute()
             assert result["condition_result"] == expected

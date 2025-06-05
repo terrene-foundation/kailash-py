@@ -2,7 +2,7 @@
 
 .. _guides-testing:
 
-=================
+
 Testing Workflows
 =================
 

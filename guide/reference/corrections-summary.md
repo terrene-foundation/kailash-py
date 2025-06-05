@@ -83,7 +83,7 @@ from kailash.nodes.code.python import PythonCodeNode
 
 **INCORRECT ASSUMPTION**: All nodes must be registered with alias
 
-**REALITY**: 
+**REALITY**:
 - Most nodes use `@register_node()` without alias
 - Node class name becomes the registry name
 - Example: `CSVReaderNode` class is registered as "CSVReaderNode"
@@ -104,12 +104,12 @@ class MyCustomNode(Node):
                 description="Input data"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """REQUIRED: Execute node logic"""
         data = kwargs["data"]
         return {"result": processed_data}
-    
+
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """OPTIONAL: Define output schema"""
         return {}  # Default if not overridden
