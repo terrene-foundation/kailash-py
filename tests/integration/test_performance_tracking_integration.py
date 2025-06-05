@@ -16,6 +16,8 @@ from kailash.workflow.graph import Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
 
 
+@pytest.mark.slow
+@pytest.mark.integration
 class TestPerformanceTrackingIntegration:
     """Test integration of performance tracking with workflow execution."""
 
