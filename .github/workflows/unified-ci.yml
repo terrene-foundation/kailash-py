@@ -195,10 +195,34 @@ jobs:
       - name: Setup Python (self-hosted)
         run: |
           echo "Checking available Python versions"
-          which python3
-          python3 --version
-          which python3.11 || echo "Python 3.11 not found - install with: brew install python@3.11"
-          which python3.12 || echo "Python 3.12 not found - install with: brew install python@3.12"
+          
+          # Initialize pyenv if available
+          if command -v pyenv &> /dev/null; then
+            echo "Found pyenv, initializing..."
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+            
+            echo "Available Python versions:"
+            pyenv versions
+            
+            # Check for required versions
+            if pyenv versions | grep -q "3.11"; then
+              echo "✓ Python 3.11 available"
+            else
+              echo "⚠️  Python 3.11 not found - install with: pyenv install 3.11"
+            fi
+            
+            if pyenv versions | grep -q "3.12"; then
+              echo "✓ Python 3.12 available"
+            else
+              echo "⚠️  Python 3.12 not found - install with: pyenv install 3.12"
+            fi
+          else
+            echo "pyenv not found, checking system Python"
+            which python3
+            python3 --version
+          fi
 
       - name: Install uv
         run: |
@@ -207,9 +231,22 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Initialize pyenv if available
+          if command -v pyenv &> /dev/null; then
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+          fi
+          
           # Create venvs for both Python versions
           echo "Setting up Python 3.11 environment"
-          if command -v python3.11 &> /dev/null; then
+          if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.11"; then
+            # Get the exact 3.11 version from pyenv
+            PY311=$(pyenv versions --bare | grep "^3\.11\." | head -1)
+            echo "Using pyenv Python $PY311"
+            PYENV_VERSION=$PY311 uv venv .venv-3.11 --python python
+            VIRTUAL_ENV=.venv-3.11 uv sync
+          elif command -v python3.11 &> /dev/null; then
             uv venv .venv-3.11 --python python3.11
             VIRTUAL_ENV=.venv-3.11 uv sync
           else
@@ -217,11 +254,18 @@ jobs:
           fi
           
           echo "Setting up Python 3.12 environment"
-          if command -v python3.12 &> /dev/null; then
+          if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.12"; then
+            # Get the exact 3.12 version from pyenv
+            PY312=$(pyenv versions --bare | grep "^3\.12\." | head -1)
+            echo "Using pyenv Python $PY312"
+            PYENV_VERSION=$PY312 uv venv .venv-3.12 --python python
+            VIRTUAL_ENV=.venv-3.12 uv sync
+          elif command -v python3.12 &> /dev/null; then
             uv venv .venv-3.12 --python python3.12
             VIRTUAL_ENV=.venv-3.12 uv sync
           else
             # Fallback to system python3
+            echo "Using system Python for 3.12"
             uv venv .venv-3.12 --python python3
             VIRTUAL_ENV=.venv-3.12 uv sync
           fi
