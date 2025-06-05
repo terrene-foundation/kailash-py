@@ -79,6 +79,9 @@ from kailash.workflow import Workflow
 
 def create_sample_data():
     """Create sample data files for the examples"""
+    # Ensure data directory exists
+    os.makedirs("data", exist_ok=True)
+    
     # Customer data with sensitive information
     customers_data = """customer_id,name,email,phone,ssn,balance,credit_limit,join_date
 1001,John Smith,john@example.com,555-0101,123-45-6789,15000,20000,2020-01-15
@@ -87,7 +90,7 @@ def create_sample_data():
 1004,Alice Brown,alice@example.com,555-0104,789-01-2345,3200,5000,2022-07-14
 1005,Charlie Wilson,charlie@example.com,555-0105,234-56-7890,18500,20000,2021-09-30"""
 
-    with open("customers.csv", "w") as f:
+    with open("data/customers.csv", "w") as f:
         f.write(customers_data)
 
     # Employee data for HR example
@@ -98,7 +101,7 @@ def create_sample_data():
 2004,Miles Dyson,Engineering,135000,444-55-6666,4.7
 2005,Marcus Wright,Marketing,78000,555-66-7777,3.5"""
 
-    with open("employees.csv", "w") as f:
+    with open("data/employees.csv", "w") as f:
         f.write(employees_data)
 
     print("✓ Created sample data files")
@@ -274,7 +277,7 @@ def create_customer_analytics_workflow():
 
     # 1. Read customer data (everyone can read)
     reader = add_access_control(
-        CSVReaderNode(name="csv_reader", file_path="customers.csv"),
+        CSVReaderNode(name="csv_reader", file_path="data/customers.csv"),
         enable_access_control=True,
         required_permission=NodePermission.EXECUTE,
         node_id="read_customers",
@@ -397,7 +400,7 @@ result = summary.to_dict('records')
     # 6. Export summary (everyone)
     summary_exporter = add_access_control(
         CSVWriterNode(
-            name="summary_exporter", file_path="customer_analysis_summary.csv"
+            name="summary_exporter", file_path="outputs/customer_analysis_summary.csv"
         ),
         enable_access_control=True,
         required_permission=NodePermission.EXECUTE,
@@ -428,7 +431,7 @@ def create_hr_workflow():
 
     # Read employee data
     reader = add_access_control(
-        CSVReaderNode(name="hr_reader", file_path="employees.csv"),
+        CSVReaderNode(name="hr_reader", file_path="data/employees.csv"),
         enable_access_control=True,
         required_permission=NodePermission.EXECUTE,
         node_id="read_employees",
@@ -486,16 +489,20 @@ result = {
             name="hr_exporter",
             code="""
 import json
+import os
+
+# Ensure outputs directory exists
+os.makedirs('outputs', exist_ok=True)
 
 # Save employee data
-with open('hr_report.json', 'w') as f:
+with open('outputs/hr_report.json', 'w') as f:
     json.dump(data['employees'], f, indent=2)
 
 # Save department stats
-with open('dept_stats.json', 'w') as f:
+with open('outputs/dept_stats.json', 'w') as f:
     json.dump(data['dept_stats'], f, indent=2)
 
-result = {'status': 'exported', 'files': ['hr_report.json', 'dept_stats.json']}
+result = {'status': 'exported', 'files': ['outputs/hr_report.json', 'outputs/dept_stats.json']}
             """,
             inputs={"data": "any"},
         ),
@@ -607,10 +614,10 @@ def demonstrate_access_control(auth: SimpleJWTAuth, admin_token: str):
 
             # Check what files were created
             files_created = []
-            if os.path.exists("customer_analysis_full.csv"):
-                files_created.append("customer_analysis_full.csv")
-            if os.path.exists("customer_analysis_summary.csv"):
-                files_created.append("customer_analysis_summary.csv")
+            if os.path.exists("outputs/customer_analysis_full.csv"):
+                files_created.append("outputs/customer_analysis_full.csv")
+            if os.path.exists("outputs/customer_analysis_summary.csv"):
+                files_created.append("outputs/customer_analysis_summary.csv")
 
             if files_created:
                 print(f"  ✓ Files created: {', '.join(files_created)}")
@@ -628,10 +635,10 @@ def demonstrate_access_control(auth: SimpleJWTAuth, admin_token: str):
 
             # Check HR files
             hr_files = []
-            if os.path.exists("hr_report.json"):
-                hr_files.append("hr_report.json")
-            if os.path.exists("dept_stats.json"):
-                hr_files.append("dept_stats.json")
+            if os.path.exists("outputs/hr_report.json"):
+                hr_files.append("outputs/hr_report.json")
+            if os.path.exists("outputs/dept_stats.json"):
+                hr_files.append("outputs/dept_stats.json")
 
             if hr_files:
                 print(f"  ✓ Files created: {', '.join(hr_files)}")
@@ -643,10 +650,10 @@ def demonstrate_access_control(auth: SimpleJWTAuth, admin_token: str):
 
         # Clean up files for next user
         for f in [
-            "customer_analysis_full.csv",
-            "customer_analysis_summary.csv",
-            "hr_report.json",
-            "dept_stats.json",
+            "outputs/customer_analysis_full.csv",
+            "outputs/customer_analysis_summary.csv",
+            "outputs/hr_report.json",
+            "outputs/dept_stats.json",
         ]:
             if os.path.exists(f):
                 os.remove(f)
@@ -662,7 +669,7 @@ def demonstrate_backward_compatibility():
     workflow = Workflow(workflow_id="legacy_workflow", name="Legacy Workflow")
 
     # Standard nodes - no access control
-    reader = CSVReaderNode(name="reader", file_path="customers.csv")
+    reader = CSVReaderNode(name="reader", file_path="data/customers.csv")
 
     processor = PythonCodeNode(
         name="processor",
@@ -741,12 +748,12 @@ def main():
 
     # Clean up sample files
     for f in [
-        "customers.csv",
-        "employees.csv",
-        "customer_analysis_full.csv",
-        "customer_analysis_summary.csv",
-        "hr_report.json",
-        "dept_stats.json",
+        "data/customers.csv",
+        "data/employees.csv",
+        "outputs/customer_analysis_full.csv",
+        "outputs/customer_analysis_summary.csv",
+        "outputs/hr_report.json",
+        "outputs/dept_stats.json",
     ]:
         if os.path.exists(f):
             os.remove(f)

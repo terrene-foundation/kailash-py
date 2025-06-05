@@ -72,13 +72,16 @@ from kailash.workflow import Workflow
 
 def setup_sample_data():
     """Create sample customer data"""
+    # Ensure data directory exists
+    os.makedirs("data", exist_ok=True)
+    
     data = """name,email,ssn,balance,status
 John Doe,john@example.com,123-45-6789,1500,active
 Jane Smith,jane@example.com,987-65-4321,2500,active
 Bob Johnson,bob@example.com,456-78-9012,800,inactive
 Alice Brown,alice@example.com,789-01-2345,3200,active"""
 
-    with open("customers.csv", "w") as f:
+    with open("data/customers.csv", "w") as f:
         f.write(data)
     print("✓ Created sample data")
 
@@ -161,7 +164,7 @@ def create_workflow():
 
     # 1. Read data (everyone)
     reader = add_access_control(
-        CSVReaderNode(name="reader", file_path="customers.csv"),
+        CSVReaderNode(name="reader", file_path="data/customers.csv"),
         enable_access_control=True,
         node_id="reader",
     )
@@ -277,7 +280,7 @@ def test_backward_compatibility():
     # Create a simple workflow without access control
     workflow = Workflow(workflow_id="simple", name="Simple Workflow")
 
-    reader = CSVReaderNode(name="reader", file_path="customers.csv")
+    reader = CSVReaderNode(name="reader", file_path="data/customers.csv")
     processor = PythonCodeNode(
         name="processor", code="result = {'count': len(data)}", inputs={"data": "any"}
     )
@@ -353,7 +356,7 @@ def main():
     print("• Access control is optional and backward compatible")
 
     # Cleanup
-    for f in ["customers.csv", "processed_data.csv"]:
+    for f in ["data/customers.csv", "outputs/processed_data.csv"]:
         if os.path.exists(f):
             os.remove(f)
 
