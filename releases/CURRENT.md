@@ -1,70 +1,56 @@
 # Current Release Status
 
-## Latest Release: v0.1.5
+## Latest Release: v0.1.6
 
 **Release Date**: 2025-06-05
 **Status**: ✅ Released
-**Type**: Minor Release (Self-Organizing Agents + Test Infrastructure Fixes)
+**Type**: Minor Release (Security & Production Hardening + CI/CD Optimization)
 
 ### Release Theme
-Complete Self-Organizing Agent Implementation with A2A Communication & Test Infrastructure Fixes
+Complete Security Implementation with JWT Auth, RBAC, Multi-tenancy & CI/CD Optimization
 
 ### Key Features
-- ✅ Complete self-organizing agent implementation (13 specialized nodes)
-- ✅ A2A communication system with SharedMemoryPoolNode and A2ACoordinatorNode
-- ✅ Test infrastructure fixes - all 766 tests now pass
-- ✅ Import optimization with isort across entire codebase
-- ✅ Perfect Sphinx documentation build (0 errors, 0 warnings)
-- ✅ Production-ready multi-agent collaboration system
+1. **Access Control System**
+   - JWT authentication with refresh tokens
+   - Role-Based Access Control (RBAC)
+   - Multi-tenant support with isolation
+   - Node-level and workflow-level permissions
 
-### Release Progress
-- [x] **Documentation Updates**: Complete
-- [x] **Self-Organizing Agents**: Complete implementation
-- [x] **Test Infrastructure**: All 766 tests passing
-- [x] **Code Quality**: Black + isort formatting complete
-- [x] **Version Validation**: All systems ready
-- [x] **Package Build**: Complete and validated
-- [x] **PyPI Release**: ✅ Published at https://pypi.org/project/kailash/0.1.5/
-- [x] **GitHub Release**: ✅ Published at https://github.com/terrene-foundation/kailash-py/releases/tag/v0.1.5
+2. **Production Hardening**
+   - Input validation and sanitization
+   - Rate limiting for API endpoints
+   - Secure error handling
+   - Audit logging for security events
 
-### Quick Stats
-- **Tests**: 766 tests (100% pass rate) ✅
-- **Examples**: 56+ working examples including 11 A2A patterns
-- **Nodes**: 66+ nodes documented with 13 self-organizing agents
-- **Documentation**: Perfect Sphinx build status
-- **Self-Organizing Agents**: Complete implementation with real-world validation
-- **Package Size**: 351KB wheel, 331KB source distribution
+3. **CI/CD Optimization**
+   - Local Mac runner support (87% faster)
+   - Parallel test execution
+   - Cleaned up workflow files (73% reduction)
 
-## Previous Releases
+### Release Statistics
+- **Total Commits**: 100+
+- **Files Changed**: 150+
+- **New Features**: Access Control, Security, CI/CD
+- **Performance**: CI from 15min → 2min
+- **Test Coverage**: 591+ tests passing
 
-### v0.1.4 (2025-05-31)
-- Self-organizing agent system implementation
-- Node naming convention standardization
-- Complete A2A communication system
+## Next Release: v0.1.7
 
-### v0.1.3 (2025-05-30)
-- Comprehensive testing framework
-- API integration enhancements
-- Performance optimization
+**Planned Date**: TBD
+**Status**: 🔵 Planning
+**Type**: TBD
 
-### v0.1.2 (2025-05-29)
-- Code quality improvements
-- Linting and formatting standardization
-- Pre-commit hooks implementation
+### Planned Features
+1. Frontend UI components for Workflow Studio
+2. AI Assistant integration
+3. Performance optimizations
+4. Bug fixes (datetime comparison in list_runs)
 
-## Release Management
-
-### Release Status: ✅ COMPLETE
-- **PyPI**: https://pypi.org/project/kailash/0.1.5/
-- **GitHub Release**: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.1.5
-- **Documentation**: All systems operational
-- **Installation**: `pip install kailash==0.1.5`
-
-### Next Release Planning
-- **Target**: v0.1.6
-- **Focus**: Security audit, performance optimization, production hardening
-- **Timeline**: Based on security requirements and user feedback
-
----
-*Last Updated: 2025-06-05*
-*Next Release: v0.1.6 (Security & Performance Focus)*
+### Release History
+- v0.1.6 - 2025-06-05 - Security & Production Hardening + CI/CD
+- v0.1.5 - 2025-06-05 - Self-Organizing Agents + Test Fixes
+- v0.1.4 - 2025-06-04 - MCP Integration & A2A Communication
+- v0.1.3 - 2025-05-28 - API Integration & Immutable State
+- v0.1.2 - 2025-05-27 - Conditional Routing & Docker Runtime
+- v0.1.1 - 2025-05-26 - Error Handling & Import Fixes
+- v0.1.0 - 2025-05-24 - Initial Release
