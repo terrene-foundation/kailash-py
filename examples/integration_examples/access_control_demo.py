@@ -188,8 +188,9 @@ result = data_list
     )
 
     # 3. Export full data (admin only)
+    os.makedirs("outputs", exist_ok=True)
     exporter = add_access_control(
-        CSVWriterNode(name="exporter", file_path="processed_data.csv"),
+        CSVWriterNode(name="exporter", file_path="outputs/processed_data.csv"),
         enable_access_control=True,
         node_id="exporter",
     )

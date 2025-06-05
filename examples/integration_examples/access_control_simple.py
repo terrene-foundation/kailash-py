@@ -75,8 +75,12 @@ def create_sample_data():
     """Create sample customers data file"""
     import os
 
-    # Create data in current directory for security
-    csv_path = "customers.csv"
+    # Create data directory if it doesn't exist
+    data_dir = "data"
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Create data in proper directory
+    csv_path = os.path.join(data_dir, "customers.csv")
     if not os.path.exists(csv_path):
         with open(csv_path, "w") as f:
             f.write("name,email,phone,ssn,balance\n")
@@ -163,7 +167,7 @@ def create_workflow():
     )
 
     # 1. Read customer data (everyone can read)
-    reader = CSVReaderNode(name="csv_reader", file_path="customers.csv")
+    reader = CSVReaderNode(name="csv_reader", file_path="data/customers.csv")
 
     # 2. Process sensitive data (admin and analyst only)
     processor = add_access_control(
@@ -234,8 +238,9 @@ result = summary.to_dict('records')
     )
 
     # 4. Export detailed data (admin only)
+    os.makedirs("outputs", exist_ok=True)
     exporter = add_access_control(
-        CSVWriterNode(name="data_exporter", file_path="customer_analysis.csv"),
+        CSVWriterNode(name="data_exporter", file_path="outputs/customer_analysis.csv"),
         enable_access_control=True,
         required_permission=NodePermission.EXECUTE,
         node_id="export_data",
@@ -243,7 +248,7 @@ result = summary.to_dict('records')
 
     # 5. Export summary (everyone)
     summary_exporter = CSVWriterNode(
-        name="summary_exporter", file_path="customer_summary.csv"
+        name="summary_exporter", file_path="outputs/customer_summary.csv"
     )
 
     # Build workflow
@@ -311,7 +316,7 @@ def main():
     workflow = create_workflow()
     print("✓ Workflow created with 5 nodes")
 
-    # Output files will be created in current directory
+    # Output files will be created in outputs directory
 
     # Run as different users
     users = [
@@ -332,20 +337,9 @@ def main():
 
     # Check outputs
     print("\nCheck the outputs directory for:")
-    print("- customer_analysis.csv (created by admin only)")
-    print("- customer_summary.csv (created by all users)")
+    print("- outputs/customer_analysis.csv (created by admin only)")
+    print("- outputs/customer_summary.csv (created by all users)")
 
 
 if __name__ == "__main__":
-    # Create sample data if it doesn't exist
-    os.makedirs("../data", exist_ok=True)
-    if not os.path.exists("../data/customers.csv"):
-        with open("../data/customers.csv", "w") as f:
-            f.write("name,email,phone,ssn,balance\n")
-            f.write("John Doe,john@example.com,555-0123,123-45-6789,1500\n")
-            f.write("Jane Smith,jane@example.com,555-0124,987-65-4321,2500\n")
-            f.write("Bob Wilson,bob@example.com,555-0125,456-78-9012,800\n")
-            f.write("Alice Brown,alice@example.com,555-0126,789-01-2345,3000\n")
-        print("Created sample data file: ../data/customers.csv")
-
     main()

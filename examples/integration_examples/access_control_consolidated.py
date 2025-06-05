@@ -386,8 +386,9 @@ result = summary.to_dict('records')
     )
 
     # 5. Export full data (admin only)
+    os.makedirs("outputs", exist_ok=True)
     full_exporter = add_access_control(
-        CSVWriterNode(name="full_exporter", file_path="customer_analysis_full.csv"),
+        CSVWriterNode(name="full_exporter", file_path="outputs/customer_analysis_full.csv"),
         enable_access_control=True,
         required_permission=NodePermission.EXECUTE,
         node_id="export_full",
