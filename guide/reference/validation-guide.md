@@ -15,7 +15,7 @@ workflow.execute(runtime)     # INVALID - causes error
 
 # ❌ WRONG - Common mistakes
 workflow.addNode()      # Wrong: camelCase
-workflow.add()          # Wrong: incomplete name  
+workflow.add()          # Wrong: incomplete name
 workflow.node()         # Wrong: incorrect name
 workflow.run()          # Wrong: should be execute()
 ```
@@ -58,7 +58,7 @@ config = {
     "system_prompt": "..."      # Correct: underscore
 }
 
-# ❌ WRONG  
+# ❌ WRONG
 config = {
     "filePath": "data.csv",     # Wrong: camelCase
     "file-path": "data.csv",    # Wrong: hyphen
@@ -96,7 +96,7 @@ workflow.add_node(
     **config                # Configuration as keyword arguments
 ) -> None
 
-# Connecting nodes - ACTUAL signature  
+# Connecting nodes - ACTUAL signature
 workflow.connect(
     source_node: str,                    # Source node ID
     target_node: str,                    # Target node ID
@@ -123,7 +123,7 @@ results, run_id = runtime.execute(
 #### Data Nodes
 ```python
 # CSVReaderNode - Configuration as keyword arguments
-workflow.add_node("reader", CSVReaderNode(), 
+workflow.add_node("reader", CSVReaderNode(),
     file_path="data.csv",      # Required
     delimiter=",",              # Optional, default: ","
     has_header=True,            # Optional, default: True
@@ -214,7 +214,7 @@ workflow.add_node("reader", CSVReaderNode(), filePath="data.csv")  # Should be f
 # ✅ CORRECT
 from kailash.nodes.ai import LLMAgentNode
 
-workflow.add_node("llm", LLMAgentNode(), 
+workflow.add_node("llm", LLMAgentNode(),
     provider="openai",
     model="gpt-4",
     temperature=0.7,
@@ -247,23 +247,23 @@ Use this pattern to validate your generated code:
 def validate_kailash_code(code_snippet):
     """Validate common patterns in Kailash code"""
     errors = []
-    
+
     # Check for wrong class names (missing Node suffix)
     wrong_classes = ["CSVReaderNode", "JSONWriterNode", "HTTPRequest", "LLMAgentNode", "SwitchNode", "MergeNode"]
     for wrong in wrong_classes:
         if f"import {wrong}" in code_snippet and "Node" not in wrong:
             errors.append(f"Class {wrong} should be {wrong}Node")
-    
+
     # Check for wrong method names
     wrong_methods = ["addNode", "runWorkflow", "executeWorkflow"]
     for wrong in wrong_methods:
         if wrong in code_snippet:
             errors.append(f"Method {wrong} is incorrect")
-    
+
     # Check for invalid workflow.execute(runtime) pattern
     if "workflow.execute(runtime)" in code_snippet:
         errors.append("workflow.execute(runtime) does NOT exist - use runtime.execute(workflow)")
-    
+
     return errors
 ```
 
@@ -445,7 +445,7 @@ class FilterNode(Node):
         }
 
 # Usage Option 1: All as configuration (static workflow)
-workflow.add_node("filter", FilterNode(), 
+workflow.add_node("filter", FilterNode(),
     config={
         "data": [{"value": 100}, {"value": 200}],  # Static data
         "column": "value",
@@ -474,9 +474,9 @@ These are set once when adding a node to the workflow and remain constant:
 
 ```python
 # ✅ CORRECT - Configuration parameters as kwargs
-workflow.add_node("reader", CSVReaderNode(), 
+workflow.add_node("reader", CSVReaderNode(),
     file_path="data.csv",         # Configuration parameter
-    delimiter=",",                # Configuration parameter  
+    delimiter=",",                # Configuration parameter
     has_header=True              # Configuration parameter
 )
 
@@ -557,7 +557,7 @@ workflow.connect("reader", "analyzer", mapping={"content": "text"})
 
 Ask yourself:
 - **"Does this change between workflow runs?"** → Runtime parameter
-- **"Is this data to be processed?"** → Runtime parameter  
+- **"Is this data to be processed?"** → Runtime parameter
 - **"Does this configure HOW the node works?"** → Configuration parameter
 - **"Is this a resource location or credential?"** → Configuration parameter
 
@@ -566,7 +566,7 @@ Ask yourself:
 #### Data Nodes
 ```python
 # Configuration: WHERE to read/write
-workflow.add_node("csv", CSVReaderNode(), 
+workflow.add_node("csv", CSVReaderNode(),
     file_path="data.csv",      # Config: file location
     delimiter=","              # Config: how to parse
 )
@@ -574,7 +574,7 @@ workflow.add_node("csv", CSVReaderNode(),
 # The actual CSV data is a runtime parameter
 ```
 
-#### AI Nodes  
+#### AI Nodes
 ```python
 # Configuration: HOW to process
 workflow.add_node("llm", LLMAgentNode(),

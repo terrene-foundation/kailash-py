@@ -59,7 +59,7 @@ git commit -m "feat: add new feature description"
    ```bash
    # Run specific test during development
    pytest tests/test_your_feature.py -v
-   
+
    # Run all tests before committing
    pytest
    ```
@@ -328,7 +328,7 @@ git checkout -b feature/add-graphql-node
 git add src/kailash/nodes/api/graphql.py
 git commit -m "feat: add GraphQL node for API queries"
 
-git add tests/test_nodes/test_graphql.py  
+git add tests/test_nodes/test_graphql.py
 git commit -m "test: add tests for GraphQL node"
 
 git add docs/api/nodes.rst

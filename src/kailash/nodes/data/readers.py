@@ -33,6 +33,7 @@ import json
 from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.security import safe_open, validate_file_path
 
 
 @register_node()
@@ -245,7 +246,7 @@ class CSVReaderNode(Node):
             - Analyzers can process row-by-row
             - data_indexed is useful for lookups and joins
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         headers = kwargs.get("headers", True)
         delimiter = kwargs.get("delimiter", ",")
         index_column = kwargs.get("index_column")
@@ -253,7 +254,10 @@ class CSVReaderNode(Node):
         data = []
         data_indexed = {}
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        # Validate file path for security
+        validated_path = validate_file_path(file_path, operation="CSV read")
+
+        with safe_open(validated_path, "r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=delimiter)
 
             if headers:
@@ -402,9 +406,12 @@ class JSONReaderNode(Node):
             - Compatible with JSONWriter for round-trip
             - Transform nodes can process nested data
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        # Validate file path for security
+        validated_path = validate_file_path(file_path, operation="JSON read")
+
+        with safe_open(validated_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         return {"data": data}
@@ -540,10 +547,13 @@ class TextReaderNode(Node):
             - Pattern nodes can search content
             - Writers can save processed text
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         encoding = kwargs.get("encoding", "utf-8")
 
-        with open(file_path, "r", encoding=encoding) as f:
+        # Validate file path for security
+        validated_path = validate_file_path(file_path, operation="text read")
+
+        with safe_open(validated_path, "r", encoding=encoding) as f:
             text = f.read()
 
         return {"text": text}

@@ -993,7 +993,7 @@ workflow.add_node("processor", ProcessorNode(),
 
 # GOOD - Configuration vs runtime separation
 # Configuration: HOW the node operates
-workflow.add_node("reader", CSVReaderNode(), 
+workflow.add_node("reader", CSVReaderNode(),
     file_path="data.csv",  # Config: WHERE to read
     delimiter=","          # Config: HOW to parse
 )
@@ -1004,7 +1004,7 @@ workflow.add_node("processor", ProcessorNode(),
 workflow.connect("reader", "processor", mapping={"data": "input_data"})
 ```
 
-**Impact**: 
+**Impact**:
 - Workflow validation errors about missing inputs
 - Confusion about why data isn't flowing correctly
 - Incorrect workflow patterns that don't follow the node-based architecture
@@ -1055,7 +1055,7 @@ results, run_id = runtime.execute(
 - Parameters dict maps node IDs to their parameter overrides
 - While workflow.execute() exists in the codebase, it's not used in practice
 
-**Key Learning**: 
+**Key Learning**:
 - Production code exclusively uses runtime.execute() for benefits like task tracking
 - The parameters argument allows runtime override of node configurations
 - Always use keyword arguments, never positional

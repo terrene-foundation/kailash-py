@@ -49,29 +49,29 @@ import asyncio
 
 class MCPEcosystemGateway(WorkflowGateway):
     """Zero-code MCP ecosystem gateway"""
-    
+
     def __init__(self, port: int = 8000):
         super().__init__(port)
         self.mcp_registry = MCPRegistry()
         self.workflow_builder = VisualWorkflowBuilder()
         self.resource_manager = ResourceManager()
-        
+
     async def register_mcp_server(self, config: Dict[str, Any]):
         """Register an MCP server with auto-discovery"""
         server_id = config["id"]
-        
+
         # Auto-discover capabilities
         client = MCPClient(
             server_command=config["command"],
             server_args=config.get("args", []),
             transport=config.get("transport", "stdio")
         )
-        
+
         # List available tools, resources, and prompts
         tools = await client.list_tools()
         resources = await client.list_resources()
         prompts = await client.list_prompts()
-        
+
         # Register in ecosystem
         self.mcp_registry.register_server(server_id, {
             "config": config,
@@ -80,33 +80,33 @@ class MCPEcosystemGateway(WorkflowGateway):
             "prompts": prompts,
             "client": client
         })
-        
+
         # Create workflow nodes for each capability
         for tool in tools:
             self._create_tool_node(server_id, tool)
-            
+
     def _create_tool_node(self, server_id: str, tool: Dict):
         """Create a reusable node for an MCP tool"""
         from kailash.nodes.base import Node
-        
+
         class DynamicMCPToolNode(Node):
             def __init__(self):
                 super().__init__()
                 self.server_id = server_id
                 self.tool_name = tool["name"]
-                
+
             def get_parameters(self):
                 # Convert MCP tool schema to node parameters
                 return self._schema_to_parameters(tool.get("inputSchema", {}))
-                
+
             async def run(self, **kwargs):
                 client = self.mcp_registry.get_client(server_id)
                 result = await client.call_tool(self.tool_name, kwargs)
                 return {"result": result}
-        
+
         # Register node in catalog
         self.workflow_builder.register_node(
-            f"{server_id}.{tool['name']}", 
+            f"{server_id}.{tool['name']}",
             DynamicMCPToolNode,
             metadata={
                 "category": "MCP Tools",
@@ -127,21 +127,21 @@ import json
 
 class VisualWorkflowBuilder:
     """Visual workflow builder with MCP integration"""
-    
+
     def __init__(self):
         self.node_catalog = {}
         self.workflow_templates = {}
-        
+
     def create_workflow_from_json(self, workflow_def: Dict) -> Workflow:
         """Create workflow from visual builder JSON"""
         workflow = Workflow(workflow_def["id"])
-        
+
         # Add nodes
         for node_def in workflow_def["nodes"]:
             node_class = self.node_catalog[node_def["type"]]
             node = node_class(**node_def.get("config", {}))
             workflow.add_node(node_def["id"], node)
-            
+
         # Add connections
         for conn in workflow_def["connections"]:
             workflow.connect(
@@ -149,9 +149,9 @@ class VisualWorkflowBuilder:
                 conn["to"],
                 mapping=conn.get("mapping", {})
             )
-            
+
         return workflow
-        
+
     def export_workflow_template(self, workflow: Workflow) -> Dict:
         """Export workflow as reusable template"""
         return {
@@ -183,15 +183,15 @@ class VisualWorkflowBuilder:
 # mcp_marketplace.py
 class MCPMarketplace:
     """Marketplace for MCP tools and workflows"""
-    
+
     def __init__(self, gateway: MCPEcosystemGateway):
         self.gateway = gateway
         self.marketplace_db = MarketplaceDB()
-        
+
     async def publish_workflow(self, workflow: Workflow, metadata: Dict):
         """Publish workflow to marketplace"""
         template = self.gateway.workflow_builder.export_workflow_template(workflow)
-        
+
         # Add marketplace metadata
         marketplace_entry = {
             "template": template,
@@ -205,18 +205,18 @@ class MCPMarketplace:
                 "preview": self._generate_preview(workflow)
             }
         }
-        
+
         await self.marketplace_db.publish(marketplace_entry)
-        
+
     async def install_workflow(self, workflow_id: str) -> Workflow:
         """Install workflow from marketplace"""
         entry = await self.marketplace_db.get(workflow_id)
-        
+
         # Check MCP server requirements
         for server in entry["metadata"]["mcp_servers"]:
             if not self.gateway.mcp_registry.has_server(server):
                 await self._auto_install_mcp_server(server)
-                
+
         # Create workflow
         return self.gateway.workflow_builder.create_workflow_from_json(
             entry["template"]
@@ -232,11 +232,11 @@ class MCPMarketplace:
 const MCPWorkflowBuilder = () => {
     const [nodes, setNodes] = useState([]);
     const [connections, setConnections] = useState([]);
-    
+
     const onDrop = (event) => {
         const nodeType = event.dataTransfer.getData('nodeType');
         const position = { x: event.clientX, y: event.clientY };
-        
+
         // Add node to canvas
         const newNode = {
             id: generateId(),
@@ -244,21 +244,21 @@ const MCPWorkflowBuilder = () => {
             position: position,
             data: getNodeDefaults(nodeType)
         };
-        
+
         setNodes([...nodes, newNode]);
     };
-    
+
     const exportWorkflow = () => {
         return {
             nodes: nodes,
             connections: connections
         };
     };
-    
+
     return (
         <div className="workflow-builder">
             <NodePalette />
-            <Canvas 
+            <Canvas
                 nodes={nodes}
                 connections={connections}
                 onDrop={onDrop}
@@ -275,32 +275,32 @@ const MCPWorkflowBuilder = () => {
 # auto_discovery_ui.py
 class MCPAutoDiscovery:
     """Auto-discover and register MCP servers"""
-    
+
     async def scan_for_servers(self) -> List[Dict]:
         """Scan for available MCP servers"""
         servers = []
-        
+
         # Check known locations
         # 1. NPM global packages
         npm_servers = await self._scan_npm_globals()
-        
+
         # 2. Python packages
         python_servers = await self._scan_python_packages()
-        
+
         # 3. Docker containers
         docker_servers = await self._scan_docker_containers()
-        
+
         # 4. Running processes
         process_servers = await self._scan_running_processes()
-        
+
         return servers + npm_servers + python_servers + docker_servers + process_servers
-        
+
     async def _scan_npm_globals(self):
         """Scan NPM global packages for MCP servers"""
         import subprocess
         result = subprocess.run(["npm", "list", "-g", "--json"], capture_output=True)
         packages = json.loads(result.stdout)
-        
+
         mcp_servers = []
         for package_name, info in packages.get("dependencies", {}).items():
             if "mcp" in package_name or self._has_mcp_manifest(info["path"]):
@@ -310,7 +310,7 @@ class MCPAutoDiscovery:
                     "command": f"npx {package_name}",
                     "transport": "stdio"
                 })
-                
+
         return mcp_servers
 ```
 
@@ -476,13 +476,13 @@ servers:
     command: npx @modelcontextprotocol/server-github
     args: ["--token", "${GITHUB_TOKEN}"]
     transport: stdio
-    
+
   - id: slack-mcp
     command: python -m mcp_server_slack
     env:
       SLACK_TOKEN: ${SLACK_TOKEN}
     transport: sse
-    
+
   - id: custom-tools
     command: ./my-mcp-server
     transport: http
@@ -491,7 +491,7 @@ servers:
 marketplace:
   endpoint: https://mcp-marketplace.com
   auto_update: true
-  
+
 ui:
   port: 3000
   theme: dark

@@ -4,12 +4,11 @@ This module implements multi-agent communication with selective attention mechan
 enabling efficient collaboration between AI agents while preventing information overload.
 """
 
-import json
 import time
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -321,7 +320,7 @@ class SharedMemoryPoolNode(Node):
     def _semantic_query(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Perform semantic search across memories."""
         query = kwargs.get("query", "")
-        agent_id = kwargs["agent_id"]
+        kwargs["agent_id"]
 
         # Simple keyword matching for now (can be enhanced with embeddings)
         matching_memories = []

@@ -25,27 +25,27 @@ Every class should have a comprehensive docstring:
 class DataTransformerNode(Node):
     """
     Transform data using configurable operations.
-    
+
     This node provides a flexible way to transform data through a series
     of operations including filtering, mapping, sorting, and aggregation.
-    
+
     Design Philosophy:
         Provides a declarative way to specify data transformations without
         writing custom code. Operations are applied in sequence.
-    
+
     Upstream Dependencies:
         - Any node that outputs data (list, dict, or DataFrame)
         - Commonly used after data readers or API nodes
-    
+
     Downstream Consumers:
         - Writer nodes for persisting transformed data
         - Analysis nodes for further processing
         - Visualization nodes for display
-    
+
     Configuration:
         operations (List[Dict]): List of transformation operations
             Each operation dict must have a 'type' field and operation-specific parameters
-    
+
     Example:
         >>> node = DataTransformerNode()
         >>> config = {
@@ -65,27 +65,27 @@ Use Google-style docstrings for all public methods:
 def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute the data transformation operations.
-    
+
     Applies each operation in sequence to the input data. Operations
     are applied in the order specified in the configuration.
-    
+
     Args:
         inputs (Dict[str, Any]): Input data with keys:
             - data: The data to transform (list, dict, or DataFrame)
             - context (optional): Additional context for transformations
-    
+
     Returns:
         Dict[str, Any]: Dictionary with keys:
             - transformed: The transformed data
             - metadata: Transformation metadata (operations applied, row count, etc.)
-    
+
     Raises:
         ValueError: If input data is missing or invalid
         TransformationError: If any transformation operation fails
-        
+
     Side Effects:
         None - this method is pure and does not modify external state
-        
+
     Example:
         >>> inputs = {'data': [{'name': 'John', 'age': 25}, {'name': 'Jane', 'age': 30}]}
         >>> outputs = node.execute(inputs)
@@ -100,7 +100,7 @@ All docstrings must include:
 
 1. **Design Purpose and Philosophy**: Why this component exists
 2. **Upstream Dependencies**: What creates/uses this class
-3. **Downstream Consumers**: What depends on this class  
+3. **Downstream Consumers**: What depends on this class
 4. **Usage Patterns**: Common ways the component is used
 5. **Implementation Details**: How it works internally
 6. **Error Handling**: What exceptions are raised and when
@@ -169,14 +169,14 @@ Include runnable examples using doctest format:
 def add_numbers(a: int, b: int) -> int:
     """
     Add two numbers together.
-    
+
     Args:
         a: First number
         b: Second number
-        
+
     Returns:
         Sum of a and b
-        
+
     Examples:
         >>> add_numbers(2, 3)
         5
@@ -211,7 +211,7 @@ workflow = Workflow(
 
 # Add nodes with detailed comments
 workflow.add_node(
-    "reader", 
+    "reader",
     CSVReaderNode,  # Can pass class, instance, or string name
     file_path="input.csv",  # Config as kwargs, not dict
     headers=True  # Reads CSV into list of dicts

@@ -1,0 +1,5 @@
+name,email,phone,ssn,balance,segment,risk_score
+John Doe,john@example.com,555-0123,123-45-6789,1500,silver,0
+Jane Smith,jane@example.com,555-0124,987-65-4321,2500,gold,0
+Bob Johnson,bob@example.com,555-0125,456-78-9012,800,bronze,1
+Alice Brown,alice@example.com,555-0126,789-01-2345,3200,gold,0

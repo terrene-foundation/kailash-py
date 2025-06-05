@@ -185,7 +185,19 @@ class Node(ABC):
                 ),
             )
             self.logger = logging.getLogger(f"kailash.nodes.{self.id}")
-            self.config = kwargs
+
+            # Filter out internal fields from config
+            internal_fields = {
+                "id",
+                "name",
+                "description",
+                "version",
+                "author",
+                "tags",
+                "metadata",
+            }
+            self.config = {k: v for k, v in kwargs.items() if k not in internal_fields}
+
             self._validate_config()
         except ValidationError as e:
             raise NodeConfigurationError(f"Invalid node metadata: {e}") from e

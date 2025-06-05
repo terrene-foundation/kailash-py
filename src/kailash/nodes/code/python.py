@@ -24,6 +24,7 @@ import ast
 import importlib.util
 import inspect
 import logging
+import resource
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type, Union, get_type_hints
@@ -33,6 +34,14 @@ from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     SafetyViolationError,
+)
+from kailash.security import (
+    ExecutionTimeoutError,
+    MemoryLimitError,
+    SecurityConfig,
+    execution_timeout,
+    get_security_config,
+    validate_node_parameters,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +57,7 @@ ALLOWED_MODULES = {
     "collections",
     "functools",
     "string",
+    "time",
     "re",
     "pandas",
     "numpy",
@@ -94,7 +104,7 @@ class SafeCodeChecker(ast.NodeVisitor):
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
             # Check for dangerous built-in functions
-            if func_name in {"eval", "exec", "compile", "__import__"}:
+            if func_name in {"eval", "exec", "compile"}:
                 self.violations.append(f"Call to '{func_name}' is not allowed")
         elif isinstance(node.func, ast.Attribute):
             # Check for dangerous method calls
@@ -126,14 +136,20 @@ class CodeExecutor:
     - Memory limits (future enhancement)
     """
 
-    def __init__(self, allowed_modules: Optional[List[str]] = None):
+    def __init__(
+        self,
+        allowed_modules: Optional[List[str]] = None,
+        security_config: Optional[SecurityConfig] = None,
+    ):
         """Initialize the code executor.
 
         Args:
             allowed_modules: List of module names allowed for import.
                            Defaults to common data processing modules.
+            security_config: Security configuration for execution limits.
         """
         self.allowed_modules = set(allowed_modules or ALLOWED_MODULES)
+        self.security_config = security_config or get_security_config()
         self.allowed_builtins = {
             "abs",
             "all",
@@ -159,6 +175,9 @@ class CodeExecutor:
             "type",
             "zip",
             "print",  # Allow print for debugging
+            "hasattr",  # For attribute checking
+            "getattr",  # For attribute access
+            "__import__",  # For imports (controlled by ALLOWED_MODULES)
         }
         self._execution_namespace = {}
 
@@ -195,9 +214,14 @@ class CodeExecutor:
 
         Raises:
             NodeExecutionError: If code execution fails
+            ExecutionTimeoutError: If execution exceeds timeout
+            MemoryLimitError: If memory usage exceeds limit
         """
         # Check code safety first
         self.check_code_safety(code)
+
+        # Sanitize inputs
+        sanitized_inputs = validate_node_parameters(inputs, self.security_config)
 
         # Create isolated namespace
         import builtins
@@ -218,19 +242,42 @@ class CodeExecutor:
             except ImportError:
                 logger.warning(f"Module {module_name} not available")
 
-        # Add inputs
-        namespace.update(inputs)
+        # Add sanitized inputs
+        namespace.update(sanitized_inputs)
 
         try:
-            exec(code, namespace)
+            # Set memory limit if supported (Unix systems)
+            if hasattr(resource, "RLIMIT_AS") and self.security_config.memory_limit:
+                try:
+                    resource.setrlimit(
+                        resource.RLIMIT_AS,
+                        (
+                            self.security_config.memory_limit,
+                            self.security_config.memory_limit,
+                        ),
+                    )
+                except (OSError, ValueError):
+                    logger.warning(
+                        "Could not set memory limit - continuing without limit"
+                    )
+
+            # Execute with timeout
+            with execution_timeout(
+                self.security_config.execution_timeout, self.security_config
+            ):
+                exec(code, namespace)
             # Return all non-private variables that weren't in inputs
             return {
                 k: v
                 for k, v in namespace.items()
                 if not k.startswith("_")
-                and k not in inputs
+                and k not in sanitized_inputs
                 and k not in self.allowed_modules
             }
+        except ExecutionTimeoutError:
+            raise
+        except MemoryLimitError:
+            raise
         except Exception as e:
             error_msg = f"Code execution failed: {str(e)}\n{traceback.format_exc()}"
             logger.error(error_msg)

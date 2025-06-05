@@ -71,13 +71,13 @@ OUTPUT_FILE = "output.json"
 def create_workflow():
     """Create and configure the workflow"""
     workflow = Workflow()
-    
+
     # Add nodes
     # ... node setup
-    
+
     # Connect nodes
     # ... connections
-    
+
     return workflow
 
 # Execution

@@ -75,7 +75,7 @@ for record in data:
     transformed_record = record.copy()
     transformed_record['processed'] = True
     transformed_record['timestamp'] = datetime.now().isoformat()
-    
+
     # Calculate risk score (example)
     value = float(record.get('value', 0))
     if value > 1000:
@@ -84,7 +84,7 @@ for record in data:
         transformed_record['risk_level'] = 'medium'
     else:
         transformed_record['risk_level'] = 'low'
-    
+
     transformed.append(transformed_record)
 
 output = {
@@ -138,13 +138,13 @@ for record in data:
     if category not in aggregations['by_category']:
         aggregations['by_category'][category] = 0
     aggregations['by_category'][category] += 1
-    
+
     # Risk level aggregation
     risk = record.get('risk_level', 'unknown')
     if risk not in aggregations['by_risk_level']:
         aggregations['by_risk_level'][risk] = 0
     aggregations['by_risk_level'][risk] += 1
-    
+
     # Value statistics
     value = float(record.get('value', 0))
     total_value += value
@@ -174,19 +174,19 @@ insights = []
 total = agg.get('total_records', 0)
 if total > 0:
     insights.append(f"Processed {total} records")
-    
+
     # Value insights
     stats = agg.get('value_stats', {})
     avg_value = stats.get('avg', 0)
     if avg_value > 1000:
         insights.append(f"High average value detected: ${avg_value:.2f}")
-    
+
     # Risk insights
     risk_dist = agg.get('by_risk_level', {})
     high_risk = risk_dist.get('high', 0)
     if high_risk > total * 0.3:
         insights.append(f"Warning: {high_risk} high-risk records ({high_risk/total*100:.1f}%)")
-    
+
     # Category insights
     categories = agg.get('by_category', {})
     if len(categories) > 5:

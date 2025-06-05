@@ -1,12 +1,15 @@
 Workflow API Wrapper
-===================
+====================
 
-The Workflow API Wrapper module provides a simple way to expose any Kailash workflow as a REST API. This enables external applications to execute workflows without requiring the Kailash SDK.
+The Workflow API Wrapper module provides a simple way to expose any Kailash workflow
+as a REST API. This enables external applications to execute workflows without
+requiring the Kailash SDK.
 
 Overview
 --------
 
-The API wrapper transforms workflows into production-ready REST APIs with minimal configuration::
+The API wrapper transforms workflows into production-ready REST APIs with minimal
+configuration::
 
     from kailash.api.workflow_api import WorkflowAPI
 
@@ -15,7 +18,7 @@ The API wrapper transforms workflows into production-ready REST APIs with minima
     api.run(port=8000)
 
 Core Components
---------------
+---------------
 
 WorkflowAPI Class
 ~~~~~~~~~~~~~~~~~
@@ -46,17 +49,17 @@ HierarchicalRAGAPI Class
    Specialized API wrapper for Hierarchical RAG workflows with domain-specific endpoints.
 
 Factory Functions
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 .. autofunction:: kailash.api.workflow_api.create_workflow_api
 
    Factory function to create appropriate API wrappers based on workflow type.
 
 Request/Response Models
-----------------------
+-----------------------
 
 WorkflowRequest
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.api.workflow_api.WorkflowRequest
    :members:
@@ -64,7 +67,7 @@ WorkflowRequest
    :show-inheritance:
 
 WorkflowResponse
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 .. autoclass:: kailash.api.workflow_api.WorkflowResponse
    :members:
@@ -72,7 +75,7 @@ WorkflowResponse
    :show-inheritance:
 
 ExecutionMode
-~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 .. autoclass:: kailash.api.workflow_api.ExecutionMode
    :members:
@@ -80,10 +83,10 @@ ExecutionMode
    :show-inheritance:
 
 Usage Examples
--------------
+--------------
 
 Basic Usage
-~~~~~~~~~~
+~~~~~~~~~~~
 
 Expose a simple workflow as an API::
 
@@ -106,7 +109,7 @@ The API will be available at:
 - ``GET /docs`` - Interactive API documentation
 
 Synchronous Execution
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 
 Execute a workflow and wait for results::
 
@@ -137,7 +140,7 @@ Response::
     }
 
 Asynchronous Execution
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Start workflow execution and check status later::
 
@@ -160,7 +163,7 @@ Start workflow execution and check status later::
     curl http://localhost:8000/status/123e4567-e89b-12d3-a456-426614174000
 
 Custom Endpoints
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 Add custom endpoints to the API::
 
@@ -176,10 +179,10 @@ Add custom endpoints to the API::
     api.run(port=8000)
 
 Production Deployment
--------------------
+---------------------
 
 Development Mode
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 For development with auto-reload::
 
@@ -191,7 +194,7 @@ For development with auto-reload::
     )
 
 Production Configuration
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 For production deployment::
 
@@ -204,7 +207,7 @@ For production deployment::
     )
 
 HTTPS Support
-~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 Enable SSL/TLS for secure communication::
 
@@ -216,7 +219,7 @@ Enable SSL/TLS for secure communication::
     )
 
 Docker Deployment
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 Example Dockerfile::
 
@@ -232,10 +235,10 @@ Example Dockerfile::
     CMD ["python", "-m", "kailash.api.workflow_api", "my_workflow.yaml"]
 
 Advanced Features
-----------------
+-----------------
 
 Middleware Integration
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Add CORS support::
 
@@ -249,7 +252,7 @@ Add CORS support::
     )
 
 Authentication
-~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 Add authentication to endpoints::
 
@@ -268,7 +271,7 @@ Add authentication to endpoints::
         pass
 
 Rate Limiting
-~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 Implement rate limiting::
 
@@ -284,10 +287,10 @@ Implement rate limiting::
         return await api._execute_sync(request)
 
 Specialized APIs
----------------
+----------------
 
 RAG API Example
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
 Create a specialized API for RAG workflows::
 
@@ -308,17 +311,20 @@ Create a specialized API for RAG workflows::
     api.run(port=8001)
 
 Best Practices
--------------
+--------------
 
-1. **Error Handling**: The API wrapper includes automatic error handling and returns appropriate HTTP status codes.
+1. **Error Handling**: The API wrapper includes automatic error handling and returns
+appropriate HTTP status codes.
 
 2. **Validation**: Input validation is performed automatically using Pydantic models.
 
 3. **Documentation**: OpenAPI documentation is generated automatically at ``/docs``.
 
-4. **Monitoring**: Use the ``/health`` endpoint for monitoring and load balancer health checks.
+4. **Monitoring**: Use the ``/health`` endpoint for monitoring and load balancer health
+checks.
 
-5. **Scaling**: Use multiple workers for production deployments to handle concurrent requests.
+5. **Scaling**: Use multiple workers for production deployments to handle concurrent
+requests.
 
 6. **Security**: Always use HTTPS in production and implement proper authentication.
 

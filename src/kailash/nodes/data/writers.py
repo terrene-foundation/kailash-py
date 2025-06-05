@@ -34,6 +34,7 @@ import json
 from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.security import safe_open, validate_file_path
 
 
 @register_node()
@@ -190,7 +191,7 @@ class CSVWriterNode(Node):
             - External tools can process output
             - Metrics available for monitoring
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         data = kwargs["data"]
         headers = kwargs.get("headers")
         delimiter = kwargs.get("delimiter", ",")
@@ -198,7 +199,10 @@ class CSVWriterNode(Node):
         if not data:
             return {"rows_written": 0}
 
-        with open(file_path, "w", newline="", encoding="utf-8") as f:
+        # Validate file path for security
+        validated_path = validate_file_path(file_path, operation="CSV write")
+
+        with safe_open(validated_path, "w", newline="", encoding="utf-8") as f:
             if isinstance(data[0], dict):
                 # Writing dictionaries
                 if not headers:
@@ -357,11 +361,14 @@ class JSONWriterNode(Node):
             - Version control can track
             - APIs can import data
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         data = kwargs["data"]
         indent = kwargs.get("indent", 2)
 
-        with open(file_path, "w", encoding="utf-8") as f:
+        # Validate file path for security
+        validated_path = validate_file_path(file_path, operation="JSON write")
+
+        with safe_open(validated_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
 
         return {"file_path": file_path}
@@ -517,13 +524,16 @@ class TextWriterNode(Node):
             - Log analyzers can process
             - Metrics available for monitoring
         """
-        file_path = kwargs["file_path"]
+        file_path = kwargs.get("file_path") or self.config.get("file_path")
         text = kwargs["text"]
         encoding = kwargs.get("encoding", "utf-8")
         append = kwargs.get("append", False)
 
         mode = "a" if append else "w"
-        with open(file_path, mode, encoding=encoding) as f:
+        # Validate file path for security
+        validated_path = validate_file_path(file_path, operation="text write")
+
+        with safe_open(validated_path, mode, encoding=encoding) as f:
             f.write(text)
 
         return {"file_path": file_path, "bytes_written": len(text.encode(encoding))}

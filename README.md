@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-753%20passing-brightgreen.svg" alt="Tests: 753 passing">
+  <img src="https://img.shields.io/badge/tests-591%20passing-brightgreen.svg" alt="Tests: 591 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -34,6 +34,8 @@
 - 🚪 **Multi-Workflow Gateway**: Manage multiple workflows through unified API with MCP integration
 - 🤖 **Self-Organizing Agents**: Autonomous agent pools with intelligent team formation and convergence detection
 - 🧠 **Agent-to-Agent Communication**: Shared memory pools and intelligent caching for coordinated multi-agent systems
+- 🔒 **Production Security**: Comprehensive security framework with path traversal prevention, code sandboxing, and audit logging
+- 🎨 **Visual Workflow Builder**: Kailash Workflow Studio - drag-and-drop interface for creating and managing workflows (coming soon)
 
 ## 🎯 Who Is This For?
 
@@ -1042,6 +1044,95 @@ This example demonstrates:
 - **Context formatting** for LLM input
 - **Answer generation** using Ollama's llama3.2 model
 
+### 🔒 Access Control and Security
+
+Kailash SDK provides comprehensive access control and security features for enterprise deployments:
+
+#### Role-Based Access Control (RBAC)
+```python
+from kailash.access_control import UserContext, PermissionRule, NodePermission
+from kailash.runtime.access_controlled import AccessControlledRuntime
+
+# Define user with roles
+user = UserContext(
+    user_id="analyst_001",
+    tenant_id="company_abc",
+    email="analyst@company.com",
+    roles=["analyst", "viewer"]
+)
+
+# Create secure runtime
+runtime = AccessControlledRuntime(user_context=user)
+
+# Execute workflow with automatic permission checks
+results, run_id = runtime.execute(workflow, parameters={})
+```
+
+#### Multi-Tenant Isolation
+```python
+from kailash.access_control import get_access_control_manager, PermissionEffect, WorkflowPermission
+
+# Configure tenant-based access rules
+acm = get_access_control_manager()
+acm.enabled = True
+
+# Tenant isolation rule
+acm.add_rule(PermissionRule(
+    id="tenant_isolation",
+    resource_type="workflow",
+    resource_id="customer_analytics",
+    permission=WorkflowPermission.EXECUTE,
+    effect=PermissionEffect.ALLOW,
+    tenant_id="company_abc"  # Only this tenant can access
+))
+```
+
+#### Data Masking and Field Protection
+```python
+from kailash.nodes.base_with_acl import add_access_control
+
+# Add access control to sensitive data nodes
+secure_reader = add_access_control(
+    CSVReaderNode(file_path="customers.csv"),
+    enable_access_control=True,
+    required_permission=NodePermission.READ_OUTPUT,
+    mask_output_fields=["ssn", "phone"]  # Mask for non-admin users
+)
+
+workflow.add_node("secure_data", secure_reader)
+```
+
+#### Permission-Based Routing
+```python
+# Different execution paths based on user permissions
+from kailash.access_control import NodePermission
+
+# Admin users get full processing
+admin_processor = PythonCodeNode.from_function(
+    lambda data: {"result": process_all_data(data)},
+    name="admin_processor"
+)
+
+# Analyst users get limited processing
+analyst_processor = PythonCodeNode.from_function(
+    lambda data: {"result": process_limited_data(data)},
+    name="analyst_processor"
+)
+
+# Runtime automatically routes based on user permissions
+workflow.add_node("admin_path", admin_processor)
+workflow.add_node("analyst_path", analyst_processor)
+```
+
+**Security Features:**
+- 🔐 **JWT Authentication**: Token-based authentication with refresh support
+- 👥 **Multi-Tenant Isolation**: Complete data separation between tenants
+- 🛡️ **Field-Level Security**: Mask sensitive data based on user roles
+- 📊 **Audit Logging**: Complete access attempt logging for compliance
+- 🚫 **Path Traversal Prevention**: Built-in protection against directory attacks
+- 🏗️ **Backward Compatibility**: Existing workflows work unchanged
+- ⚡ **Performance Optimized**: Minimal overhead with caching
+
 ## 💻 CLI Commands
 
 The SDK includes a comprehensive CLI for workflow management:
@@ -1238,6 +1329,10 @@ pre-commit run pytest-check
 - Immutable state management
 - API integration with rate limiting
 - OAuth 2.0 authentication
+- Production security framework
+- Path traversal prevention
+- Code execution sandboxing
+- Comprehensive security testing
 - SharePoint Graph API integration
 - **Self-organizing agent pools with 13 specialized nodes**
 - **Agent-to-agent communication and shared memory**
@@ -1248,16 +1343,19 @@ pre-commit run pytest-check
 - **Performance visualization dashboards**
 - **Real-time monitoring dashboard with WebSocket streaming**
 - **Comprehensive performance reports (HTML, Markdown, JSON)**
-- **89% test coverage (571 tests)**
-- **15 test categories all passing**
-- 37 working examples
+- **100% test coverage (591 tests)**
+- **All test categories passing**
+- 68 working examples
 
 </td>
 <td width="30%">
 
 ### 🚧 In Progress
-- Comprehensive API documentation
-- Security audit & hardening
+- **Kailash Workflow Studio** - Visual workflow builder UI
+  - React-based drag-and-drop interface
+  - Multi-tenant architecture with Docker
+  - WorkflowStudioAPI backend
+  - Real-time execution monitoring
 - Performance optimizations
 - Docker runtime finalization
 
@@ -1275,11 +1373,12 @@ pre-commit run pytest-check
 </table>
 
 ### 🎯 Test Suite Status
-- **Total Tests**: 571 passing (89%)
-- **Test Categories**: 15/15 at 100%
-- **Integration Tests**: 65 passing
-- **Examples**: 37/37 working
-- **Code Coverage**: 89%
+- **Total Tests**: 591 passing (100%)
+- **Test Categories**: All passing
+- **Integration Tests**: All passing
+- **Security Tests**: 10 consolidated comprehensive tests
+- **Examples**: 68/68 working
+- **Code Coverage**: 100%
 
 ## ⚠️ Known Issues
 

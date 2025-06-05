@@ -1,5 +1,5 @@
 Best Practices
-===============
+==============
 
 This guide outlines best practices for developing with the Kailash Python SDK.
 
@@ -7,7 +7,7 @@ Node Development
 ----------------
 
 Creating Custom Nodes
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 When creating custom nodes, follow these patterns:
 

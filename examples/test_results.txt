@@ -1,0 +1,86 @@
+Testing all Kailash SDK examples...
+
+=== Testing Example Imports ===
+
+Found 73 example files to test
+
+✓ integration_examples/a2a_complex_research.py - runs with --help
+✓ integration_examples/a2a_coordinated_example.py - runs with --help
+✓ integration_examples/a2a_demo.py - runs with --help
+✓ integration_examples/a2a_ollama_adaptive.py - runs with --help
+✓ integration_examples/a2a_ollama_code_review.py - starts execution (timeout expected)
+✓ integration_examples/a2a_ollama_example.py - runs with --help
+✓ integration_examples/a2a_simple_example.py - runs with --help
+✓ integration_examples/access_control_backward_compatible.py - imports successfully
+✓ integration_examples/access_control_comprehensive.py - imports successfully
+✓ integration_examples/access_control_consolidated.py - runs with --help
+✓ integration_examples/access_control_demo.py - runs with --help
+✓ integration_examples/access_control_simple.py - runs with --help
+✓ integration_examples/deployment_patterns.py - runs with --help
+✓ integration_examples/gateway_comprehensive_demo.py - runs with --help
+✓ integration_examples/integration_agentic_llm.py - runs with --help
+✓ integration_examples/integration_api_comprehensive.py - imports successfully
+✓ integration_examples/integration_api_demo.py - runs with --help
+✓ integration_examples/integration_api_simple.py - runs with --help
+✓ integration_examples/integration_gateway_basic.py - imports successfully
+✓ integration_examples/integration_gateway_complex.py - imports successfully
+✓ integration_examples/integration_hmi_api.py - imports successfully
+✓ integration_examples/integration_mcp_basic.py - runs with --help
+✓ integration_examples/integration_multi_workflow_gateway.py - imports successfully
+✓ integration_examples/integration_sharepoint_graph.py - starts execution (timeout expected)
+✓ integration_examples/intelligent_agent_orchestration_demo.py - runs with --help
+✓ integration_examples/mcp_ecosystem_demo.py - starts execution (timeout expected)
+✓ integration_examples/mcp_ecosystem_fixed.py - imports successfully
+✓ integration_examples/self_organizing_patterns.py - imports successfully
+✓ integration_examples/self_organizing_research_system.py - imports successfully
+✓ integration_examples/self_organizing_simple.py - imports successfully
+✓ integration_examples/test_gateway_simple.py - runs with --help
+✓ integration_examples/test_mcp_fixed.py - runs with --help
+✓ node_examples/node_agentic_ai_comprehensive.py - runs with --help
+✓ node_examples/node_basic_connection.py - imports successfully
+✓ node_examples/node_custom_creation.py - imports successfully
+✓ node_examples/node_docker_test.py - runs with --help
+✓ node_examples/node_example.py - imports successfully
+✓ node_examples/node_http_request.py - starts execution (timeout expected)
+✓ node_examples/node_llm_providers_demo.py - runs with --help
+✓ node_examples/node_output_schema.py - runs with --help
+✓ node_examples/node_python_code.py - imports successfully
+✓ node_examples/node_python_code_schema.py - runs with --help
+✓ node_examples/node_rest_client.py - starts execution (timeout expected)
+✓ visualization_examples/viz_dashboard_comprehensive.py - runs with --help
+✓ visualization_examples/viz_dashboard_realtime.py - runs with --help
+✓ visualization_examples/viz_dashboard_simple.py - runs with --help
+✓ visualization_examples/viz_examples_overview.py - runs with --help
+✓ visualization_examples/viz_mermaid.py - imports successfully
+✓ visualization_examples/viz_performance_actual.py - runs with --help
+✓ visualization_examples/viz_workflow_graphs.py - runs with --help
+✓ visualization_examples/viz_workflow_visual.py - imports successfully
+✓ workflow_examples/workflow_basic.py - imports successfully
+✓ workflow_examples/workflow_complex.py - imports successfully
+✓ workflow_examples/workflow_comprehensive.py - imports successfully
+✓ workflow_examples/workflow_conditional.py - imports successfully
+✓ workflow_examples/workflow_csv_python.py - imports successfully
+✓ workflow_examples/workflow_data_transformation.py - imports successfully
+✓ workflow_examples/workflow_direct_comparison.py - imports successfully
+✓ workflow_examples/workflow_docker.py - imports successfully
+✓ workflow_examples/workflow_error_handling.py - starts execution (timeout expected)
+✓ workflow_examples/workflow_export.py - runs with --help
+✓ workflow_examples/workflow_external_inputs.py - imports successfully
+✓ workflow_examples/workflow_general.py - imports successfully
+✓ workflow_examples/workflow_hierarchical_rag.py - runs with --help
+✓ workflow_examples/workflow_mcp_agentic.py - imports successfully
+✓ workflow_examples/workflow_nested_composition.py - runs with --help
+✓ workflow_examples/workflow_parallel.py - runs with --help
+✓ workflow_examples/workflow_simple.py - imports successfully
+✓ workflow_examples/workflow_simplified.py - imports successfully
+✓ workflow_examples/workflow_state_management.py - imports successfully
+✓ workflow_examples/workflow_switch.py - imports successfully
+✓ workflow_examples/workflow_task_list_runs.py - runs with --help
+✓ workflow_examples/workflow_task_tracking.py - runs with --help
+
+All examples import successfully!
+
+=== Testing Example Dry Runs ===
+
+
+=== All tests passed! ===

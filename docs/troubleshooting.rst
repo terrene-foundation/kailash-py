@@ -1,7 +1,8 @@
 Troubleshooting
 ===============
 
-This guide helps you diagnose and resolve common issues when working with the Kailash Python SDK.
+This guide helps you diagnose and resolve common issues when working with the Kailash
+Python SDK.
 
 Installation Issues
 -------------------

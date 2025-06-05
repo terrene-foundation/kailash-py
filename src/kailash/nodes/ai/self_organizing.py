@@ -9,11 +9,10 @@ import random
 import time
 import uuid
 from collections import defaultdict, deque
-from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set
 
-from kailash.nodes.ai.a2a import A2AAgentNode, SharedMemoryPoolNode
+from kailash.nodes.ai.a2a import A2AAgentNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 
@@ -536,7 +535,7 @@ class ProblemAnalyzerNode(Node):
         problem_description = kwargs["problem_description"]
         context = kwargs.get("context", {})
         strategy = kwargs.get("decomposition_strategy", "hierarchical")
-        depth = kwargs.get("analysis_depth", "standard")
+        kwargs.get("analysis_depth", "standard")
 
         # Extract key terms and requirements
         problem_lower = problem_description.lower()
@@ -952,7 +951,7 @@ class TeamFormationNode(Node):
     ) -> List[Dict]:
         """Form team using swarm intelligence principles."""
         required_capabilities = set(problem.get("required_capabilities", []))
-        complexity = problem.get("complexity_score", 0.5)
+        problem.get("complexity_score", 0.5)
 
         # Calculate attraction scores between agents
         attraction_matrix = {}
@@ -1306,7 +1305,7 @@ class SelfOrganizingAgentNode(A2AAgentNode):
 
         # Add self-organization instructions to system prompt
         so_prompt = f"""You are a self-organizing agent with capabilities: {', '.join(capabilities)}.
-        
+
 Current team context: {json.dumps(team_context, indent=2)}
 Collaboration mode: {collaboration_mode}
 

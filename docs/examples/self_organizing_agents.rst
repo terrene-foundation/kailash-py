@@ -1,7 +1,9 @@
 Self-Organizing Agent Pool System
 =================================
 
-The Kailash SDK includes a comprehensive self-organizing agent pool system that enables agents to autonomously form teams, collaborate, and solve complex problems without centralized orchestration.
+The Kailash SDK includes a comprehensive self-organizing agent pool system that
+enables agents to autonomously form teams, collaborate, and solve complex problems
+without centralized orchestration.
 
 Overview
 --------
@@ -10,14 +12,17 @@ The self-organizing agent pool system consists of several key components:
 
 **Core Infrastructure:**
 
-* **AgentPoolManagerNode**: Manages the pool of available agents with capability tracking
-* **ProblemAnalyzerNode**: Analyzes problems to determine required capabilities and complexity
+* **AgentPoolManagerNode**: Manages the pool of available agents with capability
+  tracking
+* **ProblemAnalyzerNode**: Analyzes problems to determine required capabilities
+  and complexity
 * **TeamFormationNode**: Forms optimal teams using various strategies
 * **SolutionEvaluatorNode**: Evaluates solutions and determines if iteration is needed
 
 **Agent Types:**
 
-* **SelfOrganizingAgentNode**: Agents that can autonomously join teams and adapt behavior
+* **SelfOrganizingAgentNode**: Agents that can autonomously join teams and adapt
+  behavior
 * **A2AAgentNode**: Enhanced agents with agent-to-agent communication capabilities
 * **SharedMemoryPoolNode**: Central memory pool for agent communication
 
@@ -27,7 +32,8 @@ Key Features
 1. **Autonomous Team Formation**: Agents form teams based on problem requirements
 2. **Dynamic Collaboration**: Teams adapt and reorganize based on performance
 3. **Self-Evaluation**: Solutions are evaluated and improved iteratively
-4. **Multiple Organization Strategies**: Capability matching, swarm-based, market-based, hierarchical
+4. **Multiple Organization Strategies**: Capability matching, swarm-based,
+   market-based, hierarchical
 5. **Emergent Specialization**: Agents develop expertise over time
 6. **Adaptive Topology**: Team structure adapts to problem characteristics
 
@@ -141,7 +147,7 @@ Team Collaboration
 
     # Agents collaborate on the problem
     solutions = []
-    
+
     for agent in team:
         result, _ = runtime.execute(
             workflow,
@@ -158,7 +164,7 @@ Team Collaboration
                 }
             }
         )
-        
+
         if result[agent["id"]].get("success"):
             solutions.append({
                 "agent": agent["id"],
@@ -171,7 +177,7 @@ Advanced Patterns
 -----------------
 
 Emergent Specialization
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Agents can develop specializations based on their performance history:
 
@@ -195,7 +201,7 @@ Agents can develop specializations based on their performance history:
     print(f"Agent specializations: {result['all_specializations']}")
 
 Dynamic Coalition Formation
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Agents form temporary coalitions for specific objectives:
 
@@ -258,18 +264,18 @@ Here's a complete example of a self-organizing research system:
             )
             self._setup_infrastructure()
             self._create_agent_pool(num_agents)
-            
+
         def _setup_infrastructure(self):
             # Core components
             self.workflow.add_node("pool_manager", AgentPoolManagerNode())
             self.workflow.add_node("problem_analyzer", ProblemAnalyzerNode())
             self.workflow.add_node("team_formation", TeamFormationNode())
             self.workflow.add_node("solution_evaluator", SolutionEvaluatorNode())
-            
+
             # Memory pools
             self.workflow.add_node("research_memory", SharedMemoryPoolNode())
             self.workflow.add_node("solution_memory", SharedMemoryPoolNode())
-            
+
         def _create_agent_pool(self, num_agents):
             # Create diverse agents with different specializations
             specializations = [
@@ -280,11 +286,11 @@ Here's a complete example of a self-organizing research system:
                 {"capabilities": ["visualization", "reporting"], "role": "visualizer"},
                 {"capabilities": ["research", "synthesis"], "role": "researcher"}
             ]
-            
+
             for i in range(num_agents):
                 spec = specializations[i % len(specializations)]
                 agent_id = f"agent_{spec['role']}_{i:03d}"
-                
+
                 self.workflow.add_node(
                     agent_id,
                     SelfOrganizingAgentNode(),
@@ -295,7 +301,7 @@ Here's a complete example of a self-organizing research system:
                         "model": "gpt-4"
                     }
                 )
-                
+
                 # Register with pool
                 self.workflow._node_instances["pool_manager"].run(
                     action="register",
@@ -306,7 +312,7 @@ Here's a complete example of a self-organizing research system:
 
         def solve_problem(self, problem_description):
             runtime = LocalRuntime()
-            
+
             # 1. Analyze problem
             analysis_result, _ = runtime.execute(
                 self.workflow,
@@ -317,15 +323,15 @@ Here's a complete example of a self-organizing research system:
                     }
                 }
             )
-            
+
             problem_analysis = analysis_result["problem_analyzer"]["analysis"]
-            
+
             # 2. Form team
             available_agents = self.workflow._node_instances["pool_manager"].run(
                 action="find_by_capability",
                 required_capabilities=problem_analysis["required_capabilities"]
             )
-            
+
             formation_result, _ = runtime.execute(
                 self.workflow,
                 parameters={
@@ -336,17 +342,17 @@ Here's a complete example of a self-organizing research system:
                     }
                 }
             )
-            
+
             team = formation_result["team_formation"]["team"]
-            
+
             # 3. Team collaboration (iterative)
             iteration = 0
             max_iterations = 3
             solution_quality = 0
-            
+
             while iteration < max_iterations and solution_quality < 0.8:
                 iteration += 1
-                
+
                 # Agents work on problem
                 team_solutions = []
                 for agent in team:
@@ -366,10 +372,10 @@ Here's a complete example of a self-organizing research system:
                             }
                         }
                     )
-                    
+
                     if result[agent["id"]].get("success"):
                         team_solutions.append(result[agent["id"]])
-                
+
                 # Synthesize solution
                 integrated_solution = {
                     "iteration": iteration,
@@ -378,7 +384,7 @@ Here's a complete example of a self-organizing research system:
                     "confidence": 0.7 + iteration * 0.1,
                     "approach": f"Collaborative analysis using {len(team)} specialized agents"
                 }
-                
+
                 # Evaluate solution
                 evaluation_result, _ = runtime.execute(
                     self.workflow,
@@ -393,12 +399,12 @@ Here's a complete example of a self-organizing research system:
                         }
                     }
                 )
-                
+
                 solution_quality = evaluation_result["solution_evaluator"]["overall_score"]
-                
+
                 if evaluation_result["solution_evaluator"]["meets_threshold"]:
                     break
-                    
+
             return {
                 "problem": problem_description,
                 "solution": integrated_solution,
@@ -410,7 +416,7 @@ Here's a complete example of a self-organizing research system:
     # Usage
     system = SelfOrganizingResearchSystem(num_agents=15)
     result = system.solve_problem("Analyze climate change impact on urban planning")
-    
+
     print(f"Solution quality: {result['quality']:.2f}")
     print(f"Iterations: {result['iterations']}")
     print(f"Team size: {result['team_size']}")
@@ -426,7 +432,7 @@ Best Practices
 6. **Quality Thresholds**: Set appropriate quality thresholds for your domain
 
 Configuration Options
---------------------
+---------------------
 
 Team Formation Strategies
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -444,14 +450,14 @@ Problem Analysis Settings
 * **decomposition_strategy**: "hierarchical" or "simple"
 
 Agent Configuration
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 * **autonomy_level**: How much autonomous decision making (0.0 to 1.0)
 * **collaboration_mode**: "cooperative", "competitive", or "mixed"
 * **adaptation_rate**: How quickly agents adapt (0.0 to 1.0)
 
 Troubleshooting
---------------
+---------------
 
 Common Issues and Solutions:
 
@@ -462,10 +468,12 @@ Common Issues and Solutions:
    Try different team formation strategies or increase the number of iterations.
 
 **Agents not collaborating effectively**
-   Check that agents have access to shared memory pools and appropriate attention filters.
+   Check that agents have access to shared memory pools and appropriate attention
+   filters.
 
 **Team formation fails**
-   Verify that constraints (min/max team size, budget) are reasonable for your agent pool.
+   Verify that constraints (min/max team size, budget) are reasonable for your
+   agent pool.
 
 See Also
 --------

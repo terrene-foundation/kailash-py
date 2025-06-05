@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "0.1.5"
+version = "0.1.6"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -51,6 +51,13 @@ dependencies = [
     "pre-commit>=4.2.0",
     "twine>=6.1.0",
     "ollama>=0.5.1",
+    "sqlalchemy>=2.0.0",
+    "websockets>=12.0",
+    "httpx>=0.25.0",
+    "python-jose>=3.5.0",
+    "pytest-xdist>=3.6.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-split>=0.9.0",
 ]
 
 [project.optional-dependencies]

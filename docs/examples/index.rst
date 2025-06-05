@@ -1,6 +1,6 @@
 .. _examples-index:
 
-========
+
 Examples
 ========
 
@@ -16,7 +16,8 @@ This section contains various examples demonstrating how to use the Kailash Pyth
    mcp_ecosystem
 
 For the complete collection of runnable examples, visit the
-`examples directory <https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_
+`examples directory
+<https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_
 in the GitHub repository.
 
 Example Categories

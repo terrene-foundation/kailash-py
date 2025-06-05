@@ -215,12 +215,12 @@ services:
     image: kailash-gateway
     environment:
       - INSTANCE_ID=1
-  
+
   gateway2:
     image: kailash-gateway
     environment:
       - INSTANCE_ID=2
-  
+
   haproxy:
     image: haproxy
     depends_on:

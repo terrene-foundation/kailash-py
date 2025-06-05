@@ -32,7 +32,7 @@ This document presents a complete workflow architecture for self-organizing agen
   - Query abstraction to maximize hit rates
 - **Use Cases**: API call optimization, data reuse, cost reduction
 
-#### **MCPAgentNode** 
+#### **MCPAgentNode**
 - **Purpose**: Self-organizing agent enhanced with MCP integration
 - **Features**:
   - Access to external tools through MCP servers
@@ -78,7 +78,7 @@ This document presents a complete workflow architecture for self-organizing agen
 
 #### **Self-Organizing Components**
 - **AgentPoolManagerNode**: Agent registry and capability tracking
-- **ProblemAnalyzerNode**: Problem decomposition and requirement analysis  
+- **ProblemAnalyzerNode**: Problem decomposition and requirement analysis
 - **TeamFormationNode**: Optimal team composition using multiple strategies
 - **SolutionEvaluatorNode**: Multi-dimensional solution quality assessment
 
@@ -92,7 +92,7 @@ This document presents a complete workflow architecture for self-organizing agen
 ```
 Query Input → QueryAnalysisNode → {
   - Pattern recognition
-  - Complexity assessment  
+  - Complexity assessment
   - Capability requirements
   - MCP tool needs
   - Team composition suggestions

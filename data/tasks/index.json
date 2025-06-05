@@ -440,6 +440,83 @@
       "status": "failed",
       "started_at": null,
       "ended_at": "2025-06-04T09:01:07.500374+00:00"
+    },
+    "9fe3e09d-f66b-498d-857e-a9820117ba59": {
+      "run_id": "e7e2cda5-96a4-4729-a55e-0aad34b030b2",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-04T18:33:32.447585+00:00",
+      "ended_at": "2025-06-04T18:33:32.451275+00:00"
+    },
+    "3e38a191-bba9-4c9a-8528-b977758d9ada": {
+      "run_id": "1bd5a65f-b35b-4053-b234-77ab23d19586",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T04:54:50.746824+00:00",
+      "ended_at": "2025-06-05T04:54:50.749450+00:00"
+    },
+    "a39f2833-0121-4dd8-8356-35f15db5050a": {
+      "run_id": "cc838951-da4c-4008-81a6-9adec25bc68f",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:16:11.604033+00:00",
+      "ended_at": "2025-06-05T09:16:11.606404+00:00"
+    },
+    "84d47ae0-93e1-48b3-b193-7bdc6074118e": {
+      "run_id": "05bff8d6-ff6e-46e0-a855-0c5c497e0ba9",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:17:37.960762+00:00",
+      "ended_at": "2025-06-05T09:17:37.962554+00:00"
+    },
+    "c5f73d58-b38c-43bd-b8ea-c69203d9adfe": {
+      "run_id": "af47fa1b-16c2-4e43-8e87-d51eb32f4b9f",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:19:08.962060+00:00",
+      "ended_at": "2025-06-05T09:19:08.964654+00:00"
+    },
+    "776f8474-2bc5-48d7-ba41-e868a76232b9": {
+      "run_id": "fba4f068-c0c8-4d8f-8051-47a68c881a64",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:21:11.325287+00:00",
+      "ended_at": "2025-06-05T09:21:11.328790+00:00"
+    },
+    "9aa298a3-d7e4-4b63-9f98-50529d6c19cc": {
+      "run_id": "1a0aee9e-92ac-44ad-87f5-d10c761095a0",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:24:29.892325+00:00",
+      "ended_at": "2025-06-05T09:24:29.895703+00:00"
+    },
+    "7617f3a0-3b23-4343-aaba-359bf0b3b4fd": {
+      "run_id": "0f50dcdc-a04c-47f5-85eb-f3af2e9ad212",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:26:06.175227+00:00",
+      "ended_at": "2025-06-05T09:26:06.178595+00:00"
+    },
+    "5d650fad-c115-4304-8bfe-edf7f895a1a9": {
+      "run_id": "ee6521cb-f13f-4c2d-b272-e60d2eda042c",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:27:18.144242+00:00",
+      "ended_at": "2025-06-05T09:27:18.150899+00:00"
+    },
+    "1e912b9d-fd10-41be-9abd-76ac73135186": {
+      "run_id": "a55e6c8e-5060-4abf-9753-b5d17452fc82",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:28:29.815833+00:00",
+      "ended_at": "2025-06-05T09:28:29.818484+00:00"
+    },
+    "fe863477-57c6-47b2-9928-6efae2323c99": {
+      "run_id": "cc0ac175-77b0-45e9-b424-3f2e7b18a85b",
+      "node_id": "customer_reader",
+      "status": "failed",
+      "started_at": "2025-06-05T09:29:41.834945+00:00",
+      "ended_at": "2025-06-05T09:29:41.837658+00:00"
     }
   },
   "runs": {}

@@ -11,6 +11,8 @@ from kailash.manifest import KailashManifest
 from kailash.workflow import Workflow, WorkflowBuilder
 
 
+@pytest.mark.slow
+@pytest.mark.integration
 class TestCLIIntegration:
     """Test CLI commands with real workflow execution."""
 

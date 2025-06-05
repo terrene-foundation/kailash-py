@@ -22,6 +22,8 @@ from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 from kailash.nodes.transform import DataTransformerNode
 from kailash.nodes.logic import SwitchNode, MergeNode, WorkflowNode
 from kailash.nodes.code import PythonCodeNode
+from kailash.security import SecurityConfig, set_security_config, validate_file_path, safe_open
+from kailash.nodes.mixins import SecurityMixin
 ```
 
 ## Quick Workflow Creation
@@ -33,7 +35,7 @@ workflow = Workflow("my_pipeline")
 
 # Add nodes with CONFIGURATION parameters (static settings)
 workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")  # WHERE to read
-workflow.add_node("processor", DataTransformerNode(), 
+workflow.add_node("processor", DataTransformerNode(),
     operations=[{"type": "filter", "condition": "age > 18"}]  # HOW to process
 )
 workflow.add_node("writer", CSVWriterNode(), file_path="output.csv")  # WHERE to write
@@ -72,14 +74,14 @@ workflow = (WorkflowBuilder()
 ### Data I/O
 ```python
 # CSV Reading
-workflow.add_node("csv_in", CSVReaderNode(), 
+workflow.add_node("csv_in", CSVReaderNode(),
     file_path="data.csv",
     delimiter=",",
     has_header=True
 )
 
 # JSON Writing
-workflow.add_node("json_out", JSONWriterNode(), 
+workflow.add_node("json_out", JSONWriterNode(),
     file_path="output.json",
     indent=2
 )
@@ -88,7 +90,7 @@ workflow.add_node("json_out", JSONWriterNode(),
 ### AI/LLM Integration
 ```python
 # LLM Processing
-workflow.add_node("llm", LLMAgentNode(), 
+workflow.add_node("llm", LLMAgentNode(),
     provider="openai",
     model="gpt-4",
     temperature=0.7,
@@ -96,7 +98,7 @@ workflow.add_node("llm", LLMAgentNode(),
 )
 
 # Generate Embeddings
-workflow.add_node("embedder", EmbeddingGeneratorNode(), 
+workflow.add_node("embedder", EmbeddingGeneratorNode(),
     provider="openai",
     model="text-embedding-ada-002"
 )
@@ -105,14 +107,14 @@ workflow.add_node("embedder", EmbeddingGeneratorNode(),
 ### API Calls
 ```python
 # Simple HTTP Request
-workflow.add_node("api_call", HTTPRequestNode(), 
+workflow.add_node("api_call", HTTPRequestNode(),
     url="https://api.example.com/data",
     method="GET",
     headers={"Authorization": "Bearer token"}
 )
 
 # REST Client with Auth
-workflow.add_node("rest", RESTClientNode(), 
+workflow.add_node("rest", RESTClientNode(),
     base_url="https://api.example.com",
     auth_type="bearer",
     auth_config={"token": "your-token"}
@@ -121,7 +123,7 @@ workflow.add_node("rest", RESTClientNode(),
 
 ### Data Transformation
 ```python
-workflow.add_node("transform", DataTransformerNode(), 
+workflow.add_node("transform", DataTransformerNode(),
     operations=[
         {"type": "filter", "condition": "status == 'active'"},
         {"type": "map", "expression": "{'id': id, 'name': name.upper()}"},
@@ -133,7 +135,7 @@ workflow.add_node("transform", DataTransformerNode(),
 ### Conditional Logic
 ```python
 # Route based on conditions
-workflow.add_node("router", SwitchNode(), 
+workflow.add_node("router", SwitchNode(),
     conditions=[
         {"output": "high", "expression": "value > 100"},
         {"output": "medium", "expression": "value > 50"},
@@ -149,7 +151,7 @@ workflow.connect("router", "low_handler", mapping={"low": "input"})
 
 ### Custom Python Code
 ```python
-workflow.add_node("custom", PythonCodeNode(), 
+workflow.add_node("custom", PythonCodeNode(),
     code='''
 def execute(data):
     # Custom processing logic
@@ -280,6 +282,47 @@ except NodeExecutionError as e:
     print(f"Node {e.node_id} failed: {e}")
 ```
 
+## Security Configuration
+
+### Basic Security Setup
+```python
+from kailash.security import SecurityConfig, set_security_config
+
+# Production security configuration
+config = SecurityConfig(
+    allowed_directories=["/app/data", "/tmp/kailash"],
+    max_file_size=50 * 1024 * 1024,  # 50MB
+    execution_timeout=60.0,  # 1 minute
+    memory_limit=256 * 1024 * 1024,  # 256MB
+    enable_audit_logging=True
+)
+set_security_config(config)
+```
+
+### Safe File Operations
+```python
+from kailash.security import safe_open, validate_file_path
+
+# Validate file path before use
+safe_path = validate_file_path("/app/data/file.txt")
+
+# Safe file opening with automatic validation
+with safe_open("data/file.txt", "r") as f:
+    content = f.read()
+```
+
+### Secure Node Development
+```python
+from kailash.nodes.mixins import SecurityMixin
+from kailash.nodes.base import Node
+
+class MySecureNode(SecurityMixin, Node):
+    def run(self, **kwargs):
+        # Input is automatically sanitized
+        safe_params = self.validate_and_sanitize_inputs(kwargs)
+        return self.process_safely(safe_params)
+```
+
 ## Export Workflows
 ```python
 # Export to YAML
@@ -313,16 +356,16 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 @register_node()
 class MyCustomNode(Node):
     """Process data with a threshold filter.
-    
+
     Custom node that filters input data based on a configurable threshold.
     """
-    
+
     def __init__(self, **kwargs):
         """Initialize the node with configuration."""
         super().__init__(**kwargs)
         # Access config during initialization if needed
         self.threshold = self.config.get("threshold", 0.5)
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define input parameters (REQUIRED method)."""
         return {
@@ -340,7 +383,7 @@ class MyCustomNode(Node):
                 description="Processing options"
             )
         }
-    
+
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define output schema for validation (OPTIONAL method)."""
         return {
@@ -357,22 +400,22 @@ class MyCustomNode(Node):
                 description="Processing metadata"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node logic (REQUIRED method).
-        
+
         This method receives validated parameters as keyword arguments.
         """
         # Get inputs
         data = kwargs["data"]
         options = kwargs.get("options", {})
-        
+
         # Use configuration from initialization
         threshold = options.get("threshold", self.threshold)
-        
+
         # Process data
         filtered = [item for item in data if item > threshold]
-        
+
         # Return outputs matching the schema
         return {
             "result": {
@@ -469,7 +512,7 @@ workflow.add_node("llm", LLMAgentNode(), {
 ## Quick Tips
 
 1. **Always validate workflows before execution**: `workflow.validate()`
-2. **Use named outputs/inputs for clarity**: `from_output="processed"` 
+2. **Use named outputs/inputs for clarity**: `from_output="processed"`
 3. **Chain operations in DataTransformer**: Multiple operations in sequence
 4. **Handle errors gracefully**: Wrap execution in try/except
 5. **Export workflows for reuse**: Save as YAML/JSON

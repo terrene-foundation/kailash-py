@@ -1,8 +1,8 @@
 .. _examples-integrations:
 
-=====================
+
 Integration Examples
-=====================
+====================
 
 This section shows how to integrate the Kailash Python SDK with external systems.
 
@@ -45,4 +45,5 @@ SharePoint Integration
 API Integration
 ---------------
 
-See the `integration examples <https://github.com/terrene-foundation/kailash-py/tree/main/examples/integration_examples>`_ for more API integration patterns.
+See the `integration examples
+<https://github.com/terrene-foundation/kailash-py/tree/main/examples/integration_examples>`_ for more API integration patterns.

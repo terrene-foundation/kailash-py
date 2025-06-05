@@ -1,72 +1,56 @@
 # Current Release Status
 
-## Latest Release: v0.1.5
+## Latest Release: v0.1.6
 
-**Release Date**: 2025-06-05  
-**Status**: 🚧 In Development  
-**Type**: Minor Release (Documentation Enhancement)
+**Release Date**: 2025-06-05
+**Status**: ✅ Released
+**Type**: Minor Release (Security & Production Hardening + CI/CD Optimization)
 
 ### Release Theme
-Complete Self-Organizing Agent Documentation & Reference Enhancement
+Complete Security Implementation with JWT Auth, RBAC, Multi-tenancy & CI/CD Optimization
 
 ### Key Features
-- ✅ Enhanced self-organizing agent documentation (13 specialized nodes)
-- ✅ Complete reference documentation updates
-- ✅ All AI node doctests now passing (70+ tests fixed)
-- ✅ Perfect Sphinx documentation build (0 errors, 0 warnings)
-- ✅ New MCP ecosystem integration patterns
+1. **Access Control System**
+   - JWT authentication with refresh tokens
+   - Role-Based Access Control (RBAC)
+   - Multi-tenant support with isolation
+   - Node-level and workflow-level permissions
 
-### Release Progress
-- [x] **Documentation Updates**: Complete
-- [x] **Reference Enhancement**: Complete  
-- [x] **Version Bump**: Complete (pyproject.toml → 0.1.5)
-- [x] **File Organization**: Architecture docs moved to ADRs
-- [ ] **Testing**: Pending full test suite validation
-- [ ] **Package Build**: Pending
-- [ ] **PyPI Release**: Pending
-- [ ] **GitHub Release**: Pending
+2. **Production Hardening**
+   - Input validation and sanitization
+   - Rate limiting for API endpoints
+   - Secure error handling
+   - Audit logging for security events
 
-### Quick Stats
-- **Tests**: 753+ tests (expected 100% pass rate)
-- **Examples**: 56+ working examples 
-- **Nodes**: 66+ nodes documented
-- **Documentation**: Perfect build status
-- **Self-Organizing Agents**: 13 specialized nodes fully documented
+3. **CI/CD Optimization**
+   - Local Mac runner support (87% faster)
+   - Parallel test execution
+   - Cleaned up workflow files (73% reduction)
 
-## Previous Releases
+### Release Statistics
+- **Total Commits**: 100+
+- **Files Changed**: 150+
+- **New Features**: Access Control, Security, CI/CD
+- **Performance**: CI from 15min → 2min
+- **Test Coverage**: 591+ tests passing
 
-### v0.1.4 (2025-05-31)
-- Self-organizing agent system implementation
-- Node naming convention standardization  
-- Complete A2A communication system
+## Next Release: v0.1.7
 
-### v0.1.3 (2025-05-30)
-- Comprehensive testing framework
-- API integration enhancements
-- Performance optimization
+**Planned Date**: TBD
+**Status**: 🔵 Planning
+**Type**: TBD
 
-### v0.1.2 (2025-05-29)
-- Code quality improvements
-- Linting and formatting standardization
-- Pre-commit hooks implementation
+### Planned Features
+1. Frontend UI components for Workflow Studio
+2. AI Assistant integration
+3. Performance optimizations
+4. Bug fixes (datetime comparison in list_runs)
 
-## Release Management
-
-### Release Notes Location
-- **Current**: `releases/notes/v0.1.5.md`
-- **Archive**: `releases/notes/`
-
-### Checklist
-- **Current**: `releases/checklists/v0.1.5-checklist.md`
-- **Progress**: 🚧 In Progress
-
-### Next Steps
-1. Complete testing validation
-2. Build and test package distribution  
-3. Create GitHub release
-4. Publish to PyPI
-5. Update documentation links
-
----
-*Last Updated: 2025-06-05*  
-*Next Release: v0.1.6 (Security & Performance Focus)*
+### Release History
+- v0.1.6 - 2025-06-05 - Security & Production Hardening + CI/CD
+- v0.1.5 - 2025-06-05 - Self-Organizing Agents + Test Fixes
+- v0.1.4 - 2025-06-04 - MCP Integration & A2A Communication
+- v0.1.3 - 2025-05-28 - API Integration & Immutable State
+- v0.1.2 - 2025-05-27 - Conditional Routing & Docker Runtime
+- v0.1.1 - 2025-05-26 - Error Handling & Import Fixes
+- v0.1.0 - 2025-05-24 - Initial Release

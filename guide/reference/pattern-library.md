@@ -14,6 +14,7 @@ This pattern library documents common workflow patterns, best practices, and des
 - [Composition Patterns](#composition-patterns)
 - [Self-Organizing Agent Patterns](#self-organizing-agent-patterns)
 - [Deployment Patterns](#deployment-patterns)
+- [Security Patterns](#security-patterns)
 - [Best Practices](#best-practices)
 
 ## Core Patterns
@@ -70,7 +71,7 @@ csv_reader = CSVReaderNode(config={"file_path": "data.csv"})
 data = csv_reader.execute()
 
 # Process data
-processed_data = [{"id": row["id"], "name": row["name"].upper()} 
+processed_data = [{"id": row["id"], "name": row["name"].upper()}
                   for row in data["data"]]
 
 # Write results
@@ -357,10 +358,10 @@ try:
 except Exception as e:
     self._failures += 1
     self._last_failure = time.time()
-    
+
     if self._failures >= 5:
         self._circuit_open = True
-    
+
     result = {"error": str(e), "failures": self._failures}
 """,
         "imports": ["time"]
@@ -393,7 +394,7 @@ for attempt in range(max_retries):
     except Exception as e:
         if attempt == max_retries - 1:
             raise
-        
+
         # Exponential backoff with jitter
         delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
         time.sleep(delay)
@@ -532,11 +533,11 @@ main_workflow.connect("data_prep", "ml_pipeline")
 def create_processing_workflow(steps):
     """Dynamically create workflow based on configuration"""
     workflow = Workflow()
-    
+
     previous_node = None
     for i, step in enumerate(steps):
         node_id = f"step_{i}"
-        
+
         # Create node based on step type
         if step["type"] == "transform":
             node = PythonCodeNode(config={"code": step["code"]})
@@ -548,14 +549,14 @@ def create_processing_workflow(steps):
             node = PythonCodeNode(
                 config={"code": step["aggregation_code"]}
             )
-        
+
         workflow.add_node(node_id, node)
-        
+
         if previous_node:
             workflow.connect(previous_node, node_id)
-        
+
         previous_node = node_id
-    
+
     return workflow
 
 # Create custom workflow
@@ -756,13 +757,13 @@ gateway = WorkflowGateway(port=8000)
 # Register MCP servers for external tool access
 mcp_config = {
     "research_tools": {
-        "command": "python", 
+        "command": "python",
         "args": ["-m", "research_mcp_server"],
         "capabilities": ["web_search", "document_analysis"]
     },
     "data_tools": {
         "command": "python",
-        "args": ["-m", "data_mcp_server"], 
+        "args": ["-m", "data_mcp_server"],
         "capabilities": ["sql_query", "visualization"]
     }
 }
@@ -854,6 +855,235 @@ for connection in config["connections"]:
         connection.get("output_key")
     )
 ```
+
+### 17. Workflow Studio Visual Development Pattern
+**Purpose**: Use visual interface for workflow development and deployment
+
+```python
+# Export workflow from Python for visual editing
+from kailash.utils.export import WorkflowExporter
+
+# Create workflow programmatically
+workflow = create_data_processing_workflow()
+
+# Export for Studio import
+workflow.save("workflow.yaml", format="yaml")
+
+# Import to Studio via API
+import requests
+with open("workflow.yaml", "rb") as f:
+    response = requests.post(
+        "https://studio.kailash.ai/api/workflows/import",
+        files={"workflow": f},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+# Or use Studio API client
+from kailash.api.studio import StudioClient
+client = StudioClient(api_key="your-api-key")
+client.upload_workflow(workflow)
+```
+
+**Studio Features**:
+- Drag-and-drop node palette with 66+ nodes
+- Real-time parameter validation
+- Visual connection mapping
+- Live execution monitoring
+- Export to Python/YAML/JSON
+
+### 18. Multi-Tenant Deployment Pattern
+**Purpose**: Deploy isolated workflow environments for multiple tenants
+
+```bash
+# Deploy new tenant with isolated resources
+./studio/deploy-tenant.sh \
+  --tenant-id acme-corp \
+  --domain acme.studio.kailash.ai \
+  --database-schema acme \
+  --redis-db 2
+
+# This creates:
+# - Isolated Docker container
+# - PostgreSQL schema for tenant data
+# - Redis database for caching
+# - Nginx routing configuration
+```
+
+**Tenant Isolation**:
+- Separate workflow storage per tenant
+- Isolated execution environments
+- Per-tenant resource limits
+- Independent authentication
+
+## Security Patterns
+
+### 16. Secure File Processing Pattern
+**Purpose**: Safely process files with path validation and sanitization
+
+```python
+from kailash.security import SecurityConfig, set_security_config, safe_open
+from kailash.nodes.data.readers import CSVReaderNode
+from kailash.nodes.data.writers import CSVWriterNode
+from kailash.nodes.mixins import SecurityMixin
+from kailash.nodes.base import Node
+
+# Configure security policy
+security_config = SecurityConfig(
+    allowed_directories=["/app/data", "/tmp/kailash"],
+    max_file_size=50 * 1024 * 1024,  # 50MB
+    execution_timeout=300.0,  # 5 minutes
+    enable_audit_logging=True
+)
+set_security_config(security_config)
+
+# Create secure workflow
+workflow = Workflow("secure_data_processing")
+
+# File operations automatically use security validation
+workflow.add_node("reader", CSVReaderNode(), file_path="/app/data/input.csv")
+workflow.add_node("processor", SecureProcessorNode())
+workflow.add_node("writer", CSVWriterNode(), file_path="/app/data/output.csv")
+
+workflow.connect("reader", "processor")
+workflow.connect("processor", "writer")
+```
+
+**Applications**:
+- Production data processing with security constraints
+- Multi-tenant file processing with isolation
+- Compliance-required workflows (GDPR, HIPAA)
+
+### 17. Secure Code Execution Pattern
+**Purpose**: Execute user-provided code with sandboxing and resource limits
+
+```python
+from kailash.security import SecurityConfig
+from kailash.nodes.code.python import PythonCodeNode
+
+# Configure secure execution
+secure_config = SecurityConfig(
+    execution_timeout=60.0,  # 1 minute limit
+    memory_limit=256 * 1024 * 1024,  # 256MB limit
+    enable_audit_logging=True
+)
+
+# Secure code execution node
+secure_code_node = PythonCodeNode(
+    code="""
+    # User-provided code runs in sandbox
+    result = sum(range(input_value))
+    """,
+    security_config=secure_config
+)
+
+workflow = Workflow("secure_computation")
+workflow.add_node("compute", secure_code_node)
+
+# Execute with resource monitoring
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "compute": {"input_value": 1000}
+})
+```
+
+**Applications**:
+- User-generated analytics scripts
+- Dynamic data transformations
+- Sandbox environments for untrusted code
+
+### 18. Secure Node Development Pattern
+**Purpose**: Create custom nodes with built-in security features
+
+```python
+from kailash.nodes.mixins import SecurityMixin
+from kailash.nodes.base import Node, NodeParameter
+
+class SecureDataProcessorNode(SecurityMixin, Node):
+    """Custom node with integrated security."""
+
+    def get_parameters(self):
+        return {
+            "input_data": NodeParameter(
+                type=list,
+                description="Data to process",
+                required=True
+            )
+        }
+
+    def run(self, **kwargs):
+        # Automatic input validation and sanitization
+        safe_params = self.validate_and_sanitize_inputs(kwargs)
+
+        # Log security event
+        self.log_security_event("Processing data", level="INFO")
+
+        # Process data safely
+        processed_data = self.secure_process(safe_params["input_data"])
+
+        return {"processed": processed_data}
+
+    def secure_process(self, data):
+        """Process data with security considerations."""
+        # Validate data size
+        if len(data) > 10000:
+            raise SecurityError("Data too large for processing")
+
+        # Process with size limits
+        return [item for item in data if self.is_safe_item(item)]
+
+    def is_safe_item(self, item):
+        """Check if item is safe to process."""
+        return not any(dangerous in str(item) for dangerous in ['<script>', 'eval(', 'exec('])
+```
+
+**Applications**:
+- Custom business logic nodes requiring security
+- Third-party integration nodes
+- Nodes handling sensitive data
+
+### 19. Authentication Security Pattern
+**Purpose**: Secure API authentication with credential protection
+
+```python
+import os
+from kailash.nodes.api.auth import OAuth2Node, APIKeyNode
+from kailash.nodes.api.rest import RESTClientNode
+
+# Secure credential management using environment variables
+workflow = Workflow("secure_api_integration")
+
+# OAuth2 with environment-based credentials
+oauth_node = OAuth2Node(
+    token_url="https://auth.example.com/token",
+    client_id=os.getenv("API_CLIENT_ID"),  # From environment
+    client_secret=os.getenv("API_CLIENT_SECRET"),  # From environment
+    scope="read:data"
+)
+
+# API key with secure storage
+api_key_node = APIKeyNode(
+    api_key=os.getenv("API_KEY"),  # From environment
+    placement="header",
+    key_name="Authorization",
+    prefix="Bearer"
+)
+
+# REST client with authentication
+rest_node = RESTClientNode(
+    base_url="https://api.example.com",
+    auth_type="oauth2",
+    auth_config={"oauth2_node": oauth_node}
+)
+
+workflow.add_node("auth", oauth_node)
+workflow.add_node("api", rest_node)
+workflow.connect("auth", "api")
+```
+
+**Applications**:
+- Enterprise API integrations
+- Multi-service authentication workflows
+- Credential rotation and management
 
 ## Best Practices
 

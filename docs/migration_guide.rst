@@ -1,6 +1,6 @@
 .. _migration-guide:
 
-===============
+
 Migration Guide
 ===============
 

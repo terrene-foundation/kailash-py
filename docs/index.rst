@@ -1,6 +1,6 @@
 .. Kailash Python SDK documentation master file
 
-====================================
+
 Kailash Python SDK API Documentation
 ====================================
 
@@ -32,6 +32,7 @@ container-node architecture.
    best_practices
    troubleshooting
    performance
+   workflow_studio
 
 .. toctree::
    :maxdepth: 2
@@ -41,6 +42,7 @@ container-node architecture.
    api/workflow
    api/workflow_api
    api/runtime
+   api/access_control
    api/tracking
    api/visualization
    api/utils
@@ -51,6 +53,8 @@ container-node architecture.
    :caption: Examples
 
    examples/index
+   examples/self_organizing_agents
+   examples/mcp_ecosystem
 
 .. toctree::
    :maxdepth: 1
@@ -72,8 +76,11 @@ Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It pro
   reusable nodes
 - **Extensive Node Library**: Pre-built nodes for data I/O, transformation,
   AI/ML, APIs, and more
+- **Coordinated AI Workflows**: Advanced multi-agent systems with A2A communication,
+  self-organizing agent pools, and MCP integration
 - **Flexible Runtime**: Execute workflows locally, in Docker, or distributed
   environments
+- **Access Control**: Comprehensive RBAC and multi-tenant security
 - **Task Tracking**: Monitor workflow execution with detailed metrics and logs
 - **Easy Extension**: Create custom nodes with simple Python classes
 
@@ -87,6 +94,13 @@ Key Features
    - AI/ML: Classification, Embeddings, NLP
    - API: REST, GraphQL, HTTP with auth
    - Code: Secure Python code execution
+
+🤖 **Advanced AI Coordination**
+   - **A2A (Agent-to-Agent)**: Direct communication between AI agents
+   - **Self-Organizing Agent Pools**: Autonomous team formation and problem solving
+   - **MCP (Model Context Protocol)**: AI context management and tool discovery
+   - **Intelligent Orchestration**: Adaptive workflows with convergence detection
+   - **Multi-Agent Workflows**: Coordinated agent teams for complex tasks
 
 📊 **Workflow Management**
    - Visual workflow builder
@@ -147,6 +161,51 @@ Quick Example
 
    # Execute workflow
    results = workflow.run()
+
+Coordinated AI Workflow Example
+-------------------------------
+
+.. code-block:: python
+
+   from kailash import Workflow
+   from kailash.nodes.ai.self_organizing import (
+       AgentPoolManagerNode, ProblemAnalyzerNode,
+       TeamFormationNode, SelfOrganizingAgentNode
+   )
+   from kailash.nodes.ai.a2a import A2ACoordinatorNode
+   from kailash.runtime import LocalRuntime
+
+   # Create a self-organizing research system
+   workflow = Workflow("ai_research_team")
+
+   # Add agent pool manager and problem analyzer
+   workflow.add_node("pool_manager", AgentPoolManagerNode())
+   workflow.add_node("problem_analyzer", ProblemAnalyzerNode())
+   workflow.add_node("team_formation", TeamFormationNode())
+   workflow.add_node("coordinator", A2ACoordinatorNode())
+
+   # Create specialized agents
+   agents = [
+       ("data_analyst", ["data_analysis", "statistics"]),
+       ("ml_engineer", ["machine_learning", "modeling"]),
+       ("researcher", ["research", "literature_review"])
+   ]
+
+   for agent_id, capabilities in agents:
+       workflow.add_node(agent_id, SelfOrganizingAgentNode(), config={
+           "agent_id": agent_id,
+           "capabilities": capabilities,
+           "provider": "openai",
+           "model": "gpt-4"
+       })
+
+   # Execute with a complex research problem
+   runtime = LocalRuntime()
+   result, _ = runtime.execute(workflow, parameters={
+       "problem_analyzer": {
+           "problem_description": "Analyze customer churn patterns and predict future behavior"
+       }
+   })
 
 Architecture Overview
 ---------------------

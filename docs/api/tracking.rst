@@ -11,7 +11,8 @@ This section covers the task tracking and monitoring system in the Kailash SDK.
 Overview
 ========
 
-The tracking system provides comprehensive monitoring and analytics for workflow execution:
+The tracking system provides comprehensive monitoring and analytics for workflow
+execution:
 
 - **Task Tracking**: Monitor individual node executions
 - **Run Management**: Track complete workflow runs
@@ -518,7 +519,8 @@ Send tracking events to external systems:
 Performance Metrics Collection
 ==============================
 
-The SDK includes comprehensive performance metrics collection that automatically tracks resource usage during workflow execution.
+The SDK includes comprehensive performance metrics collection that automatically tracks
+resource usage during workflow execution.
 
 MetricsCollector
 ----------------

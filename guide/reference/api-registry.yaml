@@ -16,7 +16,7 @@ workflow:
         config: "Configuration as keyword arguments"
       example: |
         workflow.add_node('reader', CSVReaderNode(), file_path='data.csv')
-    
+
     connect:
       signature: "connect(source_node: str, target_node: str, mapping: Optional[Dict[str, str]] = None) -> None"
       description: "Connect two nodes in the workflow"
@@ -27,7 +27,7 @@ workflow:
       example: |
         workflow.connect('reader', 'processor', mapping={'data': 'data'})
         workflow.connect('processor', 'writer')
-    
+
     execute:
       signature: "execute(inputs: Optional[Dict[str, Any]] = None, task_manager: Optional[TaskManager] = None) -> Dict[str, Any]"
       description: "Execute the workflow directly"
@@ -37,23 +37,23 @@ workflow:
       example: |
         # Direct execution
         results = workflow.execute(inputs={'input_data': [1, 2, 3]})
-        
+
         # Or through runtime
         runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow, inputs={'input_data': [1, 2, 3]})
-    
+
     validate:
       signature: "validate() -> bool"
       description: "Validate workflow structure and connections"
       example: |
         workflow.validate()  # Raises exception if invalid
-    
+
     to_dict:
       signature: "to_dict() -> dict"
       description: "Export workflow as dictionary"
       example: |
         workflow_dict = workflow.to_dict()
-    
+
     from_dict:
       signature: "from_dict(data: dict) -> Workflow"
       description: "Create workflow from dictionary"
@@ -70,19 +70,19 @@ workflow_builder:
       description: "Start building a new workflow"
       example: |
         builder = WorkflowBuilder().create('my_pipeline', 'Data processing pipeline')
-    
+
     add_node:
       signature: "add_node(node_id: str, node_class: Type[Node], config: dict = None) -> WorkflowBuilder"
       description: "Add a node to the workflow"
       example: |
         builder.add_node('reader', CSVReaderNode, {'file_path': 'data.csv'})
-    
+
     connect:
       signature: "connect(from_node: str, to_node: str, **kwargs) -> WorkflowBuilder"
       description: "Connect nodes in the workflow"
       example: |
         builder.connect('reader', 'processor')
-    
+
     build:
       signature: "build() -> Workflow"
       description: "Build and return the workflow"
@@ -97,7 +97,7 @@ runtime:
     usage: |
       runtime = LocalRuntime()
       results, run_id = runtime.execute(workflow)
-  
+
   docker_runtime:
     class: kailash.runtime.DockerRuntime
     description: "Execute workflows in Docker containers"
@@ -121,7 +121,7 @@ nodes:
       default: "List[Dict] - Parsed CSV data as list of dictionaries"
     example: |
       workflow.add_node('reader', CSVReaderNode(), file_path='data.csv', delimiter=',')
-  
+
   csv_writer:
     class: kailash.nodes.data.CSVWriterNode
     description: "Write data to CSV files"
@@ -134,7 +134,7 @@ nodes:
       default: "List[Dict] - Data to write"
     example: |
       workflow.add_node('writer', CSVWriterNode(), file_path='output.csv')
-  
+
   json_reader:
     class: kailash.nodes.data.JSONReaderNode
     description: "Read JSON files"
@@ -146,7 +146,7 @@ nodes:
       default: "Any - Parsed JSON data"
     example: |
       workflow.add_node('reader', JSONReaderNode(), file_path='data.json')
-  
+
   json_writer:
     class: kailash.nodes.data.JSONWriterNode
     description: "Write data to JSON files"
@@ -159,7 +159,7 @@ nodes:
       default: "Any - Data to write"
     example: |
       workflow.add_node('writer', JSONWriterNode(), file_path='output.json', indent=4)
-  
+
   text_reader:
     class: kailash.nodes.data.TextReaderNode
     description: "Read text files"
@@ -171,7 +171,7 @@ nodes:
       default: "str - Text content"
     example: |
       workflow.add_node('reader', TextReaderNode(), file_path='document.txt')
-  
+
   text_writer:
     class: kailash.nodes.data.TextWriterNode
     description: "Write text to files"
@@ -184,7 +184,7 @@ nodes:
       default: "str - Text to write"
     example: |
       workflow.add_node('writer', TextWriterNode(), file_path='output.txt')
-  
+
   # A2A Communication Nodes
   shared_memory_pool:
     class: kailash.nodes.ai.SharedMemoryPoolNode
@@ -207,7 +207,7 @@ nodes:
           tags=['research', 'correlation'],
           importance=0.8
       )
-  
+
   a2a_agent:
     class: kailash.nodes.ai.A2AAgentNode
     description: "Enhanced LLM agent with A2A communication capabilities"
@@ -231,7 +231,7 @@ nodes:
           memory_pool=memory_pool,
           attention_filter={'tags': ['data', 'analysis']}
       )
-  
+
   a2a_coordinator:
     class: kailash.nodes.ai.A2ACoordinatorNode
     description: "Coordinate communication and task delegation between agents"
@@ -272,7 +272,7 @@ nodes:
           agent_id='research_agent_001',
           capabilities=['data_analysis', 'research']
       )
-  
+
   problem_analyzer:
     class: kailash.nodes.ai.ProblemAnalyzerNode
     description: "Analyze problems for capability requirements"
@@ -288,7 +288,7 @@ nodes:
           problem_description='Predict customer churn',
           context={'domain': 'business', 'urgency': 'high'}
       )
-  
+
   team_formation:
     class: kailash.nodes.ai.TeamFormationNode
     description: "Form optimal teams based on problem requirements"
@@ -305,7 +305,7 @@ nodes:
           formation_strategy='capability_matching',
           available_agents=agents
       )
-  
+
   self_organizing_agent:
     class: kailash.nodes.ai.SelfOrganizingAgentNode
     description: "Agent that can autonomously join teams and collaborate"
@@ -324,7 +324,7 @@ nodes:
           capabilities=['data_analysis', 'machine_learning'],
           team_context={'team_id': 'research_team_1'}
       )
-  
+
   solution_evaluator:
     class: kailash.nodes.ai.SolutionEvaluatorNode
     description: "Evaluate solutions and determine if iteration is needed"
@@ -341,7 +341,7 @@ nodes:
           solution={'approach': 'ML model', 'confidence': 0.85},
           problem_requirements={'quality_threshold': 0.8}
       )
-  
+
   # Intelligent Orchestration Nodes
   intelligent_cache:
     class: kailash.nodes.ai.IntelligentCacheNode
@@ -362,7 +362,7 @@ nodes:
           cache_key='weather_api_nyc',
           ttl=3600
       )
-  
+
   mcp_agent:
     class: kailash.nodes.ai.MCPAgentNode
     description: "Self-organizing agent with MCP integration"
@@ -382,7 +382,7 @@ nodes:
           capabilities=['data_analysis', 'api_integration'],
           mcp_servers=[{'name': 'weather_server', 'command': 'python'}]
       )
-  
+
   orchestration_manager:
     class: kailash.nodes.ai.OrchestrationManagerNode
     description: "Central coordinator for self-organizing workflows"
@@ -404,7 +404,7 @@ nodes:
           agent_pool_size=15,
           max_iterations=3
       )
-  
+
   # AI/ML Nodes
   llm_agent:
     class: kailash.nodes.ai.LLMAgentNode
@@ -424,13 +424,13 @@ nodes:
       response: "str - Model response"
       metadata: "dict - Response metadata"
     example: |
-      workflow.add_node('llm', LLMAgentNode(), 
+      workflow.add_node('llm', LLMAgentNode(),
           provider='openai',
           model='gpt-4',
           temperature=0.7,
           system_prompt='You are a helpful assistant.'
       )
-  
+
   embedding_generator:
     class: kailash.nodes.ai.EmbeddingGeneratorNode
     description: "Generate text embeddings"
@@ -450,7 +450,7 @@ nodes:
           provider='openai',
           model='text-embedding-ada-002'
       )
-  
+
   # API Nodes
   http_request:
     class: kailash.nodes.api.HTTPRequestNode
@@ -474,7 +474,7 @@ nodes:
           method='GET',
           headers={'Authorization': 'Bearer token'}
       )
-  
+
   rest_client:
     class: kailash.nodes.api.RESTClientNode
     description: "RESTful API client with advanced features"
@@ -500,7 +500,7 @@ nodes:
           'auth_config': {'token': 'your-token'},
           'rate_limit': 10
       }
-  
+
   # Transform Nodes
   data_transformer:
     class: kailash.nodes.transform.DataTransformerNode
@@ -527,7 +527,7 @@ nodes:
               {'type': 'sort', 'key': 'age', 'reverse': True}
           ]
       }
-  
+
   # Logic Nodes
   switch:
     class: kailash.nodes.logic.SwitchNode
@@ -550,7 +550,7 @@ nodes:
           ],
           'default_output': 'unknown'
       }
-  
+
   merge:
     class: kailash.nodes.logic.MergeNode
     description: "Merge multiple data streams"
@@ -568,7 +568,7 @@ nodes:
           'merge_type': 'dict',
           'wait_for_all': True
       }
-  
+
   workflow_node:
     class: kailash.nodes.logic.WorkflowNode
     description: "Execute nested workflows"
@@ -584,14 +584,14 @@ nodes:
     example: |
       nested_workflow = Workflow('nested')
       # ... build nested workflow ...
-      
+
       node = WorkflowNode()
       config = {
           'workflow': nested_workflow,
           'input_mapping': {'data': 'nested_input'},
           'output_mapping': {'nested_output': 'result'}
       }
-  
+
   # Code Execution
   python_code:
     class: kailash.nodes.code.PythonCodeNode
@@ -634,7 +634,7 @@ api_wrapper:
               'input_schema': {...},
               'output_schema': {...}
           })
-      
+
       run:
         signature: "run(host: str = '0.0.0.0', port: int = 8000)"
         description: "Start the API server"
@@ -652,7 +652,7 @@ node_registry:
           def validate_config(self, config):
               # Validate configuration
               pass
-          
+
           def execute(self, inputs):
               # Process inputs and return outputs
               return {'result': processed_data}
@@ -670,7 +670,7 @@ visualization:
         example: |
           visualizer = WorkflowVisualizer()
           visualizer.visualize(workflow, 'workflow.png')
-  
+
   mermaid_visualizer:
     class: kailash.workflow.MermaidVisualizer
     description: "Generate Mermaid diagrams"
@@ -687,6 +687,80 @@ tracking:
     usage: |
       tracker = TaskTracker()
       # Automatically tracks when used with runtime
+
+# Security
+security:
+  SecurityConfig:
+    class: kailash.security.SecurityConfig
+    description: "Configuration for security policies and limits"
+    import: "from kailash.security import SecurityConfig"
+    constructor:
+      signature: "SecurityConfig(allowed_directories=None, max_file_size=100MB, execution_timeout=300.0, memory_limit=512MB, allowed_file_extensions=None, enable_audit_logging=True, enable_path_validation=True, enable_command_validation=True)"
+      params:
+        allowed_directories: "List of directories where file operations are permitted"
+        max_file_size: "Maximum file size in bytes (default: 100MB)"
+        execution_timeout: "Maximum execution time in seconds (default: 5 minutes)"
+        memory_limit: "Maximum memory usage in bytes (default: 512MB)"
+        allowed_file_extensions: "List of allowed file extensions"
+        enable_audit_logging: "Whether to log security events"
+        enable_path_validation: "Whether to validate file paths"
+        enable_command_validation: "Whether to validate command strings"
+    example: |
+      from kailash.security import SecurityConfig, set_security_config
+      config = SecurityConfig(
+          allowed_directories=["/app/data", "/tmp/kailash"],
+          max_file_size=50 * 1024 * 1024,
+          execution_timeout=60.0,
+          enable_audit_logging=True
+      )
+      set_security_config(config)
+
+  security_functions:
+    validate_file_path:
+      signature: "validate_file_path(file_path: Union[str, Path], config: Optional[SecurityConfig] = None, operation: str = 'access') -> Path"
+      description: "Validate and sanitize file paths to prevent traversal attacks"
+      import: "from kailash.security import validate_file_path"
+      example: |
+        from kailash.security import validate_file_path
+        safe_path = validate_file_path("/app/data/file.txt")
+
+    safe_open:
+      signature: "safe_open(file_path: Union[str, Path], mode: str = 'r', config: Optional[SecurityConfig] = None, **kwargs)"
+      description: "Safely open a file with security validation"
+      import: "from kailash.security import safe_open"
+      example: |
+        from kailash.security import safe_open
+        with safe_open("data/file.txt", "r") as f:
+            content = f.read()
+
+    sanitize_input:
+      signature: "sanitize_input(value: Any, max_length: int = 10000, allowed_types: Optional[List[type]] = None, config: Optional[SecurityConfig] = None) -> Any"
+      description: "Sanitize input values to prevent injection attacks"
+      import: "from kailash.security import sanitize_input"
+      example: |
+        from kailash.security import sanitize_input
+        clean_input = sanitize_input(user_input)
+
+    validate_command_string:
+      signature: "validate_command_string(command: str, config: Optional[SecurityConfig] = None) -> str"
+      description: "Validate command strings to prevent injection attacks"
+      import: "from kailash.security import validate_command_string"
+      example: |
+        from kailash.security import validate_command_string
+        safe_command = validate_command_string("python script.py")
+
+  SecurityMixin:
+    class: kailash.nodes.mixins.SecurityMixin
+    description: "Mixin that adds security features to nodes"
+    import: "from kailash.nodes.mixins import SecurityMixin"
+    usage: |
+      from kailash.nodes.mixins import SecurityMixin
+      from kailash.nodes.base import Node
+
+      class MySecureNode(SecurityMixin, Node):
+          def run(self, **kwargs):
+              safe_params = self.validate_and_sanitize_inputs(kwargs)
+              return self.process_safely(safe_params)
 
 # Utilities
 utils:

@@ -7,7 +7,7 @@ This directory contains all release-related documentation organized by type and 
 ```
 releases/
 ├── notes/           # Detailed release notes for each version
-├── checklists/      # Release checklists and procedures  
+├── checklists/      # Release checklists and procedures
 ├── announcements/   # Public announcements and summaries
 ├── CURRENT.md       # Current release information
 └── README.md        # This file

@@ -11,7 +11,6 @@ from typing import Any, Dict, List
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import JSONWriterNode
-from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
 
 # Configuration

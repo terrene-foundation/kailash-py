@@ -49,7 +49,7 @@ workflow.connect("from", "to", from_output="port", to_input="port")
 ```python
 workflow.connect(
     source_node="from",
-    target_node="to", 
+    target_node="to",
     mapping={"output_field": "input_field"}  # Dict mapping, not separate params
 )
 ```

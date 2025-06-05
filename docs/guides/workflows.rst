@@ -2,7 +2,7 @@
 
 .. _guides-workflows:
 
-===================
+
 Workflow Management
 ===================
 

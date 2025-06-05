@@ -28,7 +28,7 @@
 ### Imports
 Group imports in the following order:
 1. Standard library imports
-2. Third-party library imports  
+2. Third-party library imports
 3. Local application imports
 
 Example:
@@ -95,13 +95,13 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 @register_node()
 class MyCustomNode(Node):
     """One-line description of the node.
-    
+
     Longer description explaining purpose and usage.
     """
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define input parameters for the node.
-        
+
         This method MUST be implemented by all custom nodes.
         """
         return {
@@ -119,25 +119,25 @@ class MyCustomNode(Node):
                 description="Processing threshold"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute the node's logic.
-        
+
         This method MUST be implemented by all custom nodes.
         Receives validated parameters as keyword arguments.
         Must return a JSON-serializable dictionary.
         """
         input_data = kwargs["input_data"]
         threshold = kwargs.get("threshold", 0.5)
-        
+
         # Process data
         result = self._process_data(input_data, threshold)
-        
+
         return {
             "result": result,
             "count": len(result)
         }
-    
+
     def _process_data(self, data: List[Any], threshold: float) -> List[Any]:
         """Private helper method."""
         return [item for item in data if item > threshold]
@@ -148,7 +148,7 @@ class MyCustomNode(Node):
 ```python
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define expected output schema for validation.
-        
+
         This method is OPTIONAL. If not provided, outputs are only
         validated for JSON-serializability.
         """
@@ -177,15 +177,15 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 @register_node()
 class DataProcessorNode(Node):
     """Process data with configurable options."""
-    
+
     def __init__(self, **kwargs):
         """Initialize with configuration."""
         # Configuration can be passed during node creation
         super().__init__(**kwargs)
-        
+
         # Access configuration via self.config
         self.processing_mode = self.config.get("mode", "standard")
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define inputs."""
         return {
@@ -203,7 +203,7 @@ class DataProcessorNode(Node):
                 description="Processing options"
             )
         }
-    
+
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define outputs (optional)."""
         return {
@@ -220,21 +220,21 @@ class DataProcessorNode(Node):
                 description="Processing metadata"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Process the data."""
         data = kwargs["data"]
         options = kwargs.get("options", {})
-        
+
         # Use configuration
         if self.processing_mode == "advanced":
             processed = self._advanced_processing(data, options)
         else:
             processed = self._standard_processing(data, options)
-        
+
         # Log progress
         self.logger.info(f"Processed {len(processed)} items")
-        
+
         return {
             "processed": processed,
             "metadata": {
@@ -243,16 +243,16 @@ class DataProcessorNode(Node):
                 "options_used": options
             }
         }
-    
+
     def _standard_processing(self, data, options):
         """Standard processing logic."""
         return [item for item in data if self._is_valid(item)]
-    
+
     def _advanced_processing(self, data, options):
         """Advanced processing logic."""
         # More complex processing
         return data
-    
+
     def _is_valid(self, item):
         """Validation helper."""
         return True
@@ -306,12 +306,12 @@ from typing import Optional
 
 class Config:
     """Configuration management."""
-    
+
     def __init__(self):
         self.api_key = os.environ.get("KAILASH_API_KEY")
         self.timeout = int(os.environ.get("KAILASH_TIMEOUT", "30"))
         self.debug = os.environ.get("KAILASH_DEBUG", "").lower() == "true"
-    
+
     def validate(self):
         """Validate configuration."""
         if not self.api_key and self._requires_api_key():
@@ -323,11 +323,11 @@ class Config:
 1. **Optimize for developer experience first**
    - Clear, readable code over micro-optimizations
    - Profile before optimizing
-   
+
 2. **Lazy Loading**
    - Import heavy dependencies only when needed
    - Use generators for large data sets
-   
+
 3. **Caching**
    - Cache expensive computations
    - Use functools.lru_cache for pure functions
@@ -349,10 +349,10 @@ def test_node_execute_with_valid_data():
     # Arrange
     node = MyCustomNode(config={"threshold": 0.5})
     inputs = {"data": [1, 2, 3]}
-    
+
     # Act
     result = node.execute(inputs)
-    
+
     # Assert
     assert "result" in result
     assert isinstance(result["result"], dict)

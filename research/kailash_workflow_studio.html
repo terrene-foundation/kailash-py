@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kailash Workflow Orchestration Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-areas:
+                "header header header header"
+                "sidebar canvas chat-panel chat-panel"
+                "properties canvas execution-panel execution-panel";
+            grid-template-columns: 280px 1fr 350px 350px;
+            grid-template-rows: 60px 1fr 300px;
+            height: 100vh;
+            gap: 1px;
+            background: #000;
+        }
+
+        /* Header */
+        .header {
+            grid-area: header;
+            background: linear-gradient(90deg, #1e1e1e 0%, #2a2a2a 100%);
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #00d4ff, #007acc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 13px;
+        }
+
+        .btn:hover {
+            background: #3a3a3a;
+            border-color: #555;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #007acc, #00d4ff);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(45deg, #005c99, #00a8cc);
+        }
+
+        /* Sidebar - Node Palette */
+        .sidebar {
+            grid-area: sidebar;
+            background: #1a1a1a;
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .node-category {
+            margin-bottom: 20px;
+        }
+
+        .category-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .node-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            margin: 5px 0;
+            background: #252525;
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            border: 1px solid #333;
+        }
+
+        .node-item:hover {
+            background: #2a2a2a;
+            border-color: #444;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .node-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .data-io { background: linear-gradient(45deg, #e1f5fe, #4fc3f7); color: #0277bd; }
+        .transform { background: linear-gradient(45deg, #e8f5e8, #81c784); color: #388e3c; }
+        .logic { background: linear-gradient(45deg, #fff3e0, #ffb74d); color: #f57c00; }
+        .ai-ml { background: linear-gradient(45deg, #f3e5f5, #ba68c8); color: #7b1fa2; }
+        .api { background: linear-gradient(45deg, #fce4ec, #f06292); color: #c2185b; }
+        .code { background: linear-gradient(45deg, #e0f2f1, #4db6ac); color: #00695c; }
+
+        /* Canvas Area */
+        .canvas {
+            grid-area: canvas;
+            background:
+                radial-gradient(circle at 20px 20px, #333 1px, transparent 1px),
+                linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+            background-size: 20px 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .workflow-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .canvas-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 5px;
+            background: rgba(42, 42, 42, 0.9);
+            padding: 5px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+
+        .zoom-btn {
+            width: 30px;
+            height: 30px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        /* Chat Panel */
+        .chat-panel {
+            grid-area: chat-panel;
+            background: #1a1a1a;
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            background: #202020;
+        }
+
+        .chat-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .chat-subtitle {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            line-height: 1.4;
+            font-size: 13px;
+        }
+
+        .message.user {
+            background: linear-gradient(45deg, #007acc, #00d4ff);
+            color: white;
+            margin-left: 20px;
+        }
+
+        .message.assistant {
+            background: #252525;
+            border: 1px solid #333;
+            margin-right: 20px;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid #333;
+            background: #202020;
+        }
+
+        .chat-input {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            resize: none;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #007acc;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+        }
+
+        .chat-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .quick-action {
+            padding: 6px 12px;
+            background: #333;
+            border: 1px solid #444;
+            color: #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+
+        .quick-action:hover {
+            background: #444;
+            color: #fff;
+        }
+
+        /* Properties Panel */
+        .properties {
+            grid-area: properties;
+            background: #1a1a1a;
+            border-right: 1px solid #333;
+            border-top: 1px solid #333;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .properties-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+
+        .property-group {
+            margin-bottom: 20px;
+        }
+
+        .property-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .property-input {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .property-input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        /* Execution Panel */
+        .execution-panel {
+            grid-area: execution-panel;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .execution-header {
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            background: #202020;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .execution-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .execution-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .status-ready { background: #1b5e20; color: #c8e6c9; }
+        .status-running { background: #e65100; color: #ffcc02; }
+        .status-success { background: #2e7d32; color: #a5d6a7; }
+        .status-error { background: #c62828; color: #ffcdd2; }
+
+        .execution-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: #252525;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .log-output {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-timestamp {
+            color: #666;
+        }
+
+        .log-level-info { color: #4fc3f7; }
+        .log-level-warn { color: #ffb74d; }
+        .log-level-error { color: #f48fb1; }
+
+        /* Responsive Design */
+        @media (max-width: 1400px) {
+            .app-container {
+                grid-template-columns: 260px 1fr 300px 300px;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .app-container {
+                grid-template-areas:
+                    "header header header"
+                    "sidebar canvas chat-panel"
+                    "properties execution-panel execution-panel";
+                grid-template-columns: 250px 1fr 350px;
+            }
+        }
+
+        /* Tool Authentication Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .auth-modal {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover {
+            background: #333;
+            color: #fff;
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .tool-card {
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tool-card:hover {
+            border-color: #444;
+            background: #2a2a2a;
+        }
+
+        .tool-card.connected {
+            border-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .tool-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .tool-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tool-info {
+            flex: 1;
+        }
+
+        .tool-name {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .tool-category {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .connection-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-connected {
+            background: #28a745;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #6c757d;
+            color: white;
+        }
+
+        .tool-description {
+            font-size: 12px;
+            color: #ccc;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        .auth-section {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #333;
+        }
+
+        .auth-section.active {
+            display: block;
+        }
+
+        .auth-method {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .auth-input {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .connect-btn {
+            width: 100%;
+            padding: 8px;
+            background: linear-gradient(45deg, #007acc, #00d4ff);
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .connect-btn:hover {
+            background: linear-gradient(45deg, #005c99, #00a8cc);
+        }
+
+        .search-tools {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        .search-input {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        /* Mini workflow node preview */
+        .workflow-node {
+            position: absolute;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 12px;
+            min-width: 120px;
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+
+        .workflow-node:hover {
+            border-color: #007acc;
+            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+        }
+
+        .workflow-node.selected {
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.3);
+        }
+
+        .node-title {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .node-type {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .connection-port {
+            width: 8px;
+            height: 8px;
+            background: #666;
+            border-radius: 50%;
+            position: absolute;
+            transition: all 0.2s ease;
+        }
+
+        .connection-port:hover {
+            background: #007acc;
+            transform: scale(1.5);
+        }
+
+        .port-input {
+            left: -4px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .port-output {
+            right: -4px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">Kailash Workflow Studio</div>
+            <div class="header-controls">
+                <button class="btn">New Workflow</button>
+                <button class="btn">Import</button>
+                <button class="btn">Export</button>
+                <button class="btn btn-primary">Deploy</button>
+            </div>
+        </header>
+
+        <!-- Sidebar - Node Palette -->
+        <aside class="sidebar">
+            <div class="node-category">
+                <div class="category-header">Core Primitives</div>
+                <div class="node-item" draggable="true" data-node-type="input-node">
+                    <div class="node-icon data-io">📥</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Input Node</div>
+                        <div style="font-size: 10px; color: #888;">Data entry point</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="output-node">
+                    <div class="node-icon data-io">📤</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Output Node</div>
+                        <div style="font-size: 10px; color: #888;">Result endpoint</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="llm-node">
+                    <div class="node-icon ai-ml">🤖</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">LLM Node</div>
+                        <div style="font-size: 10px; color: #888;">AI decision maker</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="tool-node">
+                    <div class="node-icon api">🔧</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Tool Node</div>
+                        <div style="font-size: 10px; color: #888;">Action executor</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="agent-node">
+                    <div class="node-icon ai-ml">🧠</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Agent Node</div>
+                        <div style="font-size: 10px; color: #888;">LLM + Tools combo</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="node-category">
+                <div class="category-header">Agent Patterns</div>
+                <div class="node-item" draggable="true" data-node-type="prompt-chain">
+                    <div class="node-icon logic">🔗</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Prompt Chain</div>
+                        <div style="font-size: 10px; color: #888;">Sequential processing</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="parallel-agents">
+                    <div class="node-icon logic">⚡</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Parallel Agents</div>
+                        <div style="font-size: 10px; color: #888;">Concurrent execution</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="router-agent">
+                    <div class="node-icon logic">🚦</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Router Agent</div>
+                        <div style="font-size: 10px; color: #888;">Dynamic branching</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="evaluator-loop">
+                    <div class="node-icon logic">🔄</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Evaluator Loop</div>
+                        <div style="font-size: 10px; color: #888;">Generate-evaluate cycle</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="node-category">
+                <div class="category-header">Data Sources</div>
+                <div class="node-item" draggable="true" data-node-type="csv-reader">
+                    <div class="node-icon data-io">📄</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">CSV Reader</div>
+                        <div style="font-size: 10px; color: #888;">Read CSV files</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="api-connector">
+                    <div class="node-icon api">🌐</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">API Connector</div>
+                        <div style="font-size: 10px; color: #888;">External API calls</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="database-query">
+                    <div class="node-icon data-io">🗃️</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Database Query</div>
+                        <div style="font-size: 10px; color: #888;">SQL operations</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="node-category">
+                <div class="category-header">Tool Integrations</div>
+                <div class="node-item" draggable="true" data-node-type="composio-tool">
+                    <div class="node-icon api">🔌</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Composio Tools</div>
+                        <div style="font-size: 10px; color: #888;">100+ pre-built tools</div>
+                    </div>
+                </div>
+                <div class="node-item" draggable="true" data-node-type="custom-function">
+                    <div class="node-icon code">🐍</div>
+                    <div>
+                        <div style="font-size: 12px; font-weight: 500;">Custom Function</div>
+                        <div style="font-size: 10px; color: #888;">Python code execution</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Canvas Area -->
+        <main class="canvas">
+            <div class="workflow-canvas" id="workflow-canvas">
+                <div class="canvas-controls">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoomIn()">+</button>
+                        <button class="zoom-btn" onclick="zoomOut()">−</button>
+                        <button class="zoom-btn" onclick="resetZoom()">⌂</button>
+                    </div>
+                </div>
+
+                <!-- Sample workflow nodes for demonstration -->
+                <div class="workflow-node" style="top: 100px; left: 150px;">
+                    <div class="connection-port port-output"></div>
+                    <div class="node-title">CSV Reader</div>
+                    <div class="node-type">Data I/O</div>
+                </div>
+
+                <div class="workflow-node selected" style="top: 200px; left: 350px;">
+                    <div class="connection-port port-input"></div>
+                    <div class="connection-port port-output"></div>
+                    <div class="node-title">Data Filter</div>
+                    <div class="node-type">Transform</div>
+                </div>
+
+                <div class="workflow-node" style="top: 300px; left: 550px;">
+                    <div class="connection-port port-input"></div>
+                    <div class="node-title">API Call</div>
+                    <div class="node-type">API</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Chat Panel for LLM Agent -->
+        <section class="chat-panel">
+            <div class="chat-header">
+                <div class="chat-title">AI Workflow Assistant</div>
+                <div class="chat-subtitle">Get help building and optimizing workflows</div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <div class="message assistant">
+                    <strong>Kailash AI:</strong> Hi! I can help you build workflows using natural language. Try saying something like "Create a workflow that reads customer data from CSV, filters active customers, and sends them to our API."
+                </div>
+
+                <div class="message user">
+                    How do I create a data processing pipeline for customer analytics?
+                </div>
+
+                <div class="message assistant">
+                    <strong>Kailash AI:</strong> I'll help you create an intelligent customer analytics agent! I can build this using proven orchestration patterns:
+
+                    <br><br><strong>🔗 Prompt Chain Pattern:</strong>
+                    <br>Input → Data Analysis Agent → Customer Segmentation Agent → Action Recommendation Agent → Output
+
+                    <br><br><strong>⚡ Parallel Pattern:</strong>
+                    <br>Split data analysis across multiple specialized agents for faster processing
+
+                    <br><br><strong>🚦 Router Pattern:</strong>
+                    <br>Let an intelligent router decide which analysis path to take based on data characteristics
+
+                    <br><br>Which pattern interests you? I can auto-generate the workflow with proper LLM decision nodes and tool integrations.
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <textarea class="chat-input" placeholder="Ask me anything about building workflows..." rows="3"></textarea>
+                <div class="chat-actions">
+                    <div class="quick-action">Generate workflow</div>
+                    <div class="quick-action">Optimize pipeline</div>
+                    <div class="quick-action">Debug issues</div>
+                    <div class="quick-action">Add monitoring</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Properties Panel -->
+        <section class="properties">
+            <div class="properties-title">Node Properties</div>
+
+            <div class="property-group">
+                <div class="property-label">Node Name</div>
+                <input type="text" class="property-input" value="Data Filter" placeholder="Enter node name">
+            </div>
+
+            <div class="property-group">
+                <div class="property-label">Filter Column</div>
+                <input type="text" class="property-input" value="status" placeholder="Column name">
+            </div>
+
+            <div class="property-group">
+                <div class="property-label">Filter Value</div>
+                <input type="text" class="property-input" value="active" placeholder="Filter value">
+            </div>
+
+            <div class="property-group">
+                <div class="property-label">Description</div>
+                <textarea class="property-input" rows="3" placeholder="Describe this node's purpose"></textarea>
+            </div>
+        </section>
+
+        <!-- Execution Panel -->
+        <section class="execution-panel">
+            <div class="execution-header">
+                <div class="execution-title">Workflow Execution</div>
+                <div class="execution-status status-ready">Ready</div>
+            </div>
+
+            <div class="execution-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Execution Time</div>
+                        <div class="metric-value">2.4s</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Nodes Processed</div>
+                        <div class="metric-value">3/3</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Records Processed</div>
+                        <div class="metric-value">15,420</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Memory Usage</div>
+                        <div class="metric-value">124 MB</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 10px; font-size: 12px; font-weight: 600;">Execution Log</div>
+                <div class="log-output">
+                    <div class="log-entry">
+                        <span class="log-timestamp">14:23:45</span>
+                        <span class="log-level-info">[INFO]</span>
+                        Workflow execution started
+                    </div>
+                    <div class="log-entry">
+                        <span class="log-timestamp">14:23:46</span>
+                        <span class="log-level-info">[INFO]</span>
+                        CSV Reader: Loaded 15,420 records
+                    </div>
+                    <div class="log-entry">
+                        <span class="log-timestamp">14:23:47</span>
+                        <span class="log-level-info">[INFO]</span>
+                        Data Filter: Filtered to 12,336 active records
+                    </div>
+                    <div class="log-entry">
+                        <span class="log-timestamp">14:23:48</span>
+                        <span class="log-level-info">[INFO]</span>
+                        API Call: Successfully sent data to endpoint
+                    </div>
+                    <div class="log-entry">
+                        <span class="log-timestamp">14:23:49</span>
+                        <span class="log-level-info">[INFO]</span>
+                        Workflow execution completed successfully
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Tool Authentication Modal -->
+    <div class="modal-overlay" id="auth-modal">
+        <div class="auth-modal">
+            <div class="modal-header">
+                <div class="modal-title">🔌 Tool Integrations</div>
+                <button class="close-btn" onclick="closeAuthModal()">×</button>
+            </div>
+
+            <div class="search-tools">
+                <input type="text" class="search-input" placeholder="Search tools..." oninput="filterTools(this.value)">
+            </div>
+
+            <div class="tool-grid" id="tool-grid">
+                <!-- Slack -->
+                <div class="tool-card" data-tool="slack">
+                    <div class="tool-header">
+                        <div class="tool-logo" style="background: #4A154B;">💬</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Slack</div>
+                            <div class="tool-category">Communication</div>
+                        </div>
+                        <div class="connection-status status-connected">Connected</div>
+                    </div>
+                    <div class="tool-description">Send messages, create channels, manage workspace</div>
+                </div>
+
+                <!-- Gmail -->
+                <div class="tool-card" data-tool="gmail">
+                    <div class="tool-header">
+                        <div class="tool-logo" style="background: #EA4335;">📧</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Gmail</div>
+                            <div class="tool-category">Email</div>
+                        </div>
+                        <div class="connection-status status-disconnected">Disconnected</div>
+                    </div>
+                    <div class="tool-description">Send emails, read inbox, manage labels</div>
+                    <div class="auth-section">
+                        <div class="auth-method">OAuth2 Authentication</div>
+                        <button class="connect-btn" onclick="connectOAuth('gmail')">Connect with Google</button>
+                    </div>
+                </div>
+
+                <!-- Notion -->
+                <div class="tool-card" data-tool="notion">
+                    <div class="tool-header">
+                        <div class="tool-logo" style="background: #000;">📝</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Notion</div>
+                            <div class="tool-category">Productivity</div>
+                        </div>
+                        <div class="connection-status status-disconnected">Disconnected</div>
+                    </div>
+                    <div class="tool-description">Create pages, update databases, manage content</div>
+                    <div class="auth-section">
+                        <div class="auth-method">API Key Authentication</div>
+                        <input type="password" class="auth-input" placeholder="Enter Notion API Key">
+                        <button class="connect-btn" onclick="connectAPIKey('notion')">Connect</button>
+                    </div>
+                </div>
+
+                <!-- GitHub -->
+                <div class="tool-card" data-tool="github">
+                    <div class="tool-header">
+                        <div class="tool-logo" style="background: #181717;">🐙</div>
+                        <div class="tool-info">
+                            <div class="tool-name">GitHub</div>
+                            <div class="tool-category">Development</div>
+                        </div>
+                        <div class="connection-status status-disconnected">Disconnected</div>
+                    </div>
+                    <div class="tool-description">Manage repositories, create issues, review PRs</div>
+                    <div class="auth-section">
+                        <div class="auth-method">Personal Access Token</div>
+                        <input type="password" class="auth-input" placeholder="Enter GitHub Token">
+                        <button class="connect-btn" onclick="connectAPIKey('github')">Connect</button>
+                    </div>
+                </div>
+
+                <!-- Airtable -->
+                <div class="tool-card" data-tool="airtable">
+                    <div class="tool-header">
+                        <div class="tool-logo" style="background: #18BFFF;">📊</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Airtable</div>
+                            <div class="tool-category">Database</div>
+                        </div>
+                        <div class="connection-status status-disconnected">Disconnected</div>
+                    </div>
+                    <div class="tool-description">Create records, query bases, manage data</div>
+                    <div class="auth-section">
+                        <div class="auth-method">API Key Authentication</div>
+                        <input type="password" class="auth-input" placeholder="Enter Airtable API Key">
+                        <button class="connect-btn" onclick="connectAPIKey('airtable')">Connect</button>
+                    </div>
+                </div>
+
+                <!-- Discord -->
+                <div class="tool-card" data-tool="discord">
+                    <div class="tool-header">
+                        <div class="tool-logo" style="background: #5865F2;">🎮</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Discord</div>
+                            <div class="tool-category">Communication</div>
+                        </div>
+                        <div class="connection-status status-disconnected">Disconnected</div>
+                    </div>
+                    <div class="tool-description">Send messages, manage servers, create channels</div>
+                    <div class="auth-section">
+                        <div class="auth-method">Bot Token Authentication</div>
+                        <input type="password" class="auth-input" placeholder="Enter Discord Bot Token">
+                        <button class="connect-btn" onclick="connectAPIKey('discord')">Connect</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple drag and drop functionality
+        let draggedElement = null;
+        let isDragging = false;
+
+        // Node palette drag functionality
+        document.querySelectorAll('.node-item').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                draggedElement = e.target;
+                e.target.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', e.target.dataset.nodeType);
+            });
+
+            item.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+                draggedElement = null;
+            });
+        });
+
+        // Canvas drop functionality
+        const canvas = document.getElementById('workflow-canvas');
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const nodeType = e.dataTransfer.getData('text/plain');
+            createWorkflowNode(nodeType, e.offsetX, e.offsetY);
+        });
+
+        function createWorkflowNode(type, x, y) {
+            const node = document.createElement('div');
+            node.className = 'workflow-node';
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+
+            const nodeNames = {
+                'csv-reader': 'CSV Reader',
+                'json-parser': 'JSON Parser',
+                'sql-query': 'SQL Query',
+                'data-filter': 'Data Filter',
+                'data-mapper': 'Data Mapper',
+                'switch-node': 'Switch Node',
+                'merge-node': 'Merge Node',
+                'classification': 'Classification',
+                'embeddings': 'Embeddings',
+                'rest-api': 'REST API',
+                'webhook': 'Webhook',
+                'router-agent': 'Router Agent',
+                'evaluator-loop': 'Evaluator Loop',
+                'input-node': 'Input Node',
+                'output-node': 'Output Node',
+                'llm-node': 'LLM Node',
+                'tool-node': 'Tool Node',
+                'agent-node': 'Agent Node',
+                'prompt-chain': 'Prompt Chain',
+                'parallel-agents': 'Parallel Agents',
+                'api-connector': 'API Connector',
+                'database-query': 'Database Query',
+                'composio-tool': 'Composio Tool',
+                'custom-function': 'Custom Function'
+            };
+
+            const nodeCategories = {
+                'csv-reader': 'Data I/O',
+                'json-parser': 'Data I/O',
+                'sql-query': 'Data I/O',
+                'data-filter': 'Transform',
+                'data-mapper': 'Transform',
+                'switch-node': 'Logic',
+                'merge-node': 'Logic',
+                'classification': 'AI/ML',
+                'embeddings': 'AI/ML',
+                'rest-api': 'API',
+                'webhook': 'API',
+                'router-agent': 'Agent Patterns',
+                'evaluator-loop': 'Agent Patterns',
+                'input-node': 'Core Primitives',
+                'output-node': 'Core Primitives',
+                'llm-node': 'Core Primitives',
+                'tool-node': 'Core Primitives',
+                'agent-node': 'Core Primitives',
+                'prompt-chain': 'Agent Patterns',
+                'parallel-agents': 'Agent Patterns',
+                'api-connector': 'Data Sources',
+                'database-query': 'Data Sources',
+                'composio-tool': 'Tool Integrations',
+                'custom-function': 'Tool Integrations'
+            };
+
+            node.innerHTML = `
+                <div class="connection-port port-input"></div>
+                <div class="connection-port port-output"></div>
+                <div class="node-title">${nodeNames[type] || 'Unknown Node'}</div>
+                <div class="node-type">${nodeCategories[type] || 'Unknown'}</div>
+            `;
+
+            // Make the node selectable
+            node.addEventListener('click', () => {
+                document.querySelectorAll('.workflow-node').forEach(n => n.classList.remove('selected'));
+                node.classList.add('selected');
+            });
+
+            canvas.appendChild(node);
+        }
+
+        // Zoom controls
+        let zoomLevel = 1;
+        function zoomIn() {
+            zoomLevel = Math.min(zoomLevel * 1.2, 3);
+            canvas.style.transform = `scale(${zoomLevel})`;
+        }
+
+        function zoomOut() {
+            zoomLevel = Math.max(zoomLevel / 1.2, 0.3);
+            canvas.style.transform = `scale(${zoomLevel})`;
+        }
+
+        function resetZoom() {
+            zoomLevel = 1;
+            canvas.style.transform = 'scale(1)';
+        }
+
+        // Chat functionality simulation
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.querySelector('.chat-input');
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user';
+            userMessage.textContent = message;
+            chatMessages.appendChild(userMessage);
+
+            // Simulate AI response
+            setTimeout(() => {
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'message assistant';
+                aiMessage.innerHTML = `<strong>Kailash AI:</strong> I understand you want to ${message.toLowerCase()}. Let me help you create the appropriate workflow nodes for that task.`;
+                chatMessages.appendChild(aiMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 1000);
+
+            chatInput.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Quick action buttons
+        document.querySelectorAll('.quick-action').forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.textContent;
+                chatInput.value = action;
+                sendMessage();
+            });
+        });
+
+        // Simulate workflow execution
+        function simulateExecution() {
+            const statusElement = document.querySelector('.execution-status');
+            statusElement.textContent = 'Running';
+            statusElement.className = 'execution-status status-running';
+
+            setTimeout(() => {
+                statusElement.textContent = 'Success';
+                statusElement.className = 'execution-status status-success';
+            }, 3000);
+        }
+
+        // Initialize with a sample execution after page load
+        setTimeout(simulateExecution, 2000);
+
+        // Tool Authentication Modal Functions
+        function openAuthModal() {
+            document.getElementById('auth-modal').classList.add('active');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.remove('active');
+            // Close all auth sections
+            document.querySelectorAll('.auth-section').forEach(section => {
+                section.classList.remove('active');
+            });
+        }
+
+        // Tool card click handler
+        document.querySelectorAll('.tool-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Don't trigger if clicking on input or button
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+
+                const authSection = card.querySelector('.auth-section');
+                const isConnected = card.querySelector('.connection-status').classList.contains('status-connected');
+
+                if (!isConnected && authSection) {
+                    // Close other auth sections
+                    document.querySelectorAll('.auth-section').forEach(section => {
+                        if (section !== authSection) section.classList.remove('active');
+                    });
+
+                    // Toggle this auth section
+                    authSection.classList.toggle('active');
+                }
+            });
+        });
+
+        function connectOAuth(tool) {
+            // Simulate OAuth flow
+            const popup = window.open(`/auth/${tool}`, 'auth', 'width=500,height=600');
+
+            // Simulate successful connection after 2 seconds
+            setTimeout(() => {
+                popup.close();
+                updateConnectionStatus(tool, true);
+                showToast(`Successfully connected to ${tool}!`);
+            }, 2000);
+        }
+
+        function connectAPIKey(tool) {
+            const card = document.querySelector(`[data-tool="${tool}"]`);
+            const input = card.querySelector('.auth-input');
+            const apiKey = input.value.trim();
+
+            if (!apiKey) {
+                showToast('Please enter a valid API key', 'error');
+                return;
+            }
+
+            // Simulate API key validation
+            setTimeout(() => {
+                updateConnectionStatus(tool, true);
+                input.value = '';
+                card.querySelector('.auth-section').classList.remove('active');
+                showToast(`Successfully connected to ${tool}!`);
+            }, 1000);
+        }
+
+        function updateConnectionStatus(tool, isConnected) {
+            const card = document.querySelector(`[data-tool="${tool}"]`);
+            const status = card.querySelector('.connection-status');
+
+            if (isConnected) {
+                status.textContent = 'Connected';
+                status.className = 'connection-status status-connected';
+                card.classList.add('connected');
+            } else {
+                status.textContent = 'Disconnected';
+                status.className = 'connection-status status-disconnected';
+                card.classList.remove('connected');
+            }
+        }
+
+        function filterTools(searchTerm) {
+            const cards = document.querySelectorAll('.tool-card');
+            const term = searchTerm.toLowerCase();
+
+            cards.forEach(card => {
+                const name = card.querySelector('.tool-name').textContent.toLowerCase();
+                const category = card.querySelector('.tool-category').textContent.toLowerCase();
+                const description = card.querySelector('.tool-description').textContent.toLowerCase();
+
+                const matches = name.includes(term) || category.includes(term) || description.includes(term);
+                card.style.display = matches ? 'block' : 'none';
+            });
+        }
+
+        function showToast(message, type = 'success') {
+            // Create toast notification
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 6px;
+                color: white;
+                font-size: 14px;
+                z-index: 10000;
+                transition: all 0.3s ease;
+                ${type === 'success' ? 'background: #28a745;' : 'background: #dc3545;'}
+            `;
+            toast.textContent = message;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Add tool integration button to header
+        const headerControls = document.querySelector('.header-controls');
+        const toolBtn = document.createElement('button');
+        toolBtn.className = 'btn';
+        toolBtn.textContent = '🔌 Tools';
+        toolBtn.onclick = openAuthModal;
+        headerControls.insertBefore(toolBtn, headerControls.lastElementChild);
+
+        // Enhanced chat with agent patterns
+        function generateAgentWorkflow(pattern) {
+            const patterns = {
+                'prompt-chain': {
+                    nodes: ['Input Node', 'LLM Node (Analyzer)', 'LLM Node (Processor)', 'LLM Node (Summarizer)', 'Output Node'],
+                    description: 'Sequential processing with specialized LLMs'
+                },
+                'parallel': {
+                    nodes: ['Input Node', 'Parallel Agents (Analysis, Classification, Extraction)', 'Merge Node', 'Output Node'],
+                    description: 'Concurrent processing for faster results'
+                },
+                'router': {
+                    nodes: ['Input Node', 'Router Agent', 'Specialized Agents (Branch A/B/C)', 'Output Node'],
+                    description: 'Intelligent routing based on input characteristics'
+                },
+                'evaluator': {
+                    nodes: ['Input Node', 'Generator Agent', 'Evaluator Agent', 'Loop Control', 'Output Node'],
+                    description: 'Generate-evaluate-improve cycle'
+                }
+            };
+
+            return patterns[pattern] || patterns['prompt-chain'];
+        }
+
+        // Enhanced chat responses with agent patterns
+        const originalSendMessage = sendMessage;
+        sendMessage = function() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user';
+            userMessage.textContent = message;
+            chatMessages.appendChild(userMessage);
+
+            // Enhanced AI response with pattern recognition
+            setTimeout(() => {
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'message assistant';
+
+                // Pattern-aware responses
+                if (message.toLowerCase().includes('chain') || message.toLowerCase().includes('sequential')) {
+                    const pattern = generateAgentWorkflow('prompt-chain');
+                    aiMessage.innerHTML = `<strong>Kailash AI:</strong> Perfect! I'll create a <strong>Prompt Chain</strong> pattern for you:<br><br>${pattern.nodes.join(' → ')}<br><br>${pattern.description}<br><br>🎯 <span style="color: #00d4ff; cursor: pointer;" onclick="autoGenerateWorkflow('prompt-chain')">Auto-generate this workflow</span>`;
+                } else if (message.toLowerCase().includes('parallel') || message.toLowerCase().includes('concurrent')) {
+                    const pattern = generateAgentWorkflow('parallel');
+                    aiMessage.innerHTML = `<strong>Kailash AI:</strong> Great choice! <strong>Parallel Processing</strong> will speed things up:<br><br>${pattern.nodes.join(' → ')}<br><br>${pattern.description}<br><br>🎯 <span style="color: #00d4ff; cursor: pointer;" onclick="autoGenerateWorkflow('parallel')">Auto-generate this workflow</span>`;
+                } else if (message.toLowerCase().includes('route') || message.toLowerCase().includes('decide')) {
+                    const pattern = generateAgentWorkflow('router');
+                    aiMessage.innerHTML = `<strong>Kailash AI:</strong> Smart! A <strong>Router Agent</strong> will make intelligent decisions:<br><br>${pattern.nodes.join(' → ')}<br><br>${pattern.description}<br><br>🎯 <span style="color: #00d4ff; cursor: pointer;" onclick="autoGenerateWorkflow('router')">Auto-generate this workflow</span>`;
+                } else {
+                    aiMessage.innerHTML = `<strong>Kailash AI:</strong> I can help you build that workflow! Based on your description, I recommend starting with core primitives: Input → LLM Node → Tool Node → Output. Would you like me to generate a specific agent pattern, or shall we start with a simple chain?<br><br>🔗 <span style="color: #00d4ff; cursor: pointer;" onclick="autoGenerateWorkflow('prompt-chain')">Prompt Chain</span> | ⚡ <span style="color: #00d4ff; cursor: pointer;" onclick="autoGenerateWorkflow('parallel')">Parallel</span> | 🚦 <span style="color: #00d4ff; cursor: pointer;" onclick="autoGenerateWorkflow('router')">Router</span>`;
+                }
+
+                chatMessages.appendChild(aiMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 1000);
+
+            chatInput.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function autoGenerateWorkflow(pattern) {
+            // Simulate auto-generation by adding nodes to canvas
+            const patterns = {
+                'prompt-chain': [
+                    { type: 'input-node', x: 100, y: 150 },
+                    { type: 'llm-node', x: 300, y: 150 },
+                    { type: 'llm-node', x: 500, y: 150 },
+                    { type: 'output-node', x: 700, y: 150 }
+                ],
+                'parallel': [
+                    { type: 'input-node', x: 100, y: 200 },
+                    { type: 'parallel-agents', x: 300, y: 150 },
+                    { type: 'parallel-agents', x: 300, y: 250 },
+                    { type: 'merge-node', x: 500, y: 200 },
+                    { type: 'output-node', x: 700, y: 200 }
+                ],
+                'router': [
+                    { type: 'input-node', x: 100, y: 200 },
+                    { type: 'router-agent', x: 300, y: 200 },
+                    { type: 'agent-node', x: 500, y: 100 },
+                    { type: 'agent-node', x: 500, y: 200 },
+                    { type: 'agent-node', x: 500, y: 300 },
+                    { type: 'output-node', x: 700, y: 200 }
+                ]
+            };
+
+            // Clear existing nodes first
+            document.querySelectorAll('.workflow-node').forEach(node => {
+                if (!node.classList.contains('sample-node')) {
+                    node.remove();
+                }
+            });
+
+            // Add new pattern nodes
+            const nodeConfig = patterns[pattern] || patterns['prompt-chain'];
+            nodeConfig.forEach((config, index) => {
+                setTimeout(() => {
+                    createWorkflowNode(config.type, config.x, config.y);
+                }, index * 200);
+            });
+
+            // Show success message
+            showToast(`${pattern.charAt(0).toUpperCase() + pattern.slice(1)} pattern generated!`);
+        }
+    </script>
+</body>
+</html>

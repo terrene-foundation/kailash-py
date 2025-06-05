@@ -1,6 +1,6 @@
 .. _examples-advanced:
 
-=================
+
 Advanced Examples
 =================
 
@@ -40,4 +40,5 @@ Complex Workflow with Conditional Logic
    workflow.connect("process_high", "combine")
    workflow.connect("process_low", "combine")
 
-For more examples, see the `workflow examples <https://github.com/terrene-foundation/kailash-py/tree/main/examples/workflow_examples>`_.
+For more examples, see the `workflow examples
+<https://github.com/terrene-foundation/kailash-py/tree/main/examples/workflow_examples>`_.

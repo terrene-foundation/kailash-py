@@ -20,13 +20,12 @@ import json
 import time
 import uuid
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from kailash.nodes.ai.a2a import A2AAgentNode, SharedMemoryPoolNode
+from kailash.nodes.ai.a2a import SharedMemoryPoolNode
 from kailash.nodes.ai.self_organizing import (
     AgentPoolManagerNode,
-    ProblemAnalyzerNode,
     SelfOrganizingAgentNode,
     SolutionEvaluatorNode,
     TeamFormationNode,
@@ -589,7 +588,7 @@ class MCPAgentNode(SelfOrganizingAgentNode):
 
     def _enhance_task_with_tools(self, task: str, kwargs: Dict) -> str:
         """Enhance task description with available tools."""
-        available_tools = list(self.tool_registry.keys())
+        list(self.tool_registry.keys())
 
         enhanced = f"{task}\n\nAvailable MCP Tools:\n"
         for tool_name, tool_info in self.tool_registry.items():
@@ -1241,23 +1240,23 @@ class OrchestrationManagerNode(Node):
         enable_caching = kwargs.get("enable_caching", True)
 
         # Phase 1: Query Analysis
-        print(f"🔍 Phase 1: Analyzing query...")
+        print("🔍 Phase 1: Analyzing query...")
         query_analysis = self._analyze_query(query, context, mcp_servers)
 
         # Phase 2: Setup Infrastructure
-        print(f"🏗️ Phase 2: Setting up infrastructure...")
+        print("🏗️ Phase 2: Setting up infrastructure...")
         infrastructure = self._setup_infrastructure(
             agent_pool_size, mcp_servers, enable_caching
         )
 
         # Phase 3: Agent Pool Creation
-        print(f"🤖 Phase 3: Creating specialized agent pool...")
+        print("🤖 Phase 3: Creating specialized agent pool...")
         agent_pool = self._create_agent_pool(
             query_analysis, infrastructure, mcp_servers
         )
 
         # Phase 4: Iterative Solution Development
-        print(f"💡 Phase 4: Beginning solution development...")
+        print("💡 Phase 4: Beginning solution development...")
         solution_history = []
         final_solution = None
 
@@ -1304,7 +1303,7 @@ class OrchestrationManagerNode(Node):
                 final_solution = solution_result
                 break
             elif not evaluation_result["needs_iteration"]:
-                print(f"  🛑 No improvement possible, stopping iteration")
+                print("  🛑 No improvement possible, stopping iteration")
                 final_solution = solution_result
                 break
             else:
@@ -1313,7 +1312,7 @@ class OrchestrationManagerNode(Node):
                 )
 
         # Phase 5: Final Processing
-        print(f"📊 Phase 5: Finalizing results...")
+        print("📊 Phase 5: Finalizing results...")
         final_result = self._finalize_results(
             query,
             final_solution or solution_history[-1]["solution"],
@@ -1372,7 +1371,7 @@ class OrchestrationManagerNode(Node):
     ) -> List[Dict]:
         """Create specialized agent pool based on query analysis."""
         analysis = query_analysis["analysis"]
-        required_capabilities = analysis["required_capabilities"]
+        analysis["required_capabilities"]
         team_suggestion = analysis["team_suggestion"]
 
         pool_manager = infrastructure["pool_manager"]
@@ -1900,7 +1899,7 @@ class ConvergenceDetectorNode(Node):
         max_iterations = kwargs.get("max_iterations", 5)
         current_iteration = kwargs.get("current_iteration", 0)
         time_limit = kwargs.get("time_limit_seconds", 3600)
-        resource_budget = kwargs.get("resource_budget", 100.0)
+        kwargs.get("resource_budget", 100.0)
 
         if not solution_history:
             return {

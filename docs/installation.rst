@@ -2,7 +2,8 @@
 Installation
 ============
 
-This guide covers all installation methods and configurations for the Kailash Python SDK.
+This guide covers all installation methods and configurations for the Kailash Python
+SDK.
 
 System Requirements
 ===================
@@ -425,4 +426,5 @@ After installation:
 3. Review :doc:`guides/best_practices`
 4. Check the API documentation for detailed reference
 
-For additional help, see :doc:`troubleshooting` or visit our `GitHub Issues <https://github.com/terrene-foundation/kailash-py/issues>`_.
+For additional help, see :doc:`troubleshooting` or visit our `GitHub Issues
+<https://github.com/terrene-foundation/kailash-py/issues>`_.

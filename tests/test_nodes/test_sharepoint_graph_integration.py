@@ -16,6 +16,7 @@ TEST_CREDENTIALS = {
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 class TestSharePointGraphIntegration:
     """Integration tests that use real SharePoint credentials."""
 

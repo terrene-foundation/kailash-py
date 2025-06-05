@@ -6,7 +6,7 @@ Ollama models specialize in different aspects of code review.
 """
 
 import time
-from typing import Dict, List
+from typing import Dict
 
 from kailash import Workflow
 from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
@@ -400,7 +400,7 @@ Consider security issues as highest priority, followed by performance, then qual
                 for tag in memory["tags"]:
                     tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-            print(f"\n📈 Finding Categories:")
+            print("\n📈 Finding Categories:")
             for tag, count in sorted(
                 tag_counts.items(), key=lambda x: x[1], reverse=True
             ):
@@ -424,7 +424,7 @@ def get_user(id):
     query = f"SELECT * FROM users WHERE id = {id}"
     cursor.execute(query)
     user = cursor.fetchone()
-    
+
     if user:
         return {
             'id': user[0],
@@ -445,13 +445,13 @@ def get_user(id):
     code2 = """
 async function processUserData(users) {
     const results = [];
-    
+
     for (let i = 0; i < users.length; i++) {
         const user = users[i];
         const profile = await fetchUserProfile(user.id);
         const posts = await fetchUserPosts(user.id);
         const friends = await fetchUserFriends(user.id);
-        
+
         results.push({
             ...user,
             profile,
@@ -459,7 +459,7 @@ async function processUserData(users) {
             friends
         });
     }
-    
+
     return results;
 }
 """

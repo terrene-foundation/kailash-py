@@ -20,7 +20,7 @@ workflow.execute(runtime)  # workflow.execute() doesn't take runtime
 ### Configuration vs Runtime Parameters
 ```python
 # Configuration (HOW): Static settings when adding nodes
-workflow.add_node("reader", CSVReaderNode(), 
+workflow.add_node("reader", CSVReaderNode(),
     file_path="data.csv",    # WHERE to read
     delimiter=","            # HOW to parse
 )

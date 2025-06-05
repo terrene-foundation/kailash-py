@@ -7,11 +7,11 @@ This example shows different patterns for providing initial data to workflows:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode
+from kailash.nodes.data import CSVReaderNode
 from kailash.runtime import LocalRuntime
 
 

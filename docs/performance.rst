@@ -1,7 +1,8 @@
 Performance Optimization
 ========================
 
-This guide provides techniques and best practices for optimizing performance in the Kailash Python SDK.
+This guide provides techniques and best practices for optimizing performance in the
+Kailash Python SDK.
 
 Memory Optimization
 -------------------
@@ -744,7 +745,8 @@ Profile your code to identify bottlenecks:
 Performance Monitoring in Production
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The SDK includes built-in performance monitoring that automatically tracks metrics during workflow execution:
+The SDK includes built-in performance monitoring that automatically tracks metrics
+during workflow execution:
 
 Built-in Performance Tracking
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -183,7 +183,7 @@ isort src/ tests/
 ruff check src/ tests/
 mypy src/
 
-# Security scanning  
+# Security scanning
 bandit -r src/
 safety check
 
@@ -253,13 +253,13 @@ coverage report --fail-under=80
 # Bug Report Response
 Thank you for reporting this issue. I can reproduce the problem with [version].
 
-The issue occurs because [explanation]. 
+The issue occurs because [explanation].
 
 Workaround: [if applicable]
 
 I'll work on a fix and update this issue when resolved.
 
-# Feature Request Response  
+# Feature Request Response
 Thank you for the suggestion! This would be a valuable addition.
 
 Could you provide more details about:
@@ -341,7 +341,7 @@ git push --mirror https://github.com/org/kailash-sdk-restored.git
 1. **Mark as Deprecated**
    ```python
    import warnings
-   
+
    def old_method():
        warnings.warn(
            "old_method is deprecated, use new_method instead",
