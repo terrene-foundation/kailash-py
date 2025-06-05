@@ -2,22 +2,23 @@
 
 ## Overview
 
-This repository uses a unified CI pipeline that intelligently avoids duplicate test runs while maintaining code quality standards.
+This repository uses a streamlined CI/CD setup with three focused workflow files that provide comprehensive testing coverage while avoiding duplicate runs.
 
-## Workflow Files
+## Active Workflow Files
 
-### 1. `unified-ci.yml` - Unified CI Pipeline (ACTIVE)
-- **Purpose**: Smart CI pipeline that eliminates duplicate runs
+### 1. `unified-ci.yml` - Main CI Pipeline
+- **Purpose**: Smart CI pipeline that intelligently handles all development scenarios
 - **Triggers**:
   - Push to feature branches (`feat/*`, `feature/*`)
   - Pull requests to `main`
   - Manual dispatch
 - **Smart Detection**:
-  - For pushes: Checks if PR exists, skips if yes
+  - For pushes: Checks if PR exists, skips if yes (avoids duplicates)
   - For PRs: Always runs full test suite
   - For manual: Always runs full test suite
 - **Jobs**:
-  - Basic tests (push without PR)
+  - Basic tests (push without PR):
+    - Quick smoke tests only
   - Full suite (PRs and manual):
     - Lint and format checks
     - Test matrix (Python 3.11, 3.12)
@@ -28,24 +29,26 @@ This repository uses a unified CI pipeline that intelligently avoids duplicate t
   - Basic: ~2-3 minutes
   - Full: ~5-10 minutes
 
-### 2. `full-test.yml` - Full Test Suite
-- **Purpose**: Complete test coverage and artifact generation
+### 2. `full-test.yml` - Comprehensive Test Suite
+- **Purpose**: Complete test coverage with artifact generation
 - **Triggers**:
-  - Push to `main` branch
-  - Daily schedule (2 AM UTC)
+  - Push to `main` branch (post-merge validation)
+  - Daily schedule at 2 AM UTC (nightly builds)
   - Manual dispatch
 - **Jobs**:
-  - Full test matrix with coverage
+  - Full test matrix with coverage reports
   - Example execution tests
-  - Coverage report uploads
+  - Coverage report uploads to Codecov
+  - Artifact generation
 - **Duration**: ~10-15 minutes
 
-### 3. `local-test.yml` - Local Testing Validation
+### 3. `local-test.yml` - Local Development Support
 - **Purpose**: Validate workflows work with `act` for local testing
 - **Triggers**:
   - Manual dispatch only
 - **Jobs**: Simple validation tests
 - **Duration**: ~1 minute
+- **Use Case**: Test workflow changes locally before pushing
 
 ## Workflow Strategy & Optimization
 
@@ -163,23 +166,13 @@ If you see duplicate runs:
 - Codecov uploads may be rate-limited without token
 - Configure `CODECOV_TOKEN` in repository secrets
 
-## Migration Notes
+## Branch Protection Configuration
 
-### Transition to Unified CI
-- New pushes and PRs will use `unified-ci.yml` automatically
-- Existing PRs may need to be rebased to pick up the new workflow
-- `ci.yml` and `pr-checks.yml` are deprecated but kept for reference
-- No changes needed to developer workflow - just push as usual
+To ensure code quality, configure these required status checks in your repository settings:
+- `CI Pipeline / Lint and Format Check`
+- `CI Pipeline / Test Python 3.11`
+- `CI Pipeline / Test Python 3.12`
+- `CI Pipeline / Security Scan`
+- `CI Pipeline / Validate Examples`
 
-### Branch Protection Updates
-- Update required status checks to use `unified-ci.yml` jobs:
-  - `CI Pipeline / Lint and Format Check`
-  - `CI Pipeline / Test Python 3.11`
-  - `CI Pipeline / Test Python 3.12`
-  - `CI Pipeline / Security Scan`
-  - `CI Pipeline / Validate Examples`
-
-### Timeline
-1. **Immediate**: Unified workflow active for new pushes/PRs
-2. **1 week**: Monitor for issues, adjust as needed
-3. **2 weeks**: Remove deprecated workflows if stable
+These checks are automatically run by the `unified-ci.yml` workflow on all pull requests to main.
