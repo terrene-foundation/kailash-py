@@ -7,15 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-06-05
+
 ### Added
-- **Kailash Workflow Studio Foundation**
-  - Visual workflow builder architecture (ADR-0033)
+- **Kailash Workflow Studio Backend**
+  - Complete REST API for visual workflow building
   - Multi-tenant Docker-based deployment infrastructure
-  - React 18 + TypeScript + Vite frontend stack
-  - Comprehensive frontend development guidelines (`guide/frontend/`)
-  - WorkflowStudioAPI design for SDK integration
-  - Deployment scripts for tenant provisioning
-  - Workflow Studio Sphinx documentation
+  - JWT authentication with access/refresh tokens
+  - Role-Based Access Control (RBAC) system
+  - Node-level and workflow-level permissions
+  - Access-controlled runtime with transparent security
+  - Custom node creation and management API
+  - WebSocket support for real-time updates
+  - Comprehensive database schema (SQLAlchemy)
+
+- **JWT Authentication & Multi-Tenancy**
+  - Full JWT authentication system with token management
+  - Multi-tenant architecture with complete isolation
+  - User registration and secure login system
+  - API key authentication for service accounts
+  - Password hashing with bcrypt
+
+- **Access Control System**
+  - Fine-grained permission management
+  - Field-level data masking for sensitive information
+  - Permission-based conditional routing
+  - Backward compatibility with existing workflows
+  - Comprehensive audit logging
+
+- **Documentation Improvements**
+  - All docstrings updated to Claude.md 8-section standard
+  - Added coordinated AI workflows to Sphinx front page
+  - Fixed all 71 doc8 documentation style issues
+  - New access control API documentation
+  - Frontend development guidelines (`guide/frontend/`)
+  - Workflow Studio documentation
 
 - **Test Suite Optimization**
   - Reduced test suite from 915 → 591 tests (35% reduction)
@@ -23,31 +49,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved CI/CD performance by 34%
   - Fixed all remaining test failures (100% pass rate)
 
-- **Production Security Framework**
-  - Comprehensive security module (`src/kailash/security.py`) with configurable policies
-  - Path traversal prevention with directory allowlists and file extension validation
-  - Code execution sandboxing with memory limits and execution timeouts
-  - Input sanitization framework for injection attack prevention
-  - Command injection detection and validation
-  - SecurityMixin for node-level security integration
-  - Safe file operations with `safe_open()` and `validate_file_path()`
-
-- **Security Testing Suite**
-  - 28+ comprehensive security tests covering all attack vectors
-  - Advanced attack simulation (Unicode attacks, AST bypass, resource exhaustion)
-  - Path traversal, code injection, and authentication security tests
-  - Integration tests ensuring security doesn't break existing functionality
-
-- **Security Documentation**
-  - Comprehensive security guide (`guide/SECURITY.md`)
-  - Security architecture documentation (ADR-0032)
-  - Best practices for secure development and deployment
-  - Vulnerability assessment with severity ratings and remediation
-
 ### Changed
-- Updated all data reader/writer nodes to use security framework
-- Enhanced Python Code Node with comprehensive sandboxing
-- Improved authentication nodes with security analysis and recommendations
+- Updated all datetime usage from `datetime.utcnow()` to `datetime.now(timezone.utc)`
+- Enhanced README.md with access control documentation
+- Updated security.rst to mark RBAC as completed feature
+- Consolidated integration examples (removed 18 broken examples)
+- Updated pre-commit configuration for security test exclusions
+
+### Fixed
+- All pytest failures in access control tests
+- RST documentation formatting issues (71 → 0 errors)
+- Test constructor signatures and parameter names
+- DateTime deprecation warnings throughout codebase
+
+### Security
+- Production Security Framework from previous sessions remains active
+- Added access control layer on top of existing security
+- Enhanced authentication with JWT implementation
 - Fixed MergeNode to use correct parameter names (data1/data2 instead of inputs)
 - Updated async test patterns to use execute_async() with @pytest.mark.asyncio
 - Consolidated test suites for better CI performance

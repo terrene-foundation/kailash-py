@@ -39,8 +39,6 @@ from .custom_nodes import setup_custom_node_routes
 from .database import (
     CustomNodeRepository,
     ExecutionRepository,
-)
-from .database import (
     WorkflowRepository,
     get_db_session,
     init_database,

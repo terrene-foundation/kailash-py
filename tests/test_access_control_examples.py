@@ -120,7 +120,9 @@ class TestAccessControlExamples:
 
     def test_access_controlled_runtime_basic(self):
         """Test AccessControlledRuntime with simple workflow"""
-        pytest.skip("AccessControlledRuntime needs fixing - parameters not passed to nodes")
+        pytest.skip(
+            "AccessControlledRuntime needs fixing - parameters not passed to nodes"
+        )
         # Create user
         user = UserContext(
             user_id="test-user",
@@ -154,9 +156,7 @@ class TestAccessControlExamples:
 
         # Run with access control
         runtime = AccessControlledRuntime(user)
-        result, _ = runtime.execute(
-            workflow, parameters={"greeter": {"name": "World"}}
-        )
+        result, _ = runtime.execute(workflow, parameters={"greeter": {"name": "World"}})
 
         # Check the result
         assert "greeter" in result
