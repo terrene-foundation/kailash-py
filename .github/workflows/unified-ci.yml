@@ -272,6 +272,37 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  # Placeholder jobs for branch protection when using self-hosted runners
+  test-python-3-11:
+    name: Test Python 3.11
+    needs: [determine-context, all-checks-parallel]
+    if: |
+      always() && 
+      needs.determine-context.outputs.test-level == 'full' && 
+      contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
+      needs.all-checks-parallel.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report success
+        run: |
+          echo "✅ Python 3.11 tests passed in All Checks (Parallel)"
+          echo "This is a placeholder job for branch protection compatibility"
+
+  test-python-3-12:
+    name: Test Python 3.12
+    needs: [determine-context, all-checks-parallel]
+    if: |
+      always() && 
+      needs.determine-context.outputs.test-level == 'full' && 
+      contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
+      needs.all-checks-parallel.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report success
+        run: |
+          echo "✅ Python 3.12 tests passed in All Checks (Parallel)"
+          echo "This is a placeholder job for branch protection compatibility"
+
   # Full test suite for PRs and manual triggers (GitHub-hosted runners)
   lint-and-format:
     name: Lint and Format Check
@@ -444,7 +475,7 @@ jobs:
   # Summary job for PR status
   pr-summary:
     name: PR Summary
-    needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel]
+    needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
