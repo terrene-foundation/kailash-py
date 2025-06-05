@@ -39,8 +39,8 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "${{ github.event.inputs.runner-type }}" in
               local-mac)
-                echo 'label=["self-hosted", "macOS", "ARM64", "Esperies-Mini"]' >> $GITHUB_OUTPUT
-                echo "Using local Mac runner (Esperies-Mini)"
+                echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
+                echo "Using local Mac runner"
                 ;;
               self-hosted)
                 echo 'label=["self-hosted", "linux", "x64"]' >> $GITHUB_OUTPUT
