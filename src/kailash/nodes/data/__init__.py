@@ -87,7 +87,7 @@ from kailash.nodes.data.sharepoint_graph import (
     SharePointGraphWriter,
 )
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
-from kailash.nodes.data.sql import SQLDatabaseNode, SQLQueryBuilderNode
+from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.nodes.data.streaming import (
     EventStreamNode,
     KafkaConsumerNode,
@@ -119,7 +119,6 @@ __all__ = [
     "RelevanceScorerNode",
     # SQL
     "SQLDatabaseNode",
-    "SQLQueryBuilderNode",
     # Vector DB
     "EmbeddingNode",
     "VectorDatabaseNode",
