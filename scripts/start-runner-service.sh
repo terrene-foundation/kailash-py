@@ -1,8 +1,21 @@
 #!/bin/bash
 # Start GitHub Actions runner as a service
 
-# Configuration with defaults
-RUNNER_NAME=${RUNNER_NAME:-self-hosted-primary}
+# Configuration - check for available runners
+if [ -z "$RUNNER_NAME" ]; then
+    # Check which runner directory exists
+    if [ -f "$HOME/actions-runner/.runner" ] && grep -q "self-hosted-secondary" "$HOME/actions-runner/.runner" 2>/dev/null; then
+        RUNNER_NAME="self-hosted-secondary"
+    elif [ -f "$HOME/actions-runner/.runner" ] && grep -q "self-hosted-primary" "$HOME/actions-runner/.runner" 2>/dev/null; then
+        RUNNER_NAME="self-hosted-primary"
+    elif [ -f "$HOME/actions-runner/.runner" ] && grep -q "local" "$HOME/actions-runner/.runner" 2>/dev/null; then
+        RUNNER_NAME="local"
+    else
+        # Default fallback
+        RUNNER_NAME="local"
+    fi
+fi
+
 RUNNER_DIR=${RUNNER_DIR:-"$HOME/actions-runner"}
 
 echo "🚀 Starting GitHub Actions runner service for $RUNNER_NAME"

@@ -25,6 +25,7 @@ on:
         type: choice
         options:
         - github      # Use GitHub's runners
+        - local       # Use local runner (auto-detected)
         - local-mac   # Use your Mac
         - self-hosted-secondary # Use self-hosted-secondary runner
         - self-hosted-primary # Use self-hosted-primary runner
@@ -37,6 +38,7 @@ on:
         options:
         - auto        # Auto-detect based on branch
         - github      # Force GitHub runners
+        - local       # Force local runner (auto-detected)
         - local-mac   # Force local Mac runner
         - self-hosted-secondary # Force self-hosted-secondary runner
         - self-hosted-primary # Force self-hosted-primary runner
@@ -65,6 +67,10 @@ jobs:
           # Check if force-runner is specified (for PRs triggered via workflow_dispatch)
           if [[ "${{ github.event.inputs.force-runner }}" != "" && "${{ github.event.inputs.force-runner }}" != "auto" ]]; then
             case "${{ github.event.inputs.force-runner }}" in
+              local)
+                echo 'label=["self-hosted", "local"]' >> $GITHUB_OUTPUT
+                echo "Using local runner (forced)"
+                ;;
               local-mac)
                 echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner (forced)"
@@ -85,6 +91,10 @@ jobs:
           # For manual runs, use the selected runner
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "${{ github.event.inputs.runner-type }}" in
+              local)
+                echo 'label=["self-hosted", "local"]' >> $GITHUB_OUTPUT
+                echo "Using local runner"
+                ;;
               local-mac)
                 echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner"
