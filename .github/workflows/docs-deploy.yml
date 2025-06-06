@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ["self-hosted"]
+    runs-on: self-hosted
     # Only run if it's a push to main OR a merged PR
     if: |
       github.event_name == 'push' ||
@@ -69,7 +69,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ["self-hosted"]
+    runs-on: self-hosted
     needs: build
     steps:
       - name: Deploy to GitHub Pages
