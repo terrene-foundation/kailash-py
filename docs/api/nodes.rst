@@ -142,6 +142,9 @@ TextWriterNode
 
 
 
+Database Nodes
+--------------
+
 SQLDatabaseNode
 ~~~~~~~~~~~~~~~
 
@@ -154,19 +157,92 @@ SQLDatabaseNode
 
 .. code-block:: python
 
-   workflow.add_node("SQLDatabaseNode", "query_orders", config={
-       "connection_string": "postgresql://user:pass@host/db",
-       "query": "SELECT * FROM orders WHERE status = 'active'",
-       "params": {"limit": 1000}
-   })
+   from kailash.nodes.data import SQLDatabaseNode
 
-SQLQueryBuilderNode
-~~~~~~~~~~~~~~~~~~~
+   # Direct configuration approach (recommended)
+   db_node = SQLDatabaseNode(
+       connection_string="sqlite:///data.db",
+       pool_size=5,
+       max_overflow=10
+   )
+   
+   # Add to workflow
+   workflow.add_node("database", db_node)
+   
+   # Execute with runtime parameters
+   result = db_node.run(
+       query="SELECT * FROM customers WHERE active = ?",
+       parameters=[True],
+       result_format="dict"
+   )
+   
+   # PostgreSQL with advanced configuration
+   pg_node = SQLDatabaseNode(
+       connection_string="postgresql://user:pass@host/db",
+       pool_size=10,
+       max_overflow=20,
+       pool_recycle=1800,
+       connect_args={'connect_timeout': 10}
+   )
+   
+   workflow.add_node("pg_database", pg_node)
+   
+   # MySQL example
+   mysql_node = SQLDatabaseNode(
+       connection_string="mysql+pymysql://user:pass@host/db",
+       pool_size=8,
+       echo=True  # Enable query logging
+   )
+   
+   # Execute with different parameter styles
+   # SQLite uses ?
+   sqlite_result = db_node.run(
+       query="SELECT * FROM users WHERE age > ? AND city = ?",
+       parameters=[25, "New York"]
+   )
+   
+   # PostgreSQL uses $1, $2, etc.
+   pg_result = pg_node.run(
+       query="SELECT * FROM users WHERE age > $1 AND city = $2",
+       parameters=[25, "New York"]
+   )
+   
+   # MySQL uses %s
+   mysql_result = mysql_node.run(
+       query="SELECT * FROM users WHERE age > %s AND city = %s",
+       parameters=[25, "New York"]
+   )
 
-.. autoclass:: kailash.nodes.data.sql.SQLQueryBuilderNode
-   :members:
-   :undoc-members:
-   :show-inheritance:
+**Configuration Parameters:**
+
+- **connection_string** (str, required): Database connection URL
+  
+  - SQLite: ``sqlite:///path/to/database.db``
+  - PostgreSQL: ``postgresql://user:password@host:port/database``
+  - MySQL: ``mysql+pymysql://user:password@host:port/database``
+
+- **pool_size** (int, optional): Number of connections in pool (default: 5)
+- **max_overflow** (int, optional): Maximum overflow connections (default: 10)
+- **pool_timeout** (int, optional): Timeout to get connection from pool (default: 30)
+- **pool_recycle** (int, optional): Time to recycle connections in seconds (default: 3600)
+- **pool_pre_ping** (bool, optional): Test connections before use (default: True)
+- **echo** (bool, optional): Enable SQLAlchemy query logging (default: False)
+- **connect_args** (dict, optional): Additional database-specific connection arguments
+
+**Runtime Parameters:**
+
+- **query** (str, required): SQL query to execute
+- **parameters** (list, optional): Query parameters for safe execution
+- **result_format** (str, optional): Output format - 'dict', 'list', or 'raw' (default: 'dict')
+- **timeout** (int, optional): Query timeout in seconds
+
+**Security Features:**
+
+- Parameterized queries prevent SQL injection
+- Connection string password masking in logs
+- Query safety validation warnings
+- Identifier sanitization for dynamic SQL
+- Error message sanitization
 
 SharePoint Nodes
 ----------------

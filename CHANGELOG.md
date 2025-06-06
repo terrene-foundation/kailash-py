@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Enhanced
+- **SQLDatabaseNode Production Features**
+  - Added `db_config` parameter for advanced database configuration
+  - Support for connection pooling tuning (pool_size, max_overflow, pool_timeout)
+  - Transaction isolation level control
+  - SQLAlchemy engine parameter customization
+  - Removed SQLQueryBuilderNode for architectural clarity (single-node design)
+  - Enhanced examples with production configuration patterns
+  - **Simplified API**: Direct configuration in constructor (no more initialize() step)
+    - Pass connection_string and pool parameters directly to SQLDatabaseNode()
+    - Cleaner separation of configuration (constructor) vs runtime (run()) parameters
+    - Updated all tests and examples to use the new direct configuration approach
+    - Made tests hardware-agnostic by using relative performance metrics instead of absolute timing
+
 ## [0.1.6] - 2025-06-05
 
 ### Added
