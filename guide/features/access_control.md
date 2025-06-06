@@ -33,7 +33,7 @@ NodePermission.WRITE_INPUT  # Can provide inputs
 NodePermission.SKIP         # Node is skipped
 NodePermission.MASK_OUTPUT  # Sensitive fields hidden
 
-# Workflow-level permissions  
+# Workflow-level permissions
 WorkflowPermission.VIEW     # Can see workflow
 WorkflowPermission.EXECUTE  # Can run workflow
 WorkflowPermission.MODIFY   # Can edit workflow
@@ -100,7 +100,7 @@ from kailash.access_control import UserContext
 # Create user context
 user = UserContext(
     user_id="user-001",
-    tenant_id="tenant-001", 
+    tenant_id="tenant-001",
     email="user@example.com",
     roles=["analyst"]
 )

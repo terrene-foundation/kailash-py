@@ -9,7 +9,7 @@ When using your local Mac runner, all checks run in parallel within a single job
 ### 1. Single Job Execution
 Instead of running 4 separate jobs sequentially:
 - ❌ Lint and Format Check (2 min)
-- ❌ Test Python 3.11 (5 min)  
+- ❌ Test Python 3.11 (5 min)
 - ❌ Test Python 3.12 (5 min)
 - ❌ Validate Examples (3 min)
 - **Total: ~15 minutes sequential**
@@ -66,7 +66,7 @@ ps aux | grep -E "(pytest|black|isort|ruff)" | grep -v grep
 ### If a specific check fails
 The workflow saves logs for each check:
 - `black.log` - Formatting issues
-- `isort.log` - Import order issues  
+- `isort.log` - Import order issues
 - `ruff.log` - Linting issues
 - `pytest.log` - Test failures
 - `examples.log` - Example validation issues

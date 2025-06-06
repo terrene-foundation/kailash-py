@@ -171,7 +171,7 @@ class WorkflowStudioAPI:
         try:
             with self.SessionLocal() as session:
                 # Get all tenants
-                tenants = session.query(Tenant).filter(Tenant.is_active == True).all()
+                tenants = session.query(Tenant).filter(Tenant.is_active).all()
 
                 for tenant in tenants:
                     node_repo = CustomNodeRepository(session)
@@ -303,7 +303,7 @@ class WorkflowStudioAPI:
                         }
                         for name, param in params.items()
                     ]
-                except:
+                except Exception:
                     param_list = []
 
                 # Extract input/output information
@@ -323,7 +323,7 @@ class WorkflowStudioAPI:
                                         "required": schema.get("required", True),
                                     }
                                 )
-                    except:
+                    except Exception:
                         pass
 
                 # If no explicit schema, infer from parameters
@@ -654,7 +654,7 @@ class WorkflowStudioAPI:
 
                 auth = JWTAuth()
                 token_data = auth.verify_token(token)
-            except:
+            except Exception:
                 await websocket.close(code=1008, reason="Unauthorized")
                 return
 
@@ -782,12 +782,12 @@ class WorkflowStudioAPI:
         ]
 
         # Advanced nodes require specific permissions or subscription
-        advanced_nodes = {
-            "llm_agent": ["ai_features"],
-            "embedding_generator": ["ai_features"],
-            "python_code": ["code_execution"],
-            "api_client": ["external_apis"],
-        }
+        # advanced_nodes = {
+        #     "llm_agent": ["ai_features"],
+        #     "embedding_generator": ["ai_features"],
+        #     "python_code": ["code_execution"],
+        #     "api_client": ["external_apis"],
+        # }
 
         if node_id in basic_nodes:
             return True
@@ -860,7 +860,7 @@ class WorkflowStudioAPI:
             for websocket in self.websocket_connections[execution_id]:
                 try:
                     await websocket.send_json(data)
-                except:
+                except Exception:
                     pass  # Client disconnected
 
     def run(self, host: str = "0.0.0.0", port: int = 8000):

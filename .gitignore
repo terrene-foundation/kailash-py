@@ -57,6 +57,14 @@ output/
 examples/outputs/
 examples/output/
 
+# Generated files in root and examples directories
+/*.csv
+/*.json
+/examples/*.csv
+/examples/*.json
+/examples/customer_*.csv
+/examples/processed_data.csv
+
 # Task tracking storage (if they exist outside examples/data)
 **/task_storage/
 **/tasks/runs/
@@ -74,3 +82,5 @@ examples/output/
 .env.production.local
 .claude
 docs/build_output.txt
+
+# Prevent root-level data files (already covered above)

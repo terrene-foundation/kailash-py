@@ -91,7 +91,7 @@ class TaskRun(BaseModel):
     completed_at: Optional[datetime] = (
         None  # Alias for ended_at for backward compatibility
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)

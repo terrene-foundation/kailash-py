@@ -13,18 +13,12 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import uvicorn
-from fastapi import (
-    FastAPI,
-    HTTPException,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -243,7 +237,7 @@ class WorkflowStudioAPI:
                         }
                         for name, param in params.items()
                     ]
-                except:
+                except Exception:
                     param_list = []
 
                 # Extract input/output information
@@ -263,7 +257,7 @@ class WorkflowStudioAPI:
                                         "required": schema.get("required", True),
                                     }
                                 )
-                    except:
+                    except Exception:
                         pass
 
                 # If no explicit schema, infer from parameters
@@ -309,7 +303,7 @@ class WorkflowStudioAPI:
                                 ),
                             }
                         )
-                    except:
+                    except Exception:
                         outputs.append({"name": "output", "type": "any"})
                 else:
                     # Default output for all nodes
@@ -387,7 +381,7 @@ class WorkflowStudioAPI:
         async def create_workflow(workflow: WorkflowCreate):
             """Create a new workflow"""
             workflow_id = str(uuid.uuid4())
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             workflow_data = {
                 "id": workflow_id,
@@ -436,7 +430,7 @@ class WorkflowStudioAPI:
             if update.definition is not None:
                 data["definition"] = update.definition
 
-            data["updated_at"] = datetime.utcnow().isoformat()
+            data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
             # Save updated workflow
             with open(workflow_file, "w") as f:
@@ -474,7 +468,7 @@ class WorkflowStudioAPI:
                 "id": execution_id,
                 "workflow_id": workflow_id,
                 "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
                 "completed_at": None,
                 "result": None,
                 "error": None,
@@ -501,7 +495,7 @@ class WorkflowStudioAPI:
             except Exception as e:
                 execution_data["status"] = "failed"
                 execution_data["error"] = str(e)
-                execution_data["completed_at"] = datetime.utcnow().isoformat()
+                execution_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
                 with open(execution_file, "w") as f:
                     json.dump(execution_data, f, indent=2)
@@ -627,7 +621,7 @@ class WorkflowStudioAPI:
                     warnings.append(f"Workflow validation warning: {str(e)}")
 
                 # Create workflow record
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 workflow_data = {
                     "id": workflow_id,
                     "name": request.name,
@@ -673,7 +667,7 @@ class WorkflowStudioAPI:
                 execution_data = json.load(f)
 
             execution_data["status"] = "completed"
-            execution_data["completed_at"] = datetime.utcnow().isoformat()
+            execution_data["completed_at"] = datetime.now(timezone.utc).isoformat()
             execution_data["result"] = result
 
             with open(execution_file, "w") as f:
@@ -688,7 +682,7 @@ class WorkflowStudioAPI:
                 execution_data = json.load(f)
 
             execution_data["status"] = "failed"
-            execution_data["completed_at"] = datetime.utcnow().isoformat()
+            execution_data["completed_at"] = datetime.now(timezone.utc).isoformat()
             execution_data["error"] = str(e)
 
             with open(execution_file, "w") as f:
@@ -708,7 +702,7 @@ class WorkflowStudioAPI:
             for websocket in self.websocket_connections[execution_id]:
                 try:
                     await websocket.send_json(data)
-                except:
+                except Exception:
                     pass  # Client disconnected
 
     def _generate_python_code(self, workflow: Workflow, workflow_name: str) -> str:

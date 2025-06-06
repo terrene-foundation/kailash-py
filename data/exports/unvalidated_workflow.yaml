@@ -4,7 +4,7 @@ metadata:
   description: ''
   version: 1.0.0
   author: ''
-  created_at: '2025-06-05T09:29:50.148911+00:00'
+  created_at: '2025-06-06T02:40:04.471056+00:00'
 nodes:
   reader:
     type: CSVReaderNode

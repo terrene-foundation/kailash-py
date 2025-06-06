@@ -110,7 +110,7 @@ import { Button } from './Button';
 describe('Button', () => {
   it('renders with text', () => {
     render(<Button>Click me</Button>);
-    
+
     const button = screen.getByRole('button', { name: /click me/i });
     expect(button).toBeInTheDocument();
   });
@@ -118,18 +118,18 @@ describe('Button', () => {
   it('handles click events', async () => {
     const handleClick = jest.fn();
     const user = userEvent.setup();
-    
+
     render(<Button onClick={handleClick}>Click me</Button>);
-    
+
     const button = screen.getByRole('button', { name: /click me/i });
     await user.click(button);
-    
+
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
   it('shows loading state', () => {
     render(<Button loading>Loading</Button>);
-    
+
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
@@ -137,12 +137,12 @@ describe('Button', () => {
 
   it('applies variant styles', () => {
     const { rerender } = render(<Button variant="primary">Primary</Button>);
-    
+
     let button = screen.getByRole('button');
     expect(button).toHaveClass('btn-primary');
-    
+
     rerender(<Button variant="danger">Danger</Button>);
-    
+
     button = screen.getByRole('button');
     expect(button).toHaveClass('btn-danger');
   });
@@ -150,14 +150,14 @@ describe('Button', () => {
   it('forwards ref', () => {
     const ref = React.createRef<HTMLButtonElement>();
     render(<Button ref={ref}>Button</Button>);
-    
+
     expect(ref.current).toBeInstanceOf(HTMLButtonElement);
   });
 
   describe('accessibility', () => {
     it('has proper ARIA attributes when disabled', () => {
       render(<Button disabled>Disabled</Button>);
-      
+
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute('aria-disabled', 'true');
     });
@@ -165,15 +165,15 @@ describe('Button', () => {
     it('supports keyboard navigation', async () => {
       const handleClick = jest.fn();
       const user = userEvent.setup();
-      
+
       render(<Button onClick={handleClick}>Keyboard</Button>);
-      
+
       const button = screen.getByRole('button');
       button.focus();
-      
+
       await user.keyboard('{Enter}');
       expect(handleClick).toHaveBeenCalledTimes(1);
-      
+
       await user.keyboard(' ');
       expect(handleClick).toHaveBeenCalledTimes(2);
     });
@@ -199,7 +199,7 @@ describe('useDebounce', () => {
 
   it('returns initial value immediately', () => {
     const { result } = renderHook(() => useDebounce('initial', 500));
-    
+
     expect(result.current).toBe('initial');
   });
 
@@ -213,7 +213,7 @@ describe('useDebounce', () => {
 
     // Change value
     rerender({ value: 'updated', delay: 500 });
-    
+
     // Value shouldn't change immediately
     expect(result.current).toBe('initial');
 
@@ -233,7 +233,7 @@ describe('useDebounce', () => {
     );
 
     rerender({ value: 'second' });
-    
+
     act(() => {
       jest.advanceTimersByTime(300);
     });
@@ -267,7 +267,7 @@ describe('useLocalStorage', () => {
   });
 
   it('initializes with default value', () => {
-    const { result } = renderHook(() => 
+    const { result } = renderHook(() =>
       useLocalStorage('testKey', 'defaultValue')
     );
 
@@ -277,8 +277,8 @@ describe('useLocalStorage', () => {
 
   it('initializes with stored value', () => {
     localStorage.setItem('testKey', JSON.stringify('storedValue'));
-    
-    const { result } = renderHook(() => 
+
+    const { result } = renderHook(() =>
       useLocalStorage('testKey', 'defaultValue')
     );
 
@@ -287,7 +287,7 @@ describe('useLocalStorage', () => {
   });
 
   it('updates localStorage when value changes', () => {
-    const { result } = renderHook(() => 
+    const { result } = renderHook(() =>
       useLocalStorage('testKey', 'initial')
     );
 
@@ -302,7 +302,7 @@ describe('useLocalStorage', () => {
   });
 
   it('handles function updates', () => {
-    const { result } = renderHook(() => 
+    const { result } = renderHook(() =>
       useLocalStorage('counter', 0)
     );
 
@@ -317,7 +317,7 @@ describe('useLocalStorage', () => {
 
   it('handles errors gracefully', () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-    
+
     // Mock localStorage to throw error
     const mockSetItem = jest.fn(() => {
       throw new Error('Storage full');
@@ -330,7 +330,7 @@ describe('useLocalStorage', () => {
       writable: true,
     });
 
-    const { result } = renderHook(() => 
+    const { result } = renderHook(() =>
       useLocalStorage('testKey', 'value')
     );
 
@@ -613,7 +613,7 @@ describe('WorkflowBuilder Integration', () => {
 
   it('creates a new workflow with nodes and connections', async () => {
     const user = userEvent.setup();
-    
+
     renderWithProviders(<WorkflowBuilder />);
 
     // Wait for initial load
@@ -639,10 +639,10 @@ describe('WorkflowBuilder Integration', () => {
     // Add a node
     const nodePanel = screen.getByTestId('node-panel');
     const csvReaderNode = within(nodePanel).getByText('CSV Reader');
-    
+
     // Drag and drop simulation
     await user.click(csvReaderNode);
-    
+
     // Configure node
     await waitFor(() => {
       const nodeConfig = screen.getByTestId('node-config');
@@ -674,7 +674,7 @@ describe('WorkflowBuilder Integration', () => {
     );
 
     const user = userEvent.setup();
-    
+
     renderWithProviders(<WorkflowBuilder />);
 
     await user.click(screen.getByText('Create New Workflow'));
@@ -790,7 +790,7 @@ test.describe('Workflow Creation', () => {
     await page.fill('[data-testid="email-input"]', 'test@example.com');
     await page.fill('[data-testid="password-input"]', 'password');
     await page.click('[data-testid="login-button"]');
-    
+
     await page.waitForURL('/dashboard');
   });
 
@@ -826,7 +826,7 @@ test.describe('Workflow Creation', () => {
     // Connect nodes
     const sourceHandle = canvas.locator('[data-node-id="node-1"] .source-handle');
     const targetHandle = canvas.locator('[data-node-id="node-2"] .target-handle');
-    
+
     await sourceHandle.dragTo(targetHandle);
 
     // Save workflow
@@ -837,14 +837,14 @@ test.describe('Workflow Creation', () => {
 
     // Execute workflow
     await page.click('button:has-text("Execute")');
-    
+
     // Fill parameters
     await page.fill('[name="output_path"]', '/tmp/output.csv');
     await page.click('button:has-text("Run")');
 
     // Wait for execution
     await expect(page.locator('[data-testid="execution-status"]')).toContainText('Running');
-    
+
     // Wait for completion (with timeout)
     await expect(page.locator('[data-testid="execution-status"]')).toContainText('Completed', {
       timeout: 30000,
@@ -888,7 +888,7 @@ test.describe('Workflow Execution', () => {
 
     // Monitor progress
     const progressBar = page.locator('[data-testid="execution-progress"]');
-    
+
     // Initial state
     await expect(progressBar).toHaveAttribute('aria-valuenow', '0');
 
@@ -1006,14 +1006,14 @@ export const Interactive: Story = {
   args: Default.args,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    
+
     // Hover over card
     await userEvent.hover(canvas.getByRole('article'));
-    
+
     // Click execute button
     const executeButton = canvas.getByRole('button', { name: /execute/i });
     await userEvent.click(executeButton);
-    
+
     // Verify state change
     await expect(canvas.getByText(/running/i)).toBeInTheDocument();
   },
@@ -1110,10 +1110,10 @@ describe('Accessibility Tests', () => {
       <form>
         <label htmlFor="email">Email</label>
         <input id="email" type="email" required />
-        
+
         <label htmlFor="password">Password</label>
         <input id="password" type="password" required />
-        
+
         <button type="submit">Submit</button>
       </form>
     );
@@ -1130,7 +1130,7 @@ describe('Accessibility Tests', () => {
 describe('Keyboard Navigation', () => {
   it('supports full keyboard navigation', async () => {
     const user = userEvent.setup();
-    
+
     render(
       <Navigation>
         <NavItem href="/home">Home</NavItem>

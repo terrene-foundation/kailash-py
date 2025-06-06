@@ -25,10 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 from sqlalchemy import func
 
 from kailash.api.database import CustomNode as CustomNodeModel
-from kailash.api.database import (
-    CustomNodeRepository,
-    ExecutionRepository,
-)
+from kailash.api.database import CustomNodeRepository, ExecutionRepository
 from kailash.api.database import Workflow as WorkflowModel
 from kailash.api.database import WorkflowExecution as ExecutionModel
 from kailash.api.database import (
@@ -473,7 +470,7 @@ async def api_client_examples():
         try:
             response = await client.get(f"{base_url}/health")
             print(f"✅ Connected to Studio API: {response.json()}")
-        except:
+        except Exception:
             print("❌ Studio API server not running.")
             print("   Start it with: python -m kailash.api.studio")
             return

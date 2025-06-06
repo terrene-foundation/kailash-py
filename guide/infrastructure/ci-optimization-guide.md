@@ -175,7 +175,7 @@ def test_real_api():
    ```bash
    # Run single test file
    uv run pytest tests/test_nodes/test_base.py -v
-   
+
    # Run with full output
    uv run pytest -s -v tests/test_specific.py::test_function
    ```

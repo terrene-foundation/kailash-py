@@ -1,7 +1,7 @@
 """Task manager for workflow execution tracking."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from kailash.sdk_exceptions import StorageException, TaskException, TaskStateError
@@ -734,7 +734,7 @@ class TaskManager:
         except Exception as e:
             raise StorageException(f"Failed to get tasks for cleanup: {e}") from e
 
-        cutoff = datetime.now() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         deleted = 0
 
         for task in tasks:

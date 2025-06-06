@@ -8,7 +8,8 @@ This module provides:
 """
 
 import uuid
-from datetime import datetime
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -532,7 +533,7 @@ class ExecutionRepository:
             tenant_id=tenant_id,
             status="pending",
             parameters=parameters,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
         self.session.add(execution)
         self.session.commit()
@@ -559,7 +560,7 @@ class ExecutionRepository:
             execution.error = error
 
         if status in ["completed", "failed"]:
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now(timezone.utc)
             if execution.started_at:
                 execution.execution_time_ms = int(
                     (execution.completed_at - execution.started_at).total_seconds()
@@ -603,7 +604,6 @@ def init_database(db_path: str = None) -> tuple[sessionmaker, Engine]:
 
 
 # Context manager for database sessions
-from contextlib import contextmanager
 
 
 @contextmanager

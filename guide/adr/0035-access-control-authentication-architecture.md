@@ -41,7 +41,7 @@ We will implement a layered access control architecture with the following compo
 ### 4. Node-Level Integration
 ```python
 # Optional access control for nodes
-add_access_control(node, 
+add_access_control(node,
     enable_access_control=True,
     required_permission=NodePermission.EXECUTE,
     node_id="unique_id",
@@ -55,13 +55,13 @@ add_access_control(node,
 ```python
 # Workflow Permissions
 WorkflowPermission.VIEW      # Can see workflow
-WorkflowPermission.EXECUTE   # Can run workflow  
+WorkflowPermission.EXECUTE   # Can run workflow
 WorkflowPermission.MODIFY    # Can edit workflow
 WorkflowPermission.DELETE    # Can delete workflow
 WorkflowPermission.SHARE     # Can share with others
 WorkflowPermission.ADMIN     # Full control
 
-# Node Permissions  
+# Node Permissions
 NodePermission.EXECUTE       # Can run the node
 NodePermission.READ_OUTPUT   # Can see outputs
 NodePermission.WRITE_INPUT   # Can provide inputs
@@ -74,7 +74,7 @@ NodePermission.MASK_OUTPUT   # Sensitive fields hidden
 @dataclass
 class UserContext:
     user_id: str
-    tenant_id: str  
+    tenant_id: str
     email: str
     roles: List[str]
     attributes: Dict[str, Any] = field(default_factory=dict)
@@ -91,12 +91,12 @@ class PermissionRule:
     resource_id: str    # workflow_id or node_id
     permission: Union[WorkflowPermission, NodePermission]
     effect: PermissionEffect  # ALLOW or DENY
-    
+
     # Targeting
     user_id: Optional[str] = None      # Specific user
     role: Optional[str] = None         # Any user with role
     tenant_id: Optional[str] = None    # All users in tenant
-    
+
     # Conditions
     conditions: Dict[str, Any] = field(default_factory=dict)
     expires_at: Optional[datetime] = None
@@ -117,7 +117,7 @@ runtime = LocalRuntime()
 result = runtime.execute(workflow)
 
 # Run with access control (same API)
-user = UserContext(user_id="user1", tenant_id="tenant1", 
+user = UserContext(user_id="user1", tenant_id="tenant1",
                    email="user@example.com", roles=["analyst"])
 ac_runtime = AccessControlledRuntime(user)
 result = ac_runtime.execute(workflow)  # Same call!
@@ -143,7 +143,7 @@ original_output = {"name": "John", "ssn": "123-45-6789", "balance": 1500}
 # Admin sees everything
 admin_output = {"name": "John", "ssn": "123-45-6789", "balance": 1500}
 
-# Analyst sees masked sensitive fields  
+# Analyst sees masked sensitive fields
 analyst_output = {"name": "John", "ssn": "***-**-6789", "balance": 1500}
 
 # Viewer might see only summary
@@ -230,18 +230,18 @@ user_b = UserContext(user_id="u2", tenant_id="tenant-b", ...)
 
 See the following files for comprehensive demonstrations:
 - `examples/integration_examples/access_control_demo.py` - Simple working demo
-- `examples/integration_examples/access_control_simple.py` - Basic role-based demo  
+- `examples/integration_examples/access_control_simple.py` - Basic role-based demo
 - `examples/integration_examples/access_control_consolidated.py` - Full JWT/RBAC demo
 - `examples/studio_examples/test_jwt_auth.py` - JWT authentication testing
 - `examples/studio_examples/test_rbac_permissions.py` - RBAC testing
 
 ## Related ADRs
 - ADR-0032: Production Security Architecture
-- ADR-0033: Workflow Studio Multi-Tenant Architecture  
+- ADR-0033: Workflow Studio Multi-Tenant Architecture
 - ADR-0034: AI Assistant Architecture
 
 ---
-**Author**: Claude Code  
-**Date**: 2025-06-05  
-**Supersedes**: None  
+**Author**: Claude Code
+**Date**: 2025-06-05
+**Supersedes**: None
 **Status**: Accepted and Implemented

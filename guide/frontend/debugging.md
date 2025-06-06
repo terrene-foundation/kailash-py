@@ -125,7 +125,7 @@ export const useDebugInfo = (componentName: string, props: any) => {
   useEffect(() => {
     if (previousProps.current) {
       const changes: Record<string, any> = {};
-      
+
       Object.keys(props).forEach(key => {
         if (props[key] !== previousProps.current[key]) {
           changes[key] = {
@@ -147,11 +147,11 @@ export const useDebugInfo = (componentName: string, props: any) => {
     console.group(`🔍 ${componentName} Debug Info`);
     console.log('Render count:', renderCount.current);
     console.log('Current props:', props);
-    
+
     if (Object.keys(changedProps.current).length > 0) {
       console.log('Changed props:', changedProps.current);
     }
-    
+
     console.groupEnd();
   }
 
@@ -164,7 +164,7 @@ export const useDebugInfo = (componentName: string, props: any) => {
 // Usage in component
 export const MyComponent: React.FC<Props> = (props) => {
   useDebugInfo('MyComponent', props);
-  
+
   // Component logic...
 };
 ```
@@ -199,17 +199,17 @@ WorkflowCard.displayName = 'WorkflowCard';
 export const withAuth = <P extends object>(Component: React.ComponentType<P>) => {
   const WithAuthComponent = (props: P) => {
     const { user } = useAuth();
-    
+
     if (!user) {
       return <Navigate to="/login" />;
     }
-    
+
     return <Component {...props} />;
   };
 
   // Preserve original component name
   WithAuthComponent.displayName = `withAuth(${Component.displayName || Component.name || 'Component'})`;
-  
+
   return WithAuthComponent;
 };
 ```
@@ -346,15 +346,15 @@ const debugMiddleware: Middleware = (store) => (next) => (action) => {
     console.group(`🔄 ${action.type}`);
     console.log('Previous State:', store.getState());
     console.log('Action:', action);
-    
+
     const result = next(action);
-    
+
     console.log('Next State:', store.getState());
     console.groupEnd();
-    
+
     return result;
   }
-  
+
   return next(action);
 };
 ```
@@ -430,7 +430,7 @@ export class NetworkDebugger {
     window.fetch = async (...args) => {
       const [url, config] = args;
       const requestId = this.generateRequestId();
-      
+
       console.group(`🔄 API Request: ${config?.method || 'GET'} ${url}`);
       console.log('Request ID:', requestId);
       console.log('Headers:', config?.headers);
@@ -438,20 +438,20 @@ export class NetworkDebugger {
       console.groupEnd();
 
       const startTime = performance.now();
-      
+
       try {
         const response = await originalFetch(...args);
         const duration = performance.now() - startTime;
-        
+
         const clonedResponse = response.clone();
         const responseData = await clonedResponse.json().catch(() => null);
-        
+
         console.group(`✅ API Response: ${config?.method || 'GET'} ${url}`);
         console.log('Status:', response.status);
         console.log('Duration:', `${duration.toFixed(2)}ms`);
         console.log('Data:', responseData);
         console.groupEnd();
-        
+
         this.requests.set(requestId, {
           url,
           method: config?.method || 'GET',
@@ -461,16 +461,16 @@ export class NetworkDebugger {
           request: config,
           response: responseData,
         });
-        
+
         return response;
       } catch (error) {
         const duration = performance.now() - startTime;
-        
+
         console.group(`❌ API Error: ${config?.method || 'GET'} ${url}`);
         console.error('Error:', error);
         console.log('Duration:', `${duration.toFixed(2)}ms`);
         console.groupEnd();
-        
+
         throw error;
       }
     };
@@ -478,19 +478,19 @@ export class NetworkDebugger {
     // Intercept XMLHttpRequest
     const originalXHROpen = XMLHttpRequest.prototype.open;
     const originalXHRSend = XMLHttpRequest.prototype.send;
-    
+
     XMLHttpRequest.prototype.open = function(method, url, ...args) {
       this._debugInfo = { method, url, startTime: 0 };
       return originalXHROpen.apply(this, [method, url, ...args]);
     };
-    
+
     XMLHttpRequest.prototype.send = function(body) {
       if (this._debugInfo) {
         this._debugInfo.startTime = performance.now();
         this._debugInfo.body = body;
-        
+
         console.log(`🔄 XHR Request: ${this._debugInfo.method} ${this._debugInfo.url}`, body);
-        
+
         this.addEventListener('load', () => {
           const duration = performance.now() - this._debugInfo.startTime;
           console.log(`✅ XHR Response: ${this._debugInfo.method} ${this._debugInfo.url}`, {
@@ -500,7 +500,7 @@ export class NetworkDebugger {
           });
         });
       }
-      
+
       return originalXHRSend.apply(this, [body]);
     };
   }
@@ -545,7 +545,7 @@ export class NetworkDebugger {
         })),
       },
     };
-    
+
     const blob = new Blob([JSON.stringify(har, null, 2)], {
       type: 'application/json',
     });
@@ -575,15 +575,15 @@ import { ApolloLink } from '@apollo/client';
 export const debugLink = new ApolloLink((operation, forward) => {
   if (process.env.NODE_ENV === 'development') {
     const startTime = performance.now();
-    
+
     console.group(`🚀 GraphQL ${operation.operationName}`);
     console.log('Query:', operation.query.loc?.source.body);
     console.log('Variables:', operation.variables);
     console.groupEnd();
-    
+
     return forward(operation).map(response => {
       const duration = performance.now() - startTime;
-      
+
       console.group(`✅ GraphQL Response ${operation.operationName}`);
       console.log('Duration:', `${duration.toFixed(2)}ms`);
       console.log('Data:', response.data);
@@ -591,11 +591,11 @@ export const debugLink = new ApolloLink((operation, forward) => {
         console.error('Errors:', response.errors);
       }
       console.groupEnd();
-      
+
       return response;
     });
   }
-  
+
   return forward(operation);
 });
 ```
@@ -636,7 +636,7 @@ export const useDebugQuery = <TData, TError = unknown>(
   options?: UseQueryOptions<TData, TError>
 ) => {
   const query = useQuery(queryKey, queryFn, options);
-  
+
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`🔍 Query Debug [${queryKey.join(', ')}]:`, {
@@ -648,7 +648,7 @@ export const useDebugQuery = <TData, TError = unknown>(
       });
     }
   }, [query.status, query.data, query.error]);
-  
+
   return query;
 };
 ```
@@ -661,23 +661,23 @@ export const createDebugContext = <T,>(
   defaultValue: T
 ): [React.Context<T>, React.FC<{ value: T; children: React.ReactNode }>] => {
   const Context = React.createContext<T>(defaultValue);
-  
+
   if (process.env.NODE_ENV === 'development') {
     Context.displayName = name;
   }
-  
+
   const Provider: React.FC<{ value: T; children: React.ReactNode }> = ({
     value,
     children,
   }) => {
     const previousValue = useRef(value);
-    
+
     useEffect(() => {
       if (process.env.NODE_ENV === 'development') {
         console.group(`🔄 ${name} Context Update`);
         console.log('Previous:', previousValue.current);
         console.log('Current:', value);
-        
+
         // Deep diff for objects
         if (typeof value === 'object' && value !== null) {
           const changes = getObjectDiff(previousValue.current, value);
@@ -685,16 +685,16 @@ export const createDebugContext = <T,>(
             console.log('Changes:', changes);
           }
         }
-        
+
         console.groupEnd();
       }
-      
+
       previousValue.current = value;
     }, [value]);
-    
+
     return <Context.Provider value={value}>{children}</Context.Provider>;
   };
-  
+
   return [Context, Provider];
 };
 
@@ -783,12 +783,12 @@ export class DebugErrorBoundary extends Component<
       localStorage.getItem('debug_errors') || '[]'
     );
     existingErrors.push(errorLog);
-    
+
     // Keep only last 10 errors
     if (existingErrors.length > 10) {
       existingErrors.shift();
     }
-    
+
     localStorage.setItem('debug_errors', JSON.stringify(existingErrors));
   }
 
@@ -803,7 +803,7 @@ export class DebugErrorBoundary extends Component<
                 <h1 className="text-2xl font-bold text-red-600 mb-4">
                   🚨 Development Error
                 </h1>
-                
+
                 <div className="mb-6">
                   <h2 className="text-lg font-semibold mb-2">Error Message</h2>
                   <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
@@ -964,7 +964,7 @@ class ErrorLogger {
   }
 
   private searchLogs(query: string): ErrorLog[] {
-    return this.logs.filter(log => 
+    return this.logs.filter(log =>
       log.message.toLowerCase().includes(query.toLowerCase()) ||
       log.stack?.toLowerCase().includes(query.toLowerCase())
     );
@@ -1050,7 +1050,7 @@ export const DebugOverlay: React.FC = () => {
 // State debugger tab
 const StateDebugger: React.FC = () => {
   const state = useAppSelector(state => state);
-  
+
   return (
     <div>
       <h3 className="text-lg font-bold mb-2">Redux State</h3>
@@ -1064,7 +1064,7 @@ const StateDebugger: React.FC = () => {
 // Network debugger tab
 const NetworkDebugger: React.FC = () => {
   const requests = window.networkDebugger?.getRequests() || [];
-  
+
   return (
     <div>
       <h3 className="text-lg font-bold mb-2">Network Requests</h3>
@@ -1090,27 +1090,27 @@ const NetworkDebugger: React.FC = () => {
 // Performance debugger tab
 const PerformanceDebugger: React.FC = () => {
   const [fps, setFps] = useState(0);
-  
+
   useEffect(() => {
     let lastTime = performance.now();
     let frames = 0;
-    
+
     const measureFPS = () => {
       frames++;
       const currentTime = performance.now();
-      
+
       if (currentTime >= lastTime + 1000) {
         setFps(Math.round((frames * 1000) / (currentTime - lastTime)));
         frames = 0;
         lastTime = currentTime;
       }
-      
+
       requestAnimationFrame(measureFPS);
     };
-    
+
     measureFPS();
   }, []);
-  
+
   return (
     <div>
       <h3 className="text-lg font-bold mb-2">Performance Metrics</h3>
@@ -1122,7 +1122,7 @@ const PerformanceDebugger: React.FC = () => {
         <div>
           <div className="text-gray-400">Memory</div>
           <div className="text-2xl">
-            {(performance as any).memory 
+            {(performance as any).memory
               ? `${Math.round((performance as any).memory.usedJSHeapSize / 1048576)}MB`
               : 'N/A'}
           </div>

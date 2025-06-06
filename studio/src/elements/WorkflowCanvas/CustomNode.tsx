@@ -52,7 +52,7 @@ export const CustomNode = memo(({ data, selected }: NodeProps<CustomNodeData>) =
         <div className="text-xs text-muted-foreground mt-1 capitalize">
           {nodeDefinition.category}
         </div>
-        
+
         {/* Show configured parameters */}
         {Object.keys(config).length > 0 && (
           <div className="mt-2 pt-2 border-t border-border text-xs">

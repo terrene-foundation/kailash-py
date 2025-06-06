@@ -1,5 +1,13 @@
 name: CI Pipeline
 
+# Runner Selection:
+# - All CI runs use self-hosted runners (NO GitHub runners to save costs)
+# - Default runners: self-hosted-secondary or self-hosted-primary (auto-detected)
+# - For push/PR events: Automatically uses available self-hosted runners
+# - For manual runs: Can choose specific runner via workflow_dispatch
+# - Maintainers can use their own runner names
+# - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
+
 on:
   push:
     branches: [ feat/*, feature/* ]
@@ -11,12 +19,31 @@ on:
       runner-type:
         description: 'Choose runner type'
         required: false
-        default: 'github'
+        default: 'local'
         type: choice
         options:
-        - github      # Use GitHub's runners
+        - local       # Use local runner (auto-detected) - RECOMMENDED
+        - self-hosted-secondary # Use self-hosted-secondary runner
+        - self-hosted-primary # Use self-hosted-primary runner
         - local-mac   # Use your Mac
         - self-hosted # Use any self-hosted runner
+        - github      # Use GitHub's runners (EXPENSIVE - avoid unless necessary)
+      force-runner:
+        description: 'Force specific runner for PR (overrides auto-detection)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+        - auto        # Auto-detect based on branch
+        - github      # Force GitHub runners
+        - local       # Force local runner (auto-detected)
+        - local-mac   # Force local Mac runner
+        - self-hosted-secondary # Force self-hosted-secondary runner
+        - self-hosted-primary # Force self-hosted-primary runner
+
+permissions:
+  contents: read
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -26,7 +53,7 @@ jobs:
   # Determine what level of testing to run based on context
   determine-context:
     name: Determine Test Context
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # Use any available self-hosted runner
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
       skip-reason: ${{ steps.determine.outputs.skip-reason }}
@@ -35,168 +62,117 @@ jobs:
       - name: Determine runner to use
         id: runner
         run: |
+          # Check if force-runner is specified (for PRs triggered via workflow_dispatch)
+          if [[ "${{ github.event.inputs.force-runner }}" != "" && "${{ github.event.inputs.force-runner }}" != "auto" ]]; then
+            case "${{ github.event.inputs.force-runner }}" in
+              local)
+                echo 'label=self-hosted' >> $GITHUB_OUTPUT
+                echo "Using local runner (forced)"
+                ;;
+              local-mac)
+                echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
+                echo "Using local Mac runner (forced)"
+                ;;
+              self-hosted-secondary)
+                echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-secondary runner (forced)"
+                ;;
+              self-hosted-primary)
+                echo 'label=["self-hosted", "self-hosted-primary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-primary runner (forced)"
+                ;;
+              github)
+                echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
+                echo "Using GitHub-hosted runner (forced)"
+                ;;
+            esac
           # For manual runs, use the selected runner
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "${{ github.event.inputs.runner-type }}" in
+              local)
+                echo 'label=self-hosted' >> $GITHUB_OUTPUT
+                echo "Using local runner"
+                ;;
               local-mac)
                 echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner"
+                ;;
+              self-hosted-secondary)
+                echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-secondary runner"
+                ;;
+              self-hosted-primary)
+                echo 'label=["self-hosted", "self-hosted-primary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-primary runner"
                 ;;
               self-hosted)
                 echo 'label=["self-hosted", "linux", "x64"]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted Linux runner"
                 ;;
               *)
-                echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
-                echo "Using GitHub-hosted runner"
+                echo 'label=self-hosted' >> $GITHUB_OUTPUT
+                echo "Using self-hosted runner (default)"
                 ;;
             esac
           else
-            # For PRs from the main development branch, use local runner for speed
-            if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.head_ref }}" == "feat/complete-sdk-implementation" ]]; then
-              echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
-              echo "Using local Mac runner for trusted PR branch"
-            else
-              # For other automatic runs, use GitHub runners
-              echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
-              echo "Using GitHub-hosted runner (automatic trigger)"
-            fi
+            # For automatic runs (push/PR), use any available self-hosted runner
+            echo 'label=self-hosted' >> $GITHUB_OUTPUT
+            echo "Using any available self-hosted runner"
           fi
       - name: Determine test level
         id: determine
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const eventName = context.eventName;
-            const isPR = eventName === 'pull_request';
-            const isPush = eventName === 'push';
-            const isManual = eventName === 'workflow_dispatch';
-
-            console.log(`Event: ${eventName}`);
-            console.log(`Ref: ${context.ref}`);
-
-            // Manual dispatch always runs full tests
-            if (isManual) {
-              core.setOutput('level', 'full');
-              core.setOutput('skip-reason', '');
-              return;
-            }
-
-            // For PRs, always run full tests
-            if (isPR) {
-              core.setOutput('level', 'full');
-              core.setOutput('skip-reason', '');
-              console.log('PR event detected - running full test suite');
-              return;
-            }
-
-            // For pushes, check if a PR exists
-            if (isPush) {
-              const branch = context.ref.replace('refs/heads/', '');
-              console.log(`Checking for PRs on branch: ${branch}`);
-
-              try {
-                const { data: prs } = await github.rest.pulls.list({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  head: `${context.repo.owner}:${branch}`,
-                  state: 'open'
-                });
-
-                if (prs.length > 0) {
-                  core.setOutput('level', 'skip');
-                  core.setOutput('skip-reason', `PR #${prs[0].number} exists for this branch - tests will run on PR`);
-                  console.log(`Found ${prs.length} open PR(s) for this branch`);
-                } else {
-                  core.setOutput('level', 'basic');
-                  core.setOutput('skip-reason', '');
-                  console.log('No PR found - running basic tests');
-                }
-              } catch (error) {
-                // If we can't check PRs, run basic tests to be safe
-                console.log(`Error checking PRs: ${error.message}`);
-                core.setOutput('level', 'basic');
-                core.setOutput('skip-reason', '');
-              }
-            }
+        run: |
+          # Always run full tests for all triggers (push, PR, manual)
+          echo "level=full" >> $GITHUB_OUTPUT
+          echo "skip-reason=" >> $GITHUB_OUTPUT
+          echo "Running full test suite"
 
       - name: Display decision
         run: |
           echo "Test Level: ${{ steps.determine.outputs.level }}"
           echo "Skip Reason: ${{ steps.determine.outputs.skip-reason }}"
 
-  # Skip notification job
-  notify-skip:
-    name: Notify Skip
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'skip'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify why tests are skipped
-        run: |
-          echo "⏭️ Skipping tests: ${{ needs.determine-context.outputs.skip-reason }}"
-          echo "Tests will run when the PR is updated."
-
-  # Basic tests for feature branch pushes without PRs
-  basic-tests:
-    name: Basic Tests
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'basic'
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
-    steps:
-      - name: Display runner info
-        run: |
-          echo "🏃 Running on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}"
-          if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
-            echo "📍 Runner hostname: $(hostname)"
-            echo "💻 CPU cores: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'unknown')"
-          fi
-      
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
-        run: |
-          echo "Using system Python"
-          which python3
-          python3 --version
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: |
-          uv venv --python python3
-          uv sync
-
-      - name: Run basic smoke tests
-        run: |
-          echo "Running basic smoke tests..."
-          uv run pytest tests/test_ci_setup.py -v
-          uv run python -m kailash --version
 
   # Combined job for self-hosted runners to maximize parallelism
   all-checks-parallel:
     name: All Checks (Parallel)
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full' && contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python (self-hosted)
         run: |
-          echo "Using system Python"
-          which python3
-          python3 --version
+          echo "Checking available Python versions"
+
+          # Initialize pyenv if available
+          if command -v pyenv &> /dev/null; then
+            echo "Found pyenv, initializing..."
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+
+            echo "Available Python versions:"
+            pyenv versions
+
+            # Check for required versions
+            if pyenv versions | grep -q "3.11"; then
+              echo "✓ Python 3.11 available"
+            else
+              echo "⚠️  Python 3.11 not found - install with: pyenv install 3.11"
+            fi
+
+            if pyenv versions | grep -q "3.12"; then
+              echo "✓ Python 3.12 available"
+            else
+              echo "⚠️  Python 3.12 not found - install with: pyenv install 3.12"
+            fi
+          else
+            echo "pyenv not found, checking system Python"
+            which python3
+            python3 --version
+          fi
 
       - name: Install uv
         run: |
@@ -205,24 +181,60 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv --python python3
-          uv sync
+          # Initialize pyenv if available
+          if command -v pyenv &> /dev/null; then
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+          fi
+
+          # Create venvs for both Python versions
+          echo "Setting up Python 3.11 environment"
+          if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.11"; then
+            # Get the exact 3.11 version from pyenv
+            PY311=$(pyenv versions --bare | grep "^3\.11\." | head -1)
+            echo "Using pyenv Python $PY311"
+            PYENV_VERSION=$PY311 uv venv .venv-3.11 --python python
+            VIRTUAL_ENV=.venv-3.11 uv sync
+          elif command -v python3.11 &> /dev/null; then
+            uv venv .venv-3.11 --python python3.11
+            VIRTUAL_ENV=.venv-3.11 uv sync
+          else
+            echo "⚠️  Python 3.11 not found, skipping"
+          fi
+
+          echo "Setting up Python 3.12 environment"
+          if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.12"; then
+            # Get the exact 3.12 version from pyenv
+            PY312=$(pyenv versions --bare | grep "^3\.12\." | head -1)
+            echo "Using pyenv Python $PY312"
+            PYENV_VERSION=$PY312 uv venv .venv-3.12 --python python
+            VIRTUAL_ENV=.venv-3.12 uv sync
+          elif command -v python3.12 &> /dev/null; then
+            uv venv .venv-3.12 --python python3.12
+            VIRTUAL_ENV=.venv-3.12 uv sync
+          else
+            # Fallback to system python3
+            echo "Using system Python for 3.12"
+            uv venv .venv-3.12 --python python3
+            VIRTUAL_ENV=.venv-3.12 uv sync
+          fi
 
       - name: Run all checks in parallel
         run: |
           echo "Running all checks in parallel on $(sysctl -n hw.ncpu) cores"
-          
+
           # Create a script to run all checks
           cat > run-all-checks.sh << 'EOF'
           #!/bin/bash
           set -e
-          
+
           # Function to run a check and capture its status
           run_check() {
               local name="$1"
               local cmd="$2"
               local logfile="$3"
-              
+
               echo "Starting $name..."
               if eval "$cmd" > "$logfile" 2>&1; then
                   echo "✅ $name passed"
@@ -233,34 +245,51 @@ jobs:
                   return 1
               fi
           }
-          
+
           # Run all checks in parallel
           (
               run_check "Black formatting" "uv run black --check src/ tests/" "black.log" &
               run_check "Isort imports" "uv run isort --check-only src/ tests/" "isort.log" &
               run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
-              run_check "Tests Python 3.11" "uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto" "pytest.log" &
+
+              # Run tests with Python 3.11 if available
+              if [ -d ".venv-3.11" ]; then
+                  run_check "Tests Python 3.11" "VIRTUAL_ENV=.venv-3.11 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -n auto" "pytest-3.11.log" &
+              else
+                  echo "⚠️  Skipping Python 3.11 tests (not installed)"
+              fi
+
+              # Run tests with Python 3.12
+              if [ -d ".venv-3.12" ]; then
+                  run_check "Tests Python 3.12" "VIRTUAL_ENV=.venv-3.12 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -n auto" "pytest-3.12.log" &
+              else
+                  echo "⚠️  Skipping Python 3.12 tests (not available)"
+              fi
+
               run_check "Example validation" "cd examples && uv run python _utils/test_all_examples.py" "examples.log" &
-              
+
               # Wait for all background jobs
               wait
           )
-          
+
           # Check if any job failed
           if [ $? -ne 0 ]; then
-              echo "\nSome checks failed. Logs:"
+              echo -e "\nSome checks failed. Logs:"
               for log in *.log; do
                   if [ -f "$log" ] && grep -q "failed\|error\|Error" "$log"; then
-                      echo "\n=== $log ==="
+                      echo -e "\n=== $log ==="
                       tail -50 "$log"
                   fi
               done
               exit 1
           fi
-          
-          echo "\n✅ All checks passed!"
+
+          echo -e "\n✅ All checks passed!"
+          echo "Tests run with:"
+          [ -d ".venv-3.11" ] && echo "  - Python 3.11 ✓"
+          [ -d ".venv-3.12" ] && echo "  - Python 3.12 ✓"
           EOF
-          
+
           chmod +x run-all-checks.sh
           ./run-all-checks.sh
 
@@ -277,11 +306,11 @@ jobs:
     name: Test Python 3.11
     needs: [determine-context, all-checks-parallel]
     if: |
-      always() && 
-      needs.determine-context.outputs.test-level == 'full' && 
+      always() &&
+      needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Report success
         run: |
@@ -292,11 +321,11 @@ jobs:
     name: Test Python 3.12
     needs: [determine-context, all-checks-parallel]
     if: |
-      always() && 
-      needs.determine-context.outputs.test-level == 'full' && 
+      always() &&
+      needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Report success
         run: |
@@ -307,19 +336,19 @@ jobs:
   lint-and-format:
     name: Lint and Format Check
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    if: false # Disabled - we only use self-hosted runners now
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python"
           which python3
@@ -352,24 +381,24 @@ jobs:
   test-matrix:
     name: Test Python ${{ matrix.python-version }}
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
+    if: false # Disabled - we only use self-hosted runners now
     strategy:
       fail-fast: false
       matrix:
         python-version: ['3.11', '3.12']
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python ${{ matrix.python-version }}
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python for matrix version ${{ matrix.python-version }}"
           which python3
@@ -388,7 +417,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           # Use all available cores on self-hosted runners if pytest-xdist is available
-          if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
+          if [[ "${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}" == "true" ]]; then
             echo "Running on self-hosted runner with $(nproc 2>/dev/null || sysctl -n hw.ncpu) cores"
             # Check if pytest-xdist is available
             if uv run python -c "import pytest_xdist" 2>/dev/null; then
@@ -416,11 +445,16 @@ jobs:
     name: Security Scan
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    outputs:
+      critical-count: ${{ steps.scan-summary.outputs.critical }}
+      high-count: ${{ steps.scan-summary.outputs.high }}
+      medium-count: ${{ steps.scan-summary.outputs.medium }}
+      summary: ${{ steps.scan-summary.outputs.summary }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner (SARIF)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -428,6 +462,49 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          format: 'json'
+          output: 'trivy-results.json'
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Create security summary
+        id: scan-summary
+        run: |
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json || echo "0")
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json || echo "0")
+          MEDIUM=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json || echo "0")
+          
+          # Set outputs
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          
+          # Create summary
+          {
+            echo 'summary<<EOF'
+            echo "### 🔒 Security Scan Summary"
+            echo ""
+            echo "| Severity | Count |"
+            echo "|----------|-------|"
+            echo "| 🔴 CRITICAL | $CRITICAL |"
+            echo "| 🟠 HIGH | $HIGH |"
+            echo "| 🟡 MEDIUM | $MEDIUM |"
+            echo ""
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "⚠️ **Action Required**: Critical or High severity vulnerabilities found!"
+            else
+              echo "✅ No critical or high severity vulnerabilities found!"
+            fi
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -439,19 +516,19 @@ jobs:
   validate-examples:
     name: Validate Examples
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    if: false # Disabled - we only use self-hosted runners now
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python"
           which python3
@@ -472,12 +549,14 @@ jobs:
           cd examples
           uv run python _utils/test_all_examples.py
 
-  # Summary job for PR status
-  pr-summary:
-    name: PR Summary
+  # Summary job for test results
+  test-summary:
+    name: Test Summary
     needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel, test-python-3-11, test-python-3-12]
-    if: always() && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: self-hosted
+    permissions:
+      pull-requests: write
     steps:
       - name: Summary
         uses: actions/github-script@v7
@@ -486,7 +565,7 @@ jobs:
             // Check if running on self-hosted runner
             const allChecksStatus = '${{ needs.all-checks-parallel.result }}';
             const isParallel = allChecksStatus !== 'skipped';
-            
+
             let jobs = [];
             if (isParallel) {
               // Self-hosted runner (all checks in one job)
@@ -512,6 +591,12 @@ jobs:
               const icon = job.status === 'success' ? '✅' : '❌';
               comment += `${icon} **${job.name}**: ${job.status}\n`;
               if (job.status !== 'success') allPassed = false;
+            }
+
+            // Add security scan results if available
+            const securitySummary = `${{ needs.security-scan.outputs.summary }}`;
+            if (securitySummary && securitySummary !== '') {
+              comment += '\n' + securitySummary + '\n';
             }
 
             comment += '\n';

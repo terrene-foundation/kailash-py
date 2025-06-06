@@ -49,6 +49,7 @@ Future Enhancements:
 
 import os
 import secrets
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -398,7 +399,7 @@ async def verify_api_key(
         )
 
     # Find API key by verifying against hashes
-    api_keys = session.query(APIKey).filter(APIKey.is_active == True).all()
+    api_keys = session.query(APIKey).filter(APIKey.is_active).all()
 
     valid_key = None
     for key_record in api_keys:
@@ -412,13 +413,13 @@ async def verify_api_key(
         )
 
     # Check expiration
-    if valid_key.expires_at and valid_key.expires_at < datetime.utcnow():
+    if valid_key.expires_at and valid_key.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="API key expired"
         )
 
     # Update usage
-    valid_key.last_used_at = datetime.utcnow()
+    valid_key.last_used_at = datetime.now(timezone.utc)
     valid_key.usage_count["total"] += 1
     valid_key.usage_count["monthly"] += 1
     session.commit()
@@ -502,8 +503,6 @@ class TenantContext:
 
 
 # Thread-local storage for tenant context
-import threading
-
 _tenant_context = threading.local()
 
 
@@ -608,7 +607,7 @@ class AuthService:
             )
 
         # Update last login
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         self.session.commit()
 
         # Generate tokens

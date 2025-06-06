@@ -1,5 +1,7 @@
 # Kailash SDK Quick Reference Cheatsheet
 
+**Version**: 0.1.4 | **Last Updated**: 2025-01-06
+
 ## Quick Links to Resources
 - **[Node Catalog](node-catalog.md)** - All 66 available nodes with parameters
 - **[Pattern Library](pattern-library.md)** - Common workflow patterns and best practices
@@ -14,24 +16,56 @@ pip install kailash
 
 ## Basic Imports
 ```python
-from kailash import Workflow, WorkflowBuilder
+# Core workflow components
+from kailash import Workflow
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode, TextReaderNode, TextWriterNode
+from kailash.runtime.access_controlled import AccessControlledRuntime
+
+# Data I/O nodes
+from kailash.nodes.data import (
+    CSVReaderNode, CSVWriterNode,
+    JSONReaderNode, JSONWriterNode,
+    TextReaderNode, TextWriterNode,
+    SharePointGraphReader, SharePointGraphWriter
+)
+
+# AI/ML nodes
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
+from kailash.nodes.ai.a2a import SharedMemoryPoolNode, A2AAgentNode, A2ACoordinatorNode
+from kailash.nodes.ai.self_organizing import (
+    AgentPoolManagerNode, ProblemAnalyzerNode,
+    TeamFormationNode, SelfOrganizingAgentNode
+)
+from kailash.nodes.ai.intelligent_agent_orchestrator import (
+    OrchestrationManagerNode, IntelligentCacheNode
+)
+
+# API nodes
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
-from kailash.nodes.transform import DataTransformerNode
+
+# Transform & logic nodes
+from kailash.nodes.transform import DataTransformerNode, FilterNode
 from kailash.nodes.logic import SwitchNode, MergeNode, WorkflowNode
 from kailash.nodes.code import PythonCodeNode
-from kailash.security import SecurityConfig, set_security_config, validate_file_path, safe_open
-from kailash.nodes.mixins import SecurityMixin
+
+# Security
+from kailash.security import (
+    SecurityConfig, set_security_config,
+    validate_file_path, safe_open
+)
+from kailash.access_control import UserContext, PermissionRule
+
+# API Gateway & MCP
+from kailash.api.gateway import WorkflowAPIGateway
+from kailash.api.mcp_integration import MCPIntegration
 ```
 
 ## Quick Workflow Creation
 
-### Method 1: Direct Construction
+### Method 1: Direct Construction (Recommended)
 ```python
-# Create workflow
-workflow = Workflow("my_pipeline")
+# Create workflow with ID and name
+workflow = Workflow("wf-001", name="my_pipeline")
 
 # Add nodes with CONFIGURATION parameters (static settings)
 workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")  # WHERE to read
@@ -41,21 +75,25 @@ workflow.add_node("processor", DataTransformerNode(),
 workflow.add_node("writer", CSVWriterNode(), file_path="output.csv")  # WHERE to write
 
 # Connect nodes - RUNTIME data flows through these connections
-workflow.connect("reader", "processor", mapping={"data": "data"})  # data flows at runtime
-workflow.connect("processor", "writer", mapping={"data": "data"})
+workflow.connect("reader", "processor")  # Automatic mapping when names match
+workflow.connect("processor", "writer", mapping={"transformed": "data"})  # Explicit mapping
 
-# Execute with runtime (RECOMMENDED)
+# Execute with runtime (ALWAYS RECOMMENDED)
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow)
 
-# OR execute directly (without runtime)
-results = workflow.execute(inputs={})
+# With parameter overrides
+results, run_id = runtime.execute(workflow, parameters={
+    "reader": {"file_path": "custom.csv"}  # Override at runtime
+})
 
-# INVALID: workflow.execute(runtime) does NOT exist
+# Direct execution (less features, no tracking)
+results = workflow.execute()  # Note: No 'inputs' parameter
 ```
 
-### Method 2: Builder Pattern
+### Method 2: Builder Pattern (Deprecated - Use Method 1)
 ```python
+# NOTE: WorkflowBuilder can cause confusion. Prefer Workflow.connect() instead.
 workflow = (WorkflowBuilder()
     .create("my_pipeline")
     .add_node("reader", CSVReaderNode, {"file_path": "input.csv"})
@@ -435,64 +473,212 @@ class MyCustomNode(Node):
 
 ### ETL Pipeline
 ```python
-workflow = (WorkflowBuilder()
-    .create("etl_pipeline")
-    .add_node("extract", CSVReaderNode, {"file_path": "raw_data.csv"})
-    .add_node("transform", DataTransformerNode, {
-        "operations": [
-            {"type": "filter", "condition": "valid == True"},
-            {"type": "map", "expression": "process_record(item)"}
-        ]
-    })
-    .add_node("load", CSVWriterNode, {"file_path": "processed_data.csv"})
-    .connect("extract", "transform")
-    .connect("transform", "load")
-    .build()
+workflow = Workflow("etl-001", name="etl_pipeline")
+
+# Extract
+workflow.add_node("extract", CSVReaderNode(), file_path="raw_data.csv")
+
+# Transform
+workflow.add_node("transform", DataTransformerNode(),
+    operations=[
+        {"type": "filter", "condition": "valid == True"},
+        {"type": "map", "expression": "upper(name)"},
+        {"type": "sort", "key": "timestamp"}
+    ]
+)
+
+# Load
+workflow.add_node("load", CSVWriterNode(), file_path="processed_data.csv")
+
+# Connect pipeline
+workflow.connect("extract", "transform")
+workflow.connect("transform", "load")
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow)
+```
+
+### Hierarchical RAG Pipeline
+```python
+from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
+from kailash.nodes.data.retrieval import RelevanceScorerNode
+from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+from kailash.nodes.transform.formatters import (
+    ChunkTextExtractorNode, QueryTextWrapperNode, ContextFormatterNode
+)
+
+workflow = Workflow("rag-001", name="hierarchical_rag")
+
+# Data sources
+workflow.add_node("doc_source", DocumentSourceNode())
+workflow.add_node("query_source", QuerySourceNode())
+
+# Document processing
+workflow.add_node("chunker", HierarchicalChunkerNode(),
+    chunk_size=1000, chunk_overlap=200)
+workflow.add_node("chunk_text_extractor", ChunkTextExtractorNode())
+workflow.add_node("query_wrapper", QueryTextWrapperNode())
+
+# Embeddings
+workflow.add_node("chunk_embedder", EmbeddingGeneratorNode(),
+    provider="ollama", model="nomic-embed-text", operation="embed_batch")
+workflow.add_node("query_embedder", EmbeddingGeneratorNode(),
+    provider="ollama", model="nomic-embed-text", operation="embed_batch")
+
+# Retrieval and generation
+workflow.add_node("scorer", RelevanceScorerNode(),
+    similarity_method="cosine", top_k=5)
+workflow.add_node("formatter", ContextFormatterNode())
+workflow.add_node("llm", LLMAgentNode(),
+    provider="ollama", model="llama3.2", temperature=0.7)
+
+# Connect RAG pipeline
+workflow.connect("doc_source", "chunker")
+workflow.connect("chunker", "chunk_text_extractor")
+workflow.connect("chunk_text_extractor", "chunk_embedder")
+workflow.connect("query_source", "query_wrapper")
+workflow.connect("query_wrapper", "query_embedder")
+workflow.connect("chunker", "scorer", {"chunks": "chunks"})
+workflow.connect("query_embedder", "scorer", {"embeddings": "query_embedding"})
+workflow.connect("chunk_embedder", "scorer", {"embeddings": "chunk_embeddings"})
+workflow.connect("scorer", "formatter")
+workflow.connect("query_source", "formatter", {"query": "query"})
+workflow.connect("formatter", "llm")
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow)
+```
+
+### Self-Organizing Agent Workflow
+```python
+workflow = Workflow("agents-001", name="self_organizing_research")
+
+# Shared infrastructure
+workflow.add_node("memory", SharedMemoryPoolNode(),
+    memory_size_limit=1000, attention_window=50)
+workflow.add_node("cache", IntelligentCacheNode(),
+    ttl=3600, similarity_threshold=0.8)
+
+# Problem analysis and team formation
+workflow.add_node("analyzer", ProblemAnalyzerNode())
+workflow.add_node("team_former", TeamFormationNode(),
+    formation_strategy="capability_matching")
+
+# Agent pool
+workflow.add_node("pool", AgentPoolManagerNode(),
+    max_active_agents=20, agent_timeout=120)
+
+# Orchestration
+workflow.add_node("orchestrator", OrchestrationManagerNode(),
+    max_iterations=10, quality_threshold=0.85)
+
+# Connect components
+workflow.connect("orchestrator", "analyzer")
+workflow.connect("analyzer", "team_former")
+workflow.connect("team_former", "pool")
+
+# Execute with complex problem
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "orchestrator": {
+        "query": "Analyze market trends for fintech growth strategy",
+        "agent_pool_size": 12,
+        "context": {"domain": "fintech", "depth": "comprehensive"}
+    }
+})
+```
+
+### API Gateway for Multiple Workflows
+```python
+from kailash.api.gateway import WorkflowAPIGateway
+from kailash.api.mcp_integration import MCPIntegration
+
+# Create gateway
+gateway = WorkflowAPIGateway(
+    title="Enterprise Platform",
+    description="Unified API for all workflows"
+)
+
+# Register workflows
+gateway.register_workflow("sales", sales_workflow)
+gateway.register_workflow("analytics", analytics_workflow)
+
+# Add MCP tools
+mcp = MCPIntegration("ai_tools")
+mcp.add_tool("analyze", analyze_function)
+gateway.register_mcp_server("ai", mcp)
+
+# Run gateway
+gateway.run(port=8000)
+
+# Access endpoints:
+# POST /sales/execute
+# POST /analytics/execute
+# GET /workflows
+# GET /health
+```
+
+## SharePoint Integration
+```python
+import os
+from kailash.nodes.data import SharePointGraphReader, SharePointGraphWriter
+
+# Read from SharePoint
+workflow.add_node("sharepoint_read", SharePointGraphReader(),
+    tenant_id=os.getenv("SHAREPOINT_TENANT_ID"),
+    client_id=os.getenv("SHAREPOINT_CLIENT_ID"),
+    client_secret=os.getenv("SHAREPOINT_CLIENT_SECRET"),
+    site_url="https://company.sharepoint.com/sites/Data",
+    operation="list_files",
+    library_name="Documents"
+)
+
+# Write to SharePoint
+workflow.add_node("sharepoint_write", SharePointGraphWriter(),
+    tenant_id=os.getenv("SHAREPOINT_TENANT_ID"),
+    client_id=os.getenv("SHAREPOINT_CLIENT_ID"),
+    client_secret=os.getenv("SHAREPOINT_CLIENT_SECRET"),
+    site_url="https://company.sharepoint.com/sites/Data",
+    library_name="Reports",
+    file_path="output/report.xlsx"
 )
 ```
 
-### AI Analysis Pipeline
+## Access Control & Multi-Tenancy
 ```python
-workflow = (WorkflowBuilder()
-    .create("ai_analysis")
-    .add_node("reader", JSONReaderNode, {"file_path": "documents.json"})
-    .add_node("embedder", EmbeddingGeneratorNode, {
-        "provider": "openai",
-        "model": "text-embedding-ada-002"
-    })
-    .add_node("analyzer", LLMAgentNode, {
-        "provider": "openai",
-        "model": "gpt-4",
-        "system_prompt": "Analyze the following documents..."
-    })
-    .add_node("writer", JSONWriterNode, {"file_path": "analysis.json"})
-    .connect("reader", "embedder")
-    .connect("embedder", "analyzer", mapping={"embeddings": "context"})
-    .connect("reader", "analyzer", mapping={"data": "prompt"})
-    .connect("analyzer", "writer")
-    .build()
+from kailash.access_control import UserContext
+from kailash.runtime.access_controlled import AccessControlledRuntime
+
+# Define user context
+user = UserContext(
+    user_id="user_001",
+    tenant_id="company_abc",
+    email="analyst@company.com",
+    roles=["analyst", "viewer"]
 )
+
+# Create secure runtime
+secure_runtime = AccessControlledRuntime(user_context=user)
+
+# Execute with automatic permission checks
+results, run_id = secure_runtime.execute(workflow)
 ```
 
-### API Integration
+## Workflow as REST API
 ```python
-workflow = (WorkflowBuilder()
-    .create("api_integration")
-    .add_node("trigger", HTTPRequestNode, {
-        "url": "https://api.source.com/events",
-        "method": "GET"
-    })
-    .add_node("processor", PythonCodeNode, {
-        "code": "def execute(data): return {'processed': transform(data)}"
-    })
-    .add_node("webhook", HTTPRequestNode, {
-        "url": "https://api.destination.com/webhook",
-        "method": "POST"
-    })
-    .connect("trigger", "processor")
-    .connect("processor", "webhook")
-    .build()
-)
+from kailash.api.workflow_api import WorkflowAPI
+
+# Expose any workflow as REST API in 3 lines
+api = WorkflowAPI(workflow)
+api.run(port=8000)
+
+# Endpoints created:
+# POST /execute - Execute workflow
+# GET /workflow/info - Get workflow metadata
+# GET /health - Health check
+# GET /docs - OpenAPI documentation
 ```
 
 ## Environment Variables
@@ -500,24 +686,58 @@ workflow = (WorkflowBuilder()
 # Common environment variables for API keys
 os.environ["OPENAI_API_KEY"] = "your-key"
 os.environ["ANTHROPIC_API_KEY"] = "your-key"
+os.environ["OLLAMA_BASE_URL"] = "http://localhost:11434"
+
+# SharePoint credentials
+os.environ["SHAREPOINT_TENANT_ID"] = "your-tenant-id"
+os.environ["SHAREPOINT_CLIENT_ID"] = "your-client-id"
+os.environ["SHAREPOINT_CLIENT_SECRET"] = "your-secret"
 
 # Use in node config
-workflow.add_node("llm", LLMAgentNode(), {
-    "provider": "openai",
-    "model": "gpt-4"
+workflow.add_node("llm", LLMAgentNode(),
+    provider="openai",
+    model="gpt-4"
     # api_key will be read from OPENAI_API_KEY env var
-})
+)
 ```
 
 ## Quick Tips
 
-1. **Always validate workflows before execution**: `workflow.validate()`
-2. **Use named outputs/inputs for clarity**: `from_output="processed"`
-3. **Chain operations in DataTransformer**: Multiple operations in sequence
-4. **Handle errors gracefully**: Wrap execution in try/except
-5. **Export workflows for reuse**: Save as YAML/JSON
-6. **Use environment variables for secrets**: Never hardcode API keys
-7. **Test with small data first**: Validate logic before scaling
-8. **Use type hints in custom nodes**: Better IDE support
-9. **Document node configurations**: Clear descriptions in docstrings
-10. **Monitor execution with tracking**: Built-in performance metrics
+1. **All node classes end with "Node"**: `CSVReaderNode` ✓, `CSVReader` ✗
+2. **All methods use snake_case**: `add_node()` ✓, `addNode()` ✗
+3. **All config keys use underscores**: `file_path` ✓, `filePath` ✗
+4. **Always use runtime.execute()**: Returns (results, run_id) tuple
+5. **Use parameters={} for overrides**: Not inputs={} or data={}
+6. **Workflow needs ID and name**: `Workflow("id", name="name")`
+7. **Prefer Workflow.connect()**: Avoid WorkflowBuilder confusion
+8. **Validate before execution**: `workflow.validate()`
+9. **Use environment variables**: For API keys and secrets
+10. **Enable security in production**: Configure SecurityConfig
+
+## Common Mistakes to Avoid
+
+```python
+# ❌ WRONG - Missing "Node" suffix
+workflow.add_node("reader", CSVReader())
+
+# ✅ CORRECT
+workflow.add_node("reader", CSVReaderNode())
+
+# ❌ WRONG - Wrong parameter name
+runtime.execute(workflow, inputs={"data": [1,2,3]})
+
+# ✅ CORRECT
+runtime.execute(workflow, parameters={"node_id": {"data": [1,2,3]}})
+
+# ❌ WRONG - Using camelCase
+workflow.addNode("reader", node)
+
+# ✅ CORRECT
+workflow.add_node("reader", node)
+
+# ❌ WRONG - Direct execution returns only results
+results, run_id = workflow.execute()
+
+# ✅ CORRECT - Runtime returns tuple
+results, run_id = runtime.execute(workflow)
+```

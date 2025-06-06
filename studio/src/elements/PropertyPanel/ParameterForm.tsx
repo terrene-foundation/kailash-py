@@ -19,7 +19,7 @@ export function ParameterForm({ node, nodeDefinition }: ParameterFormProps) {
   const handleChange = (paramName: string, value: any) => {
     const newConfig = { ...config, [paramName]: value };
     setConfig(newConfig);
-    
+
     // Update node in store
     updateNode(node.id, {
       data: {

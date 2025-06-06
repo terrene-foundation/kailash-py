@@ -157,7 +157,7 @@ Or allow fallback to GitHub runners:
 runs-on: ${{ matrix.runner }}
 strategy:
   matrix:
-    runner: 
+    runner:
       - [self-hosted, linux, x64]
       - ubuntu-latest  # Fallback
 ```

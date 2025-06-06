@@ -31,19 +31,19 @@ This guide covers styling best practices, design systems, and responsive design 
     --color-success: 34 197 94; /* green-500 */
     --color-warning: 245 158 11; /* amber-500 */
     --color-error: 239 68 68; /* red-500 */
-    
+
     /* Spacing */
     --spacing-unit: 0.25rem;
-    
+
     /* Typography */
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-    
+
     /* Animations */
     --animation-fast: 150ms;
     --animation-normal: 300ms;
@@ -176,10 +176,10 @@ module.exports = {
 // src/components/WorkflowCard/WorkflowCard.module.scss
 .card {
   @apply relative overflow-hidden transition-all duration-300;
-  
+
   &:hover {
     @apply shadow-lg transform -translate-y-1;
-    
+
     .cardOverlay {
       @apply opacity-100;
     }
@@ -191,7 +191,7 @@ module.exports = {
 
   &.isError {
     @apply border-red-500;
-    
+
     .statusIndicator {
       @apply bg-red-500;
     }
@@ -213,15 +213,15 @@ module.exports = {
 
 .statusIndicator {
   @apply w-2 h-2 rounded-full animate-pulse;
-  
+
   &.running {
     @apply bg-blue-500;
   }
-  
+
   &.success {
     @apply bg-green-500 animate-none;
   }
-  
+
   &.error {
     @apply bg-red-500 animate-none;
   }
@@ -231,12 +231,12 @@ module.exports = {
 :global(.dark) {
   .card {
     @apply bg-gray-800 border-gray-700;
-    
+
     &:hover {
       @apply bg-gray-750;
     }
   }
-  
+
   .cardHeader {
     @apply border-gray-700;
   }
@@ -258,7 +258,7 @@ const variantStyles = {
   primary: css`
     background-color: var(--color-primary);
     color: white;
-    
+
     &:hover:not(:disabled) {
       background-color: var(--color-primary-dark);
     }
@@ -267,7 +267,7 @@ const variantStyles = {
     background-color: transparent;
     color: var(--color-primary);
     border: 1px solid var(--color-primary);
-    
+
     &:hover:not(:disabled) {
       background-color: var(--color-primary);
       color: white;
@@ -276,7 +276,7 @@ const variantStyles = {
   danger: css`
     background-color: var(--color-error);
     color: white;
-    
+
     &:hover:not(:disabled) {
       background-color: var(--color-error-dark);
     }
@@ -308,16 +308,16 @@ export const StyledButton = styled.button<StyledButtonProps>`
   cursor: pointer;
   outline: none;
   border: none;
-  
+
   ${({ variant = 'primary' }) => variantStyles[variant]}
   ${({ size = 'medium' }) => sizeStyles[size]}
   ${({ fullWidth }) => fullWidth && css`width: 100%;`}
-  
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
-  
+
   &:focus-visible {
     box-shadow: 0 0 0 2px var(--color-background),
                 0 0 0 4px var(--color-primary);
@@ -346,12 +346,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setThemeState] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'system';
   });
-  
+
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
     const root = window.document.documentElement;
-    
+
     const applyTheme = (theme: Theme) => {
       if (theme === 'system') {
         const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -376,7 +376,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         applyTheme('system');
       }
     };
-    
+
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
@@ -433,18 +433,18 @@ export const ThemeToggle: React.FC = () => {
   --color-foreground: 243 244 246; /* gray-100 */
   --color-card: 31 41 55; /* gray-800 */
   --color-card-foreground: 243 244 246; /* gray-100 */
-  
+
   // Borders
   --color-border: 55 65 81; /* gray-700 */
-  
+
   // Interactive elements
   --color-primary: 96 165 250; /* blue-400 */
   --color-primary-foreground: 17 24 39; /* gray-900 */
-  
+
   // Syntax highlighting for code
   .code-block {
     background-color: rgb(31 41 55); /* gray-800 */
-    
+
     .token {
       &.comment { color: rgb(107 114 128); }
       &.string { color: rgb(134 239 172); }
@@ -718,7 +718,7 @@ export const PageTransition: React.FC<{ children: React.ReactNode }> = ({ childr
 
 .pulse-ring {
   position: relative;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -756,13 +756,13 @@ export const FormField: React.FC<FormFieldProps> = ({
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
-      
+
       {children}
-      
+
       {helpText && !error && (
         <p className="text-sm text-gray-500 dark:text-gray-400">{helpText}</p>
       )}
-      
+
       {error && (
         <motion.p
           initial={{ opacity: 0, y: -10 }}
@@ -838,7 +838,7 @@ export function DataTable<T>({
             {columns.map((column) => (
               <th
                 key={column.key}
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500
                           dark:text-gray-400 uppercase tracking-wider"
               >
                 {column.header}
@@ -884,7 +884,7 @@ export function DataTable<T>({
 // src/styles/accessibility.scss
 // Focus visible styles
 .focus-ring {
-  @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 
+  @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
          focus-visible:ring-primary-500 dark:focus-visible:ring-primary-400;
 }
 
@@ -913,7 +913,7 @@ export function DataTable<T>({
   .card {
     border-width: 2px;
   }
-  
+
   .btn {
     border: 2px solid currentColor;
   }
@@ -993,7 +993,7 @@ export const tokens = {
     // Base colors
     white: '#FFFFFF',
     black: '#000000',
-    
+
     // Gray scale
     gray: {
       50: '#F9FAFB',
@@ -1007,13 +1007,13 @@ export const tokens = {
       800: '#1F2937',
       900: '#111827',
     },
-    
+
     // Brand colors
     primary: {
       50: '#EFF6FF',
       // ... rest of primary scale
     },
-    
+
     // Semantic colors
     success: {
       light: '#D1FAE5',
@@ -1031,7 +1031,7 @@ export const tokens = {
       dark: '#DC2626',
     },
   },
-  
+
   spacing: {
     px: '1px',
     0: '0',
@@ -1049,7 +1049,7 @@ export const tokens = {
     20: '5rem',
     24: '6rem',
   },
-  
+
   typography: {
     fontFamily: {
       sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -1075,7 +1075,7 @@ export const tokens = {
       extrabold: '800',
     },
   },
-  
+
   shadows: {
     sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
     DEFAULT: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
@@ -1083,7 +1083,7 @@ export const tokens = {
     lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
     xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
   },
-  
+
   animation: {
     duration: {
       fast: '150ms',
