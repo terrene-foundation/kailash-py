@@ -53,7 +53,7 @@ jobs:
   # Determine what level of testing to run based on context
   determine-context:
     name: Determine Test Context
-    runs-on: ["self-hosted"]  # Use any available self-hosted runner
+    runs-on: "self-hosted-primary"  # Use self-hosted-primary runner specifically
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
       skip-reason: ${{ steps.determine.outputs.skip-reason }}
@@ -115,10 +115,10 @@ jobs:
                 ;;
             esac
           else
-            # For automatic runs (push/PR), use any available self-hosted runner
-            # GitHub will automatically pick an available runner with the self-hosted label
-            echo 'label=["self-hosted"]' >> $GITHUB_OUTPUT
-            echo "Using any available self-hosted runner"
+            # For automatic runs (push/PR), try self-hosted-primary first, then any self-hosted
+            # This works around runners that might not have the generic self-hosted label
+            echo 'label="self-hosted-primary"' >> $GITHUB_OUTPUT
+            echo "Using self-hosted-primary runner"
           fi
       - name: Determine test level
         id: determine
@@ -311,7 +311,7 @@ jobs:
       needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
-    runs-on: ["self-hosted"]
+    runs-on: "self-hosted-primary"
     steps:
       - name: Report success
         run: |
@@ -326,7 +326,7 @@ jobs:
       needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
-    runs-on: ["self-hosted"]
+    runs-on: "self-hosted-primary"
     steps:
       - name: Report success
         run: |
@@ -446,7 +446,7 @@ jobs:
     name: Security Scan
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full'
-    runs-on: ["self-hosted"]
+    runs-on: "self-hosted-primary"
     outputs:
       critical-count: ${{ steps.scan-summary.outputs.critical }}
       high-count: ${{ steps.scan-summary.outputs.high }}
@@ -555,7 +555,7 @@ jobs:
     name: Test Summary
     needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: always() && github.event_name == 'workflow_dispatch'
-    runs-on: ["self-hosted"]
+    runs-on: "self-hosted-primary"
     permissions:
       pull-requests: write
     steps:
