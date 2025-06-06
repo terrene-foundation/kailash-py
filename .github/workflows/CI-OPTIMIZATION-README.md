@@ -65,7 +65,7 @@ Tests are now marked:
 
 If tests still run slowly:
 
-1. **Skip CI temporarily**: 
+1. **Skip CI temporarily**:
    ```bash
    git commit -m "fix: Update feature [skip ci]"
    ```

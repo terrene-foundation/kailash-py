@@ -2,7 +2,7 @@ name: CI Pipeline
 
 # Runner Selection:
 # - By default, all PRs use GitHub runners
-# - To use local runner: 
+# - To use local runner:
 #   1. Go to Actions tab > CI Pipeline > Run workflow
 #   2. Select your branch
 #   3. Choose "Force specific runner for PR" option
@@ -175,7 +175,7 @@ jobs:
             echo "📍 Runner hostname: $(hostname)"
             echo "💻 CPU cores: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'unknown')"
           fi
-      
+
       - uses: actions/checkout@v4
 
       - name: Setup Python
@@ -219,24 +219,24 @@ jobs:
       - name: Setup Python (self-hosted)
         run: |
           echo "Checking available Python versions"
-          
+
           # Initialize pyenv if available
           if command -v pyenv &> /dev/null; then
             echo "Found pyenv, initializing..."
             export PYENV_ROOT="$HOME/.pyenv"
             export PATH="$PYENV_ROOT/bin:$PATH"
             eval "$(pyenv init -)"
-            
+
             echo "Available Python versions:"
             pyenv versions
-            
+
             # Check for required versions
             if pyenv versions | grep -q "3.11"; then
               echo "✓ Python 3.11 available"
             else
               echo "⚠️  Python 3.11 not found - install with: pyenv install 3.11"
             fi
-            
+
             if pyenv versions | grep -q "3.12"; then
               echo "✓ Python 3.12 available"
             else
@@ -261,7 +261,7 @@ jobs:
             export PATH="$PYENV_ROOT/bin:$PATH"
             eval "$(pyenv init -)"
           fi
-          
+
           # Create venvs for both Python versions
           echo "Setting up Python 3.11 environment"
           if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.11"; then
@@ -276,7 +276,7 @@ jobs:
           else
             echo "⚠️  Python 3.11 not found, skipping"
           fi
-          
+
           echo "Setting up Python 3.12 environment"
           if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.12"; then
             # Get the exact 3.12 version from pyenv
@@ -297,18 +297,18 @@ jobs:
       - name: Run all checks in parallel
         run: |
           echo "Running all checks in parallel on $(sysctl -n hw.ncpu) cores"
-          
+
           # Create a script to run all checks
           cat > run-all-checks.sh << 'EOF'
           #!/bin/bash
           set -e
-          
+
           # Function to run a check and capture its status
           run_check() {
               local name="$1"
               local cmd="$2"
               local logfile="$3"
-              
+
               echo "Starting $name..."
               if eval "$cmd" > "$logfile" 2>&1; then
                   echo "✅ $name passed"
@@ -319,33 +319,33 @@ jobs:
                   return 1
               fi
           }
-          
+
           # Run all checks in parallel
           (
               run_check "Black formatting" "uv run black --check src/ tests/" "black.log" &
               run_check "Isort imports" "uv run isort --check-only src/ tests/" "isort.log" &
               run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
-              
+
               # Run tests with Python 3.11 if available
               if [ -d ".venv-3.11" ]; then
                   run_check "Tests Python 3.11" "VIRTUAL_ENV=.venv-3.11 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -n auto" "pytest-3.11.log" &
               else
                   echo "⚠️  Skipping Python 3.11 tests (not installed)"
               fi
-              
+
               # Run tests with Python 3.12
               if [ -d ".venv-3.12" ]; then
                   run_check "Tests Python 3.12" "VIRTUAL_ENV=.venv-3.12 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -n auto" "pytest-3.12.log" &
               else
                   echo "⚠️  Skipping Python 3.12 tests (not available)"
               fi
-              
+
               run_check "Example validation" "cd examples && uv run python _utils/test_all_examples.py" "examples.log" &
-              
+
               # Wait for all background jobs
               wait
           )
-          
+
           # Check if any job failed
           if [ $? -ne 0 ]; then
               echo -e "\nSome checks failed. Logs:"
@@ -357,13 +357,13 @@ jobs:
               done
               exit 1
           fi
-          
+
           echo -e "\n✅ All checks passed!"
           echo "Tests run with:"
           [ -d ".venv-3.11" ] && echo "  - Python 3.11 ✓"
           [ -d ".venv-3.12" ] && echo "  - Python 3.12 ✓"
           EOF
-          
+
           chmod +x run-all-checks.sh
           ./run-all-checks.sh
 
@@ -380,8 +380,8 @@ jobs:
     name: Test Python 3.11
     needs: [determine-context, all-checks-parallel]
     if: |
-      always() && 
-      needs.determine-context.outputs.test-level == 'full' && 
+      always() &&
+      needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
     runs-on: ubuntu-latest
@@ -395,8 +395,8 @@ jobs:
     name: Test Python 3.12
     needs: [determine-context, all-checks-parallel]
     if: |
-      always() && 
-      needs.determine-context.outputs.test-level == 'full' && 
+      always() &&
+      needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
     runs-on: ubuntu-latest
@@ -589,7 +589,7 @@ jobs:
             // Check if running on self-hosted runner
             const allChecksStatus = '${{ needs.all-checks-parallel.result }}';
             const isParallel = allChecksStatus !== 'skipped';
-            
+
             let jobs = [];
             if (isParallel) {
               // Self-hosted runner (all checks in one job)

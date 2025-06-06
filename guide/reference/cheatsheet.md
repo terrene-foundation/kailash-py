@@ -23,8 +23,8 @@ from kailash.runtime.access_controlled import AccessControlledRuntime
 
 # Data I/O nodes
 from kailash.nodes.data import (
-    CSVReaderNode, CSVWriterNode, 
-    JSONReaderNode, JSONWriterNode, 
+    CSVReaderNode, CSVWriterNode,
+    JSONReaderNode, JSONWriterNode,
     TextReaderNode, TextWriterNode,
     SharePointGraphReader, SharePointGraphWriter
 )
@@ -33,7 +33,7 @@ from kailash.nodes.data import (
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
 from kailash.nodes.ai.a2a import SharedMemoryPoolNode, A2AAgentNode, A2ACoordinatorNode
 from kailash.nodes.ai.self_organizing import (
-    AgentPoolManagerNode, ProblemAnalyzerNode, 
+    AgentPoolManagerNode, ProblemAnalyzerNode,
     TeamFormationNode, SelfOrganizingAgentNode
 )
 from kailash.nodes.ai.intelligent_agent_orchestrator import (
@@ -50,7 +50,7 @@ from kailash.nodes.code import PythonCodeNode
 
 # Security
 from kailash.security import (
-    SecurityConfig, set_security_config, 
+    SecurityConfig, set_security_config,
     validate_file_path, safe_open
 )
 from kailash.access_control import UserContext, PermissionRule
@@ -515,7 +515,7 @@ workflow.add_node("doc_source", DocumentSourceNode())
 workflow.add_node("query_source", QuerySourceNode())
 
 # Document processing
-workflow.add_node("chunker", HierarchicalChunkerNode(), 
+workflow.add_node("chunker", HierarchicalChunkerNode(),
     chunk_size=1000, chunk_overlap=200)
 workflow.add_node("chunk_text_extractor", ChunkTextExtractorNode())
 workflow.add_node("query_wrapper", QueryTextWrapperNode())
@@ -527,7 +527,7 @@ workflow.add_node("query_embedder", EmbeddingGeneratorNode(),
     provider="ollama", model="nomic-embed-text", operation="embed_batch")
 
 # Retrieval and generation
-workflow.add_node("scorer", RelevanceScorerNode(), 
+workflow.add_node("scorer", RelevanceScorerNode(),
     similarity_method="cosine", top_k=5)
 workflow.add_node("formatter", ContextFormatterNode())
 workflow.add_node("llm", LLMAgentNode(),

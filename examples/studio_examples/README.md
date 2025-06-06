@@ -26,7 +26,7 @@ Simplified examples using real database operations:
 ### 3. `custom_node_templates.py`
 Complete template library for creating custom nodes:
 - **Python nodes**: Execute Python code with DataFrames
-- **Workflow nodes**: Compose nodes from other workflows  
+- **Workflow nodes**: Compose nodes from other workflows
 - **API nodes**: Wrap external REST APIs
 
 Each template includes:

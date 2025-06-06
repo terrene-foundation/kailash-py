@@ -89,7 +89,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, helperText, leftIcon, rightIcon, id, ...props }, ref) => {
     const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     return (
       <div className="w-full">
         {label && (
@@ -345,7 +345,7 @@ export const BaseNode = memo<NodeProps<BaseNodeData>>(({ data, selected }) => {
         position={Position.Top}
         className="w-3 h-3 bg-gray-400 border-2 border-white"
       />
-      
+
       <div className="flex items-center space-x-2">
         <NodeIcon type={data.type} status={data.status} />
         <div className="flex-1">
@@ -374,7 +374,7 @@ BaseNode.displayName = 'BaseNode';
 // src/components/workflow/nodes/DataReaderNode/DataReaderNode.tsx
 export const DataReaderNode = memo<NodeProps<DataReaderNodeData>>(({ data, id }) => {
   const { config = {} } = data;
-  
+
   return (
     <BaseNode data={data} id={id}>
       <div className="mt-2 space-y-1">
@@ -865,7 +865,7 @@ describe('Button', () => {
   it('handles click events', () => {
     const handleClick = jest.fn();
     render(<Button onClick={handleClick}>Click me</Button>);
-    
+
     fireEvent.click(screen.getByRole('button'));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });

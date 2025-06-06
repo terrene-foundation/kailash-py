@@ -147,7 +147,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({ node, onEdit, onDelete }) =>
 // src/components/workflow/WorkflowCanvas/WorkflowCanvas.tsx
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ workflow }) => {
   const { nodes, connections } = workflow;
-  
+
   return (
     <div className="workflow-canvas">
       <ReactFlow
@@ -333,14 +333,14 @@ export const selectWorkflowValidation = createSelector(
   [selectActiveWorkflow],
   (workflow) => {
     if (!workflow) return { isValid: false, errors: ['No workflow selected'] };
-    
+
     const errors: string[] = [];
-    
+
     // Validate nodes
     if (workflow.nodes.length === 0) {
       errors.push('Workflow must have at least one node');
     }
-    
+
     // Validate connections
     const nodeIds = new Set(workflow.nodes.map(n => n.id));
     for (const conn of workflow.connections) {
@@ -348,7 +348,7 @@ export const selectWorkflowValidation = createSelector(
         errors.push(`Invalid connection: ${conn.from} -> ${conn.to}`);
       }
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,
@@ -482,7 +482,7 @@ export const WorkflowRunnerContainer: React.FC<{ workflowId: string }> = ({ work
   const dispatch = useAppDispatch();
   const workflow = useAppSelector(state => selectWorkflow(state, workflowId));
   const execution = useAppSelector(state => selectExecution(state, workflowId));
-  
+
   const handleExecute = (parameters: any) => {
     dispatch(executeWorkflow({ id: workflowId, parameters }));
   };
@@ -549,7 +549,7 @@ export const useWorkflowExecution = (workflowId: string) => {
 
   const execute = useCallback(async (parameters: any) => {
     setLocalState({ isExecuting: true, error: null });
-    
+
     try {
       await dispatch(executeWorkflow({ id: workflowId, parameters })).unwrap();
       setLocalState({ isExecuting: false, error: null });
@@ -761,8 +761,8 @@ export const App: React.FC = () => {
 // src/components/workflow/NodeRenderer.tsx
 export const NodeRenderer = React.memo<NodeRendererProps>(({ node, isSelected, onUpdate }) => {
   // Memoize expensive computations
-  const nodeStyle = useMemo(() => 
-    calculateNodeStyle(node, isSelected), 
+  const nodeStyle = useMemo(() =>
+    calculateNodeStyle(node, isSelected),
     [node.type, node.status, isSelected]
   );
 
@@ -774,9 +774,9 @@ export const NodeRenderer = React.memo<NodeRendererProps>(({ node, isSelected, o
   return (
     <div className="node-renderer" style={nodeStyle}>
       <NodeHeader node={node} />
-      <NodeConfig 
-        config={node.config} 
-        onChange={handleConfigChange} 
+      <NodeConfig
+        config={node.config}
+        onChange={handleConfigChange}
       />
     </div>
   );

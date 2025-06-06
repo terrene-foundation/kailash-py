@@ -1,6 +1,6 @@
 # Kailash SDK Documentation Validation Report
 
-**Generated**: 2025-01-06  
+**Generated**: 2025-01-06
 **Version**: 0.1.4
 
 ## Executive Summary
@@ -56,10 +56,10 @@ The following major features were missing from the reference documentation:
 
 Several API usage patterns needed correction:
 
-- **Execution Pattern**: 
-  - ❌ `runtime.execute(workflow, inputs={...})` 
+- **Execution Pattern**:
+  - ❌ `runtime.execute(workflow, inputs={...})`
   - ✅ `runtime.execute(workflow, parameters={...})`
-  
+
 - **Node Naming**:
   - All node classes should end with "Node" suffix
   - ✅ `CSVReaderNode`, `FilterNode`, `DataTransformerNode`

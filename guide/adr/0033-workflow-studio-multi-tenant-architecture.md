@@ -28,24 +28,24 @@ Extend the existing SDK with a comprehensive API layer:
 # New module: src/kailash/api/studio.py
 class WorkflowStudioAPI:
     """API endpoints for the workflow studio"""
-    
+
     # Node Discovery
     GET /api/nodes - List all available nodes with metadata
     GET /api/nodes/{category} - List nodes by category
     GET /api/nodes/{node_id}/schema - Get node parameter schema
-    
+
     # Workflow Management (per tenant)
     GET /api/workflows - List tenant workflows
     POST /api/workflows - Create new workflow
     GET /api/workflows/{id} - Get workflow details
     PUT /api/workflows/{id} - Update workflow
     DELETE /api/workflows/{id} - Delete workflow
-    
+
     # Workflow Execution
     POST /api/workflows/{id}/execute - Execute workflow
     GET /api/executions/{id} - Get execution status
     WS /ws/executions/{id} - Real-time execution updates
-    
+
     # Export/Import
     GET /api/workflows/{id}/export?format=python|yaml - Export workflow
     POST /api/workflows/import - Import workflow from code
@@ -67,7 +67,7 @@ services:
 
   redis:
     image: redis:7
-    
+
   # Per-tenant services (dynamically created)
   tenant_template:
     build: .
@@ -105,7 +105,7 @@ class NodeRegistry {
     // Fetch from backend API
     return api.get('/api/nodes');
   }
-  
+
   generateComponent(node: NodeDefinition): React.Component {
     // Dynamically generate UI component
     return <DynamicNode definition={node} />;

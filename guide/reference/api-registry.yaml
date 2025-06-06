@@ -841,24 +841,24 @@ api_gateway:
         description: "Register a workflow with the gateway"
         example: |
           gateway.register_workflow("sales", sales_workflow)
-      
+
       register_mcp_server:
         signature: "register_mcp_server(name: str, mcp_integration: MCPIntegration)"
         description: "Register an MCP server"
         example: |
           gateway.register_mcp_server("tools", mcp_integration)
-      
+
       run:
         signature: "run(host: str = '0.0.0.0', port: int = 8000, **kwargs)"
         description: "Start the gateway server"
     example: |
       from kailash.api.gateway import WorkflowAPIGateway
-      
+
       gateway = WorkflowAPIGateway(
           title="Enterprise Platform",
           description="Unified API for all workflows"
       )
-      
+
       gateway.register_workflow("sales", sales_workflow)
       gateway.register_workflow("analytics", analytics_workflow)
       gateway.run(port=8000)
@@ -880,7 +880,7 @@ mcp_integration:
         description: "Start the MCP server"
     example: |
       from kailash.api.mcp_integration import MCPIntegration
-      
+
       mcp = MCPIntegration("ai_tools")
       mcp.add_tool("analyze", analyze_function, "Analyze data")
       mcp.add_tool("predict", predict_function, "Make predictions")
@@ -1063,7 +1063,7 @@ workflow_studio:
       - "WebSocket /ws/execution/{run_id} - Real-time execution updates"
     example: |
       from kailash.api.studio import WorkflowStudioAPI
-      
+
       studio_api = WorkflowStudioAPI(
           database_url="postgresql://user:pass@localhost/studio"
       )

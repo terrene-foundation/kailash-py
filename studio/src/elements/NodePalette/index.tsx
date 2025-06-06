@@ -44,14 +44,14 @@ export function NodePalette() {
     if (!searchTerm) return nodeCategories;
 
     const filtered: Record<string, NodeDefinition[]> = {};
-    
+
     Object.entries(nodeCategories).forEach(([category, nodes]) => {
       const matchingNodes = nodes.filter(
         (node) =>
           node.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           node.description.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      
+
       if (matchingNodes.length > 0) {
         filtered[category] = matchingNodes;
       }

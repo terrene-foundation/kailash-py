@@ -553,19 +553,19 @@ def main():
     # Run tests
     try:
         # Test 1: User registration and login
-        client = test_user_registration_and_login()
+        test_user_registration_and_login()
 
         # Test 2: Workflow tenant isolation
-        client_a, client_b = test_workflow_tenant_isolation()
+        test_workflow_tenant_isolation()
 
         # Test 3: API key authentication
-        api_client = test_api_key_authentication()
+        test_api_key_authentication()
 
         # Test 4: Custom node creation
-        node_client = test_custom_node_creation()
+        test_custom_node_creation()
 
         # Test 5: Workflow execution
-        exec_client = test_workflow_execution_with_auth()
+        test_workflow_execution_with_auth()
 
         print("\n" + "=" * 70)
         print("✓ All tests completed successfully!")

@@ -34,20 +34,20 @@ ai_backend:
 ```python
 class KailashMCPServer:
     """MCP server providing tools for the AI assistant"""
-    
+
     tools = {
         # Documentation access
         "read_documentation": {
             "description": "Read Kailash documentation files",
             "parameters": ["file_path"]
         },
-        
+
         # Reference access (Claude.md style)
         "read_reference": {
             "description": "Access reference documents",
             "parameters": ["reference_type"]  # api-registry, node-catalog, etc.
         },
-        
+
         # Todo management
         "read_todos": {
             "description": "Read current todo list",
@@ -57,7 +57,7 @@ class KailashMCPServer:
             "description": "Update todo list",
             "parameters": ["todos"]
         },
-        
+
         # Workflow operations
         "create_workflow": {
             "description": "Create a new workflow",
@@ -71,13 +71,13 @@ class KailashMCPServer:
             "description": "Get information about a node",
             "parameters": ["node_type"]
         },
-        
+
         # Code generation
         "generate_custom_node": {
             "description": "Generate custom node code",
             "parameters": ["requirements"]
         },
-        
+
         # Search
         "search_documentation": {
             "description": "Search through documentation",

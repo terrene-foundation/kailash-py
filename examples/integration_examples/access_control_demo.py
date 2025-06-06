@@ -74,7 +74,7 @@ def setup_sample_data():
     """Create sample customer data"""
     # Ensure data directory exists
     os.makedirs("data", exist_ok=True)
-    
+
     data = """name,email,ssn,balance,status
 John Doe,john@example.com,123-45-6789,1500,active
 Jane Smith,jane@example.com,987-65-4321,2500,active
@@ -180,7 +180,7 @@ for record in data_list:
     # Add risk flag
     balance = float(record.get('balance', 0))
     record['risk'] = 'high' if balance < 1000 else 'low'
-    
+
 result = data_list
             """,
             inputs={"data": "any"},

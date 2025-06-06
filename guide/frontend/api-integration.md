@@ -18,27 +18,27 @@ const KAILASH_APIS = {
     execute: 'POST /api/workflows/:id/execute',
     status: 'GET /api/workflows/:id/executions/:executionId',
   },
-  
+
   // Gateway API
   gateway: {
     status: 'GET /api/gateway/status',
     routes: 'GET /api/gateway/routes',
     register: 'POST /api/gateway/routes',
   },
-  
+
   // Node Management
   nodes: {
     list: 'GET /api/nodes',
     types: 'GET /api/nodes/types',
     validate: 'POST /api/nodes/validate',
   },
-  
+
   // Real-time Updates
   websocket: {
     workflow: 'ws://localhost:8000/ws/workflow/:id',
     metrics: 'ws://localhost:8000/ws/metrics',
   },
-  
+
   // MCP Integration
   mcp: {
     tools: 'GET /api/mcp/tools',
@@ -212,7 +212,7 @@ class ApiClient {
     // Clear auth data
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
-    
+
     // Redirect to login
     window.location.href = '/login';
   }
@@ -476,10 +476,10 @@ export const useCreateWorkflow = () => {
     onSuccess: (data) => {
       // Invalidate list queries
       queryClient.invalidateQueries(workflowKeys.lists());
-      
+
       // Optionally set the new workflow in cache
       queryClient.setQueryData(workflowKeys.detail(data.id), data);
-      
+
       toast.success('Workflow created successfully');
     },
   });
@@ -537,7 +537,7 @@ export const useExecuteWorkflow = () => {
     onSuccess: (data, variables) => {
       // Invalidate executions list
       queryClient.invalidateQueries(workflowKeys.executions(variables.id));
-      
+
       toast.success('Workflow execution started');
     },
   });
@@ -644,7 +644,7 @@ export class WebSocketManager extends EventEmitter {
 
     // Emit typed events
     this.emit(message.type, message.payload);
-    
+
     // Emit generic message event
     this.emit('message', message);
   }
@@ -673,7 +673,7 @@ export class WebSocketManager extends EventEmitter {
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
     console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    
+
     setTimeout(() => {
       this.connect();
     }, delay);
@@ -793,7 +793,7 @@ export const useWorkflowUpdates = (workflowId: string) => {
           case 'execution.started':
             setStatus('running');
             break;
-          
+
           case 'node.completed':
             // Update specific node status
             queryClient.setQueryData(
@@ -804,13 +804,13 @@ export const useWorkflowUpdates = (workflowId: string) => {
               }
             );
             break;
-          
+
           case 'execution.completed':
             setStatus('completed');
             // Invalidate to fetch final results
             queryClient.invalidateQueries(['workflow', workflowId]);
             break;
-          
+
           case 'execution.failed':
             setStatus('failed');
             toast.error(`Execution failed: ${payload.error}`);
@@ -873,10 +873,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (credentials: LoginCredentials) => {
     const { user, tokens } = await authService.login(credentials);
-    
+
     localStorage.setItem('access_token', tokens.access);
     localStorage.setItem('refresh_token', tokens.refresh);
-    
+
     setUser(user);
   };
 
@@ -892,10 +892,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (data: RegisterData) => {
     const { user, tokens } = await authService.register(data);
-    
+
     localStorage.setItem('access_token', tokens.access);
     localStorage.setItem('refresh_token', tokens.refresh);
-    
+
     setUser(user);
   };
 
@@ -1049,7 +1049,7 @@ export const WorkflowInfiniteList: React.FC = () => {
           ))}
         </React.Fragment>
       ))}
-      
+
       <div ref={ref} className="h-10">
         {isFetchingNextPage && <Spinner />}
       </div>
@@ -1069,7 +1069,7 @@ export const useOptimisticWorkflowUpdate = () => {
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Workflow> }) =>
       workflowService.updateWorkflow(id, updates),
-    
+
     onMutate: async ({ id, updates }) => {
       // Cancel in-flight queries
       await queryClient.cancelQueries(['workflow', id]);
@@ -1091,7 +1091,7 @@ export const useOptimisticWorkflowUpdate = () => {
         { queryKey: ['workflows'], exact: false },
         (old: any) => {
           if (!old?.data) return old;
-          
+
           return {
             ...old,
             data: old.data.map((w: Workflow) =>
@@ -1109,7 +1109,7 @@ export const useOptimisticWorkflowUpdate = () => {
       if (context?.previousWorkflow) {
         queryClient.setQueryData(['workflow', variables.id], context.previousWorkflow);
       }
-      
+
       // Also rollback list views
       queryClient.invalidateQueries(['workflows']);
     },
@@ -1148,12 +1148,12 @@ export class ApiErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('API Error caught by boundary:', error, errorInfo);
-    
+
     // Log to error tracking service
     if (process.env.NODE_ENV === 'production') {
       // Sentry.captureException(error);
     }
-    
+
     this.setState({ errorInfo });
   }
 

@@ -22,32 +22,32 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if it's a push to main OR a merged PR
     if: |
-      github.event_name == 'push' || 
+      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     steps:
       - uses: actions/checkout@v4
-        
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          
+
       - name: Install dependencies
         run: |
           uv venv
           uv sync
-          
+
       - name: Build documentation
         run: |
           cd docs
           uv run python build_docs.py
-          
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

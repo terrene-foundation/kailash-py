@@ -51,7 +51,7 @@ The Kailash Workflow Studio is a visual interface for the Kailash Python SDK tha
 3. **Workflow Storage Schema**
    ```sql
    CREATE SCHEMA IF NOT EXISTS tenant_{tenant_id};
-   
+
    CREATE TABLE tenant_{tenant_id}.workflows (
      id UUID PRIMARY KEY,
      name VARCHAR(255),
@@ -60,7 +60,7 @@ The Kailash Workflow Studio is a visual interface for the Kailash Python SDK tha
      created_at TIMESTAMP,
      updated_at TIMESTAMP
    );
-   
+
    CREATE TABLE tenant_{tenant_id}.executions (
      id UUID PRIMARY KEY,
      workflow_id UUID REFERENCES workflows(id),
@@ -156,7 +156,7 @@ The Kailash Workflow Studio is a visual interface for the Kailash Python SDK tha
    ```yaml
    # docker-compose.yml
    version: '3.8'
-   
+
    services:
      studio-backend:
        build: .
@@ -165,7 +165,7 @@ The Kailash Workflow Studio is a visual interface for the Kailash Python SDK tha
          - DATABASE_URL=postgresql://postgres:password@postgres:5432/kailash_${TENANT_ID}
        volumes:
          - ./tenants/${TENANT_ID}:/app/tenant_data
-   
+
      studio-frontend:
        build: ./studio
        environment:

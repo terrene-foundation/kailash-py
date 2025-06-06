@@ -18,13 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import uvicorn
-from fastapi import (
-    FastAPI,
-    HTTPException,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -243,7 +237,7 @@ class WorkflowStudioAPI:
                         }
                         for name, param in params.items()
                     ]
-                except:
+                except Exception:
                     param_list = []
 
                 # Extract input/output information
@@ -263,7 +257,7 @@ class WorkflowStudioAPI:
                                         "required": schema.get("required", True),
                                     }
                                 )
-                    except:
+                    except Exception:
                         pass
 
                 # If no explicit schema, infer from parameters
@@ -309,7 +303,7 @@ class WorkflowStudioAPI:
                                 ),
                             }
                         )
-                    except:
+                    except Exception:
                         outputs.append({"name": "output", "type": "any"})
                 else:
                     # Default output for all nodes
@@ -708,7 +702,7 @@ class WorkflowStudioAPI:
             for websocket in self.websocket_connections[execution_id]:
                 try:
                     await websocket.send_json(data)
-                except:
+                except Exception:
                     pass  # Client disconnected
 
     def _generate_python_code(self, workflow: Workflow, workflow_name: str) -> str:

@@ -178,7 +178,7 @@ export const WorkflowGraph: React.FC<{ workflow: Workflow }> = ({ workflow }) =>
 // WebSocket integration for live workflow status
 useEffect(() => {
   const ws = new WebSocket(`ws://localhost:8000/ws/workflow/${workflowId}`);
-  
+
   ws.onmessage = (event) => {
     const update = JSON.parse(event.data);
     dispatch(updateWorkflowStatus(update));

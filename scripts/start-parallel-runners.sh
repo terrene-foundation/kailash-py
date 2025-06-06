@@ -13,25 +13,25 @@ mkdir -p "$RUNNER_BASE_DIR"
 start_runner() {
     local index=$1
     local runner_dir="$RUNNER_BASE_DIR/runner-$index"
-    
+
     echo "Setting up runner $index in $runner_dir"
-    
+
     # Create runner directory
     mkdir -p "$runner_dir"
     cd "$runner_dir"
-    
+
     # Download runner if not exists
     if [ ! -f "run.sh" ]; then
         echo "Downloading runner for instance $index..."
         curl -o actions-runner-osx-arm64-2.324.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.324.0/actions-runner-osx-arm64-2.324.0.tar.gz
         tar xzf ./actions-runner-osx-arm64-2.324.0.tar.gz
         rm actions-runner-osx-arm64-2.324.0.tar.gz
-        
+
         echo "⚠️  Runner $index needs configuration. Run:"
         echo "cd $runner_dir && ./config.sh --url https://github.com/terrene-foundation --name self-hosted-secondary-$index"
         return
     fi
-    
+
     # Start runner in background
     echo "Starting runner $index..."
     nohup ./run.sh > runner-$index.log 2>&1 &

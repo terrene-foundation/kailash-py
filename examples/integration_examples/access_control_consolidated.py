@@ -81,7 +81,7 @@ def create_sample_data():
     """Create sample data files for the examples"""
     # Ensure data directory exists
     os.makedirs("data", exist_ok=True)
-    
+
     # Customer data with sensitive information
     customers_data = """customer_id,name,email,phone,ssn,balance,credit_limit,join_date
 1001,John Smith,john@example.com,555-0101,123-45-6789,15000,20000,2020-01-15
@@ -342,7 +342,7 @@ df['risk_category'] = df.apply(
 
 # Flag accounts for review
 df['needs_review'] = (
-    (df['risk_category'] == 'critical') | 
+    (df['risk_category'] == 'critical') |
     (df['utilization'] > 0.95)
 )
 
@@ -391,7 +391,9 @@ result = summary.to_dict('records')
     # 5. Export full data (admin only)
     os.makedirs("outputs", exist_ok=True)
     full_exporter = add_access_control(
-        CSVWriterNode(name="full_exporter", file_path="outputs/customer_analysis_full.csv"),
+        CSVWriterNode(
+            name="full_exporter", file_path="outputs/customer_analysis_full.csv"
+        ),
         enable_access_control=True,
         required_permission=NodePermission.EXECUTE,
         node_id="export_full",

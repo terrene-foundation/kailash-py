@@ -69,7 +69,7 @@ export function useWorkflowApi() {
       }
 
       const data = await response.json();
-      
+
       // Create download
       const blob = new Blob([data.content], { type: "text/plain" });
       const url = window.URL.createObjectURL(blob);

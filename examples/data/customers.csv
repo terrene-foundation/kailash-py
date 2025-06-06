@@ -1,0 +1,5 @@
+name,email,phone,ssn,balance
+John Doe,john@example.com,555-0123,123-45-6789,1500
+Jane Smith,jane@example.com,555-0124,987-65-4321,2500
+Bob Johnson,bob@example.com,555-0125,456-78-9012,800
+Alice Brown,alice@example.com,555-0126,789-01-2345,3200

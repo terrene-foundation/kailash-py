@@ -49,6 +49,7 @@ Future Enhancements:
 
 import os
 import secrets
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -398,7 +399,7 @@ async def verify_api_key(
         )
 
     # Find API key by verifying against hashes
-    api_keys = session.query(APIKey).filter(APIKey.is_active == True).all()
+    api_keys = session.query(APIKey).filter(APIKey.is_active).all()
 
     valid_key = None
     for key_record in api_keys:
@@ -502,8 +503,6 @@ class TenantContext:
 
 
 # Thread-local storage for tenant context
-import threading
-
 _tenant_context = threading.local()
 
 

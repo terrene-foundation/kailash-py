@@ -58,16 +58,16 @@ negative_words = ['bad', 'terrible', 'awful', 'horrible', 'hate', 'worst', 'poor
 def analyze_sentiment(text):
     if not text:
         return 0.0
-    
+
     text_lower = str(text).lower()
     words = text_lower.split()
-    
+
     pos_count = sum(1 for word in words if word in positive_words)
     neg_count = sum(1 for word in words if word in negative_words)
-    
+
     if pos_count + neg_count == 0:
         return 0.0
-    
+
     sentiment_score = (pos_count - neg_count) / (pos_count + neg_count)
     return sentiment_score
 

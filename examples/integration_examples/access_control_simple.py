@@ -78,7 +78,7 @@ def create_sample_data():
     # Create data directory if it doesn't exist
     data_dir = "data"
     os.makedirs(data_dir, exist_ok=True)
-    
+
     # Create data in proper directory
     csv_path = os.path.join(data_dir, "customers.csv")
     if not os.path.exists(csv_path):
@@ -187,7 +187,7 @@ df['balance'] = pd.to_numeric(df['balance'])
 
 # Calculate customer segments
 df['segment'] = pd.cut(
-    df['balance'], 
+    df['balance'],
     bins=[0, 1000, 2000, float('inf')],
     labels=['bronze', 'silver', 'gold']
 )

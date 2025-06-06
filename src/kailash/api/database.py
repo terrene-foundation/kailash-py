@@ -8,6 +8,7 @@ This module provides:
 """
 
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -603,7 +604,6 @@ def init_database(db_path: str = None) -> tuple[sessionmaker, Engine]:
 
 
 # Context manager for database sessions
-from contextlib import contextmanager
 
 
 @contextmanager

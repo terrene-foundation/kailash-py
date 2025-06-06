@@ -622,19 +622,19 @@ def main():
     # Run tests
     try:
         # Test 1: Basic RBAC
-        rbac_client = test_basic_rbac()
+        test_basic_rbac()
 
         # Test 2: Tenant resource limits
-        limits_client = test_tenant_resource_limits()
+        test_tenant_resource_limits()
 
         # Test 3: Cross-tenant isolation
-        tenant_a, tenant_b = test_cross_tenant_isolation()
+        test_cross_tenant_isolation()
 
         # Test 4: API key scopes
-        api_key_client = test_api_key_scopes()
+        test_api_key_scopes()
 
         # Test 5: Secure execution isolation
-        exec_client = test_secure_execution_isolation()
+        test_secure_execution_isolation()
 
         print(f"\n{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
         print_success("All permission tests completed!")

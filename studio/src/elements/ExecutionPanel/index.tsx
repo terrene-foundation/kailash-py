@@ -102,7 +102,7 @@ export function ExecutionPanel() {
             {selectedExecution ? (
               <div>
                 <h4 className="font-medium mb-4">Execution Details</h4>
-                
+
                 <div className="space-y-3">
                   <div>
                     <span className="text-sm font-medium">Status:</span>
@@ -110,14 +110,14 @@ export function ExecutionPanel() {
                       {selectedExecution.status}
                     </span>
                   </div>
-                  
+
                   <div>
                     <span className="text-sm font-medium">Started:</span>
                     <span className="ml-2 text-sm">
                       {new Date(selectedExecution.started_at).toLocaleString()}
                     </span>
                   </div>
-                  
+
                   {selectedExecution.completed_at && (
                     <div>
                       <span className="text-sm font-medium">Completed:</span>
@@ -126,7 +126,7 @@ export function ExecutionPanel() {
                       </span>
                     </div>
                   )}
-                  
+
                   {selectedExecution.result && (
                     <div>
                       <span className="text-sm font-medium">Result:</span>
@@ -135,7 +135,7 @@ export function ExecutionPanel() {
                       </pre>
                     </div>
                   )}
-                  
+
                   {selectedExecution.error && (
                     <div>
                       <span className="text-sm font-medium text-destructive">
