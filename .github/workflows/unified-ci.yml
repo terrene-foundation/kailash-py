@@ -1,5 +1,14 @@
 name: CI Pipeline
 
+# Runner Selection:
+# - By default, PRs from feat/complete-sdk-implementation use local Mac runner
+# - To override: 
+#   1. Go to Actions tab > CI Pipeline > Run workflow
+#   2. Select your branch
+#   3. Choose "Force specific runner for PR" option
+#   4. Select "github" to use GitHub runners or "local-mac" for your local runner
+# - Or add a comment in your PR: "/ci-runner github" or "/ci-runner local"
+
 on:
   push:
     branches: [ feat/*, feature/* ]
@@ -17,6 +26,15 @@ on:
         - github      # Use GitHub's runners
         - local-mac   # Use your Mac
         - self-hosted # Use any self-hosted runner
+      force-runner:
+        description: 'Force specific runner for PR (overrides auto-detection)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+        - auto        # Auto-detect based on branch
+        - github      # Force GitHub runners
+        - local-mac   # Force local Mac runner
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -35,8 +53,20 @@ jobs:
       - name: Determine runner to use
         id: runner
         run: |
+          # Check if force-runner is specified (for PRs triggered via workflow_dispatch)
+          if [[ "${{ github.event.inputs.force-runner }}" != "" && "${{ github.event.inputs.force-runner }}" != "auto" ]]; then
+            case "${{ github.event.inputs.force-runner }}" in
+              local-mac)
+                echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
+                echo "Using local Mac runner (forced)"
+                ;;
+              github)
+                echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
+                echo "Using GitHub-hosted runner (forced)"
+                ;;
+            esac
           # For manual runs, use the selected runner
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "${{ github.event.inputs.runner-type }}" in
               local-mac)
                 echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
