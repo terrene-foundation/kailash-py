@@ -2,12 +2,13 @@ name: CI Pipeline
 
 # Runner Selection:
 # - By default, all PRs use GitHub runners
-# - To use local runner:
+# - To use your local runner:
 #   1. Go to Actions tab > CI Pipeline > Run workflow
 #   2. Select your branch
 #   3. Choose "Force specific runner for PR" option
-#   4. Select "local-mac" to use your local runner
-# - Or set USE_LOCAL_RUNNER=true in your environment
+#   4. Select your runner name (e.g., "self-hosted-primary", "john-mac", etc.)
+# - Maintainers can use their own runner names
+# - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
 
 on:
   push:
@@ -26,6 +27,7 @@ on:
         - github      # Use GitHub's runners
         - local-mac   # Use your Mac
         - self-hosted-secondary # Use self-hosted-secondary runner
+        - self-hosted-primary # Use self-hosted-primary runner
         - self-hosted # Use any self-hosted runner
       force-runner:
         description: 'Force specific runner for PR (overrides auto-detection)'
@@ -37,6 +39,7 @@ on:
         - github      # Force GitHub runners
         - local-mac   # Force local Mac runner
         - self-hosted-secondary # Force self-hosted-secondary runner
+        - self-hosted-primary # Force self-hosted-primary runner
 
 permissions:
   contents: read
@@ -70,6 +73,10 @@ jobs:
                 echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted-secondary runner (forced)"
                 ;;
+              self-hosted-primary)
+                echo 'label=["self-hosted", "self-hosted-primary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-primary runner (forced)"
+                ;;
               github)
                 echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
                 echo "Using GitHub-hosted runner (forced)"
@@ -85,6 +92,10 @@ jobs:
               self-hosted-secondary)
                 echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted-secondary runner"
+                ;;
+              self-hosted-primary)
+                echo 'label=["self-hosted", "self-hosted-primary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-primary runner"
                 ;;
               self-hosted)
                 echo 'label=["self-hosted", "linux", "x64"]' >> $GITHUB_OUTPUT
