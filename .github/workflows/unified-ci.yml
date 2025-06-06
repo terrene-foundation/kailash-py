@@ -1,22 +1,19 @@
 name: CI Pipeline
 
 # Runner Selection:
-# - This workflow only runs manually to save costs
-# - To run CI:
-#   1. Go to Actions tab > CI Pipeline > Run workflow
-#   2. Select your branch
-#   3. Choose your runner type (self-hosted recommended)
-#   4. Click "Run workflow"
+# - All CI runs use self-hosted runners (NO GitHub runners to save costs)
+# - Default runners: self-hosted-secondary or self-hosted-primary (auto-detected)
+# - For push/PR events: Automatically uses available self-hosted runners
+# - For manual runs: Can choose specific runner via workflow_dispatch
 # - Maintainers can use their own runner names
 # - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
 
 on:
-  # Removed automatic triggers to save costs
-  # push:
-  #   branches: [ feat/*, feature/* ]
-  # pull_request:
-  #   branches: [ main ]
-  #   types: [opened, synchronize, reopened]
+  push:
+    branches: [ feat/*, feature/* ]
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       runner-type:
@@ -118,17 +115,18 @@ jobs:
                 ;;
             esac
           else
-            # Default to self-hosted runners (manual runs only now)
-            echo 'label=["self-hosted", "local"]' >> $GITHUB_OUTPUT
-            echo "Using local runner (default)"
+            # For automatic runs (push/PR), use any available self-hosted runner
+            # GitHub will automatically pick an available runner with the self-hosted label
+            echo 'label=["self-hosted"]' >> $GITHUB_OUTPUT
+            echo "Using any available self-hosted runner"
           fi
       - name: Determine test level
         id: determine
         run: |
-          # Since we only run manually now, always run full tests
+          # Always run full tests for all triggers (push, PR, manual)
           echo "level=full" >> $GITHUB_OUTPUT
           echo "skip-reason=" >> $GITHUB_OUTPUT
-          echo "Running full test suite (manual trigger)"
+          echo "Running full test suite"
 
       - name: Display decision
         run: |
