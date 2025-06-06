@@ -36,6 +36,10 @@ on:
         - github      # Force GitHub runners
         - local-mac   # Force local Mac runner
 
+permissions:
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -520,10 +524,15 @@ jobs:
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full'
     runs-on: ubuntu-latest
+    outputs:
+      critical-count: ${{ steps.scan-summary.outputs.critical }}
+      high-count: ${{ steps.scan-summary.outputs.high }}
+      medium-count: ${{ steps.scan-summary.outputs.medium }}
+      summary: ${{ steps.scan-summary.outputs.summary }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner (SARIF)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -531,6 +540,49 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          format: 'json'
+          output: 'trivy-results.json'
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Create security summary
+        id: scan-summary
+        run: |
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json || echo "0")
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json || echo "0")
+          MEDIUM=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json || echo "0")
+          
+          # Set outputs
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          
+          # Create summary
+          {
+            echo 'summary<<EOF'
+            echo "### 🔒 Security Scan Summary"
+            echo ""
+            echo "| Severity | Count |"
+            echo "|----------|-------|"
+            echo "| 🔴 CRITICAL | $CRITICAL |"
+            echo "| 🟠 HIGH | $HIGH |"
+            echo "| 🟡 MEDIUM | $MEDIUM |"
+            echo ""
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "⚠️ **Action Required**: Critical or High severity vulnerabilities found!"
+            else
+              echo "✅ No critical or high severity vulnerabilities found!"
+            fi
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -581,6 +633,8 @@ jobs:
     needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Summary
         uses: actions/github-script@v7
@@ -615,6 +669,12 @@ jobs:
               const icon = job.status === 'success' ? '✅' : '❌';
               comment += `${icon} **${job.name}**: ${job.status}\n`;
               if (job.status !== 'success') allPassed = false;
+            }
+
+            // Add security scan results if available
+            const securitySummary = `${{ needs.security-scan.outputs.summary }}`;
+            if (securitySummary && securitySummary !== '') {
+              comment += '\n' + securitySummary + '\n';
             }
 
             comment += '\n';
