@@ -47,7 +47,7 @@ jobs:
                 echo "Using self-hosted Linux runner"
                 ;;
               *)
-                echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
+                echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
                 echo "Using GitHub-hosted runner"
                 ;;
             esac
@@ -58,7 +58,7 @@ jobs:
               echo "Using local Mac runner for trusted PR branch"
             else
               # For other automatic runs, use GitHub runners
-              echo "label=ubuntu-latest" >> $GITHUB_OUTPUT
+              echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
               echo "Using GitHub-hosted runner (automatic trigger)"
             fi
           fi
@@ -142,12 +142,12 @@ jobs:
     name: Basic Tests
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'basic'
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - name: Display runner info
         run: |
-          echo "🏃 Running on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}"
-          if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
+          echo "🏃 Running on: ${{ needs.determine-context.outputs.runner-label }}"
+          if [[ "${{ needs.determine-context.outputs.runner-label }}" == *"self-hosted"* ]]; then
             echo "📍 Runner hostname: $(hostname)"
             echo "💻 CPU cores: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'unknown')"
           fi
@@ -155,13 +155,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python"
           which python3
@@ -188,7 +188,7 @@ jobs:
     name: All Checks (Parallel)
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full' && contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
 
@@ -387,18 +387,18 @@ jobs:
     name: Lint and Format Check
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python"
           which python3
@@ -436,19 +436,19 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.11', '3.12']
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python ${{ matrix.python-version }}
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python for matrix version ${{ matrix.python-version }}"
           which python3
@@ -467,7 +467,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           # Use all available cores on self-hosted runners if pytest-xdist is available
-          if [[ "${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}" == "true" ]]; then
+          if [[ "${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}" == "true" ]]; then
             echo "Running on self-hosted runner with $(nproc 2>/dev/null || sysctl -n hw.ncpu) cores"
             # Check if pytest-xdist is available
             if uv run python -c "import pytest_xdist" 2>/dev/null; then
@@ -519,18 +519,18 @@ jobs:
     name: Validate Examples
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ fromJSON(needs.determine-context.outputs.runner-label) }}
+    runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        if: ${{ !contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ !contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Setup Python (self-hosted)
-        if: ${{ contains(fromJSON(needs.determine-context.outputs.runner-label), 'self-hosted') }}
+        if: ${{ contains(needs.determine-context.outputs.runner-label, 'self-hosted') }}
         run: |
           echo "Using system Python"
           which python3
