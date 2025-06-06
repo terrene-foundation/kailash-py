@@ -3,9 +3,21 @@ name: Deploy Documentation
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs-deploy.yml'
   pull_request:
     branches: [ main ]
     types: [closed]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
 permissions:
