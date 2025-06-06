@@ -336,7 +336,7 @@ jobs:
   lint-and-format:
     name: Lint and Format Check
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
+    if: false # Disabled - we only use self-hosted runners now
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
@@ -381,7 +381,7 @@ jobs:
   test-matrix:
     name: Test Python ${{ matrix.python-version }}
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
+    if: false # Disabled - we only use self-hosted runners now
     strategy:
       fail-fast: false
       matrix:
@@ -516,7 +516,7 @@ jobs:
   validate-examples:
     name: Validate Examples
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !contains(needs.determine-context.outputs.runner-label, 'self-hosted')
+    if: false # Disabled - we only use self-hosted runners now
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
