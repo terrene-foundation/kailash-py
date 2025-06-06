@@ -1,11 +1,12 @@
 name: Deploy Documentation
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-    types: [closed]
+  # Removed automatic triggers to save costs
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
+  #   types: [closed]
   workflow_dispatch:
 
 permissions:
