@@ -187,6 +187,59 @@ nodes:
     example: |
       workflow.add_node('writer', TextWriterNode(), file_path='output.txt')
 
+  # Database Nodes
+  sql_database:
+    class: kailash.nodes.data.SQLDatabaseNode
+    description: "Execute SQL queries against relational databases (SQLite, PostgreSQL, MySQL)"
+    import: "from kailash.nodes.data import SQLDatabaseNode"
+    constructor:
+      connection_string: "str - Database connection URL (required)"
+      pool_size: "int - Number of connections in pool (default: 5)"
+      max_overflow: "int - Maximum overflow connections (default: 10)"
+      pool_timeout: "int - Timeout to get connection from pool (default: 30)"
+      pool_recycle: "int - Time to recycle connections in seconds (default: 3600)"
+      pool_pre_ping: "bool - Test connections before use (default: True)"
+      echo: "bool - Enable SQLAlchemy query logging (default: False)"
+      connect_args: "dict - Additional database-specific connection arguments"
+    runtime:
+      query: "str - SQL query to execute (use ? for SQLite, $1 for PostgreSQL, %s for MySQL)"
+      parameters: "list - Query parameters for safe execution (default: [])"
+      result_format: "str - Output format: 'dict', 'list', 'raw' (default: 'dict')"
+      timeout: "int - Query timeout in seconds (optional)"
+    outputs:
+      data: "list - Query results in specified format"
+      row_count: "int - Number of rows returned/affected"
+      columns: "list - Column names from query"
+      execution_time: "float - Query execution time in seconds"
+    example: |
+      # Direct configuration approach (recommended)
+      node = SQLDatabaseNode(
+          connection_string='sqlite:///data.db',
+          pool_size=5,
+          max_overflow=10
+      )
+      workflow.add_node('db', node)
+      
+      # Runtime parameters
+      workflow.execute(parameters={
+          'db': {
+              'query': 'SELECT * FROM customers WHERE active = ?',
+              'parameters': [True],
+              'result_format': 'dict'
+          }
+      })
+      
+      # PostgreSQL example with advanced configuration
+      pg_node = SQLDatabaseNode(
+          connection_string='postgresql://user:pass@host/db',
+          pool_size=10,
+          max_overflow=20,
+          pool_recycle=1800,
+          connect_args={'connect_timeout': 10}
+      )
+      workflow.add_node('pg_db', pg_node)
+
+
   # A2A Communication Nodes
   shared_memory_pool:
     class: kailash.nodes.ai.SharedMemoryPoolNode

@@ -537,6 +537,62 @@ providers = get_available_providers()
 
 ## Data Nodes
 
+### Database Nodes
+
+#### SQLDatabaseNode ✅
+- **Module**: `kailash.nodes.data.sql`
+- **Purpose**: Execute SQL queries against relational databases (SQLite, PostgreSQL, MySQL)
+- **Constructor Parameters** (Direct configuration):
+  - `connection_string`: Database connection URL (required)
+  - `pool_size`: Number of connections in pool (default: 5)
+  - `max_overflow`: Maximum overflow connections (default: 10)
+  - `pool_timeout`: Timeout to get connection from pool (default: 30)
+  - `pool_recycle`: Time to recycle connections in seconds (default: 3600)
+  - `pool_pre_ping`: Test connections before use (default: True)
+  - `echo`: Enable SQLAlchemy query logging (default: False)
+  - `connect_args`: Additional database-specific connection arguments
+- **Runtime Parameters** (Passed to run()):
+  - `query`: SQL query to execute (use ? for SQLite, $1 for PostgreSQL, %s for MySQL)
+  - `parameters`: Query parameters for safe execution (prevents SQL injection)
+  - `result_format`: Output format ('dict', 'list', 'raw')
+  - `timeout`: Query timeout in seconds (optional)
+- **Output**:
+  - `data`: Query results in specified format
+  - `row_count`: Number of rows returned/affected
+  - `columns`: List of column names
+  - `execution_time`: Query execution time in seconds
+- **Example**:
+  ```python
+  # Direct configuration approach (recommended)
+  db_node = SQLDatabaseNode(
+      connection_string="sqlite:///data.db",
+      pool_size=5,
+      max_overflow=10
+  )
+  
+  # Execute queries
+  result = db_node.run(
+      query="SELECT * FROM customers WHERE active = ?",
+      parameters=[True],
+      result_format="dict"
+  )
+  
+  # PostgreSQL with advanced configuration
+  pg_node = SQLDatabaseNode(
+      connection_string="postgresql://user:pass@host/db",
+      pool_size=10,
+      max_overflow=20,
+      pool_recycle=1800,
+      connect_args={'connect_timeout': 10}
+  )
+  
+  result = pg_node.run(
+      query="SELECT id, name FROM customers WHERE active = $1",
+      parameters=[True]
+  )
+  ```
+
+
 ### File I/O Nodes
 
 #### CSVReaderNode
@@ -584,23 +640,6 @@ providers = get_available_providers()
   - `file_path`: Output file path
   - `content`: Text content
 
-### Database Nodes
-
-#### SQLDatabaseNode
-- **Module**: `kailash.nodes.data.sql`
-- **Purpose**: Execute SQL queries
-- **Parameters**:
-  - `connection_string`: Database connection
-  - `query`: SQL query
-  - `parameters`: Query parameters
-
-#### SQLQueryBuilderNode
-- **Module**: `kailash.nodes.data.sql`
-- **Purpose**: Build SQL queries programmatically
-- **Parameters**:
-  - `table`: Table name
-  - `operation`: SELECT, INSERT, UPDATE, DELETE
-  - `conditions`: WHERE conditions
 
 ### Streaming Nodes
 
