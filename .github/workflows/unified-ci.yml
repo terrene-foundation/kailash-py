@@ -66,7 +66,7 @@ jobs:
           if [[ "${{ github.event.inputs.force-runner }}" != "" && "${{ github.event.inputs.force-runner }}" != "auto" ]]; then
             case "${{ github.event.inputs.force-runner }}" in
               local)
-                echo 'label=["self-hosted", "local"]' >> $GITHUB_OUTPUT
+                echo 'label=["self-hosted"]' >> $GITHUB_OUTPUT
                 echo "Using local runner (forced)"
                 ;;
               local-mac)
@@ -90,7 +90,7 @@ jobs:
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "${{ github.event.inputs.runner-type }}" in
               local)
-                echo 'label=["self-hosted", "local"]' >> $GITHUB_OUTPUT
+                echo 'label=["self-hosted"]' >> $GITHUB_OUTPUT
                 echo "Using local runner"
                 ;;
               local-mac)
@@ -110,8 +110,8 @@ jobs:
                 echo "Using self-hosted Linux runner"
                 ;;
               *)
-                echo 'label=["self-hosted", "local"]' >> $GITHUB_OUTPUT
-                echo "Using local runner (default)"
+                echo 'label=["self-hosted"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted runner (default)"
                 ;;
             esac
           else
