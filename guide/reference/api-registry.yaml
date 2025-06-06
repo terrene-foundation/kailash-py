@@ -1,6 +1,7 @@
 # Kailash SDK API Registry
 # LLM-optimized reference for quick API lookup
-# Version: 0.1.3
+# Version: 0.1.4
+# Last Updated: 2025-01-06
 
 workflow:
   class: kailash.Workflow
@@ -62,8 +63,9 @@ workflow:
 
 workflow_builder:
   class: kailash.WorkflowBuilder
-  description: "Fluent API for building workflows"
+  description: "Fluent API for building workflows (NOTE: Prefer using Workflow.connect() instead)"
   import: "from kailash import WorkflowBuilder"
+  deprecated: "Use Workflow class with connect() method for clarity"
   methods:
     create:
       signature: "create(name: str, description: str = '') -> WorkflowBuilder"
@@ -761,6 +763,311 @@ security:
           def run(self, **kwargs):
               safe_params = self.validate_and_sanitize_inputs(kwargs)
               return self.process_safely(safe_params)
+
+# Access Control
+access_control:
+  UserContext:
+    class: kailash.access_control.UserContext
+    description: "User information for access control"
+    import: "from kailash.access_control import UserContext"
+    constructor:
+      signature: "UserContext(user_id: str, tenant_id: str, email: str, roles: List[str] = None, permissions: List[str] = None)"
+      params:
+        user_id: "Unique user identifier"
+        tenant_id: "Tenant identifier for multi-tenancy"
+        email: "User email address"
+        roles: "List of user roles"
+        permissions: "List of specific permissions"
+    example: |
+      from kailash.access_control import UserContext
+      user = UserContext(
+          user_id="user_001",
+          tenant_id="company_abc",
+          email="user@company.com",
+          roles=["analyst", "viewer"]
+      )
+
+  AccessControlledRuntime:
+    class: kailash.runtime.access_controlled.AccessControlledRuntime
+    description: "Runtime with access control enforcement"
+    import: "from kailash.runtime.access_controlled import AccessControlledRuntime"
+    constructor:
+      signature: "AccessControlledRuntime(user_context: UserContext, **kwargs)"
+      params:
+        user_context: "User context for permission checks"
+    methods:
+      execute:
+        signature: "execute(workflow: Workflow, parameters: Dict[str, Any] = None) -> Tuple[Dict[str, Any], str]"
+        description: "Execute workflow with permission checks"
+    example: |
+      from kailash.runtime.access_controlled import AccessControlledRuntime
+      runtime = AccessControlledRuntime(user_context=user)
+      results, run_id = runtime.execute(workflow)
+
+  PermissionRule:
+    class: kailash.access_control.PermissionRule
+    description: "Define access control rules"
+    import: "from kailash.access_control import PermissionRule, PermissionEffect, NodePermission"
+    constructor:
+      signature: "PermissionRule(id: str, resource_type: str, resource_id: str, permission: Permission, effect: PermissionEffect, **kwargs)"
+      params:
+        id: "Rule identifier"
+        resource_type: "Type of resource (workflow, node)"
+        resource_id: "Resource identifier"
+        permission: "Permission type"
+        effect: "ALLOW or DENY"
+    example: |
+      from kailash.access_control import PermissionRule, PermissionEffect, NodePermission
+      rule = PermissionRule(
+          id="allow_read",
+          resource_type="node",
+          resource_id="csv_reader",
+          permission=NodePermission.READ_OUTPUT,
+          effect=PermissionEffect.ALLOW,
+          roles=["analyst"]
+      )
+
+# API Gateway
+api_gateway:
+  WorkflowAPIGateway:
+    class: kailash.api.gateway.WorkflowAPIGateway
+    description: "Unified API gateway for multiple workflows"
+    import: "from kailash.api.gateway import WorkflowAPIGateway"
+    constructor:
+      signature: "WorkflowAPIGateway(title: str = 'Kailash Gateway', description: str = '', version: str = '1.0.0')"
+    methods:
+      register_workflow:
+        signature: "register_workflow(prefix: str, workflow: Workflow, **kwargs)"
+        description: "Register a workflow with the gateway"
+        example: |
+          gateway.register_workflow("sales", sales_workflow)
+      
+      register_mcp_server:
+        signature: "register_mcp_server(name: str, mcp_integration: MCPIntegration)"
+        description: "Register an MCP server"
+        example: |
+          gateway.register_mcp_server("tools", mcp_integration)
+      
+      run:
+        signature: "run(host: str = '0.0.0.0', port: int = 8000, **kwargs)"
+        description: "Start the gateway server"
+    example: |
+      from kailash.api.gateway import WorkflowAPIGateway
+      
+      gateway = WorkflowAPIGateway(
+          title="Enterprise Platform",
+          description="Unified API for all workflows"
+      )
+      
+      gateway.register_workflow("sales", sales_workflow)
+      gateway.register_workflow("analytics", analytics_workflow)
+      gateway.run(port=8000)
+
+# MCP Integration
+mcp_integration:
+  MCPIntegration:
+    class: kailash.api.mcp_integration.MCPIntegration
+    description: "Model Context Protocol integration"
+    import: "from kailash.api.mcp_integration import MCPIntegration"
+    constructor:
+      signature: "MCPIntegration(name: str)"
+    methods:
+      add_tool:
+        signature: "add_tool(name: str, function: Callable, description: str = '')"
+        description: "Add a tool to the MCP server"
+      start:
+        signature: "start(command: List[str])"
+        description: "Start the MCP server"
+    example: |
+      from kailash.api.mcp_integration import MCPIntegration
+      
+      mcp = MCPIntegration("ai_tools")
+      mcp.add_tool("analyze", analyze_function, "Analyze data")
+      mcp.add_tool("predict", predict_function, "Make predictions")
+
+  MCPToolNode:
+    class: kailash.nodes.mcp.MCPToolNode
+    description: "Execute MCP tools in workflows"
+    import: "from kailash.nodes.mcp import MCPToolNode"
+    config:
+      mcp_server: "str - Name of MCP server"
+      tool_name: "str - Name of tool to execute"
+      parameters: "dict - Tool parameters"
+    example: |
+      workflow.add_node('mcp_tool', MCPToolNode(),
+          mcp_server='ai_tools',
+          tool_name='analyze',
+          parameters={'method': 'regression'}
+      )
+
+# SharePoint Integration
+sharepoint:
+  SharePointGraphReader:
+    class: kailash.nodes.data.sharepoint_graph.SharePointGraphReader
+    description: "Read files from SharePoint using Microsoft Graph API"
+    import: "from kailash.nodes.data import SharePointGraphReader"
+    config:
+      tenant_id: "str - Azure AD tenant ID"
+      client_id: "str - Azure AD app client ID"
+      client_secret: "str - Azure AD app client secret"
+      site_url: "str - SharePoint site URL"
+      operation: "str - Operation type (list_files, download_file, etc.)"
+      library_name: "str - Document library name"
+      file_path: "str - File path for download"
+    outputs:
+      files: "List[dict] - File information"
+      content: "bytes - File content (for download)"
+    example: |
+      workflow.add_node('sharepoint', SharePointGraphReader(),
+          tenant_id=os.getenv("SHAREPOINT_TENANT_ID"),
+          client_id=os.getenv("SHAREPOINT_CLIENT_ID"),
+          client_secret=os.getenv("SHAREPOINT_CLIENT_SECRET"),
+          site_url="https://company.sharepoint.com/sites/YourSite",
+          operation="list_files",
+          library_name="Documents"
+      )
+
+  SharePointGraphWriter:
+    class: kailash.nodes.data.sharepoint_graph.SharePointGraphWriter
+    description: "Upload files to SharePoint using Microsoft Graph API"
+    import: "from kailash.nodes.data import SharePointGraphWriter"
+    config:
+      tenant_id: "str - Azure AD tenant ID"
+      client_id: "str - Azure AD app client ID"
+      client_secret: "str - Azure AD app client secret"
+      site_url: "str - SharePoint site URL"
+      library_name: "str - Document library name"
+      file_path: "str - Destination file path"
+    inputs:
+      content: "bytes - File content to upload"
+    example: |
+      workflow.add_node('upload', SharePointGraphWriter(),
+          tenant_id=os.getenv("SHAREPOINT_TENANT_ID"),
+          client_id=os.getenv("SHAREPOINT_CLIENT_ID"),
+          client_secret=os.getenv("SHAREPOINT_CLIENT_SECRET"),
+          site_url="https://company.sharepoint.com/sites/YourSite",
+          library_name="Documents",
+          file_path="reports/output.pdf"
+      )
+
+# RAG (Retrieval-Augmented Generation) Nodes
+rag_nodes:
+  DocumentSourceNode:
+    class: kailash.nodes.data.sources.DocumentSourceNode
+    description: "Provide sample documents for RAG workflows"
+    import: "from kailash.nodes.data.sources import DocumentSourceNode"
+    outputs:
+      documents: "List[dict] - Sample documents with title and content"
+    example: |
+      workflow.add_node('doc_source', DocumentSourceNode())
+
+  QuerySourceNode:
+    class: kailash.nodes.data.sources.QuerySourceNode
+    description: "Provide sample queries for RAG workflows"
+    import: "from kailash.nodes.data.sources import QuerySourceNode"
+    outputs:
+      query: "str - Sample query text"
+    example: |
+      workflow.add_node('query_source', QuerySourceNode())
+
+  HierarchicalChunkerNode:
+    class: kailash.nodes.transform.chunkers.HierarchicalChunkerNode
+    description: "Split documents into hierarchical chunks"
+    import: "from kailash.nodes.transform.chunkers import HierarchicalChunkerNode"
+    config:
+      chunk_size: "int - Maximum chunk size (default: 1000)"
+      chunk_overlap: "int - Overlap between chunks (default: 200)"
+      level_separators: "List[str] - Separators for hierarchy levels"
+    inputs:
+      documents: "List[dict] - Documents to chunk"
+    outputs:
+      chunks: "List[dict] - Document chunks with metadata"
+    example: |
+      workflow.add_node('chunker', HierarchicalChunkerNode(),
+          chunk_size=1000,
+          chunk_overlap=200
+      )
+
+  ChunkTextExtractorNode:
+    class: kailash.nodes.transform.formatters.ChunkTextExtractorNode
+    description: "Extract text from chunks for embedding"
+    import: "from kailash.nodes.transform.formatters import ChunkTextExtractorNode"
+    inputs:
+      chunks: "List[dict] - Document chunks"
+    outputs:
+      input_texts: "List[str] - Extracted text for embedding"
+    example: |
+      workflow.add_node('text_extractor', ChunkTextExtractorNode())
+
+  QueryTextWrapperNode:
+    class: kailash.nodes.transform.formatters.QueryTextWrapperNode
+    description: "Wrap query text for embedding"
+    import: "from kailash.nodes.transform.formatters import QueryTextWrapperNode"
+    inputs:
+      query: "str - Query text"
+    outputs:
+      input_texts: "List[str] - Wrapped query for embedding"
+    example: |
+      workflow.add_node('query_wrapper', QueryTextWrapperNode())
+
+  RelevanceScorerNode:
+    class: kailash.nodes.data.retrieval.RelevanceScorerNode
+    description: "Score chunks by relevance to query"
+    import: "from kailash.nodes.data.retrieval import RelevanceScorerNode"
+    config:
+      similarity_method: "str - Method (cosine, euclidean, dot_product)"
+      top_k: "int - Number of chunks to return (default: 5)"
+    inputs:
+      chunks: "List[dict] - Document chunks"
+      query_embedding: "List[float] - Query embedding"
+      chunk_embeddings: "List[List[float]] - Chunk embeddings"
+    outputs:
+      relevant_chunks: "List[dict] - Top relevant chunks with scores"
+    example: |
+      workflow.add_node('scorer', RelevanceScorerNode(),
+          similarity_method='cosine',
+          top_k=5
+      )
+
+  ContextFormatterNode:
+    class: kailash.nodes.transform.formatters.ContextFormatterNode
+    description: "Format context for LLM input"
+    import: "from kailash.nodes.transform.formatters import ContextFormatterNode"
+    inputs:
+      relevant_chunks: "List[dict] - Relevant chunks"
+      query: "str - Original query"
+    outputs:
+      messages: "List[dict] - Formatted messages for LLM"
+    example: |
+      workflow.add_node('formatter', ContextFormatterNode())
+
+# Workflow Studio API
+workflow_studio:
+  WorkflowStudioAPI:
+    class: kailash.api.studio.WorkflowStudioAPI
+    description: "Backend API for Workflow Studio UI"
+    import: "from kailash.api.studio import WorkflowStudioAPI"
+    constructor:
+      signature: "WorkflowStudioAPI(database_url: str = 'sqlite:///workflow_studio.db')"
+    methods:
+      run:
+        signature: "run(host: str = '0.0.0.0', port: int = 8001)"
+        description: "Start the Studio API server"
+    endpoints:
+      - "GET /api/nodes - List available node types"
+      - "GET /api/workflows - List saved workflows"
+      - "POST /api/workflows - Create new workflow"
+      - "PUT /api/workflows/{id} - Update workflow"
+      - "DELETE /api/workflows/{id} - Delete workflow"
+      - "POST /api/workflows/{id}/execute - Execute workflow"
+      - "WebSocket /ws/execution/{run_id} - Real-time execution updates"
+    example: |
+      from kailash.api.studio import WorkflowStudioAPI
+      
+      studio_api = WorkflowStudioAPI(
+          database_url="postgresql://user:pass@localhost/studio"
+      )
+      studio_api.run(port=8001)
 
 # Utilities
 utils:

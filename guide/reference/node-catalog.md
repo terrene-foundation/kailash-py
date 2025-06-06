@@ -1,22 +1,26 @@
 # Kailash Python SDK - Node Catalog
 
-Last Updated: 2025-06-05
+Last Updated: 2025-01-06
 
 This comprehensive catalog documents all available nodes in the Kailash Python SDK, organized by category.
+
+**Total Nodes**: 66+ nodes across 9 categories
 
 ## Table of Contents
 - [Base Classes](#base-classes)
 - [AI Nodes](#ai-nodes)
-- [Intelligent Orchestration Nodes](#intelligent-orchestration-nodes)
-- [Self-Organizing Agent Nodes](#self-organizing-agent-nodes)
 - [A2A Communication Nodes](#a2a-communication-nodes)
+- [Self-Organizing Agent Nodes](#self-organizing-agent-nodes)
+- [Intelligent Orchestration Nodes](#intelligent-orchestration-nodes)
 - [API Nodes](#api-nodes)
 - [Code Nodes](#code-nodes)
 - [Data Nodes](#data-nodes)
 - [Logic Nodes](#logic-nodes)
 - [MCP Nodes](#mcp-nodes)
 - [Transform Nodes](#transform-nodes)
-- [Node Naming Issues](#node-naming-issues)
+- [Visualization Nodes](#visualization-nodes)
+- [Security Nodes](#security-nodes)
+- [Node Naming Convention](#node-naming-convention)
 
 ## Base Classes
 
@@ -85,19 +89,24 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
 - **Purpose**: Specialized agents for conversation and document retrieval
 - **Features**: Built on unified provider architecture with enhanced capabilities
 
-### AI Model Nodes (Need Renaming)
-- **TextClassifier** → Should be `TextClassifierNode`
-- **TextEmbedder** → Should be `TextEmbedderNode`
-- **SentimentAnalyzer** → Should be `SentimentAnalyzerNode`
-- **NamedEntityRecognizer** → Should be `NamedEntityRecognizerNode`
-- **ModelPredictor** → Should be `ModelPredictorNode`
-- **TextSummarizer** → Should be `TextSummarizerNode`
+### Unified AI Provider Architecture
 
-### AI Agent Nodes (Need Renaming)
-- **ChatAgent** → Should be `ChatAgentNode`
-- **RetrievalAgent** → Should be `RetrievalAgentNode`
-- **FunctionCallingAgent** → Should be `FunctionCallingAgentNode`
-- **PlanningAgent** → Should be `PlanningAgentNode`
+The SDK features a unified provider architecture supporting multiple AI providers:
+
+**Supported Providers**:
+- **OpenAI**: GPT models and text-embedding series
+- **Anthropic**: Claude models (chat only)
+- **Ollama**: Local LLMs with both chat and embeddings
+- **Cohere**: Embedding models
+- **HuggingFace**: Sentence transformers and local models
+- **Mock**: Testing provider with consistent outputs
+
+**Example**:
+```python
+from kailash.nodes.ai.ai_providers import get_available_providers
+providers = get_available_providers()
+# Returns: {"ollama": {"available": True, "chat": True, "embeddings": True}, ...}
+```
 
 ### A2A Communication Nodes
 
@@ -674,9 +683,37 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `documents`: Documents to score
   - `scoring_method`: Scoring algorithm
 
-### SharePoint Nodes (Need Renaming)
-- **SharePointGraphReader** → Should be `SharePointGraphReaderNode`
-- **SharePointGraphWriter** → Should be `SharePointGraphWriterNode`
+### SharePoint Integration Nodes
+
+#### SharePointGraphReader
+- **Module**: `kailash.nodes.data.sharepoint_graph`
+- **Purpose**: Read files from SharePoint using Microsoft Graph API
+- **Parameters**:
+  - `tenant_id`: Azure AD tenant ID
+  - `client_id`: Azure AD app client ID
+  - `client_secret`: Azure AD app client secret
+  - `site_url`: SharePoint site URL
+  - `operation`: Operation type (list_files, download_file)
+  - `library_name`: Document library name
+- **Example**:
+  ```python
+  sharepoint = SharePointGraphReader()
+  result = sharepoint.run(
+      tenant_id=os.getenv("SHAREPOINT_TENANT_ID"),
+      client_id=os.getenv("SHAREPOINT_CLIENT_ID"),
+      client_secret=os.getenv("SHAREPOINT_CLIENT_SECRET"),
+      site_url="https://company.sharepoint.com/sites/YourSite",
+      operation="list_files",
+      library_name="Documents"
+  )
+  ```
+
+#### SharePointGraphWriter
+- **Module**: `kailash.nodes.data.sharepoint_graph`
+- **Purpose**: Upload files to SharePoint using Microsoft Graph API
+- **Parameters**: Same authentication parameters plus:
+  - `file_path`: Destination file path
+  - `content`: File content to upload
 
 ## Logic Nodes
 
@@ -792,10 +829,37 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
 
 ## MCP Nodes
 
-### MCP Nodes (Need Renaming)
-- **MCPClient** → Should be `MCPClientNode`
-- **MCPServer** → Should be `MCPServerNode`
-- **MCPResource** → Should be `MCPResourceNode`
+### MCPToolNode
+- **Module**: `kailash.nodes.mcp`
+- **Purpose**: Execute MCP (Model Context Protocol) tools in workflows
+- **Parameters**:
+  - `mcp_server`: Name of MCP server
+  - `tool_name`: Name of tool to execute
+  - `parameters`: Tool parameters
+- **Example**:
+  ```python
+  mcp_tool = MCPToolNode()
+  result = mcp_tool.run(
+      mcp_server="ai_tools",
+      tool_name="analyze",
+      parameters={"method": "regression", "data": input_data}
+  )
+  ```
+
+### MCPClientNode
+- **Module**: `kailash.nodes.mcp.client`
+- **Purpose**: Connect to and interact with MCP servers
+- **Features**: Tool discovery, parameter validation, result handling
+
+### MCPServerNode
+- **Module**: `kailash.nodes.mcp.server`
+- **Purpose**: Create MCP server endpoints within workflows
+- **Features**: Tool registration, request handling, response formatting
+
+### MCPResourceNode
+- **Module**: `kailash.nodes.mcp.resource`
+- **Purpose**: Access MCP resources (files, data, etc.)
+- **Features**: Resource discovery, access control, caching
 
 ## Transform Nodes
 
@@ -829,7 +893,7 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
   - `prefix`: Text prefix
   - `suffix`: Text suffix
 
-### FilterNode ✅
+### FilterNode
 - **Module**: `kailash.nodes.transform.processors`
 - **Purpose**: Filters data based on configurable conditions and operators
 - **Parameters**:
@@ -846,37 +910,82 @@ This comprehensive catalog documents all available nodes in the Kailash Python S
       value=3
   )  # Returns: {"filtered_data": [4, 5]}
   ```
-- **Backward Compatibility**: Available as `Filter` alias
 
-### Transform Processor Nodes (Need Renaming)
-- **Map** → Should be `MapNode`
-- **DataTransformer** → Should be `DataTransformerNode`
-- **Sort** → Should be `SortNode`
+### DataTransformerNode
+- **Module**: `kailash.nodes.transform.processors`
+- **Purpose**: Transform data using configurable operations
+- **Operations**:
+  - `filter`: Filter data based on conditions
+  - `map`: Transform each item
+  - `reduce`: Aggregate data
+  - `sort`: Sort data by key
+  - `group`: Group data by field
+- **Example**:
+  ```python
+  transformer = DataTransformerNode()
+  result = transformer.run(
+      data=[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}],
+      operations=[
+          {"type": "filter", "condition": "age > 25"},
+          {"type": "sort", "key": "age", "reverse": True}
+      ]
+  )
+  ```
 
-## Node Naming Issues
+## Visualization Nodes
 
-The following nodes do not follow the standard naming convention (should end with "Node"):
+### WorkflowVisualizerNode
+- **Module**: `kailash.nodes.visualization`
+- **Purpose**: Generate workflow visualizations
+- **Output Formats**: PNG, SVG, Mermaid
 
-### Critical Naming Issues (22 nodes):
-1. **AI Module** (10 nodes):
-   - TextClassifier, TextEmbedder, SentimentAnalyzer, NamedEntityRecognizer
-   - ModelPredictor, TextSummarizer, ChatAgent, RetrievalAgent
-   - FunctionCallingAgent, PlanningAgent
+### RealTimeDashboardNode
+- **Module**: `kailash.nodes.visualization.dashboard`
+- **Purpose**: Create real-time monitoring dashboards
+- **Features**: WebSocket streaming, metric collection, Chart.js integration
 
-2. **Data Module** (2 nodes):
-   - SharePointGraphReader, SharePointGraphWriter
+### PerformanceReporterNode
+- **Module**: `kailash.nodes.visualization.reports`
+- **Purpose**: Generate comprehensive performance reports
+- **Formats**: HTML, Markdown, JSON
 
-3. **MCP Module** (3 nodes):
-   - MCPClient, MCPServer, MCPResource
+## Security Nodes
 
-4. **Transform Module** (4 nodes):
-   - Filter, Map, DataTransformer, Sort
+### SecurityMixin
+- **Module**: `kailash.nodes.mixins`
+- **Purpose**: Add security features to any node
+- **Features**:
+  - Input validation and sanitization
+  - Path traversal prevention
+  - Command injection protection
+  - Audit logging
 
-### Recommendation
-These nodes should be renamed to follow the convention for consistency and to avoid validation errors. For example:
-- `TextClassifier` → `TextClassifierNode`
-- `MCPClient` → `MCPClientNode`
-- `Filter` → `FilterNode`
+### SecureFileNode
+- **Module**: `kailash.nodes.security`
+- **Purpose**: Secure file operations with validation
+- **Features**: Path validation, size limits, extension checks
+
+## Node Naming Convention
+
+All node classes in the Kailash SDK follow a consistent naming convention:
+
+### Standard: ClassNameNode
+
+**Examples**:
+- ✅ `CSVReaderNode` - Correct
+- ✅ `LLMAgentNode` - Correct
+- ✅ `SwitchNode` - Correct
+- ❌ `CSVReader` - Incorrect (missing Node suffix)
+- ❌ `Filter` - Incorrect (missing Node suffix)
+
+### Benefits:
+1. **Consistency**: Easy to identify node classes
+2. **Validation**: Automated tools can check naming
+3. **Discovery**: Better IDE autocomplete
+4. **Documentation**: Clear distinction from other classes
+
+### Migration Notes:
+Some older nodes may not follow this convention but have aliases for backward compatibility. New nodes MUST follow the convention.
 
 ## Usage Examples
 
