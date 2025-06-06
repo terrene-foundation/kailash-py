@@ -25,6 +25,7 @@ on:
         options:
         - github      # Use GitHub's runners
         - local-mac   # Use your Mac
+        - self-hosted-secondary # Use self-hosted-secondary runner
         - self-hosted # Use any self-hosted runner
       force-runner:
         description: 'Force specific runner for PR (overrides auto-detection)'
@@ -35,6 +36,7 @@ on:
         - auto        # Auto-detect based on branch
         - github      # Force GitHub runners
         - local-mac   # Force local Mac runner
+        - self-hosted-secondary # Force self-hosted-secondary runner
 
 permissions:
   contents: read
@@ -64,6 +66,10 @@ jobs:
                 echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner (forced)"
                 ;;
+              self-hosted-secondary)
+                echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-secondary runner (forced)"
+                ;;
               github)
                 echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
                 echo "Using GitHub-hosted runner (forced)"
@@ -75,6 +81,10 @@ jobs:
               local-mac)
                 echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner"
+                ;;
+              self-hosted-secondary)
+                echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
+                echo "Using self-hosted-secondary runner"
                 ;;
               self-hosted)
                 echo 'label=["self-hosted", "linux", "x64"]' >> $GITHUB_OUTPUT
