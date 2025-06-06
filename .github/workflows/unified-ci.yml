@@ -1,13 +1,13 @@
 name: CI Pipeline
 
 # Runner Selection:
-# - By default, PRs from feat/complete-sdk-implementation use local Mac runner
-# - To override: 
+# - By default, all PRs use GitHub runners
+# - To use local runner: 
 #   1. Go to Actions tab > CI Pipeline > Run workflow
 #   2. Select your branch
 #   3. Choose "Force specific runner for PR" option
-#   4. Select "github" to use GitHub runners or "local-mac" for your local runner
-# - Or add a comment in your PR: "/ci-runner github" or "/ci-runner local"
+#   4. Select "local-mac" to use your local runner
+# - Or set USE_LOCAL_RUNNER=true in your environment
 
 on:
   push:
@@ -82,15 +82,9 @@ jobs:
                 ;;
             esac
           else
-            # For PRs from the main development branch, use local runner for speed
-            if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.head_ref }}" == "feat/complete-sdk-implementation" ]]; then
-              echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
-              echo "Using local Mac runner for trusted PR branch"
-            else
-              # For other automatic runs, use GitHub runners
-              echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
-              echo "Using GitHub-hosted runner (automatic trigger)"
-            fi
+            # Default to GitHub runners for all automatic runs
+            echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
+            echo "Using GitHub-hosted runner (default)"
           fi
       - name: Determine test level
         id: determine
