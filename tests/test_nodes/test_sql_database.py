@@ -427,8 +427,9 @@ class TestSQLDatabaseNodeSQLite:
         assert result2["data"][0]["total_orders"] == 5
         assert len(result3["data"]) >= 1  # At least one user over 30
 
-        # Verify the node maintained its connection configuration
-        assert node.connection_string == "sqlite:///test_shared.db"
+        # Verify the node maintained its connection configuration (check pattern since we use UUID)
+        assert node.connection_string.startswith("sqlite:///test_shared_")
+        assert node.connection_string.endswith(".db")
 
     def test_performance_metrics(self, sqlite_test_database, db_configs):
         """Test that performance metrics are captured."""
