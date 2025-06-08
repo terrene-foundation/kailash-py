@@ -104,8 +104,12 @@ class User(Base):
     permissions = Column(JSON, default=lambda: [])
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     last_login = Column(DateTime)
 
     # Relationships
@@ -146,8 +150,12 @@ class Tenant(Base):
     subscription_tier = Column(String(50), default="free")
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     # Relationships
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
@@ -179,7 +187,7 @@ class APIKey(Base):
     usage_count = Column(JSON, default=lambda: {"total": 0, "monthly": 0})
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     user = relationship("User", back_populates="api_keys")

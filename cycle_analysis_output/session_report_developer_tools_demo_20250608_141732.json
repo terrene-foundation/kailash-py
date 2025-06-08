@@ -1,0 +1,190 @@
+{
+  "session_info": {
+    "session_id": "developer_tools_demo",
+    "analysis_level": "comprehensive",
+    "cycles_analyzed": 3,
+    "generated_at": "2025-06-08T14:17:32.258928"
+  },
+  "summary": {
+    "total_cycles": 3,
+    "total_iterations": 45,
+    "convergence_rate": 0.0,
+    "avg_cycle_time": 0.30222033333333337
+  },
+  "performance_analysis": {
+    "summary": {
+      "overall_score": 0.5853777129117351,
+      "total_cycles_analyzed": 3,
+      "total_iterations": 45,
+      "avg_cycle_time": 0.3022203333333333,
+      "primary_bottlenecks": [
+        "High iteration time variance - inconsistent node performance",
+        "Outlier slow iterations detected - potential resource contention"
+      ]
+    },
+    "detailed_metrics": {
+      "total_cycles": 3,
+      "total_iterations": 45,
+      "timing": {
+        "avg_cycle_time": 0.3022203333333333,
+        "avg_iteration_time": 0.00024273333333333334,
+        "min_iteration_time": 4.7e-05,
+        "max_iteration_time": 0.000848,
+        "iteration_time_stddev": 0.0002158960608508388
+      },
+      "memory_stats": {
+        "avg": 99.38055555555556,
+        "min": 99.203125,
+        "max": 99.5,
+        "stddev": 0.10608670792854381,
+        "median": 99.359375
+      },
+      "cpu_stats": {},
+      "convergence_stats": {
+        "avg_convergence": 0.2808194368696583,
+        "min_convergence": 0.025422772409999937,
+        "max_convergence": 0.8068766530830319,
+        "convergence_stddev": 0.21729991833301301,
+        "convergence_trend": "improving",
+        "data_points": 45
+      },
+      "bottlenecks": [
+        "High iteration time variance - inconsistent node performance",
+        "Outlier slow iterations detected - potential resource contention"
+      ],
+      "optimization_opportunities": [
+        "Add early termination conditions for faster convergence"
+      ]
+    },
+    "trend_analysis": {
+      "trend": "degrading",
+      "trend_strength": 0.0,
+      "recent_scores": [
+        0.5853777129117351,
+        0.5853777129117351,
+        0.5853777129117351
+      ],
+      "performance_history_length": 3
+    },
+    "recommendations": [
+      {
+        "priority": "HIGH",
+        "category": "efficiency",
+        "description": "Very low efficiency detected",
+        "suggestion": "Consider reducing max_iterations or improving convergence condition",
+        "cycle_id": "efficient_cycle",
+        "current_value": 0.29968621,
+        "target_improvement": "Increase to > 0.5"
+      },
+      {
+        "priority": "HIGH",
+        "category": "convergence",
+        "description": "Cycle reached max_iterations without converging",
+        "suggestion": "Increase max_iterations or improve algorithm",
+        "cycle_id": "efficient_cycle",
+        "current_value": 10,
+        "target_improvement": "Increase to 15"
+      },
+      {
+        "priority": "HIGH",
+        "category": "efficiency",
+        "description": "Very low efficiency detected",
+        "suggestion": "Consider reducing max_iterations or improving convergence condition",
+        "cycle_id": "noisy_cycle",
+        "current_value": 0.29817667,
+        "target_improvement": "Increase to > 0.5"
+      },
+      {
+        "priority": "HIGH",
+        "category": "convergence",
+        "description": "Cycle reached max_iterations without converging",
+        "suggestion": "Increase max_iterations or improve algorithm",
+        "cycle_id": "noisy_cycle",
+        "current_value": 15,
+        "target_improvement": "Increase to 22"
+      },
+      {
+        "priority": "HIGH",
+        "category": "efficiency",
+        "description": "Very low efficiency detected",
+        "suggestion": "Consider reducing max_iterations or improving convergence condition",
+        "cycle_id": "slow_cycle",
+        "current_value": 0.297603815,
+        "target_improvement": "Increase to > 0.5"
+      },
+      {
+        "priority": "HIGH",
+        "category": "convergence",
+        "description": "Cycle reached max_iterations without converging",
+        "suggestion": "Increase max_iterations or improve algorithm",
+        "cycle_id": "slow_cycle",
+        "current_value": 20,
+        "target_improvement": "Increase to 30"
+      }
+    ],
+    "cycle_comparisons": {
+      "best_cycle": {
+        "id": "efficient_cycle",
+        "score": 0.29968621
+      },
+      "worst_cycle": {
+        "id": "slow_cycle",
+        "score": 0.297603815
+      },
+      "score_range": 0.0020823950000000147,
+      "total_cycles": 3
+    },
+    "generated_at": "2025-06-08T14:17:32.259966"
+  },
+  "comparative_analysis": {
+    "cycles_compared": 3,
+    "cycle_details": {
+      "efficient_cycle": {
+        "execution_time": 0.062758,
+        "iterations": 10,
+        "converged": false,
+        "efficiency_score": 0.29968621,
+        "avg_iteration_time": 7.58e-05,
+        "convergence_rate": 0.0
+      },
+      "noisy_cycle": {
+        "execution_time": 0.364666,
+        "iterations": 15,
+        "converged": false,
+        "efficiency_score": 0.29817667,
+        "avg_iteration_time": 0.00037506666666666666,
+        "convergence_rate": 0.0
+      },
+      "slow_cycle": {
+        "execution_time": 0.479237,
+        "iterations": 20,
+        "converged": false,
+        "efficiency_score": 0.297603815,
+        "avg_iteration_time": 0.00022695,
+        "convergence_rate": 0.0
+      }
+    },
+    "performance_ranking": [
+      "efficient_cycle",
+      "noisy_cycle",
+      "slow_cycle"
+    ],
+    "significant_differences": [],
+    "best_cycle": "efficient_cycle",
+    "worst_cycle": "slow_cycle"
+  },
+  "insights": {
+    "best_performing_cycle": {
+      "id": "efficient_cycle",
+      "score": 0.29968621
+    },
+    "worst_performing_cycle": {
+      "id": "slow_cycle",
+      "score": 0.297603815
+    },
+    "overall_convergence_rate": 0.0,
+    "avg_iterations_per_cycle": 15.0,
+    "performance_consistency": 0.0020823950000000147,
+    "session_quality": "needs_improvement"
+  }
+}

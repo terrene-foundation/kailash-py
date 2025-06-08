@@ -10,6 +10,7 @@ import json
 import logging
 import os
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
 from kailash.nodes.data.writers import JSONWriterNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
@@ -41,7 +42,7 @@ def generate_sample_data():
     ]
 
     # Write to JSON file
-    with open("../data/transactions.json", "w") as f:
+    with open(str(get_data_dir() / "transactions.json"), "w") as f:
         json.dump(transactions, f, indent=2)
 
     # Sample customer data
@@ -79,7 +80,7 @@ def generate_sample_data():
     ]
 
     # Write to CSV file
-    with open("../data/customers.csv", "w") as f:
+    with open(str(get_data_dir() / "customers.csv"), "w") as f:
         f.write("customer_id,name,email,tier\n")
         for customer in customers:
             f.write(
@@ -112,12 +113,15 @@ def create_conditional_workflow() -> Workflow:
     # 1. Create nodes
     # Data source nodes
     workflow.add_node(
-        "transactions_reader", JSONReaderNode(file_path="../data/transactions.json")
+        "transactions_reader",
+        JSONReaderNode(file_path=str(get_data_dir() / "transactions.json")),
     )
 
     workflow.add_node(
         "customers_reader",
-        CSVReaderNode(file_path="../data/customers.csv", index_column="customer_id"),
+        CSVReaderNode(
+            file_path=str(get_data_dir() / "customers.csv", index_column="customer_id")
+        ),
     )
 
     # Switch node to route by transaction status
@@ -165,23 +169,23 @@ def create_conditional_workflow() -> Workflow:
     # Output writers for each transaction status
     workflow.add_node(
         "completed_writer",
-        JSONWriterNode(file_path="../outputs/completed_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "completed_transactions.json")),
     )
 
     workflow.add_node(
         "pending_writer",
-        JSONWriterNode(file_path="../outputs/pending_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "pending_transactions.json")),
     )
 
     workflow.add_node(
         "failed_writer",
-        JSONWriterNode(file_path="../outputs/failed_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "failed_transactions.json")),
     )
 
     # Output node for all transactions
     workflow.add_node(
         "results_writer",
-        JSONWriterNode(file_path="../outputs/processed_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "processed_transactions.json")),
     )
 
     # 2. Connect the nodes
@@ -223,12 +227,15 @@ def create_multi_condition_workflow() -> Workflow:
 
     # Data source nodes
     workflow.add_node(
-        "transactions_reader", JSONReaderNode(file_path="../data/transactions.json")
+        "transactions_reader",
+        JSONReaderNode(file_path=str(get_data_dir() / "transactions.json")),
     )
 
     workflow.add_node(
         "customers_reader",
-        CSVReaderNode(file_path="../data/customers.csv", index_column="customer_id"),
+        CSVReaderNode(
+            file_path=str(get_data_dir() / "customers.csv", index_column="customer_id")
+        ),
     )
 
     # Initial customer join node
@@ -326,7 +333,9 @@ def create_multi_condition_workflow() -> Workflow:
     # Output
     workflow.add_node(
         "results_writer",
-        JSONWriterNode(file_path="../outputs/multi_condition_results.json"),
+        JSONWriterNode(
+            file_path=str(get_output_dir() / "multi_condition_results.json")
+        ),
     )
 
     # Connect nodes - First connect data sources for joining

@@ -2,7 +2,10 @@
 Getting Started
 ===============
 
-Welcome to the Kailash Python SDK! This guide will help you get up and running quickly.
+Welcome to the Kailash Python SDK v0.2.0! This guide will help you get up and running quickly.
+
+**New in v0.2.0**: Universal Hybrid Cyclic Graph Architecture with high-performance iterative workflows,
+automatic convergence detection, and comprehensive developer tools.
 
 Prerequisites
 =============
@@ -242,16 +245,26 @@ For custom logic:
 
 - **PythonCodeNode**: Execute Python code safely
 
+Cycle-Aware Nodes (New in v0.2.0)
+---------------------------------
+
+For iterative processing:
+
+- **CycleAwareNode**: Base class with convergence detection
+- **Built-in cycle support**: All nodes can participate in cycles
+- **Automatic state management**: Track iterations and convergence
+
 Next Steps
 ==========
 
 Now that you've created your first workflow:
 
-1. **Explore Examples**: Check out the :doc:`examples/index` section
-2. **Learn Concepts**: Read about workflow concepts
+1. **Master Cyclic Workflows**: Learn about the new :doc:`guides/cyclic_workflows` (v0.2.0)
+2. **Explore Examples**: Check out the :doc:`examples/index` section
 3. **Build Complex Workflows**: See :doc:`guides/workflows`
 4. **Create Custom Nodes**: Learn in :doc:`guides/custom_nodes`
 5. **Best Practices**: Review :doc:`guides/best_practices`
+6. **Developer Tools**: Explore CycleAnalyzer, CycleDebugger, and CycleProfiler
 
 Common Patterns
 ===============
@@ -312,6 +325,60 @@ API Integration
 
    workflow.connect_sequential(["read_requests", "call_api", "save_responses"])
    workflow.run()
+
+Iterative Processing (New in v0.2.0)
+------------------------------------
+
+Create workflows that iterate until convergence:
+
+.. code-block:: python
+
+   from kailash.workflow import CycleBuilder
+   from kailash.nodes import PythonCodeNode
+
+   # Use the new CycleBuilder API
+   builder = CycleBuilder("iterative_refinement")
+
+   # Add a node that refines results iteratively
+   refiner_code = '''
+   # Access previous iteration's state
+   try:
+       quality = cycle_state["quality"]
+       data = cycle_state["data"]
+   except:
+       quality = 0.0
+       data = input_data
+
+   # Refine the data
+   refined_data = [x * 1.1 for x in data]  # Simple refinement
+   new_quality = min(quality + 0.2, 1.0)  # Improve quality
+
+   # Check if we've reached target quality
+   converged = new_quality >= 0.95
+
+   result = {
+       "data": refined_data,
+       "quality": new_quality,
+       "converged": converged
+   }
+   '''
+
+   builder.add_cycle_node(
+       "refiner",
+       PythonCodeNode(name="refiner", code=refiner_code),
+       input_mapping={"input_data": "data"},
+       convergence_check="converged == True",
+       max_iterations=10
+   )
+
+   # Build and run
+   workflow = builder.build()
+   results = workflow.run(parameters={
+       "refiner": {"data": [1, 2, 3, 4, 5]}
+   })
+
+   print(f"Final quality: {results['refiner']['quality']}")
+   print(f"Refined data: {results['refiner']['data']}")
 
 Getting Help
 ============

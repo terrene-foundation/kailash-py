@@ -11,6 +11,7 @@ Usage:
 import time
 from pathlib import Path
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.transform.processors import Filter
@@ -32,12 +33,15 @@ def create_simple_workflow():
     workflow = Workflow("simple_dashboard_demo", "Simple Dashboard Demo")
 
     # Simple 3-node workflow
-    reader = CSVReaderNode(node_id="reader", file_path="../data/customers.csv")
+    reader = CSVReaderNode(
+        node_id="reader", file_path=str(get_data_dir() / "customers.csv")
+    )
 
     filter_node = Filter(node_id="filter", field="age", operator=">", value=18)
 
     writer = CSVWriterNode(
-        node_id="writer", file_path="../outputs/simple_dashboard_output.csv"
+        node_id="writer",
+        file_path=str(get_output_dir() / "simple_dashboard_output.csv"),
     )
 
     # Connect nodes
@@ -53,7 +57,7 @@ def create_simple_workflow():
 
 def setup_basic_tracking():
     """Set up basic task tracking."""
-    storage_path = Path("../data/simple_dashboard_tracking")
+    storage_path = get_data_dir() / "simple_dashboard_tracking"
     storage_path.mkdir(parents=True, exist_ok=True)
 
     storage = FileSystemStorage(storage_path)
@@ -138,7 +142,7 @@ def generate_live_dashboard(dashboard: RealTimeDashboard):
     """Generate live dashboard HTML."""
     print("\n6. Generating live dashboard...")
 
-    dashboard_path = Path("../outputs/simple_live_dashboard.html")
+    dashboard_path = get_output_dir() / "simple_live_dashboard.html"
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
 
     dashboard.generate_live_report(dashboard_path, include_charts=True)

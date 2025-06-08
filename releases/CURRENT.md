@@ -1,52 +1,56 @@
 # Current Release Status
 
-## Latest Release: v0.1.6
+## Latest Release: v0.2.0
 
-**Release Date**: 2025-06-05
+**Release Date**: 2025-06-08
 **Status**: ✅ Released
-**Type**: Minor Release (Security & Production Hardening + CI/CD Optimization)
+**Type**: Major Release (Universal Hybrid Cyclic Graph Architecture)
 
 ### Release Theme
-Complete Security Implementation with JWT Auth, RBAC, Multi-tenancy & CI/CD Optimization
+Complete implementation of Universal Hybrid Cyclic Graph Architecture with developer tools and production-ready features
 
 ### Key Features
-1. **Access Control System**
-   - JWT authentication with refresh tokens
-   - Role-Based Access Control (RBAC)
-   - Multi-tenant support with isolation
-   - Node-level and workflow-level permissions
+1. **Universal Hybrid Cyclic Graph Architecture**
+   - CycleAwareNode base class with helper methods
+   - Native cycle support in workflow graphs
+   - High performance (~30,000 iterations/second)
+   - Production tested with 100,000+ iterations
 
-2. **Production Hardening**
-   - Input validation and sanitization
-   - Rate limiting for API endpoints
-   - Secure error handling
-   - Audit logging for security events
+2. **Developer Tools & Analytics**
+   - CycleAnalyzer for performance analysis
+   - CycleDebugger for interactive debugging
+   - CycleProfiler for detailed profiling
+   - CycleBuilder with fluent API
+   - Type-safe configuration system
 
-3. **CI/CD Optimization**
-   - Local Mac runner support (87% faster)
-   - Parallel test execution
-   - Cleaned up workflow files (73% reduction)
+3. **Production-Ready Features**
+   - Enhanced PythonCodeNode with DataFrame/NumPy support
+   - Automatic serialization for complex data types
+   - Platform-specific type compatibility
+   - Memory-efficient data processing
 
 ### Release Statistics
-- **Total Commits**: 100+
-- **Files Changed**: 150+
-- **New Features**: Access Control, Security, CI/CD
-- **Performance**: CI from 15min → 2min
-- **Test Coverage**: 591+ tests passing
+- **Total Commits**: 50+
+- **Files Changed**: 100+
+- **New Features**: Cyclic Workflows, Developer Tools
+- **Performance**: ~30,000 iterations/second
+- **Test Coverage**: 650+ tests passing
+- **Breaking Changes**: None
 
-## Next Release: v0.1.7
+## Next Release: v0.2.1
 
 **Planned Date**: TBD
 **Status**: 🔵 Planning
-**Type**: TBD
+**Type**: Minor Release
 
 ### Planned Features
-1. Frontend UI components for Workflow Studio
-2. AI Assistant integration
-3. Performance optimizations
-4. Bug fixes (datetime comparison in list_runs)
+1. Enhanced visualization for cyclic workflows
+2. More pre-built cycle patterns
+3. Integration with popular ML frameworks
+4. Performance optimizations for nested cycles
 
 ### Release History
+- v0.2.0 - 2025-06-08 - Universal Hybrid Cyclic Graph Architecture
 - v0.1.6 - 2025-06-05 - Security & Production Hardening + CI/CD
 - v0.1.5 - 2025-06-05 - Self-Organizing Agents + Test Fixes
 - v0.1.4 - 2025-06-04 - MCP Integration & A2A Communication

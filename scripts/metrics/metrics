@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# Metrics Launcher - Easy access to all metrics scripts
+# Usage: ./metrics [command] [options]
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Color codes
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+show_help() {
+    echo -e "${BLUE}Kailash SDK GitHub Metrics${NC}"
+    echo ""
+    echo "Usage: ./metrics [command] [options]"
+    echo ""
+    echo "Commands:"
+    echo "  daily              Show today's metrics"
+    echo "  weekly [offset]    Show weekly summary (0=this week, 1=last week)"
+    echo "  report [start] [end]   Generate full report for date range"
+    echo "  features [start] [end] Track feature development"
+    echo "  tests [start] [end]    Analyze test coverage"
+    echo "  help               Show this help message"
+    echo ""
+    echo "Quick commands:"
+    echo "  today              Today's activity"
+    echo "  yesterday          Yesterday's activity"
+    echo "  thisweek           This week's summary"
+    echo "  lastweek           Last week's summary"
+    echo "  month              This month's report"
+    echo ""
+    echo "Examples:"
+    echo "  ./metrics daily"
+    echo "  ./metrics weekly 1"
+    echo "  ./metrics report 2024-01-01 2024-01-31"
+    echo "  ./metrics features"
+    echo "  ./metrics lastweek"
+}
+
+case "$1" in
+    daily)
+        "$SCRIPT_DIR/daily-metrics.sh"
+        ;;
+
+    weekly)
+        OFFSET=${2:-0}
+        "$SCRIPT_DIR/weekly-summary.sh" "$OFFSET"
+        ;;
+
+    report)
+        START=${2:-$(date -v-7d +%Y-%m-%d)}
+        END=${3:-$(date +%Y-%m-%d)}
+        "$SCRIPT_DIR/github-metrics.sh" "$START" "$END"
+        ;;
+
+    features)
+        START=${2:-$(date -v-30d +%Y-%m-%d)}
+        END=${3:-$(date +%Y-%m-%d)}
+        "$SCRIPT_DIR/feature-tracker.sh" "$START" "$END"
+        ;;
+
+    tests)
+        START=${2:-$(date -v-30d +%Y-%m-%d)}
+        END=${3:-$(date +%Y-%m-%d)}
+        "$SCRIPT_DIR/test-coverage-tracker.sh" "$START" "$END"
+        ;;
+
+    # Quick commands
+    today)
+        "$SCRIPT_DIR/daily-metrics.sh"
+        ;;
+
+    yesterday)
+        YESTERDAY=$(date -v-1d +%Y-%m-%d)
+        "$SCRIPT_DIR/github-metrics.sh" "$YESTERDAY" "$YESTERDAY"
+        ;;
+
+    thisweek)
+        "$SCRIPT_DIR/weekly-summary.sh" 0
+        ;;
+
+    lastweek)
+        "$SCRIPT_DIR/weekly-summary.sh" 1
+        ;;
+
+    month)
+        START=$(date -v1d +%Y-%m-01)
+        END=$(date +%Y-%m-%d)
+        echo -e "${BLUE}Month-to-date Report${NC}"
+        "$SCRIPT_DIR/github-metrics.sh" "$START" "$END"
+        ;;
+
+    help|--help|-h|"")
+        show_help
+        ;;
+
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

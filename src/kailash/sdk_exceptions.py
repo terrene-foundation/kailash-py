@@ -1,8 +1,76 @@
-"""Exception classes for the Kailash SDK.
+"""Comprehensive Exception System for the Kailash SDK.
 
-This module defines all custom exceptions used throughout the Kailash SDK.
-Each exception includes helpful error messages and context to guide users
-toward correct usage.
+This module provides a comprehensive hierarchy of custom exceptions designed to
+provide clear, actionable error information throughout the Kailash SDK. Each
+exception includes detailed context, suggestions for resolution, and integration
+with debugging and monitoring systems.
+
+Design Philosophy:
+    Provides a clear, hierarchical exception system that enables precise error
+    handling and debugging. Each exception includes comprehensive context,
+    actionable suggestions, and integration points for monitoring and logging
+    systems.
+
+Key Features:
+    - Hierarchical exception structure for precise error handling
+    - Rich context information with actionable suggestions
+    - Integration with logging and monitoring systems
+    - Cycle-specific exceptions for advanced workflow patterns
+    - Security and safety violation reporting
+    - Performance and resource-related error tracking
+
+Exception Categories:
+    - **Core Exceptions**: Fundamental SDK operations
+    - **Workflow Exceptions**: Workflow creation and validation
+    - **Execution Exceptions**: Runtime execution errors
+    - **Cycle Exceptions**: Cyclic workflow-specific errors
+    - **Security Exceptions**: Safety and security violations
+    - **Configuration Exceptions**: Parameter and setup errors
+
+Core Exception Hierarchy:
+    - KailashException: Base exception for all SDK errors
+        - NodeException: Node-related errors
+            - NodeValidationError: Validation failures
+            - NodeExecutionError: Runtime execution issues
+            - NodeConfigurationError: Configuration problems
+        - WorkflowException: Workflow-related errors
+            - WorkflowValidationError: Validation failures
+            - WorkflowExecutionError: Execution failures
+        - RuntimeException: Runtime execution errors
+        - SecurityException: Security and safety violations
+
+Cycle-Specific Exceptions (v0.2.0):
+    Enhanced exception handling for cyclic workflows with detailed context
+    and resolution guidance for cycle-specific issues.
+
+Examples:
+    Basic exception handling:
+
+    >>> from kailash.sdk_exceptions import WorkflowValidationError, NodeExecutionError
+    >>> try:
+    ...     workflow.validate()
+    ... except WorkflowValidationError as e:
+    ...     print(f"Validation failed: {e}")
+    ...     # Exception includes helpful context and suggestions
+
+    Production error monitoring:
+
+    >>> import logging
+    >>> from kailash.sdk_exceptions import KailashException
+    >>> logger = logging.getLogger(__name__)
+    >>> try:
+    ...     runtime.execute(workflow)
+    ... except KailashException as e:
+    ...     logger.error(f"SDK Error: {e}", extra={
+    ...         'error_type': type(e).__name__,
+    ...         'workflow_id': getattr(workflow, 'workflow_id', None)
+            })
+            raise
+
+See Also:
+    - :mod:`kailash.workflow.cycle_exceptions` for cycle-specific errors
+    - :mod:`kailash.security` for security validation and exceptions
+    - :doc:`/guides/error_handling` for comprehensive error handling patterns
 """
 
 
@@ -115,6 +183,23 @@ class ConnectionError(WorkflowException):
     - Trying to connect incompatible node outputs/inputs
     - Connection already exists
     - Node not found in workflow
+    """
+
+    pass
+
+
+class CycleConfigurationError(WorkflowException):
+    """Raised when cycle configuration is invalid.
+
+    This exception is thrown by the CycleBuilder API when cycle parameters
+    are missing, invalid, or conflicting. It provides actionable error messages
+    to guide developers toward correct cycle configuration.
+
+    Common scenarios:
+    - Missing required cycle parameters (max_iterations or convergence_check)
+    - Invalid parameter values (negative iterations, empty conditions)
+    - Unsafe expressions in convergence conditions
+    - Missing source/target nodes before build()
     """
 
     pass

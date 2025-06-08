@@ -3,6 +3,7 @@
 import json
 import logging
 import uuid
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -50,6 +51,33 @@ class Connection(BaseModel):
     source_output: str = Field(..., description="Output field from source")
     target_node: str = Field(..., description="Target node ID")
     target_input: str = Field(..., description="Input field on target")
+
+
+class CyclicConnection(Connection):
+    """Extended connection supporting cycle metadata."""
+
+    cycle: bool = Field(
+        default=False, description="Whether this connection creates a cycle"
+    )
+    max_iterations: Optional[int] = Field(
+        default=None, description="Maximum cycle iterations"
+    )
+    convergence_check: Optional[str] = Field(
+        default=None, description="Convergence condition expression"
+    )
+    cycle_id: Optional[str] = Field(
+        default=None, description="Logical cycle group identifier"
+    )
+    timeout: Optional[float] = Field(
+        default=None, description="Cycle timeout in seconds"
+    )
+    memory_limit: Optional[int] = Field(default=None, description="Memory limit in MB")
+    condition: Optional[str] = Field(
+        default=None, description="Conditional cycle routing expression"
+    )
+    parent_cycle: Optional[str] = Field(
+        default=None, description="Parent cycle for nested cycles"
+    )
 
 
 class Workflow:
@@ -198,6 +226,14 @@ class Workflow:
         source_node: str,
         target_node: str,
         mapping: Optional[Dict[str, str]] = None,
+        cycle: bool = False,
+        max_iterations: Optional[int] = None,
+        convergence_check: Optional[str] = None,
+        cycle_id: Optional[str] = None,
+        timeout: Optional[float] = None,
+        memory_limit: Optional[int] = None,
+        condition: Optional[str] = None,
+        parent_cycle: Optional[str] = None,
     ) -> None:
         """Connect two nodes in the workflow.
 
@@ -205,10 +241,18 @@ class Workflow:
             source_node: Source node ID
             target_node: Target node ID
             mapping: Dict mapping source outputs to target inputs
+            cycle: Whether this connection creates a cycle
+            max_iterations: Maximum cycle iterations (required if cycle=True)
+            convergence_check: Convergence condition expression
+            cycle_id: Logical cycle group identifier
+            timeout: Cycle timeout in seconds
+            memory_limit: Memory limit in MB
+            condition: Conditional cycle routing expression
+            parent_cycle: Parent cycle for nested cycles
 
         Raises:
             ConnectionError: If connection is invalid
-            WorkflowValidationError: If nodes don't exist
+            WorkflowValidationError: If nodes don't exist or cycle parameters invalid
         """
         if source_node not in self.nodes:
             available_nodes = ", ".join(self.nodes.keys())
@@ -223,54 +267,259 @@ class Workflow:
                 f"Available nodes: {available_nodes}"
             )
 
-        # Self-connection check
-        if source_node == target_node:
-            raise ConnectionError(f"Cannot connect node '{source_node}' to itself")
+        # Self-connection check (allow for cycles)
+        if source_node == target_node and not cycle:
+            raise ConnectionError(
+                f"Cannot connect node '{source_node}' to itself unless it's a cycle"
+            )
+
+        # Validate cycle parameters and issue deprecation warning
+        if cycle:
+            # Issue deprecation warning for cycle usage via connect()
+            warnings.warn(
+                "Using workflow.connect() with cycle=True is deprecated and will be removed in v0.2.0. "
+                "Use the new CycleBuilder API instead:\n"
+                "  workflow.create_cycle('cycle_name')\\\n"
+                "    .connect(source_node, target_node)\\\n"
+                "    .max_iterations(N)\\\n"
+                "    .converge_when('condition')\\\n"
+                "    .build()\n"
+                "See Phase 5 API documentation for details.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+            # Import enhanced exceptions for better error messaging
+            try:
+                from kailash.workflow.cycle_exceptions import CycleConfigurationError
+
+                if max_iterations is None and convergence_check is None:
+                    raise CycleConfigurationError(
+                        "Cycle connections must specify either max_iterations or convergence_check",
+                        error_code="CYCLE_CONFIG_001",
+                        suggestions=[
+                            "Add max_iterations parameter (recommended: 10-100)",
+                            "Add convergence_check expression (e.g., 'error < 0.01')",
+                            "Consider using the new CycleBuilder API for better validation",
+                        ],
+                    )
+                if max_iterations is not None and max_iterations <= 0:
+                    raise CycleConfigurationError(
+                        f"max_iterations must be positive, got {max_iterations}",
+                        error_code="CYCLE_CONFIG_002",
+                        invalid_params={"max_iterations": max_iterations},
+                        suggestions=[
+                            "Use 10-100 iterations for quick convergence",
+                            "Use 100-1000 iterations for complex optimization",
+                        ],
+                    )
+                if timeout is not None and timeout <= 0:
+                    raise CycleConfigurationError(
+                        f"timeout must be positive, got {timeout}",
+                        error_code="CYCLE_CONFIG_003",
+                        invalid_params={"timeout": timeout},
+                        suggestions=[
+                            "Use 30-300 seconds for most cycles",
+                            "Use longer timeouts for complex processing",
+                        ],
+                    )
+                if memory_limit is not None and memory_limit <= 0:
+                    raise CycleConfigurationError(
+                        f"memory_limit must be positive, got {memory_limit}",
+                        error_code="CYCLE_CONFIG_004",
+                        invalid_params={"memory_limit": memory_limit},
+                        suggestions=[
+                            "Use 100-1000 MB for most cycles",
+                            "Increase limit for data-intensive processing",
+                        ],
+                    )
+            except ImportError:
+                # Fallback to old exceptions if enhanced ones aren't available
+                if max_iterations is None and convergence_check is None:
+                    raise WorkflowValidationError(
+                        "Cycle connections must specify either max_iterations or convergence_check"
+                    )
+                if max_iterations is not None and max_iterations <= 0:
+                    raise WorkflowValidationError("max_iterations must be positive")
+                if timeout is not None and timeout <= 0:
+                    raise WorkflowValidationError("timeout must be positive")
+                if memory_limit is not None and memory_limit <= 0:
+                    raise WorkflowValidationError("memory_limit must be positive")
 
         # Default mapping if not provided
         if mapping is None:
             mapping = {"output": "input"}
 
-        # Check for existing connections
+        # Check for existing connections (allow multiple cycles with different IDs)
         existing_connections = [
             c
             for c in self.connections
             if c.source_node == source_node and c.target_node == target_node
         ]
-        if existing_connections:
+        if existing_connections and not cycle:
             raise ConnectionError(
                 f"Connection already exists between '{source_node}' and '{target_node}'. "
                 f"Existing mappings: {[c.model_dump() for c in existing_connections]}"
             )
 
-        # Create connections
+        # Create connections (store in self.connections list)
         for source_output, target_input in mapping.items():
             try:
-                connection = Connection(
-                    source_node=source_node,
-                    source_output=source_output,
-                    target_node=target_node,
-                    target_input=target_input,
-                )
+                if cycle:
+                    # Create cyclic connection with all metadata
+                    connection = CyclicConnection(
+                        source_node=source_node,
+                        source_output=source_output,
+                        target_node=target_node,
+                        target_input=target_input,
+                        cycle=cycle,
+                        max_iterations=max_iterations,
+                        convergence_check=convergence_check,
+                        cycle_id=cycle_id,
+                        timeout=timeout,
+                        memory_limit=memory_limit,
+                        condition=condition,
+                        parent_cycle=parent_cycle,
+                    )
+                else:
+                    # Create regular connection
+                    connection = Connection(
+                        source_node=source_node,
+                        source_output=source_output,
+                        target_node=target_node,
+                        target_input=target_input,
+                    )
             except ValidationError as e:
                 raise ConnectionError(f"Invalid connection data: {e}") from e
 
             self.connections.append(connection)
 
-            # Add edge to graph
-            self.graph.add_edge(
-                source_node,
-                target_node,
-                from_output=source_output,
-                to_input=target_input,
-                mapping={
-                    source_output: target_input
-                },  # Keep for backward compatibility
+        # FIXED: Add edge to graph ONCE with the complete mapping
+        edge_data = {
+            "mapping": mapping,  # Complete mapping dictionary
+        }
+
+        # For backward compatibility, store single mappings as strings
+        # and multi-mappings as lists
+        if len(mapping) == 1:
+            # Single mapping - store as strings for backward compatibility
+            edge_data["from_output"] = list(mapping.keys())[0]
+            edge_data["to_input"] = list(mapping.values())[0]
+        else:
+            # Multiple mappings - store as lists
+            edge_data["from_output"] = list(mapping.keys())
+            edge_data["to_input"] = list(mapping.values())
+
+        # Add cycle metadata to edge
+        if cycle:
+            edge_data.update(
+                {
+                    "cycle": cycle,
+                    "max_iterations": max_iterations,
+                    "convergence_check": convergence_check,
+                    "cycle_id": cycle_id,
+                    "timeout": timeout,
+                    "memory_limit": memory_limit,
+                    "condition": condition,
+                    "parent_cycle": parent_cycle,
+                }
             )
 
-        logger.info(
-            f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}"
-        )
+        # Add or update the edge (NetworkX will update if edge exists)
+        self.graph.add_edge(source_node, target_node, **edge_data)
+
+        # Enhanced logging for cycles
+        if cycle:
+            cycle_info = f" (CYCLE: id={cycle_id}, max_iter={max_iterations}, conv={convergence_check})"
+            logger.info(
+                f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}{cycle_info}"
+            )
+        else:
+            logger.info(
+                f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}"
+            )
+
+    def create_cycle(self, cycle_id: Optional[str] = None):
+        """
+        Create a new CycleBuilder for intuitive cycle configuration.
+
+        This method provides the entry point to the enhanced CycleBuilder API,
+        which offers a fluent, chainable interface for creating cyclic workflow
+        connections with better developer experience than the raw connect() method.
+
+        Design Philosophy:
+            Replaces verbose parameter-heavy cycle creation with an intuitive
+            builder pattern that guides developers through cycle configuration
+            with IDE auto-completion and method chaining.
+
+        Upstream Dependencies:
+            - Requires source and target nodes to exist in workflow
+            - Uses existing connection validation and cycle infrastructure
+
+        Downstream Consumers:
+            - CycleBuilder.build() calls back to workflow.connect() internally
+            - CyclicWorkflowExecutor for execution of configured cycles
+            - Cycle debugging and visualization tools
+
+        Usage Patterns:
+            1. Simple cycles: create_cycle().connect().max_iterations().build()
+            2. Convergence-based: create_cycle().connect().converge_when().build()
+            3. Complex cycles: Full builder chain with timeouts and conditions
+
+        Implementation Details:
+            Creates a CycleBuilder instance that accumulates configuration
+            through method chaining, then applies it via workflow.connect()
+            when build() is called. Maintains full backward compatibility.
+
+        Error Handling:
+            - WorkflowValidationError: If cycle_id conflicts with existing cycles
+            - CycleConfigurationError: Raised by CycleBuilder for invalid config
+
+        Side Effects:
+            Creates CycleBuilder instance but does not modify workflow until
+            build() is called. No validation occurs until build() time.
+
+        Args:
+            cycle_id (Optional[str]): Optional identifier for the cycle group.
+                If None, cycles are grouped by connection pattern.
+                Used for nested cycles and debugging identification.
+
+        Returns:
+            CycleBuilder: Fluent builder instance for configuring the cycle
+
+        Raises:
+            ImportError: If CycleBuilder module cannot be imported
+
+        Example:
+            >>> # Basic cycle with iteration limit
+            >>> workflow.create_cycle("optimization") \\
+            ...     .connect("processor", "evaluator") \\
+            ...     .max_iterations(50) \\
+            ...     .build()
+
+            >>> # Convergence-based cycle with timeout
+            >>> workflow.create_cycle("quality_improvement") \\
+            ...     .connect("cleaner", "validator", {"result": "data"}) \\
+            ...     .converge_when("quality > 0.95") \\
+            ...     .timeout(300) \\
+            ...     .build()
+
+            >>> # Nested cycle with memory limit
+            >>> workflow.create_cycle("inner_optimization") \\
+            ...     .connect("fine_tuner", "evaluator") \\
+            ...     .max_iterations(10) \\
+            ...     .nested_in("outer_optimization") \\
+            ...     .memory_limit(1024) \\
+            ...     .build()
+        """
+        try:
+            from kailash.workflow.cycle_builder import CycleBuilder
+        except ImportError as e:
+            raise ImportError(
+                "CycleBuilder not available. Ensure kailash.workflow.cycle_builder is installed."
+            ) from e
+
+        return CycleBuilder(workflow=self, cycle_id=cycle_id)
 
     def _add_edge_internal(
         self, from_node: str, from_output: str, to_node: str, to_input: str
@@ -308,23 +557,155 @@ class Workflow:
         # Fallback to _node_instances
         return self._node_instances.get(node_id)
 
+    def separate_dag_and_cycle_edges(self) -> Tuple[List[Tuple], List[Tuple]]:
+        """Separate DAG edges from cycle edges.
+
+        Returns:
+            Tuple of (dag_edges, cycle_edges) where each edge is (source, target, data)
+        """
+        dag_edges = []
+        cycle_edges = []
+
+        for source, target, data in self.graph.edges(data=True):
+            if data.get("cycle", False):
+                cycle_edges.append((source, target, data))
+            else:
+                dag_edges.append((source, target, data))
+
+        return dag_edges, cycle_edges
+
+    def get_cycle_groups(self) -> Dict[str, List[Tuple]]:
+        """Get cycle edges grouped by cycle_id with enhanced multi-node cycle detection.
+
+        For multi-node cycles like A → B → C → A where only C → A is marked as cycle,
+        this method identifies all nodes (A, B, C) that are part of the same strongly
+        connected component and groups them together.
+
+        Returns:
+            Dict mapping cycle_id to list of cycle edges
+        """
+        cycle_groups = {}
+        _, cycle_edges = self.separate_dag_and_cycle_edges()
+
+        # First pass: group by cycle_id as before
+        for source, target, data in cycle_edges:
+            cycle_id = data.get("cycle_id", "default")
+            if cycle_id not in cycle_groups:
+                cycle_groups[cycle_id] = []
+            cycle_groups[cycle_id].append((source, target, data))
+
+        # Second pass: enhance cycle groups with strongly connected components
+        enhanced_groups = {}
+        for cycle_id, edges in cycle_groups.items():
+            # Find all nodes that are part of strongly connected components
+            # containing any cycle edge nodes
+            cycle_nodes = set()
+            for source, target, data in edges:
+                cycle_nodes.add(source)
+                cycle_nodes.add(target)
+
+            # Find strongly connected components in the full graph
+            try:
+                # Get all strongly connected components
+                sccs = list(nx.strongly_connected_components(self.graph))
+
+                # Find which SCC contains our cycle nodes
+                target_scc = None
+                for scc in sccs:
+                    if any(node in scc for node in cycle_nodes):
+                        target_scc = scc
+                        break
+
+                if target_scc and len(target_scc) > 1:
+                    # Multi-node cycle detected - include all SCC nodes
+                    logger.debug(
+                        f"Enhanced cycle detection for {cycle_id}: {cycle_nodes} → {target_scc}"
+                    )
+
+                    # Add edges for all nodes in the SCC that are connected
+                    enhanced_edges = list(edges)  # Start with original cycle edges
+                    for node in target_scc:
+                        for successor in self.graph.successors(node):
+                            if successor in target_scc:
+                                # This is an edge within the SCC
+                                edge_data = self.graph.get_edge_data(node, successor)
+                                if not edge_data.get("cycle", False):
+                                    # Add as a synthetic cycle edge for execution planning
+                                    synthetic_edge_data = edge_data.copy()
+                                    synthetic_edge_data.update(
+                                        {
+                                            "cycle": True,
+                                            "cycle_id": cycle_id,
+                                            "synthetic": True,  # Mark as synthetic for reference
+                                            "max_iterations": edges[0][2].get(
+                                                "max_iterations"
+                                            ),
+                                            "convergence_check": edges[0][2].get(
+                                                "convergence_check"
+                                            ),
+                                            "timeout": edges[0][2].get("timeout"),
+                                            "memory_limit": edges[0][2].get(
+                                                "memory_limit"
+                                            ),
+                                        }
+                                    )
+                                    enhanced_edges.append(
+                                        (node, successor, synthetic_edge_data)
+                                    )
+
+                    enhanced_groups[cycle_id] = enhanced_edges
+                else:
+                    # Single-node cycle or no SCC found
+                    enhanced_groups[cycle_id] = edges
+
+            except Exception as e:
+                logger.warning(f"Could not enhance cycle detection for {cycle_id}: {e}")
+                # Fall back to original behavior
+                enhanced_groups[cycle_id] = edges
+
+        return enhanced_groups
+
+    def has_cycles(self) -> bool:
+        """Check if the workflow contains any cycle connections.
+
+        Returns:
+            True if workflow has cycle connections, False otherwise
+        """
+        _, cycle_edges = self.separate_dag_and_cycle_edges()
+        return len(cycle_edges) > 0
+
     def get_execution_order(self) -> List[str]:
-        """Get topological execution order for nodes.
+        """Get topological execution order for nodes, handling cycles gracefully.
 
         Returns:
             List of node IDs in execution order
 
         Raises:
-            WorkflowValidationError: If workflow contains cycles
+            WorkflowValidationError: If workflow contains unmarked cycles
         """
+        # Create a copy of the graph without cycle edges for topological sort
+        dag_edges, cycle_edges = self.separate_dag_and_cycle_edges()
+
+        # Create DAG-only graph
+        dag_graph = nx.DiGraph()
+        dag_graph.add_nodes_from(self.graph.nodes(data=True))
+        for source, target, data in dag_edges:
+            dag_graph.add_edge(source, target, **data)
+
         try:
-            return list(nx.topological_sort(self.graph))
+            # Get topological order for DAG portion
+            return list(nx.topological_sort(dag_graph))
         except nx.NetworkXUnfeasible:
-            cycles = list(nx.simple_cycles(self.graph))
-            raise WorkflowValidationError(
-                f"Workflow contains cycles: {cycles}. "
-                "Remove circular dependencies to create a valid workflow."
-            )
+            # Check if there are unmarked cycles
+            cycles = list(nx.simple_cycles(dag_graph))
+            if cycles:
+                raise WorkflowValidationError(
+                    f"Workflow contains unmarked cycles: {cycles}. "
+                    "Mark cycle connections with cycle=True or remove circular dependencies."
+                )
+            else:
+                # This shouldn't happen, but handle gracefully
+                raise WorkflowValidationError("Unable to determine execution order")
 
     def validate(self) -> None:
         """Validate the workflow structure.
@@ -332,11 +713,14 @@ class Workflow:
         Raises:
             WorkflowValidationError: If workflow is invalid
         """
-        # Check for cycles
+        # Check for unmarked cycles and validate execution order
         try:
             self.get_execution_order()
         except WorkflowValidationError:
             raise
+
+        # Validate cycle configurations
+        self._validate_cycles()
 
         # Check all nodes have required inputs
         for node_id, node_instance in self._node_instances.items():
@@ -354,8 +738,12 @@ class Workflow:
             for _, _, data in incoming_edges:
                 to_input = data.get("to_input")
                 if to_input:
-                    connected_inputs.add(to_input)
-                # For backward compatibility
+                    # Handle both string and list formats
+                    if isinstance(to_input, list):
+                        connected_inputs.update(to_input)
+                    else:
+                        connected_inputs.add(to_input)
+                # For backward compatibility and complete mapping
                 mapping = data.get("mapping", {})
                 connected_inputs.update(mapping.values())
 
@@ -381,6 +769,66 @@ class Workflow:
                 )
 
         logger.info(f"Workflow '{self.name}' validated successfully")
+
+    def _validate_cycles(self) -> None:
+        """Validate cycle configurations and detect potential issues.
+
+        Raises:
+            WorkflowValidationError: If cycle configuration is invalid
+        """
+        cycle_groups = self.get_cycle_groups()
+
+        for cycle_id, cycle_edges in cycle_groups.items():
+            # Check for conflicting cycle parameters within the same group
+            max_iterations_set = set()
+            convergence_checks = set()
+            timeouts = set()
+
+            for source, target, data in cycle_edges:
+                if data.get("max_iterations") is not None:
+                    max_iterations_set.add(data["max_iterations"])
+                if data.get("convergence_check") is not None:
+                    convergence_checks.add(data["convergence_check"])
+                if data.get("timeout") is not None:
+                    timeouts.add(data["timeout"])
+
+            # Warn about conflicting parameters (but don't fail)
+            if len(max_iterations_set) > 1:
+                logger.warning(
+                    f"Cycle group '{cycle_id}' has conflicting max_iterations: {max_iterations_set}"
+                )
+            if len(convergence_checks) > 1:
+                logger.warning(
+                    f"Cycle group '{cycle_id}' has conflicting convergence_check: {convergence_checks}"
+                )
+            if len(timeouts) > 1:
+                logger.warning(
+                    f"Cycle group '{cycle_id}' has conflicting timeouts: {timeouts}"
+                )
+
+        # Check for nested cycle validity
+        parent_cycles = set()
+        child_cycles = set()
+
+        for cycle_id, cycle_edges in cycle_groups.items():
+            for source, target, data in cycle_edges:
+                if data.get("parent_cycle"):
+                    parent_cycles.add(data["parent_cycle"])
+                    child_cycles.add(cycle_id)
+
+        # Ensure parent cycles exist
+        for parent_cycle in parent_cycles:
+            if parent_cycle not in cycle_groups:
+                raise WorkflowValidationError(
+                    f"Parent cycle '{parent_cycle}' not found in workflow"
+                )
+
+        # Check for circular parent relationships
+        for child_cycle in child_cycles:
+            if child_cycle in parent_cycles:
+                raise WorkflowValidationError(
+                    f"Cycle '{child_cycle}' cannot be both parent and child"
+                )
 
     def run(
         self, task_manager: Optional[TaskManager] = None, **overrides
@@ -482,9 +930,22 @@ class Workflow:
 
                     source_results = results.get(source_node_id, {})
 
-                    # Add connections using from_output/to_input format
-                    if from_output and to_input and from_output in source_results:
-                        node_inputs[to_input] = source_results[from_output]
+                    # Handle backward compatibility - from_output/to_input can be string or list
+                    if from_output and to_input:
+                        # Convert to lists if they're strings (backward compatibility)
+                        from_outputs = (
+                            [from_output]
+                            if isinstance(from_output, str)
+                            else from_output
+                        )
+                        to_inputs = (
+                            [to_input] if isinstance(to_input, str) else to_input
+                        )
+
+                        # Process each mapping pair
+                        for i, (src, dst) in enumerate(zip(from_outputs, to_inputs)):
+                            if src in source_results:
+                                node_inputs[dst] = source_results[src]
 
                     # Also add connections using mapping format for backward compatibility
                     for source_key, target_key in mapping.items():

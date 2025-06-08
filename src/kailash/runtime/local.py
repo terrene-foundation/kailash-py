@@ -1,4 +1,43 @@
-"""Local runtime engine for executing workflows."""
+"""Enhanced Local Runtime Engine with Comprehensive Cycle Support.
+
+This module provides a sophisticated local execution engine for workflows with
+advanced support for both traditional DAG workflows and complex cyclic patterns.
+It offers comprehensive task tracking, performance monitoring, and debugging
+capabilities for development and production use.
+
+Examples:
+    Basic workflow execution:
+
+    >>> from kailash.runtime.local import LocalRuntime
+    >>> runtime = LocalRuntime(debug=True, enable_cycles=True)
+    >>> results = runtime.execute(workflow, parameters={"input": "data"})
+
+    With comprehensive tracking:
+
+    >>> from kailash.tracking import TaskManager
+    >>> runtime = LocalRuntime(enable_cycles=True)
+    >>> task_manager = TaskManager()
+    >>> results = runtime.execute(
+    ...     workflow,
+    ...     task_manager=task_manager,
+    ...     parameters={"initial_value": 10}
+    ... )
+    >>> # Access detailed execution information
+    >>> tasks = task_manager.get_tasks_for_workflow(workflow.workflow_id)
+    >>> metrics = task_manager.get_performance_summary()
+
+    Production configuration:
+
+    >>> runtime = LocalRuntime(
+    ...     debug=False,           # Optimized for performance
+    ...     enable_cycles=True     # Support cyclic patterns
+    ... )
+    >>> results = runtime.execute(
+    ...     workflow,
+    ...     parameters=input_params,
+    ...     run_id="production_run_001"
+    ... )
+"""
 
 import logging
 from datetime import datetime, timezone
@@ -16,21 +55,32 @@ from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.workflow import Workflow
+from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
 
 
 class LocalRuntime:
-    """Local execution engine for workflows."""
+    """Local execution engine for workflows.
 
-    def __init__(self, debug: bool = False):
+    This class provides a robust, production-ready execution engine that seamlessly
+    handles both traditional workflows and advanced cyclic patterns.
+    """
+
+    def __init__(self, debug: bool = False, enable_cycles: bool = True):
         """Initialize the local runtime.
 
         Args:
-            debug: Whether to enable debug logging
+            debug: Whether to enable debug logging.
+            enable_cycles: Whether to enable cyclic workflow support.
         """
         self.debug = debug
+        self.enable_cycles = enable_cycles
         self.logger = logger
+
+        # Initialize cyclic workflow executor if enabled
+        if enable_cycles:
+            self.cyclic_executor = CyclicWorkflowExecutor()
 
         if debug:
             self.logger.setLevel(logging.DEBUG)
@@ -46,16 +96,16 @@ class LocalRuntime:
         """Execute a workflow locally.
 
         Args:
-            workflow: Workflow to execute
-            task_manager: Optional task manager for tracking
-            parameters: Optional parameter overrides per node
+            workflow: Workflow to execute.
+            task_manager: Optional task manager for tracking.
+            parameters: Optional parameter overrides per node.
 
         Returns:
-            Tuple of (results dict, run_id)
+            Tuple of (results dict, run_id).
 
         Raises:
-            RuntimeExecutionError: If execution fails
-            WorkflowValidationError: If workflow is invalid
+            RuntimeExecutionError: If execution fails.
+            WorkflowValidationError: If workflow is invalid.
         """
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
@@ -81,13 +131,36 @@ class LocalRuntime:
                     self.logger.warning(f"Failed to create task run: {e}")
                     # Continue without tracking
 
-            # Execute workflow
-            results = self._execute_workflow(
-                workflow=workflow,
-                task_manager=task_manager,
-                run_id=run_id,
-                parameters=parameters or {},
-            )
+            # Check for cyclic workflows and delegate accordingly
+            if self.enable_cycles and workflow.has_cycles():
+                self.logger.info(
+                    "Cyclic workflow detected, using CyclicWorkflowExecutor"
+                )
+                # Use cyclic executor for workflows with cycles
+                try:
+                    # Pass run_id to cyclic executor if available
+                    cyclic_results, cyclic_run_id = self.cyclic_executor.execute(
+                        workflow, parameters, task_manager, run_id
+                    )
+                    results = cyclic_results
+                    # Update run_id if task manager is being used
+                    if not run_id:
+                        run_id = cyclic_run_id
+                except Exception as e:
+                    raise RuntimeExecutionError(
+                        f"Cyclic workflow execution failed: {e}"
+                    ) from e
+            else:
+                # Execute standard DAG workflow
+                self.logger.info(
+                    "Standard DAG workflow detected, using local execution"
+                )
+                results = self._execute_workflow(
+                    workflow=workflow,
+                    task_manager=task_manager,
+                    run_id=run_id,
+                    parameters=parameters or {},
+                )
 
             # Mark run as completed
             if task_manager and run_id:
@@ -131,16 +204,16 @@ class LocalRuntime:
         """Execute the workflow nodes in topological order.
 
         Args:
-            workflow: Workflow to execute
-            task_manager: Task manager for tracking
-            run_id: Run ID for tracking
-            parameters: Parameter overrides
+            workflow: Workflow to execute.
+            task_manager: Task manager for tracking.
+            run_id: Run ID for tracking.
+            parameters: Parameter overrides.
 
         Returns:
-            Dictionary of node results
+            Dictionary of node results.
 
         Raises:
-            WorkflowExecutionError: If execution fails
+            WorkflowExecutionError: If execution fails.
         """
         # Get execution order
         try:
@@ -304,17 +377,17 @@ class LocalRuntime:
         """Prepare inputs for a node execution.
 
         Args:
-            workflow: The workflow being executed
-            node_id: Current node ID
-            node_instance: Current node instance
-            node_outputs: Outputs from previously executed nodes
-            parameters: Parameter overrides
+            workflow: The workflow being executed.
+            node_id: Current node ID.
+            node_instance: Current node instance.
+            node_outputs: Outputs from previously executed nodes.
+            parameters: Parameter overrides.
 
         Returns:
-            Dictionary of inputs for the node
+            Dictionary of inputs for the node.
 
         Raises:
-            WorkflowExecutionError: If input preparation fails
+            WorkflowExecutionError: If input preparation fails.
         """
         inputs = {}
 
@@ -353,11 +426,11 @@ class LocalRuntime:
         """Determine if execution should stop when a node fails.
 
         Args:
-            workflow: The workflow being executed
-            node_id: Failed node ID
+            workflow: The workflow being executed.
+            node_id: Failed node ID.
 
         Returns:
-            Whether to stop execution
+            Whether to stop execution.
         """
         # Check if any downstream nodes depend on this node
         has_dependents = workflow.graph.out_degree(node_id) > 0

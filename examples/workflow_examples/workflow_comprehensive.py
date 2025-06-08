@@ -23,6 +23,8 @@ from typing import List
 import numpy as np
 import pandas as pd
 
+from examples.utils.paths import get_data_dir
+
 # Ensure module is in path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -53,13 +55,13 @@ logger = logging.getLogger(__name__)
 def setup_directories():
     """Set up necessary directories for examples."""
     # Create data directories
-    data_dir = Path("../data")
+    data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
 
-    output_dir = Path("../data/outputs")
+    output_dir = get_data_dir() / "outputs"
     output_dir.mkdir(exist_ok=True)
 
-    storage_dir = Path("../data/tasks")
+    storage_dir = get_data_dir() / "tasks"
     storage_dir.mkdir(parents=True, exist_ok=True)
 
     return data_dir, output_dir, storage_dir
@@ -442,7 +444,7 @@ def demonstrate_error_handling_workflow(data_dir: Path, output_dir: Path):
     # workflow.connect("error_handler", "error_writer", {"error_handled_data": "data"})
 
     # 4. Execute workflow (with task tracking)
-    storage = FileSystemStorage(base_path=str(Path("../data/tasks")))
+    storage = FileSystemStorage(base_path=str(get_data_dir() / "tasks"))
     task_manager = TaskManager(storage_backend=storage)
 
     # Create run

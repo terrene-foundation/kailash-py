@@ -1,0 +1,271 @@
+# Kailash SDK API Reference - AI Nodes
+# Module: kailash.nodes.ai
+# Version: 0.1.4
+# Last Updated: 2025-01-06
+
+nodes:
+  # A2A Communication Nodes
+  shared_memory_pool:
+    class: kailash.nodes.ai.SharedMemoryPoolNode
+    description: "Central memory pool for agent-to-agent communication"
+    import: "from kailash.nodes.ai.a2a import SharedMemoryPoolNode"
+    config:
+      action: "str - Memory operation (read, write, subscribe, query)"
+      agent_id: "str - ID of the agent performing action"
+      content: "str - Content to write (for write action)"
+      attention_filter: "dict - Filter criteria for reading memories"
+      tags: "List[str] - Memory tags for categorization"
+      importance: "float - Importance score (0-1)"
+    outputs:
+      result: "dict - Memory operation result"
+    example: |
+      workflow.add_node('memory', SharedMemoryPoolNode(),
+          action='write',
+          agent_id='researcher_001',
+          content='Key finding about correlation',
+          tags=['research', 'correlation'],
+          importance=0.8
+      )
+
+  a2a_agent:
+    class: kailash.nodes.ai.A2AAgentNode
+    description: "Enhanced LLM agent with A2A communication capabilities"
+    import: "from kailash.nodes.ai.a2a import A2AAgentNode"
+    config:
+      agent_id: "str - Unique agent identifier"
+      agent_role: "str - Agent's role (researcher, analyst, etc.)"
+      provider: "str - LLM provider (openai, anthropic, ollama)"
+      model: "str - LLM model to use"
+      memory_pool: "SharedMemoryPoolNode - Reference to memory pool"
+      attention_filter: "dict - Criteria for filtering relevant information"
+      temperature: "float - Sampling temperature"
+      max_tokens: "int - Maximum response tokens"
+    outputs:
+      result: "dict - Agent execution result with memory updates"
+    example: |
+      workflow.add_node('agent', A2AAgentNode(),
+          agent_id='researcher_001',
+          provider='openai',
+          model='gpt-4',
+          memory_pool=memory_pool,
+          attention_filter={'tags': ['data', 'analysis']}
+      )
+
+  a2a_coordinator:
+    class: kailash.nodes.ai.A2ACoordinatorNode
+    description: "Coordinate communication and task delegation between agents"
+    import: "from kailash.nodes.ai.a2a import A2ACoordinatorNode"
+    config:
+      action: "str - Coordination action (register, delegate, broadcast, consensus)"
+      agent_info: "dict - Agent information for registration"
+      task: "dict - Task to delegate or coordinate"
+      coordination_strategy: "str - Strategy (best_match, round_robin, auction)"
+      available_agents: "List[dict] - List of available agents"
+      proposals: "List[dict] - Proposals for consensus"
+      voting_agents: "List[str] - Agent IDs for voting"
+    outputs:
+      result: "dict - Coordination result"
+    example: |
+      workflow.add_node('coordinator', A2ACoordinatorNode(),
+          action='delegate',
+          task={'type': 'research', 'description': 'Analyze trends'},
+          available_agents=[{'id': 'agent1', 'skills': ['research']}],
+          coordination_strategy='best_match'
+      )
+
+  # Self-Organizing Agent Nodes
+  agent_pool_manager:
+    class: kailash.nodes.ai.AgentPoolManagerNode
+    description: "Manage pool of self-organizing agents"
+    import: "from kailash.nodes.ai.self_organizing import AgentPoolManagerNode"
+    config:
+      action: "str - Pool operation (register, find_by_capability, update_status)"
+      agent_id: "str - ID of the agent"
+      capabilities: "List[str] - List of agent capabilities"
+      required_capabilities: "List[str] - Capabilities required for search"
+    outputs:
+      result: "dict - Pool operation result"
+    example: |
+      workflow.add_node('pool', AgentPoolManagerNode(),
+          action='register',
+          agent_id='research_agent_001',
+          capabilities=['data_analysis', 'research']
+      )
+
+  problem_analyzer:
+    class: kailash.nodes.ai.ProblemAnalyzerNode
+    description: "Analyze problems for capability requirements"
+    import: "from kailash.nodes.ai.self_organizing import ProblemAnalyzerNode"
+    config:
+      problem_description: "str - Description of problem to solve"
+      context: "dict - Additional context about the problem"
+      decomposition_strategy: "str - Strategy for decomposing problem"
+    outputs:
+      analysis: "dict - Problem analysis result"
+    example: |
+      workflow.add_node('analyzer', ProblemAnalyzerNode(),
+          problem_description='Predict customer churn',
+          context={'domain': 'business', 'urgency': 'high'}
+      )
+
+  team_formation:
+    class: kailash.nodes.ai.TeamFormationNode
+    description: "Form optimal teams based on problem requirements"
+    import: "from kailash.nodes.ai.self_organizing import TeamFormationNode"
+    config:
+      problem_analysis: "dict - Analysis from ProblemAnalyzerNode"
+      available_agents: "List[dict] - List of available agents"
+      formation_strategy: "str - Team formation strategy"
+      constraints: "dict - Constraints for team formation"
+    outputs:
+      team: "dict - Formed team configuration"
+    example: |
+      workflow.add_node('formation', TeamFormationNode(),
+          formation_strategy='capability_matching',
+          available_agents=agents
+      )
+
+  self_organizing_agent:
+    class: kailash.nodes.ai.SelfOrganizingAgentNode
+    description: "Agent that can autonomously join teams and collaborate"
+    import: "from kailash.nodes.ai.self_organizing import SelfOrganizingAgentNode"
+    config:
+      agent_id: "str - Unique agent identifier"
+      capabilities: "List[str] - Agent's capabilities"
+      team_context: "dict - Current team information"
+      collaboration_mode: "str - Mode (cooperative, competitive, mixed)"
+      autonomy_level: "float - Level of autonomous decision making"
+    outputs:
+      result: "dict - Agent execution result"
+    example: |
+      workflow.add_node('agent', SelfOrganizingAgentNode(),
+          agent_id='adaptive_agent_001',
+          capabilities=['data_analysis', 'machine_learning'],
+          team_context={'team_id': 'research_team_1'}
+      )
+
+  solution_evaluator:
+    class: kailash.nodes.ai.SolutionEvaluatorNode
+    description: "Evaluate solutions and determine if iteration is needed"
+    import: "from kailash.nodes.ai.self_organizing import SolutionEvaluatorNode"
+    config:
+      solution: "dict - Solution to evaluate"
+      problem_requirements: "dict - Original problem requirements"
+      team_performance: "dict - Team performance metrics"
+      evaluation_criteria: "dict - Custom evaluation criteria"
+    outputs:
+      evaluation: "dict - Solution evaluation result"
+    example: |
+      workflow.add_node('evaluator', SolutionEvaluatorNode(),
+          solution={'approach': 'ML model', 'confidence': 0.85},
+          problem_requirements={'quality_threshold': 0.8}
+      )
+
+  # Intelligent Orchestration Nodes
+  intelligent_cache:
+    class: kailash.nodes.ai.IntelligentCacheNode
+    description: "Intelligent caching with semantic similarity"
+    import: "from kailash.nodes.ai.intelligent_agent_orchestrator import IntelligentCacheNode"
+    config:
+      action: "str - Cache operation (cache, get, invalidate, stats, cleanup)"
+      cache_key: "str - Unique key for cached item"
+      data: "Any - Data to cache"
+      metadata: "dict - Metadata including source, cost, semantic tags"
+      ttl: "int - Time to live in seconds"
+      similarity_threshold: "float - Threshold for semantic matching"
+    outputs:
+      result: "Any - Cache operation result"
+    example: |
+      workflow.add_node('cache', IntelligentCacheNode(),
+          action='cache',
+          cache_key='weather_api_nyc',
+          ttl=3600
+      )
+
+  mcp_agent:
+    class: kailash.nodes.ai.MCPAgentNode
+    description: "Self-organizing agent with MCP integration"
+    import: "from kailash.nodes.ai.intelligent_agent_orchestrator import MCPAgentNode"
+    config:
+      agent_id: "str - Unique agent identifier"
+      capabilities: "List[str] - Agent capabilities"
+      mcp_servers: "List[dict] - MCP server configurations"
+      cache_node_id: "str - ID of cache node"
+      tool_preferences: "dict - Agent's tool preferences"
+      cost_awareness: "float - Cost consciousness (0-1)"
+    outputs:
+      result: "dict - Agent execution result"
+    example: |
+      workflow.add_node('mcp_agent', MCPAgentNode(),
+          agent_id='mcp_agent_001',
+          capabilities=['data_analysis', 'api_integration'],
+          mcp_servers=[{'name': 'weather_server', 'command': 'python'}]
+      )
+
+  orchestration_manager:
+    class: kailash.nodes.ai.OrchestrationManagerNode
+    description: "Central coordinator for self-organizing workflows"
+    import: "from kailash.nodes.ai.intelligent_agent_orchestrator import OrchestrationManagerNode"
+    config:
+      query: "str - Main query or problem to solve"
+      context: "dict - Additional context for the query"
+      agent_pool_size: "int - Number of agents in the pool"
+      mcp_servers: "List[dict] - MCP server configurations"
+      max_iterations: "int - Maximum number of solution iterations"
+      quality_threshold: "float - Quality threshold for solution acceptance"
+      time_limit_minutes: "int - Maximum time limit for solution"
+      enable_caching: "bool - Enable intelligent caching"
+    outputs:
+      result: "dict - Orchestration result"
+    example: |
+      workflow.add_node('orchestrator', OrchestrationManagerNode(),
+          query='Analyze market trends and develop strategy',
+          agent_pool_size=15,
+          max_iterations=3
+      )
+
+  # AI/ML Nodes
+  llm_agent:
+    class: kailash.nodes.ai.LLMAgentNode
+    description: "Interact with language models"
+    import: "from kailash.nodes.ai import LLMAgentNode"
+    config:
+      provider: "str - LLM provider ('openai', 'anthropic', 'ollama')"
+      model: "str - Model name (e.g., 'gpt-4', 'claude-3')"
+      api_key: "str - API key (or use env var)"
+      temperature: "float - Sampling temperature (default: 0.7)"
+      max_tokens: "int - Maximum tokens (default: 1000)"
+      system_prompt: "str - System prompt (optional)"
+    inputs:
+      prompt: "str - User prompt"
+      context: "Any - Additional context (optional)"
+    outputs:
+      response: "str - Model response"
+      metadata: "dict - Response metadata"
+    example: |
+      workflow.add_node('llm', LLMAgentNode(),
+          provider='openai',
+          model='gpt-4',
+          temperature=0.7,
+          system_prompt='You are a helpful assistant.'
+      )
+
+  embedding_generator:
+    class: kailash.nodes.ai.EmbeddingGeneratorNode
+    description: "Generate text embeddings"
+    import: "from kailash.nodes.ai import EmbeddingGeneratorNode"
+    config:
+      provider: "str - Embedding provider"
+      model: "str - Embedding model name"
+      api_key: "str - API key (or use env var)"
+      batch_size: "int - Batch size for processing (default: 100)"
+    inputs:
+      texts: "List[str] - Texts to embed"
+    outputs:
+      embeddings: "List[List[float]] - Text embeddings"
+      metadata: "dict - Embedding metadata"
+    example: |
+      workflow.add_node('embedder', EmbeddingGeneratorNode(),
+          provider='openai',
+          model='text-embedding-ada-002'
+      )

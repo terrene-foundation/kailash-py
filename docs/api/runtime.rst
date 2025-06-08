@@ -110,6 +110,86 @@ Asynchronous runtime for I/O-bound operations.
 
    results = asyncio.run(run())
 
+CyclicWorkflowExecutor
+======================
+
+Specialized executor for workflows containing cycles.
+
+.. autoclass:: kailash.workflow.cyclic_runner.CyclicWorkflowExecutor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Characteristics:**
+
+- Optimized for iterative workflows
+- Automatic convergence detection
+- State management between iterations
+- Performance tracking per cycle
+- Memory-efficient execution
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
+   from kailash import Workflow
+
+   # Create workflow with cycles
+   workflow = Workflow("optimization")
+   workflow.add_node("optimizer", OptimizerNode())
+   workflow.connect("optimizer", "optimizer",
+                    cycle=True,
+                    max_iterations=100,
+                    convergence_check="converged == True")
+
+   # Execute with cyclic executor
+   executor = CyclicWorkflowExecutor()
+   results = executor.execute(workflow, inputs={"optimizer": {"initial_value": 0.1}})
+
+   # Access cycle metrics
+   print(f"Iterations: {results['cycle_metrics']['total_iterations']}")
+   print(f"Converged: {results['cycle_metrics']['converged']}")
+
+**Performance Characteristics:**
+
+- Minimal overhead: ~0.03ms per iteration
+- Efficient state management with automatic cleanup
+- Support for parallel cycles with ParallelCyclicRuntime
+- Configurable history windows for memory optimization
+
+ParallelCyclicRuntime
+=====================
+
+Parallel execution engine for cyclic workflows.
+
+.. autoclass:: kailash.runtime.parallel_cyclic.ParallelCyclicRuntime
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Features:**
+
+- Parallel execution of independent cycle branches
+- Shared state management across workers
+- Automatic load balancing
+- Thread-safe cycle state updates
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
+
+   # Create runtime for parallel cycles
+   runtime = ParallelCyclicRuntime(
+       max_workers=4,
+       cycle_batch_size=10  # Process 10 iterations per batch
+   )
+
+   # Execute workflow with multiple independent cycles
+   results = runtime.execute(workflow)
+
 ParallelRuntime
 ===============
 

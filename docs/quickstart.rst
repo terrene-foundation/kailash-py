@@ -129,6 +129,191 @@ Enrich data using external APIs:
    w.connect_sequential(["companies", "enrich", "save"])
    w.run()
 
+Iterative Processing with Cycles (New in v0.2.0)
+-------------------------------------------------
+
+The new CycleBuilder API makes it easy to create powerful iterative workflows:
+
+**Example 1: Optimization with Automatic Convergence**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleBuilder
+   from kailash.nodes import PythonCodeNode
+
+   # Create optimization workflow
+   builder = CycleBuilder("optimization")
+
+   # Gradient descent optimizer
+   optimizer_code = '''
+   # Access cycle state with automatic defaults
+   try:
+       x = cycle_state["x"]
+       learning_rate = cycle_state["learning_rate"]
+   except:
+       x = 5.0  # Start far from minimum
+       learning_rate = 0.1
+
+   # Gradient of f(x) = (x-2)^2
+   gradient = 2 * (x - 2)
+
+   # Update x
+   new_x = x - learning_rate * gradient
+
+   # Adaptive learning rate
+   if abs(gradient) < 0.1:
+       learning_rate *= 0.9
+
+   # Check convergence
+   converged = abs(gradient) < 0.001
+
+   result = {
+       "x": new_x,
+       "gradient": gradient,
+       "learning_rate": learning_rate,
+       "converged": converged
+   }
+   '''
+
+   builder.add_cycle_node(
+       "optimizer",
+       PythonCodeNode(name="optimizer", code=optimizer_code),
+       convergence_check="converged == True",
+       max_iterations=100
+   )
+
+   # Build and run
+   workflow = builder.build()
+   results = workflow.run()
+
+   # Analyze performance
+   from kailash.workflow import CycleAnalyzer
+   analyzer = CycleAnalyzer(workflow)
+   report = analyzer.analyze_execution(results)
+   print(f"Found minimum at x={results['optimizer']['x']:.4f}")
+   print(f"Converged in {report['iterations']} iterations")
+   print(f"Performance: {report['iterations_per_second']:.0f} iter/sec")
+
+**Example 2: Data Processing with Retry Logic**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleBuilder
+   from kailash.nodes import PythonCodeNode
+
+   builder = CycleBuilder("retry_pipeline")
+
+   # Processor with automatic retry
+   processor_code = '''
+   import random
+
+   # Get data and attempt count
+   try:
+       data = cycle_state["data"]
+       attempts = cycle_state["attempts"]
+   except:
+       data = input_data  # First iteration
+       attempts = 0
+
+   attempts += 1
+
+   # Simulate processing that might fail
+   if attempts < 3 and random.random() < 0.7:
+       # Simulate failure
+       result = {
+           "data": data,
+           "attempts": attempts,
+           "success": False,
+           "error": f"Failed on attempt {attempts}"
+       }
+   else:
+       # Process data
+       processed = [x * 2 for x in data]
+       result = {
+           "data": processed,
+           "attempts": attempts,
+           "success": True
+       }
+   '''
+
+   builder.add_cycle_node(
+       "processor",
+       PythonCodeNode(name="processor", code=processor_code),
+       input_mapping={"input_data": "data"},
+       convergence_check="success == True",
+       max_iterations=5
+   )
+
+   # Run with input data
+   workflow = builder.build()
+   results = workflow.run(parameters={
+       "processor": {"data": [1, 2, 3, 4, 5]}
+   })
+
+   print(f"Succeeded after {results['processor']['attempts']} attempts")
+   print(f"Result: {results['processor']['data']}")
+
+**Example 3: Using Cycle-Aware Nodes**
+
+.. code-block:: python
+
+   from kailash import Workflow
+   from kailash.nodes.base_cycle_aware import CycleAwareNode
+   from kailash.nodes.base import NodeParameter
+   from typing import Dict, Any
+
+   class ConvergenceNode(CycleAwareNode):
+       """Node with built-in convergence detection tools."""
+
+       def get_parameters(self) -> Dict[str, NodeParameter]:
+           return {
+               "target": NodeParameter(name="target", type=float, required=True),
+               "tolerance": NodeParameter(name="tolerance", type=float, required=False, default=0.01)
+           }
+
+       def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+           target = kwargs["target"]
+           tolerance = kwargs.get("tolerance", 0.01)
+
+           # Get iteration and previous state
+           iteration = self.get_iteration(context)
+           prev_state = self.get_previous_state(context)
+
+           # Initialize or update value
+           value = prev_state.get("value", 0.0)
+           value += (target - value) * 0.3  # Move 30% closer each iteration
+
+           # Track values for trend analysis
+           self.accumulate_values(context, "value", value)
+           trend = self.detect_convergence_trend(context, "value")
+
+           # Log progress
+           self.log_cycle_info(context, f"Iteration {iteration}: value={value:.4f}")
+
+           # Check convergence
+           converged = abs(value - target) < tolerance or trend["converging"]
+
+           # Save state
+           self.set_cycle_state({"value": value})
+
+           return {
+               "value": value,
+               "converged": converged,
+               "iterations": iteration + 1,
+               "trend": trend
+           }
+
+   # Use in workflow
+   workflow = Workflow("convergence_demo")
+   workflow.add_node("converge", ConvergenceNode())
+   workflow.connect("converge", "converge",
+                    cycle=True,
+                    max_iterations=50,
+                    convergence_check="converged == True")
+
+   results = workflow.run(parameters={"converge": {"target": 10.0}})
+   print(f"Converged to {results['converge']['value']:.4f} in {results['converge']['iterations']} iterations")
+
 Text Analysis Pipeline
 ----------------------
 
@@ -397,16 +582,43 @@ Track and visualize workflow performance:
    # - I/O operations
    # - Resource bottlenecks
 
+7. **Debug Cyclic Workflows** (New in v0.2.0)
+
+Use the new developer tools for cyclic workflows:
+
+.. code-block:: python
+
+   from kailash.workflow import CycleDebugger, CycleProfiler
+
+   # Enable debugging
+   debugger = CycleDebugger(workflow)
+   debugger.enable_debugging()
+
+   # Run workflow
+   results = workflow.run()
+
+   # Get detailed debug info
+   debug_info = debugger.get_debug_info()
+   print(f"Total iterations: {debug_info['total_iterations']}")
+   print(f"Convergence history: {debug_info['convergence_history']}")
+
+   # Profile performance
+   profiler = CycleProfiler(workflow)
+   profile = profiler.profile_execution(results)
+   print(f"Average iteration time: {profile['avg_iteration_time']:.4f}s")
+   print(f"Bottleneck: {profile['bottleneck_node']}")
+
 Next Steps
 ==========
 
 Ready for more? Here's where to go next:
 
-1. **Learn Core Concepts**: Read about workflow concepts
+1. **Master Cyclic Workflows**: :doc:`guides/cyclic_workflows` (New in v0.2.0)
 2. **Explore Node Types**: :doc:`api/nodes`
 3. **Build Complex Workflows**: :doc:`guides/workflows`
 4. **Create Custom Nodes**: :doc:`guides/custom_nodes`
 5. **Production Best Practices**: :doc:`guides/best_practices`
+6. **Learn Phase 5 API**: :doc:`api/workflow` - CycleBuilder and developer tools
 
 Need Help?
 ----------

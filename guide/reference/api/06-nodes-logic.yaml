@@ -1,0 +1,108 @@
+# Kailash SDK API Reference - Logic Nodes
+# Module: kailash.nodes.logic
+# Version: 0.1.4
+# Last Updated: 2025-01-06
+
+nodes:
+  # Logic Nodes
+  switch:
+    class: kailash.nodes.logic.SwitchNode
+    description: "Route data based on conditions"
+    import: "from kailash.nodes.logic import SwitchNode"
+    config:
+      conditions: "List[dict] - Routing conditions"
+      default_output: "str - Default output port (optional)"
+    inputs:
+      data: "Any - Data to evaluate"
+    outputs:
+      (dynamic): "Multiple outputs based on conditions"
+    example: |
+      node = SwitchNode()
+      config = {
+          'conditions': [
+              {'output': 'small', 'expression': 'value < 10'},
+              {'output': 'medium', 'expression': 'value < 100'},
+              {'output': 'large', 'expression': 'value >= 100'}
+          ],
+          'default_output': 'unknown'
+      }
+
+  merge:
+    class: kailash.nodes.logic.MergeNode
+    description: "Merge multiple data streams (Essential for multi-node input aggregation)"
+    import: "from kailash.nodes.logic import MergeNode"
+    config:
+      merge_type: "str - Merge strategy ('concat', 'zip', 'merge_dict')"
+      key: "str - Key field for dict merging (optional)"
+      skip_none: "bool - Skip None values (default: True)"
+    inputs:
+      data1: "Any - First data source (required)"
+      data2: "Any - Second data source (required)"
+      data3: "Any - Third data source (optional)"
+      data4: "Any - Fourth data source (optional)"
+      data5: "Any - Fifth data source (optional)"
+    outputs:
+      merged_data: "Any - Merged data (list for concat, tuples for zip, dict for merge_dict)"
+    pattern: "Multi-Node Input Aggregation"
+    critical_rule: "When multiple nodes feed into one node, ALWAYS use MergeNode"
+    common_mistake: "Connecting multiple nodes directly to aggregator without MergeNode"
+    example: |
+      # Multi-agent aggregation pattern
+      workflow = Workflow("multi_agent_aggregation")
+
+      # Multiple source nodes
+      agent1 = LLMAgentNode(name="agent1")
+      agent2 = LLMAgentNode(name="agent2")
+      agent3 = LLMAgentNode(name="agent3")
+
+      # MergeNode to combine outputs
+      merger = MergeNode(name="merger")  # merge_type="concat" by default
+
+      # Aggregator to process combined data
+      aggregator = PythonCodeNode(
+          name="aggregator",
+          code="""
+      # merged_data comes as a list from MergeNode (concat mode)
+      if isinstance(merged_data, list) and len(merged_data) >= 3:
+          agent1_result = merged_data[0]  # data1
+          agent2_result = merged_data[1]  # data2
+          agent3_result = merged_data[2]  # data3
+      else:
+          agent1_result = {}
+          agent2_result = {}
+          agent3_result = {}
+
+      result = {
+          "combined": [agent1_result, agent2_result, agent3_result]
+      }
+      """
+      )
+
+      # Connect: All agents → MergeNode → Aggregator
+      workflow.connect("agent1", "merger", mapping={"response": "data1"})
+      workflow.connect("agent2", "merger", mapping={"response": "data2"})
+      workflow.connect("agent3", "merger", mapping={"response": "data3"})
+      workflow.connect("merger", "aggregator", mapping={"merged_data": "merged_data"})
+
+  workflow_node:
+    class: kailash.nodes.logic.WorkflowNode
+    description: "Execute nested workflows"
+    import: "from kailash.nodes.logic import WorkflowNode"
+    config:
+      workflow: "Workflow - Nested workflow instance"
+      input_mapping: "dict - Map inputs to nested workflow"
+      output_mapping: "dict - Map outputs from nested workflow"
+    inputs:
+      (dynamic): "Based on input_mapping"
+    outputs:
+      (dynamic): "Based on output_mapping"
+    example: |
+      nested_workflow = Workflow('nested')
+      # ... build nested workflow ...
+
+      node = WorkflowNode()
+      config = {
+          'workflow': nested_workflow,
+          'input_mapping': {'data': 'nested_input'},
+          'output_mapping': {'nested_output': 'result'}
+      }

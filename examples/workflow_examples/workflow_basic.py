@@ -17,6 +17,8 @@ from typing import Any, Dict
 
 import pandas as pd
 
+from examples.utils.paths import get_data_dir
+
 # Add the parent directory to the path to import kailash
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -79,7 +81,7 @@ def main():
     """Create and execute a basic data processing workflow."""
 
     # Create data directory if it doesn't exist
-    data_dir = Path("../data")
+    data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
     output_dir = data_dir / "outputs"
     output_dir.mkdir(exist_ok=True)
@@ -182,7 +184,7 @@ def main():
 
 if __name__ == "__main__":
     # Create sample data if it doesn't exist
-    sample_data_file = Path("../data/customers.csv")
+    sample_data_file = get_data_dir() / "customers.csv"
     if not sample_data_file.exists():
         print("Creating sample customer data...")
         sample_data = pd.DataFrame(

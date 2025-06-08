@@ -519,3 +519,202 @@ Configuration Validation
         @validator('file_path')
         def validate_file_path(cls, v):
             return sanitize_file_path(v)
+
+Cyclic Workflow Best Practices
+------------------------------
+
+Designing Cyclic Workflows
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When building iterative workflows, follow these patterns:
+
+.. code-block:: python
+
+    from kailash import Workflow
+    from kailash.nodes.base_cycle_aware import CycleAwareNode
+    from typing import Dict, Any
+
+    class IterativeProcessorNode(CycleAwareNode):
+        """Best practices for cycle-aware nodes."""
+
+        def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            # 1. Always get iteration info first
+            iteration = self.get_iteration(context)
+            prev_state = self.get_previous_state(context)
+
+            # 2. Handle first iteration gracefully
+            if iteration == 0:
+                # Initialize state
+                current_value = kwargs.get("initial_value", 0)
+                self.log_cycle_info(context, "Starting iterative process")
+            else:
+                # Use previous state
+                current_value = prev_state.get("value", 0)
+
+            # 3. Perform processing
+            new_value = self.process_value(current_value)
+
+            # 4. Track metrics for convergence
+            self.accumulate_values(context, "value", new_value)
+            trend = self.detect_convergence_trend(context, "value")
+
+            # 5. Save state for next iteration
+            self.set_cycle_state({
+                "value": new_value,
+                "history": prev_state.get("history", []) + [new_value]
+            })
+
+            # 6. Determine convergence with multiple criteria
+            converged = (
+                new_value > 0.95 or                    # Threshold reached
+                trend["converging"] or                 # Trending toward convergence
+                trend["plateau_detected"] or           # No improvement
+                iteration >= self.max_iterations - 1   # Safety limit
+            )
+
+            # 7. Return structured output
+            return {
+                "value": new_value,
+                "converged": converged,
+                "iteration": iteration,
+                "improvement": new_value - current_value
+            }
+
+Cycle Safety Guidelines
+^^^^^^^^^^^^^^^^^^^^^^^
+
+1. **Always Set Convergence Conditions**:
+
+.. code-block:: python
+
+    # Good: Multiple convergence criteria
+    workflow.connect("processor", "processor",
+        cycle=True,
+        max_iterations=100,
+        convergence_check="converged == True or error < 0.001")
+
+    # Bad: No convergence check
+    workflow.connect("processor", "processor", cycle=True)  # Dangerous!
+
+2. **Use Reasonable Iteration Limits**:
+
+.. code-block:: python
+
+    # Consider the problem domain
+    workflow.connect("optimizer", "optimizer",
+        cycle=True,
+        max_iterations=1000,      # Machine learning: higher limit
+        convergence_check="loss < 0.01")
+
+    workflow.connect("retry", "retry",
+        cycle=True,
+        max_iterations=5,         # Retry logic: lower limit
+        convergence_check="success == True")
+
+3. **Implement Memory Management**:
+
+.. code-block:: python
+
+    class MemoryEfficientCycleNode(CycleAwareNode):
+        def run(self, context, **kwargs):
+            # Limit history size
+            MAX_HISTORY = 100
+
+            prev_state = self.get_previous_state(context)
+            history = prev_state.get("history", [])
+
+            # Trim history to prevent memory growth
+            if len(history) > MAX_HISTORY:
+                history = history[-MAX_HISTORY:]
+
+            # Process and update
+            result = self.process_data(kwargs["data"])
+            history.append(result["metric"])
+
+            self.set_cycle_state({"history": history})
+            return result
+
+Performance Optimization for Cycles
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
+
+    # Use parallel runtime for independent cycles
+    runtime = ParallelCyclicRuntime(
+        max_workers=4,
+        cycle_batch_size=10  # Process multiple iterations in parallel
+    )
+
+    # Example: Parallel optimization with multiple starting points
+    workflow = Workflow("parallel_optimization")
+
+    # Add multiple optimizers
+    for i in range(4):
+        workflow.add_node(f"optimizer_{i}", OptimizerNode())
+        workflow.connect(f"optimizer_{i}", f"optimizer_{i}",
+            cycle=True,
+            max_iterations=100,
+            convergence_check="converged == True")
+
+    # Execute all optimizers in parallel
+    results = runtime.execute(workflow, parameters={
+        f"optimizer_{i}": {"initial_value": i * 0.25}
+        for i in range(4)
+    })
+
+Common Pitfalls to Avoid
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. **Incorrect Edge Marking**:
+
+.. code-block:: python
+
+    # Wrong: Marking all edges as cycles
+    workflow.connect("A", "B", cycle=True)  # ❌
+    workflow.connect("B", "C", cycle=True)  # ❌
+    workflow.connect("C", "A", cycle=True)  # ❌
+
+    # Correct: Only mark the closing edge
+    workflow.connect("A", "B")              # ✓ Regular edge
+    workflow.connect("B", "C")              # ✓ Regular edge
+    workflow.connect("C", "A", cycle=True)  # ✓ Closing edge only
+
+2. **Poor State Management**:
+
+.. code-block:: python
+
+    # Wrong: Storing entire datasets in state
+    self.set_cycle_state({"full_dataset": large_dataframe})  # ❌
+
+    # Correct: Store only essential state
+    self.set_cycle_state({
+        "summary_stats": dataframe.describe().to_dict(),
+        "row_count": len(dataframe),
+        "quality_score": calculate_quality(dataframe)
+    })  # ✓
+
+3. **Missing Error Handling**:
+
+.. code-block:: python
+
+    class RobustCycleNode(CycleAwareNode):
+        def run(self, context, **kwargs):
+            iteration = self.get_iteration(context)
+
+            try:
+                result = self.process_data(kwargs["data"])
+                return {"success": True, "result": result}
+            except Exception as e:
+                # Log error with context
+                self.log_cycle_info(context,
+                    f"Error at iteration {iteration}: {str(e)}")
+
+                # Decide whether to continue
+                if iteration < 3:  # Retry a few times
+                    return {"success": False, "retry": True}
+                else:
+                    # Give up and converge
+                    return {"success": False, "error": str(e),
+                            "converged": True}

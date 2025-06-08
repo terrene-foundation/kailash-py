@@ -20,6 +20,8 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 # Add the parent directory to the path to import kailash
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -548,13 +550,15 @@ def main():
         from kailash.nodes.data.writers import CSVWriterNode
 
         # Save sample data to CSV
-        sample_file = Path("../data/sample_reviews.csv")
+        sample_file = get_data_dir() / "sample_reviews.csv"
         sample_file.parent.mkdir(exist_ok=True)
         pd.DataFrame(sample_reviews).to_csv(sample_file, index=False)
 
         # Create reader node
         reader = CSVReaderNode(file_path=str(sample_file), headers=True)
-        writer = CSVWriterNode(file_path="../outputs/sentiment_summary.csv")
+        writer = CSVWriterNode(
+            file_path=str(get_output_dir() / "sentiment_summary.csv")
+        )
 
         # Add to workflow
         workflow.add_node(node_id="reader", node_or_type=reader)

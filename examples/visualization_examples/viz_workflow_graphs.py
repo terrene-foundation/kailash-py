@@ -12,6 +12,8 @@ from typing import Any, Dict
 import matplotlib.pyplot as plt
 import numpy as np
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
@@ -31,8 +33,10 @@ def create_sample_workflow():
     )
 
     # Create nodes
-    csv_reader = CSVReaderNode(file_path="../data/customers.csv", headers=True)
-    json_reader = JSONReaderNode(file_path="../data/transactions.json")
+    csv_reader = CSVReaderNode(
+        file_path=str(get_data_dir() / "customers.csv"), headers=True
+    )
+    json_reader = JSONReaderNode(file_path=str(get_data_dir() / "transactions.json"))
 
     # Create joiner using PythonCodeNode
     def join_data(customer_data: list, transaction_data: list) -> Dict[str, Any]:
@@ -131,8 +135,10 @@ def create_sample_workflow():
         output_schema=aggregator_output_schema,
     )
 
-    csv_writer = CSVWriterNode(file_path="../data/results.csv")
-    json_writer = JSONWriterNode(file_path="../data/summary.json", data={})
+    csv_writer = CSVWriterNode(file_path=str(get_output_dir() / "results.csv"))
+    json_writer = JSONWriterNode(
+        file_path=str(get_output_dir() / "summary.json"), data={}
+    )
 
     # Add nodes to workflow
     workflow.add_node(node_id="csv_reader", node_or_type=csv_reader)
@@ -217,13 +223,13 @@ def demonstrate_execution_visualization():
     run_id = task_manager.create_run(workflow_name=workflow.name)
 
     # Create sample data
-    Path("../data").mkdir(exist_ok=True)
-    with open("../data/customers.csv", "w") as f:
+    get_data_dir().mkdir(exist_ok=True)
+    with open(str(get_data_dir() / "customers.csv", "w")) as f:
         f.write("customer_id,name,value\n")
         f.write("1,Customer A,1000\n")
         f.write("2,Customer B,2000\n")
 
-    with open("../data/transactions.json", "w") as f:
+    with open(str(get_data_dir() / "transactions.json", "w")) as f:
         import json
 
         transactions = [
@@ -572,7 +578,7 @@ def main():
     print("=== Kailash Visualization Examples ===\n")
 
     # Create output directory
-    Path("../data").mkdir(exist_ok=True)
+    get_data_dir().mkdir(exist_ok=True)
 
     examples = [
         ("Basic Visualization", demonstrate_basic_visualization),
@@ -599,7 +605,7 @@ def main():
 
     print("\n=== All visualization examples completed ===")
     print("\nVisualization files created in the '../data' directory:")
-    for file in sorted(Path("../data").glob("*.png")):
+    for file in sorted(get_data_dir().glob("*.png")):
         print(f"  - {file.name}")
 
     return 0

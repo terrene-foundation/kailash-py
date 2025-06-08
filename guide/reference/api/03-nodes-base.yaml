@@ -1,0 +1,19 @@
+# Kailash SDK API Reference - Base Nodes
+# Modules: kailash.nodes.base, kailash.nodes.base_async, kailash.nodes.base_cycle_aware
+# Version: 0.1.4
+# Last Updated: 2025-01-06
+
+node_registry:
+  register_node:
+    description: "Decorator to register custom nodes"
+    import: "from kailash.nodes import register_node"
+    usage: |
+      @register_node()
+      class MyCustomNode(Node):
+          def validate_config(self, config):
+              # Validate configuration
+              pass
+
+          def execute(self, inputs):
+              # Process inputs and return outputs
+              return {'result': processed_data}

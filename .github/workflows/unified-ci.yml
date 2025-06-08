@@ -53,7 +53,7 @@ jobs:
   # Determine what level of testing to run based on context
   determine-context:
     name: Determine Test Context
-    runs-on: self-hosted  # Use any available self-hosted runner
+    runs-on: ubuntu-latest  # Lightweight job - okay to use GitHub runner
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
       skip-reason: ${{ steps.determine.outputs.skip-reason }}
@@ -176,8 +176,11 @@ jobs:
 
       - name: Install uv
         run: |
+          # Install uv in a custom location to avoid permission issues
+          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+          export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: |
@@ -310,7 +313,7 @@ jobs:
       needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Use GitHub runner for placeholder job
     steps:
       - name: Report success
         run: |
@@ -325,7 +328,7 @@ jobs:
       needs.determine-context.outputs.test-level == 'full' &&
       contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
       needs.all-checks-parallel.result == 'success'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Use GitHub runner for placeholder job
     steps:
       - name: Report success
         run: |
@@ -356,8 +359,11 @@ jobs:
 
       - name: Install uv
         run: |
+          # Install uv in a custom location to avoid permission issues
+          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+          export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: |
@@ -406,8 +412,11 @@ jobs:
 
       - name: Install uv
         run: |
+          # Install uv in a custom location to avoid permission issues
+          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+          export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: |
@@ -445,7 +454,7 @@ jobs:
     name: Security Scan
     needs: determine-context
     if: needs.determine-context.outputs.test-level == 'full'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Security scan needs internet access for vulnerability DB
     outputs:
       critical-count: ${{ steps.scan-summary.outputs.critical }}
       high-count: ${{ steps.scan-summary.outputs.high }}
@@ -481,12 +490,12 @@ jobs:
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json || echo "0")
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json || echo "0")
           MEDIUM=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json || echo "0")
-          
+
           # Set outputs
           echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
           echo "high=$HIGH" >> $GITHUB_OUTPUT
           echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
-          
+
           # Create summary
           {
             echo 'summary<<EOF'
@@ -536,8 +545,11 @@ jobs:
 
       - name: Install uv
         run: |
+          # Install uv in a custom location to avoid permission issues
+          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+          export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: |
@@ -554,7 +566,7 @@ jobs:
     name: Test Summary
     needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: always() && github.event_name == 'workflow_dispatch'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Lightweight summary job - okay to use GitHub runner
     permissions:
       pull-requests: write
     steps:

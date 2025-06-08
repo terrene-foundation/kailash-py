@@ -1,23 +1,49 @@
-"""Python code execution node implementation.
+"""Advanced Python Code Execution Node with Cycle Support.
 
-This module provides nodes that can execute arbitrary Python code, allowing users
-to create custom processing logic without defining new node classes. It supports
-both function-based and class-based code execution with automatic type inference
-and error handling.
+This module provides sophisticated nodes for executing arbitrary Python code,
+allowing users to create custom processing logic without defining new node classes.
+It supports both function-based and class-based code execution with automatic type
+inference, comprehensive error handling, and advanced cycle-aware capabilities.
 
-Design Principles:
-1. Safety - Code execution is sandboxed with proper error handling
-2. Flexibility - Support functions, classes, and inline code
-3. Type Safety - Automatic type inference with validation
-4. Composability - Works seamlessly with other nodes in workflows
-5. Simplicity - Easy to use for non-technical users
+Examples:
+    Basic code execution:
 
-Components:
-- PythonCodeNode: Main node for code execution
-- CodeExecutor: Safe code execution environment
-- FunctionWrapper: Converts functions to nodes
-- ClassWrapper: Converts classes to nodes
-- SafeCodeChecker: AST-based security validation
+    >>> node = PythonCodeNode(
+    ...     name="processor",
+    ...     code="result = {'value': input_value * 2, 'status': 'processed'}"
+    ... )
+
+    Cycle-aware execution:
+
+    >>> cycle_node = PythonCodeNode(
+    ...     name="accumulator",
+    ...     code='''
+    ...     # Safe cycle parameter access
+    ...     try:
+    ...         count = count
+    ...         total = total
+    ...     except NameError:
+    ...         count = 0
+    ...         total = 0
+    ...
+    ...     count += 1
+    ...     total += input_value
+    ...     average = total / count
+    ...
+    ...     result = {
+    ...         'count': count,
+    ...         'total': total,
+    ...         'average': average,
+    ...         'converged': average > 10.0
+    ...     }
+    ...     '''
+    ... )
+
+    Function integration:
+
+    >>> def custom_processor(data: dict) -> dict:
+    ...     return {'processed': data['value'] * 2}
+    >>> node = PythonCodeNode.from_function(custom_processor)
 """
 
 import ast
@@ -59,6 +85,7 @@ ALLOWED_MODULES = {
     "string",
     "time",
     "re",
+    "os",  # For file operations in cycles
     "pandas",
     "numpy",
     "scipy",
@@ -176,7 +203,41 @@ class CodeExecutor:
             "zip",
             "print",  # Allow print for debugging
             "hasattr",  # For attribute checking
+            # Exception classes for proper error handling
+            "Exception",
+            "ValueError",
+            "TypeError",
+            "KeyError",
+            "NameError",
+            "AttributeError",
+            "IndexError",
+            "RuntimeError",
+            "StopIteration",
+            "ImportError",
+            "OSError",
+            "IOError",
+            "FileNotFoundError",
+            "ZeroDivisionError",
+            "ArithmeticError",
+            "AssertionError",
+            # Useful built-ins for data science
+            "set",
+            "frozenset",
+            "bytes",
+            "bytearray",
+            "complex",
+            "divmod",
+            "pow",
+            "hex",
+            "oct",
+            "bin",
+            "format",
+            "ord",
+            "chr",
+            "repr",
+            "vars",  # For debugging
             "getattr",  # For attribute access
+            "open",  # For file operations
             "__import__",  # For imports (controlled by ALLOWED_MODULES)
         }
         self._execution_namespace = {}
@@ -375,7 +436,7 @@ class FunctionWrapper:
         """Extract output type from function signature.
 
         Returns:
-            Return type annotation or Any
+            Return type annotation or Any.
         """
         return self.type_hints.get("return", Any)
 

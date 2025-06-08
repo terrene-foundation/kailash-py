@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
@@ -19,7 +20,7 @@ def direct_execution_example():
 
     # Create and configure nodes with all parameters
     reader = CSVReaderNode(
-        file_path="../tests/sample_data/customer_value.csv", headers=True
+        file_path=str(get_data_dir() / "customer_value.csv"), headers=True
     )
 
     # Execute the reader directly
@@ -28,7 +29,7 @@ def direct_execution_example():
 
     # Create writer with data available upfront
     writer = CSVWriterNode(
-        file_path="../outputs/direct_output.csv",
+        file_path=str(get_output_dir() / "direct_output.csv"),
         data=result["data"],  # Data provided at creation time
         # Don't provide headers=True for dict data - let it auto-detect
     )
@@ -52,11 +53,11 @@ def workflow_execution_example():
 
     # Create nodes - writer doesn't need data at creation time
     reader = CSVReaderNode(
-        file_path="../tests/sample_data/customer_value.csv", headers=True
+        file_path=str(get_data_dir() / "customer_value.csv"), headers=True
     )
 
     writer = CSVWriterNode(
-        file_path="../outputs/workflow_output.csv",
+        file_path=str(get_output_dir() / "workflow_output.csv"),
         # Note: No data parameter - it will come from the connection
         # Don't provide headers=True for dict data - let it auto-detect
     )
@@ -85,7 +86,7 @@ def workflow_execution_example():
 def main():
     """Run both examples to show the difference."""
     # Ensure output directory exists
-    Path("../outputs").mkdir(exist_ok=True)
+    get_output_dir().mkdir(exist_ok=True)
 
     # Create sample data if it doesn't exist
     sample_directory = Path("../tests/sample_data")
@@ -129,8 +130,8 @@ def main():
     print("   - Provides execution tracking and management")
 
     print("\nBoth files should contain the same data:")
-    print("- ../outputs/direct_output.csv")
-    print("- ../outputs/workflow_output.csv")
+    print(f"- {get_output_dir() / 'direct_output.csv'}")
+    print(f"- {get_output_dir() / 'workflow_output.csv'}")
 
 
 if __name__ == "__main__":

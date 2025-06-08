@@ -9,6 +9,7 @@ This example shows different patterns for providing initial data to workflows:
 from pathlib import Path
 from typing import Any, Dict
 
+from examples.utils.paths import get_data_dir
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.data import CSVReaderNode
@@ -63,7 +64,7 @@ def example_1_source_node_pattern():
 
     # Add source node that reads from file
     csv_reader = CSVReaderNode(
-        file_path=Path(__file__).parent / "data" / "sample_data.csv", headers=True
+        file_path=str(get_data_dir() / "sample_data.csv"), headers=True
     )
     workflow.add_node("reader", csv_reader)
 

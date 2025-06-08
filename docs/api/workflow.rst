@@ -2,7 +2,8 @@
 Workflow
 ========
 
-This section covers the workflow management components of the Kailash SDK.
+This section covers the workflow management components of the Kailash SDK,
+including the new Universal Hybrid Cyclic Graph Architecture introduced in v0.2.0.
 
 .. contents:: Table of Contents
    :local:
@@ -90,8 +91,222 @@ Internal graph representation is handled by the Workflow class.
 
 - ``add_node(node_id, node_instance)``: Add a node to the graph
 - ``add_edge(source, target, metadata)``: Connect two nodes
-- ``get_execution_order()``: Get topological sort of nodes
-- ``validate()``: Check for cycles and connectivity
+- ``connect(source, target, mapping=None, condition=None, cycle=False, max_iterations=100, convergence_check=None)``:
+  Connect nodes with optional cycle support
+- ``get_execution_order()``: Get topological sort of nodes (DAG workflows only)
+- ``validate()``: Check for proper graph structure and cycle configuration
+
+Cyclic Workflows (Enhanced in v0.2.0)
+=====================================
+
+Kailash v0.2.0 introduces the Universal Hybrid Cyclic Graph Architecture with
+high-performance iterative processing, automatic convergence detection, and
+comprehensive developer tools.
+
+**Performance:** 30,000+ iterations per second for typical workflows.
+
+CycleBuilder API (New in v0.2.0)
+---------------------------------
+
+.. autoclass:: kailash.workflow.CycleBuilder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Phase 5 API - Simple and Intuitive:**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleBuilder
+   from kailash.nodes import PythonCodeNode
+
+   # Create builder
+   builder = CycleBuilder("optimization")
+
+   # Add cycle node with automatic state management
+   optimizer_code = '''
+   # Access previous state with automatic defaults
+   try:
+       x = cycle_state["x"]
+       loss = cycle_state["loss"]
+   except:
+       x = 10.0  # Initial value
+       loss = float('inf')
+
+   # Gradient descent step
+   gradient = 2 * x  # derivative of x^2
+   learning_rate = 0.1
+   new_x = x - learning_rate * gradient
+   new_loss = new_x ** 2
+
+   # Check convergence
+   converged = abs(new_loss - loss) < 0.001
+
+   result = {"x": new_x, "loss": new_loss, "converged": converged}
+   '''
+
+   builder.add_cycle_node(
+       "optimizer",
+       PythonCodeNode(name="optimizer", code=optimizer_code),
+       convergence_check="converged == True",
+       max_iterations=100
+   )
+
+   # Build and run
+   workflow = builder.build()
+   results = workflow.run()
+
+**Advanced Features:**
+
+.. code-block:: python
+
+   # Multi-node cycles with CycleBuilder
+   builder = CycleBuilder("multi_stage")
+
+   # Add multiple nodes in cycle
+   builder.add_cycle_node("stage1", Stage1Node())
+   builder.add_node("stage2", Stage2Node())  # Regular node in cycle
+   builder.add_node("stage3", Stage3Node())
+
+   # Define cycle path
+   builder.connect("stage1", "stage2")
+   builder.connect("stage2", "stage3")
+   builder.close_cycle("stage3", "stage1",
+                      convergence_check="converged == True")
+
+   workflow = builder.build()
+
+**Traditional API (Still Supported):**
+
+.. code-block:: python
+
+   from kailash import Workflow
+
+   workflow = Workflow("iterative_process")
+
+   # Add a cycle-aware node
+   workflow.add_node("processor", MyProcessorNode())
+
+   # Connect node to itself to create a cycle
+   workflow.connect("processor", "processor",
+                    mapping={"output": "input"},
+                    cycle=True,
+                    max_iterations=100,
+                    convergence_check="done == True")
+
+CycleAnalyzer (New in v0.2.0)
+------------------------------
+
+.. autoclass:: kailash.workflow.CycleAnalyzer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Analyze Cycle Performance:**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleAnalyzer
+
+   analyzer = CycleAnalyzer(workflow)
+
+   # Analyze execution
+   report = analyzer.analyze_execution(results)
+
+   print(f"Total iterations: {report['iterations']}")
+   print(f"Performance: {report['iterations_per_second']:.0f} iter/sec")
+   print(f"Convergence rate: {report['convergence_rate']:.2%}")
+
+   # Generate detailed report
+   analyzer.generate_report("cycle_analysis.json")
+
+   # Visualize convergence
+   analyzer.plot_convergence("convergence.png")
+
+CycleDebugger (New in v0.2.0)
+------------------------------
+
+.. autoclass:: kailash.workflow.CycleDebugger
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Debug Cyclic Workflows:**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleDebugger
+
+   debugger = CycleDebugger(workflow)
+
+   # Enable debugging
+   debugger.enable_debugging()
+
+   # Set breakpoints
+   debugger.set_breakpoint("optimizer", iteration=10)
+   debugger.set_conditional_breakpoint(
+       "optimizer",
+       condition=lambda state: state.get("loss", 0) < 0.1
+   )
+
+   # Run with debugging
+   results = workflow.run()
+
+   # Get debug information
+   debug_info = debugger.get_debug_info()
+   print(f"State at iteration 10: {debug_info['breakpoints'][10]}")
+
+   # Trace execution
+   trace = debugger.get_execution_trace()
+   for step in trace:
+       print(f"Iteration {step['iteration']}: {step['state']}")
+
+CycleProfiler (New in v0.2.0)
+------------------------------
+
+.. autoclass:: kailash.workflow.CycleProfiler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Profile Performance:**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleProfiler
+
+   profiler = CycleProfiler(workflow)
+
+   # Profile execution
+   profile = profiler.profile_execution(results)
+
+   print(f"Average iteration time: {profile['avg_iteration_time']:.4f}s")
+   print(f"Peak memory usage: {profile['peak_memory_mb']:.1f} MB")
+   print(f"Bottleneck node: {profile['bottleneck_node']}")
+
+   # Generate performance report
+   profiler.generate_performance_report("performance_report.html")
+
+   # Identify optimization opportunities
+   suggestions = profiler.get_optimization_suggestions()
+   for suggestion in suggestions:
+       print(f"- {suggestion}")
+
+**Cycle Parameters:**
+
+- ``cycle=True``: Marks the connection as a cyclic edge
+- ``max_iterations``: Maximum iterations before forced stop (default: 100)
+- ``convergence_check``: Python expression evaluated against node outputs
+- ``mapping``: Maps outputs from one iteration to inputs of the next
+- ``early_termination``: Additional conditions for early stopping
+
+**Important Notes:**
+
+- Only one edge per cycle should be marked with ``cycle=True``
+- Workflows with cycles use the ``CyclicRunner`` automatically
+- Use ``CycleAwareNode`` base class for built-in cycle features
+- State is managed automatically between iterations
+- Performance optimized for 30,000+ iterations/second
 
 WorkflowRunner
 ==============
@@ -450,6 +665,62 @@ Best Practices
    validation_sub = create_data_validation_workflow()
    main_workflow.add_subworkflow("validation", validation_sub)
 
+Cycle Configuration (New in v0.2.0)
+===================================
+
+.. autoclass:: kailash.workflow.CycleConfig
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Type-Safe Configuration:**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleConfig
+
+   # Create configuration
+   config = CycleConfig(
+       max_iterations=1000,
+       convergence_check="loss < 0.001",
+       early_termination="gradient < 1e-6",
+       save_checkpoints=True,
+       checkpoint_interval=100
+   )
+
+   # Use in workflow
+   workflow.connect("node1", "node2",
+                    cycle=True,
+                    **config.to_dict())
+
+Migration Tools (New in v0.2.0)
+================================
+
+.. automodule:: kailash.workflow.migration
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Migrate Existing Workflows:**
+
+.. code-block:: python
+
+   from kailash.workflow.migration import WorkflowMigrator
+
+   # Migrate to use CycleBuilder
+   migrator = WorkflowMigrator()
+
+   # Analyze workflow
+   analysis = migrator.analyze_workflow(old_workflow)
+   print(f"Found {len(analysis['cycles'])} cycles")
+
+   # Generate migration code
+   new_code = migrator.generate_migration_code(old_workflow)
+   print(new_code)
+
+   # Auto-migrate
+   new_workflow = migrator.migrate_workflow(old_workflow)
+
 See Also
 ========
 
@@ -457,4 +728,5 @@ See Also
 - :doc:`runtime` - Execution runtime options
 - :doc:`tracking` - Task tracking and monitoring
 - :doc:`/guides/workflows` - Workflow design guide
+- :doc:`/guides/cyclic_workflows` - Cyclic workflow guide (New)
 - :doc:`/examples/index` - Example workflows

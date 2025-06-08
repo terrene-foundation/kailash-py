@@ -1,0 +1,21 @@
+# Kailash SDK API Reference - Runtime
+# Module: kailash.runtime
+# Version: 0.1.4
+# Last Updated: 2025-01-06
+
+runtime:
+  local_runtime:
+    class: kailash.LocalRuntime
+    description: "Execute workflows locally"
+    import: "from kailash import LocalRuntime"
+    usage: |
+      runtime = LocalRuntime()
+      results, run_id = runtime.execute(workflow)
+
+  docker_runtime:
+    class: kailash.runtime.DockerRuntime
+    description: "Execute workflows in Docker containers"
+    import: "from kailash.runtime import DockerRuntime"
+    usage: |
+      runtime = DockerRuntime(base_image='python:3.9')
+      results = workflow.execute(runtime)

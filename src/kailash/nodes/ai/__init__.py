@@ -25,6 +25,7 @@ from .intelligent_agent_orchestrator import (
     OrchestrationManagerNode,
     QueryAnalysisNode,
 )
+from .iterative_llm_agent import IterativeLLMAgentNode
 from .llm_agent import LLMAgentNode
 from .models import (
     ModelPredictor,
@@ -51,6 +52,7 @@ __all__ = [
     "FunctionCallingAgent",
     "PlanningAgent",
     "LLMAgentNode",
+    "IterativeLLMAgentNode",
     # A2A Communication
     "A2AAgentNode",
     "SharedMemoryPoolNode",

@@ -9,6 +9,7 @@ import json
 import logging
 import os
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.data.readers import JSONReaderNode
 from kailash.nodes.data.writers import JSONWriterNode
 from kailash.nodes.logic.operations import SwitchNode
@@ -39,7 +40,7 @@ def generate_sample_data():
     ]
 
     # Write to JSON file
-    with open("../data/transactions.json", "w") as f:
+    with open(str(get_data_dir() / "transactions.json"), "w") as f:
         json.dump(transactions, f, indent=2)
 
     logger.info("Sample data generated successfully")
@@ -66,7 +67,8 @@ def create_simple_switch_workflow() -> Workflow:
 
     # Data source node
     workflow.add_node(
-        "transactions_reader", JSONReaderNode(file_path="../data/transactions.json")
+        "transactions_reader",
+        JSONReaderNode(file_path=str(get_data_dir() / "transactions.json")),
     )
 
     # Switch node to route by transaction status
@@ -83,23 +85,23 @@ def create_simple_switch_workflow() -> Workflow:
     # Writer nodes for each status
     workflow.add_node(
         "completed_writer",
-        JSONWriterNode(file_path="../outputs/completed_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "completed_transactions.json")),
     )
 
     workflow.add_node(
         "pending_writer",
-        JSONWriterNode(file_path="../outputs/pending_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "pending_transactions.json")),
     )
 
     workflow.add_node(
         "failed_writer",
-        JSONWriterNode(file_path="../outputs/failed_transactions.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "failed_transactions.json")),
     )
 
     # Output node
     workflow.add_node(
         "results_writer",
-        JSONWriterNode(file_path="../outputs/simple_switch_results.json"),
+        JSONWriterNode(file_path=str(get_output_dir() / "simple_switch_results.json")),
     )
 
     # Connect the nodes

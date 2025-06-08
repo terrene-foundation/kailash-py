@@ -7,19 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Enhanced
-- **SQLDatabaseNode Production Features**
-  - Added `db_config` parameter for advanced database configuration
-  - Support for connection pooling tuning (pool_size, max_overflow, pool_timeout)
-  - Transaction isolation level control
-  - SQLAlchemy engine parameter customization
-  - Removed SQLQueryBuilderNode for architectural clarity (single-node design)
+## [0.2.1] - 2025-06-08
+
+### Added
+- **Enhanced Database Connectivity**
+  - SQLDatabaseNode with direct constructor configuration
+  - Support for SQLite, PostgreSQL, and MySQL
+  - Production-ready connection pooling and transaction management
+  - Comprehensive test suite with 1,275+ tests
+  - Database setup/teardown scripts for automated testing
   - Enhanced examples with production configuration patterns
-  - **Simplified API**: Direct configuration in constructor (no more initialize() step)
-    - Pass connection_string and pool parameters directly to SQLDatabaseNode()
-    - Cleaner separation of configuration (constructor) vs runtime (run()) parameters
-    - Updated all tests and examples to use the new direct configuration approach
-    - Made tests hardware-agnostic by using relative performance metrics instead of absolute timing
+
+### Fixed
+- Database connectivity integration from main branch
+- Updated documentation and architecture decisions
+
+## [0.2.0] - 2025-06-08
+
+### Added
+- **Universal Hybrid Cyclic Graph Architecture** - Phase 6 Complete
+  - `CycleAwareNode` base class with comprehensive helper methods:
+    - `get_iteration()` - Track current iteration number
+    - `get_previous_state()` - Access state from previous iteration
+    - `set_cycle_state()` - Persist state across iterations
+    - `accumulate_values()` - Build rolling windows of values
+    - `detect_convergence_trend()` - Automatic convergence detection
+    - `log_cycle_info()` - Structured logging for cycles
+  - Cyclic workflow execution support in `Workflow.connect()`:
+    - `cycle=True` parameter to mark cyclic edges
+    - `max_iterations` for safety limits
+    - `convergence_check` for dynamic stopping conditions
+  - `CyclicWorkflowExecutor` for optimized cyclic execution
+  - `ParallelCyclicRuntime` for parallel execution of cycles
+  - Comprehensive test coverage with 15+ integration tests
+  - Performance optimizations achieving ~30,000 iterations/second
+  - Built-in cycle detection and validation
+  - State management with automatic cleanup
+  - Support for nested cycles and multi-node cycles
+
+- **Developer Tools & Analytics**
+  - `CycleAnalyzer` for comprehensive cycle performance analysis
+  - `CycleDebugger` for interactive debugging of cyclic workflows
+  - `CycleProfiler` for detailed performance profiling
+  - `CycleBuilder` with fluent API for constructing cyclic workflows
+  - Type-safe configuration with `CycleConfig` and `TypedCycleConfig`
+  - Advanced exception handling with specialized cycle exceptions
+  - Developer-focused helper methods and productivity tools
+
+- **Production-Ready Features**
+  - Enhanced PythonCodeNode with better DataFrame and NumPy support
+  - Automatic serialization handling for complex data types
+  - Platform-specific type compatibility checks
+  - Memory-efficient data processing patterns
+  - Production-ready error handling and recovery
+
+- **Enhanced Database Connectivity**
+  - SQLDatabaseNode with direct constructor configuration
+  - Support for SQLite, PostgreSQL, and MySQL
+  - Production-ready connection pooling and transaction management
+
+### Changed
+- Enhanced `LocalRuntime` to automatically detect and route cyclic workflows
+- Improved workflow validation to handle cyclic graphs correctly
+- Updated execution engine to support iterative processing patterns
+- Improved PythonCodeNode error messages and debugging support
+- Enhanced cycle parameter propagation and state management
+
+### Performance
+- Cyclic workflows execute with minimal overhead (~0.03ms per iteration)
+- Memory-efficient state management with configurable history windows
+- Optimized convergence detection algorithms
+- Parallel execution support for independent cycle branches
+- Production-tested with workflows handling 100,000+ iterations
 
 ## [0.1.6] - 2025-06-05
 
@@ -371,7 +430,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe code execution in isolated environments
 - Authentication support for API nodes
 
-[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/terrene-foundation/kailash-py/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.6...v0.2.0
+[0.1.6]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/terrene-foundation/kailash-py/compare/v0.1.1...v0.1.2

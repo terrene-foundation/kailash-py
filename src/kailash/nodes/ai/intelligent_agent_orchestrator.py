@@ -31,7 +31,8 @@ from kailash.nodes.ai.self_organizing import (
     TeamFormationNode,
 )
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.mcp.client import MCPClient
+
+# MCP functionality is now built into LLM agents as a capability
 
 
 @register_node()
@@ -556,35 +557,29 @@ class MCPAgentNode(SelfOrganizingAgentNode):
         return result
 
     def _setup_mcp_clients(self, servers: List[Dict]):
-        """Set up MCP clients for configured servers."""
+        """Set up MCP clients for configured servers.
+
+        NOTE: MCP is now a built-in capability of LLM agents. This method
+        is deprecated and should be replaced with LLM agents that have
+        MCP servers configured directly.
+        """
+        # TODO: Update this orchestrator to use LLM agents with MCP capabilities
+        # For now, we'll just register the servers without creating clients
         for server_config in servers:
             server_name = server_config.get("name", "unknown")
             try:
-                client = MCPClient()
+                # Instead of creating MCPClient nodes, we now configure LLM agents
+                # with MCP server information
+                self.mcp_clients[server_name] = {
+                    "config": server_config,
+                    "tools": [],  # Tools will be discovered by LLM agents
+                }
 
-                # Get available tools
-                tools_result = client.run(
-                    server_config=server_config, operation="list_tools"
-                )
-
-                if tools_result.get("success"):
-                    self.mcp_clients[server_name] = {
-                        "client": client,
-                        "config": server_config,
-                        "tools": tools_result.get("tools", []),
-                    }
-
-                    # Register tools
-                    for tool in tools_result.get("tools", []):
-                        tool_name = tool["name"]
-                        self.tool_registry[tool_name] = {
-                            "server": server_name,
-                            "description": tool["description"],
-                            "schema": tool.get("inputSchema", {}),
-                        }
+                # Tool registry will be populated by LLM agents during execution
+                self.logger.info(f"Registered MCP server: {server_name}")
 
             except Exception as e:
-                print(f"Failed to setup MCP client for {server_name}: {e}")
+                print(f"Failed to register MCP server {server_name}: {e}")
 
     def _enhance_task_with_tools(self, task: str, kwargs: Dict) -> str:
         """Enhance task description with available tools."""

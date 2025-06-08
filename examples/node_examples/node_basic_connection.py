@@ -1,16 +1,16 @@
 """Basic example showing how to connect CSV node to Python node."""
 
-from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
 
+from examples.utils.paths import get_data_dir
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode
 
 # Setup paths
-sample_directory = Path("../data")
+sample_directory = get_data_dir()
 
 # Method 1: Using pre-built CSVReaderNode
 csv_reader_node = CSVReaderNode(
@@ -173,7 +173,7 @@ print(f"  Count: {stats_result['count']}")
 
 # Create sample data if needed
 if __name__ == "__main__":
-    sample_dir = Path("../data")
+    sample_dir = get_data_dir()
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     if not (sample_dir / "customer_value.csv").exists():

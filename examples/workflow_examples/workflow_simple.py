@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
@@ -13,9 +14,9 @@ from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 def main():
     """Simple example of connecting data nodes to Python nodes."""
 
-    # Setup paths
-    sample_dir = Path("../tests/sample_data")
-    output_dir = Path("../outputs")
+    # Setup paths using utility functions
+    sample_dir = get_data_dir()
+    output_dir = get_output_dir()
     output_dir.mkdir(exist_ok=True)
 
     print("=== Simple Node Connection Example ===\n")
@@ -23,7 +24,7 @@ def main():
     # 1. Create and execute CSV reader
     print("Step 1: Reading CSV data...")
     csv_reader = CSVReaderNode(
-        file_path=sample_dir / "customer_value.csv", headers=True, delimiter=","
+        file_path=str(sample_dir / "customer_value.csv"), headers=True, delimiter=","
     )
 
     # Execute the CSV reader

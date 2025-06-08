@@ -2,8 +2,14 @@
 
 This module implements multi-agent communication with selective attention mechanisms,
 enabling efficient collaboration between AI agents while preventing information overload.
+
+Design Philosophy:
+    The A2A system enables decentralized multi-agent collaboration through shared
+    memory pools and attention mechanisms. Agents can share insights, coordinate
+    tasks, and build collective intelligence without centralized control.
 """
 
+import json
 import time
 import uuid
 from collections import defaultdict, deque
@@ -12,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.base_cycle_aware import CycleAwareNode
 
 
 @register_node()
@@ -210,6 +217,8 @@ class SharedMemoryPoolNode(Node):
             return self._subscribe_agent(kwargs)
         elif action == "query":
             return self._semantic_query(kwargs)
+        elif action == "metrics":
+            return self._get_metrics()
         else:
             return {"success": False, "error": f"Unknown action: {action}"}
 
@@ -437,6 +446,24 @@ class SharedMemoryPoolNode(Node):
 
         return relevant_agents
 
+    def _get_metrics(self) -> Dict[str, Any]:
+        """Get memory pool metrics."""
+        total_memories = sum(
+            len(memories) for memories in self.memory_segments.values()
+        )
+
+        return {
+            "success": True,
+            "total_memories": total_memories,
+            "segments": list(self.memory_segments.keys()),
+            "segment_sizes": {
+                segment: len(memories)
+                for segment, memories in self.memory_segments.items()
+            },
+            "total_agents": len(self.agent_subscriptions),
+            "memory_id_counter": self.memory_id_counter,
+        }
+
 
 @register_node()
 class A2AAgentNode(LLMAgentNode):
@@ -625,6 +652,10 @@ class A2AAgentNode(LLMAgentNode):
             if memory_result.get("success"):
                 shared_context = memory_result.get("memories", [])
 
+        # Store provider and model for use in summarization
+        self._current_provider = kwargs.get("provider", "mock")
+        self._current_model = kwargs.get("model", "mock-model")
+
         # Enhance messages with shared context
         messages = kwargs.get("messages", [])
         if shared_context:
@@ -644,10 +675,41 @@ Relevant shared context from other agents:
         if result.get("success") and memory_pool:
             response_content = result.get("response", {}).get("content", "")
 
-            # Extract important insights
-            insights = self._extract_insights(response_content, agent_role)
+            # Use LLM to extract insights if provider supports it
+            use_llm_extraction = kwargs.get("use_llm_insight_extraction", True)
+            provider = kwargs.get("provider", "mock")
+
+            if use_llm_extraction and provider not in ["mock"]:
+                # Use LLM to extract and analyze insights
+                insights = self._extract_insights_with_llm(
+                    response_content, agent_role, agent_id, kwargs
+                )
+            else:
+                # Fallback to rule-based extraction
+                insights = self._extract_insights(response_content, agent_role)
+
+            # Track insight statistics
+            insight_stats = {
+                "total": len(insights),
+                "high_importance": sum(1 for i in insights if i["importance"] >= 0.8),
+                "by_type": {},
+                "extraction_method": (
+                    "llm"
+                    if use_llm_extraction and provider not in ["mock"]
+                    else "rule-based"
+                ),
+            }
 
             for insight in insights:
+                # Update type statistics
+                insight_type = insight.get("metadata", {}).get(
+                    "insight_type", "general"
+                )
+                insight_stats["by_type"][insight_type] = (
+                    insight_stats["by_type"].get(insight_type, 0) + 1
+                )
+
+                # Write to memory pool with enhanced context
                 memory_pool.run(
                     action="write",
                     agent_id=agent_id,
@@ -658,7 +720,20 @@ Relevant shared context from other agents:
                     context={
                         "source_message": messages[-1] if messages else None,
                         "agent_role": agent_role,
+                        "insight_metadata": insight.get("metadata", {}),
+                        "timestamp": kwargs.get("timestamp", time.time()),
                     },
+                )
+
+            # Store insights in local memory for agent's own reference
+            for insight in insights:
+                self.local_memory.append(
+                    {
+                        "type": "insight",
+                        "content": insight["content"],
+                        "importance": insight["importance"],
+                        "timestamp": time.time(),
+                    }
                 )
 
         # Add A2A metadata to result
@@ -667,6 +742,9 @@ Relevant shared context from other agents:
             "agent_role": agent_role,
             "shared_context_used": len(shared_context),
             "insights_generated": len(insights) if "insights" in locals() else 0,
+            "insight_statistics": insight_stats if "insight_stats" in locals() else {},
+            "memory_pool_active": memory_pool is not None,
+            "local_memory_size": len(self.local_memory),
         }
 
         return result
@@ -676,68 +754,382 @@ Relevant shared context from other agents:
         if not shared_context:
             return "No relevant shared context available."
 
-        summary_parts = []
-        for memory in shared_context[:5]:  # Limit to top 5 most relevant
-            agent_id = memory.get("agent_id", "unknown")
-            content = memory.get("content", "")
-            importance = memory.get("importance", 0)
-            tags = ", ".join(memory.get("tags", []))
+        # For small context, use simple formatting
+        if len(shared_context) <= 3:
+            summary_parts = []
+            for memory in shared_context:
+                agent_id = memory.get("agent_id", "unknown")
+                content = memory.get("content", "")
+                importance = memory.get("importance", 0)
+                tags = ", ".join(memory.get("tags", []))
 
-            summary_parts.append(
-                f"- Agent {agent_id} ({importance:.1f} importance, tags: {tags}): {content}"
+                summary_parts.append(
+                    f"- Agent {agent_id} ({importance:.1f} importance, tags: {tags}): {content}"
+                )
+            return "\n".join(summary_parts)
+
+        # For larger context, use LLM to create intelligent summary
+        return self._summarize_with_llm(shared_context)
+
+    def _summarize_with_llm(self, shared_context: List[Dict[str, Any]]) -> str:
+        """Use LLM to create an intelligent summary of shared context."""
+
+        # Prepare context for summarization
+        context_items = []
+        for memory in shared_context[:10]:  # Process up to 10 most relevant
+            context_items.append(
+                {
+                    "agent": memory.get("agent_id", "unknown"),
+                    "content": memory.get("content", ""),
+                    "importance": memory.get("importance", 0),
+                    "tags": memory.get("tags", []),
+                    "type": memory.get("context", {})
+                    .get("insight_metadata", {})
+                    .get("insight_type", "general"),
+                }
             )
 
-        return "\n".join(summary_parts)
+        # Create summarization prompt
+        summarization_prompt = f"""Summarize the following shared insights from other agents into a concise, actionable briefing.
+
+Shared Context Items:
+{json.dumps(context_items, indent=2)}
+
+Create a summary that:
+1. Groups related insights by theme
+2. Highlights the most important findings (importance >= 0.8)
+3. Identifies consensus points where multiple agents agree
+4. Notes any contradictions or disagreements
+5. Extracts key metrics and data points
+6. Suggests areas needing further investigation
+
+Format the summary as a brief paragraph (max 200 words) that another agent can quickly understand and act upon.
+Focus on actionable intelligence rather than just listing what each agent said."""
+
+        try:
+            # Use the current agent's LLM configuration for summarization
+            provider = getattr(self, "_current_provider", "mock")
+            model = getattr(self, "_current_model", "mock-model")
+
+            if provider not in ["mock"]:
+                summary_kwargs = {
+                    "provider": provider,
+                    "model": model,
+                    "temperature": 0.3,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are an expert at synthesizing information from multiple sources into clear, actionable summaries.",
+                        },
+                        {"role": "user", "content": summarization_prompt},
+                    ],
+                    "max_tokens": 300,
+                }
+
+                result = super().run(**summary_kwargs)
+
+                if result.get("success"):
+                    summary = result.get("response", {}).get("content", "")
+                    if summary:
+                        return f"Shared Context Summary:\n{summary}"
+        except:
+            pass
+
+        # Fallback to simple summary
+        summary_parts = []
+        for memory in shared_context[:5]:
+            agent_id = memory.get("agent_id", "unknown")
+            content = memory.get("content", "")[:100] + "..."
+            importance = memory.get("importance", 0)
+
+            summary_parts.append(f"- {agent_id} [{importance:.1f}]: {content}")
+
+        return "Recent insights:\n" + "\n".join(summary_parts)
 
     def _extract_insights(self, response: str, agent_role: str) -> List[Dict[str, Any]]:
-        """Extract important insights from agent response."""
+        """Extract important insights from agent response using advanced NLP techniques."""
         insights = []
 
-        # Simple heuristic-based extraction
-        lines = response.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not line:
+        # Enhanced keyword patterns for different types of insights
+        insight_patterns = {
+            "findings": {
+                "keywords": [
+                    "found",
+                    "discovered",
+                    "identified",
+                    "revealed",
+                    "uncovered",
+                    "detected",
+                    "observed",
+                    "noted",
+                    "recognized",
+                ],
+                "importance": 0.8,
+                "tags": ["finding", "discovery"],
+            },
+            "conclusions": {
+                "keywords": [
+                    "conclude",
+                    "therefore",
+                    "thus",
+                    "hence",
+                    "consequently",
+                    "as a result",
+                    "in summary",
+                    "overall",
+                    "in conclusion",
+                ],
+                "importance": 0.9,
+                "tags": ["conclusion", "summary"],
+            },
+            "comparisons": {
+                "keywords": [
+                    "compared to",
+                    "versus",
+                    "vs",
+                    "better than",
+                    "worse than",
+                    "improvement",
+                    "decline",
+                    "increase",
+                    "decrease",
+                    "change",
+                ],
+                "importance": 0.7,
+                "tags": ["comparison", "analysis"],
+            },
+            "recommendations": {
+                "keywords": [
+                    "recommend",
+                    "suggest",
+                    "should",
+                    "advise",
+                    "propose",
+                    "best practice",
+                    "optimal",
+                    "ideal",
+                ],
+                "importance": 0.85,
+                "tags": ["recommendation", "advice"],
+            },
+            "problems": {
+                "keywords": [
+                    "issue",
+                    "problem",
+                    "challenge",
+                    "limitation",
+                    "constraint",
+                    "difficulty",
+                    "obstacle",
+                    "concern",
+                    "risk",
+                ],
+                "importance": 0.75,
+                "tags": ["problem", "challenge"],
+            },
+            "metrics": {
+                "keywords": [
+                    "percent",
+                    "%",
+                    "score",
+                    "rating",
+                    "benchmark",
+                    "metric",
+                    "measurement",
+                    "performance",
+                    "efficiency",
+                ],
+                "importance": 0.65,
+                "tags": ["metric", "measurement"],
+            },
+        }
+
+        # Process response by sentences for better context
+        import re
+
+        sentences = re.split(r"[.!?]+", response)
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence or len(sentence) < 20:
                 continue
 
-            # High importance indicators
-            high_importance_keywords = [
-                "critical",
-                "important",
-                "key finding",
-                "conclusion",
-                "discovered",
-            ]
-            importance = 0.5
+            # Calculate importance based on multiple factors
+            importance = 0.5  # Base importance
+            matched_tags = set([agent_role])
+            insight_type = None
 
-            if any(keyword in line.lower() for keyword in high_importance_keywords):
-                importance = 0.8
+            # Check for insight patterns
+            sentence_lower = sentence.lower()
+            for pattern_type, pattern_info in insight_patterns.items():
+                if any(
+                    keyword in sentence_lower for keyword in pattern_info["keywords"]
+                ):
+                    importance = max(importance, pattern_info["importance"])
+                    matched_tags.update(pattern_info["tags"])
+                    insight_type = pattern_type
+                    break
 
-            # Tag extraction based on role
-            tags = [agent_role]
-            if "data" in line.lower():
-                tags.append("data")
-            if "pattern" in line.lower():
-                tags.append("pattern")
-            if "insight" in line.lower():
-                tags.append("insight")
+            # Extract entities and add as tags
+            # Simple entity extraction - numbers, capitalized words, technical terms
+            numbers = re.findall(r"\b\d+(?:\.\d+)?%?\b", sentence)
+            if numbers:
+                matched_tags.add("quantitative")
+                importance += 0.1
 
-            # Only save substantive lines
-            if len(line) > 20:
-                insights.append(
+            # Extract technical terms (words with specific patterns)
+            tech_terms = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", sentence)
+            if tech_terms:
+                matched_tags.update(
+                    [term.lower() for term in tech_terms[:2]]
+                )  # Limit tags
+
+            # Boost importance for sentences with multiple capital letters (proper nouns)
+            capital_words = re.findall(r"\b[A-Z][A-Za-z]+\b", sentence)
+            if len(capital_words) > 2:
+                importance += 0.05
+
+            # Check for structured data (JSON, lists, etc.)
+            if any(char in sentence for char in ["{", "[", ":", "-"]):
+                matched_tags.add("structured")
+                importance += 0.05
+
+            # Determine segment based on insight type and role
+            segment = f"{agent_role}_{insight_type}" if insight_type else agent_role
+
+            # Create insight with rich metadata
+            insight = {
+                "content": sentence,
+                "importance": min(importance, 1.0),  # Cap at 1.0
+                "tags": list(matched_tags),
+                "segment": segment,
+                "metadata": {
+                    "length": len(sentence),
+                    "has_numbers": bool(numbers),
+                    "insight_type": insight_type or "general",
+                    "extracted_entities": tech_terms[:3] if tech_terms else [],
+                },
+            }
+
+            insights.append(insight)
+
+        # Sort by importance and return top insights
+        insights.sort(key=lambda x: x["importance"], reverse=True)
+
+        # Dynamic limit based on response quality
+        # If we have many high-quality insights, return more
+        high_quality_count = sum(1 for i in insights if i["importance"] >= 0.7)
+        limit = min(5 if high_quality_count > 3 else 3, len(insights))
+
+        return insights[:limit]
+
+    def _extract_insights_with_llm(
+        self,
+        response: str,
+        agent_role: str,
+        agent_id: str,
+        original_kwargs: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to extract and analyze insights from the response."""
+
+        # Prepare a focused prompt for insight extraction
+        insight_extraction_prompt = f"""You are an AI insight extraction specialist. Analyze the following response and extract the most important insights.
+
+Agent Role: {agent_role}
+Original Response:
+{response}
+
+Extract 3-5 key insights from this response. For each insight:
+1. Summarize the core finding or conclusion (max 100 words)
+2. Assign an importance score (0.0-1.0) based on:
+   - Novelty and uniqueness (0.3 weight)
+   - Impact on decision-making (0.4 weight)
+   - Supporting evidence quality (0.3 weight)
+3. Categorize the insight type: finding, conclusion, comparison, recommendation, problem, metric, or pattern
+4. Extract key entities mentioned (products, technologies, metrics, etc.)
+5. Suggest relevant tags for categorization
+
+Output your analysis as a JSON array with this structure:
+[
+  {{
+    "content": "The core insight summarized concisely",
+    "importance": 0.85,
+    "type": "finding",
+    "entities": ["MacBook Air M3", "M2", "battery life"],
+    "tags": ["performance", "comparison", "hardware"],
+    "evidence": "Brief supporting evidence from the text"
+  }}
+]
+
+Focus on insights that would be valuable for other agents to know. Ensure the JSON is valid."""
+
+        try:
+            # Create a sub-call to the LLM for insight extraction
+            extraction_kwargs = {
+                "provider": original_kwargs.get("provider", "ollama"),
+                "model": original_kwargs.get("model", "mistral"),
+                "temperature": 0.3,  # Lower temperature for more focused extraction
+                "messages": [
                     {
-                        "content": line,
-                        "importance": importance,
-                        "tags": tags,
-                        "segment": agent_role,
-                    }
+                        "role": "system",
+                        "content": "You are an expert at analyzing text and extracting structured insights. Always respond with valid JSON.",
+                    },
+                    {"role": "user", "content": insight_extraction_prompt},
+                ],
+                "max_tokens": original_kwargs.get("max_tokens", 1000),
+            }
+
+            # Execute LLM call for insight extraction
+            extraction_result = super().run(**extraction_kwargs)
+
+            if extraction_result.get("success"):
+                extracted_content = extraction_result.get("response", {}).get(
+                    "content", ""
                 )
 
-        return insights[:3]  # Limit to top 3 insights per response
+                # Parse the JSON response
+                import json
+                import re
+
+                # Try to extract JSON from the response
+                json_match = re.search(r"\[.*?\]", extracted_content, re.DOTALL)
+                if json_match:
+                    try:
+                        extracted_insights = json.loads(json_match.group())
+
+                        # Convert to our insight format
+                        insights = []
+                        for item in extracted_insights[:5]:  # Limit to 5 insights
+                            insight = {
+                                "content": item.get("content", ""),
+                                "importance": min(
+                                    max(item.get("importance", 0.5), 0.0), 1.0
+                                ),
+                                "tags": item.get("tags", []) + [agent_role],
+                                "segment": f"{agent_role}_{item.get('type', 'general')}",
+                                "metadata": {
+                                    "insight_type": item.get("type", "general"),
+                                    "extracted_entities": item.get("entities", []),
+                                    "evidence": item.get("evidence", ""),
+                                    "llm_extracted": True,
+                                },
+                            }
+                            insights.append(insight)
+
+                        return insights
+                    except json.JSONDecodeError:
+                        pass
+
+        except Exception:
+            # Log the error but don't fail - fall back to rule-based extraction
+            pass
+
+        # If LLM extraction fails, fall back to rule-based
+        return self._extract_insights(response, agent_role)
 
 
 @register_node()
-class A2ACoordinatorNode(Node):
+class A2ACoordinatorNode(CycleAwareNode):
     """
     Coordinates communication and task delegation between A2A agents.
 
@@ -883,24 +1275,134 @@ class A2ACoordinatorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Execute coordination action."""
+    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Execute coordination action with cycle awareness.
+
+        Routes coordination requests to appropriate handlers based on action
+        parameter. Tracks coordination history and agent performance across
+        iterations for cycle-aware optimization.
+
+        Args:
+            context: Execution context with cycle information
+            **kwargs: Action-specific parameters including:
+                action (str): Type of coordination action
+                agent_info (dict): Agent registration details
+                task (dict): Task to delegate
+                available_agents (list): Agents available for tasks
+                coordination_strategy (str): Delegation strategy
+
+        Returns:
+            Dict[str, Any]: Action results with cycle metadata including:
+                success (bool): Whether action succeeded
+                cycle_info (dict): Iteration and history information
+                Additional action-specific fields
+
+        Raises:
+            None - errors returned in result dictionary
+
+        Side Effects:
+            Updates internal agent registry
+            Modifies coordination history
+            Updates agent performance metrics
+
+        Examples:
+            >>> coordinator = A2ACoordinatorNode()
+            >>> result = coordinator.run(context,
+            ...     action=\"delegate\",
+            ...     task={\"type\": \"analysis\", \"required_skills\": [\"data\"]},
+            ...     coordination_strategy=\"best_match\"
+            ... )
+            >>> assert result[\"success\"] == True
+        """
         action = kwargs.get("action")
 
-        if action == "register":
-            return self._register_agent(kwargs)
-        elif action == "delegate":
-            return self._delegate_task(kwargs)
-        elif action == "broadcast":
-            return self._broadcast_message(kwargs)
-        elif action == "consensus":
-            return self._manage_consensus(kwargs)
-        elif action == "coordinate":
-            return self._coordinate_workflow(kwargs)
-        else:
-            return {"success": False, "error": f"Unknown action: {action}"}
+        # Get cycle information using CycleAwareNode helpers
+        iteration = self.get_iteration(context)
+        is_first = self.is_first_iteration(context)
+        prev_state = self.get_previous_state(context)
 
-    def _register_agent(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        # Initialize cycle-aware coordination state
+        if is_first:
+            self.log_cycle_info(context, f"Starting coordination with action: {action}")
+            coordination_history = []
+            agent_performance_history = {}
+        else:
+            coordination_history = prev_state.get("coordination_history", [])
+            agent_performance_history = prev_state.get("agent_performance", {})
+
+        # Execute the coordination action
+        if action == "register":
+            result = self._register_agent(kwargs, context)
+        elif action == "delegate":
+            result = self._delegate_task(
+                kwargs, context, coordination_history, agent_performance_history
+            )
+        elif action == "broadcast":
+            result = self._broadcast_message(kwargs, context)
+        elif action == "consensus":
+            result = self._manage_consensus(kwargs, context, coordination_history)
+        elif action == "coordinate":
+            result = self._coordinate_workflow(kwargs, context, iteration)
+        else:
+            result = {"success": False, "error": f"Unknown action: {action}"}
+
+        # Track coordination history for cycle learning
+        coordination_event = {
+            "iteration": iteration,
+            "action": action,
+            "success": result.get("success", False),
+            "timestamp": time.time(),
+            "details": {k: v for k, v in result.items() if k not in ["success"]},
+        }
+        coordination_history.append(coordination_event)
+
+        # Update agent performance tracking
+        if action == "delegate" and result.get("success"):
+            agent_id = result.get("delegated_to")
+            if agent_id:
+                if agent_id not in agent_performance_history:
+                    agent_performance_history[agent_id] = {
+                        "assignments": 0,
+                        "success_rate": 1.0,
+                    }
+                agent_performance_history[agent_id]["assignments"] += 1
+
+        # Add cycle-aware metadata to result
+        result.update(
+            {
+                "cycle_info": {
+                    "iteration": iteration,
+                    "coordination_history_length": len(coordination_history),
+                    "active_agents": len(self.registered_agents),
+                    "performance_tracked_agents": len(agent_performance_history),
+                }
+            }
+        )
+
+        # Log progress
+        if iteration % 5 == 0:  # Log every 5 iterations
+            self.log_cycle_info(
+                context,
+                f"Coordination stats: {len(coordination_history)} events, {len(self.registered_agents)} agents",
+            )
+
+        # Persist state for next iteration
+        return {
+            **result,
+            **self.set_cycle_state(
+                {
+                    "coordination_history": coordination_history[
+                        -50:
+                    ],  # Keep last 50 events
+                    "agent_performance": agent_performance_history,
+                }
+            ),
+        }
+
+    def _register_agent(
+        self, kwargs: Dict[str, Any], context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Register an agent with the coordinator."""
         agent_info = kwargs.get("agent_info", {})
         agent_id = agent_info.get("id")
@@ -924,8 +1426,14 @@ class A2ACoordinatorNode(Node):
             "registered_agents": list(self.registered_agents.keys()),
         }
 
-    def _delegate_task(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Delegate task to most suitable agent."""
+    def _delegate_task(
+        self,
+        kwargs: Dict[str, Any],
+        context: Dict[str, Any],
+        coordination_history: List[Dict],
+        agent_performance: Dict,
+    ) -> Dict[str, Any]:
+        """Delegate task to most suitable agent with cycle-aware optimization."""
         task = kwargs.get("task", {})
         available_agents = kwargs.get("available_agents", [])
         strategy = kwargs.get("coordination_strategy", "best_match")
@@ -940,13 +1448,22 @@ class A2ACoordinatorNode(Node):
         if not available_agents:
             return {"success": False, "error": "No available agents"}
 
-        # Select agent based on strategy
+        # Use cycle-aware agent selection based on performance history
+        iteration = self.get_iteration(context)
+
+        # Select agent based on strategy with cycle learning
         if strategy == "best_match":
-            selected_agent = self._find_best_match(task, available_agents)
+            selected_agent = self._find_best_match_cycle_aware(
+                task, available_agents, agent_performance, iteration
+            )
         elif strategy == "round_robin":
-            selected_agent = available_agents[0]  # Simple round-robin
+            # Cycle-aware round-robin based on iteration
+            agent_index = iteration % len(available_agents)
+            selected_agent = available_agents[agent_index]
         elif strategy == "auction":
-            selected_agent = self._run_auction(task, available_agents)
+            selected_agent = self._run_auction_cycle_aware(
+                task, available_agents, agent_performance
+            )
         else:
             selected_agent = available_agents[0]
 
@@ -964,9 +1481,15 @@ class A2ACoordinatorNode(Node):
             "delegated_to": agent_id,
             "task": task,
             "strategy": strategy,
+            "agent_performance_score": agent_performance.get(agent_id, {}).get(
+                "success_rate", 1.0
+            ),
+            "iteration": iteration,
         }
 
-    def _broadcast_message(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _broadcast_message(
+        self, kwargs: Dict[str, Any], context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Broadcast message to relevant agents."""
         message = kwargs.get("message", {})
         target_roles = message.get("target_roles", [])
@@ -992,7 +1515,12 @@ class A2ACoordinatorNode(Node):
             "broadcast_time": time.time(),
         }
 
-    def _manage_consensus(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _manage_consensus(
+        self,
+        kwargs: Dict[str, Any],
+        context: Dict[str, Any],
+        coordination_history: List[Dict],
+    ) -> Dict[str, Any]:
         """Manage consensus building among agents."""
         proposal = kwargs.get("consensus_proposal", {})
         session_id = proposal.get("session_id", str(uuid.uuid4()))
@@ -1040,7 +1568,9 @@ class A2ACoordinatorNode(Node):
             "votes_needed": int(total_agents * 0.5),
         }
 
-    def _coordinate_workflow(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _coordinate_workflow(
+        self, kwargs: Dict[str, Any], context: Dict[str, Any], iteration: int
+    ) -> Dict[str, Any]:
         """Coordinate a multi-agent workflow."""
         workflow_spec = kwargs.get("task", {})
         steps = workflow_spec.get("steps", [])
@@ -1131,6 +1661,124 @@ class A2ACoordinatorNode(Node):
             workload = 1.0 - (agent.get("task_count", 0) / 10.0)  # Lower bid if busy
 
             bid_value = skill_match * workload * agent.get("success_rate", 1.0)
+
+            bids.append({"agent": agent, "bid": bid_value})
+
+        # Select highest bidder
+        if bids:
+            bids.sort(key=lambda x: x["bid"], reverse=True)
+            return bids[0]["agent"]
+
+        return None
+
+    def _find_best_match_cycle_aware(
+        self,
+        task: Dict[str, Any],
+        agents: List[Dict[str, Any]],
+        agent_performance: Dict[str, Dict],
+        iteration: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Find best matching agent using cycle-aware performance data."""
+        required_skills = task.get("required_skills", [])
+        if not required_skills:
+            # When no specific skills required, prefer agents with better historical performance
+            if agent_performance:
+                best_agent = None
+                best_score = 0
+                for agent in agents:
+                    agent_id = agent.get("id")
+                    perf = agent_performance.get(
+                        agent_id, {"success_rate": 1.0, "assignments": 0}
+                    )
+                    # Balance experience and success rate
+                    experience_factor = min(
+                        perf["assignments"] / 10.0, 1.0
+                    )  # Max at 10 assignments
+                    score = perf["success_rate"] * (0.7 + 0.3 * experience_factor)
+                    if score > best_score:
+                        best_score = score
+                        best_agent = agent
+                return best_agent or (agents[0] if agents else None)
+            return agents[0] if agents else None
+
+        best_agent = None
+        best_score = 0
+
+        for agent in agents:
+            agent_id = agent.get("id")
+            agent_skills = set(agent.get("skills", []))
+            required_set = set(required_skills)
+
+            # Calculate skill match score
+            matches = agent_skills & required_set
+            skill_score = len(matches) / len(required_set) if required_set else 0
+
+            # Get performance history
+            perf = agent_performance.get(
+                agent_id, {"success_rate": 1.0, "assignments": 0}
+            )
+            performance_score = perf["success_rate"]
+
+            # Experience bonus (agents with more assignments get slight preference)
+            experience_bonus = min(perf["assignments"] * 0.05, 0.2)  # Max 20% bonus
+
+            # Cycle adaptation: prefer different agents in different iterations to explore
+            diversity_factor = 1.0
+            if iteration > 0 and agent_performance:
+                recent_assignments = sum(
+                    1 for p in agent_performance.values() if p["assignments"] > 0
+                )
+                if recent_assignments > 0:
+                    agent_usage_ratio = perf["assignments"] / recent_assignments
+                    if agent_usage_ratio > 0.5:  # Over-used agent
+                        diversity_factor = 0.8  # Slight penalty
+
+            # Combined score
+            final_score = (
+                skill_score * performance_score * diversity_factor
+            ) + experience_bonus
+
+            if final_score > best_score:
+                best_score = final_score
+                best_agent = agent
+
+        return best_agent
+
+    def _run_auction_cycle_aware(
+        self,
+        task: Dict[str, Any],
+        agents: List[Dict[str, Any]],
+        agent_performance: Dict[str, Dict],
+    ) -> Optional[Dict[str, Any]]:
+        """Run auction-based task assignment with cycle-aware bidding."""
+        bids = []
+
+        for agent in agents:
+            agent_id = agent.get("id")
+
+            # Calculate bid based on skill match and availability (original logic)
+            required_skills = set(task.get("required_skills", []))
+            agent_skills = set(agent.get("skills", []))
+
+            skill_match = (
+                len(required_skills & agent_skills) / len(required_skills)
+                if required_skills
+                else 1.0
+            )
+            workload = 1.0 - (agent.get("task_count", 0) / 10.0)  # Lower bid if busy
+
+            # Enhance with performance history
+            perf = agent_performance.get(
+                agent_id, {"success_rate": 1.0, "assignments": 0}
+            )
+            performance_factor = perf["success_rate"]
+
+            # Experience factor (slight preference for experienced agents)
+            experience_factor = min(
+                1.0 + (perf["assignments"] * 0.02), 1.2
+            )  # Max 20% boost
+
+            bid_value = skill_match * workload * performance_factor * experience_factor
 
             bids.append({"agent": agent, "bid": bid_value})
 

@@ -7,6 +7,7 @@ Microsoft Graph API with MSAL authentication.
 
 import os
 
+from examples.utils.paths import get_output_dir
 from kailash.nodes.data import SharePointGraphReader
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
@@ -86,11 +87,13 @@ def test_sharepoint_graph_operations():
     # Test 3: Download all 3 files
     print("3. Downloading all 3 files from SharePoint:")
     if files_to_download:
-        os.makedirs("downloads", exist_ok=True)
+        download_dir = get_output_dir() / "sharepoint_downloads"
+        download_dir.mkdir(exist_ok=True)
 
         for file_name in files_to_download:
             try:
                 print(f"\nDownloading: {file_name}")
+                local_file_path = download_dir / file_name
                 result = reader.execute(
                     tenant_id=tenant_id,
                     client_id=client_id,
@@ -100,7 +103,7 @@ def test_sharepoint_graph_operations():
                     library_name="Documents",
                     file_name=file_name,
                     folder_path="",
-                    local_path=f"downloads/{file_name}",
+                    local_path=str(local_file_path),
                 )
 
                 if result["downloaded"]:
@@ -111,13 +114,13 @@ def test_sharepoint_graph_operations():
 
         # List downloaded files
         print("\n4. Verifying downloaded files:")
-        if os.path.exists("downloads"):
-            files = os.listdir("downloads")
+        if download_dir.exists():
+            files = list(download_dir.iterdir())
             print(f"Found {len(files)} files in downloads folder:")
-            for file in files:
-                file_path = os.path.join("downloads", file)
-                size = os.path.getsize(file_path)
-                print(f"  - {file} ({size:,} bytes)")
+            for file_path in files:
+                if file_path.is_file():
+                    size = file_path.stat().st_size
+                    print(f"  - {file_path.name} ({size:,} bytes)")
     else:
         print("No files found to download")
 

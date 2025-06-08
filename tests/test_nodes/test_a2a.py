@@ -249,7 +249,11 @@ class TestA2ACoordinatorNode:
         """Test registering agents with coordinator."""
         coordinator = A2ACoordinatorNode()
 
+        # A2ACoordinatorNode is a CycleAwareNode, so it needs context
+        context = {"cycle": {"iteration": 0}}
+
         result = coordinator.run(
+            context,
             action="register",
             agent_info={
                 "id": "agent1",
@@ -265,9 +269,11 @@ class TestA2ACoordinatorNode:
     def test_task_delegation(self):
         """Test delegating tasks to agents."""
         coordinator = A2ACoordinatorNode()
+        context = {"cycle": {"iteration": 0}}
 
         # Register some agents
         coordinator.run(
+            context,
             action="register",
             agent_info={
                 "id": "researcher1",
@@ -277,6 +283,7 @@ class TestA2ACoordinatorNode:
         )
 
         coordinator.run(
+            context,
             action="register",
             agent_info={
                 "id": "analyst1",
@@ -287,6 +294,7 @@ class TestA2ACoordinatorNode:
 
         # Delegate a research task
         result = coordinator.run(
+            context,
             action="delegate",
             task={
                 "name": "Market Research",
@@ -303,17 +311,21 @@ class TestA2ACoordinatorNode:
     def test_broadcast_message(self):
         """Test broadcasting messages to agents."""
         coordinator = A2ACoordinatorNode()
+        context = {"cycle": {"iteration": 0}}
 
         # Register agents with different roles
         coordinator.run(
+            context,
             action="register",
             agent_info={"id": "agent1", "role": "researcher", "skills": ["research"]},
         )
         coordinator.run(
+            context,
             action="register",
             agent_info={"id": "agent2", "role": "analyst", "skills": ["analysis"]},
         )
         coordinator.run(
+            context,
             action="register",
             agent_info={
                 "id": "agent3",
@@ -324,6 +336,7 @@ class TestA2ACoordinatorNode:
 
         # Broadcast to researchers only
         result = coordinator.run(
+            context,
             action="broadcast",
             message={"content": "New data available", "target_roles": ["researcher"]},
         )
@@ -334,15 +347,19 @@ class TestA2ACoordinatorNode:
     def test_consensus_management(self):
         """Test consensus building among agents."""
         coordinator = A2ACoordinatorNode()
+        context = {"cycle": {"iteration": 0}}
 
         # Register agents
         for i in range(4):
             coordinator.run(
-                action="register", agent_info={"id": f"agent{i}", "role": "voter"}
+                context,
+                action="register",
+                agent_info={"id": f"agent{i}", "role": "voter"},
             )
 
         # Start consensus session
         result = coordinator.run(
+            context,
             action="consensus",
             consensus_proposal={
                 "session_id": "test_consensus",
@@ -356,6 +373,7 @@ class TestA2ACoordinatorNode:
 
         # Cast votes
         coordinator.run(
+            context,
             action="consensus",
             consensus_proposal={"session_id": "test_consensus"},
             agent_id="agent0",
@@ -363,6 +381,7 @@ class TestA2ACoordinatorNode:
         )
 
         coordinator.run(
+            context,
             action="consensus",
             consensus_proposal={"session_id": "test_consensus"},
             agent_id="agent1",
@@ -370,6 +389,7 @@ class TestA2ACoordinatorNode:
         )
 
         result = coordinator.run(
+            context,
             action="consensus",
             consensus_proposal={"session_id": "test_consensus"},
             agent_id="agent2",
@@ -383,9 +403,11 @@ class TestA2ACoordinatorNode:
     def test_workflow_coordination(self):
         """Test coordinating multi-step workflows."""
         coordinator = A2ACoordinatorNode()
+        context = {"cycle": {"iteration": 0}}
 
         # Register specialized agents
         coordinator.run(
+            context,
             action="register",
             agent_info={
                 "id": "data_agent",
@@ -395,6 +417,7 @@ class TestA2ACoordinatorNode:
         )
 
         coordinator.run(
+            context,
             action="register",
             agent_info={
                 "id": "ml_agent",
@@ -414,7 +437,7 @@ class TestA2ACoordinatorNode:
             ],
         }
 
-        result = coordinator.run(action="coordinate", task=workflow)
+        result = coordinator.run(context, action="coordinate", task=workflow)
 
         assert result["success"] is True
         assert result["total_steps"] == 4

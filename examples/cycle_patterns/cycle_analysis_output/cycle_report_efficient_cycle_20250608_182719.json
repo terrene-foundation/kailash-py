@@ -1,0 +1,312 @@
+{
+  "analysis_info": {
+    "cycle_id": "efficient_cycle",
+    "workflow_id": "analyzer_demo",
+    "analysis_level": "comprehensive",
+    "session_id": "developer_tools_demo",
+    "generated_at": "2025-06-08T18:27:19.828275"
+  },
+  "debugging": {
+    "cycle_info": {
+      "cycle_id": "efficient_cycle",
+      "workflow_id": "analyzer_demo",
+      "execution_time": 0.061871,
+      "converged": false,
+      "termination_reason": "max_iterations"
+    },
+    "statistics": {
+      "total_iterations": 10,
+      "successful_iterations": 10,
+      "failed_iterations": 0,
+      "avg_iteration_time": 8.47e-05,
+      "min_iteration_time": 5.2e-05,
+      "max_iteration_time": 0.000105,
+      "total_execution_time": 0.061871,
+      "converged": false,
+      "convergence_iteration": null,
+      "termination_reason": "max_iterations",
+      "memory_peak_mb": 98.40625,
+      "cpu_peak_percent": null,
+      "convergence_rate": 0.0,
+      "efficiency_score": 0.299690645
+    },
+    "performance": {
+      "efficiency_score": 0.299690645,
+      "avg_iteration_time": 8.47e-05,
+      "convergence_rate": 0.0,
+      "resource_usage": {
+        "memory_peak_mb": 98.40625,
+        "cpu_peak_percent": null
+      }
+    },
+    "convergence_analysis": {
+      "pattern": "steady_improvement",
+      "analysis": "Convergence is steadily improving",
+      "initial_value": 0.63,
+      "final_value": 0.025422772409999937,
+      "improvement": 0.6045772275900001,
+      "data_points": 10
+    },
+    "recommendations": [
+      "Consider reducing max_iterations or improving convergence condition",
+      "Cycle reached max_iterations without converging - increase limit or improve algorithm"
+    ],
+    "trace_data": {
+      "cycle_id": "efficient_cycle",
+      "workflow_id": "analyzer_demo",
+      "start_time": "2025-06-08T18:27:18.913306",
+      "end_time": "2025-06-08T18:27:18.975177",
+      "total_execution_time": 0.061871,
+      "iterations": [
+        {
+          "iteration_number": 1,
+          "start_time": "2025-06-08T18:27:18.919599",
+          "end_time": "2025-06-08T18:27:18.919657",
+          "execution_time": 5.8e-05,
+          "memory_usage_mb": 98.390625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.63,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 91,
+          "output_size": 51
+        },
+        {
+          "iteration_number": 2,
+          "start_time": "2025-06-08T18:27:18.925974",
+          "end_time": "2025-06-08T18:27:18.926069",
+          "execution_time": 9.5e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.441,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 91,
+          "output_size": 52
+        },
+        {
+          "iteration_number": 3,
+          "start_time": "2025-06-08T18:27:18.932388",
+          "end_time": "2025-06-08T18:27:18.932440",
+          "execution_time": 5.2e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.30870000000000003,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 91,
+          "output_size": 68
+        },
+        {
+          "iteration_number": 4,
+          "start_time": "2025-06-08T18:27:18.938756",
+          "end_time": "2025-06-08T18:27:18.938848",
+          "execution_time": 9.2e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.2160900000000001,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 92,
+          "output_size": 91
+        },
+        {
+          "iteration_number": 5,
+          "start_time": "2025-06-08T18:27:18.945160",
+          "end_time": "2025-06-08T18:27:18.945257",
+          "execution_time": 9.7e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.151263,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 104,
+          "output_size": 71
+        },
+        {
+          "iteration_number": 6,
+          "start_time": "2025-06-08T18:27:18.951594",
+          "end_time": "2025-06-08T18:27:18.951691",
+          "execution_time": 9.7e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.10588409999999997,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 94,
+          "output_size": 73
+        },
+        {
+          "iteration_number": 7,
+          "start_time": "2025-06-08T18:27:18.957007",
+          "end_time": "2025-06-08T18:27:18.957104",
+          "execution_time": 9.7e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.07411886999999993,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 95,
+          "output_size": 85
+        },
+        {
+          "iteration_number": 8,
+          "start_time": "2025-06-08T18:27:18.962207",
+          "end_time": "2025-06-08T18:27:18.962296",
+          "execution_time": 8.9e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.05188320899999994,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 96,
+          "output_size": 85
+        },
+        {
+          "iteration_number": 9,
+          "start_time": "2025-06-08T18:27:18.968604",
+          "end_time": "2025-06-08T18:27:18.968669",
+          "execution_time": 6.5e-05,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.03631824629999997,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 97,
+          "output_size": 86
+        },
+        {
+          "iteration_number": 10,
+          "start_time": "2025-06-08T18:27:18.974988",
+          "end_time": "2025-06-08T18:27:18.975093",
+          "execution_time": 0.000105,
+          "memory_usage_mb": 98.40625,
+          "cpu_usage_percent": 0,
+          "convergence_value": 0.025422772409999937,
+          "error": null,
+          "node_executions": [
+            "optimization_node"
+          ],
+          "input_size": 99,
+          "output_size": 89
+        }
+      ],
+      "converged": false,
+      "convergence_iteration": null,
+      "termination_reason": "max_iterations",
+      "max_iterations_configured": 10,
+      "timeout_configured": 60.0,
+      "convergence_condition": "error < 0.01",
+      "memory_peak_mb": 98.40625,
+      "cpu_peak_percent": null,
+      "statistics": {
+        "total_iterations": 10,
+        "successful_iterations": 10,
+        "failed_iterations": 0,
+        "avg_iteration_time": 8.47e-05,
+        "min_iteration_time": 5.2e-05,
+        "max_iteration_time": 0.000105,
+        "total_execution_time": 0.061871,
+        "converged": false,
+        "convergence_iteration": null,
+        "termination_reason": "max_iterations",
+        "memory_peak_mb": 98.40625,
+        "cpu_peak_percent": null,
+        "convergence_rate": 0.0,
+        "efficiency_score": 0.299690645
+      }
+    }
+  },
+  "performance": {
+    "total_cycles": 1,
+    "total_iterations": 10,
+    "timing": {
+      "avg_cycle_time": 0.061871,
+      "avg_iteration_time": 8.47e-05,
+      "min_iteration_time": 5.2e-05,
+      "max_iteration_time": 0.000105,
+      "iteration_time_stddev": 1.8897677693891973e-05
+    },
+    "memory_stats": {
+      "avg": 98.4046875,
+      "min": 98.390625,
+      "max": 98.40625,
+      "stddev": 0.004941058844013093,
+      "median": 98.40625
+    },
+    "cpu_stats": {},
+    "convergence_stats": {
+      "avg_convergence": 0.20406801977099998,
+      "min_convergence": 0.025422772409999937,
+      "max_convergence": 0.63,
+      "convergence_stddev": 0.2003266098724143,
+      "convergence_trend": "improving",
+      "data_points": 10
+    },
+    "bottlenecks": [],
+    "optimization_opportunities": [
+      "Add early termination conditions for faster convergence"
+    ]
+  },
+  "recommendations": [
+    {
+      "priority": "HIGH",
+      "category": "efficiency",
+      "description": "Very low efficiency detected",
+      "suggestion": "Consider reducing max_iterations or improving convergence condition",
+      "cycle_id": "efficient_cycle",
+      "current_value": 0.299690645,
+      "target_improvement": "Increase to > 0.5"
+    },
+    {
+      "priority": "HIGH",
+      "category": "convergence",
+      "description": "Cycle reached max_iterations without converging",
+      "suggestion": "Increase max_iterations or improve algorithm",
+      "cycle_id": "efficient_cycle",
+      "current_value": 10,
+      "target_improvement": "Increase to 15"
+    }
+  ],
+  "advanced_analysis": {
+    "convergence_analysis": {
+      "convergence_velocity": 0.06045772275900001,
+      "convergence_pattern": "slow",
+      "stability_score": 0.018334131446878343
+    },
+    "iteration_analysis": {
+      "time_distribution": {
+        "mean": 8.47e-05,
+        "median": 9.35e-05,
+        "mode": 9.7e-05,
+        "skewness": -0.8006657252984308
+      },
+      "performance_trend": "degrading"
+    },
+    "resource_efficiency": {
+      "memory_efficiency": {
+        "peak_usage": 98.40625,
+        "avg_usage": 98.4046875,
+        "efficiency_score": 0.950796875
+      }
+    }
+  }
+}

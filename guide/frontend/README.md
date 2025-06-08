@@ -231,7 +231,7 @@ export class ErrorBoundary extends React.Component {
 ### Internal Documentation
 - [Kailash Python SDK Documentation](../../README.md)
 - [API Reference](../reference/api-registry.yaml)
-- [Workflow Patterns](../reference/pattern-library.md)
+- [Workflow Patterns](../reference/pattern-library/README.md)
 
 ### External Resources
 - [React Documentation](https://react.dev)

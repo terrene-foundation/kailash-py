@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
+from examples.utils.paths import get_output_dir
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
@@ -113,7 +114,7 @@ def create_data_pipeline():
     summarizer.id = "summarizer"
 
     # 5. Output: CSV Writers
-    output_dir = Path("../outputs")
+    output_dir = get_output_dir()
     output_dir.mkdir(exist_ok=True)
 
     enriched_writer = CSVWriterNode(
@@ -203,7 +204,7 @@ def main():
     visualizer = WorkflowVisualizer()
 
     # Save workflow diagram
-    output_dir = Path("../outputs")
+    output_dir = get_output_dir()
     output_dir.mkdir(exist_ok=True)
 
     try:

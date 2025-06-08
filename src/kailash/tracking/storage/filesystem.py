@@ -83,7 +83,22 @@ class FileSystemStorage(StorageBackend):
                 continue
 
         # Sort by started_at (newest first)
-        runs.sort(key=lambda r: r.started_at, reverse=True)
+        # Handle potential timezone-naive datetime objects
+        def safe_datetime_key(run):
+            if run.started_at:
+                # Ensure datetime is timezone-aware
+                if run.started_at.tzinfo is None:
+                    # Assume UTC for naive datetimes
+                    from datetime import timezone
+
+                    return run.started_at.replace(tzinfo=timezone.utc)
+                return run.started_at
+            # Return a very old date for runs without started_at
+            from datetime import datetime, timezone
+
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+        runs.sort(key=safe_datetime_key, reverse=True)
         return runs
 
     def save_task(self, task: TaskRun) -> None:
@@ -225,7 +240,20 @@ class FileSystemStorage(StorageBackend):
                 continue
 
         # Sort by started_at
-        tasks.sort(key=lambda t: t.started_at or t.task_id)
+        # Handle potential timezone-naive datetime objects
+        def safe_task_sort_key(task):
+            if task.started_at:
+                # Ensure datetime is timezone-aware
+                if task.started_at.tzinfo is None:
+                    # Assume UTC for naive datetimes
+                    from datetime import timezone
+
+                    return task.started_at.replace(tzinfo=timezone.utc)
+                return task.started_at
+            # Use task_id as fallback for tasks without started_at
+            return task.task_id
+
+        tasks.sort(key=safe_task_sort_key)
         return tasks
 
     def clear(self) -> None:

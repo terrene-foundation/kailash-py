@@ -19,6 +19,8 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 # Add the parent directory to the path to import kailash
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -397,7 +399,9 @@ def create_transformation_pipeline():
     )
 
     # Create nodes
-    reader = CSVReaderNode(file_path="../data/raw_customers.csv", headers=True)
+    reader = CSVReaderNode(
+        file_path=str(get_data_dir() / "raw_customers.csv"), headers=True
+    )
 
     cleaner = create_data_cleaner()
     feature_engineer = create_feature_engineer()
@@ -405,16 +409,20 @@ def create_transformation_pipeline():
     quality_checker = create_quality_checker()
 
     # Writers for different outputs
-    cleaned_writer = CSVWriterNode(file_path="../data/outputs/cleaned_customers.csv")
-
-    features_writer = CSVWriterNode(
-        file_path="../data/outputs/customers_with_features.csv"
+    cleaned_writer = CSVWriterNode(
+        file_path=str(get_output_dir() / "cleaned_customers.csv")
     )
 
-    aggregated_writer = CSVWriterNode(file_path="../data/outputs/customer_segments.csv")
+    features_writer = CSVWriterNode(
+        file_path=str(get_output_dir() / "customers_with_features.csv")
+    )
+
+    aggregated_writer = CSVWriterNode(
+        file_path=str(get_output_dir() / "customer_segments.csv")
+    )
 
     quality_report_writer = JSONWriterNode(
-        file_path="../data/outputs/quality_report.json"
+        file_path=str(get_output_dir() / "quality_report.json")
     )
 
     # Add nodes to workflow
@@ -463,7 +471,7 @@ def main():
     print("=== Kailash Data Transformation Example ===\n")
 
     # Create sample data
-    data_dir = Path("../data")
+    data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
     output_dir = data_dir / "outputs"
     output_dir.mkdir(exist_ok=True)

@@ -4,19 +4,24 @@ This directory contains internal documentation for developers and contributors t
 
 ## Directory Structure
 
-### In this directory:
-- **`adr/`** - Architecture Decision Records
-- **`development/`** - Development workflows and processes
-- **`features/`** - Feature documentation and specifications
-- **`mistakes/`** - Common mistakes and lessons learned
+### Core Directories (with README.md):
+- **`adr/`** - Architecture Decision Records (35+ design decisions)
+- **`features/`** - In-depth feature implementation guides
+- **`reference/`** - LLM-optimized API references and patterns
+- **`instructions/`** - Detailed coding and documentation standards
+- **`frontend/`** - Frontend development guide
+- **`workflows/`** - Development workflows and task checklists
+
+### Additional Directories:
+- **`development/`** - Development processes and pre-commit hooks
+- **`infrastructure/`** - CI/CD and runner configuration
+- **`mistakes/`** - Documented mistakes and lessons learned (61+ issues)
 - **`prd/`** - Product Requirements Documents
-- **`reference/`** - Reference documentation and templates
-- **`instructions/`** - Detailed development instructions
-- **`todos/`** - Task tracking and development history
-- **`SECURITY.md`** - Comprehensive security documentation and guidelines
+- **`todos/`** - Active task tracking system
+- **`SECURITY.md`** - Comprehensive security documentation
 
 ### In project root:
-- **`CLAUDE.md`** - AI assistant guidelines and project conventions (required by Claude Code)
+- **`CLAUDE.md`** - Compact LLM quick reference (optimized navigation)
 
 ## Important Notes
 

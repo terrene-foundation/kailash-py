@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
 
+from examples.utils.paths import get_data_dir
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode
 
-sample_directory = Path("../data")
+sample_directory = get_data_dir()
 
 # CSV Node (pre-created)
 csv_reader_node = CSVReaderNode(
