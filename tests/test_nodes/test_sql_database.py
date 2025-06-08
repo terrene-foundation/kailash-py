@@ -50,6 +50,7 @@ def db_configs(sqlite_test_database):
 def sqlite_test_database():
     """Create a test SQLite database with sample data."""
     import uuid
+
     db_path = f"test_shared_{uuid.uuid4().hex[:8]}.db"
 
     # Remove existing database
@@ -347,13 +348,13 @@ class TestSQLDatabaseNodeSQLite:
         # Assertions - allow for some failures due to database contention
         successful_queries = [r for r in results if r["success"]]
         failed_queries = [r for r in results if not r["success"]]
-        
+
         # Log failed queries for debugging
         if failed_queries:
             print(f"⚠️  {len(failed_queries)} queries failed:")
             for fq in failed_queries:
                 print(f"   Query {fq['query_id']}: {fq.get('error', 'Unknown error')}")
-        
+
         # Require at least 50% of queries to succeed for connection pooling test
         min_required = max(2, num_concurrent_queries // 2)
         assert (
@@ -375,10 +376,12 @@ class TestSQLDatabaseNodeSQLite:
         assert (
             pooling_efficiency < 1.0
         ), f"Connection pooling slower than sequential: {pooling_efficiency:.2f} (expected < 1.0)"
-        
+
         # Log efficiency for monitoring - ideally should be < 0.75 but not required
         if pooling_efficiency >= 0.75:
-            print(f"⚠️  Connection pooling efficiency suboptimal: {pooling_efficiency:.2f}")
+            print(
+                f"⚠️  Connection pooling efficiency suboptimal: {pooling_efficiency:.2f}"
+            )
         else:
             print(f"✅ Connection pooling efficient: {pooling_efficiency:.2f}")
 
@@ -863,13 +866,13 @@ class TestSQLDatabaseNodePostgreSQL:
         # Assertions - allow for some failures due to database contention
         successful_queries = [r for r in results if r["success"]]
         failed_queries = [r for r in results if not r["success"]]
-        
+
         # Log failed queries for debugging
         if failed_queries:
             print(f"⚠️  {len(failed_queries)} queries failed:")
             for fq in failed_queries:
                 print(f"   Query {fq['query_id']}: {fq.get('error', 'Unknown error')}")
-        
+
         # Require at least 50% of queries to succeed for connection pooling test
         min_required = max(2, num_concurrent_queries // 2)
         assert (
@@ -891,10 +894,12 @@ class TestSQLDatabaseNodePostgreSQL:
         assert (
             pooling_efficiency < 1.0
         ), f"Connection pooling slower than sequential: {pooling_efficiency:.2f} (expected < 1.0)"
-        
+
         # Log efficiency for monitoring - ideally should be < 0.75 but not required
         if pooling_efficiency >= 0.75:
-            print(f"⚠️  Connection pooling efficiency suboptimal: {pooling_efficiency:.2f}")
+            print(
+                f"⚠️  Connection pooling efficiency suboptimal: {pooling_efficiency:.2f}"
+            )
         else:
             print(f"✅ Connection pooling efficient: {pooling_efficiency:.2f}")
 
@@ -1242,13 +1247,13 @@ class TestSQLDatabaseNodeMySQL:
         # Assertions - allow for some failures due to database contention
         successful_queries = [r for r in results if r["success"]]
         failed_queries = [r for r in results if not r["success"]]
-        
+
         # Log failed queries for debugging
         if failed_queries:
             print(f"⚠️  {len(failed_queries)} queries failed:")
             for fq in failed_queries:
                 print(f"   Query {fq['query_id']}: {fq.get('error', 'Unknown error')}")
-        
+
         # Require at least 50% of queries to succeed for connection pooling test
         min_required = max(2, num_concurrent_queries // 2)
         assert (
@@ -1270,10 +1275,12 @@ class TestSQLDatabaseNodeMySQL:
         assert (
             pooling_efficiency < 1.0
         ), f"Connection pooling slower than sequential: {pooling_efficiency:.2f} (expected < 1.0)"
-        
+
         # Log efficiency for monitoring - ideally should be < 0.75 but not required
         if pooling_efficiency >= 0.75:
-            print(f"⚠️  Connection pooling efficiency suboptimal: {pooling_efficiency:.2f}")
+            print(
+                f"⚠️  Connection pooling efficiency suboptimal: {pooling_efficiency:.2f}"
+            )
         else:
             print(f"✅ Connection pooling efficient: {pooling_efficiency:.2f}")
 
