@@ -25,7 +25,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 from sqlalchemy import func
 
 from kailash.api.database import CustomNode as CustomNodeModel
-from kailash.api.database import CustomNodeRepository, ExecutionRepository
+from kailash.api.database import (
+    CustomNodeRepository,
+    ExecutionRepository,
+)
 from kailash.api.database import Workflow as WorkflowModel
 from kailash.api.database import WorkflowExecution as ExecutionModel
 from kailash.api.database import (

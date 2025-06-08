@@ -832,7 +832,7 @@ Focus on actionable intelligence rather than just listing what each agent said."
                     summary = result.get("response", {}).get("content", "")
                     if summary:
                         return f"Shared Context Summary:\n{summary}"
-        except:
+        except Exception:
             pass
 
         # Fallback to simple summary

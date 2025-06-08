@@ -229,7 +229,7 @@ class AdaptiveCondition(ConvergenceCondition):
 
 
 def create_convergence_condition(
-    spec: Union[str, int, Callable, Dict]
+    spec: Union[str, int, Callable, Dict],
 ) -> ConvergenceCondition:
     """Factory function to create convergence conditions from various specs.
 

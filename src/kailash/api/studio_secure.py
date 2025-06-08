@@ -369,7 +369,7 @@ class WorkflowStudioAPI:
                                 ),
                             }
                         )
-                    except:
+                    except Exception:
                         outputs.append({"name": "output", "type": "any"})
                 else:
                     # Default output for all nodes
