@@ -40,26 +40,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install uv
+      - name: Setup Python and uv for local runner
         run: |
-          # Install uv in a custom location to avoid permission issues
-          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
-          export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
+          # Check if Python is available
+          python3 --version || { echo "Python 3 not found"; exit 1; }
+          
+          # Install uv if not available, using workspace directory to avoid permission issues
+          if ! command -v uv &> /dev/null; then
+            export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+            export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
+            export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
+          fi
+          
+          # Verify uv is working
+          uv --version
 
       - name: Install dependencies
         run: |
-          uv venv
+          # Create virtual environment in workspace
+          uv venv .venv --python python3
           uv sync
 
       - name: Build documentation
         run: |
+          # Ensure uv is in PATH and activate environment
+          export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
           cd docs
           uv run python build_docs.py
 
