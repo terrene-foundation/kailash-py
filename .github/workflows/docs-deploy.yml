@@ -70,6 +70,21 @@ jobs:
           cd docs
           uv run python build_docs.py
 
+      - name: Install GNU tar for local runner
+        run: |
+          # Check if gtar is available, install if needed
+          if ! command -v gtar &> /dev/null; then
+            if command -v brew &> /dev/null; then
+              echo "Installing GNU tar via Homebrew..."
+              brew install gnu-tar
+            else
+              echo "Homebrew not available, creating gtar symlink..."
+              sudo ln -sf /usr/bin/tar /usr/local/bin/gtar || true
+            fi
+          fi
+          # Verify gtar is now available
+          gtar --version || tar --version
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

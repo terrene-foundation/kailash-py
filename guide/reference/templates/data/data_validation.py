@@ -79,11 +79,11 @@ def validate_record(
     for field, expected_type in rules["field_types"].items():
         if field in record and record[field] is not None:
             try:
-                if expected_type == int:
+                if expected_type is int:
                     int(record[field])
-                elif expected_type == float:
+                elif expected_type is float:
                     float(record[field])
-                elif expected_type == str:
+                elif expected_type is str:
                     str(record[field])
             except (ValueError, TypeError):
                 errors.append(

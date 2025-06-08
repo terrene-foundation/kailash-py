@@ -101,7 +101,7 @@ test-integration:
 
 test-examples:
 	@echo "Testing all examples..."
-	cd examples && python _utils/test_all_examples.py
+	cd examples && python utils/test_runner.py
 
 test-fast: test-unit test-examples
 	@echo "Fast tests completed"
