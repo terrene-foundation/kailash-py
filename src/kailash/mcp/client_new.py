@@ -292,7 +292,7 @@ class MCPClient:
 
 # Convenience functions for LLM agents
 async def discover_and_prepare_tools(
-    mcp_servers: List[Union[str, Dict[str, Any]]]
+    mcp_servers: List[Union[str, Dict[str, Any]]],
 ) -> List[Dict[str, Any]]:
     """
     Discover tools from multiple MCP servers and prepare them for LLM use.

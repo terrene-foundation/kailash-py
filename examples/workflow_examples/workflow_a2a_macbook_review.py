@@ -45,7 +45,7 @@ from pathlib import Path
 
 from kailash import Workflow
 from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
-from kailash.nodes.mcp import MCPClient
+from kailash.mcp import MCPClient
 from kailash.runtime import LocalRuntime
 
 
@@ -676,7 +676,7 @@ def show_memory_stats(memory_pool):
         )
         if recent.get("memories"):
             print(f"    Recent memories: {len(recent['memories'])}")
-    except:
+    except Exception:
         pass
 
 
@@ -741,7 +741,7 @@ def main():
         if response.status_code != 200:
             print("ERROR: Ollama not running. Start with: ollama serve")
             return
-    except:
+    except Exception:
         print("ERROR: Cannot connect to Ollama")
         return
 
