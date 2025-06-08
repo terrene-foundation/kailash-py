@@ -269,7 +269,7 @@ jobs:
                   echo "⚠️  Skipping Python 3.12 tests (not available)"
               fi
 
-              run_check "Example validation" "cd examples && uv run python _utils/test_all_examples.py" "examples.log" &
+              run_check "Example validation" "cd examples && uv run python utils/test_runner.py" "examples.log" &
 
               # Wait for all background jobs
               wait

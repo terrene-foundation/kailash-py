@@ -13,7 +13,7 @@ examples/
 ├── data/                   # Sample data files for examples
 ├── outputs/                # Generated output files from examples
 ├── migrations/             # Migration experiments from other systems
-└── _utils/                 # Utility scripts for testing examples
+└── utils/                  # Utility scripts for testing examples
 ```
 
 ## Example Categories
@@ -78,7 +78,7 @@ python run_example.py workflow_examples/workflow_basic.py
 ### Testing All Examples
 ```bash
 # Test that all examples import correctly
-python _utils/test_all_examples.py
+python utils/test_runner.py
 ```
 
 ### Data Files
