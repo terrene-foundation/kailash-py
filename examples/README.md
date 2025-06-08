@@ -60,13 +60,20 @@ Workflow visualization and reporting:
 ## Running Examples
 
 ### Basic Usage
-```bash
-# Run any example directly
-python workflow_examples/workflow_basic.py
 
-# Run with help to see options
-python workflow_examples/workflow_basic.py --help
+Due to security restrictions, examples should be run from the project root directory:
+
+```bash
+# From the project root (kailash_python_sdk/)
+python examples/workflow_examples/workflow_basic.py
+python examples/workflow_examples/workflow_simple.py
+
+# Or use the helper script from the examples directory
+cd examples
+python run_example.py workflow_examples/workflow_basic.py
 ```
+
+**Note**: The SDK's security system restricts file access to specific directories. Running from the project root ensures examples can access the `examples/data/` directory.
 
 ### Testing All Examples
 ```bash

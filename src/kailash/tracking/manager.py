@@ -678,11 +678,28 @@ class TaskManager:
                 )
             else:
                 # Fallback for MockStorage
-                return [
-                    t
-                    for t in self.storage.get_all_tasks()
-                    if t.created_at >= start_time and t.created_at <= end_time
-                ]
+                tasks = []
+                for t in self.storage.get_all_tasks():
+                    # Ensure timezone-aware comparison
+                    task_created_at = t.created_at
+                    if task_created_at and task_created_at.tzinfo is None:
+                        task_created_at = task_created_at.replace(tzinfo=timezone.utc)
+
+                    start_aware = start_time
+                    if start_aware.tzinfo is None:
+                        start_aware = start_aware.replace(tzinfo=timezone.utc)
+
+                    end_aware = end_time
+                    if end_aware.tzinfo is None:
+                        end_aware = end_aware.replace(tzinfo=timezone.utc)
+
+                    if (
+                        task_created_at
+                        and task_created_at >= start_aware
+                        and task_created_at <= end_aware
+                    ):
+                        tasks.append(t)
+                return tasks
         except Exception as e:
             raise StorageException(f"Failed to query tasks by timerange: {e}") from e
 
@@ -738,14 +755,20 @@ class TaskManager:
         deleted = 0
 
         for task in tasks:
-            if task.created_at and task.created_at < cutoff:
-                try:
-                    self.delete_task(task.task_id)
-                    deleted += 1
-                except Exception as e:
-                    self.logger.warning(
-                        f"Failed to delete old task {task.task_id}: {e}"
-                    )
+            if task.created_at:
+                # Ensure timezone-aware comparison
+                task_created_at = task.created_at
+                if task_created_at.tzinfo is None:
+                    task_created_at = task_created_at.replace(tzinfo=timezone.utc)
+
+                if task_created_at < cutoff:
+                    try:
+                        self.delete_task(task.task_id)
+                        deleted += 1
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to delete old task {task.task_id}: {e}"
+                        )
 
         return deleted
 

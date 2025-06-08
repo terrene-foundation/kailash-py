@@ -45,6 +45,51 @@ class AsyncNode(Node):
     - TaskManager: Tracks node execution status
     """
 
+    def execute(self, **runtime_inputs) -> Dict[str, Any]:
+        """Execute the node synchronously by running async code in a new event loop.
+
+        This override allows AsyncNode to work with synchronous runtimes like LocalRuntime.
+        It creates a new event loop to run the async code if needed.
+
+        Args:
+            **runtime_inputs: Runtime inputs for node execution
+
+        Returns:
+            Dictionary of validated outputs
+
+        Raises:
+            NodeValidationError: If inputs or outputs are invalid
+            NodeExecutionError: If execution fails
+        """
+        import asyncio
+        import sys
+
+        # Check if we're already in an event loop
+        try:
+            asyncio.get_running_loop()
+            # We're in an event loop - this is problematic for sync execution
+            # Try to use nest_asyncio if available
+            try:
+                import nest_asyncio
+
+                nest_asyncio.apply()
+                return asyncio.run(self.execute_async(**runtime_inputs))
+            except ImportError:
+                # Fall back to running in a thread pool
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run, self.execute_async(**runtime_inputs)
+                    )
+                    return future.result()
+        except RuntimeError:
+            # No event loop running, we can create one
+            if sys.platform == "win32":
+                # Windows requires special handling
+                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            return asyncio.run(self.execute_async(**runtime_inputs))
+
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Asynchronous execution method for the node.
 

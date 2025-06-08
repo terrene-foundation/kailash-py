@@ -1,0 +1,80 @@
+# Kailash SDK API Reference - API Nodes
+# Module: kailash.nodes.api
+# Version: 0.1.4
+# Last Updated: 2025-01-06
+
+nodes:
+  # API Nodes
+  http_request:
+    class: kailash.nodes.api.HTTPRequestNode
+    description: "Make HTTP requests"
+    import: "from kailash.nodes.api import HTTPRequestNode"
+    config:
+      url: "str - Request URL (required)"
+      method: "str - HTTP method (default: 'GET')"
+      headers: "dict - Request headers (optional)"
+      params: "dict - Query parameters (optional)"
+      timeout: "int - Request timeout in seconds (default: 30)"
+    inputs:
+      data: "Any - Request body (for POST/PUT)"
+    outputs:
+      response: "dict - Response data"
+      status_code: "int - HTTP status code"
+      headers: "dict - Response headers"
+    example: |
+      workflow.add_node('http', HTTPRequestNode(),
+          url='https://api.example.com/data',
+          method='GET',
+          headers={'Authorization': 'Bearer token'}
+      )
+
+  rest_client:
+    class: kailash.nodes.api.RESTClientNode
+    description: "RESTful API client with advanced features"
+    import: "from kailash.nodes.api import RESTClientNode"
+    config:
+      base_url: "str - Base URL for API"
+      auth_type: "str - Authentication type ('bearer', 'basic', 'api_key')"
+      auth_config: "dict - Authentication configuration"
+      rate_limit: "int - Requests per second (optional)"
+      retry_config: "dict - Retry configuration (optional)"
+    inputs:
+      endpoint: "str - API endpoint"
+      method: "str - HTTP method"
+      data: "Any - Request data (optional)"
+    outputs:
+      response: "Any - API response"
+      metadata: "dict - Response metadata"
+    example: |
+      node = RESTClientNode()
+      config = {
+          'base_url': 'https://api.example.com',
+          'auth_type': 'bearer',
+          'auth_config': {'token': 'your-token'},
+          'rate_limit': 10
+      }
+
+  # Code Execution
+  python_code:
+    class: kailash.nodes.code.PythonCodeNode
+    description: "Execute custom Python code"
+    import: "from kailash.nodes.code import PythonCodeNode"
+    config:
+      code: "str - Python code to execute"
+      requirements: "List[str] - Required packages (optional)"
+      timeout: "int - Execution timeout in seconds (default: 30)"
+    inputs:
+      (dynamic): "Defined in code"
+    outputs:
+      (dynamic): "Returned from code"
+    example: |
+      node = PythonCodeNode()
+      config = {
+          'code': '''
+      def execute(data):
+          # Process data
+          result = [x * 2 for x in data]
+          return {'doubled': result}
+      ''',
+          'requirements': ['numpy', 'pandas']
+      }

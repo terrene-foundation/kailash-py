@@ -1,21 +1,114 @@
 """
-Kailash SDK Security Module
+Comprehensive Security Framework for the Kailash SDK.
 
-This module provides security utilities for safe file operations, input validation,
-and protection against common vulnerabilities like path traversal attacks.
-
-Security Features:
-    - Path traversal prevention
-    - Input sanitization and validation
-    - Safe file operations with sandboxing
-    - Command injection protection
-    - Memory and execution limits
+This module provides an extensive security framework designed to protect against
+common vulnerabilities and ensure safe execution of workflows, particularly in
+cyclic patterns where long-running processes may be exposed to additional risks.
+It implements defense-in-depth strategies with configurable policies.
 
 Design Philosophy:
-    - Fail-safe defaults (deny by default)
-    - Defense in depth
-    - Comprehensive logging for audit trails
-    - Configurable security policies
+    Implements a comprehensive security-first approach with fail-safe defaults,
+    defense-in-depth strategies, and extensive monitoring. Designed to protect
+    against both common web vulnerabilities and workflow-specific attack vectors
+    while maintaining usability and performance.
+
+Key Security Features:
+    - **Path Security**: Comprehensive path traversal prevention
+    - **Input Validation**: Multi-layer input sanitization and validation
+    - **Execution Security**: Safe code execution with sandboxing
+    - **Resource Limits**: Memory, CPU, and execution time constraints
+    - **Injection Protection**: Command and code injection prevention
+    - **Audit Logging**: Comprehensive security event logging
+
+Cycle Security Enhancements (v0.2.0):
+    Enhanced security specifically for cyclic workflows including:
+    - Long-running process monitoring and limits
+    - Iteration-based resource accumulation detection
+    - Parameter injection attack prevention in cycles
+    - State corruption detection and prevention
+    - Convergence manipulation attack detection
+
+Security Layers:
+    1. **Input Layer**: Validation and sanitization of all inputs
+    2. **Execution Layer**: Sandboxed execution with resource limits
+    3. **File System Layer**: Controlled file access with path validation
+    4. **Network Layer**: Controlled external communication
+    5. **Monitoring Layer**: Real-time security event detection
+
+Vulnerability Protection:
+    - **Path Traversal**: Comprehensive path validation and canonicalization
+    - **Command Injection**: Input sanitization and safe command execution
+    - **Code Injection**: AST validation and safe code execution
+    - **Resource Exhaustion**: Memory, CPU, and time limits
+    - **Information Disclosure**: Controlled error messages and logging
+    - **Privilege Escalation**: Sandboxed execution environments
+
+Core Components:
+    - SecurityConfig: Centralized security policy configuration
+    - ValidationFramework: Multi-layer input validation system
+    - ExecutionSandbox: Safe code execution environment
+    - ResourceMonitor: Real-time resource usage monitoring
+    - AuditLogger: Comprehensive security event logging
+
+Upstream Dependencies:
+    - Operating system security features for sandboxing
+    - Python security libraries for validation and monitoring
+    - Workflow execution framework for integration points
+
+Downstream Consumers:
+    - All workflow execution components requiring security
+    - Node implementations with external resource access
+    - Runtime engines executing user-provided code
+    - API endpoints handling external workflow requests
+
+Examples:
+    Basic security configuration:
+
+    >>> from kailash.security import SecurityConfig, validate_node_parameters
+    >>> # Configure security policy
+    >>> config = SecurityConfig(
+    ...     max_execution_time=300,
+    ...     max_memory_mb=1024,
+    ...     allowed_paths=["/safe/directory"]
+    ... )
+    >>> # Validate node parameters
+    >>> validate_node_parameters(parameters, config)
+
+    Secure file operations:
+
+    >>> from kailash.security import safe_file_operation, validate_path
+    >>> # Validate and access file safely
+    >>> safe_path = validate_path("/user/input/path", base_dir="/safe/root")
+    >>> with safe_file_operation(safe_path, "r") as f:
+    ...     content = f.read()
+
+    Execution timeout protection:
+
+    >>> from kailash.security import execution_timeout
+    >>> @execution_timeout(seconds=30)
+    ... def potentially_long_running_function():
+    ...     # Function will be terminated if it runs longer than 30 seconds
+    ...     return process_data()
+
+    Comprehensive monitoring:
+
+    >>> from kailash.security import SecurityMonitor
+    >>> monitor = SecurityMonitor()
+    >>> with monitor.track_execution("workflow_execution"):
+    ...     # All security events will be monitored and logged
+    ...     runtime.execute(workflow)
+
+Security Policies:
+    Configurable security policies allow adaptation to different environments:
+    - **Development**: Relaxed policies for debugging and testing
+    - **Staging**: Moderate policies balancing security and functionality
+    - **Production**: Strict policies prioritizing security
+    - **High-Security**: Maximum security for sensitive environments
+
+See Also:
+    - :mod:`kailash.nodes.code.python` for secure code execution
+    - :mod:`kailash.workflow.safety` for workflow-specific safety measures
+    - :doc:`/guides/security` for comprehensive security best practices
 """
 
 import logging
@@ -87,13 +180,22 @@ class SecurityConfig:
             enable_path_validation: Whether to validate file paths
             enable_command_validation: Whether to validate command strings
         """
-        self.allowed_directories = allowed_directories or [
+        default_dirs = [
             os.path.expanduser("~/.kailash"),
             tempfile.gettempdir(),  # Allow all temp directories
             os.getcwd(),
             "/tmp",  # Unix temp directory
             "/var/tmp",  # Unix temp directory
         ]
+
+        # Check for additional allowed directories from environment
+        env_dirs = os.environ.get("KAILASH_ALLOWED_DIRS", "")
+        if env_dirs:
+            for dir_path in env_dirs.split(":"):
+                if dir_path and os.path.isdir(dir_path):
+                    default_dirs.append(os.path.abspath(dir_path))
+
+        self.allowed_directories = allowed_directories or default_dirs
         self.max_file_size = max_file_size
         self.execution_timeout = execution_timeout
         self.memory_limit = memory_limit
@@ -405,10 +507,236 @@ def sanitize_input(
         config = get_security_config()
 
     if allowed_types is None:
-        allowed_types = [str, int, float, bool, list, dict]
+        allowed_types = [str, int, float, bool, list, dict, tuple, set, type(None)]
 
-    # Type validation
-    if not any(isinstance(value, t) for t in allowed_types):
+        # Core data science types
+        try:
+            import pandas as pd
+
+            allowed_types.extend(
+                [
+                    pd.DataFrame,
+                    pd.Series,
+                    pd.Index,
+                    pd.MultiIndex,
+                    pd.Categorical,
+                    pd.Timestamp,
+                    pd.Timedelta,
+                    pd.Period,
+                    pd.DatetimeIndex,
+                    pd.TimedeltaIndex,
+                    pd.PeriodIndex,
+                ]
+            )
+        except ImportError:
+            pass
+
+        try:
+            import numpy as np
+
+            numpy_types = [
+                np.ndarray,
+                np.ma.MaskedArray,
+                # All numpy scalar types
+                np.int8,
+                np.int16,
+                np.int32,
+                np.int64,
+                np.uint8,
+                np.uint16,
+                np.uint32,
+                np.uint64,
+                np.float16,
+                np.float32,
+                np.float64,
+                np.complex64,
+                np.complex128,
+                np.bool_,
+                np.object_,
+                np.datetime64,
+                np.timedelta64,
+            ]
+
+            # Add matrix if available (deprecated in NumPy 2.0)
+            if hasattr(np, "matrix"):
+                numpy_types.append(np.matrix)
+
+            # Handle NumPy version differences
+            if hasattr(np, "string_"):
+                numpy_types.append(np.string_)
+            elif hasattr(np, "bytes_"):
+                numpy_types.append(np.bytes_)
+
+            if hasattr(np, "unicode_"):
+                numpy_types.append(np.unicode_)
+            elif hasattr(np, "str_"):
+                numpy_types.append(np.str_)
+
+            # Add platform-specific types if available
+            if hasattr(np, "float128"):
+                numpy_types.append(np.float128)
+            if hasattr(np, "complex256"):
+                numpy_types.append(np.complex256)
+
+            # Add generic numpy type to catch all numpy scalars
+            if hasattr(np, "generic"):
+                numpy_types.append(np.generic)
+
+            allowed_types.extend(numpy_types)
+        except ImportError:
+            pass
+
+        # Deep learning frameworks
+        try:
+            import torch
+
+            allowed_types.extend(
+                [
+                    torch.Tensor,
+                    torch.nn.Module,
+                    torch.nn.Parameter,
+                    torch.cuda.FloatTensor,
+                    torch.cuda.DoubleTensor,
+                    torch.cuda.IntTensor,
+                    torch.cuda.LongTensor,
+                ]
+            )
+        except ImportError:
+            pass
+
+        try:
+            import tensorflow as tf
+
+            allowed_types.extend(
+                [
+                    tf.Tensor,
+                    tf.Variable,
+                    tf.constant,
+                    tf.keras.Model,
+                    tf.keras.layers.Layer,
+                    tf.data.Dataset,
+                ]
+            )
+        except ImportError:
+            pass
+
+        # Scientific computing
+        try:
+            import scipy.sparse
+
+            allowed_types.extend(
+                [
+                    scipy.sparse.csr_matrix,
+                    scipy.sparse.csc_matrix,
+                    scipy.sparse.coo_matrix,
+                    scipy.sparse.dia_matrix,
+                    scipy.sparse.dok_matrix,
+                    scipy.sparse.lil_matrix,
+                ]
+            )
+        except ImportError:
+            pass
+
+        # Machine learning frameworks
+        try:
+            from sklearn.base import BaseEstimator, TransformerMixin
+
+            allowed_types.extend([BaseEstimator, TransformerMixin])
+        except ImportError:
+            pass
+
+        try:
+            import xgboost as xgb
+
+            allowed_types.extend([xgb.DMatrix, xgb.Booster])
+        except ImportError:
+            pass
+
+        try:
+            import lightgbm as lgb
+
+            allowed_types.extend([lgb.Dataset, lgb.Booster])
+        except ImportError:
+            pass
+
+        # Data visualization
+        try:
+            from matplotlib.axes import Axes
+            from matplotlib.figure import Figure
+
+            allowed_types.extend([Figure, Axes])
+        except ImportError:
+            pass
+
+        try:
+            import plotly.graph_objects as go
+
+            allowed_types.append(go.Figure)
+        except ImportError:
+            pass
+
+        # Statistical modeling
+        try:
+            import statsmodels.api as sm
+
+            allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS, sm.RegressionResults])
+        except ImportError:
+            pass
+
+        # Image processing
+        try:
+            from PIL import Image
+
+            allowed_types.append(Image.Image)
+        except ImportError:
+            pass
+
+        try:
+            # OpenCV uses numpy arrays, already covered
+            import cv2  # noqa: F401
+        except ImportError:
+            pass
+
+        # NLP libraries
+        try:
+            from spacy.tokens import Doc, Span, Token
+
+            allowed_types.extend([Doc, Span, Token])
+        except ImportError:
+            pass
+
+        # Graph/Network analysis
+        try:
+            import networkx as nx
+
+            allowed_types.extend([nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph])
+        except ImportError:
+            pass
+
+        # Time series
+        try:
+            from prophet import Prophet
+            from prophet.forecaster import Prophet as ProphetModel
+
+            allowed_types.extend([Prophet, ProphetModel])
+        except ImportError:
+            pass
+
+    # Type validation - allow data science types
+    type_allowed = any(isinstance(value, t) for t in allowed_types)
+
+    # Additional check for numpy scalar types
+    if not type_allowed:
+        try:
+            import numpy as np
+
+            # Check if it's any numpy type
+            if isinstance(value, np.generic):
+                type_allowed = True
+        except ImportError:
+            pass
+
+    if not type_allowed:
         raise SecurityError(f"Input type not allowed: {type(value)}")
 
     # String sanitization

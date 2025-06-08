@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime import LocalRuntime
@@ -257,13 +258,15 @@ def main():
             "quantity": np.random.randint(1, 20, 100),
         }
     )
-    sample_data.to_csv("../data/sample_metrics.csv", index=False)
+    sample_data.to_csv(str(get_data_dir() / "sample_metrics.csv"), index=False)
 
     # Create workflow
     workflow = Workflow(workflow_id="python_code_demo", name="python_code_demo")
 
     # Add data reader
-    reader = CSVReaderNode(file_path="../data/sample_metrics.csv", name="data_reader")
+    reader = CSVReaderNode(
+        file_path=str(get_data_dir() / "sample_metrics.csv"), name="data_reader"
+    )
     workflow.add_node("data_reader", reader)
 
     # Create and add custom nodes
@@ -278,7 +281,9 @@ def main():
     workflow.add_node("file_node", file_node)
 
     # Add data writer
-    writer = CSVWriterNode(file_path="../outputs/results.csv", name="result_writer")
+    writer = CSVWriterNode(
+        file_path=str(get_output_dir() / "results.csv"), name="result_writer"
+    )
     workflow.add_node("result_writer", writer)
 
     # Connect nodes in pipeline
@@ -289,13 +294,13 @@ def main():
 
     # Comment out code node due to security restrictions in this demo
     # workflow.connect("data_reader", "code_node", {"data": "data"})
-    # aggregation_writer = CSVWriterNode(file_path="../data/aggregated_metrics.csv", name="aggregation_writer")
+    # aggregation_writer = CSVWriterNode(file_path=str(get_data_dir() / "aggregated_metrics.csv", name="aggregation_writer")
     # workflow.add_node("aggregation_writer", aggregation_writer)
     # workflow.connect("code_node", "aggregation_writer", {"result": "data"})
 
     # Configure nodes
-    reader.config = {"file_path": "../data/sample_metrics.csv"}
-    writer.config = {"file_path": "../outputs/processed_metrics.csv"}
+    reader.config = {"file_path": str(get_data_dir() / "sample_metrics.csv")}
+    writer.config = {"file_path": str(get_output_dir() / "processed_metrics.csv")}
     # aggregation_writer.config = {'file_path': "../data/aggregated_metrics.csv'}
 
     # Add custom parameters
@@ -340,6 +345,6 @@ def main():
 
 if __name__ == "__main__":
     # Create data directory
-    Path("../data").mkdir(exist_ok=True)
+    get_data_dir().mkdir(exist_ok=True)
 
     main()

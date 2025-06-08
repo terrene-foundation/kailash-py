@@ -24,6 +24,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 # Add parent directory to path to allow importing the Kailash SDK
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.absolute()))
 
@@ -557,7 +559,9 @@ def create_test_workflow():
     workflow = Workflow(workflow_id="docker_test_workflow", name="docker_test_workflow")
 
     # Create nodes
-    reader = CSVReaderNode(file_path="../data/customers.csv", headers=True)
+    reader = CSVReaderNode(
+        file_path=str(get_data_dir() / "customers.csv"), headers=True
+    )
 
     def process_data(data):
         """Simple data processing function."""
@@ -579,7 +583,7 @@ def create_test_workflow():
         output_schema=output_schema,
     )
 
-    writer = CSVWriterNode(file_path="../outputs/processed_output.csv")
+    writer = CSVWriterNode(file_path=str(get_output_dir() / "processed_output.csv"))
 
     # Add nodes to workflow
     workflow.add_node("reader", reader)

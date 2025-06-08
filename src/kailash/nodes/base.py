@@ -60,7 +60,8 @@ class NodeMetadata(BaseModel):
     version: str = Field("1.0.0", description="Node version")
     author: str = Field("", description="Node author")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Node creation date"
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Node creation date",
     )
     tags: Set[str] = Field(default_factory=set, description="Node tags")
 

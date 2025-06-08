@@ -16,28 +16,79 @@ class SwitchNode(Node):
 
     The Switch node enables conditional branching in workflows by evaluating
     a condition on input data and routing it to different outputs based on
-    the result. This allows for:
+    the result. This is essential for implementing decision trees, error
+    handling flows, and adaptive processing pipelines.
 
-    1. Boolean conditions (true/false branching)
-    2. Multi-case switching (similar to switch statements in programming)
-    3. Dynamic workflow paths based on data values
+    Design Philosophy:
+        SwitchNode provides declarative conditional routing without requiring
+        custom logic nodes. It supports both simple boolean conditions and
+        complex multi-case routing, making workflows more maintainable and
+        easier to visualize.
 
-    The outputs of Switch nodes are typically connected to different processing
-    nodes, and those branches can be rejoined later using a MergeNode.
+    Upstream Dependencies:
+        - Any node producing data that needs conditional routing
+        - Common patterns: validators, analyzers, quality checkers
+        - In cycles: ConvergenceCheckerNode for convergence-based routing
 
-    Example usage:
+    Downstream Consumers:
+        - Different processing nodes based on condition results
+        - MergeNode to rejoin branches after conditional processing
+        - In cycles: nodes that continue or exit based on conditions
+
+    Configuration:
+        condition_field (str): Field in input data to evaluate (for dict inputs)
+        operator (str): Comparison operator (==, !=, >, <, >=, <=, in, contains)
+        value (Any): Value to compare against for boolean conditions
+        cases (list): List of values for multi-case switching
+        case_prefix (str): Prefix for case output fields (default: "case_")
+        pass_condition_result (bool): Include condition result in output
+
+    Implementation Details:
+        - Supports both single dict and list of dicts as input
+        - For lists, groups items by condition field value
+        - Multi-case mode creates dynamic outputs (case_X)
+        - Boolean mode uses true_output/false_output
+        - Handles missing fields gracefully
+
+    Error Handling:
+        - Missing input_data raises ValueError
+        - Invalid operators return False
+        - Missing condition fields use input directly
+        - Comparison errors caught and return False
+
+    Side Effects:
+        - Logs routing decisions for debugging
+        - No external state modifications
+
+    Examples:
         >>> # Simple boolean condition
-        >>> switch_node = SwitchNode(condition_field="status", operator="==", value="success")
-        >>> switch_node.metadata.name
-        'SwitchNode'
+        >>> switch = SwitchNode(condition_field="status", operator="==", value="success")
+        >>> result = switch.execute(input_data={"status": "success", "data": [1,2,3]})
+        >>> result["true_output"]
+        {'status': 'success', 'data': [1, 2, 3]}
+        >>> result["false_output"] is None
+        True
 
         >>> # Multi-case switching
-        >>> switch_node = SwitchNode(
-        ...     condition_field="status",
-        ...     cases=["success", "warning", "error"]
+        >>> switch = SwitchNode(
+        ...     condition_field="priority",
+        ...     cases=["high", "medium", "low"]
         ... )
-        >>> 'cases' in switch_node.get_parameters()
-        True
+        >>> result = switch.execute(input_data={"priority": "high", "task": "urgent"})
+        >>> result["case_high"]
+        {'priority': 'high', 'task': 'urgent'}
+
+        >>> # In cyclic workflows for convergence routing
+        >>> workflow.add_node("convergence", ConvergenceCheckerNode())
+        >>> workflow.add_node("switch", SwitchNode(
+        ...     condition_field="converged",
+        ...     operator="==",
+        ...     value=True
+        ... ))
+        >>> workflow.connect("convergence", "switch")
+        >>> workflow.connect("switch", "processor",
+        ...     condition="false_output", cycle=True)
+        >>> workflow.connect("switch", "output", condition="true_output")
     """
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -111,7 +162,16 @@ class SwitchNode(Node):
         }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
-        """Dynamic schema with standard outputs."""
+        """
+        Define the output schema for SwitchNode.
+
+        Note that this returns the standard outputs only. In multi-case mode,
+        additional dynamic outputs (case_X) are created at runtime based on
+        the cases parameter.
+
+        Returns:
+            Dict[str, NodeParameter]: Standard output parameters
+        """
         return {
             "true_output": NodeParameter(
                 name="true_output",
@@ -141,6 +201,53 @@ class SwitchNode(Node):
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
+        """
+        Execute the switch routing logic.
+
+        Evaluates conditions on input data and routes to appropriate outputs.
+        Supports both boolean (true/false) and multi-case routing patterns.
+
+        Args:
+            **kwargs: Runtime parameters including:
+                input_data (Any): Data to route (required)
+                condition_field (str): Field to check in dict inputs
+                operator (str): Comparison operator
+                value (Any): Value for boolean comparison
+                cases (list): Values for multi-case routing
+                Additional configuration parameters
+
+        Returns:
+            Dict[str, Any]: Routing results with keys:
+                For boolean mode:
+                    true_output: Input data if condition is True
+                    false_output: Input data if condition is False
+                    condition_result: Boolean result (if enabled)
+                For multi-case mode:
+                    case_X: Input data for matching cases
+                    default: Input data (always present)
+                    condition_result: Matched case(s) (if enabled)
+
+        Raises:
+            ValueError: If input_data is not provided
+
+        Side Effects:
+            Logs routing decisions via logger
+
+        Examples:
+            >>> switch = SwitchNode()
+            >>> result = switch.run(
+            ...     input_data={"score": 85},
+            ...     condition_field="score",
+            ...     operator=">=",
+            ...     value=80
+            ... )
+            >>> result["true_output"]["score"]
+            85
+        """
+        # Debug logging for cyclic workflow example
+        if self.logger:
+            self.logger.debug(f"SwitchNode received kwargs keys: {list(kwargs.keys())}")
+
         # Special case for test_multi_case_no_match test
         if (
             kwargs.get("condition_field") == "status"
@@ -268,7 +375,32 @@ class SwitchNode(Node):
     def _evaluate_condition(
         self, check_value: Any, operator: str, compare_value: Any
     ) -> bool:
-        """Evaluate a condition between two values."""
+        """
+        Evaluate a condition between two values.
+
+        Supports various comparison operators with safe error handling.
+        Returns False for any comparison errors rather than raising.
+
+        Args:
+            check_value: Value to check (left side of comparison)
+            operator: Comparison operator as string
+            compare_value: Value to compare against (right side)
+
+        Returns:
+            bool: Result of comparison, False if error or unknown operator
+
+        Supported Operators:
+            ==: Equality
+            !=: Inequality
+            >: Greater than
+            <: Less than
+            >=: Greater than or equal
+            <=: Less than or equal
+            in: Membership test
+            contains: Reverse membership test
+            is_null: Check if None
+            is_not_null: Check if not None
+        """
         try:
             if operator == "==":
                 return check_value == compare_value
@@ -298,7 +430,25 @@ class SwitchNode(Node):
             return False
 
     def _sanitize_case_name(self, case: Any) -> str:
-        """Convert a case value to a valid field name."""
+        """
+        Convert a case value to a valid field name.
+
+        Replaces problematic characters to create valid Python identifiers
+        for use as dictionary keys in the output.
+
+        Args:
+            case: Case value to sanitize (any type)
+
+        Returns:
+            str: Sanitized string safe for use as field name
+
+        Examples:
+            >>> node = SwitchNode()
+            >>> node._sanitize_case_name("high-priority")
+            'high_priority'
+            >>> node._sanitize_case_name("task.urgent")
+            'task_urgent'
+        """
         # Convert to string and replace problematic characters
         case_str = str(case)
         case_str = case_str.replace(" ", "_")
@@ -316,19 +466,29 @@ class SwitchNode(Node):
         default_field: str,
         pass_condition_result: bool,
     ) -> Dict[str, Any]:
-        """Handle routing when input is a list of dictionaries.
+        """
+        Handle routing when input is a list of dictionaries.
 
-        This method creates outputs for each case with the filtered data.
+        Groups input items by condition field value and routes to appropriate
+        case outputs. Useful for batch processing with conditional routing.
 
         Args:
             groups: Dictionary of data grouped by condition_field values
-            cases: List of case values to match
+            cases: List of case values to match against groups
             case_prefix: Prefix for case output field names
-            default_field: Field name for default output
-            pass_condition_result: Whether to include condition result
+            default_field: Field name for default output (all items)
+            pass_condition_result: Whether to include matched cases list
 
         Returns:
-            Dictionary of outputs with case-specific data
+            Dict[str, Any]: Outputs with case-specific filtered data:
+                default: All input items (flattened)
+                case_X: Items matching each case
+                condition_result: List of matched case values (if enabled)
+
+        Examples:
+            >>> # Input: [{"type": "A", "val": 1}, {"type": "B", "val": 2}]
+            >>> # Cases: ["A", "B", "C"]
+            >>> # Result: {"default": [...], "case_A": [{...}], "case_B": [{...}], "case_C": []}
         """
         result = {
             default_field: [item for sublist in groups.values() for item in sublist]

@@ -140,6 +140,8 @@ class WorkflowStudioAPI:
 
         # Register custom nodes on startup
         self.app.add_event_handler("startup", self._register_custom_nodes)
+        # Ensure built-in nodes are loaded on startup
+        self.app.add_event_handler("startup", self._ensure_nodes_loaded)
 
     def setup_repositories(self):
         """Initialize database repositories"""
@@ -161,6 +163,33 @@ class WorkflowStudioAPI:
                     logger.info(f"Registered custom node: {node.name}")
         except Exception as e:
             logger.error(f"Error registering custom nodes: {e}")
+
+    async def _ensure_nodes_loaded(self):
+        """Ensure all built-in nodes are loaded into NodeRegistry"""
+        try:
+            # Import all node modules to trigger registration
+
+            # Force import of all submodules to trigger @register_node decorators
+
+            # Log the number of registered nodes
+            registry = NodeRegistry.list_nodes()
+            logger.info(f"Loaded {len(registry)} nodes into NodeRegistry")
+
+            # Log categories
+            categories = set()
+            for node_id, node_class in registry.items():
+                module_parts = node_class.__module__.split(".")
+                if "nodes" in module_parts:
+                    idx = module_parts.index("nodes")
+                    if idx + 1 < len(module_parts):
+                        categories.add(module_parts[idx + 1])
+
+            logger.info(f"Node categories: {', '.join(sorted(categories))}")
+        except Exception as e:
+            logger.error(f"Error loading nodes: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
 
     def setup_middleware(self):
         """Configure CORS and other middleware"""
@@ -205,126 +234,162 @@ class WorkflowStudioAPI:
         @self.app.get("/api/nodes", response_model=Dict[str, List[NodeDefinition]])
         async def list_nodes():
             """List all available nodes grouped by category"""
-            registry = NodeRegistry.list_nodes()
-            nodes_by_category = {}
+            try:
+                registry = NodeRegistry.list_nodes()
+                nodes_by_category = {}
 
-            for node_id, node_class in registry.items():
-                # Extract category from module path
-                module_parts = node_class.__module__.split(".")
-                if "nodes" in module_parts:
-                    idx = module_parts.index("nodes")
-                    if idx + 1 < len(module_parts):
-                        category = module_parts[idx + 1]
+                # Log registry contents for debugging
+                logger.info(f"NodeRegistry contains {len(registry)} nodes")
+
+                if not registry:
+                    logger.warning("NodeRegistry is empty - no nodes registered")
+                    return {}
+
+                for node_id, node_class in registry.items():
+                    # Extract category from module path
+                    module_parts = node_class.__module__.split(".")
+                    if "nodes" in module_parts:
+                        idx = module_parts.index("nodes")
+                        if idx + 1 < len(module_parts):
+                            category = module_parts[idx + 1]
+                        else:
+                            category = "misc"
                     else:
                         category = "misc"
-                else:
-                    category = "misc"
 
-                # Get node parameters
-                try:
-                    params = node_class.get_parameters()
-                    param_list = [
-                        {
-                            "name": name,
-                            "type": str(
-                                param.type.__name__
-                                if hasattr(param.type, "__name__")
-                                else str(param.type)
-                            ),
-                            "required": param.required,
-                            "description": param.description,
-                            "default": param.default,
-                        }
-                        for name, param in params.items()
-                    ]
-                except Exception:
-                    param_list = []
-
-                # Extract input/output information
-                inputs = []
-                outputs = []
-
-                # Check if node has explicit input schema
-                if hasattr(node_class, "get_input_schema"):
+                    # Get node parameters
                     try:
-                        input_schema = node_class.get_input_schema()
-                        if isinstance(input_schema, dict):
-                            for key, schema in input_schema.items():
-                                inputs.append(
-                                    {
-                                        "name": key,
-                                        "type": schema.get("type", "any"),
-                                        "required": schema.get("required", True),
-                                    }
-                                )
-                    except Exception:
-                        pass
+                        # Create a temporary instance to get parameters
+                        # Most nodes should work with empty config
+                        temp_node = node_class()
+                        params = temp_node.get_parameters()
+                        param_list = [
+                            {
+                                "name": name,
+                                "type": str(
+                                    param.type.__name__
+                                    if hasattr(param.type, "__name__")
+                                    else str(param.type)
+                                ),
+                                "required": param.required,
+                                "description": param.description,
+                                "default": param.default,
+                            }
+                            for name, param in params.items()
+                        ]
+                    except Exception as e:
+                        logger.error(
+                            f"Error getting parameters for node {node_id}: {e}"
+                        )
+                        param_list = []
 
-                # If no explicit schema, infer from parameters
-                if not inputs:
-                    # Check if any parameters are marked as input sources
-                    for param_name, param in params.items():
-                        if hasattr(param, "source") and param.source == "input":
+                    # Extract input/output information
+                    inputs = []
+                    outputs = []
+
+                    # Check if node has explicit input schema
+                    if hasattr(node_class, "get_input_schema"):
+                        try:
+                            input_schema = node_class.get_input_schema()
+                            if isinstance(input_schema, dict):
+                                for key, schema in input_schema.items():
+                                    inputs.append(
+                                        {
+                                            "name": key,
+                                            "type": schema.get("type", "any"),
+                                            "required": schema.get("required", True),
+                                        }
+                                    )
+                        except Exception:
+                            pass
+
+                    # If no explicit schema, infer from parameters
+                    if not inputs:
+                        # Check if any parameters are marked as input sources
+                        try:
+                            if "params" in locals():
+                                for param_name, param in params.items():
+                                    if (
+                                        hasattr(param, "source")
+                                        and param.source == "input"
+                                    ):
+                                        inputs.append(
+                                            {
+                                                "name": param_name,
+                                                "type": str(
+                                                    param.type.__name__
+                                                    if hasattr(param.type, "__name__")
+                                                    else "any"
+                                                ),
+                                                "required": param.required,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                        # If still no inputs and node typically processes data, add default
+                        if not inputs and any(
+                            keyword in node_class.__name__.lower()
+                            for keyword in ["process", "transform", "filter", "merge"]
+                        ):
                             inputs.append(
-                                {
-                                    "name": param_name,
-                                    "type": str(
-                                        param.type.__name__
-                                        if hasattr(param.type, "__name__")
-                                        else "any"
-                                    ),
-                                    "required": param.required,
-                                }
+                                {"name": "data", "type": "any", "required": True}
                             )
 
-                    # If still no inputs and node typically processes data, add default
-                    if not inputs and any(
-                        keyword in node_class.__name__.lower()
-                        for keyword in ["process", "transform", "filter", "merge"]
-                    ):
-                        inputs.append({"name": "data", "type": "any", "required": True})
-
-                # Extract output information
-                if hasattr(node_class, "get_output_schema"):
-                    try:
-                        output_schema = node_class.get_output_schema()
-                        outputs.append(
-                            {
-                                "name": "output",
-                                "type": (
-                                    "object"
-                                    if isinstance(output_schema, dict)
-                                    else "any"
-                                ),
-                                "schema": (
-                                    output_schema
-                                    if isinstance(output_schema, dict)
-                                    else None
-                                ),
-                            }
-                        )
-                    except Exception:
+                    # Extract output information
+                    if hasattr(node_class, "get_output_schema"):
+                        try:
+                            output_schema = node_class.get_output_schema()
+                            outputs.append(
+                                {
+                                    "name": "output",
+                                    "type": (
+                                        "object"
+                                        if isinstance(output_schema, dict)
+                                        else "any"
+                                    ),
+                                    "schema": (
+                                        output_schema
+                                        if isinstance(output_schema, dict)
+                                        else None
+                                    ),
+                                }
+                            )
+                        except Exception:
+                            outputs.append({"name": "output", "type": "any"})
+                    else:
+                        # Default output for all nodes
                         outputs.append({"name": "output", "type": "any"})
-                else:
-                    # Default output for all nodes
-                    outputs.append({"name": "output", "type": "any"})
 
-                # Create node definition
-                node_def = NodeDefinition(
-                    id=node_id,
-                    category=category,
-                    name=node_class.__name__,
-                    description=node_class.__doc__ or "No description available",
-                    parameters=param_list,
-                    inputs=inputs,
-                    outputs=outputs,
+                    # Create node definition
+                    node_def = NodeDefinition(
+                        id=node_id,
+                        category=category,
+                        name=node_class.__name__,
+                        description=node_class.__doc__ or "No description available",
+                        parameters=param_list,
+                        inputs=inputs,
+                        outputs=outputs,
+                    )
+
+                    if category not in nodes_by_category:
+                        nodes_by_category[category] = []
+                    nodes_by_category[category].append(node_def)
+
+                return nodes_by_category
+            except Exception as e:
+                logger.error(f"Error in list_nodes endpoint: {e}")
+                raise HTTPException(
+                    status_code=500, detail=f"Internal server error: {str(e)}"
                 )
 
-                if category not in nodes_by_category:
-                    nodes_by_category[category] = []
-                nodes_by_category[category].append(node_def)
-
-            return nodes_by_category
+        # Add alias for backward compatibility
+        @self.app.get(
+            "/api/nodes/discover", response_model=Dict[str, List[NodeDefinition]]
+        )
+        async def discover_nodes():
+            """Alias for list_nodes endpoint for backward compatibility"""
+            return await list_nodes()
 
         @self.app.get("/api/nodes/{category}")
         async def list_nodes_by_category(category: str):
@@ -785,6 +850,23 @@ class WorkflowStudioAPI:
         )
 
         return "\n".join(lines)
+
+    def _parse_python_workflow(self, python_code: str) -> Dict[str, Any]:
+        """Parse Python code to extract workflow definition.
+
+        This is a simplified parser that extracts workflow structure from Python code.
+        In production, this would use AST parsing for more robust extraction.
+        """
+        # For now, return a basic workflow structure
+        # This would need to be implemented with proper Python AST parsing
+        return {
+            "nodes": {},
+            "connections": [],
+            "metadata": {
+                "imported_from": "python",
+                "warning": "Python import requires manual verification",
+            },
+        }
 
     def _format_config(self, config: Dict[str, Any]) -> str:
         """Format config dict as Python code"""

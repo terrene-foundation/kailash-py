@@ -1,34 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { Search, ChevronRight, ChevronDown } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { useWorkflowStore, NodeDefinition } from "@/store/workflowStore";
-import { LoadingSkeleton } from "./LoadingSkeleton";
-import { NodeCard } from "./NodeCard";
+import React, { useState } from "react";
+import { NODE_CATEGORIES } from "../../store/workflowStore";
+import NodeCard from "./NodeCard";
 
 export function NodePalette() {
-  const { nodeCategories, setNodeCategories } = useWorkflowStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set()
+    new Set(Object.keys(NODE_CATEGORIES))
   );
-
-  // Fetch node definitions from API
-  const { isPending, error, data } = useQuery({
-    queryKey: ["nodes"],
-    queryFn: () =>
-      fetch("/api/nodes").then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch nodes");
-        return res.json();
-      }),
-  });
-
-  useEffect(() => {
-    if (data) {
-      setNodeCategories(data);
-      // Expand all categories by default
-      setExpandedCategories(new Set(Object.keys(data)));
-    }
-  }, [data, setNodeCategories]);
 
   const toggleCategory = (category: string) => {
     const newExpanded = new Set(expandedCategories);
@@ -40,79 +18,66 @@ export function NodePalette() {
     setExpandedCategories(newExpanded);
   };
 
-  const filteredCategories = React.useMemo(() => {
-    if (!searchTerm) return nodeCategories;
-
-    const filtered: Record<string, NodeDefinition[]> = {};
-
-    Object.entries(nodeCategories).forEach(([category, nodes]) => {
-      const matchingNodes = nodes.filter(
-        (node) =>
-          node.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          node.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCategories = Object.entries(NODE_CATEGORIES).reduce(
+    (acc, [category, data]) => {
+      const filteredNodes = data.nodes.filter((node) =>
+        node.toLowerCase().includes(searchTerm.toLowerCase())
       );
-
-      if (matchingNodes.length > 0) {
-        filtered[category] = matchingNodes;
+      if (filteredNodes.length > 0) {
+        acc[category] = { ...data, nodes: filteredNodes };
       }
-    });
-
-    return filtered;
-  }, [nodeCategories, searchTerm]);
-
-  if (isPending) return <LoadingSkeleton />;
-
-  if (error) {
-    return (
-      <div className="w-64 bg-card border-r border-border p-4">
-        <div className="text-destructive">
-          Failed to load nodes: {error.message}
-        </div>
-      </div>
-    );
-  }
+      return acc;
+    },
+    {} as typeof NODE_CATEGORIES
+  );
 
   return (
-    <div className="w-64 bg-card border-r border-border flex flex-col">
-      <div className="p-4 border-b border-border">
-        <h2 className="text-lg font-semibold mb-3">Node Palette</h2>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <aside className="node-palette">
+      <div className="palette-header">
+        <h3>Node Library</h3>
+        <div className="search-container">
           <input
             type="text"
             placeholder="Search nodes..."
-            className="w-full pl-10 pr-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="node-search"
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {Object.entries(filteredCategories).map(([category, nodes]) => (
-          <div key={category} className="border-b border-border">
-            <button
-              className="w-full px-4 py-2 flex items-center justify-between hover:bg-accent transition-colors"
+      <div className="node-categories">
+        {Object.entries(filteredCategories).map(([category, data]) => (
+          <div key={category} className="node-category">
+            <div
+              className="category-header"
               onClick={() => toggleCategory(category)}
+              style={{ cursor: "pointer" }}
             >
-              <span className="font-medium capitalize">{category}</span>
-              {expandedCategories.has(category) ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </button>
+              <span className="category-icon">{data.icon}</span>
+              <span className="category-name">{category}</span>
+              <span className="category-count">({data.nodes.length})</span>
+              <span className="category-toggle">
+                {expandedCategories.has(category) ? "▼" : "▶"}
+              </span>
+            </div>
 
             {expandedCategories.has(category) && (
-              <div className="px-2 py-2 space-y-1">
-                {nodes.map((node) => (
-                  <NodeCard key={node.id} node={node} />
+              <div className="category-nodes">
+                {data.nodes.map((nodeType) => (
+                  <NodeCard
+                    key={nodeType}
+                    nodeType={nodeType}
+                    category={category}
+                    icon={data.icon}
+                    color={data.color}
+                  />
                 ))}
               </div>
             )}
           </div>
         ))}
       </div>
-    </div>
+    </aside>
   );
 }

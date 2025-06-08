@@ -286,6 +286,27 @@
       "status": "completed",
       "started_at": "2025-06-02T10:09:20.977106+00:00",
       "ended_at": "2025-06-02T10:09:20.979272+00:00"
+    },
+    "004bc6b7-9986-4e3b-8887-6b88d8fab2cd": {
+      "run_id": "93efb4b1-293d-4f98-bec3-df55bae5aac0",
+      "node_id": "reader",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:41.519729+00:00",
+      "ended_at": "2025-06-08T13:53:41.522609+00:00"
+    },
+    "8b9b34b9-b019-4711-b303-54ed63ea1591": {
+      "run_id": "93efb4b1-293d-4f98-bec3-df55bae5aac0",
+      "node_id": "filter",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:41.524173+00:00",
+      "ended_at": "2025-06-08T13:53:41.525704+00:00"
+    },
+    "55bf9a61-f883-4895-bcca-e5540d397293": {
+      "run_id": "93efb4b1-293d-4f98-bec3-df55bae5aac0",
+      "node_id": "writer",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:41.527143+00:00",
+      "ended_at": "2025-06-08T13:53:41.528708+00:00"
     }
   },
   "runs": {}

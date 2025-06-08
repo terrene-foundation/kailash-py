@@ -1,76 +1,496 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f8f8f8;
+  color: #333;
+  overflow: hidden;
+}
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+.app-container {
+  display: grid;
+  grid-template-areas:
+    "header header header"
+    "sidebar canvas properties"
+    "sidebar canvas execution";
+  grid-template-columns: 280px 1fr 320px;
+  grid-template-rows: 60px 1fr 250px;
+  height: 100vh;
+  background: #fff;
+}
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+/* Header */
+.header {
+  grid-area: header;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333;
+}
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+.header-controls {
+  display: flex;
+  gap: 10px;
+}
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+.btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #333;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 500;
+}
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+.btn:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+.btn-primary {
+  background: #0084ff;
+  border-color: #0084ff;
+  color: white;
+}
 
-    --radius: 0.5rem;
-  }
+.btn-primary:hover {
+  background: #0073e6;
+  border-color: #0073e6;
+}
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+/* Node Palette */
+.node-palette {
+  grid-area: sidebar;
+  background: #fafafa;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  padding: 0;
+}
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+.palette-header {
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+.palette-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+.node-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+.node-search:focus {
+  outline: none;
+  border-color: #0084ff;
+}
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+.node-categories {
+  padding: 8px;
+}
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+.node-category {
+  margin-bottom: 8px;
+}
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+  transition: all 0.2s;
+}
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+.category-header:hover {
+  background: #f5f5f5;
+}
+
+.category-icon {
+  font-size: 16px;
+}
+
+.category-name {
+  flex: 1;
+}
+
+.category-count {
+  color: #666;
+  font-size: 12px;
+}
+
+.category-toggle {
+  color: #999;
+  font-size: 10px;
+}
+
+.category-nodes {
+  padding: 4px 0 8px 28px;
+}
+
+.node-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 2px 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: grab;
+  transition: all 0.2s;
+  font-size: 13px;
+}
+
+.node-card:hover {
+  background: #f5f5f5;
+  border-color: #ddd;
+  transform: translateX(2px);
+}
+
+.node-card:active {
+  cursor: grabbing;
+}
+
+.node-card-icon {
+  font-size: 14px;
+}
+
+.node-card-name {
+  flex: 1;
+}
+
+/* Workflow Canvas */
+.workflow-canvas {
+  grid-area: canvas;
+  background: #fafafa;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Kailash Node Styles */
+.kailash-node {
+  background: #fff;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 180px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.kailash-node:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.kailash-node.selected {
+  border-color: #0084ff;
+  box-shadow: 0 0 0 1px #0084ff, 0 4px 12px rgba(0,132,255,0.2);
+}
+
+.kailash-node.executed {
+  background: #f0f8ff;
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.node-icon {
+  font-size: 16px;
+}
+
+.node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.node-type {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.execution-status {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e0;
+  font-size: 11px;
+}
+
+.status-error {
+  color: #f44336;
+}
+
+.status-success {
+  color: #4caf50;
+}
+
+/* Handle styles */
+.kailash-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: #666 !important;
+  border: 2px solid #fff !important;
+  transition: all 0.2s;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.2);
+}
+
+/* Edge styles */
+.react-flow__edge-path {
+  stroke: #b1b1b7;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #0084ff;
+}
+
+/* Loop edge animation */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -10;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+.react-flow__edge-path[style*="stroke-dasharray"] {
+  animation: dash 1s linear infinite;
+}
+
+/* Edge delete button */
+.edge-delete-button {
+  transition: all 0.2s;
+}
+
+.edge-delete-button:hover {
+  transform: scale(1.2);
+}
+
+/* Properties Panel */
+.properties-panel {
+  grid-area: properties;
+  background: #fff;
+  border-left: 1px solid #e0e0e0;
+  overflow-y: auto;
+}
+
+.panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.panel-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.properties-content {
+  padding: 16px;
+}
+
+.property-section {
+  margin-bottom: 24px;
+}
+
+.property-section h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.property-group {
+  margin-bottom: 16px;
+}
+
+.property-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.property-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.property-input:focus {
+  outline: none;
+  border-color: #0084ff;
+}
+
+.property-input[readonly] {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+textarea.property-input {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.property-value {
+  font-size: 13px;
+  color: #666;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 13px;
+}
+
+/* Execution Panel */
+.execution-panel {
+  grid-area: execution;
+  background: #fff;
+  border-top: 1px solid #e0e0e0;
+  border-left: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+}
+
+.execution-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.execution-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.execution-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Chat Panel - Hidden for now */
+.chat-panel {
+  display: none;
+}
+
+/* ReactFlow overrides */
+.react-flow__controls {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.react-flow__controls-button {
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid #e0e0e0;
+  color: #666;
+  fill: #666;
+}
+
+.react-flow__controls-button:hover {
+  background: #f5f5f5;
+  color: #333;
+  fill: #333;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__minimap {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .app-container {
+    grid-template-columns: 260px 1fr 280px;
   }
-  body {
-    @apply bg-background text-foreground;
+}
+
+@media (max-width: 1024px) {
+  .app-container {
+    grid-template-areas:
+      "header header"
+      "sidebar canvas"
+      "properties execution";
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 60px 1fr 300px;
+  }
+
+  .properties-panel {
+    grid-area: properties;
+    border-left: none;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .execution-panel {
+    grid-area: execution;
+    border-left: none;
   }
 }

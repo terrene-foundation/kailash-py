@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
@@ -37,7 +39,9 @@ def demonstrate_basic_task_tracking():
     )
 
     # Create nodes
-    reader = CSVReaderNode(name="read_data", file_path="../data/input.csv")
+    reader = CSVReaderNode(
+        name="read_data", file_path=str(get_data_dir() / "input.csv")
+    )
 
     def transform_data(data: list) -> Dict[str, Any]:
         """Simple data transformation."""
@@ -50,17 +54,21 @@ def demonstrate_basic_task_tracking():
 
     transformer = PythonCodeNode.from_function(transform_data, name="transform_data")
 
-    writer = CSVWriterNode(name="write_results", file_path="../outputs/output.csv")
+    writer = CSVWriterNode(
+        name="write_results", file_path=str(get_output_dir() / "output.csv")
+    )
 
     # Add nodes to workflow
     workflow.add_node(
-        node_id="reader", node_or_type=reader, config={"file_path": "../data/input.csv"}
+        node_id="reader",
+        node_or_type=reader,
+        config={"file_path": str(get_data_dir() / "input.csv")},
     )
     workflow.add_node(node_id="transformer", node_or_type=transformer)
     workflow.add_node(
         node_id="writer",
         node_or_type=writer,
-        config={"file_path": "../outputs/output.csv"},
+        config={"file_path": str(get_output_dir() / "output.csv")},
     )
 
     # Connect nodes
@@ -68,8 +76,8 @@ def demonstrate_basic_task_tracking():
     workflow.connect("transformer", "writer", {"result": "data"})
 
     # Create sample data
-    Path("../data").mkdir(exist_ok=True)
-    with open("../data/input.csv", "w") as f:
+    get_data_dir().mkdir(exist_ok=True)
+    with open(str(get_data_dir() / "input.csv", "w")) as f:
         f.write("id,name,value\n")
         f.write("1,Item A,100\n")
         f.write("2,Item B,200\n")
@@ -185,13 +193,15 @@ def demonstrate_task_progress_tracking():
     processor = PythonCodeNode.from_function(long_process, name="long_processor")
 
     # Create reader
-    reader = CSVReaderNode(name="data_reader", file_path="../data/large_input.csv")
+    reader = CSVReaderNode(
+        name="data_reader", file_path=str(get_data_dir() / "large_input.csv")
+    )
 
     # Add nodes
     workflow.add_node(
         node_id="reader",
         node_or_type=reader,
-        config={"file_path": "../data/large_input.csv"},
+        config={"file_path": str(get_data_dir() / "large_input.csv")},
     )
     workflow.add_node(node_id="processor", node_or_type=processor)
 
@@ -199,7 +209,7 @@ def demonstrate_task_progress_tracking():
     workflow.connect("reader", "processor", {"data": "data"})
 
     # Create sample data
-    with open("../data/large_input.csv", "w") as f:
+    with open(str(get_data_dir() / "large_input.csv", "w")) as f:
         f.write("id,value\n")
         for i in range(10):
             f.write(f"{i},{i * 100}\n")
@@ -367,7 +377,7 @@ def demonstrate_task_persistence():
     print("\n=== Task Persistence ===")
 
     # Create task manager with filesystem storage
-    storage_path = Path("../data/task_storage")
+    storage_path = get_data_dir() / "task_storage"
     storage_path.mkdir(parents=True, exist_ok=True)
 
     task_manager = TaskManager(
@@ -412,7 +422,7 @@ def main():
     print("=== Kailash Task Tracking Examples ===\n")
 
     # Create necessary directories
-    Path("../data/task_storage").mkdir(parents=True, exist_ok=True)
+    get_data_dir() / "task_storage".mkdir(parents=True, exist_ok=True)
 
     examples = [
         ("Basic Task Tracking", demonstrate_basic_task_tracking),

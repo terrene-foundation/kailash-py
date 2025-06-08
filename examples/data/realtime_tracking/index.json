@@ -587,6 +587,55 @@
       "status": "completed",
       "started_at": "2025-06-02T10:09:15.953943+00:00",
       "ended_at": "2025-06-02T10:09:15.956344+00:00"
+    },
+    "f8fa2e45-fe80-4a0a-a460-e5dd23b8d280": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "reader_customers",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.493776+00:00",
+      "ended_at": "2025-06-08T13:53:36.496757+00:00"
+    },
+    "5f2ecfe3-758b-49df-b717-25945aa7521a": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "reader_backup",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.498832+00:00",
+      "ended_at": "2025-06-08T13:53:36.501126+00:00"
+    },
+    "16d3abcc-ec1e-4b79-8c1b-f89a69e943e5": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "filter_adults",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.503012+00:00",
+      "ended_at": "2025-06-08T13:53:36.504809+00:00"
+    },
+    "d32ce76b-20eb-4a3c-82f8-f97a488dec24": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "filter_seniors",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.506624+00:00",
+      "ended_at": "2025-06-08T13:53:36.508565+00:00"
+    },
+    "11ae89fd-d1c8-4cab-b65e-3b548c61127f": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "all_writer",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.510374+00:00",
+      "ended_at": "2025-06-08T13:53:36.513403+00:00"
+    },
+    "2375eb96-0d21-48e1-8931-68be35bc3922": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "adults_writer",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.515128+00:00",
+      "ended_at": "2025-06-08T13:53:36.517178+00:00"
+    },
+    "3212e27a-022f-4051-8949-27af77f09c5c": {
+      "run_id": "40ebb9d1-24f4-435d-996f-c3e8a483aad8",
+      "node_id": "seniors_writer",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:36.518937+00:00",
+      "ended_at": "2025-06-08T13:53:36.520819+00:00"
     }
   },
   "runs": {}

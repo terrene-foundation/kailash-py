@@ -4,12 +4,16 @@ This directory contains lean, LLM-optimized reference documentation for the Kail
 
 ## Contents
 
-### 1. **[API Registry](api-registry.yaml)**
-Complete YAML-based API reference with:
-- All classes, methods, and signatures
-- Configuration schemas for every node type
-- Import statements and usage examples
-- Input/output specifications
+### 1. **[API Reference](api/)**
+Complete YAML-based API reference organized by module:
+- [Core Workflow](api/01-core-workflow.yaml) - Workflow and WorkflowBuilder classes
+- [Runtime](api/02-runtime.yaml) - Execution runtimes (Local, Docker, etc.)
+- [AI Nodes](api/04-nodes-ai.yaml) - LLM agents, A2A communication, self-organizing
+- [Data Nodes](api/05-nodes-data.yaml) - File I/O, databases, SharePoint integration
+- [Logic Nodes](api/06-nodes-logic.yaml) - Control flow (Switch, Merge, WorkflowNode)
+- [Security](api/09-security-access.yaml) - Security config and access control
+- [Integrations](api/12-integrations.yaml) - API Gateway, MCP, Workflow Studio
+- And 6 more focused modules
 
 ### 2. **[Quick Reference Cheatsheet](cheatsheet.md)**
 Concise, example-driven guide covering:
@@ -28,30 +32,26 @@ Critical rules to prevent common LLM mistakes:
 - Configuration key formats
 - Import path structures
 
-### 4. **[API Validation Schema](api-validation-schema.json)**
-Machine-readable validation rules:
-- JSON schema for programmatic validation
-- Common mistake patterns and fixes
-- Exact method signatures
-- Configuration requirements
+### 4. **[Validation Tools](validation/)**
+Validation tools and guidelines:
+- [Validation Guide](validation/validation-guide.md) - Critical rules to prevent LLM mistakes
+- [API Validation Schema](validation/api-validation-schema.json) - Machine-readable validation rules
+- [Corrections Summary](validation/corrections-summary.md) - Common mistake patterns and fixes
+- [Validation Report](validation/validation_report.md) - Documentation accuracy report
 
-### 5. **[Code Validator](validate_kailash_code.py)**
-Python script to validate generated code:
-- Checks for common naming mistakes
-- Validates method signatures
-- Verifies import statements
-- Can be used programmatically or via CLI
+### 5. **[Node Catalog](nodes/)**
+Comprehensive catalog of all 66+ nodes organized by category:
+- [Base Classes](nodes/01-base-nodes.md) - Abstract base classes and core interfaces
+- [AI Nodes](nodes/02-ai-nodes.md) - LLM agents, A2A communication, self-organizing
+- [Data Nodes](nodes/03-data-nodes.md) - File I/O, databases, streaming, SharePoint
+- [API Nodes](nodes/04-api-nodes.md) - HTTP, REST, GraphQL, authentication
+- [Logic Nodes](nodes/05-logic-nodes.md) - Control flow (Switch, Merge, WorkflowNode)
+- [Transform Nodes](nodes/06-transform-nodes.md) - Data processing and formatting
+- [Code Nodes](nodes/07-code-nodes.md) - Python execution, MCP tools
+- [Utility Nodes](nodes/08-utility-nodes.md) - Visualization, security, tracking
 
-### 6. **[Node Catalog](node-catalog.md)**
-Comprehensive catalog of all 66 available nodes:
-- Complete node listing by category (AI, API, Code, Data, Logic, MCP, Transform)
-- Detailed parameter specifications for each node
-- Input/output schemas and validation
-- Usage examples and best practices
-- Node naming convention issues
-
-### 7. **[Pattern Library](pattern-library.md)**
-Extensive collection of workflow patterns:
+### 6. **[Pattern Library](pattern-library/)**
+Extensive collection of workflow patterns organized by category:
 - Core patterns (Linear Pipeline, Direct Execution)
 - Control flow patterns (Conditional Routing, Multi-Level Decisions)
 - Data processing patterns (Parallel, Batch, Stream)
@@ -59,9 +59,12 @@ Extensive collection of workflow patterns:
 - Error handling patterns (Circuit Breaker, Retry with Backoff)
 - Performance patterns (Caching, Stream Processing)
 - Composition patterns (Nested Workflows, Dynamic Generation)
-- Deployment patterns with best practices
+- Agent patterns (Self-organizing, MCP Integration)
+- Deployment patterns (Export, Containerization, Multi-tenant)
+- Security patterns (Authentication, Encryption, Audit)
+- Best practices and guidelines
 
-### 8. **[Templates](templates/)**
+### 7. **[Templates](templates/)**
 Ready-to-use code templates for common scenarios:
 - Workflow templates (ETL, conditional routing, parallel processing)
 - Custom node creation templates
@@ -69,20 +72,48 @@ Ready-to-use code templates for common scenarios:
 - Data validation and processing templates
 - Error handling and monitoring patterns
 
+## When to Use Each Resource
+
+### Quick Decision Guide:
+- **"How do I...?"** → [Cheatsheet](cheatsheet/README.md) - Quick snippets, copy-paste code
+- **"What pattern should I use for...?"** → [Pattern Library](pattern-library/README.md) - Full workflow architectures
+- **"Is this the right way to...?"** → [Validation Guide](validation-guide.md) - API correctness rules
+
+### Detailed Usage:
+1. **[Cheatsheet](cheatsheet/README.md)** - Start here for:
+   - Quick code snippets to copy-paste
+   - Basic syntax and common operations
+   - Topic-focused guides (installation, nodes, connections, etc.)
+   - Self-contained examples that just work
+
+2. **[Pattern Library](pattern-library/README.md)** - Use this for:
+   - Complete workflow architectures
+   - Design patterns and best practices
+   - Complex multi-node scenarios
+   - Deployment and security patterns
+   - When designing a new system
+
+3. **[Validation Guide](validation-guide.md)** - Essential for:
+   - Exact API signatures and method names
+   - Preventing common LLM mistakes
+   - Config vs runtime parameter rules
+   - Node naming conventions
+   - When something isn't working as expected
+
 ## Usage
 
 ### For LLMs/AI Assistants:
-1. **ALWAYS** check `validation-guide.md` first to avoid common mistakes
-2. Load `api-registry.yaml` for comprehensive API details
-3. Reference `cheatsheet.md` for quick code generation
-4. Use `api-validation-schema.json` for programmatic validation
-5. Run generated code through `validate_kailash_code.py` if possible
+1. **ALWAYS** check `validation/validation-guide.md` first to avoid common mistakes
+2. Browse `api/` directory for comprehensive API details by module
+3. Reference `cheatsheet/README.md` for quick code generation
+4. Use `nodes/` directory for detailed node specifications
+5. Check `pattern-library/` for architectural patterns
 
 ### For Developers:
-1. Start with `cheatsheet.md` for quick reference
-2. Consult `api-registry.yaml` for detailed specifications
-3. Use `validation-guide.md` to ensure correct API usage
-4. Check pattern library for best practices
+1. Start with `cheatsheet/README.md` for quick reference
+2. Browse `api/` directory for detailed specifications
+3. Use `validation/validation-guide.md` to ensure correct API usage
+4. Check `pattern-library/` and `nodes/` for comprehensive references
 
 ## Critical Rules for LLMs
 

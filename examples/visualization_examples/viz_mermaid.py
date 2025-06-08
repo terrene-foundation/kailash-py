@@ -8,6 +8,8 @@ in markdown documentation for better workflow visualization.
 import os
 import sys
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -32,9 +34,9 @@ def create_simple_workflow() -> Workflow:
     )
 
     # Create node instances
-    reader = CSVReaderNode(file_path="../data/input.csv", headers=True)
+    reader = CSVReaderNode(file_path=str(get_data_dir() / "input.csv", headers=True))
     transformer = DataTransformer(transformations=["lambda x: x"])
-    writer = CSVWriterNode(file_path="../outputs/output.csv")
+    writer = CSVWriterNode(file_path=str(get_output_dir() / "output.csv"))
 
     # Add nodes to workflow
     workflow.add_node(node_id="reader", node_or_type=reader)
@@ -56,12 +58,12 @@ def create_complex_workflow() -> Workflow:
     csv_reader = builder.add_node(
         "CSVReaderNode",
         "customer_reader",
-        {"file_path": "../data/customers.csv", "headers": True},
+        {"file_path": str(get_data_dir() / "customers.csv"), "headers": True},
     )
     json_reader = builder.add_node(
         "JSONReaderNode",
         "transaction_reader",
-        {"file_path": "../data/transactions.json"},
+        {"file_path": str(get_data_dir() / "transactions.json")},
     )
 
     # Processing nodes
@@ -110,7 +112,9 @@ def create_complex_workflow() -> Workflow:
 
     # Output
     json_writer = builder.add_node(
-        "JSONWriterNode", "final_output", {"file_path": "../outputs/output.json"}
+        "JSONWriterNode",
+        "final_output",
+        {"file_path": str(get_output_dir() / "output.json")},
     )
 
     # Connect the workflow
@@ -223,12 +227,12 @@ def demonstrate_mermaid_visualization():
     )
 
     # Create node instances
-    fetch_data = JSONReaderNode(file_path="../data/transactions.json")
+    fetch_data = JSONReaderNode(file_path=str(get_data_dir() / "transactions.json"))
     process_data = PythonCodeNode(
         name="ProcessData", code="def execute(data):\n    return {'processed': data}"
     )
     transform_data = DataTransformer(transformations=["lambda x: {'final': x}"])
-    save_results = JSONWriterNode(file_path="../outputs/api_results.json")
+    save_results = JSONWriterNode(file_path=str(get_output_dir() / "api_results.json"))
 
     # Add nodes to workflow
     api_workflow.add_node(node_id="fetch_data", node_or_type=fetch_data)

@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-591%20passing-brightgreen.svg" alt="Tests: 591 passing">
+  <img src="https://img.shields.io/badge/tests-734%20passing-brightgreen.svg" alt="Tests: 734 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -36,6 +36,9 @@
 - 🧠 **Agent-to-Agent Communication**: Shared memory pools and intelligent caching for coordinated multi-agent systems
 - 🔒 **Production Security**: Comprehensive security framework with path traversal prevention, code sandboxing, and audit logging
 - 🎨 **Visual Workflow Builder**: Kailash Workflow Studio - drag-and-drop interface for creating and managing workflows (coming soon)
+- 🔁 **Cyclic Workflows (v0.2.0)**: Universal Hybrid Cyclic Graph Architecture with 30,000+ iterations/second performance
+- 🛠️ **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler for production-ready cyclic workflows
+- 📈 **High Performance**: Optimized execution engine supporting 100,000+ iteration workflows
 
 ## 🎯 Who Is This For?
 
@@ -219,6 +222,141 @@ results, run_id = runtime.execute(workflow)
 
 print("RAG Response:", results["llm_agent"]["response"])
 ```
+
+### Cyclic Workflows - Iterative Processing with Convergence
+
+Build workflows that iterate until a condition is met, perfect for optimization, retries, and ML training:
+
+```python
+from kailash.workflow import Workflow
+from kailash.nodes.base_cycle_aware import CycleAwareNode
+from kailash.nodes.base import NodeParameter
+from kailash.runtime.local import LocalRuntime
+from typing import Any, Dict
+
+# Create a custom cycle-aware node for data quality improvement
+class DataQualityImproverNode(CycleAwareNode):
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "data": NodeParameter(name="data", type=list, required=True),
+            "target_quality": NodeParameter(name="target_quality", type=float, required=False, default=0.95)
+        }
+
+    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Iteratively improve data quality."""
+        data = kwargs["data"]
+        target_quality = kwargs.get("target_quality", 0.95)
+
+        # Get current iteration and previous state
+        iteration = self.get_iteration(context)
+        prev_state = self.get_previous_state(context)
+
+        # Calculate current quality
+        quality = prev_state.get("quality", 0.5) + 0.1  # Improve by 10% each iteration
+        quality = min(quality, 1.0)
+
+        # Process data (simplified)
+        processed_data = [item for item in data if item is not None]
+
+        # Track quality history
+        quality_history = self.accumulate_values(context, "quality_history", quality, max_history=10)
+
+        # Detect convergence trend
+        trend = self.detect_convergence_trend(context, "quality_history", window_size=5)
+        converged = quality >= target_quality or (trend and trend["slope"] < 0.01)
+
+        # Log progress
+        self.log_cycle_info(context, f"Iteration {iteration}: Quality={quality:.2%}")
+
+        # Save state for next iteration
+        self.set_cycle_state({"quality": quality, "processed_count": len(processed_data)})
+
+        return {
+            "data": processed_data,
+            "quality": quality,
+            "converged": converged,
+            "iteration": iteration,
+            "history": quality_history
+        }
+
+# Build cyclic workflow
+workflow = Workflow("quality_improvement", "Iterative Data Quality")
+workflow.add_node("improver", DataQualityImproverNode())
+
+# Create a cycle - node connects to itself!
+workflow.connect("improver", "improver",
+                 mapping={"data": "data"},  # Pass data to next iteration
+                 cycle=True,  # This is a cycle
+                 max_iterations=20,  # Safety limit
+                 convergence_check="converged == True")  # Stop condition
+
+# Execute with automatic iteration management
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "improver": {
+        "data": [1, None, 3, None, 5, 6, None, 8, 9, 10],
+        "target_quality": 0.9
+    }
+})
+
+print(f"Converged after {results['improver']['iteration']} iterations")
+print(f"Final quality: {results['improver']['quality']:.2%}")
+print(f"Quality history: {results['improver']['history']}")
+```
+
+### NEW in v0.2.0: CycleBuilder API
+
+The new CycleBuilder API provides a fluent interface for creating cyclic workflows:
+
+```python
+# Modern approach with CycleBuilder
+workflow.create_cycle("optimization_loop")
+    .connect("gradient", "optimizer")
+    .connect("optimizer", "evaluator")
+    .connect("evaluator", "gradient")
+    .max_iterations(100)
+    .converge_when("loss < 0.01")
+    .early_stop_when("gradient_norm < 1e-6")
+    .checkpoint_every(10)
+    .build()
+
+# Developer tools for production workflows
+from kailash.workflow import CycleAnalyzer, CycleDebugger, CycleProfiler
+
+# Analyze cycle patterns
+analyzer = CycleAnalyzer(workflow)
+report = analyzer.analyze()
+print(f"Found {len(report.cycles)} cycles")
+print(f"Max depth: {report.max_cycle_depth}")
+
+# Debug with breakpoints
+debugger = CycleDebugger(workflow)
+debugger.set_breakpoint("optimizer", iteration=50)
+debugger.set_trace("gradient_norm", lambda x: x < 0.001)
+
+# Profile performance
+profiler = CycleProfiler(workflow)
+profile_data = profiler.profile(runtime, parameters)
+print(f"Bottleneck: {profile_data.bottleneck_node}")
+print(f"Iterations/sec: {profile_data.iterations_per_second}")
+```
+
+#### Cyclic Workflow Features
+
+- **Built-in Iteration Management**: No manual loops or recursion needed
+- **State Persistence**: Maintain state across iterations with `get_previous_state()` and `set_cycle_state()`
+- **Convergence Detection**: Automatic trend analysis with `detect_convergence_trend()`
+- **Value Accumulation**: Track metrics over time with `accumulate_values()`
+- **Safety Limits**: Max iterations prevent infinite loops
+- **Performance**: Optimized execution with ~30,000 iterations/second
+- **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler for production workflows
+
+Common cyclic patterns include:
+- **Retry with Backoff**: ETL pipelines with automatic retry
+- **Optimization Loops**: Iterative parameter tuning
+- **ML Training**: Training until accuracy threshold
+- **Polling**: API polling with rate limiting
+- **Stream Processing**: Windowed data processing
 
 ### Workflow API Wrapper - Expose Workflows as REST APIs
 

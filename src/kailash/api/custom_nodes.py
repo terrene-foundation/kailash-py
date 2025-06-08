@@ -86,7 +86,7 @@ def setup_custom_node_routes(app, SessionLocal, tenant_id: str):
     """Setup custom node API routes"""
     from fastapi import HTTPException
 
-    from ..database import CustomNodeRepository, get_db_session
+    from .database import CustomNodeRepository, get_db_session
 
     @app.get("/api/custom-nodes", response_model=List[CustomNodeResponse])
     async def list_custom_nodes():

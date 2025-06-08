@@ -24,7 +24,9 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
-from kailash.nodes.mcp import MCPClient, MCPResource, MCPServer
+from kailash.nodes.mcp import MCPResource, MCPServer
+
+# Note: MCPClient is no longer a node - use LLMAgentNode with mcp_servers instead
 
 
 def check_ollama_availability():
@@ -458,20 +460,34 @@ def demonstrate_mcp_ecosystem():
         else:
             print("✅ Resource created successfully")
 
-    # MCPClient - Connecting to MCP servers
-    print("\n🔌 MCPClient - Retrieving Shared Context:")
-    client = MCPClient()
+    # MCPClient - Now integrated into LLMAgentNode
+    print("\n🔌 MCP Integration - Now Built into LLMAgentNode:")
+    print("⚠️  MCPClient is no longer a standalone node.")
+    print("✅ Use LLMAgentNode with mcp_servers parameter instead:")
+    print("\nDemonstrating with Ollama:")
 
-    # List available resources
-    list_result = client.run(
-        server_config={"name": "mock-server", "transport": "stdio"},
-        operation="list_resources",
+    # Create an agent with MCP integration
+    agent = LLMAgentNode(name="mcp_integrated_agent")
+    result = agent.run(
+        provider="ollama",
+        model="llama3.1:8b-instruct-q8_0",
+        messages=[{"role": "user", "content": "What MCP tools are available?"}],
+        mcp_servers=[
+            {
+                "name": "demo-server",
+                "transport": "stdio",
+                "command": "echo",
+                "args": ["mock-mcp-server"],
+            }
+        ],
+        auto_discover_tools=True,
     )
 
-    if list_result["success"]:
-        print(f"Available resources: {len(list_result.get('resources', []))}")
-        for res in list_result.get("resources", [])[:3]:
-            print(f"  - {res['uri']}: {res['name']}")
+    if result["success"]:
+        print(f"✅ MCP-integrated response: {result['response']['content'][:100]}...")
+        print(f"   Tools discovered: {result['context']['tools_available']}")
+    else:
+        print(f"❌ Error: {result['error']}")
 
     # MCPServer - Configuration for hosting
     print("\n🖥️  MCPServer - Hosting Resources:")

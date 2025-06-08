@@ -1,0 +1,129 @@
+# Kailash SDK API Reference - Integrations
+# Modules: API Gateway, MCP Integration
+# Version: 0.1.4
+# Last Updated: 2025-01-06
+
+# API Wrapper
+api_wrapper:
+  workflow_api:
+    class: kailash.api.WorkflowAPI
+    description: "Expose workflows as REST APIs"
+    import: "from kailash.api import WorkflowAPI"
+    methods:
+      create:
+        signature: "create(workflow: Workflow, config: dict = None) -> WorkflowAPI"
+        description: "Create API from workflow"
+        example: |
+          api = WorkflowAPI.create(workflow, {
+              'endpoint': '/process',
+              'method': 'POST',
+              'input_schema': {...},
+              'output_schema': {...}
+          })
+
+      run:
+        signature: "run(host: str = '0.0.0.0', port: int = 8000)"
+        description: "Start the API server"
+        example: |
+          api.run(host='localhost', port=8080)
+
+# API Gateway
+api_gateway:
+  WorkflowAPIGateway:
+    class: kailash.api.gateway.WorkflowAPIGateway
+    description: "Unified API gateway for multiple workflows"
+    import: "from kailash.api.gateway import WorkflowAPIGateway"
+    constructor:
+      signature: "WorkflowAPIGateway(title: str = 'Kailash Gateway', description: str = '', version: str = '1.0.0')"
+    methods:
+      register_workflow:
+        signature: "register_workflow(prefix: str, workflow: Workflow, **kwargs)"
+        description: "Register a workflow with the gateway"
+        example: |
+          gateway.register_workflow("sales", sales_workflow)
+
+      register_mcp_server:
+        signature: "register_mcp_server(name: str, mcp_integration: MCPIntegration)"
+        description: "Register an MCP server"
+        example: |
+          gateway.register_mcp_server("tools", mcp_integration)
+
+      run:
+        signature: "run(host: str = '0.0.0.0', port: int = 8000, **kwargs)"
+        description: "Start the gateway server"
+    example: |
+      from kailash.api.gateway import WorkflowAPIGateway
+
+      gateway = WorkflowAPIGateway(
+          title="Enterprise Platform",
+          description="Unified API for all workflows"
+      )
+
+      gateway.register_workflow("sales", sales_workflow)
+      gateway.register_workflow("analytics", analytics_workflow)
+      gateway.run(port=8000)
+
+# MCP Integration
+mcp_integration:
+  MCPIntegration:
+    class: kailash.api.mcp_integration.MCPIntegration
+    description: "Model Context Protocol integration"
+    import: "from kailash.api.mcp_integration import MCPIntegration"
+    constructor:
+      signature: "MCPIntegration(name: str)"
+    methods:
+      add_tool:
+        signature: "add_tool(name: str, function: Callable, description: str = '')"
+        description: "Add a tool to the MCP server"
+      start:
+        signature: "start(command: List[str])"
+        description: "Start the MCP server"
+    example: |
+      from kailash.api.mcp_integration import MCPIntegration
+
+      mcp = MCPIntegration("ai_tools")
+      mcp.add_tool("analyze", analyze_function, "Analyze data")
+      mcp.add_tool("predict", predict_function, "Make predictions")
+
+  MCPToolNode:
+    class: kailash.nodes.mcp.MCPToolNode
+    description: "Execute MCP tools in workflows"
+    import: "from kailash.nodes.mcp import MCPToolNode"
+    config:
+      mcp_server: "str - Name of MCP server"
+      tool_name: "str - Name of tool to execute"
+      parameters: "dict - Tool parameters"
+    example: |
+      workflow.add_node('mcp_tool', MCPToolNode(),
+          mcp_server='ai_tools',
+          tool_name='analyze',
+          parameters={'method': 'regression'}
+      )
+
+# Workflow Studio API
+workflow_studio:
+  WorkflowStudioAPI:
+    class: kailash.api.studio.WorkflowStudioAPI
+    description: "Backend API for Workflow Studio UI"
+    import: "from kailash.api.studio import WorkflowStudioAPI"
+    constructor:
+      signature: "WorkflowStudioAPI(database_url: str = 'sqlite:///workflow_studio.db')"
+    methods:
+      run:
+        signature: "run(host: str = '0.0.0.0', port: int = 8001)"
+        description: "Start the Studio API server"
+    endpoints:
+      - "GET /api/nodes - List available node types"
+      - "GET /api/workflows - List saved workflows"
+      - "POST /api/workflows - Create new workflow"
+      - "PUT /api/workflows/{id} - Update workflow"
+      - "DELETE /api/workflows/{id} - Delete workflow"
+      - "POST /api/workflows/{id}/execute - Execute workflow"
+      - "WebSocket /ws/execution/{run_id} - Real-time execution updates"
+    example: |
+      from kailash.api.studio import WorkflowStudioAPI
+
+      studio_api = WorkflowStudioAPI(
+          database_url="postgresql://user:pass@localhost/studio"
+      )
+      studio_api.run(port=8001)

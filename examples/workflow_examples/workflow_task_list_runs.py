@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from examples.utils.paths import get_data_dir
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
@@ -338,7 +340,7 @@ def main():
     print("These examples demonstrate both the issue and potential workarounds.\n")
 
     # Create necessary directories
-    Path("../data").mkdir(parents=True, exist_ok=True)
+    get_data_dir().mkdir(parents=True, exist_ok=True)
 
     examples = [
         ("Basic List Runs", demonstrate_basic_list_runs),

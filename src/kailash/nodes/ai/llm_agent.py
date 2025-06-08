@@ -182,6 +182,13 @@ class LLMAgentNode(Node):
                 default=[],
                 description="MCP resource URIs to include as context",
             ),
+            "auto_discover_tools": NodeParameter(
+                name="auto_discover_tools",
+                type=bool,
+                required=False,
+                default=False,
+                description="Automatically discover and use MCP tools",
+            ),
             "rag_config": NodeParameter(
                 name="rag_config",
                 type=dict,
@@ -451,6 +458,7 @@ class LLMAgentNode(Node):
         memory_config = kwargs.get("memory_config", {})
         mcp_servers = kwargs.get("mcp_servers", [])
         mcp_context = kwargs.get("mcp_context", [])
+        auto_discover_tools = kwargs.get("auto_discover_tools", False)
         rag_config = kwargs.get("rag_config", {})
         generation_config = kwargs.get("generation_config", {})
         streaming = kwargs.get("streaming", False)
@@ -468,6 +476,12 @@ class LLMAgentNode(Node):
 
             # Retrieve MCP context if configured
             mcp_context_data = self._retrieve_mcp_context(mcp_servers, mcp_context)
+
+            # Discover MCP tools if enabled
+            if auto_discover_tools and mcp_servers:
+                mcp_tools = self._discover_mcp_tools(mcp_servers)
+                # Merge MCP tools with existing tools
+                tools = self._merge_tools(tools, mcp_tools)
 
             # Perform RAG retrieval if configured
             rag_context = self._perform_rag_retrieval(
@@ -727,7 +741,125 @@ class LLMAgentNode(Node):
 
         context_data = []
 
-        # Mock MCP context retrieval
+        # Check if we should use real MCP implementation
+        use_real_mcp = hasattr(self, "_mcp_client") or self._should_use_real_mcp()
+
+        if use_real_mcp:
+            # Use internal MCP client for real implementation
+            try:
+                import asyncio
+                from datetime import datetime
+
+                from kailash.mcp import MCPClient
+
+                # Initialize MCP client if not already done
+                if not hasattr(self, "_mcp_client"):
+                    self._mcp_client = MCPClient()
+
+                # Process each server
+                for server_config in mcp_servers:
+                    try:
+                        # List resources from server
+                        resources = asyncio.run(
+                            self._mcp_client.list_resources(server_config)
+                        )
+
+                        # Read specific resources if requested
+                        for uri in mcp_context:
+                            try:
+                                resource_data = asyncio.run(
+                                    self._mcp_client.read_resource(server_config, uri)
+                                )
+
+                                if resource_data:
+                                    # Extract content from resource data
+                                    content = resource_data
+                                    if isinstance(resource_data, dict):
+                                        content = resource_data.get(
+                                            "content", resource_data
+                                        )
+
+                                    # Handle different content formats
+                                    if isinstance(content, list):
+                                        # MCP returns content as array of items
+                                        text_content = ""
+                                        for item in content:
+                                            if (
+                                                isinstance(item, dict)
+                                                and item.get("type") == "text"
+                                            ):
+                                                text_content += item.get("text", "")
+                                            elif isinstance(item, str):
+                                                text_content += item
+                                        content = text_content
+
+                                    context_data.append(
+                                        {
+                                            "uri": uri,
+                                            "content": str(content),
+                                            "source": server_config.get(
+                                                "name", "mcp_server"
+                                            ),
+                                            "retrieved_at": datetime.now().isoformat(),
+                                            "relevance_score": 0.95,  # High score for explicitly requested
+                                            "metadata": (
+                                                resource_data
+                                                if isinstance(resource_data, dict)
+                                                else {}
+                                            ),
+                                        }
+                                    )
+                            except Exception as e:
+                                self.logger.debug(f"Failed to read resource {uri}: {e}")
+
+                        # Auto-discover and include relevant resources
+                        if resources and isinstance(resources, list):
+                            for resource in resources[
+                                :3
+                            ]:  # Limit auto-discovered resources
+                                resource_dict = (
+                                    resource
+                                    if isinstance(resource, dict)
+                                    else {"uri": str(resource)}
+                                )
+                                context_data.append(
+                                    {
+                                        "uri": resource_dict.get("uri", ""),
+                                        "content": f"Auto-discovered: {resource_dict.get('name', '')} - {resource_dict.get('description', '')}",
+                                        "source": server_config.get(
+                                            "name", "mcp_server"
+                                        ),
+                                        "retrieved_at": datetime.now().isoformat(),
+                                        "relevance_score": 0.75,
+                                        "metadata": resource_dict,
+                                    }
+                                )
+
+                    except Exception as e:
+                        self.logger.debug(f"MCP server connection failed: {e}")
+                        # Fall back to mock for this server
+                        context_data.append(
+                            {
+                                "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
+                                "content": "Connection failed, using fallback content",
+                                "source": server_config.get("name", "unknown"),
+                                "retrieved_at": datetime.now().isoformat(),
+                                "relevance_score": 0.5,
+                                "metadata": {"error": str(e)},
+                            }
+                        )
+
+                # If we got real data, return it
+                if context_data:
+                    return context_data
+
+            except ImportError:
+                # MCPClient not available, fall back to mock
+                pass
+            except Exception as e:
+                self.logger.debug(f"MCP retrieval error: {e}")
+
+        # Fallback to mock implementation
         for uri in mcp_context:
             context_data.append(
                 {
@@ -753,6 +885,146 @@ class LLMAgentNode(Node):
             )
 
         return context_data
+
+    def _should_use_real_mcp(self) -> bool:
+        """Check if real MCP implementation should be used."""
+        # Check environment variable or configuration
+        import os
+
+        return os.environ.get("KAILASH_USE_REAL_MCP", "false").lower() == "true"
+
+    def _discover_mcp_tools(self, mcp_servers: List[dict]) -> List[Dict[str, Any]]:
+        """
+        Discover available tools from MCP servers.
+
+        Args:
+            mcp_servers: List of MCP server configurations
+
+        Returns:
+            List of tool definitions in OpenAI function calling format
+        """
+        discovered_tools = []
+
+        # Check if we should use real MCP implementation
+        use_real_mcp = hasattr(self, "_mcp_client") or self._should_use_real_mcp()
+
+        if use_real_mcp:
+            try:
+                import asyncio
+
+                from kailash.mcp import MCPClient
+
+                # Initialize MCP client if not already done
+                if not hasattr(self, "_mcp_client"):
+                    self._mcp_client = MCPClient()
+
+                # Discover tools from each server
+                for server_config in mcp_servers:
+                    try:
+                        # Discover tools asynchronously
+                        tools = asyncio.run(
+                            self._mcp_client.discover_tools(server_config)
+                        )
+
+                        # Convert MCP tools to OpenAI function calling format
+                        if isinstance(tools, list):
+                            for tool in tools:
+                                tool_dict = (
+                                    tool
+                                    if isinstance(tool, dict)
+                                    else {"name": str(tool)}
+                                )
+                                # Extract tool info
+                                function_def = {
+                                    "name": tool_dict.get("name", "unknown"),
+                                    "description": tool_dict.get("description", ""),
+                                    "parameters": tool_dict.get(
+                                        "inputSchema", tool_dict.get("parameters", {})
+                                    ),
+                                }
+                                # Add MCP metadata
+                                function_def["mcp_server"] = server_config.get(
+                                    "name", "mcp_server"
+                                )
+                                function_def["mcp_server_config"] = server_config
+
+                                discovered_tools.append(
+                                    {"type": "function", "function": function_def}
+                                )
+
+                    except Exception as e:
+                        self.logger.debug(
+                            f"Failed to discover tools from {server_config.get('name', 'unknown')}: {e}"
+                        )
+
+            except ImportError:
+                # MCPClient not available, use mock tools
+                pass
+            except Exception as e:
+                self.logger.debug(f"MCP tool discovery error: {e}")
+
+        # If no real tools discovered, provide minimal generic tools
+        if not discovered_tools:
+            # Provide minimal generic tools for each server
+            for server_config in mcp_servers:
+                server_name = server_config.get("name", "mcp_server")
+                discovered_tools.extend(
+                    [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": f"mcp_{server_name}_search",
+                                "description": f"Search for information in {server_name}",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "query": {
+                                            "type": "string",
+                                            "description": "Search query",
+                                        }
+                                    },
+                                    "required": ["query"],
+                                },
+                                "mcp_server": server_name,
+                                "mcp_server_config": server_config,
+                            },
+                        }
+                    ]
+                )
+
+        return discovered_tools
+
+    def _merge_tools(
+        self, existing_tools: List[dict], mcp_tools: List[dict]
+    ) -> List[dict]:
+        """
+        Merge MCP discovered tools with existing tools, avoiding duplicates.
+
+        Args:
+            existing_tools: Tools already defined
+            mcp_tools: Tools discovered from MCP servers
+
+        Returns:
+            Merged list of tools
+        """
+        # Create a set of existing tool names for deduplication
+        existing_names = set()
+        for tool in existing_tools:
+            if isinstance(tool, dict) and "function" in tool:
+                existing_names.add(tool["function"].get("name", ""))
+            elif isinstance(tool, dict) and "name" in tool:
+                existing_names.add(tool["name"])
+
+        # Add MCP tools that don't conflict
+        merged_tools = existing_tools.copy()
+        for mcp_tool in mcp_tools:
+            if isinstance(mcp_tool, dict) and "function" in mcp_tool:
+                tool_name = mcp_tool["function"].get("name", "")
+                if tool_name and tool_name not in existing_names:
+                    merged_tools.append(mcp_tool)
+                    existing_names.add(tool_name)
+
+        return merged_tools
 
     def _perform_rag_retrieval(
         self, messages: List[dict], rag_config: dict, mcp_context: List[dict]
@@ -1159,3 +1431,54 @@ class LLMAgentNode(Node):
             "provider": provider,
             "efficiency_score": completion_tokens / max(total_tokens, 1),
         }
+
+    async def _execute_mcp_tool_call(
+        self, tool_call: dict, mcp_tools: List[dict]
+    ) -> Dict[str, Any]:
+        """Execute an MCP tool call.
+
+        Args:
+            tool_call: Tool call from LLM response
+            mcp_tools: List of discovered MCP tools
+
+        Returns:
+            Tool execution result
+        """
+        tool_name = tool_call.get("function", {}).get("name", "")
+        tool_args = json.loads(tool_call.get("function", {}).get("arguments", "{}"))
+
+        # Find the MCP tool definition
+        mcp_tool = None
+        for tool in mcp_tools:
+            if tool.get("function", {}).get("name") == tool_name:
+                mcp_tool = tool
+                break
+
+        if not mcp_tool:
+            return {"error": f"MCP tool '{tool_name}' not found", "success": False}
+
+        # Get server config from tool
+        server_config = mcp_tool.get("function", {}).get("mcp_server_config", {})
+
+        try:
+            from kailash.mcp import MCPClient
+
+            # Initialize MCP client if not already done
+            if not hasattr(self, "_mcp_client"):
+                self._mcp_client = MCPClient()
+
+            # Call the tool
+            result = await self._mcp_client.call_tool(
+                server_config, tool_name, tool_args
+            )
+
+            return {
+                "result": result,
+                "success": True,
+                "tool_name": tool_name,
+                "server": server_config.get("name", "unknown"),
+            }
+
+        except Exception as e:
+            self.logger.error(f"MCP tool execution failed: {e}")
+            return {"error": str(e), "success": False, "tool_name": tool_name}

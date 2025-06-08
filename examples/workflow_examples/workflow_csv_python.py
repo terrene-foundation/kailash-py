@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
+from examples.utils.paths import get_output_dir
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
@@ -17,7 +18,7 @@ def main():
 
     # Setup paths
     sample_directory = Path("../tests/sample_data")
-    output_directory = Path("../outputs")
+    output_directory = get_output_dir()
     output_directory.mkdir(exist_ok=True)
 
     # 1. Create a workflow

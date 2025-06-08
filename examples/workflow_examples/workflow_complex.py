@@ -19,6 +19,8 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
+from examples.utils.paths import get_data_dir
+
 # Add the parent directory to the path to import kailash
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -225,7 +227,7 @@ def main():
     """Execute the complex workflow with task tracking."""
 
     # Create directories
-    data_dir = Path("../data")
+    data_dir = get_data_dir()
     output_dir = data_dir / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -380,7 +382,7 @@ def main():
 
 if __name__ == "__main__":
     # Create sample data if needed
-    data_dir = Path("../data")
+    data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
 
     # Create sample customer data

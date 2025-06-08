@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from examples.utils.paths import get_data_dir, get_output_dir
 from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import CSVWriterNode
 from kailash.nodes.transform.processors import Filter
@@ -37,12 +38,12 @@ def create_long_running_workflow():
 
     # Create simple multi-step workflow for demo
     reader1 = CSVReaderNode(
-        node_id="reader_customers", file_path="../data/customers.csv"
+        node_id="reader_customers", file_path=str(get_data_dir() / "customers.csv")
     )
 
     reader2 = CSVReaderNode(
         node_id="reader_backup",
-        file_path="../data/customers.csv",  # Use same file for simplicity
+        file_path=str(get_data_dir() / "customers.csv"),  # Use same file for simplicity
     )
 
     # Data processing nodes
@@ -56,15 +57,16 @@ def create_long_running_workflow():
 
     # Output writers
     adults_writer = CSVWriterNode(
-        node_id="adults_writer", file_path="../outputs/realtime_adults.csv"
+        node_id="adults_writer", file_path=str(get_output_dir() / "realtime_adults.csv")
     )
 
     seniors_writer = CSVWriterNode(
-        node_id="seniors_writer", file_path="../outputs/realtime_seniors.csv"
+        node_id="seniors_writer",
+        file_path=str(get_output_dir() / "realtime_seniors.csv"),
     )
 
     all_writer = CSVWriterNode(
-        node_id="all_writer", file_path="../outputs/realtime_all.csv"
+        node_id="all_writer", file_path=str(get_output_dir() / "realtime_all.csv")
     )
 
     # Build workflow graph
@@ -88,7 +90,7 @@ def create_long_running_workflow():
 
 def setup_realtime_tracking():
     """Set up task tracking for real-time demo."""
-    storage_path = Path("../data/realtime_tracking")
+    storage_path = get_data_dir() / "realtime_tracking"
     storage_path.mkdir(parents=True, exist_ok=True)
 
     storage = FileSystemStorage(storage_path)
@@ -231,14 +233,14 @@ def generate_streaming_dashboard(
     print("\n3. Generating streaming dashboard...")
 
     # Generate live dashboard with all metrics history
-    dashboard_path = Path("../outputs/realtime_streaming_dashboard.html")
+    dashboard_path = get_output_dir() / "realtime_streaming_dashboard.html"
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
 
     dashboard.generate_live_report(dashboard_path, include_charts=True)
     print(f"   💻 Streaming dashboard: {dashboard_path}")
 
     # Save metrics log
-    metrics_log_path = Path("../outputs/realtime_metrics_log.json")
+    metrics_log_path = get_output_dir() / "realtime_metrics_log.json"
     monitor.save_metrics_log(metrics_log_path)
     print(f"   📊 Metrics log: {metrics_log_path}")
 
@@ -553,7 +555,7 @@ def create_realtime_html_dashboard(monitor: RealtimeMonitor):
 </html>
     """
 
-    output_path = Path("../outputs/realtime_enhanced_dashboard.html")
+    output_path = get_output_dir() / "realtime_enhanced_dashboard.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w") as f:

@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from examples.utils.paths import get_output_dir
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.base import NodeParameter
@@ -143,7 +145,7 @@ def visualize_performance():
     print("\n=== PERFORMANCE METRICS VISUALIZATION ===\n")
 
     # Setup
-    output_dir = Path("../outputs/actual_performance")
+    output_dir = get_output_dir() / "actual_performance"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Clean storage directory

@@ -417,6 +417,184 @@ assert all(item > 0 for item in values)
 - File not found
 - Permission errors
 
+## Testing Cyclic Workflows
+
+### Flexible Assertions for Cycles
+
+Cyclic workflows have non-deterministic iteration counts, so tests must be flexible:
+
+```python
+def test_cyclic_workflow_convergence():
+    """Test that cyclic workflow converges within expected bounds."""
+    # Create cyclic workflow
+    workflow = Workflow("cycle_test", "Test cyclic convergence")
+
+    workflow.add_node("processor", PythonCodeNode(),
+        code="""
+        # Iterative refinement
+        if 'feedback' in locals():
+            result = data * feedback['adjustment']
+        else:
+            result = data
+        """)
+
+    workflow.add_node("validator", PythonCodeNode(),
+        code="""
+        quality = sum(result) / len(result)
+        converged = 0.9 <= quality <= 1.1
+        feedback = {'adjustment': 0.95 if quality > 1 else 1.05, 'converged': converged}
+        """)
+
+    # Create cycle
+    workflow.connect("processor", "validator", mapping={"result": "result"})
+    workflow.connect("validator", "processor",
+        mapping={"feedback": "feedback"},
+        cycle=True,
+        max_iterations=20,
+        convergence_check="feedback['converged']"
+    )
+
+    # Execute
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow, parameters={
+        "processor": {"data": [1.5, 2.0, 2.5]}
+    })
+
+    # ❌ BAD - Too specific
+    # assert results['validator']['iteration_count'] == 5
+
+    # ✅ GOOD - Flexible assertions
+    assert 1 <= results['validator']['iteration_count'] <= 20
+    assert results['validator']['feedback']['converged'] is True
+
+    # Check final state
+    final_quality = sum(results['processor']['result']) / len(results['processor']['result'])
+    assert 0.9 <= final_quality <= 1.1
+```
+
+### Testing Cycle Safety Features
+
+```python
+def test_cycle_max_iterations():
+    """Test that cycles respect max_iterations limit."""
+    workflow = Workflow("max_iter_test", "Test max iterations")
+
+    # Node that never converges
+    workflow.add_node("infinite", PythonCodeNode(),
+        code="result = data + 1")
+
+    workflow.connect("infinite", "infinite",
+        mapping={"result": "data"},
+        cycle=True,
+        max_iterations=5
+    )
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow, parameters={
+        "infinite": {"data": 0}
+    })
+
+    # Should stop at max_iterations
+    assert results['infinite']['iteration_count'] == 5
+    assert results['infinite']['result'] == 5  # 0 + 1 for each iteration
+
+def test_cycle_timeout():
+    """Test that cycles respect timeout."""
+    workflow = Workflow("timeout_test", "Test cycle timeout")
+
+    workflow.add_node("slow", PythonCodeNode(),
+        code="""
+        import time
+        time.sleep(0.1)
+        result = data
+        """)
+
+    workflow.connect("slow", "slow",
+        cycle=True,
+        timeout=0.3  # Should timeout after ~3 iterations
+    )
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow, parameters={
+        "slow": {"data": "test"}
+    })
+
+    # Should timeout before max_iterations
+    assert results['slow']['iteration_count'] < 10
+```
+
+### Testing Cycle State Management
+
+```python
+def test_cycle_state_preservation():
+    """Test that cycle state is preserved between iterations."""
+    workflow = Workflow("state_test", "Test state preservation")
+
+    workflow.add_node("accumulator", PythonCodeNode(),
+        code="""
+        context = kwargs.get('context', {})
+        cycle_info = context.get('cycle', {})
+        prev_state = cycle_info.get('node_state') or {}
+
+        history = prev_state.get('history', [])
+        history.append(data)
+
+        result = {
+            'current': data,
+            'history': history,
+            'count': len(history)
+        }
+        """)
+
+    workflow.connect("accumulator", "accumulator",
+        mapping={"current": "data"},
+        cycle=True,
+        max_iterations=3
+    )
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow, parameters={
+        "accumulator": {"data": "A"}
+    })
+
+    # Check state accumulation
+    assert results['accumulator']['count'] == 3
+    assert results['accumulator']['history'] == ["A", "A", "A"]
+```
+
+### Testing Convergence Callbacks
+
+```python
+def test_convergence_callback():
+    """Test custom convergence callback function."""
+    def check_convergence(results, iteration, cycle_state):
+        """Custom convergence logic."""
+        if iteration < 2:
+            return False
+
+        current = results.get('value', 0)
+        history = cycle_state.get('value_history', [])
+
+        if not history:
+            return False
+
+        # Check if improvement is slowing
+        improvement = abs(current - history[-1])
+        return improvement < 0.01
+
+    workflow = Workflow("callback_test", "Test convergence callback")
+
+    # ... setup nodes ...
+
+    workflow.connect("optimizer", "evaluator",
+        cycle=True,
+        convergence_callback=check_convergence,
+        max_iterations=100
+    )
+
+    # Test execution and verify callback was used
+```
+
 ## Continuous Integration
 
 Tests run automatically on:

@@ -12,9 +12,9 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK documentation! This SDK provides a
-comprehensive framework for building workflow-based applications with a
-container-node architecture.
+Welcome to the Kailash Python SDK v0.2.0 documentation! This major release introduces
+the **Universal Hybrid Cyclic Graph Architecture**, enabling powerful iterative workflows
+with automatic convergence detection and high-performance execution.
 
 .. toctree::
    :maxdepth: 2
@@ -29,6 +29,7 @@ container-node architecture.
    :maxdepth: 2
    :caption: User Guide
 
+   guides/cyclic_workflows
    best_practices
    troubleshooting
    performance
@@ -108,12 +109,20 @@ Key Features
    - Error handling and recovery
    - Parallel execution
    - Conditional routing
+   - **Cyclic workflows** with convergence detection and developer tools
 
 🚀 **Multiple Runtime Options**
    - Local execution for development
    - Docker runtime for isolation
    - Async execution for I/O operations
    - Parallel processing for performance
+
+🔄 **Universal Hybrid Cyclic Graph Architecture** (New in v0.2.0)
+   - **High-Performance Cycles**: 30,000+ iterations/second
+   - **Automatic Convergence**: Built-in trend detection and early termination
+   - **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler
+   - **Phase 5 API**: CycleBuilder for intuitive cyclic workflow creation
+   - **Cycle-Aware Nodes**: Pre-built support for iterative processing
 
 🌐 **REST API Wrapper**
    - Expose any workflow as REST API
@@ -206,6 +215,86 @@ Coordinated AI Workflow Example
            "problem_description": "Analyze customer churn patterns and predict future behavior"
        }
    })
+
+Cyclic Workflow Example (New in v0.2.0)
+---------------------------------------
+
+**Using the new CycleBuilder API:**
+
+.. code-block:: python
+
+   from kailash.workflow import CycleBuilder
+   from kailash.nodes import PythonCodeNode
+
+   # Phase 5 API - Simple and intuitive
+   builder = CycleBuilder("gradient_descent")
+
+   # Add optimizer with automatic convergence tracking
+   optimizer_code = '''
+   # Access previous state with automatic defaults
+   try:
+       value = cycle_state["value"]
+   except:
+       value = 0.1
+
+   # Gradient descent step
+   gradient = 2 * (value - 0.5)  # derivative of (x-0.5)^2
+   learning_rate = 0.1
+   new_value = value - learning_rate * gradient
+
+   # Check convergence
+   converged = abs(new_value - value) < 0.001
+
+   result = {"value": new_value, "converged": converged}
+   '''
+
+   builder.add_cycle_node(
+       "optimizer",
+       PythonCodeNode(name="optimizer", code=optimizer_code),
+       initial_state={"value": 0.1},
+       convergence_check="converged == True",
+       max_iterations=100
+   )
+
+   # Build and run
+   workflow = builder.build()
+   results = workflow.run()
+
+   # Analyze with developer tools
+   from kailash.workflow import CycleAnalyzer
+   analyzer = CycleAnalyzer(workflow)
+   report = analyzer.analyze_execution(results)
+   print(f"Converged in {report['iterations']} iterations")
+   print(f"Performance: {report['iterations_per_second']:.0f} iter/sec")
+
+**Using Cycle-Aware Nodes:**
+
+.. code-block:: python
+
+   from kailash.nodes.base_cycle_aware import CycleAwareNode
+
+   class OptimizerNode(CycleAwareNode):
+       """Iterative optimization with built-in convergence tools."""
+
+       def run(self, context, **kwargs):
+           # Automatic iteration tracking
+           iteration = self.get_iteration(context)
+           prev_state = self.get_previous_state(context)
+
+           # Your optimization logic
+           value = prev_state.get("value", 0.1)
+           improvement = 0.1 * (1 - value)
+           new_value = value + improvement
+
+           # Built-in convergence detection
+           self.accumulate_values(context, "value", new_value)
+           trend = self.detect_convergence_trend(context, "value")
+
+           # Automatic state management
+           self.set_cycle_state({"value": new_value})
+           converged = new_value > 0.95 or trend["converging"]
+
+           return {"value": new_value, "converged": converged}
 
 Architecture Overview
 ---------------------

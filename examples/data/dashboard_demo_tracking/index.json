@@ -286,6 +286,27 @@
       "status": "completed",
       "started_at": "2025-06-02T10:09:10.950361+00:00",
       "ended_at": "2025-06-02T10:09:10.952147+00:00"
+    },
+    "e0b22d9a-fc91-416f-93a7-7b75439d03c5": {
+      "run_id": "0e62bf14-2934-47bf-b6dc-dba186602b44",
+      "node_id": "data_reader",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:31.475962+00:00",
+      "ended_at": "2025-06-08T13:53:31.478724+00:00"
+    },
+    "8725e3a2-8070-49c8-abd3-a070e4ad7d4b": {
+      "run_id": "0e62bf14-2934-47bf-b6dc-dba186602b44",
+      "node_id": "data_filter",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:31.480468+00:00",
+      "ended_at": "2025-06-08T13:53:31.481962+00:00"
+    },
+    "fcc7fae9-9e13-41b7-92af-03fd11bcd348": {
+      "run_id": "0e62bf14-2934-47bf-b6dc-dba186602b44",
+      "node_id": "data_writer",
+      "status": "completed",
+      "started_at": "2025-06-08T13:53:31.483339+00:00",
+      "ended_at": "2025-06-08T13:53:31.485114+00:00"
     }
   },
   "runs": {}

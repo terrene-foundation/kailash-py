@@ -14,6 +14,8 @@ from typing import Any, Dict
 
 import yaml
 
+from examples.utils.paths import get_data_dir, get_output_dir
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from kailash.nodes.code.python import PythonCodeNode
@@ -39,7 +41,9 @@ def create_sample_workflow():
     workflow.metadata["author"] = "John Doe"
 
     # Create nodes
-    csv_reader = CSVReaderNode(file_path="../data/customers.csv", headers=True)
+    csv_reader = CSVReaderNode(
+        file_path=str(get_data_dir() / "customers.csv"), headers=True
+    )
 
     # Create transformer using PythonCodeNode
     def transform_data(data: list) -> Dict[str, Any]:
@@ -87,20 +91,20 @@ def create_sample_workflow():
         output_schema=output_schema,
     )
 
-    csv_writer = CSVWriterNode(file_path="../data/export_results.csv")
+    csv_writer = CSVWriterNode(file_path=str(get_output_dir() / "export_results.csv"))
 
     # Add nodes to workflow with configuration
     workflow.add_node(
         node_id="reader",
         node_or_type=csv_reader,
-        config={"file_path": "../data/customers.csv"},
+        config={"file_path": str(get_data_dir() / "customers.csv")},
     )
     workflow.add_node(node_id="transformer", node_or_type=transformer)
     workflow.add_node(node_id="classifier", node_or_type=classifier)
     workflow.add_node(
         node_id="writer",
         node_or_type=csv_writer,
-        config={"file_path": "../data/customer_segments.csv"},
+        config={"file_path": str(get_data_dir() / "customer_segments.csv")},
     )
 
     # Connect nodes
@@ -299,7 +303,7 @@ def demonstrate_export_validation():
     workflow = Workflow(workflow_id="test_workflow", name="test_workflow")
 
     # Add an incomplete node
-    csv_reader = CSVReaderNode(file_path="../data/test.csv", headers=True)
+    csv_reader = CSVReaderNode(file_path=str(get_data_dir() / "test.csv"), headers=True)
     workflow.add_node(node_id="reader", node_or_type=csv_reader)
     # Note: No configuration provided for reader
 
@@ -340,8 +344,8 @@ def demonstrate_workflow_execution_and_export():
     ]
 
     # Write sample data
-    Path("../data").mkdir(exist_ok=True)
-    with open("../data/customers.csv", "w") as f:
+    get_data_dir().mkdir(exist_ok=True)
+    with open(str(get_data_dir() / "customers.csv", "w")) as f:
         f.write("customer_id,name,age,income\n")
         for record in sample_data:
             f.write(

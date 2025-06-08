@@ -30,6 +30,161 @@ AsyncNode
    :show-inheritance:
    :special-members: __init__
 
+CycleAwareNode
+--------------
+
+.. autoclass:: kailash.nodes.base_cycle_aware.CycleAwareNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :special-members: __init__
+
+The CycleAwareNode provides built-in helpers for managing state and iteration
+tracking in cyclic workflows.
+
+**Helper Methods:**
+
+- ``get_iteration(context)``: Get the current iteration number (0-based)
+- ``get_previous_state(context)``: Access state from the previous iteration
+- ``set_cycle_state(state)``: Persist state for the next iteration
+- ``accumulate_values(context, key, value)``: Build a rolling window of values
+- ``detect_convergence_trend(context, metric_key)``: Analyze convergence patterns
+- ``log_cycle_info(context, message)``: Log structured cycle information
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.nodes.base_cycle_aware import CycleAwareNode
+   from typing import Dict, Any
+
+   class OptimizerNode(CycleAwareNode):
+       """Iterative optimization node that improves results each cycle."""
+
+       def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+           # Get iteration info
+           iteration = self.get_iteration(context)
+           prev_state = self.get_previous_state(context)
+
+           # Get previous value or start with initial
+           current_value = prev_state.get("value", 0.5)
+
+           # Optimization step
+           improvement = 0.1 * (1 - current_value)  # Diminishing returns
+           new_value = current_value + improvement
+
+           # Track convergence
+           self.accumulate_values(context, "value", new_value)
+           trend = self.detect_convergence_trend(context, "value")
+
+           # Save state for next iteration
+           self.set_cycle_state({"value": new_value})
+
+           # Log progress
+           self.log_cycle_info(context, f"Value improved to {new_value:.3f}")
+
+           # Check convergence
+           converged = new_value > 0.95 or (trend["converging"] and trend["stability"] > 0.98)
+
+           return {
+               "value": new_value,
+               "converged": converged,
+               "iteration": iteration,
+               "improvement": improvement
+           }
+
+   # Use in a workflow
+   from kailash import Workflow
+
+   workflow = Workflow("optimization")
+   workflow.add_node("optimizer", OptimizerNode())
+
+   # Create optimization cycle
+   workflow.connect("optimizer", "optimizer",
+                    mapping={"value": "initial_value"},
+                    cycle=True,
+                    max_iterations=100,
+                    convergence_check="converged == True")
+
+**Common Patterns:**
+
+1. **Retry with Exponential Backoff:**
+
+.. code-block:: python
+
+   class RetryNode(CycleAwareNode):
+       def run(self, context, **kwargs):
+           iteration = self.get_iteration(context)
+           max_retries = kwargs.get("max_retries", 3)
+
+           try:
+               result = perform_operation()
+               return {"success": True, "result": result}
+           except Exception as e:
+               if iteration < max_retries:
+                   delay = 2 ** iteration  # Exponential backoff
+                   time.sleep(delay)
+                   self.log_cycle_info(context, f"Retry {iteration + 1} after {delay}s")
+                   return {"success": False, "retry": True}
+               else:
+                   return {"success": False, "error": str(e)}
+
+2. **Data Quality Improvement:**
+
+.. code-block:: python
+
+   class QualityImproverNode(CycleAwareNode):
+       def run(self, context, **kwargs):
+           data = kwargs["data"]
+           prev_state = self.get_previous_state(context)
+
+           # Calculate quality score
+           quality = calculate_quality(data)
+           self.accumulate_values(context, "quality", quality)
+
+           # Check if we're making progress
+           trend = self.detect_convergence_trend(context, "quality")
+           if trend["plateau_detected"]:
+               self.log_cycle_info(context, "Quality plateau detected")
+
+           # Improve data
+           improved_data = improve_quality(data)
+
+           return {
+               "data": improved_data,
+               "quality": quality,
+               "converged": quality > 0.95 or trend["plateau_detected"]
+           }
+
+3. **Iterative Model Training:**
+
+.. code-block:: python
+
+   class TrainingNode(CycleAwareNode):
+       def run(self, context, **kwargs):
+           model = kwargs.get("model")
+           data = kwargs["training_data"]
+           iteration = self.get_iteration(context)
+
+           # Train for one epoch
+           loss = model.train_epoch(data)
+           self.accumulate_values(context, "loss", loss)
+
+           # Early stopping check
+           trend = self.detect_convergence_trend(context, "loss")
+           early_stop = trend["converging"] and trend["stability"] > 0.99
+
+           # Save best model
+           prev_best = self.get_previous_state(context).get("best_loss", float('inf'))
+           if loss < prev_best:
+               self.set_cycle_state({"best_loss": loss, "best_model": model.state_dict()})
+
+           return {
+               "model": model,
+               "loss": loss,
+               "converged": early_stop or iteration >= 100
+           }
+
 Data Nodes
 ==========
 

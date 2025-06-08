@@ -463,6 +463,91 @@ Slow Execution
 
             return results
 
+Cyclic Workflow Issues
+----------------------
+
+Infinite Loops
+^^^^^^^^^^^^^^
+
+**Problem**: Workflow runs indefinitely without converging
+
+**Symptoms**:
+
+.. code-block:: text
+
+    WARNING: Reached maximum iterations (1000) without convergence
+
+**Solutions**:
+
+.. code-block:: python
+
+    # 1. Always set convergence conditions
+    workflow.connect("processor", "processor",
+        cycle=True,
+        max_iterations=100,  # Safety limit
+        convergence_check="converged == True or error < 0.001")
+
+    # 2. Implement proper convergence logic in your node
+    class MyNode(CycleAwareNode):
+        def run(self, context, **kwargs):
+            iteration = self.get_iteration(context)
+
+            # Always provide a convergence flag
+            converged = (
+                iteration >= 50 or           # Max iterations
+                self.result_good_enough() or # Domain-specific check
+                self.no_improvement()        # Plateau detection
+            )
+
+            return {"converged": converged, ...}
+
+State Management Errors
+^^^^^^^^^^^^^^^^^^^^^^^
+
+**Problem**: State not persisting between iterations
+
+**Common Mistakes**:
+
+.. code-block:: python
+
+    # Wrong: Forgetting to use CycleAwareNode helpers
+    class BadNode(Node):  # Should inherit from CycleAwareNode
+        def run(self, context, **kwargs):
+            # This won't work properly in cycles
+            self.state = {"value": 1}  # Lost between iterations
+
+    # Correct: Using CycleAwareNode properly
+    class GoodNode(CycleAwareNode):
+        def run(self, context, **kwargs):
+            prev_state = self.get_previous_state(context)
+            new_value = prev_state.get("value", 0) + 1
+            self.set_cycle_state({"value": new_value})
+
+Parameter Mapping Issues
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Problem**: Cycle parameters not being passed correctly
+
+**Solutions**:
+
+.. code-block:: python
+
+    # For PythonCodeNode - use nested path mapping
+    workflow.connect("processor", "processor",
+        mapping={"result.count": "count"},  # Note: result.count
+        cycle=True)
+
+    # For regular nodes - use direct mapping
+    workflow.connect("optimizer", "optimizer",
+        mapping={"value": "input_value"},
+        cycle=True)
+
+    # Debug parameter flow
+    class DebugNode(CycleAwareNode):
+        def run(self, context, **kwargs):
+            self.log_cycle_info(context, f"Received params: {kwargs}")
+            # Your logic here
+
 Data Processing Errors
 ----------------------
 
