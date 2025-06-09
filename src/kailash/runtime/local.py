@@ -399,8 +399,13 @@ class LocalRuntime:
             source_node_id = edge[0]
             mapping = edge[2].get("mapping", {})
 
+            print(f"LOCAL RUNTIME DEBUG: Processing edge {source_node_id} -> {node_id}")
+            print(f"  Edge data: {edge[2]}")
+            print(f"  Mapping: {mapping}")
+
             if source_node_id in node_outputs:
                 source_outputs = node_outputs[source_node_id]
+                print(f"  Source outputs: {list(source_outputs.keys())}")
 
                 # Check if the source node failed
                 if isinstance(source_outputs, dict) and source_outputs.get("failed"):
@@ -411,11 +416,19 @@ class LocalRuntime:
                 for source_key, target_key in mapping.items():
                     if source_key in source_outputs:
                         inputs[target_key] = source_outputs[source_key]
+                        print(
+                            f"  MAPPED: {source_key} -> {target_key} (type: {type(source_outputs[source_key])})"
+                        )
                     else:
+                        print(
+                            f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
+                        )
                         self.logger.warning(
                             f"Source output '{source_key}' not found in node '{source_node_id}'. "
                             f"Available outputs: {list(source_outputs.keys())}"
                         )
+            else:
+                print(f"  No outputs found for source node {source_node_id}")
 
         # Apply parameter overrides
         inputs.update(parameters)

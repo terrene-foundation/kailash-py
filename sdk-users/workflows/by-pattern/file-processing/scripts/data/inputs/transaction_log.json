@@ -1,0 +1,26 @@
+{
+  "transactions": [
+    {
+      "id": "TXN-001",
+      "customer_id": "CUST-001",
+      "amount": 299.99,
+      "timestamp": "2024-01-15T09:00:00Z"
+    },
+    {
+      "id": "TXN-002",
+      "customer_id": "CUST-002",
+      "amount": 149.5,
+      "timestamp": "2024-01-15T09:30:00Z"
+    },
+    {
+      "id": "TXN-003",
+      "customer_id": "CUST-001",
+      "amount": 79.99,
+      "timestamp": "2024-01-15T10:00:00Z"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "generated_at": "2024-01-15T10:30:00Z"
+  }
+}

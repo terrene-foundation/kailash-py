@@ -145,14 +145,11 @@ class TestRESTClientNodeCycles:
         workflow.add_node("rest_client", MockRESTClientNode())
 
         # Create retry cycle
-        workflow.connect(
+        workflow.create_cycle("api_retry").connect(
             "rest_client",
             "rest_client",
-            mapping={"retry_count": "retry_count", "url": "url", "method": "method"},
-            cycle=True,
-            max_iterations=12,
-            convergence_check="converged == True",
-        )
+            mapping={"retry_count": "retry_count", "url": "url", "method": "method"}
+        ).max_iterations(12).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -250,18 +247,15 @@ class TestRESTClientNodeCycles:
         )
 
         # Cycle with specific field mapping
-        workflow.connect(
+        workflow.create_cycle("backoff_test").connect(
             "backoff_client",
             "backoff_client",
             mapping={
                 "delay_history": "delay_history",
                 "base_delay": "base_delay",
                 "max_delay": "max_delay",
-            },
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-        )
+            }
+        ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -323,13 +317,10 @@ class TestRESTClientNodeCycles:
 
         workflow.add_node("conditional_client", ConditionalRetryRESTNode())
 
-        workflow.connect(
+        workflow.create_cycle("conditional_retry").connect(
             "conditional_client",
-            "conditional_client",
-            cycle=True,
-            max_iterations=8,
-            convergence_check="converged == True",
-        )
+            "conditional_client"
+        ).max_iterations(8).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -382,7 +373,7 @@ class TestHTTPRequestNodeCycles:
         )
 
         # Create polling cycle - map specific fields that need to persist
-        workflow.connect(
+        workflow.create_cycle("http_polling_cycle").connect(
             "http_poller",
             "http_poller",
             mapping={
@@ -391,11 +382,8 @@ class TestHTTPRequestNodeCycles:
                 "params": "params",
                 "headers": "headers",
                 "polling_interval": "polling_interval",
-            },
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-        )
+            }
+        ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -505,18 +493,15 @@ class TestHTTPRequestNodeCycles:
         )
 
         # Cycle with specific field mapping
-        workflow.connect(
+        workflow.create_cycle("progressive_fetch").connect(
             "progressive_fetcher",
             "progressive_fetcher",
             mapping={
                 "total_fetched": "total_fetched",
                 "per_page": "per_page",
                 "next_page": "page",  # Use next_page as the new page number
-            },
-            cycle=True,
-            max_iterations=15,
-            convergence_check="converged == True",
-        )
+            }
+        ).max_iterations(15).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -640,7 +625,7 @@ class TestHTTPRequestNodeCycles:
         )
 
         # Cycle with specific field mapping
-        workflow.connect(
+        workflow.create_cycle("adaptive_rate_limiting").connect(
             "adaptive_limiter",
             "adaptive_limiter",
             mapping={
@@ -648,11 +633,8 @@ class TestHTTPRequestNodeCycles:
                 "successful_requests": "successful_requests",
                 "failed_requests": "failed_requests",
                 "requests_to_make": "requests_to_make",
-            },
-            cycle=True,
-            max_iterations=35,
-            convergence_check="converged == True",
-        )
+            }
+        ).max_iterations(35).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -765,13 +747,10 @@ class TestAPINodeCycleIntegration:
 
         workflow.add_node("circuit_breaker_api", CircuitBreakerAPINode())
 
-        workflow.connect(
+        workflow.create_cycle("circuit_breaker_cycle").connect(
             "circuit_breaker_api",
-            "circuit_breaker_api",
-            cycle=True,
-            max_iterations=20,
-            convergence_check="converged == True",
-        )
+            "circuit_breaker_api"
+        ).max_iterations(20).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(

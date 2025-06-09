@@ -80,6 +80,7 @@ Example Workflows:
     workflow.connect('process', 'publish')
 """
 
+from kailash.nodes.data.directory import DirectoryReaderNode
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode, TextReaderNode
 from kailash.nodes.data.retrieval import RelevanceScorerNode
 from kailash.nodes.data.sharepoint_graph import (
@@ -102,6 +103,8 @@ from kailash.nodes.data.vector_db import (
 from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriterNode
 
 __all__ = [
+    # Directory
+    "DirectoryReaderNode",
     # Readers
     "CSVReaderNode",
     "JSONReaderNode",
