@@ -10,7 +10,7 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ feat/*, feature/* ]
+    branches: [ feat/*, feature/*, fix/*, session/* ]
   pull_request:
     branches: [ main ]
     types: [opened, synchronize, reopened]
