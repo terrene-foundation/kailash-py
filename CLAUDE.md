@@ -47,6 +47,9 @@ code = "try:\n    count = input_count + 1\nexcept:\n    count = 1\nresult = {'co
 node = PythonCodeNode(name="counter", code=code)
 ```
 
+## 🌿 Branch Naming
+Use prefixes: `feat/`, `fix/`, `docs/`, `release/`, or `session-` for all branches.
+
 ## 📁 Quick Directory Access
 | I need to... | Go to | Check |
 |--------------|-------|-------|
