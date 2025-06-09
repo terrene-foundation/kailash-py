@@ -11,6 +11,7 @@
 - **Reference**: `guide/reference/CLAUDE.md` → cheatsheet, validation, patterns
 - **Plan**: Clear implementation approach
 - **Create & start todos**: Add new tasks from plan → mark "in_progress" in `guide/todos/000-master.md`
+- **Create implementation details**: Architecture and implementation plan with deliverables in `guide/todos/active/`
 
 ### **Phase 2: Implement → Validate → Test**
 - **Implement**: Use `guide/reference/cheatsheet/` for copy-paste patterns
