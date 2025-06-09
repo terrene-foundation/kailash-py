@@ -259,5 +259,5 @@ kailash_python_sdk/           # Project root directory
 ├── README.md                # Project README
 ├── CONTRIBUTING.md          # Contribution guidelines
 ├── LICENSE                  # License file
-└── Claude.md                # Development guidelines (this file)
+└── CLAUDE.md                # Development guidelines (this file)
 ```

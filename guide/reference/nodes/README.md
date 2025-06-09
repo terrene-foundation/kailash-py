@@ -1,15 +1,20 @@
 # Kailash Python SDK - Node Catalog
 
-**Version**: 0.1.4 | **Last Updated**: 2025-01-06
+**Version**: 0.1.4 | **Last Updated**: 2025-01-09
 
 This directory contains the complete node catalog for the Kailash Python SDK, organized by category.
 
 **Total Nodes**: 66+ nodes across 8 categories
 
+## 🎯 Quick Start
+
+**[comprehensive-node-catalog.md](comprehensive-node-catalog.md)** - Complete reference with all nodes and their use cases. **Start here to find the right node for your task!**
+
 ## 📁 Node Catalog Files
 
 | File | Category | Node Count | Description |
 |------|----------|------------|-------------|
+| [comprehensive-node-catalog.md](comprehensive-node-catalog.md) | **All Nodes** | **66+** | **Complete reference with use cases** |
 | [01-base-nodes.md](01-base-nodes.md) | Base Classes | 3 | Abstract base classes and core interfaces |
 | [02-ai-nodes.md](02-ai-nodes.md) | AI & ML | 15+ | LLM agents, embeddings, A2A communication, self-organizing |
 | [03-data-nodes.md](03-data-nodes.md) | Data I/O | 15+ | File readers/writers, databases, streaming, SharePoint |

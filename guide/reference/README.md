@@ -2,6 +2,8 @@
 
 This directory contains lean, LLM-optimized reference documentation for the Kailash Python SDK. These documents are designed for quick lookup and automated code generation by AI assistants like Claude Code.
 
+**🎯 Quick Navigation**: See [CLAUDE.md](CLAUDE.md) for rapid access to key resources.
+
 ## Contents
 
 ### 1. **[API Reference](api/)**
@@ -41,6 +43,7 @@ Validation tools and guidelines:
 
 ### 5. **[Node Catalog](nodes/)**
 Comprehensive catalog of all 66+ nodes organized by category:
+- **[Complete Node Reference](nodes/comprehensive-node-catalog.md)** - All nodes with use cases and decision guide
 - [Base Classes](nodes/01-base-nodes.md) - Abstract base classes and core interfaces
 - [AI Nodes](nodes/02-ai-nodes.md) - LLM agents, A2A communication, self-organizing
 - [Data Nodes](nodes/03-data-nodes.md) - File I/O, databases, streaming, SharePoint
@@ -157,4 +160,4 @@ These references are extracted from the main codebase and should be updated when
 - New patterns emerge
 - Common use cases are identified
 
-Last Updated: Version 0.1.4 (2025-06-04)
+Last Updated: Version 0.1.6 (2025-01-09)
