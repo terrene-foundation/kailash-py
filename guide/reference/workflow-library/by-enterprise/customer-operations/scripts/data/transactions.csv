@@ -1,0 +1,9 @@
+customer_id,amount,date,product,category,status
+1001,299.99,2023-06-01,Software License,software,completed
+1001,150.50,2023-07-15,Consulting,services,completed
+1002,1250.00,2023-06-20,Enterprise Package,software,completed
+1002,89.99,2023-08-10,Add-on Module,software,completed
+1003,45.00,2023-03-15,Basic Plan,subscription,refunded
+1004,750.00,2023-04-10,Professional Services,services,completed
+1004,320.00,2023-08-25,Training,services,completed
+1001,199.99,2023-09-01,Upgrade,software,completed
