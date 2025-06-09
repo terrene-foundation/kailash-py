@@ -9,6 +9,20 @@
 6. **MISTAKES GUIDE**: `guide/mistakes/README.md` - Quick reference for documented mistakes and solutions
 7. **CHEATSHEET**: `guide/reference/cheatsheet/README.md` - Quick reference organized by topic with focused examples
 
+## 🌿 Git Branch Naming Convention (REQUIRED)
+When creating new branches, ALWAYS use one of these prefixes:
+- **`feat/`** - New features or enhancements (e.g., `feat/add-llm-provider`)
+- **`fix/`** - Bug fixes or corrections (e.g., `fix/cycle-test-failures`)
+- **`docs/`** - Documentation only changes (e.g., `docs/update-api-reference`)
+- **`refactor/`** - Code refactoring without functionality changes (e.g., `refactor/simplify-node-base`)
+- **`test/`** - Test additions or fixes (e.g., `test/add-cycle-coverage`)
+- **`chore/`** - Maintenance tasks, dependency updates (e.g., `chore/update-dependencies`)
+
+NEVER create branches with:
+- ❌ `session-*` prefixes (use `feat/session-*` instead)
+- ❌ Generic names without prefixes
+- ❌ Personal or arbitrary naming schemes
+
 ## 🚀 Development Workflow Phases
 
 ### Phase 1: Discovery & Planning
@@ -112,6 +126,7 @@ EDIT MODE:
 21. **PythonCodeNode DataFrame Output**: Convert DataFrames with `.to_dict('records')` for JSON serialization ✓
 22. **NumPy Type Compatibility**: Check availability with `hasattr(np, 'float128')` for platform-specific types ✓
 23. **NumPy Array Serialization**: Convert arrays to lists with `.tolist()` before returning from PythonCodeNode ✓
+24. **Git Branch Naming**: ALWAYS use prefixes: `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, or `chore/` ✓
 
 ## Common Pitfalls (Avoid These!)
 1. **Config vs Runtime** (#1 issue!): Config=HOW (code, paths), Runtime=WHAT (data)
@@ -127,6 +142,7 @@ EDIT MODE:
 11. **DataFrame Index Lost**: Serialization with `.to_dict('records')` loses index - use `.reset_index()` to preserve
 12. **NumPy 2.0 Breaking Changes**: `np.string_` → `np.bytes_`, `np.unicode_` → `np.str_`, `np.matrix` deprecated
 13. **Platform-Specific NumPy Types**: float128/complex256 not available everywhere - always check with `hasattr()`
+14. **Branch Naming Violations**: Creating branches like `session-059-todos-updates` instead of `feat/session-059-todos`
 
 📋 **Quick reference guide**:
 - **Snippets?** → `guide/reference/cheatsheet/`
