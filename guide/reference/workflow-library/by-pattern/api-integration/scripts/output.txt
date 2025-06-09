@@ -1,0 +1,313 @@
+INFO:kailash.runtime.local:Standard DAG workflow detected, using local execution
+INFO:kailash.runtime.local:Execution order: ['mock_api', 'debugger', 'data_extractor', 'stock_filter', 'metrics_calculator', 'metrics_writer']
+INFO:kailash.runtime.local:Executing node: mock_api
+INFO:kailash.runtime.local:Node mock_api completed successfully in 0.000s
+INFO:kailash.runtime.local:Executing node: debugger
+INFO:kailash.runtime.local:Node debugger completed successfully in 0.000s
+INFO:kailash.runtime.local:Executing node: data_extractor
+ERROR:kailash.nodes.data_extractor:Error executing transformation: string indices must be integers, not 'str'
+ERROR:kailash.nodes.data_extractor:Node data_extractor execution failed: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/base.py", line 733, in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 445, in run
+    raise RuntimeError(
+RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+ERROR:kailash.runtime.local:Node data_extractor failed: Node 'data_extractor' execution failed: RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+Running simple API workflow...
+DEBUG: Type of actual_data: <class 'list'>
+DEBUG: Not a dict, is <class 'list'>
+DEBUG data type: <class 'list'>
+DEBUG data content: ['status', 'data', 'timestamp']
+Workflow failed: Workflow execution failed: WorkflowExecutionError: Node 'data_extractor' failed: Node 'data_extractor' execution failed: RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/base.py", line 733, in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 445, in run
+    raise RuntimeError(
+RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/runtime/local.py", line 305, in _execute_workflow
+    outputs = node_instance.execute(**inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/base.py", line 753, in execute
+    raise NodeExecutionError(
+kailash.sdk_exceptions.NodeExecutionError: Node 'data_extractor' execution failed: RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/runtime/local.py", line 158, in execute
+    results = self._execute_workflow(
+              ^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/src/kailash/runtime/local.py", line 358, in _execute_workflow
+    raise WorkflowExecutionError(error_msg) from e
+kailash.sdk_exceptions.WorkflowExecutionError: Node 'data_extractor' failed: Node 'data_extractor' execution failed: RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/guide/reference/workflow-library/by-pattern/api-integration/scripts/rest_api_workflow.py", line 321, in <module>
+    main()
+  File "./repos/projects/kailash_python_sdk/guide/reference/workflow-library/by-pattern/api-integration/scripts/rest_api_workflow.py", line 317, in main
+    run_simple_api()
+  File "./repos/projects/kailash_python_sdk/guide/reference/workflow-library/by-pattern/api-integration/scripts/rest_api_workflow.py", line 295, in run_simple_api
+    result, run_id = runtime.execute(workflow, parameters=parameters)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./repos/projects/kailash_python_sdk/src/kailash/runtime/local.py", line 193, in execute
+    raise RuntimeExecutionError(
+kailash.sdk_exceptions.RuntimeExecutionError: Workflow execution failed: WorkflowExecutionError: Node 'data_extractor' failed: Node 'data_extractor' execution failed: RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'
+

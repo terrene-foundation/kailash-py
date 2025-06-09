@@ -1,0 +1,7 @@
+customer_id,ticket_id,status,priority,created_date,resolved_date,satisfaction_score,category
+1001,T-001,resolved,medium,2023-06-05,2023-06-07,4,technical
+1002,T-002,resolved,low,2023-07-01,2023-07-02,5,billing
+1003,T-003,open,high,2023-08-15,,2,technical
+1004,T-004,resolved,medium,2023-04-20,2023-04-25,4,technical
+1001,T-005,resolved,low,2023-08-30,2023-09-01,5,general
+1002,T-006,resolved,urgent,2023-08-20,2023-08-22,3,technical

@@ -18,14 +18,13 @@ PLAN MODE:
 2. Review: guide/todos/active/ (existing plans & implementation details)
 3. Research: guide/adr/, guide/features/, guide/reference/
 4. Review: guide/mistakes/README.md for known issues & patterns
-5. Output: Architecture plan with deliverables
+5. Create & start todos: Add new tasks from plan → mark "in_progress" in guide/todos/000-master.md
+6. Create implementation details: Architecture and implementation plan with deliverables in guide/todos/active/
 ```
 
 ### Phase 2: Implementation & Learning
 ```
 EDIT MODE:
-5. Update TODOs → In Progress (in guide/todos/000-master.md)
-6. Check implementation details (in guide/todos/active/)
 7. Write examples → Debug → Learn
 8. If examples fail, do not resort to simplifying it with mock data and new scripts.
 9. Reference cheatsheet: guide/reference/cheatsheet/README.md for quick examples
