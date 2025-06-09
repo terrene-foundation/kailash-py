@@ -43,6 +43,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [026-performance-optimization](026-performance-optimization.md) | Performance Optimization | Memory management, cycle optimization, debugging |
 | [028-developer-tools-advanced](028-developer-tools-advanced.md) | Advanced Developer Tools | CycleDebugger, CycleProfiler, CycleAnalyzer (Phase 5.2) |
 | [029-pythoncode-data-science-patterns](029-pythoncode-data-science-patterns.md) | PythonCodeNode Data Science | DataFrame processing, NumPy arrays, ML workflows |
+| [030-choosing-the-right-node](030-choosing-the-right-node.md) | Choosing the Right Node | Decision guide for node selection vs PythonCodeNode |
 
 ## 🔗 Related Resources
 

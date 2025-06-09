@@ -23,11 +23,11 @@ Instruct Claude one step at a time, it will help if you give the directory and f
     4. You need to ask it specifically on the passing of examples or tests.
     5. Prompt it accordingly to ensure that examples, tests are created (without mock inputs and responses) and passed.
 6. (Switch to plan mode) Instruct:
-    1. Analyze whether we need to update mistakes and reference from what you learnt in this session so that Claude Code will not make the same coding errors in the future.are
-    2. Are there any recurring mistakes that should be included into Claude.md?
-    3. Are there any design patterns or nodes that need to be updated in reference folder?
+    1. Analyze whether we need to update mistakes and reference from what you learnt in this session so that Claude Code will not make the same coding errors in the future.
+    2. Are there any design patterns or nodes that need to be updated in reference folder?
 7. Inspect the plan then switch to edit mode and execute.
-8. Ask Claude to update the master todo list and files in todos
+8. Ask Claude to update the master todo list and files in todos.
+9. Ask Claude to align the CLAUDE.md files in the respective directories with the READMEs if required. Ensure that CLAUDE.md is always short and used for navigation and critical information purposes.
 
 ## Pre-release
 1. Perform lint, black, isort, and ruff (automated in pre-commit hooks)

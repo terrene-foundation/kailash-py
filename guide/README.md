@@ -15,7 +15,7 @@ This directory contains internal documentation for developers and contributors t
 ### Additional Directories:
 - **`development/`** - Development processes and pre-commit hooks
 - **`infrastructure/`** - CI/CD and runner configuration
-- **`mistakes/`** - Documented mistakes and lessons learned (61+ issues)
+- **`mistakes/`** - Documented mistakes and lessons learned (73+ issues)
 - **`prd/`** - Product Requirements Documents
 - **`todos/`** - Active task tracking system
 - **`SECURITY.md`** - Comprehensive security documentation

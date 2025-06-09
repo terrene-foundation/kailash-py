@@ -109,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive audit logging
 
 - **Documentation Improvements**
-  - All docstrings updated to Claude.md 8-section standard
+  - All docstrings updated to CLAUDE.md 8-section standard
   - Added coordinated AI workflows to Sphinx front page
   - Fixed all 71 doc8 documentation style issues
   - New access control API documentation
