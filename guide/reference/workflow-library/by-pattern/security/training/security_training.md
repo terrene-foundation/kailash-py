@@ -162,9 +162,9 @@ current_time = datetime.now()
 for component in components:
     # Simulate scanning with context-aware vulnerability detection
     vuln_probability = 0.3 if component["criticality"] == "critical" else 0.2 if component["criticality"] == "high" else 0.1
-    
+
     component_vulns = []
-    
+
     for vuln_type in vulnerability_types:
         if random.random() < vuln_probability:
             # Adjust severity based on component context
@@ -173,10 +173,10 @@ for component in components:
                 adjusted_score = min(10.0, base_score + 1.0)  # External exposure increases risk
             else:
                 adjusted_score = base_score
-                
+
             if component["criticality"] == "critical":
                 adjusted_score = min(10.0, adjusted_score + 0.5)  # Critical components increase impact
-            
+
             vulnerability = {
                 "vulnerability_id": vuln_type["id"],
                 "vulnerability_name": vuln_type["name"],
@@ -194,7 +194,7 @@ for component in components:
                 "exploitability": "high" if component["exposure"] == "external" and adjusted_score >= 7.0 else "medium" if adjusted_score >= 5.0 else "low"
             }
             component_vulns.append(vulnerability)
-    
+
     scan_result = {
         "component": component,
         "vulnerabilities": component_vulns,
@@ -309,21 +309,21 @@ compliance_results = {}
 for framework_id, framework in compliance_frameworks.items():
     # Check vulnerabilities against framework requirements
     framework_vulns = [vuln for vuln in all_vulns if vuln.get("category") in framework["categories"]]
-    
+
     # Count vulnerabilities by severity
     critical_count = sum(1 for vuln in framework_vulns if vuln.get("severity") == "critical")
     high_count = sum(1 for vuln in framework_vulns if vuln.get("severity") == "high")
     medium_count = sum(1 for vuln in framework_vulns if vuln.get("severity") == "medium")
-    
+
     # Determine compliance status
-    is_compliant = (critical_count <= framework["critical_threshold"] and 
+    is_compliant = (critical_count <= framework["critical_threshold"] and
                    high_count <= framework["high_threshold"])
-    
+
     # Calculate compliance score
     total_possible_issues = len(framework["categories"]) * 2  # 2 potential issues per category
     actual_issues = critical_count * 2 + high_count * 1.5 + medium_count * 0.5
     compliance_score = max(0, round((total_possible_issues - actual_issues) / total_possible_issues * 100, 1))
-    
+
     # Identify failing requirements
     failing_requirements = []
     for vuln in framework_vulns:
@@ -337,7 +337,7 @@ for framework_id, framework in compliance_frameworks.items():
                     "severity": vuln.get("severity"),
                     "component": vuln.get("component_name")
                 })
-    
+
     compliance_result = {
         "framework_name": framework["name"],
         "is_compliant": is_compliant,
@@ -350,7 +350,7 @@ for framework_id, framework in compliance_frameworks.items():
         "next_assessment_date": (datetime.now() + timedelta(days=90)).isoformat(),
         "assessment_timestamp": datetime.now().isoformat()
     }
-    
+
     compliance_results[framework_id] = compliance_result
 
 # Overall compliance summary
@@ -430,7 +430,7 @@ for vuln in all_vulns:
     exposure_score = exposure_scores.get(vuln.get("component_exposure", "internal"), 5)
     criticality_score = criticality_scores.get(vuln.get("component_criticality", "medium"), 5)
     exploitability_score = exploitability_scores.get(vuln.get("exploitability", "medium"), 6)
-    
+
     # Calculate weighted risk score
     risk_score = (
         cvss_normalized * risk_factors["cvss_weight"] +
@@ -438,7 +438,7 @@ for vuln in all_vulns:
         criticality_score * risk_factors["criticality_weight"] +
         exploitability_score * risk_factors["exploitability_weight"]
     )
-    
+
     # Determine risk level and priority
     if risk_score >= 8.5:
         risk_level = "critical"
@@ -456,12 +456,12 @@ for vuln in all_vulns:
         risk_level = "low"
         priority = 4
         remediation_timeline = "3 months"
-    
+
     # Estimate remediation effort and cost
     remediation_effort = vuln.get("remediation_effort", "medium")
     effort_hours = {"low": 8, "medium": 24, "high": 80}.get(remediation_effort, 24)
     estimated_cost = effort_hours * 150  # $150/hour developer rate
-    
+
     # Business impact assessment
     if vuln.get("component_criticality") == "critical" and vuln.get("severity") in ["critical", "high"]:
         business_impact = "high"
@@ -472,7 +472,7 @@ for vuln in all_vulns:
     else:
         business_impact = "low"
         potential_loss = "10000-100000"  # Operational disruption
-    
+
     risk_assessment = {
         "vulnerability_id": vuln.get("vulnerability_id"),
         "vulnerability_name": vuln.get("vulnerability_name"),
@@ -498,7 +498,7 @@ for vuln in all_vulns:
             "Update security documentation"
         ]
     }
-    
+
     risk_assessments.append(risk_assessment)
 
 # Sort by risk score descending (highest risk first)
@@ -557,7 +557,7 @@ def create_security_audit_workflow() -> Workflow:
         name="security_audit_workflow",
         description="Perform comprehensive security assessment and compliance checking"
     )
-    
+
     # === SECURITY SCANNING ===
     vulnerability_scanner = DataTransformer(
         id="vulnerability_scanner",
@@ -566,7 +566,7 @@ def create_security_audit_workflow() -> Workflow:
         ]
     )
     workflow.add_node("vulnerability_scanner", vulnerability_scanner)
-    
+
     # === COMPLIANCE CHECKING ===
     compliance_checker = DataTransformer(
         id="compliance_checker",
@@ -576,7 +576,7 @@ def create_security_audit_workflow() -> Workflow:
     )
     workflow.add_node("compliance_checker", compliance_checker)
     workflow.connect("vulnerability_scanner", "compliance_checker", mapping={"result": "data"})
-    
+
     # === RISK ASSESSMENT ===
     risk_assessor = DataTransformer(
         id="risk_assessor",
@@ -586,7 +586,7 @@ def create_security_audit_workflow() -> Workflow:
     )
     workflow.add_node("risk_assessor", risk_assessor)
     workflow.connect("vulnerability_scanner", "risk_assessor", mapping={"result": "data"})
-    
+
     # === SECURITY REPORTING ===
     # Merge compliance and risk data
     security_merger = MergeNode(
@@ -596,7 +596,7 @@ def create_security_audit_workflow() -> Workflow:
     workflow.add_node("security_merger", security_merger)
     workflow.connect("compliance_checker", "security_merger", mapping={"result": "data1"})
     workflow.connect("risk_assessor", "security_merger", mapping={"result": "data2"})
-    
+
     # Generate comprehensive security report
     security_reporter = DataTransformer(
         id="security_reporter",
@@ -606,7 +606,7 @@ def create_security_audit_workflow() -> Workflow:
     )
     workflow.add_node("security_reporter", security_reporter)
     workflow.connect("security_merger", "security_reporter", mapping={"merged_data": "data"})
-    
+
     # === OUTPUTS ===
     # Save comprehensive security audit report
     audit_writer = JSONWriterNode(
@@ -615,7 +615,7 @@ def create_security_audit_workflow() -> Workflow:
     )
     workflow.add_node("audit_writer", audit_writer)
     workflow.connect("security_reporter", "audit_writer", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -675,16 +675,16 @@ criticality_adjustments = {
 # Calculate dynamic thresholds based on context
 for framework_id, framework_result in compliance_results.items():
     base_thresholds = framework_thresholds.get(framework_id, {"critical": 0, "high": 2})
-    
+
     # Adjust thresholds based on component mix
     avg_criticality = calculate_average_component_criticality(components)
     adjustment_factor = criticality_adjustments.get(avg_criticality, 1.0)
-    
+
     adjusted_thresholds = {
         "critical": base_thresholds["critical"],  # Never adjust critical threshold
         "high": int(base_thresholds["high"] * adjustment_factor)
     }
-    
+
     # Apply adjusted thresholds to compliance assessment
     framework_result["dynamic_thresholds"] = adjusted_thresholds
     framework_result["threshold_justification"] = f"Adjusted for {avg_criticality} criticality components"

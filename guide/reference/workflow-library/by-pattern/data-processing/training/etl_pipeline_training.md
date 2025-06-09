@@ -109,7 +109,7 @@ workflow.connect(reader.id, filter_node.id, mapping={"data": "data"})
 parameters = {
     "filter_active": {
         "field": "status",
-        "operator": "==", 
+        "operator": "==",
         "value": "active"
     }
 }
@@ -295,7 +295,7 @@ workflow = Workflow(name="customer_etl")
 customers = CSVReaderNode(name="read_customers", file_path="customers.csv")
 transactions = CSVReaderNode(name="read_transactions", file_path="transactions.csv")
 filter_active = FilterNode(name="filter_active_customers")
-enrich = DataTransformer(name="enrich_customers") 
+enrich = DataTransformer(name="enrich_customers")
 merge = MergeNode(name="merge_data")
 writer = CSVWriterNode(name="write_results", file_path="output.csv")
 

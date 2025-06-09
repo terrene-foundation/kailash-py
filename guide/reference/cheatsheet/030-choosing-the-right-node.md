@@ -9,7 +9,7 @@ Quick decision guide for selecting the appropriate node type instead of defaulti
 # Reading CSV? → CSVReaderNode
 node = CSVReaderNode(file_path="data.csv")
 
-# Writing JSON? → JSONWriterNode  
+# Writing JSON? → JSONWriterNode
 node = JSONWriterNode(file_path="output.json")
 
 # Text files? → TextReaderNode/TextWriterNode

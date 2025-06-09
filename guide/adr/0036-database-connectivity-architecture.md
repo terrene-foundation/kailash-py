@@ -131,7 +131,7 @@ def run(self, **kwargs) -> Dict[str, Any]:
     parameters = kwargs.get("parameters", [])  # Guaranteed list
     result_format = kwargs.get("result_format", "dict")  # Guaranteed str
     timeout = kwargs.get("timeout", 30)  # Guaranteed int
-    
+
     # Create engine and execute
     start_time = time.time()
     engine = create_engine(
@@ -141,13 +141,13 @@ def run(self, **kwargs) -> Dict[str, Any]:
         max_overflow=10,
         pool_timeout=timeout
     )
-    
+
     with engine.connect() as conn:
         with conn.begin():  # Transaction management
             result = conn.execute(text(query), parameters)
             formatted_data = self.format_results(result, result_format)
             execution_time = time.time() - start_time
-    
+
     return {
         "data": formatted_data,
         "row_count": len(formatted_data) if isinstance(formatted_data, list) else result.rowcount,

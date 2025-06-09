@@ -26,7 +26,7 @@ result = {
     "summary": df.describe().to_dict(),
     "null_counts": df.isnull().sum().to_dict(),
     "data_types": {col: str(dtype) for col, dtype in df.dtypes.items()},
-    "top_values": {col: df[col].value_counts().head(3).to_dict() 
+    "top_values": {col: df[col].value_counts().head(3).to_dict()
                    for col in df.select_dtypes(include=['object']).columns}
 }
 '''
@@ -64,7 +64,7 @@ numeric_columns = df.select_dtypes(include=[np.number]).columns
 for col in numeric_columns:
     df[col] = df[col].fillna(df[col].median())
 
-text_columns = df.select_dtypes(include=['object']).columns  
+text_columns = df.select_dtypes(include=['object']).columns
 for col in text_columns:
     df[col] = df[col].fillna('Unknown')
 
@@ -139,7 +139,7 @@ from kailash.nodes.logic import MergeNode
 
 workflow = Workflow("multi_api")
 workflow.add_node("api1", RestClientNode())
-workflow.add_node("api2", RestClientNode()) 
+workflow.add_node("api2", RestClientNode())
 workflow.add_node("merger", MergeNode())
 workflow.add_node("aggregator", PythonCodeNode(
     name="aggregator",
@@ -195,7 +195,7 @@ runtime.execute(workflow, parameters={
     "reader": {"file_path": "documents.csv"},
     "ai_analyzer": {
         "provider": "ollama",
-        "model": "llama3.2", 
+        "model": "llama3.2",
         "messages": [{"role": "user", "content": "Analyze these documents and provide key insights"}]
     }
 })
@@ -236,7 +236,7 @@ runtime.execute(workflow, parameters={
         "messages": [{"role": "user", "content": "I need an AI strategy for my healthcare startup"}],
         "mcp_servers": [{
             "name": "ai-registry",
-            "transport": "stdio", 
+            "transport": "stdio",
             "command": "python",
             "args": ["scripts/start-ai-registry-server.py"]
         }],
@@ -272,7 +272,7 @@ result = {"stream": stream_data}
 '''
 ))
 workflow.add_node("anomaly_detector", PythonCodeNode(
-    name="anomaly_detector", 
+    name="anomaly_detector",
     code='''
 import numpy as np
 
@@ -409,19 +409,19 @@ df = pd.DataFrame(data)
 if all(col in df.columns for col in ['purchase_amount', 'last_purchase_days']):
     # Monetary value segments
     df['monetary_segment'] = pd.qcut(df['purchase_amount'], q=3, labels=['Low', 'Medium', 'High'])
-    
-    # Recency segments  
+
+    # Recency segments
     df['recency_segment'] = pd.qcut(df['last_purchase_days'], q=3, labels=['Recent', 'Moderate', 'Distant'])
-    
+
     # Combine segments
     df['customer_segment'] = df['monetary_segment'].astype(str) + '_' + df['recency_segment'].astype(str)
-    
+
     # Calculate segment metrics
     segment_summary = df.groupby('customer_segment').agg({
         'purchase_amount': ['count', 'mean', 'sum'],
         'last_purchase_days': 'mean'
     }).round(2).to_dict()
-    
+
     segments = df['customer_segment'].value_counts().to_dict()
 else:
     segments = {"error": "Required columns not found"}
@@ -536,11 +536,11 @@ import os
 def run_workflow(workflow, parameters):
     """Execute any workflow with error handling."""
     runtime = LocalRuntime()
-    
+
     try:
         print(f"🚀 Executing workflow: {workflow.workflow_id}")
         results, execution_id = runtime.execute(workflow, parameters)
-        
+
         if results:
             print("✅ Workflow completed successfully!")
             print(f"📊 Results: {len(results)} nodes executed")
@@ -548,7 +548,7 @@ def run_workflow(workflow, parameters):
         else:
             print("❌ Workflow failed - no results returned")
             return None
-            
+
     except Exception as e:
         print(f"❌ Workflow error: {e}")
         return None

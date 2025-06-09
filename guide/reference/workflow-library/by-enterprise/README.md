@@ -8,7 +8,7 @@ This library covers the most critical enterprise workflows across all major busi
 
 ### 1. **Data Processing & Analytics**
 - Customer 360° data integration
-- Financial reporting automation  
+- Financial reporting automation
 - Supply chain analytics
 - Real-time business intelligence dashboards
 - Data quality monitoring
@@ -113,7 +113,7 @@ enterprise-workflows/
 These workflows typically deliver:
 - **80% reduction** in manual processing time
 - **95% improvement** in data accuracy
-- **60% faster** decision-making cycles  
+- **60% faster** decision-making cycles
 - **90% reduction** in human errors
 - **50% cost savings** on operational tasks
 

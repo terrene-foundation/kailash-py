@@ -166,10 +166,10 @@ class SQLDatabaseNode(Node):
     Example:
         >>> # Initialize with project configuration
         >>> SQLDatabaseNode.initialize('kailash_project.yaml')
-        >>> 
+        >>>
         >>> # Create node with database connection configuration
         >>> sql_node = SQLDatabaseNode(connection='customer_db')
-        >>> 
+        >>>
         >>> # Execute multiple queries with the same node
         >>> result1 = sql_node.run(
         ...     query='SELECT * FROM customers WHERE active = ?',

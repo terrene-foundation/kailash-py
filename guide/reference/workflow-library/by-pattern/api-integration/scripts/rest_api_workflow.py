@@ -17,10 +17,11 @@ Key Features:
 """
 
 import os
+
 from kailash import Workflow
 from kailash.nodes.api import RateLimitedAPINode
-from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.nodes.data import CSVWriterNode
+from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.runtime import LocalRuntime
 
 
@@ -29,40 +30,36 @@ def create_api_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="api_integration_001",
         name="rest_api_workflow",
-        description="REST API integration with rate limiting"
+        description="REST API integration with rate limiting",
     )
-    
+
     # REST API client with rate limiting
     api_client = RateLimitedAPINode(
         id="api_client",
         base_url="https://api.example.com",
         timeout=30,
         requests_per_minute=60,
-        max_retries=3
+        max_retries=3,
     )
     workflow.add_node("api_client", api_client)
-    
+
     # Response transformer
     transformer = DataTransformer(
-        id="response_transformer",
-        transformations=[]  # Provided at runtime
+        id="response_transformer", transformations=[]  # Provided at runtime
     )
     workflow.add_node("response_transformer", transformer)
     workflow.connect("api_client", "response_transformer", mapping={"response": "data"})
-    
+
     # Error filter
     error_filter = FilterNode(id="error_filter")
     workflow.add_node("error_filter", error_filter)
     workflow.connect("response_transformer", "error_filter", mapping={"result": "data"})
-    
+
     # Save results
-    writer = CSVWriterNode(
-        id="result_writer",
-        file_path="data/outputs/api_results.csv"
-    )
+    writer = CSVWriterNode(id="result_writer", file_path="data/outputs/api_results.csv")
     workflow.add_node("result_writer", writer)
     workflow.connect("error_filter", "result_writer", mapping={"filtered_data": "data"})
-    
+
     return workflow
 
 
@@ -71,9 +68,9 @@ def create_simple_api_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="simple_api_001",
         name="simple_api_workflow",
-        description="Simple API workflow without external calls"
+        description="Simple API workflow without external calls",
     )
-    
+
     # Mock API response
     mock_api = DataTransformer(
         id="mock_api",
@@ -109,10 +106,10 @@ api_response = {
 }
 result = api_response
 """
-        ]
+        ],
     )
     workflow.add_node("mock_api", mock_api)
-    
+
     # Debug transformer to see what mock_api returns
     debugger = DataTransformer(
         id="debugger",
@@ -129,16 +126,16 @@ if isinstance(actual_data, dict):
         print(f"DEBUG: First product: {actual_data['data'][0] if actual_data['data'] else 'No products'}")
 else:
     print(f"DEBUG: Not a dict, is {type(actual_data)}")
-    
+
 # Pass through the actual API response structure
 result = actual_data
 """
-        ]
+        ],
     )
     workflow.add_node("debugger", debugger)
     # DataTransformer outputs "result", so map that to "data" for next node
     workflow.connect("mock_api", "debugger", mapping={"result": "data"})
-    
+
     # Extract and transform data
     extractor = DataTransformer(
         id="data_extractor",
@@ -166,16 +163,16 @@ for product in products:
 
 result = enhanced
 """
-        ]
+        ],
     )
     workflow.add_node("data_extractor", extractor)
     workflow.connect("debugger", "data_extractor", mapping={"result": "data"})
-    
+
     # Filter in-stock items
     stock_filter = FilterNode(id="stock_filter")
     workflow.add_node("stock_filter", stock_filter)
     workflow.connect("data_extractor", "stock_filter", mapping={"result": "data"})
-    
+
     # Calculate metrics
     metrics = DataTransformer(
         id="metrics_calculator",
@@ -190,7 +187,7 @@ for product in data:
     value = product["price"] * product["stock"]
     total_value += value
     total_items += product["stock"]
-    
+
     cat = product["category"]
     if cat not in categories:
         categories[cat] = {"count": 0, "value": 0}
@@ -205,19 +202,20 @@ result = [{
     "category_breakdown": str(categories)
 }]
 """
-        ]
+        ],
     )
     workflow.add_node("metrics_calculator", metrics)
-    workflow.connect("stock_filter", "metrics_calculator", mapping={"filtered_data": "data"})
-    
+    workflow.connect(
+        "stock_filter", "metrics_calculator", mapping={"filtered_data": "data"}
+    )
+
     # Write metrics
     writer = CSVWriterNode(
-        id="metrics_writer",
-        file_path="data/outputs/inventory_metrics.csv"
+        id="metrics_writer", file_path="data/outputs/inventory_metrics.csv"
     )
     workflow.add_node("metrics_writer", writer)
     workflow.connect("metrics_calculator", "metrics_writer", mapping={"result": "data"})
-    
+
     return workflow
 
 
@@ -225,19 +223,16 @@ def run_api_workflow():
     """Run the API workflow with rate limiting."""
     workflow = create_api_workflow()
     runtime = LocalRuntime()
-    
+
     parameters = {
         "api_client": {
             "endpoint": "/v1/products",
             "method": "GET",
             "headers": {
                 "Authorization": "Bearer YOUR_API_KEY",
-                "Accept": "application/json"
+                "Accept": "application/json",
             },
-            "params": {
-                "limit": 100,
-                "offset": 0
-            }
+            "params": {"limit": 100, "offset": 0},
         },
         "response_transformer": {
             "transformations": [
@@ -252,13 +247,9 @@ else:
 """
             ]
         },
-        "error_filter": {
-            "field": "status",
-            "operator": "!=",
-            "value": "error"
-        }
+        "error_filter": {"field": "status", "operator": "!=", "value": "error"},
     }
-    
+
     try:
         print("Running API workflow...")
         result, run_id = runtime.execute(workflow, parameters=parameters)
@@ -273,21 +264,15 @@ def run_simple_api():
     """Run simplified API workflow."""
     workflow = create_simple_api_workflow()
     runtime = LocalRuntime()
-    
+
     parameters = {
-        "mock_api": {
-            "data": []  # Empty data to ensure 'data' variable exists
-        },
+        "mock_api": {"data": []},  # Empty data to ensure 'data' variable exists
         "debugger": {},
         "data_extractor": {},
-        "stock_filter": {
-            "field": "in_stock",
-            "operator": "==",
-            "value": True
-        },
-        "metrics_calculator": {}
+        "stock_filter": {"field": "in_stock", "operator": "==", "value": True},
+        "metrics_calculator": {},
     }
-    
+
     try:
         print("Running simple API workflow...")
         result, run_id = runtime.execute(workflow, parameters=parameters)
@@ -302,10 +287,10 @@ def run_simple_api():
 def main():
     """Main entry point."""
     import sys
-    
+
     # Create output directory
     os.makedirs("data/outputs", exist_ok=True)
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == "real":
         # Run with real API (requires API key)
         print("Note: Real API workflow requires valid API credentials")

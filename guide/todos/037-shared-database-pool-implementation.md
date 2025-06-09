@@ -12,7 +12,7 @@ Implement the shared database pool architecture to replace the current engine-pe
 ## Implementation Plan
 
 ### Phase 1: Core Implementation
-**Priority**: HIGH  
+**Priority**: HIGH
 **Estimated Effort**: 3-4 days
 
 #### Tasks:
@@ -85,7 +85,7 @@ databases:
     pool_timeout: 60
     pool_recycle: 3600
     pool_pre_ping: true
-    
+
   default:
     url: "sqlite:///default.db"
     pool_size: 10
@@ -149,7 +149,7 @@ databases:
 
 ---
 
-**Created**: 2025-01-06  
-**Assigned**: TBD  
-**Dependencies**: ADR-0037 approval  
+**Created**: 2025-01-06
+**Assigned**: TBD
+**Dependencies**: ADR-0037 approval
 **Target Completion**: Q1 2025

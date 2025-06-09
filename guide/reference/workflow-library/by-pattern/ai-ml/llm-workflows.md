@@ -94,7 +94,7 @@ workflow.add_node("researcher", researcher)
 
 # Analysis agent
 analyzer = LLMAgentNode(
-    id="analyzer", 
+    id="analyzer",
     model="gpt-4",
     system_prompt="You are an analytical expert. Apply frameworks to understand patterns."
 )
@@ -180,35 +180,35 @@ for doc in data.get("documents", []):
         "language": doc.get("language", "en"),
         "processing_timestamp": datetime.now().isoformat()
     }
-    
+
     # Clean and normalize text
     content = doc.get("content", "")
-    
+
     # Remove excessive whitespace
     content = re.sub(r'\s+', ' ', content)
-    
+
     # Remove special characters but preserve structure
     content = re.sub(r'[^\w\s\.\,\!\?\;\:\-\(\)\[\]\{\}\"\'\/\\n\\t]', '', content)
-    
+
     # Normalize line breaks
     content = re.sub(r'\n\s*\n', '\n\n', content)
-    
+
     # Extract sections and headings
     sections = []
     current_section = {"title": "", "content": "", "level": 0}
-    
+
     for line in content.split('\n'):
         line = line.strip()
         if not line:
             continue
-            
+
         # Detect headings (simple heuristic)
         if (line.isupper() and len(line) < 100) or \
            (line.startswith('#') or re.match(r'^\d+\.', line)):
             # Save previous section
             if current_section["content"]:
                 sections.append(dict(current_section))
-            
+
             # Start new section
             current_section = {
                 "title": line,
@@ -217,11 +217,11 @@ for doc in data.get("documents", []):
             }
         else:
             current_section["content"] += line + " "
-    
+
     # Add final section
     if current_section["content"]:
         sections.append(dict(current_section))
-    
+
     # Calculate document statistics
     stats = {
         "total_chars": len(content),
@@ -231,21 +231,21 @@ for doc in data.get("documents", []):
         "total_sections": len(sections),
         "avg_section_length": sum(len(s["content"]) for s in sections) / len(sections) if sections else 0
     }
-    
+
     # Quality assessment
     quality_score = 1.0
     quality_issues = []
-    
+
     if stats["total_words"] < 10:
         quality_score *= 0.3
         quality_issues.append("Very short document")
-    
+
     if stats["total_words"] > 50000:
         quality_issues.append("Very long document - consider splitting")
-    
+
     if len(re.findall(r'[^\x00-\x7F]', content)) > stats["total_chars"] * 0.1:
         quality_issues.append("High non-ASCII character ratio")
-    
+
     processed_doc = {
         "id": doc.get("id", ""),
         "metadata": metadata,
@@ -258,7 +258,7 @@ for doc in data.get("documents", []):
         },
         "processing_status": "completed"
     }
-    
+
     processed_docs.append(processed_doc)
 
 result = {
@@ -298,7 +298,7 @@ enterprise_rag.add_node("primary_embedder", primary_embedder)
 
 # Secondary embedder for comparison/diversity
 secondary_embedder = EmbeddingGeneratorNode(
-    id="secondary_embedder", 
+    id="secondary_embedder",
     model="text-embedding-ada-002",
     dimensions=1536,
     batch_size=100
@@ -336,7 +336,7 @@ else:
         "word_count": len(query_text.split()),
         "processing_timestamp": datetime.now().isoformat()
     }
-    
+
     # Intent detection (simple rule-based)
     intent_patterns = {
         "factual": [r"\bwhat\b", r"\bwho\b", r"\bwhen\b", r"\bwhere\b", r"\bdefine\b"],
@@ -346,21 +346,21 @@ else:
         "summary": [r"\bsummarize\b", r"\boverview\b", r"\bmain points\b"],
         "recommendation": [r"\brecommend\b", r"\badvice\b", r"\bsuggest\b", r"\bbest\b"]
     }
-    
+
     detected_intents = []
     intent_confidence = {}
-    
+
     for intent, patterns in intent_patterns.items():
         matches = sum(1 for pattern in patterns if re.search(pattern, query_text.lower()))
         if matches > 0:
             detected_intents.append(intent)
             intent_confidence[intent] = matches / len(patterns)
-    
+
     primary_intent = max(intent_confidence.items(), key=lambda x: x[1])[0] if intent_confidence else "general"
-    
+
     # Query expansion for better retrieval
     expanded_terms = []
-    
+
     # Add synonyms (simplified)
     synonym_map = {
         "fast": ["quick", "rapid", "speedy"],
@@ -370,12 +370,12 @@ else:
         "good": ["excellent", "great", "beneficial"],
         "bad": ["poor", "terrible", "harmful"]
     }
-    
+
     query_words = query_text.lower().split()
     for word in query_words:
         if word in synonym_map:
             expanded_terms.extend(synonym_map[word])
-    
+
     # Generate search parameters based on intent
     search_params = {
         "similarity_threshold": 0.7,
@@ -383,7 +383,7 @@ else:
         "rerank": True,
         "include_metadata": True
     }
-    
+
     # Adjust parameters based on intent
     if primary_intent == "factual":
         search_params["similarity_threshold"] = 0.8
@@ -394,7 +394,7 @@ else:
     elif primary_intent == "comparative":
         search_params["top_k"] = 8
         search_params["diversity_penalty"] = 0.2
-    
+
     result = {
         "query_analysis": query_analysis,
         "primary_intent": primary_intent,
@@ -425,11 +425,11 @@ primary_intent = query_info.get("primary_intent", "general")
 scored_chunks = []
 for chunk in chunks:
     base_score = chunk.get("similarity_score", 0.0)
-    
+
     # Content quality signals
     content = chunk.get("content", "")
     content_quality = 1.0
-    
+
     # Length penalty/bonus
     content_length = len(content)
     if content_length < 50:
@@ -438,19 +438,19 @@ for chunk in chunks:
         content_quality *= 0.9  # Too long
     else:
         content_quality *= 1.1  # Good length
-    
+
     # Structure signals
     has_headers = bool(re.search(r'^[A-Z][^.]*:|\n#+\s', content))
     has_lists = bool(re.search(r'\n\s*[-\*\d+\.]\s', content))
     has_formatting = has_headers or has_lists
-    
+
     if has_formatting:
         content_quality *= 1.1
-    
+
     # Metadata signals
     metadata = chunk.get("metadata", {})
     doc_quality = metadata.get("quality_score", 1.0)
-    
+
     # Recency bonus (if timestamp available)
     recency_score = 1.0
     if "last_modified" in metadata:
@@ -460,7 +460,7 @@ for chunk in chunks:
             recency_score = max(0.5, 1.0 - (days_old / 365.0))  # Decay over a year
         except:
             pass
-    
+
     # Intent-based scoring adjustments
     intent_bonus = 1.0
     if primary_intent == "factual" and re.search(r'\b(is|are|definition|means)\b', content.lower()):
@@ -469,10 +469,10 @@ for chunk in chunks:
         intent_bonus = 1.2
     elif primary_intent == "comparative" and re.search(r'\b(compare|versus|difference|better|worse)\b', content.lower()):
         intent_bonus = 1.2
-    
+
     # Calculate final score
     final_score = base_score * content_quality * doc_quality * recency_score * intent_bonus
-    
+
     scored_chunk = dict(chunk)
     scored_chunk.update({
         "final_score": final_score,
@@ -484,7 +484,7 @@ for chunk in chunks:
             "intent_bonus": intent_bonus
         }
     })
-    
+
     scored_chunks.append(scored_chunk)
 
 # Sort by final score and apply diversity
@@ -498,11 +498,11 @@ for chunk in scored_chunks:
     content = chunk.get("content", "")
     # Simple content hash for diversity
     content_hash = hash(content[:100])  # First 100 chars
-    
+
     if content_hash not in seen_content_hashes:
         diverse_chunks.append(chunk)
         seen_content_hashes.add(content_hash)
-        
+
         if len(diverse_chunks) >= query_info.get("search_params", {}).get("top_k", 5):
             break
 

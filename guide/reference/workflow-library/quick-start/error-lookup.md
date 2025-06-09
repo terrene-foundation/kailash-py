@@ -13,7 +13,7 @@
 # Config: How the node works (static)
 workflow.add_node("node", PythonCodeNode(name="node", code="..."))
 
-# Runtime: What data to process (dynamic)  
+# Runtime: What data to process (dynamic)
 runtime.execute(workflow, parameters={"node": {"data": [1,2,3]}})
 ```
 
@@ -28,14 +28,14 @@ PythonCodeNode(name="my_node", code="result = data * 2")
 ### Cycle Parameter Mapping Failures
 ```
 ❌ ERROR: "assert 1 >= 3" (cycle state not persisting)
-❌ ERROR: "assert 0.0 >= 0.7" (quality score not improving)  
+❌ ERROR: "assert 0.0 >= 0.7" (quality score not improving)
 ❌ ERROR: "assert 10 == 45" (accumulation failing)
 
 ✅ SOLUTION: Use specific field mapping in cycles
 # ❌ NEVER: Generic mapping
 workflow.connect("a", "b", cycle=True, mapping={"output": "output"})
 
-# ✅ ALWAYS: Specific field mapping  
+# ✅ ALWAYS: Specific field mapping
 workflow.connect("a", "b", cycle=True, mapping={"result.count": "count"})
 workflow.connect("a", "b", cycle=True, mapping={"final.value": "input_value"})
 ```
@@ -86,7 +86,7 @@ arr = np.array([1, 2, 3])
 
 result = {
     "dataframe": df.to_dict('records'),  # ✅ JSON serializable
-    "array": arr.tolist(),               # ✅ JSON serializable  
+    "array": arr.tolist(),               # ✅ JSON serializable
     "summary": df.describe().to_dict()   # ✅ Convert all pandas objects
 }
 ```
@@ -146,7 +146,7 @@ runtime.execute(workflow, parameters={
 
 ✅ SOLUTION: Use MergeNode for multiple inputs
 workflow.add_node("merger", MergeNode())
-workflow.connect("source1", "merger", mapping={"data": "input1"})  
+workflow.connect("source1", "merger", mapping={"data": "input1"})
 workflow.connect("source2", "merger", mapping={"data": "input2"})
 workflow.connect("merger", "processor", mapping={"merged": "combined_data"})
 ```
@@ -161,11 +161,11 @@ workflow.connect("merger", "processor", mapping={"merged": "combined_data"})
 ✅ SOLUTION: Use LLMAgentNode with built-in MCP
 workflow.add_node("ai_agent", LLMAgentNode(
     provider="ollama",
-    model="llama3.2", 
+    model="llama3.2",
     mcp_servers=[{
         "name": "ai-registry",
         "transport": "stdio",
-        "command": "python", 
+        "command": "python",
         "args": ["scripts/start-ai-registry-server.py"]
     }],
     auto_discover_tools=True
@@ -200,7 +200,7 @@ workflow.connect("switch", "target", mapping={"output": "input_data"})
 ```
 ❌ ERROR: "WARNING: Expression evaluation failed: name 'converged' is not defined"
 
-✅ SOLUTION: Use direct field names in convergence checks  
+✅ SOLUTION: Use direct field names in convergence checks
 convergence_check="converged == True"        # ✅ Direct field
 convergence_check="error < 0.01"             # ✅ Direct field
 convergence_check="count >= 10"              # ✅ Direct field
@@ -231,7 +231,7 @@ results_history = prev_state.get("results", [])
 # ❌ Rigid
 assert cycle_count == 3
 
-# ✅ Flexible  
+# ✅ Flexible
 assert cycle_count >= 1
 assert 1 <= cycle_count <= 5
 assert cycle_count > 0
@@ -268,7 +268,7 @@ workflow.connect("a", "b", cycle=True, mapping={
 When you encounter any error:
 
 1. **Check Config vs Runtime**: Is data in the right place?
-2. **Verify Node Names**: Do all classes end with "Node"?  
+2. **Verify Node Names**: Do all classes end with "Node"?
 3. **Check Cycle Mapping**: Using specific fields, not generic?
 4. **Validate Serialization**: Are DataFrames/arrays converted?
 5. **Check MCP Pattern**: Using LLMAgentNode, not separate client?

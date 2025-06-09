@@ -33,16 +33,16 @@ switch_node = SwitchNode(id="router", condition="customer_value_score >= 80")
 ```python
 # Boolean mode - uses condition_field, operator, value
 switch_node = SwitchNode(
-    id="router", 
-    condition_field="customer_value_score", 
-    operator=">=", 
+    id="router",
+    condition_field="customer_value_score",
+    operator=">=",
     value=80
 )
 
 # OR Multi-case mode - uses condition_field and cases
 switch_node = SwitchNode(
     id="router",
-    condition_field="customer_segment", 
+    condition_field="customer_segment",
     cases=["VIP", "Premium"]
 )
 ```
@@ -61,7 +61,7 @@ workflow.connect("router", "high_value", condition="true_output", mapping={"true
 workflow.connect("router", "high_value", mapping={"true_output": "data"})
 workflow.connect("router", "standard", mapping={"false_output": "data"})
 
-# For multi-case mode  
+# For multi-case mode
 workflow.connect("router", "high_value", mapping={"case_VIP": "data"})
 workflow.connect("router", "standard", mapping={"default": "data"})
 ```
@@ -101,7 +101,7 @@ if isinstance(data, list) and len(data) > 0:
             else:
                 flattened_data.append(sublist)
         data = flattened_data
-    
+
     # Process customer data - iterate through each customer record
     for customer in data:
         # Skip if customer is not a dict (safety check)

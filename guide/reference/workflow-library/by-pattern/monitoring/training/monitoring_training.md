@@ -84,7 +84,7 @@ for service in services:
         start_time = time.time()
         response = requests.get(f"https://{service}/health", timeout=5)
         response_time = (time.time() - start_time) * 1000
-        
+
         health_results.append({
             "service": service,
             "status": "healthy" if response.status_code == 200 else "unhealthy",
@@ -136,7 +136,7 @@ for service in services:
     # Simulate health check results with realistic failure patterns
     is_healthy = random.random() > 0.15  # 85% healthy rate
     response_time = random.uniform(50, 500) if is_healthy else random.uniform(1000, 5000)
-    
+
     # Classify different types of issues
     if not is_healthy:
         issue_types = ["timeout", "connection_refused", "http_500", "http_503", "high_latency"]
@@ -147,7 +147,7 @@ for service in services:
         issue_type = None
         status_code = 200
         error_message = None
-    
+
     health_check = {
         "service_name": service["name"],
         "url": service["url"],
@@ -240,7 +240,7 @@ alert_conditions = [
     {
         "name": "high_response_time",
         "description": "Service response time above threshold",
-        "severity": "warning", 
+        "severity": "warning",
         "condition": lambda check: check.get("response_time_ms", 0) > 2000
     },
     {
@@ -256,7 +256,7 @@ alert_conditions = [
         "condition": lambda summary: summary.get("overall_health_percentage", 100) < 80
     },
     {
-        "name": "critical_health_low", 
+        "name": "critical_health_low",
         "description": "Critical services health below threshold",
         "severity": "critical",
         "condition": lambda summary: summary.get("critical_health_percentage", 100) < 90
@@ -369,13 +369,13 @@ else:
     response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("response_time_ms")]
     healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("status") == "healthy" and check.get("response_time_ms")]
     critical_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_critical") and check.get("response_time_ms")]
-    
+
     # Service availability metrics
     total_services = len(health_checks)
     healthy_services = sum(1 for check in health_checks if check.get("status") == "healthy")
     critical_services = [check for check in health_checks if check.get("is_critical")]
     critical_healthy = sum(1 for check in critical_services if check.get("status") == "healthy")
-    
+
     # Performance thresholds and categorization
     response_time_thresholds = {
         "excellent": 100,
@@ -383,10 +383,10 @@ else:
         "acceptable": 1000,
         "poor": 3000
     }
-    
+
     # Categorize services by performance
     performance_categories = {"excellent": 0, "good": 0, "acceptable": 0, "poor": 0, "unacceptable": 0}
-    
+
     for check in health_checks:
         rt = check.get("response_time_ms", 0)
         if rt <= response_time_thresholds["excellent"]:
@@ -399,7 +399,7 @@ else:
             performance_categories["poor"] += 1
         else:
             performance_categories["unacceptable"] += 1
-    
+
     # Calculate comprehensive statistics
     metrics = {
         "response_time_metrics": {
@@ -427,15 +427,15 @@ else:
         },
         "trends": {
             "overall_performance_score": round(
-                (performance_categories["excellent"] * 100 + 
-                 performance_categories["good"] * 80 + 
-                 performance_categories["acceptable"] * 60 + 
-                 performance_categories["poor"] * 40 + 
+                (performance_categories["excellent"] * 100 +
+                 performance_categories["good"] * 80 +
+                 performance_categories["acceptable"] * 60 +
+                 performance_categories["poor"] * 40 +
                  performance_categories["unacceptable"] * 0) / total_services, 2
             ) if total_services > 0 else 0
         }
     }
-    
+
     # Generate actionable recommendations
     recommendations = []
     if metrics["availability_metrics"]["overall_availability_percentage"] < 95:
@@ -446,7 +446,7 @@ else:
         recommendations.append(f"{performance_categories['unacceptable']} services have unacceptable response times")
     if metrics["availability_metrics"]["critical_availability_percentage"] < 100:
         recommendations.append("URGENT: Critical services are experiencing downtime")
-    
+
     result = {
         "performance_metrics": metrics,
         "recommendations": recommendations,
@@ -474,7 +474,7 @@ def create_health_monitoring_workflow() -> Workflow:
         name="health_monitoring_workflow",
         description="Monitor system health and generate alerts"
     )
-    
+
     # === HEALTH CHECK COLLECTION ===
     health_collector = DataTransformer(
         id="health_collector",
@@ -483,7 +483,7 @@ def create_health_monitoring_workflow() -> Workflow:
         ]
     )
     workflow.add_node("health_collector", health_collector)
-    
+
     # === ALERT DETECTION ===
     alert_detector = DataTransformer(
         id="alert_detector",
@@ -493,7 +493,7 @@ def create_health_monitoring_workflow() -> Workflow:
     )
     workflow.add_node("alert_detector", alert_detector)
     workflow.connect("health_collector", "alert_detector", mapping={"result": "data"})
-    
+
     # === PERFORMANCE METRICS ===
     metrics_calculator = DataTransformer(
         id="metrics_calculator",
@@ -503,7 +503,7 @@ def create_health_monitoring_workflow() -> Workflow:
     )
     workflow.add_node("metrics_calculator", metrics_calculator)
     workflow.connect("health_collector", "metrics_calculator", mapping={"result": "data"})
-    
+
     # === REPORTING ===
     # Merge alerts and metrics
     report_merger = MergeNode(
@@ -513,7 +513,7 @@ def create_health_monitoring_workflow() -> Workflow:
     workflow.add_node("report_merger", report_merger)
     workflow.connect("alert_detector", "report_merger", mapping={"result": "data1"})
     workflow.connect("metrics_calculator", "report_merger", mapping={"result": "data2"})
-    
+
     # Generate comprehensive report
     report_generator = DataTransformer(
         id="report_generator",
@@ -523,7 +523,7 @@ def create_health_monitoring_workflow() -> Workflow:
     )
     workflow.add_node("report_generator", report_generator)
     workflow.connect("report_merger", "report_generator", mapping={"merged_data": "data"})
-    
+
     # === OUTPUTS ===
     # Save monitoring report
     report_writer = JSONWriterNode(
@@ -532,7 +532,7 @@ def create_health_monitoring_workflow() -> Workflow:
     )
     workflow.add_node("report_writer", report_writer)
     workflow.connect("report_generator", "report_writer", mapping={"result": "data"})
-    
+
     # Save alerts separately
     alert_writer = JSONWriterNode(
         id="alert_writer",
@@ -540,7 +540,7 @@ def create_health_monitoring_workflow() -> Workflow:
     )
     workflow.add_node("alert_writer", alert_writer)
     workflow.connect("alert_detector", "alert_writer", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -589,7 +589,7 @@ for alert in raw_alerts:
     # Create fingerprint based on service and alert type
     fingerprint_data = f"{alert['service_name']}:{alert['alert_type']}:{alert['severity']}"
     fingerprint = hashlib.md5(fingerprint_data.encode()).hexdigest()[:8]
-    
+
     if fingerprint not in deduplicated_alerts:
         # New alert
         alert_with_fingerprint = {

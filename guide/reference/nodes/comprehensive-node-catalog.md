@@ -310,7 +310,7 @@ node = PythonCodeNode(
         discount = 0.15
     else:
         discount = 0.05
-    
+
     final_price = base_price * (1 - discount) * order['quantity']
     result = {"final_price": final_price, "discount_applied": discount}
     '''
@@ -325,7 +325,7 @@ node = PythonCodeNode(
     code='''
     import numpy as np
     from scipy import stats
-    
+
     # Custom statistical test
     statistic, p_value = stats.ks_2samp(sample1, sample2)
     result = {

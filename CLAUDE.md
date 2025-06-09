@@ -57,7 +57,7 @@ Use prefixes: `feat/`, `fix/`, `docs/`, `release/`, or `session-` for all branch
 | **Fix an error** | [guide/mistakes/CLAUDE.md](guide/mistakes/CLAUDE.md) | Error lookup table |
 | **Find patterns/validation** | [guide/reference/CLAUDE.md](guide/reference/CLAUDE.md) | Cheatsheet, validation, nodes, workflows |
 | **Run examples** | `examples/README.md` | Security restrictions & example list |
-| **Run tests** | `tests/integration/README.md` | Test commands & troubleshooting |  
+| **Run tests** | `tests/integration/README.md` | Test commands & troubleshooting |
 | **Frontend work** | `studio/README.md` | React setup & development guide |
 | **Architecture decisions** | `guide/adr/README.md` | ADR index & process |
 

@@ -20,7 +20,7 @@ Instructions for using the todo tracking system in the Kailash Python SDK projec
 - **Infrastructure**: [active/quality-infrastructure.md](active/quality-infrastructure.md) - Quality & tooling
 
 ### For Historical Reference
-- **Sessions overview**: [completed/README.md](completed/README.md) - Entry point for all completed sessions  
+- **Sessions overview**: [completed/README.md](completed/README.md) - Entry point for all completed sessions
 - **Latest session**: [completed/059-phase-7-workflow-library-completion.md](completed/059-phase-7-workflow-library-completion.md) - Pattern implementation complete
 - **Individual sessions**: [completed/XXX-session-name.md](completed/) - Specific session details
 

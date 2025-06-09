@@ -194,7 +194,7 @@ researcher = LLMAgentNode(
 )
 workflow.add_node(researcher)
 
-# Analysis agent  
+# Analysis agent
 analyst = LLMAgentNode(
     name="analyst",
     model="gpt-4",
@@ -273,35 +273,35 @@ from kailash.runtime import AsyncLocalRuntime
 
 async def create_rag_pipeline():
     workflow = Workflow(name="rag_system")
-    
+
     # Document processing
     docs = DocumentSourceNode(name="documents")
     workflow.add_node(docs)
-    
+
     chunker = ChunkerNode(name="chunker")
     workflow.add_node(chunker)
     workflow.connect(docs.id, chunker.id, mapping={"documents": "documents"})
-    
+
     # Embeddings
     doc_embedder = EmbeddingGeneratorNode(name="doc_embedder")
     workflow.add_node(doc_embedder)
     workflow.connect(chunker.id, doc_embedder.id, mapping={"chunks": "texts"})
-    
+
     # Query processing
     query = QuerySourceNode(name="query")
     workflow.add_node(query)
-    
+
     query_embedder = EmbeddingGeneratorNode(name="query_embedder")
     workflow.add_node(query_embedder)
     workflow.connect(query.id, query_embedder.id, mapping={"query": "texts"})
-    
+
     # Relevance scoring
     scorer = RelevanceScorerNode(name="scorer")
     workflow.add_node(scorer)
     workflow.connect(chunker.id, scorer.id, mapping={"chunks": "chunks"})
     workflow.connect(query_embedder.id, scorer.id, mapping={"embeddings": "query_embedding"})
     workflow.connect(doc_embedder.id, scorer.id, mapping={"embeddings": "chunk_embeddings"})
-    
+
     # Answer generation
     answerer = LLMAgentNode(
         name="answerer",
@@ -311,7 +311,7 @@ async def create_rag_pipeline():
     workflow.add_node(answerer)
     workflow.connect(scorer.id, answerer.id, mapping={"relevant_chunks": "context"})
     workflow.connect(query.id, answerer.id, mapping={"query": "question"})
-    
+
     # Execute
     runtime = AsyncLocalRuntime()
     result = await runtime.execute(workflow, parameters={
@@ -322,7 +322,7 @@ async def create_rag_pipeline():
             "temperature": 0.7
         }
     })
-    
+
     return result
 ```
 

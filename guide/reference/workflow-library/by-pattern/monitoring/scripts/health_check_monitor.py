@@ -14,12 +14,13 @@ Patterns demonstrated:
 4. Automated incident detection
 """
 
-import os
 import json
+import os
+
 from kailash import Workflow
-from kailash.nodes.transform import DataTransformer
 from kailash.nodes.data import JSONWriterNode
 from kailash.nodes.logic import MergeNode
+from kailash.nodes.transform import DataTransformer
 from kailash.runtime import LocalRuntime
 
 
@@ -28,11 +29,11 @@ def create_health_monitoring_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="health_monitoring_001",
         name="health_monitoring_workflow",
-        description="Monitor system health and generate alerts"
+        description="Monitor system health and generate alerts",
     )
-    
+
     # === HEALTH CHECK COLLECTION ===
-    
+
     # Simulate health checks for multiple services
     health_collector = DataTransformer(
         id="health_collector",
@@ -62,7 +63,7 @@ for service in services:
     # Most services are healthy, some may have issues
     is_healthy = random.random() > 0.15  # 85% healthy rate
     response_time = random.uniform(50, 500) if is_healthy else random.uniform(1000, 5000)
-    
+
     # Simulate different types of issues
     if not is_healthy:
         issue_types = ["timeout", "connection_refused", "http_500", "http_503", "high_latency"]
@@ -73,7 +74,7 @@ for service in services:
         issue_type = None
         status_code = 200
         error_message = None
-    
+
     health_check = {
         "service_name": service["name"],
         "url": service["url"],
@@ -113,12 +114,12 @@ result = {
     "collection_timestamp": current_time.isoformat()
 }
 """
-        ]
+        ],
     )
     workflow.add_node("health_collector", health_collector)
-    
+
     # === ALERT DETECTION ===
-    
+
     # Analyze health data and generate alerts
     alert_detector = DataTransformer(
         id="alert_detector",
@@ -171,7 +172,7 @@ alert_conditions = [
     {
         "name": "high_response_time",
         "description": "Service response time above threshold",
-        "severity": "warning", 
+        "severity": "warning",
         "condition": lambda check: check.get("response_time_ms", 0) > 2000
     },
     {
@@ -187,7 +188,7 @@ alert_conditions = [
         "condition": lambda summary: summary.get("overall_health_percentage", 100) < 80
     },
     {
-        "name": "critical_health_low", 
+        "name": "critical_health_low",
         "description": "Critical services health below threshold",
         "severity": "critical",
         "condition": lambda summary: summary.get("critical_health_percentage", 100) < 90
@@ -256,13 +257,13 @@ result = {
     "detection_timestamp": current_time.isoformat()
 }
 """
-        ]
+        ],
     )
     workflow.add_node("alert_detector", alert_detector)
     workflow.connect("health_collector", "alert_detector", mapping={"result": "data"})
-    
+
     # === PERFORMANCE METRICS ===
-    
+
     # Calculate performance metrics from health data
     metrics_calculator = DataTransformer(
         id="metrics_calculator",
@@ -299,13 +300,13 @@ else:
     response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("response_time_ms")]
     healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("status") == "healthy" and check.get("response_time_ms")]
     critical_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_critical") and check.get("response_time_ms")]
-    
+
     # Service availability metrics
     total_services = len(health_checks)
     healthy_services = sum(1 for check in health_checks if check.get("status") == "healthy")
     critical_services = [check for check in health_checks if check.get("is_critical")]
     critical_healthy = sum(1 for check in critical_services if check.get("status") == "healthy")
-    
+
     # Performance thresholds
     response_time_thresholds = {
         "excellent": 100,
@@ -313,10 +314,10 @@ else:
         "acceptable": 1000,
         "poor": 3000
     }
-    
+
     # Categorize services by performance
     performance_categories = {"excellent": 0, "good": 0, "acceptable": 0, "poor": 0, "unacceptable": 0}
-    
+
     for check in health_checks:
         rt = check.get("response_time_ms", 0)
         if rt <= response_time_thresholds["excellent"]:
@@ -329,7 +330,7 @@ else:
             performance_categories["poor"] += 1
         else:
             performance_categories["unacceptable"] += 1
-    
+
     # Calculate statistics
     metrics = {
         "response_time_metrics": {
@@ -359,17 +360,17 @@ else:
         },
         "trends": {
             "overall_performance_score": round(
-                (performance_categories["excellent"] * 100 + 
-                 performance_categories["good"] * 80 + 
-                 performance_categories["acceptable"] * 60 + 
-                 performance_categories["poor"] * 40 + 
+                (performance_categories["excellent"] * 100 +
+                 performance_categories["good"] * 80 +
+                 performance_categories["acceptable"] * 60 +
+                 performance_categories["poor"] * 40 +
                  performance_categories["unacceptable"] * 0) / total_services, 2
             ) if total_services > 0 else 0,
             "health_trend": "stable",  # Would calculate from historical data
             "performance_trend": "stable"  # Would calculate from historical data
         }
     }
-    
+
     # Generate recommendations
     recommendations = []
     if metrics["availability_metrics"]["overall_availability_percentage"] < 95:
@@ -380,7 +381,7 @@ else:
         recommendations.append(f"{performance_categories['unacceptable']} services have unacceptable response times")
     if metrics["availability_metrics"]["critical_availability_percentage"] < 100:
         recommendations.append("URGENT: Critical services are experiencing downtime")
-    
+
     result = {
         "performance_metrics": metrics,
         "recommendations": recommendations,
@@ -393,22 +394,21 @@ else:
         }
     }
 """
-        ]
+        ],
     )
     workflow.add_node("metrics_calculator", metrics_calculator)
-    workflow.connect("health_collector", "metrics_calculator", mapping={"result": "data"})
-    
-    # === REPORTING ===
-    
-    # Merge alerts and metrics for comprehensive reporting
-    report_merger = MergeNode(
-        id="report_merger",
-        merge_type="merge_dict"
+    workflow.connect(
+        "health_collector", "metrics_calculator", mapping={"result": "data"}
     )
+
+    # === REPORTING ===
+
+    # Merge alerts and metrics for comprehensive reporting
+    report_merger = MergeNode(id="report_merger", merge_type="merge_dict")
     workflow.add_node("report_merger", report_merger)
     workflow.connect("alert_detector", "report_merger", mapping={"result": "data1"})
     workflow.connect("metrics_calculator", "report_merger", mapping={"result": "data2"})
-    
+
     # Generate comprehensive monitoring report
     report_generator = DataTransformer(
         id="report_generator",
@@ -556,29 +556,29 @@ report = {
 
 result = report
 """
-        ]
+        ],
     )
     workflow.add_node("report_generator", report_generator)
-    workflow.connect("report_merger", "report_generator", mapping={"merged_data": "data"})
-    
+    workflow.connect(
+        "report_merger", "report_generator", mapping={"merged_data": "data"}
+    )
+
     # === OUTPUTS ===
-    
+
     # Save monitoring report
     report_writer = JSONWriterNode(
-        id="report_writer",
-        file_path="data/outputs/monitoring_report.json"
+        id="report_writer", file_path="data/outputs/monitoring_report.json"
     )
     workflow.add_node("report_writer", report_writer)
     workflow.connect("report_generator", "report_writer", mapping={"result": "data"})
-    
+
     # Save alerts separately for alert management systems
     alert_writer = JSONWriterNode(
-        id="alert_writer",
-        file_path="data/outputs/active_alerts.json"
+        id="alert_writer", file_path="data/outputs/active_alerts.json"
     )
     workflow.add_node("alert_writer", alert_writer)
     workflow.connect("alert_detector", "alert_writer", mapping={"result": "data"})
-    
+
     return workflow
 
 
@@ -586,32 +586,40 @@ def run_health_monitoring():
     """Execute the health monitoring workflow."""
     workflow = create_health_monitoring_workflow()
     runtime = LocalRuntime()
-    
+
     parameters = {}
-    
+
     try:
         print("Starting Health Monitoring Workflow...")
         print("🔍 Collecting health status from services...")
-        
+
         result, run_id = runtime.execute(workflow, parameters=parameters)
-        
+
         print("\\n✅ Health Monitoring Complete!")
         print("📁 Outputs generated:")
         print("   - Monitoring report: data/outputs/monitoring_report.json")
         print("   - Active alerts: data/outputs/active_alerts.json")
-        
+
         # Show executive summary
         report_result = result.get("report_generator", {}).get("result", {})
         monitoring_report = report_result.get("monitoring_report", {})
         executive_summary = monitoring_report.get("executive_summary", {})
-        
-        print(f"\\n📊 System Status: {executive_summary.get('system_status', 'UNKNOWN')}")
+
+        print(
+            f"\\n📊 System Status: {executive_summary.get('system_status', 'UNKNOWN')}"
+        )
         print(f"   - Overall Health: {executive_summary.get('overall_health', 'N/A')}")
-        print(f"   - Critical Services: {executive_summary.get('critical_services_health', 'N/A')}")
-        print(f"   - Average Response: {executive_summary.get('average_response_time', 'N/A')}")
+        print(
+            f"   - Critical Services: {executive_summary.get('critical_services_health', 'N/A')}"
+        )
+        print(
+            f"   - Average Response: {executive_summary.get('average_response_time', 'N/A')}"
+        )
         print(f"   - Active Alerts: {executive_summary.get('active_alerts', 0)}")
-        print(f"   - Performance Score: {executive_summary.get('performance_score', 'N/A')}")
-        
+        print(
+            f"   - Performance Score: {executive_summary.get('performance_score', 'N/A')}"
+        )
+
         # Show immediate actions if any
         next_actions = report_result.get("next_actions", {})
         immediate_actions = next_actions.get("immediate_actions", [])
@@ -619,9 +627,9 @@ def run_health_monitoring():
             print("\\n🚨 IMMEDIATE ACTIONS REQUIRED:")
             for action in immediate_actions:
                 print(f"   - {action}")
-        
+
         return result
-        
+
     except Exception as e:
         print(f"❌ Health Monitoring failed: {str(e)}")
         raise
@@ -631,10 +639,10 @@ def main():
     """Main entry point."""
     # Create output directories
     os.makedirs("data/outputs", exist_ok=True)
-    
+
     # Run the health monitoring workflow
     run_health_monitoring()
-    
+
     # Display generated reports
     print("\\n=== Monitoring Report Preview ===")
     try:
@@ -642,7 +650,7 @@ def main():
             report = json.load(f)
             executive_summary = report["monitoring_report"]["executive_summary"]
             print(json.dumps(executive_summary, indent=2))
-            
+
         print("\\n=== Active Alerts Preview ===")
         with open("data/outputs/active_alerts.json", "r") as f:
             alerts = json.load(f)
