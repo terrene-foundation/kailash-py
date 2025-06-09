@@ -245,11 +245,11 @@ def run_workflow():
         result, run_id = runtime.execute(workflow, parameters=parameters)
         
         print("\n=== Workflow Complete ===")
-        print(f"Report saved to: data/outputs/inventory_report.json")
+        print("Report saved to: data/outputs/inventory_report.json")
         
         # Show summary
         summary = result.get("reporter", {}).get("result", {}).get("summary", {})
-        print(f"\nInventory Summary:")
+        print("\nInventory Summary:")
         print(f"- Total Products: {summary.get('total_products', 0)}")
         print(f"- In Stock: {summary.get('in_stock', 0)}")
         print(f"- Out of Stock: {summary.get('out_of_stock', 0)}")

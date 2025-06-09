@@ -16,15 +16,14 @@ Key Features:
 - Production-ready patterns
 """
 
-import json
+import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
 from kailash import Workflow
-from kailash.nodes.data import ConstantNode, CSVWriterNode
+from kailash.nodes.data import ConstantNode
 from kailash.nodes.transform import FilterNode, DataTransformer
 from kailash.nodes.logic import SwitchNode, MergeNode
 from kailash.nodes.api import WebhookNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime import AsyncLocalRuntime
 
 
 def create_realtime_workflow() -> Workflow:
@@ -47,9 +46,9 @@ def create_realtime_workflow() -> Workflow:
     priority_filter = FilterNode(name="priority_filter")
     workflow.add_node(priority_filter)
     workflow.connect(
-        stream_reader.id,
+        event_source.id,
         priority_filter.id,
-        mapping={"events": "data"}
+        mapping={"value": "data"}
     )
     
     # Transform events with enrichment

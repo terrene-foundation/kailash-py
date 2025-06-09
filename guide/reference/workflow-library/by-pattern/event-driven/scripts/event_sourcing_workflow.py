@@ -16,11 +16,9 @@ Patterns demonstrated:
 
 import os
 import json
-from datetime import datetime
 from kailash import Workflow
 from kailash.nodes.transform import DataTransformer
-from kailash.nodes.logic import MergeNode
-from kailash.nodes.data import JSONWriterNode, JSONReaderNode
+from kailash.nodes.data import JSONWriterNode
 from kailash.runtime import LocalRuntime
 
 
@@ -359,14 +357,14 @@ def run_event_sourcing():
         state_result = result.get("state_builder", {}).get("result", {})
         summary = state_result.get("summary", {})
         
-        print(f"\n📊 Order Processing Summary:")
+        print("\n📊 Order Processing Summary:")
         print(f"   - Total orders processed: {summary.get('total_orders', 0)}")
         print(f"   - Total revenue: ${summary.get('total_revenue', 0):,.2f}")
         print(f"   - Status breakdown: {summary.get('status_breakdown', {})}")
         
         # Show event stats
         event_result = result.get("event_generator", {}).get("result", {})
-        print(f"\n📈 Event Stream Stats:")
+        print("\n📈 Event Stream Stats:")
         print(f"   - Total events: {event_result.get('event_count', 0)}")
         print(f"   - Event types: {', '.join(event_result.get('event_types', []))}")
         print(f"   - Aggregates: {event_result.get('aggregate_count', 0)}")

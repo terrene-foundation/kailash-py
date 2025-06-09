@@ -18,8 +18,8 @@ import os
 import json
 from kailash import Workflow
 from kailash.nodes.transform import DataTransformer
-from kailash.nodes.data import CSVReaderNode, JSONWriterNode, CSVWriterNode
-from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.data import JSONWriterNode
+from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -592,7 +592,7 @@ def run_document_processing():
         summary_result = result.get("summary_generator", {}).get("result", {})
         processing_summary = summary_result.get("processing_summary", {})
         
-        print(f"\\n📊 Processing Summary:")
+        print("\\n📊 Processing Summary:")
         print(f"   - Total files processed: {processing_summary.get('total_files_processed', 0)}")
         print(f"   - Files by type: {processing_summary.get('files_by_type', {})}")
         print(f"   - Successful files: {processing_summary.get('successful_files', 0)}")
@@ -600,7 +600,7 @@ def run_document_processing():
         # Show recommendations
         recommendations = summary_result.get("recommendations", [])
         if recommendations:
-            print(f"\\n💡 Recommendations:")
+            print("\\n💡 Recommendations:")
             for rec in recommendations:
                 print(f"   - {rec}")
         

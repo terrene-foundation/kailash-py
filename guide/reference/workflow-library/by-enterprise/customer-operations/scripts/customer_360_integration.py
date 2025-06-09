@@ -19,10 +19,9 @@ This workflow demonstrates real enterprise patterns for:
 """
 
 import os
-from typing import Dict, Any
 from kailash import Workflow
 from kailash.nodes.data import CSVReaderNode, JSONReaderNode, CSVWriterNode, JSONWriterNode
-from kailash.nodes.transform import DataTransformer, FilterNode
+from kailash.nodes.transform import DataTransformer
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime import LocalRuntime
 
@@ -667,10 +666,10 @@ result = processed_standard
         result, run_id = runtime.execute(workflow, parameters=parameters)
         
         print("\n✅ Customer 360° Integration Complete!")
-        print(f"📁 Outputs generated:")
-        print(f"   - High-value customers: data/outputs/high_value_customers.json")
-        print(f"   - Standard customers: data/outputs/standard_customers.csv") 
-        print(f"   - Complete customer 360°: data/outputs/customer_360_complete.json")
+        print("📁 Outputs generated:")
+        print("   - High-value customers: data/outputs/high_value_customers.json")
+        print("   - Standard customers: data/outputs/standard_customers.csv") 
+        print("   - Complete customer 360°: data/outputs/customer_360_complete.json")
         
         # Summary statistics
         scoring_result = result.get("customer_scoring", {}).get("result", [])
@@ -679,7 +678,7 @@ result = processed_standard
             vip_count = len([c for c in scoring_result if c.get('customer_segment') == 'VIP'])
             premium_count = len([c for c in scoring_result if c.get('customer_segment') == 'Premium'])
             
-            print(f"\n📈 Customer Analysis Summary:")
+            print("\n📈 Customer Analysis Summary:")
             print(f"   - Total customers processed: {total_customers}")
             print(f"   - VIP customers: {vip_count}")
             print(f"   - Premium customers: {premium_count}")

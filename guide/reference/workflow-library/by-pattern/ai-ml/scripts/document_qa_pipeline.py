@@ -17,12 +17,9 @@ Key Features:
 - Production-ready patterns
 """
 
-import os
-import csv
-from typing import Dict, Any, List
 from kailash import Workflow
-from kailash.nodes.data import CSVReaderNode, DocumentSourceNode, QuerySourceNode, RelevanceScorerNode
-from kailash.nodes.transform import HierarchicalChunkerNode, FilterNode, DataTransformer
+from kailash.nodes.data import DocumentSourceNode, QuerySourceNode, RelevanceScorerNode
+from kailash.nodes.transform import HierarchicalChunkerNode, DataTransformer
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.runtime import LocalRuntime
 

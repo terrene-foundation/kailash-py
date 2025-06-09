@@ -17,10 +17,8 @@ Key Features:
 """
 
 import os
-import json
-from typing import Dict, Any
 from kailash import Workflow
-from kailash.nodes.api import RESTClientNode, RateLimitedAPINode
+from kailash.nodes.api import RateLimitedAPINode
 from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.nodes.data import CSVWriterNode
 from kailash.runtime import LocalRuntime
@@ -294,7 +292,7 @@ def run_simple_api():
         print("Running simple API workflow...")
         result, run_id = runtime.execute(workflow, parameters=parameters)
         print("Workflow complete!")
-        print(f"Metrics written to: data/outputs/inventory_metrics.csv")
+        print("Metrics written to: data/outputs/inventory_metrics.csv")
         return result
     except Exception as e:
         print(f"Workflow failed: {str(e)}")

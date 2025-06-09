@@ -16,11 +16,10 @@ Patterns demonstrated:
 
 import os
 import json
-from datetime import datetime, timedelta
 from kailash import Workflow
 from kailash.nodes.transform import DataTransformer
 from kailash.nodes.data import JSONWriterNode
-from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -617,7 +616,7 @@ def run_health_monitoring():
         next_actions = report_result.get("next_actions", {})
         immediate_actions = next_actions.get("immediate_actions", [])
         if immediate_actions:
-            print(f"\\n🚨 IMMEDIATE ACTIONS REQUIRED:")
+            print("\\n🚨 IMMEDIATE ACTIONS REQUIRED:")
             for action in immediate_actions:
                 print(f"   - {action}")
         
