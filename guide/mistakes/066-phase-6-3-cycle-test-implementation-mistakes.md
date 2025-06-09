@@ -200,7 +200,7 @@ node = PythonCodeNode(
 
 These patterns should be added to:
 
-1. **Claude.md**: Common cycle test pitfalls
+1. **CLAUDE.md**: Common cycle test pitfalls
 2. **Cheatsheet**: PythonCodeNode usage patterns
 3. **Reference docs**: Node constructor signatures
 4. **Workflow guide**: Cycle connection requirements

@@ -223,7 +223,7 @@ converged = progress_made and min_iterations_met
 
 These patterns should be added to:
 
-1. **Claude.md**: Core rules about PythonCodeNode execution environment
+1. **CLAUDE.md**: Core rules about PythonCodeNode execution environment
 2. **Cheatsheet**: Complete PythonCodeNode cycle patterns
 3. **Reference docs**: Execution environment limitations and workarounds
 4. **Workflow guide**: Initial parameter passing limitations in cycles
