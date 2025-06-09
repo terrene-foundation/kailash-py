@@ -16,7 +16,6 @@ Key Features:
 - Production-ready patterns
 """
 
-from typing import Dict, Any
 from kailash import Workflow
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import FilterNode, DataTransformer
@@ -138,8 +137,8 @@ def run_etl_pipeline():
     try:
         print("Starting ETL pipeline...")
         result, run_id = runtime.execute(workflow, parameters=parameters)
-        print(f"ETL pipeline completed successfully!")
-        print(f"Results written to: data/outputs/enriched_customers.csv")
+        print("ETL pipeline completed successfully!")
+        print("Results written to: data/outputs/enriched_customers.csv")
         return result
     except Exception as e:
         print(f"ETL pipeline failed: {str(e)}")

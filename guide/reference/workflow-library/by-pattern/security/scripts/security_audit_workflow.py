@@ -16,11 +16,10 @@ Patterns demonstrated:
 
 import os
 import json
-from datetime import datetime, timedelta
 from kailash import Workflow
 from kailash.nodes.transform import DataTransformer
 from kailash.nodes.data import JSONWriterNode
-from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -726,7 +725,7 @@ def run_security_audit():
         # Show key findings
         key_findings = security_report.get("key_findings", [])
         if key_findings:
-            print(f"\\n🚨 KEY FINDINGS:")
+            print("\\n🚨 KEY FINDINGS:")
             for finding in key_findings[:3]:  # Show top 3 findings
                 print(f"   - [{finding.get('severity', 'unknown').upper()}] {finding.get('finding', 'N/A')}")
         

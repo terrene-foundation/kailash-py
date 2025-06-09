@@ -18,7 +18,6 @@ Key Features:
 """
 
 import asyncio
-from typing import Dict, Any, List
 from kailash import Workflow
 from kailash.nodes.data import DocumentSourceNode, CSVReaderNode
 from kailash.nodes.transform import ChunkerNode, FilterNode
@@ -284,7 +283,7 @@ def main():
     # Check command line arguments
     if len(sys.argv) > 1 and sys.argv[1] == "support":
         print("Running customer support workflow...")
-        workflow = create_customer_support_workflow()
+        create_customer_support_workflow()
         # Would run with appropriate parameters
     else:
         # Default: Run document Q&A

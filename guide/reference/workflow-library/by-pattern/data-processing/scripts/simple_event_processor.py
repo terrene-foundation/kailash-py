@@ -110,7 +110,7 @@ result = [{
         print("Running simple event processor...")
         result, run_id = runtime.execute(workflow, parameters=parameters)
         print("Processing complete!")
-        print(f"Summary written to: data/outputs/event_summary.csv")
+        print("Summary written to: data/outputs/event_summary.csv")
         return result
     except Exception as e:
         print(f"Processing failed: {str(e)}")

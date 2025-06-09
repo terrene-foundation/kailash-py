@@ -35,17 +35,13 @@ Requirements:
 """
 
 import os
-import json
-from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from kailash import Workflow
 from kailash.nodes.ai import IterativeLLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONWriterNode
-from kailash.nodes.logic import SwitchNode, MergeNode
 from kailash.runtime.local import LocalRuntime
-from kailash.security import HealthcareSecurityMixin
 
 
 def create_clinical_diagnosis_workflow() -> Workflow:
@@ -891,7 +887,7 @@ def run_clinical_workflow_demo():
     # Create sample patient data
     patient_data = create_sample_patient_data()
     
-    print(f"\n📋 Analyzing patient case:")
+    print("\n📋 Analyzing patient case:")
     print(f"   Chief Complaint: {patient_data['chief_complaint']}")
     print(f"   Age: {patient_data['age']}, Gender: {patient_data['gender']}")
     print(f"   Medical History: {len(patient_data['medical_history'])} conditions")
@@ -958,9 +954,9 @@ Use the AI Registry tools to find relevant healthcare AI use cases that can info
     print("\n🔄 Executing clinical analysis workflow...")
     print("⚙️  AI Configuration:")
     print(f"   Model: {parameters['clinical_ai_agent']['model']}")
-    print(f"   MCP Integration: AI Registry Server")
+    print("   MCP Integration: AI Registry Server")
     print(f"   Max Iterations: {parameters['clinical_ai_agent']['max_iterations']}")
-    print(f"   HIPAA Compliance: Enabled")
+    print("   HIPAA Compliance: Enabled")
     
     try:
         # Execute workflow
@@ -974,30 +970,30 @@ Use the AI Registry tools to find relevant healthcare AI use cases that can info
             final_report = results["report_generator"]["result"]
             executive_summary = final_report["executive_summary"]
             
-            print(f"\n📊 CLINICAL ASSESSMENT SUMMARY")
+            print("\n📊 CLINICAL ASSESSMENT SUMMARY")
             print(f"   Patient ID: {executive_summary['patient_id']}")
             print(f"   Assessment Time: {executive_summary['assessment_timestamp']}")
             print(f"   Report Confidence: {executive_summary['report_confidence']}")
             
-            print(f"\n🔍 KEY FINDINGS:")
+            print("\n🔍 KEY FINDINGS:")
             for i, finding in enumerate(executive_summary['key_findings'], 1):
                 print(f"   {i}. {finding}")
             
             if executive_summary['critical_actions']:
-                print(f"\n⚠️  CRITICAL ACTIONS:")
+                print("\n⚠️  CRITICAL ACTIONS:")
                 for action in executive_summary['critical_actions']:
                     print(f"   • {action}")
             
-            print(f"\n💊 OVERALL RECOMMENDATION:")
+            print("\n💊 OVERALL RECOMMENDATION:")
             print(f"   {executive_summary['overall_recommendation']}")
             
-            print(f"\n📋 NEXT STEPS:")
+            print("\n📋 NEXT STEPS:")
             for i, step in enumerate(executive_summary['next_steps'], 1):
                 print(f"   {i}. {step}")
             
             # Quality metrics
             quality_data = final_report["detailed_analysis"]["quality_assessment"]
-            print(f"\n📈 QUALITY METRICS:")
+            print("\n📈 QUALITY METRICS:")
             print(f"   Overall Quality Score: {quality_data['overall_quality_score']}%")
             print(f"   Quality Grade: {quality_data['quality_grade']}")
             print(f"   Clinical Standards Met: {'Yes' if quality_data['meets_clinical_standards'] else 'No'}")
@@ -1005,14 +1001,14 @@ Use the AI Registry tools to find relevant healthcare AI use cases that can info
             
             # AI Analysis details
             ai_analysis = final_report["detailed_analysis"]["ai_clinical_analysis"]
-            print(f"\n🤖 AI ANALYSIS DETAILS:")
+            print("\n🤖 AI ANALYSIS DETAILS:")
             print(f"   Total Iterations: {ai_analysis.get('total_iterations', 0)}")
             print(f"   Convergence Reason: {ai_analysis.get('convergence_reason', 'Unknown')}")
-            print(f"   Evidence-Based: Yes")
+            print("   Evidence-Based: Yes")
             
-            print(f"\n💾 Report saved to: outputs/clinical_diagnosis_report.json")
-            print(f"🔒 HIPAA Compliance: Verified")
-            print(f"📝 Audit Trail: Complete")
+            print("\n💾 Report saved to: outputs/clinical_diagnosis_report.json")
+            print("🔒 HIPAA Compliance: Verified")
+            print("📝 Audit Trail: Complete")
             
         else:
             print("\n❌ Clinical analysis failed:")
