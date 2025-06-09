@@ -7,20 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.1] - 2025-06-08
-
 ### Added
-- **Enhanced Database Connectivity**
-  - SQLDatabaseNode with direct constructor configuration
-  - Support for SQLite, PostgreSQL, and MySQL
-  - Production-ready connection pooling and transaction management
-  - Comprehensive test suite with 1,275+ tests
-  - Database setup/teardown scripts for automated testing
-  - Enhanced examples with production configuration patterns
+- **Custom Node Development Guide** - Comprehensive documentation for creating custom nodes
+  - Parameter type constraints and patterns (critical for avoiding "abstract class" errors)
+  - Common implementation patterns with examples
+  - Troubleshooting guide for frequent issues
+  - Working examples in `guide/developer/`
 
 ### Fixed
-- Database connectivity integration from main branch
-- Updated documentation and architecture decisions
+- **HTTPClientNode Backwards Compatibility** - Added deprecated alias for smooth migration
+  - `HTTPClientNode` now available as alias for `HTTPRequestNode`
+  - Deprecation warning guides users to new import
+  - Fixed incorrect import in `custom_nodes_secure.py`
+
+### Documentation
+- Created comprehensive custom node development guide addressing common SDK issues
+- Added CLAUDE.md navigation file for efficient LLM assistance
+- Documented parameter type constraints (no generic types in NodeParameter)
+- Added troubleshooting section for "Can't instantiate abstract class" errors
+
+## [0.2.1] - 2025-06-09
+
+### Added
+- **DirectoryReaderNode** for dynamic file discovery
+  - Recursive directory scanning with pattern matching  
+  - MIME type detection and metadata extraction
+  - Organized output by file type for typed processing
+  - Performance optimizations for large directories
+  - Comprehensive cheatsheet and documentation
+
+- **Enhanced DataTransformer** with critical bug fixes
+  - Fixed dictionary output bug where only keys were passed instead of full dictionaries
+  - Enhanced `validate_inputs()` to accept arbitrary mapped parameters
+  - Improved error handling and debugging capabilities
+  - Backward compatibility maintained
+
+- **Expanded PythonCodeNode Modules** for real-world file processing
+  - Added `csv`, `mimetypes`, `pathlib`, `glob`, `xml` to allowed modules
+  - Enables data science and file processing workflows
+  - Maintains security restrictions for dangerous operations
+
+- **Real-World Workflow Examples**
+  - Fixed 4 out of 5 workflow library examples to use real data sources
+  - Document processor using DirectoryReaderNode for actual file discovery
+  - Health monitoring using real endpoints (JSONPlaceholder, GitHub API, HTTPBin)
+  - Security audit with comprehensive vulnerability scanning
+  - All workflows validated with comprehensive testing
+
+- **Enhanced Documentation**
+  - Updated Sphinx documentation with new nodes and fixes
+  - New cheatsheets: DirectoryReaderNode usage and DataTransformer workarounds
+  - Comprehensive base node fixes documentation
+  - Updated quickstart guide with dynamic file discovery examples
+
+### Fixed
+- **Critical DataTransformer Bug**: Fixed parameter mapping issue affecting data flow between nodes
+- **PythonCodeNode Security**: Safely expanded allowed modules for file processing
+- **Workflow Validation**: All fixed workflows tested and validated with real data sources
+- **Test Suite**: 28/28 tests passing with zero regressions from base node changes
+
+### Documentation
+- Updated README with new capabilities highlights
+- Enhanced Sphinx API documentation for new nodes
+- Comprehensive migration guide for existing users
+- New cheatsheet entries for DirectoryReaderNode and DataTransformer patterns
+
+## [0.2.0] - 2025-06-08
 
 ## [0.2.0] - 2025-06-08
 

@@ -93,6 +93,12 @@ ALLOWED_MODULES = {
     "matplotlib",
     "seaborn",
     "plotly",
+    # File processing modules
+    "csv",  # For CSV file processing
+    "mimetypes",  # For MIME type detection
+    "pathlib",  # For modern path operations
+    "glob",  # For file pattern matching
+    "xml",  # For XML processing
 }
 
 

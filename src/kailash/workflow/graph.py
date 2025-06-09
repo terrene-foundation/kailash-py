@@ -928,6 +928,14 @@ class Workflow:
                     to_input = edge_data.get("to_input")
                     mapping = edge_data.get("mapping", {})
 
+                    print(f"CONNECTION DEBUG: {source_node_id} -> {node_id}")
+                    print(f"  Edge data: {edge_data}")
+                    print(f"  from_output: {from_output}, to_input: {to_input}")
+                    print(f"  mapping: {mapping}")
+                    print(
+                        f"  source_results keys: {list(results.get(source_node_id, {}).keys())}"
+                    )
+
                     source_results = results.get(source_node_id, {})
 
                     # Handle backward compatibility - from_output/to_input can be string or list
@@ -951,6 +959,13 @@ class Workflow:
                     for source_key, target_key in mapping.items():
                         if source_key in source_results:
                             node_inputs[target_key] = source_results[source_key]
+                            print(
+                                f"MAPPING DEBUG: {source_key} -> {target_key}, value type: {type(source_results[source_key])}"
+                            )
+                        else:
+                            print(
+                                f"MAPPING DEBUG: Source key '{source_key}' not found in source results: {list(source_results.keys())}"
+                            )
 
                 # Apply overrides
                 node_overrides = inputs.get(node_id, {})

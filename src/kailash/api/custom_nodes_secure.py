@@ -350,7 +350,7 @@ async def _execute_api_node(
 ) -> Dict[str, Any]:
     """Execute an API-based custom node"""
 
-    from kailash.nodes.api.http import HTTPClientNode
+    from kailash.nodes.api.http import HTTPRequestNode
     from kailash.security import TenantContext
 
     # Execute in tenant context
@@ -359,7 +359,7 @@ async def _execute_api_node(
         api_config = node.implementation.get("api", {})
 
         # Create HTTP client node
-        http_node = HTTPClientNode(
+        http_node = HTTPRequestNode(
             url=api_config.get("url", ""),
             method=api_config.get("method", "GET"),
             headers=api_config.get("headers", {}),
