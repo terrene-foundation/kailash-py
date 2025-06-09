@@ -12,7 +12,7 @@
 | [Batch Processing](data-processing/batch-processing.md) | Large-scale data processing | Intermediate | File processing, bulk operations, scheduled jobs |
 | [Data Validation](data-processing/data-validation.md) | Quality assurance, cleanup | Beginner | Schema validation, outlier detection, cleansing |
 
-### 🌐 API & Integration Patterns  
+### 🌐 API & Integration Patterns
 | Pattern | Use Cases | Complexity | Examples |
 |---------|-----------|------------|----------|
 | [REST API Workflows](api-integration/rest-api-workflows.md) | API consumption, data sync | Beginner-Intermediate | Third-party APIs, microservices, webhook handling |
@@ -90,7 +90,7 @@
 
 **Beginner (New to Kailash)**
 - [Simple ETL](data-processing/etl-pipelines.md#simple-etl) - CSV to database
-- [Basic API Call](api-integration/rest-api-workflows.md#basic-api-call) - REST API consumption  
+- [Basic API Call](api-integration/rest-api-workflows.md#basic-api-call) - REST API consumption
 - [File Processing](file-processing/document-parsing.md#basic-file-processing) - Text file analysis
 - [Health Check](monitoring/health-checks.md#simple-health-check) - Service monitoring
 

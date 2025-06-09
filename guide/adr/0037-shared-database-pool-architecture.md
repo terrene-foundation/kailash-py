@@ -17,7 +17,7 @@ The current SQLDatabaseNode implementation creates a new SQLAlchemy engine for e
 
 2. **RDS Connection Limits**: Cloud databases have strict connection limits
    - AWS RDS t3.micro: 90 connections
-   - AWS RDS t3.small: 180 connections  
+   - AWS RDS t3.small: 180 connections
    - Connection exhaustion causes application failures
 
 3. **Resource Waste**: Multiple engines to the same database waste memory and network resources
@@ -47,16 +47,16 @@ class SQLDatabaseNode(Node):
     # Class-level shared pools
     _shared_pools = {}  # {(connection_string, config_hash): engine}
     _pool_lock = threading.Lock()
-    
+
     def _get_shared_engine(self, connection_string: str, config: dict):
         """Get or create shared engine for database connection."""
         cache_key = (connection_string, frozenset(config.items()))
-        
+
         with self._pool_lock:
             if cache_key not in self._shared_pools:
                 engine = create_engine(connection_string, **config)
                 self._shared_pools[cache_key] = engine
-                
+
             return self._shared_pools[cache_key]
 ```
 
@@ -77,14 +77,14 @@ databases:
     pool_timeout: 60
     pool_recycle: 3600
     pool_pre_ping: true
-    
+
   analytics_db:
     url: "${ANALYTICS_DB_URL}"
     pool_size: 50
     max_overflow: 100
     pool_timeout: 120
     pool_recycle: 3600
-    
+
   default:
     pool_size: 10
     max_overflow: 20
@@ -108,7 +108,7 @@ class SQLDatabaseNode(Node):
                 description="Database connection name from project configuration"
             ),
             "query": NodeParameter(
-                name="query", 
+                name="query",
                 type=str,
                 required=True,
                 description="SQL query to execute"
@@ -131,26 +131,26 @@ class SQLDatabaseNode(Node):
 ```python
 class DatabaseConfigManager:
     """Manages database configurations from project settings."""
-    
+
     def __init__(self, project_config_path: str):
         self.config = self._load_project_config(project_config_path)
-    
+
     def get_database_config(self, connection_name: str) -> tuple[str, dict]:
         """Get database configuration by connection name."""
         databases = self.config.get('databases', {})
-        
+
         if connection_name in databases:
             db_config = databases[connection_name].copy()
             connection_string = db_config.pop('url')
             return connection_string, db_config
-        
+
         # Fall back to default configuration
         if 'default' in databases:
             default_config = databases['default'].copy()
             if 'url' in default_config:
                 connection_string = default_config.pop('url')
                 return connection_string, default_config
-        
+
         # Ultimate fallback
         raise NodeExecutionError(f"Database connection '{connection_name}' not found in project configuration")
 ```
@@ -160,26 +160,26 @@ class DatabaseConfigManager:
 ```python
 class SQLDatabaseNode(Node):
     """Enhanced SQL database node with shared connection pools."""
-    
+
     # Class-level shared resources
     _shared_pools = {}
     _pool_metrics = {}
     _pool_lock = threading.Lock()
     _config_manager = None
-    
+
     @classmethod
     def initialize(cls, project_config_path: str):
         """Initialize shared resources with project configuration."""
         cls._config_manager = DatabaseConfigManager(project_config_path)
-    
+
     def _get_shared_engine(self, connection_string: str, config: dict):
         """Get or create shared engine for database connection."""
         cache_key = (connection_string, frozenset(config.items()))
-        
+
         with self._pool_lock:
             if cache_key not in self._shared_pools:
                 self.logger.info(f"Creating shared pool for {self._mask_connection_string(connection_string)}")
-                
+
                 # Apply sensible defaults
                 pool_config = {
                     "poolclass": QueuePool,
@@ -189,50 +189,50 @@ class SQLDatabaseNode(Node):
                     "pool_recycle": config.get("pool_recycle", 3600),
                     "pool_pre_ping": config.get("pool_pre_ping", True),
                 }
-                
+
                 # Add any additional config
                 for key, value in config.items():
                     if key not in pool_config:
                         pool_config[key] = value
-                
+
                 engine = create_engine(connection_string, **pool_config)
-                
+
                 self._shared_pools[cache_key] = engine
                 self._pool_metrics[cache_key] = {
                     'created_at': datetime.now(),
                     'total_queries': 0
                 }
-            
+
             return self._shared_pools[cache_key]
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute SQL query using shared connection pool."""
         connection_name = kwargs.get("connection")
         query = kwargs.get("query")
         parameters = kwargs.get("parameters", [])
-        
+
         if not connection_name:
             raise NodeExecutionError("connection parameter is required")
         if not query:
             raise NodeExecutionError("query parameter is required")
-        
+
         # Get database configuration
         if not self._config_manager:
             raise NodeExecutionError("SQLDatabaseNode not initialized. Call initialize() first.")
-        
+
         connection_string, db_config = self._config_manager.get_database_config(connection_name)
-        
+
         # Get shared engine
         engine = self._get_shared_engine(connection_string, db_config)
-        
+
         # Track metrics
         cache_key = (connection_string, frozenset(db_config.items()))
         with self._pool_lock:
             self._pool_metrics[cache_key]['total_queries'] += 1
-        
+
         # Execute query with shared connection pool
         start_time = time.time()
-        
+
         try:
             with engine.connect() as conn:
                 with conn.begin() as trans:
@@ -250,9 +250,9 @@ class SQLDatabaseNode(Node):
                             result = conn.execute(text(query), parameters)
                         else:
                             result = conn.execute(text(query))
-                        
+
                         execution_time = time.time() - start_time
-                        
+
                         # Process results
                         if result.returns_rows:
                             rows = result.fetchall()
@@ -263,27 +263,27 @@ class SQLDatabaseNode(Node):
                             formatted_data = []
                             columns = []
                             row_count = result.rowcount if result.rowcount != -1 else 0
-                        
+
                         trans.commit()
-                        
+
                     except Exception as e:
                         trans.rollback()
                         raise
-                        
+
         except SQLAlchemyError as e:
             execution_time = time.time() - start_time
             sanitized_error = self._sanitize_error_message(str(e))
             raise NodeExecutionError(f"Database error: {sanitized_error}") from e
-        
+
         self.logger.info(f"Query executed in {execution_time:.3f}s, {row_count} rows affected/returned")
-        
+
         return {
             "data": formatted_data,
             "row_count": row_count,
             "columns": columns,
             "execution_time": execution_time
         }
-    
+
     @classmethod
     def get_pool_status(cls) -> Dict[str, Any]:
         """Get status of all shared connection pools."""
@@ -293,7 +293,7 @@ class SQLDatabaseNode(Node):
                 pool = engine.pool
                 connection_string = key[0]
                 masked_string = cls._mask_connection_string(connection_string)
-                
+
                 status[masked_string] = {
                     'pool_size': pool.size(),
                     'checked_out': pool.checkedout(),
@@ -302,9 +302,9 @@ class SQLDatabaseNode(Node):
                     'utilization': pool.checkedout() / (pool.size() + pool.overflow()) if (pool.size() + pool.overflow()) > 0 else 0,
                     'metrics': cls._pool_metrics.get(key, {})
                 }
-            
+
             return status
-    
+
     @classmethod
     def cleanup_pools(cls):
         """Clean up all shared connection pools."""
@@ -390,7 +390,7 @@ databases:
     pool_timeout: 30
     pool_recycle: 300
 
-# Production  
+# Production
 databases:
   app_db:
     url: "${PROD_DATABASE_URL}"
@@ -447,7 +447,7 @@ SQLDatabaseNode(
 ### Risk 1: Shared Pool Contention
 **Risk**: Multiple workflows competing for the same connection pool could cause queuing delays.
 
-**Mitigation**: 
+**Mitigation**:
 - Proper pool sizing based on workload analysis
 - Monitoring and alerting on pool utilization
 - Configure appropriate timeouts
@@ -481,6 +481,6 @@ See TODO-037: Shared Database Pool Implementation for detailed implementation pl
 
 ---
 
-**Decision Date**: 2025-01-06  
-**Next Review**: 2025-04-06 (3 months after implementation)  
+**Decision Date**: 2025-01-06
+**Next Review**: 2025-04-06 (3 months after implementation)
 **Status**: PROPOSED - Pending implementation and testing

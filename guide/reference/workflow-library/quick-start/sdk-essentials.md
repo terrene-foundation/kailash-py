@@ -91,7 +91,7 @@ result = {"count": count + 1, "data": prev_result + [count]}
 ```python
 # ✅ CORRECT: Use direct field names
 convergence_check="converged == True"
-convergence_check="error < 0.01"  
+convergence_check="error < 0.01"
 convergence_check="count >= 10"
 
 # ❌ WRONG: Nested path access
@@ -116,7 +116,7 @@ result = {
     "shape": df.shape                     # Tuples are fine
 }
 
-# ✅ CRITICAL: NumPy array serialization  
+# ✅ CRITICAL: NumPy array serialization
 arr = np.array([1, 2, 3])
 result["array"] = arr.tolist()  # Convert to list
 
@@ -167,7 +167,7 @@ workflow.add_node("mcp_client", MCPClientNode())  # Overly complex
 # ✅ MODERN: Use IterativeLLMAgentNode for complex analysis
 workflow.add_node("strategy_agent", IterativeLLMAgentNode(
     provider="ollama",
-    model="llama3.2", 
+    model="llama3.2",
     max_iterations=4,
     convergence_criteria={
         "goal_satisfaction": {"threshold": 0.85}
@@ -267,7 +267,7 @@ results, run_id = runtime.execute(workflow, parameters={
 workflow = Workflow("api_integration")
 workflow.add_node("api_call", RestClientNode())
 workflow.add_node("transformer", PythonCodeNode(
-    name="transformer", 
+    name="transformer",
     code="result = {'processed': len(response.get('data', []))}"
 ))
 
@@ -299,7 +299,7 @@ Before deploying any workflow:
 ## 🔗 Next Steps
 
 - **Complex Cycles**: See [cyclic-workflows-complete.md](../advanced/cyclic-workflows-complete.md)
-- **AI Agents**: See [ai-agent-coordination.md](../advanced/ai-agent-coordination.md)  
+- **AI Agents**: See [ai-agent-coordination.md](../advanced/ai-agent-coordination.md)
 - **Production**: See [enterprise-integration.md](../advanced/enterprise-integration.md)
 - **Industry Examples**: See [by-industry/](../by-industry/) workflows
 

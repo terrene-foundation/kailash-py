@@ -113,7 +113,7 @@ workflow.add_node("primary_api", primary_api)
 
 # Fallback API for resilience
 fallback_api = RateLimitedAPINode(
-    id="fallback_api", 
+    id="fallback_api",
     base_url="https://api.backup.com",
     requests_per_minute=50,
     max_retries=2,
@@ -161,24 +161,24 @@ else:
         # Validate items structure
         items = payload.get("items", [])
         validated_items = []
-        
+
         for i, item in enumerate(items):
             if not isinstance(item, dict):
                 validation_result["warnings"].append(f"Item {i} is not a dictionary")
                 continue
-            
+
             # Required fields validation
             required_fields = ["id", "name", "status"]
             missing_fields = [f for f in required_fields if f not in item]
             if missing_fields:
                 validation_result["warnings"].append(f"Item {i} missing fields: {missing_fields}")
-            
+
             # Data type validation
             if "id" in item and not isinstance(item["id"], (int, str)):
                 validation_result["warnings"].append(f"Item {i} has invalid id type")
-            
+
             validated_items.append(item)
-        
+
         validation_result["data"] = {
             "items": validated_items,
             "total": len(validated_items),
@@ -217,11 +217,11 @@ for item in items:
         "source": metadata.get("source", "unknown"),
         "validation_status": "passed"
     })
-    
+
     # Add computed fields
     if "price" in item and "quantity" in item:
         enriched_item["total_value"] = item["price"] * item.get("quantity", 0)
-    
+
     enriched_items.append(enriched_item)
 
 # Generate summary statistics
@@ -287,8 +287,8 @@ workflow.connect("primary_api", "validator", mapping={"response": "data"})
 workflow.connect("validator", "router", mapping={"result": "data"})
 
 # Success path
-workflow.connect("router", "success_processor", 
-               output_key="true_output", 
+workflow.connect("router", "success_processor",
+               output_key="true_output",
                mapping={"data": "data"})
 
 # Error path
@@ -387,7 +387,7 @@ data_extractor = DataTransformer(
 if isinstance(data, dict) and "data" in data:
     items = data["data"]
     processed_items = []
-    
+
     for item in items:
         processed_items.append({
             "id": item.get("id"),
@@ -395,7 +395,7 @@ if isinstance(data, dict) and "data" in data:
             "price": item.get("price", 0),
             "available": item.get("stock", 0) > 0
         })
-    
+
     result = {
         "items": processed_items,
         "count": len(processed_items)
@@ -437,11 +437,11 @@ analytics = {
 # Process primary data for time series analysis
 if "transactions" in primary_data:
     transactions = primary_data["transactions"]
-    
+
     # Group by time periods
     hourly_data = defaultdict(lambda: {"count": 0, "volume": 0, "value": 0})
     daily_data = defaultdict(lambda: {"count": 0, "volume": 0, "value": 0})
-    
+
     for txn in transactions:
         timestamp = txn.get("timestamp", "")
         if timestamp:
@@ -450,41 +450,41 @@ if "transactions" in primary_data:
                 dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                 hour_key = dt.strftime("%Y-%m-%d %H:00")
                 day_key = dt.strftime("%Y-%m-%d")
-                
+
                 amount = float(txn.get("amount", 0))
                 volume = int(txn.get("quantity", 1))
-                
+
                 hourly_data[hour_key]["count"] += 1
                 hourly_data[hour_key]["volume"] += volume
                 hourly_data[hour_key]["value"] += amount
-                
+
                 daily_data[day_key]["count"] += 1
                 daily_data[day_key]["volume"] += volume
                 daily_data[day_key]["value"] += amount
-                
+
             except Exception as e:
                 analytics["anomalies"].append(f"Invalid timestamp: {timestamp}")
-    
+
     analytics["time_series"]["hourly"] = dict(hourly_data)
     analytics["time_series"]["daily"] = dict(daily_data)
 
 # Process geographic data
 if "user_locations" in secondary_data:
     locations = secondary_data["user_locations"]
-    
+
     for location in locations:
         country = location.get("country", "Unknown")
         region = location.get("region", "Unknown")
         user_count = int(location.get("user_count", 0))
         revenue = float(location.get("revenue", 0))
-        
+
         if country not in analytics["geographic"]:
             analytics["geographic"][country] = {
                 "regions": defaultdict(dict),
                 "total_users": 0,
                 "total_revenue": 0
             }
-        
+
         analytics["geographic"][country]["total_users"] += user_count
         analytics["geographic"][country]["total_revenue"] += revenue
         analytics["geographic"][country]["regions"][region] = {
@@ -496,12 +496,12 @@ if "user_locations" in secondary_data:
 # Category analysis
 if "product_categories" in tertiary_data:
     categories = tertiary_data["product_categories"]
-    
+
     for category in categories:
         cat_name = category.get("name", "Unknown")
         cat_sales = int(category.get("sales", 0))
         cat_revenue = float(category.get("revenue", 0))
-        
+
         analytics["categorical"][cat_name] = {
             "sales": cat_sales,
             "revenue": cat_revenue,
@@ -530,19 +530,19 @@ if total_transactions > 0:
         avg_daily = sum(daily_values) / len(daily_values)
         max_daily = max(daily_values)
         min_daily = min(daily_values)
-        
+
         # Flag anomalies (simple threshold-based)
         if max_daily > avg_daily * 2:
             analytics["anomalies"].append(f"High revenue day detected: ${max_daily:.2f} vs avg ${avg_daily:.2f}")
-        
+
         if min_daily < avg_daily * 0.3:
             analytics["anomalies"].append(f"Low revenue day detected: ${min_daily:.2f} vs avg ${avg_daily:.2f}")
 
 # Generate recommendations
 if analytics["performance_metrics"]["total_transactions"] > 100:
-    top_countries = sorted(analytics["geographic"].items(), 
+    top_countries = sorted(analytics["geographic"].items(),
                           key=lambda x: x[1]["total_revenue"], reverse=True)[:3]
-    
+
     analytics["recommendations"].extend([
         f"Focus marketing on top revenue countries: {', '.join([c[0] for c in top_countries])}",
         "Consider expanding operations in high-performing regions",
@@ -553,7 +553,7 @@ if analytics["performance_metrics"]["total_transactions"] > 100:
 if analytics["categorical"]:
     top_categories = sorted(analytics["categorical"].items(),
                            key=lambda x: x[1]["revenue"], reverse=True)[:5]
-    
+
     analytics["recommendations"].append(
         f"Prioritize inventory for top categories: {', '.join([c[0] for c in top_categories])}"
     )
@@ -634,12 +634,12 @@ for event in data.get("events", []):
         "timestamp": event.get("timestamp"),
         "processed_at": datetime.now().isoformat(),
         "payload": event.get("data", {}),
-        
+
         # Add computed fields
         "severity": "high" if event.get("priority", 0) > 8 else "medium" if event.get("priority", 0) > 5 else "low",
         "category": event.get("type", "unknown").split(".")[0],  # Extract main category
         "source_ip": event.get("metadata", {}).get("source_ip", "unknown"),
-        
+
         # Event enrichment
         "enriched_data": {
             "user_agent": event.get("metadata", {}).get("user_agent", ""),
@@ -648,12 +648,12 @@ for event in data.get("events", []):
             "correlation_id": event.get("correlation_id", "")
         }
     }
-    
+
     # Add business logic enrichment
     if processed_event["type"] == "purchase":
         amount = float(event.get("data", {}).get("amount", 0))
         processed_event["revenue_impact"] = "high" if amount > 100 else "medium" if amount > 50 else "low"
-    
+
     processed_events.append(processed_event)
 
 # Aggregate streaming metrics
@@ -671,7 +671,7 @@ metrics = {
 for event in processed_events:
     event_type = event.get("type", "unknown")
     severity = event.get("severity", "low")
-    
+
     metrics["event_types"][event_type] = metrics["event_types"].get(event_type, 0) + 1
     metrics["severity_distribution"][severity] += 1
 

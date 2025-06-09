@@ -2,7 +2,7 @@
 
 ## 🎯 Quick Decision Guide
 - **"How do I...?"** → [cheatsheet/README.md](cheatsheet/README.md) - 32 copy-paste guides
-- **"What pattern for...?"** → [pattern-library/README.md](pattern-library/README.md) - 11 architecture categories  
+- **"What pattern for...?"** → [pattern-library/README.md](pattern-library/README.md) - 11 architecture categories
 - **"Is this correct...?"** → [validation/validation-guide.md](validation/validation-guide.md) - LLM rules
 - **"Which node...?"** → [nodes/comprehensive-node-catalog.md](nodes/comprehensive-node-catalog.md) - 66+ node guide
 
@@ -12,7 +12,7 @@
 - **[Validation Guide](validation/validation-guide.md)** - Critical rules to prevent LLM mistakes
 - **[Node Catalog](nodes/comprehensive-node-catalog.md)** - Complete node reference with decision guide
 
-## 🏗️ Advanced Resources (Project-Specific)  
+## 🏗️ Advanced Resources (Project-Specific)
 - **[Pattern Library](pattern-library/README.md)** - 11 categories of workflow architectures
 - **[Workflow Library](workflow-library/README.md)** - End-to-end enterprise workflows by domain
 - **[Templates](templates/README.md)** - Ready-to-use code templates

@@ -34,7 +34,7 @@ customers_reader = CSVReaderNode(
 workflow.add_node("customers_reader", customers_reader)
 
 transactions_reader = CSVReaderNode(
-    id="transactions_reader", 
+    id="transactions_reader",
     file_path="data/transactions.csv"
 )
 workflow.add_node("transactions_reader", transactions_reader)
@@ -52,7 +52,7 @@ enriched_customers = DataTransformer(
 workflow.add_node("enriched_customers", enriched_customers)
 workflow.connect("valid_customers", "enriched_customers", mapping={"filtered_data": "data"})
 
-# Filter high-value transactions  
+# Filter high-value transactions
 high_value_transactions = FilterNode(id="high_value_transactions")
 workflow.add_node("high_value_transactions", high_value_transactions)
 workflow.connect("transactions_reader", "high_value_transactions", mapping={"data": "data"})
@@ -76,7 +76,7 @@ runtime = LocalRuntime()
 parameters = {
     "valid_customers": {
         "field": "status",
-        "operator": "==", 
+        "operator": "==",
         "value": "active"
     },
     "enriched_customers": {
@@ -111,7 +111,7 @@ from kailash.nodes.logic import SwitchNode, MergeNode
 
 # Enterprise database ETL workflow
 enterprise_etl = Workflow(
-    workflow_id="enterprise_etl_001", 
+    workflow_id="enterprise_etl_001",
     name="enterprise_database_etl",
     description="Production-grade database ETL with real-time capabilities"
 )
@@ -127,7 +127,7 @@ primary_db = SQLDatabaseNode(
 enterprise_etl.add_node("primary_db", primary_db)
 
 secondary_db = SQLDatabaseNode(
-    id="secondary_db", 
+    id="secondary_db",
     connection_string="${SECONDARY_DB_URL}",
     query="SELECT customer_id, preference_data, last_activity FROM user_preferences",
     operation_type="read",
@@ -196,21 +196,21 @@ seen_values = {"customer_id": set(), "email": set()}
 for i, record in enumerate(data):
     record_score = 100.0
     record_issues = []
-    
+
     # Completeness check
-    missing_fields = [field for field in quality_rules["completeness"]["required_fields"] 
+    missing_fields = [field for field in quality_rules["completeness"]["required_fields"]
                      if not record.get(field)]
     if missing_fields:
         completeness_penalty = (len(missing_fields) / len(quality_rules["completeness"]["required_fields"])) * 100
         record_score -= completeness_penalty * quality_rules["completeness"]["weight"]
         record_issues.append(f"Missing fields: {missing_fields}")
-    
+
     # Validity checks
     email = record.get("email", "")
     if email and not re.match(quality_rules["validity"]["email_pattern"], email):
         record_score -= 25 * quality_rules["validity"]["weight"]
         record_issues.append("Invalid email format")
-    
+
     # Date validity
     created_date = record.get("created_date")
     if created_date:
@@ -225,13 +225,13 @@ for i, record in enumerate(data):
         if not date_valid:
             record_score -= 20 * quality_rules["validity"]["weight"]
             record_issues.append("Invalid date format")
-    
+
     # Consistency checks
     status = record.get("status", "").lower()
     if status and status not in quality_rules["consistency"]["status_values"]:
         record_score -= 15 * quality_rules["consistency"]["weight"]
         record_issues.append(f"Invalid status: {status}")
-    
+
     # Timeliness check
     if created_date:
         try:
@@ -248,7 +248,7 @@ for i, record in enumerate(data):
                     continue
         except:
             pass
-    
+
     # Uniqueness checks
     customer_id = record.get("customer_id")
     if customer_id:
@@ -257,26 +257,26 @@ for i, record in enumerate(data):
             record_issues.append("Duplicate customer_id")
         else:
             seen_values["customer_id"].add(customer_id)
-    
+
     if email:
         if email in seen_values["email"]:
             record_score -= 25 * quality_rules["uniqueness"]["weight"]
             record_issues.append("Duplicate email")
         else:
             seen_values["email"].add(email)
-    
+
     # Assign quality grade
     if record_score >= 90:
         quality_grade = "A"
     elif record_score >= 80:
-        quality_grade = "B" 
+        quality_grade = "B"
     elif record_score >= 70:
         quality_grade = "C"
     elif record_score >= 60:
         quality_grade = "D"
     else:
         quality_grade = "F"
-    
+
     # Enhanced record with quality metadata
     enhanced_record = dict(record)
     enhanced_record.update({
@@ -285,9 +285,9 @@ for i, record in enumerate(data):
         "quality_issues": record_issues,
         "quality_check_timestamp": datetime.now().isoformat()
     })
-    
+
     processed_records.append(enhanced_record)
-    
+
     # Collect issues for reporting
     if record_issues:
         quality_report["data_issues"].extend([f"Record {i}: {issue}" for issue in record_issues])
@@ -299,7 +299,7 @@ if processed_records:
     for record in processed_records:
         grade = record["quality_grade"]
         grade_distribution[grade] = grade_distribution.get(grade, 0) + 1
-    
+
     quality_report.update({
         "total_records": len(processed_records),
         "average_quality_score": round(avg_quality_score, 2),
@@ -307,14 +307,14 @@ if processed_records:
         "high_quality_records": sum(1 for r in processed_records if r["quality_score"] >= 80),
         "low_quality_records": sum(1 for r in processed_records if r["quality_score"] < 60)
     })
-    
+
     # Generate recommendations
     if avg_quality_score < 70:
         quality_report["recommendations"].append("Overall data quality below threshold - implement data governance")
-    
+
     if grade_distribution.get("F", 0) > len(processed_records) * 0.1:
         quality_report["recommendations"].append("High number of failing records - review data sources")
-    
+
     if len(seen_values["customer_id"]) < len(processed_records):
         quality_report["recommendations"].append("Duplicate customer IDs detected - implement deduplication")
 
@@ -337,7 +337,7 @@ enterprise_etl.add_node("data_merger", data_merger)
 
 # Route based on quality scores
 quality_router = SwitchNode(
-    id="quality_router", 
+    id="quality_router",
     condition="quality_score >= 80"
 )
 enterprise_etl.add_node("quality_router", quality_router)
@@ -356,19 +356,19 @@ for record in data:
     if record.get("quality_score", 0) >= 80:
         # Advanced enrichment for high-quality records
         enriched_record = dict(record)
-        
+
         # AI-powered segmentation (simplified)
         total_value = float(record.get("total_value", 0))
         engagement_score = float(record.get("engagement_score", 0))
         recency_days = int(record.get("days_since_signup", 0))
-        
+
         # Multi-dimensional scoring
         value_score = min(total_value / 10000 * 100, 100)  # Normalize to 100
         engagement_normalized = min(engagement_score, 100)
         recency_score = max(100 - (recency_days / 365 * 50), 0)  # Decay over time
-        
+
         composite_score = (value_score * 0.4 + engagement_normalized * 0.4 + recency_score * 0.2)
-        
+
         # Advanced segmentation
         if composite_score >= 80:
             tier = "Platinum"
@@ -382,7 +382,7 @@ for record in data:
         else:
             tier = "Bronze"
             priority = "Low"
-        
+
         enriched_record.update({
             "composite_score": round(composite_score, 2),
             "customer_tier": tier,
@@ -390,7 +390,7 @@ for record in data:
             "premium_processing": True,
             "enrichment_timestamp": datetime.now().isoformat()
         })
-        
+
         premium_records.append(enriched_record)
 
 result = {"premium_processed": premium_records}
@@ -404,7 +404,7 @@ enterprise_etl.connect("primary_db", "quality_checker", mapping={"data": "data"}
 enterprise_etl.connect("quality_checker", "data_merger", mapping={"quality_checked_data": "data1"})
 enterprise_etl.connect("secondary_db", "data_merger", mapping={"data": "data2"})
 enterprise_etl.connect("data_merger", "quality_router", mapping={"merged_data": "data"})
-enterprise_etl.connect("quality_router", "premium_processor", 
+enterprise_etl.connect("quality_router", "premium_processor",
                       output_key="true_output", mapping={"data": "data"})
 
 # Multiple output destinations
@@ -470,28 +470,28 @@ if 'customer_id' in df.columns and 'order_value' in df.columns:
         'order_value': ['sum', 'mean', 'count'],
         'order_date': ['min', 'max']
     }).round(2)
-    
+
     customer_metrics.columns = ['total_value', 'avg_order', 'order_count', 'first_order', 'last_order']
     customer_metrics = customer_metrics.reset_index()
-    
+
     # RFM Analysis (Recency, Frequency, Monetary)
     reference_date = datetime.now()
     customer_metrics['recency'] = (reference_date - pd.to_datetime(customer_metrics['last_order'])).dt.days
     customer_metrics['frequency'] = customer_metrics['order_count']
     customer_metrics['monetary'] = customer_metrics['total_value']
-    
+
     # Scoring (1-5 scale)
     customer_metrics['recency_score'] = pd.qcut(customer_metrics['recency'], 5, labels=[5,4,3,2,1])
     customer_metrics['frequency_score'] = pd.qcut(customer_metrics['frequency'].rank(method='first'), 5, labels=[1,2,3,4,5])
     customer_metrics['monetary_score'] = pd.qcut(customer_metrics['monetary'], 5, labels=[1,2,3,4,5])
-    
+
     # Combine scores
     customer_metrics['rfm_score'] = (
-        customer_metrics['recency_score'].astype(str) + 
-        customer_metrics['frequency_score'].astype(str) + 
+        customer_metrics['recency_score'].astype(str) +
+        customer_metrics['frequency_score'].astype(str) +
         customer_metrics['monetary_score'].astype(str)
     )
-    
+
     # Segment classification
     def classify_customer(rfm_score):
         if rfm_score in ['555', '554', '544', '545', '454', '455', '445']:
@@ -510,11 +510,11 @@ if 'customer_id' in df.columns and 'order_value' in df.columns:
             return "Hibernating"
         else:
             return 'Others'
-    
+
     customer_metrics['customer_segment'] = customer_metrics['rfm_score'].apply(classify_customer)
-    
+
     # Merge back with original data
-    df = df.merge(customer_metrics[['customer_id', 'customer_segment', 'rfm_score']], 
+    df = df.merge(customer_metrics[['customer_id', 'customer_segment', 'rfm_score']],
                   on='customer_id', how='left')
 
 # Data enrichment
@@ -614,13 +614,13 @@ if not unified_data:
 else:
     # Create unified DataFrame
     df = pd.DataFrame(unified_data)
-    
+
     # Schema standardization
     required_columns = ['id', 'name', 'email', 'value', 'data_source']
     for col in required_columns:
         if col not in df.columns:
             df[col] = None
-    
+
     # Data type standardization
     if 'id' in df.columns:
         df['id'] = df['id'].astype(str)
@@ -628,27 +628,27 @@ else:
         df['value'] = pd.to_numeric(df['value'], errors='coerce').fillna(0)
     if 'email' in df.columns:
         df['email'] = df['email'].str.lower().str.strip()
-    
+
     # Deduplication across sources (prefer database > api > file)
     source_priority = {'database': 1, 'api': 2, 'file': 3}
     df['source_priority'] = df['data_source'].map(source_priority)
-    
+
     # Keep record with highest priority for each ID
     df_deduplicated = df.sort_values('source_priority').drop_duplicates(subset=['id'], keep='first')
-    
+
     # Data quality scoring
     df_deduplicated['completeness_score'] = df_deduplicated.apply(
         lambda row: sum(1 for val in row[required_columns[:-1]] if pd.notna(val)) / (len(required_columns) - 1),
         axis=1
     )
-    
+
     # Business logic transformations
     df_deduplicated['data_freshness'] = df_deduplicated['data_source'].map({
         'database': 'real_time',
-        'api': 'near_real_time', 
+        'api': 'near_real_time',
         'file': 'batch'
     })
-    
+
     # Integration metadata
     integration_summary = {
         'total_sources': len(df['data_source'].unique()),
@@ -657,7 +657,7 @@ else:
         'average_completeness': df_deduplicated['completeness_score'].mean(),
         'integration_timestamp': datetime.now().isoformat()
     }
-    
+
     result = {
         "unified_records": df_deduplicated.to_dict('records'),
         "integration_summary": integration_summary,
@@ -698,11 +698,11 @@ from datetime import datetime
 # Simulate streaming data extraction
 def extract_incremental_data(last_processed_timestamp=None):
     """Extract data that has changed since last processing."""
-    
+
     # In production, this would connect to change data capture (CDC) systems
     # For demo, simulate with timestamp-based extraction
     current_time = datetime.now()
-    
+
     # Simulate data with various change types
     extracted_records = []
     for i in range(10):  # Batch of 10 records
@@ -714,7 +714,7 @@ def extract_incremental_data(last_processed_timestamp=None):
             'checksum': hashlib.md5(f'Sample data {i}'.encode()).hexdigest()
         }
         extracted_records.append(record)
-    
+
     return extracted_records
 
 # Extract current batch
@@ -743,7 +743,7 @@ processing_results = []
 
 for record in extracted_records:
     change_type = record.get('change_type', 'INSERT')
-    
+
     if change_type == 'DELETE':
         # Handle deletion
         processed_record = {
@@ -763,7 +763,7 @@ for record in extracted_records:
             'source_checksum': record['checksum'],
             'status': 'processed'
         }
-    
+
     processing_results.append(processed_record)
 
 # Stream processing metrics
@@ -804,7 +804,7 @@ loading_results = []
 for record in processed_records:
     operation = record['operation']
     record_id = record['id']
-    
+
     if operation == 'DELETE':
         # Soft delete implementation
         loading_result = {
@@ -822,7 +822,7 @@ for record in processed_records:
             'upserted_timestamp': datetime.now().isoformat(),
             'conflict_resolution': 'timestamp_based'
         }
-    
+
     loading_results.append(loading_result)
 
 # Track loading metrics
@@ -863,19 +863,19 @@ import glob
 
 class DataLakeExtractor:
     """Extract data with partitioning and metadata management."""
-    
+
     def __init__(self, data_lake_path="/data/lake"):
         self.data_lake_path = data_lake_path
         self.extraction_metadata = {}
-    
+
     def discover_partitions(self, table_name):
         """Discover available data partitions."""
         partition_path = f"{self.data_lake_path}/{table_name}"
-        
+
         # Simulate partition discovery (year/month/day structure)
         partitions = []
         base_date = datetime.now() - timedelta(days=30)
-        
+
         for i in range(30):  # Last 30 days
             partition_date = base_date + timedelta(days=i)
             partition = {
@@ -888,9 +888,9 @@ class DataLakeExtractor:
                 'last_modified': partition_date.isoformat()
             }
             partitions.append(partition)
-        
+
         return partitions
-    
+
     def extract_partition_data(self, partition_info):
         """Extract data from specific partition."""
         # Simulate reading from data lake partition
@@ -906,7 +906,7 @@ class DataLakeExtractor:
                 'file_size_bytes': 1024 + (i * 10)
             }
             records.append(record)
-        
+
         return records
 
 # Initialize extractor and process partitions
@@ -950,7 +950,7 @@ from datetime import datetime
 
 class SchemaEvolutionTransformer:
     """Handle schema evolution and data format changes."""
-    
+
     def __init__(self):
         self.schema_versions = {
             'v1.0': ['id', 'event_timestamp', 'data_value'],
@@ -958,30 +958,30 @@ class SchemaEvolutionTransformer:
             'v3.0': ['id', 'event_timestamp', 'data_value', 'partition_year', 'partition_month', 'partition_day', 'file_size_bytes']
         }
         self.current_schema = 'v3.0'
-    
+
     def detect_schema_version(self, sample_record):
         """Detect schema version from record structure."""
         record_fields = set(sample_record.keys())
-        
+
         for version, fields in sorted(self.schema_versions.items(), reverse=True):
             if set(fields).issubset(record_fields):
                 return version
-        
+
         return 'unknown'
-    
+
     def transform_to_current_schema(self, records):
         """Transform records to current schema."""
         if not records:
             return []
-        
+
         # Detect source schema
         source_schema = self.detect_schema_version(records[0])
-        
+
         transformed_records = []
         for record in records:
             # Start with original record
             transformed = record.copy()
-            
+
             # Add missing fields based on schema evolution
             if 'partition_year' not in transformed:
                 # Extract from timestamp or default
@@ -989,23 +989,23 @@ class SchemaEvolutionTransformer:
                 transformed['partition_year'] = event_time.year
                 transformed['partition_month'] = event_time.month
                 transformed['partition_day'] = event_time.day
-            
+
             if 'file_size_bytes' not in transformed:
                 # Estimate based on data_value length
                 transformed['file_size_bytes'] = len(str(transformed.get('data_value', ''))) * 8
-            
+
             # Add transformation metadata
             transformed['schema_version'] = self.current_schema
             transformed['source_schema'] = source_schema
             transformed['transformation_timestamp'] = datetime.now().isoformat()
-            
+
             # Data quality enhancements
             transformed['data_completeness'] = self.calculate_completeness(transformed)
-            
+
             transformed_records.append(transformed)
-        
+
         return transformed_records
-    
+
     def calculate_completeness(self, record):
         """Calculate data completeness score."""
         required_fields = self.schema_versions[self.current_schema]
@@ -1049,20 +1049,20 @@ import os
 
 class PartitionedDataWarehouseLoader:
     """Load data to warehouse with intelligent partitioning."""
-    
+
     def __init__(self, warehouse_path="/warehouse"):
         self.warehouse_path = warehouse_path
         self.partition_strategy = "date_based"
-    
+
     def create_partition_key(self, record):
         """Create partition key from record."""
         if self.partition_strategy == "date_based":
             year = record.get('partition_year', datetime.now().year)
             month = record.get('partition_month', datetime.now().month)
             return f"year={year}/month={month:02d}"
-        
+
         return "default"
-    
+
     def load_to_warehouse(self, transformed_records):
         """Load records to partitioned warehouse."""
         # Group records by partition
@@ -1072,7 +1072,7 @@ class PartitionedDataWarehouseLoader:
             if partition_key not in partition_groups:
                 partition_groups[partition_key] = []
             partition_groups[partition_key].append(record)
-        
+
         # Load each partition
         loading_results = []
         for partition_key, records in partition_groups.items():
@@ -1086,14 +1086,14 @@ class PartitionedDataWarehouseLoader:
                 'index_created': True
             }
             loading_results.append(partition_result)
-        
+
         return loading_results
-    
+
     def create_loading_summary(self, loading_results):
         """Create summary of loading operation."""
         total_records = sum(r['record_count'] for r in loading_results)
         total_partitions = len(loading_results)
-        
+
         return {
             'total_records_loaded': total_records,
             'partitions_created': total_partitions,
@@ -1153,7 +1153,7 @@ from datetime import datetime
 
 class DataQualityValidator:
     """Comprehensive data quality validation."""
-    
+
     def __init__(self):
         self.quality_rules = {
             'completeness_threshold': 0.95,  # 95% of fields must be complete
@@ -1162,51 +1162,51 @@ class DataQualityValidator:
             'consistency_threshold': 0.85    # 85% consistency across related fields
         }
         self.quality_report = {}
-    
+
     def validate_completeness(self, df):
         """Check data completeness."""
         completeness_scores = {}
         for column in df.columns:
             non_null_ratio = df[column].notna().sum() / len(df)
             completeness_scores[column] = non_null_ratio
-        
+
         overall_completeness = sum(completeness_scores.values()) / len(completeness_scores)
-        
+
         return {
             'overall_score': overall_completeness,
             'column_scores': completeness_scores,
             'passed': overall_completeness >= self.quality_rules['completeness_threshold'],
-            'failing_columns': [col for col, score in completeness_scores.items() 
+            'failing_columns': [col for col, score in completeness_scores.items()
                               if score < self.quality_rules['completeness_threshold']]
         }
-    
+
     def validate_uniqueness(self, df, unique_columns=['id']):
         """Check data uniqueness."""
         uniqueness_results = {}
-        
+
         for column in unique_columns:
             if column in df.columns:
                 total_count = len(df[column])
                 unique_count = df[column].nunique()
                 uniqueness_ratio = unique_count / total_count if total_count > 0 else 0
-                
+
                 uniqueness_results[column] = {
                     'uniqueness_ratio': uniqueness_ratio,
                     'duplicate_count': total_count - unique_count,
                     'passed': uniqueness_ratio >= self.quality_rules['uniqueness_threshold']
                 }
-        
+
         overall_passed = all(result['passed'] for result in uniqueness_results.values())
-        
+
         return {
             'column_results': uniqueness_results,
             'overall_passed': overall_passed
         }
-    
+
     def validate_formats(self, df):
         """Validate data formats."""
         format_validations = {}
-        
+
         # Email format validation
         if 'email' in df.columns:
             email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -1217,7 +1217,7 @@ class DataQualityValidator:
                 'total_count': total_emails,
                 'validity_ratio': valid_emails / total_emails if total_emails > 0 else 0
             }
-        
+
         # Date format validation
         date_columns = [col for col in df.columns if 'date' in col.lower()]
         for col in date_columns:
@@ -1232,43 +1232,43 @@ class DataQualityValidator:
                 }
             except:
                 format_validations[col] = {'validity_ratio': 0, 'error': 'format_validation_failed'}
-        
+
         return format_validations
-    
+
     def run_full_validation(self, data):
         """Run comprehensive data quality validation."""
         if not data:
             return {'error': 'No data provided for validation'}
-        
+
         df = pd.DataFrame(data)
-        
+
         # Run all validations
         completeness_result = self.validate_completeness(df)
         uniqueness_result = self.validate_uniqueness(df)
         format_result = self.validate_formats(df)
-        
+
         # Calculate overall quality score
         quality_scores = []
         if completeness_result['overall_score'] is not None:
             quality_scores.append(completeness_result['overall_score'])
-        
+
         uniqueness_scores = [r['uniqueness_ratio'] for r in uniqueness_result['column_results'].values()]
         if uniqueness_scores:
             quality_scores.append(sum(uniqueness_scores) / len(uniqueness_scores))
-        
+
         format_scores = [r['validity_ratio'] for r in format_result.values() if 'validity_ratio' in r]
         if format_scores:
             quality_scores.append(sum(format_scores) / len(format_scores))
-        
+
         overall_quality_score = sum(quality_scores) / len(quality_scores) if quality_scores else 0
-        
+
         # Determine if data passes quality gates
         quality_passed = (
             completeness_result['passed'] and
             uniqueness_result['overall_passed'] and
             overall_quality_score >= 0.80  # 80% overall threshold
         )
-        
+
         return {
             'overall_quality_score': round(overall_quality_score * 100, 2),
             'quality_passed': quality_passed,
@@ -1301,7 +1301,7 @@ import logging
 
 class ETLErrorHandler:
     """Handle ETL errors with recovery strategies."""
-    
+
     def __init__(self):
         self.error_strategies = {
             'data_quality_failure': 'quarantine_and_alert',
@@ -1310,10 +1310,10 @@ class ETLErrorHandler:
             'network_error': 'exponential_backoff'
         }
         self.recovery_attempts = {}
-    
+
     def classify_error(self, error_type, error_details):
         """Classify error and determine recovery strategy."""
-        
+
         error_classification = {
             'error_type': error_type,
             'severity': 'low',
@@ -1321,7 +1321,7 @@ class ETLErrorHandler:
             'alert_required': False,
             'quarantine_data': False
         }
-        
+
         if error_type == 'data_quality_failure':
             quality_score = error_details.get('overall_quality_score', 0)
             if quality_score < 50:
@@ -1337,26 +1337,26 @@ class ETLErrorHandler:
                     'recovery_strategy': 'data_cleaning',
                     'alert_required': True
                 })
-        
+
         elif error_type == 'transformation_error':
             error_classification.update({
                 'severity': 'medium',
                 'recovery_strategy': 'retry_with_fallback',
                 'alert_required': True
             })
-        
+
         elif error_type == 'loading_error':
             error_classification.update({
                 'severity': 'high',
                 'recovery_strategy': 'retry_with_backoff',
                 'alert_required': True
             })
-        
+
         return error_classification
-    
+
     def execute_recovery_strategy(self, error_classification, original_data):
         """Execute appropriate recovery strategy."""
-        
+
         strategy = error_classification['recovery_strategy']
         recovery_result = {
             'strategy_executed': strategy,
@@ -1365,7 +1365,7 @@ class ETLErrorHandler:
             'recovered_data': None,
             'actions_taken': []
         }
-        
+
         if strategy == 'quarantine_and_alert':
             # Quarantine bad data and alert operators
             recovery_result.update({
@@ -1377,7 +1377,7 @@ class ETLErrorHandler:
                     'Pipeline halted for investigation'
                 ]
             })
-        
+
         elif strategy == 'data_cleaning':
             # Attempt automated data cleaning
             cleaned_count = int(len(original_data) * 0.8)  # Simulate 80% recovery
@@ -1390,7 +1390,7 @@ class ETLErrorHandler:
                     'Pipeline continued with cleaned data'
                 ]
             })
-        
+
         elif strategy == 'retry_with_fallback':
             # Retry with simpler transformation logic
             recovery_result.update({
@@ -1402,18 +1402,18 @@ class ETLErrorHandler:
                     'Basic data structure preserved'
                 ]
             })
-        
+
         return recovery_result
-    
+
     def handle_etl_error(self, error_type, error_details, original_data):
         """Main error handling orchestration."""
-        
+
         # Classify the error
         error_classification = self.classify_error(error_type, error_details)
-        
+
         # Execute recovery strategy
         recovery_result = self.execute_recovery_strategy(error_classification, original_data)
-        
+
         # Create incident report
         incident_report = {
             'incident_id': f"etl_incident_{int(datetime.now().timestamp())}",
@@ -1427,15 +1427,15 @@ class ETLErrorHandler:
             },
             'recommendations': self.generate_recommendations(error_classification)
         }
-        
+
         return incident_report
-    
+
     def generate_recommendations(self, error_classification):
         """Generate recommendations for preventing similar errors."""
-        
+
         recommendations = []
         error_type = error_classification['error_type']
-        
+
         if error_type == 'data_quality_failure':
             recommendations.extend([
                 'Implement upstream data validation',
@@ -1443,7 +1443,7 @@ class ETLErrorHandler:
                 'Review data source quality processes',
                 'Consider implementing data contracts'
             ])
-        
+
         elif error_type == 'transformation_error':
             recommendations.extend([
                 'Add more comprehensive error handling in transformations',
@@ -1451,7 +1451,7 @@ class ETLErrorHandler:
                 'Add unit tests for transformation logic',
                 'Consider schema validation'
             ])
-        
+
         elif error_type == 'loading_error':
             recommendations.extend([
                 'Implement connection pooling',
@@ -1459,7 +1459,7 @@ class ETLErrorHandler:
                 'Monitor target system capacity',
                 'Implement circuit breaker pattern'
             ])
-        
+
         return recommendations
 
 # Handle any errors from previous stages
@@ -1499,35 +1499,35 @@ else:
 # Complete ETL workflow with external system integration
 def create_enterprise_etl_workflow():
     """Create production-ready ETL workflow with full integration."""
-    
+
     workflow = Workflow("enterprise_etl")
-    
+
     # 1. Extract from multiple sources
     workflow.add_node("extract_erp", SQLReaderNode())        # ERP system
     workflow.add_node("extract_crm", RestClientNode())       # CRM API
     workflow.add_node("extract_files", CSVReaderNode())      # File uploads
-    
+
     # 2. Data quality validation
     workflow.add_node("validate_quality", data_quality_check_node)
-    
+
     # 3. Error handling
     workflow.add_node("handle_errors", error_handler_node)
-    
+
     # 4. Data transformation
     workflow.add_node("transform_data", advanced_transformation_node)
-    
+
     # 5. Load to data warehouse
     workflow.add_node("load_warehouse", SQLWriterNode())
-    
+
     # 6. Update data catalog
     workflow.add_node("update_catalog", catalog_update_node)
-    
+
     # 7. Send notifications
     workflow.add_node("notify_completion", notification_node)
-    
+
     # Connect the complete pipeline
     # [connections implementation]
-    
+
     return workflow
 
 # Execute with full monitoring

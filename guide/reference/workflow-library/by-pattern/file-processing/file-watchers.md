@@ -86,7 +86,7 @@ for file_info in new_files:
     try:
         file_path = Path(file_info["path"])
         mime_type, _ = mimetypes.guess_type(str(file_path))
-        
+
         # Basic processing based on file type
         if mime_type and mime_type.startswith("text/"):
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -200,22 +200,22 @@ if watch_dir.exists():
     for file_path in watch_dir.rglob("*"):
         if not file_path.is_file():
             continue
-            
+
         # Skip already processed
         if str(file_path) in processed_files:
             continue
-            
+
         # Check size
         if file_path.stat().st_size > max_file_size:
             skipped["too_large"] += 1
             continue
-            
+
         # Check age
         file_age = now - datetime.fromtimestamp(file_path.stat().st_mtime)
         if file_age < min_age:
             skipped["too_new"] += 1
             continue
-            
+
         # Check patterns
         file_str = str(file_path)
         if include_patterns and not any(p.search(file_str) for p in include_patterns):
@@ -224,7 +224,7 @@ if watch_dir.exists():
         if exclude_patterns and any(p.search(file_str) for p in exclude_patterns):
             skipped["excluded"] += 1
             continue
-            
+
         # Add candidate
         candidates.append({
             "path": str(file_path),
@@ -292,7 +292,7 @@ for file_info in pdf_files:
             "text_content": "",
             "tables": []
         }
-        
+
         # Try pdfplumber first (better text extraction)
         try:
             with pdfplumber.open(pdf_path) as pdf:
@@ -301,13 +301,13 @@ for file_info in pdf_files:
                     "pages": len(pdf.pages),
                     "metadata": pdf.metadata
                 }
-                
+
                 # Extract text and tables from each page
                 full_text = []
                 for i, page in enumerate(pdf.pages):
                     page_text = page.extract_text() or ""
                     full_text.append(page_text)
-                    
+
                     # Extract tables
                     tables = page.extract_tables()
                     if tables:
@@ -316,21 +316,21 @@ for file_info in pdf_files:
                             "table_index": j,
                             "data": table
                         } for j, table in enumerate(tables)])
-                    
+
                     doc_data["pages"].append({
                         "page_num": i + 1,
                         "text": page_text,
                         "char_count": len(page_text)
                     })
-                
+
                 doc_data["text_content"] = "\\n\\n".join(full_text)
-                
+
         except Exception as e:
             # Fallback to PyPDF2
             with open(pdf_path, 'rb') as file:
                 reader = PyPDF2.PdfReader(file)
                 doc_data["metadata"]["pages"] = len(reader.pages)
-                
+
                 full_text = []
                 for i, page in enumerate(reader.pages):
                     text = page.extract_text()
@@ -340,9 +340,9 @@ for file_info in pdf_files:
                         "text": text,
                         "char_count": len(text)
                     })
-                
+
                 doc_data["text_content"] = "\\n\\n".join(full_text)
-        
+
         # Calculate statistics
         doc_data["statistics"] = {
             "total_characters": len(doc_data["text_content"]),
@@ -350,9 +350,9 @@ for file_info in pdf_files:
             "total_lines": doc_data["text_content"].count("\\n"),
             "table_count": len(doc_data["tables"])
         }
-        
+
         parsed_documents.append(doc_data)
-        
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],
@@ -392,7 +392,7 @@ for file_info in word_files:
     try:
         doc_path = Path(file_info["path"])
         doc = docx.Document(doc_path)
-        
+
         doc_data = {
             "path": str(doc_path),
             "name": doc_path.name,
@@ -401,7 +401,7 @@ for file_info in word_files:
             "headers": [],
             "sections": []
         }
-        
+
         # Extract paragraphs with formatting
         for para in doc.paragraphs:
             if para.text.strip():
@@ -411,7 +411,7 @@ for file_info in word_files:
                     "alignment": str(para.alignment) if para.alignment else None,
                     "runs": []
                 }
-                
+
                 # Extract run-level formatting
                 for run in para.runs:
                     if run.text:
@@ -423,16 +423,16 @@ for file_info in word_files:
                             "font_name": run.font.name,
                             "font_size": run.font.size.pt if run.font.size else None
                         })
-                
+
                 doc_data["paragraphs"].append(para_data)
-                
+
                 # Identify headers
                 if para.style and "Heading" in para.style.name:
                     doc_data["headers"].append({
                         "level": para.style.name,
                         "text": para.text
                     })
-        
+
         # Extract tables
         for table_idx, table in enumerate(doc.tables):
             table_data = {
@@ -443,15 +443,15 @@ for file_info in word_files:
                     "cols": len(table.columns)
                 }
             }
-            
+
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
                     row_data.append(cell.text.strip())
                 table_data["rows"].append(row_data)
-            
+
             doc_data["tables"].append(table_data)
-        
+
         # Extract sections
         for section in doc.sections:
             doc_data["sections"].append({
@@ -460,7 +460,7 @@ for file_info in word_files:
                 "page_width": section.page_width,
                 "page_height": section.page_height
             })
-        
+
         # Calculate statistics
         full_text = " ".join([p["text"] for p in doc_data["paragraphs"]])
         doc_data["statistics"] = {
@@ -470,9 +470,9 @@ for file_info in word_files:
             "table_count": len(doc_data["tables"]),
             "header_count": len(doc_data["headers"])
         }
-        
+
         parsed_docs.append(doc_data)
-        
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],
@@ -514,18 +514,18 @@ errors = []
 for file_info in image_files:
     try:
         img_path = Path(file_info["path"])
-        
+
         # Load and preprocess image
         image = cv2.imread(str(img_path))
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
+
         # Apply preprocessing based on options
         if apply_denoise:
             gray = cv2.fastNlMeansDenoising(gray)
-        
+
         if apply_threshold:
             gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-        
+
         if apply_deskew:
             # Simple deskewing
             coords = np.column_stack(np.where(gray > 0))
@@ -537,10 +537,10 @@ for file_info in image_files:
                 center = (w // 2, h // 2)
                 M = cv2.getRotationMatrix2D(center, angle, 1.0)
                 gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-        
+
         # Convert back to PIL Image
         pil_image = Image.fromarray(gray)
-        
+
         # Extract text with different modes
         text_data = {
             "path": str(img_path),
@@ -550,22 +550,22 @@ for file_info in image_files:
             "languages": languages,
             "blocks": []
         }
-        
+
         # Basic text extraction
         text_data["text"] = pytesseract.image_to_string(pil_image, lang="+".join(languages))
-        
+
         # Detailed extraction with confidence
         details = pytesseract.image_to_data(pil_image, lang="+".join(languages), output_type=pytesseract.Output.DICT)
-        
+
         # Group by blocks
         n_boxes = len(details['text'])
         valid_confidences = []
         current_block = {"text": [], "confidence": []}
-        
+
         for i in range(n_boxes):
             if int(details['conf'][i]) > 0:
                 valid_confidences.append(int(details['conf'][i]))
-                
+
                 if details['text'][i].strip():
                     current_block["text"].append(details['text'][i])
                     current_block["confidence"].append(int(details['conf'][i]))
@@ -576,18 +576,18 @@ for file_info in image_files:
                         "avg_confidence": sum(current_block["confidence"]) / len(current_block["confidence"])
                     })
                     current_block = {"text": [], "confidence": []}
-        
+
         # Add last block
         if current_block["text"]:
             text_data["blocks"].append({
                 "text": " ".join(current_block["text"]),
                 "avg_confidence": sum(current_block["confidence"]) / len(current_block["confidence"])
             })
-        
+
         # Calculate overall confidence
         if valid_confidences:
             text_data["confidence"] = sum(valid_confidences) / len(valid_confidences)
-        
+
         # Word and character count
         text_data["statistics"] = {
             "character_count": len(text_data["text"]),
@@ -595,9 +595,9 @@ for file_info in image_files:
             "line_count": text_data["text"].count("\\n"),
             "block_count": len(text_data["blocks"])
         }
-        
+
         extracted_texts.append(text_data)
-        
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],
@@ -646,11 +646,11 @@ errors = []
 for file_info in image_files:
     try:
         img_path = Path(file_info["path"])
-        
+
         # Load image
         image = cv2.imread(str(img_path))
         pil_image = Image.open(img_path)
-        
+
         analysis = {
             "path": str(img_path),
             "name": img_path.name,
@@ -659,7 +659,7 @@ for file_info in image_files:
             "content_analysis": {},
             "hashes": {}
         }
-        
+
         # Basic properties
         height, width = image.shape[:2]
         analysis["properties"] = {
@@ -670,23 +670,23 @@ for file_info in image_files:
             "mode": pil_image.mode,
             "size_bytes": img_path.stat().st_size
         }
-        
+
         # Quality metrics
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) > 2 else image
-        
+
         # Blur detection (Laplacian variance)
         laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
         analysis["quality_metrics"]["sharpness_score"] = float(laplacian_var)
         analysis["quality_metrics"]["is_blurry"] = laplacian_var < blur_threshold
-        
+
         # Brightness and contrast
         analysis["quality_metrics"]["brightness"] = float(np.mean(gray))
         analysis["quality_metrics"]["contrast"] = float(np.std(gray))
-        
+
         # Noise estimation
         noise = cv2.Laplacian(gray, cv2.CV_64F)
         analysis["quality_metrics"]["noise_level"] = float(np.std(noise))
-        
+
         # Content analysis
         if perform_content_analysis:
             # Color distribution
@@ -695,28 +695,28 @@ for file_info in image_files:
                 hist_b = cv2.calcHist([image], [0], None, [256], [0, 256])
                 hist_g = cv2.calcHist([image], [1], None, [256], [0, 256])
                 hist_r = cv2.calcHist([image], [2], None, [256], [0, 256])
-                
+
                 # Dominant colors
                 analysis["content_analysis"]["dominant_colors"] = {
                     "blue": int(np.argmax(hist_b)),
                     "green": int(np.argmax(hist_g)),
                     "red": int(np.argmax(hist_r))
                 }
-                
+
                 # Color statistics
                 analysis["content_analysis"]["color_stats"] = {
                     "mean_rgb": [float(np.mean(image[:,:,i])) for i in range(3)],
                     "std_rgb": [float(np.std(image[:,:,i])) for i in range(3)]
                 }
-            
+
             # Edge detection
             edges = cv2.Canny(gray, 100, 200)
             analysis["content_analysis"]["edge_density"] = float(np.sum(edges > 0) / (width * height))
-            
+
             # Corner detection
             corners = cv2.goodFeaturesToTrack(gray, maxCorners=1000, qualityLevel=0.01, minDistance=10)
             analysis["content_analysis"]["corner_count"] = len(corners) if corners is not None else 0
-        
+
         # Perceptual hashing for duplicate detection
         analysis["hashes"] = {
             "average_hash": str(imagehash.average_hash(pil_image)),
@@ -724,7 +724,7 @@ for file_info in image_files:
             "difference_hash": str(imagehash.dhash(pil_image)),
             "wavelet_hash": str(imagehash.whash(pil_image))
         }
-        
+
         # Face detection if requested
         if detect_faces:
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -734,9 +734,9 @@ for file_info in image_files:
                 {"x": int(x), "y": int(y), "width": int(w), "height": int(h)}
                 for (x, y, w, h) in faces
             ]
-        
+
         analyzed_images.append(analysis)
-        
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],
@@ -781,22 +781,22 @@ for file_info in image_files:
         img_path = Path(file_info["path"])
         output_dir = Path(output_directory)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Load image
         image = cv2.imread(str(img_path))
         pil_image = Image.open(img_path)
-        
+
         transformation_log = {
             "source": str(img_path),
             "transformations": []
         }
-        
+
         # Resize if needed
         if resize_config["enabled"]:
             target_width = resize_config.get("width")
             target_height = resize_config.get("height")
             max_dimension = resize_config.get("max_dimension")
-            
+
             if max_dimension:
                 # Resize keeping aspect ratio
                 h, w = image.shape[:2]
@@ -813,7 +813,7 @@ for file_info in image_files:
                 image = cv2.resize(image, (target_width, target_height))
                 pil_image = pil_image.resize((target_width, target_height))
                 transformation_log["transformations"].append(f"Resized to {target_width}x{target_height}")
-        
+
         # Apply filters
         if filters["sharpen"]:
             kernel = np.array([[-1,-1,-1],
@@ -821,37 +821,37 @@ for file_info in image_files:
                               [-1,-1,-1]])
             image = cv2.filter2D(image, -1, kernel)
             transformation_log["transformations"].append("Applied sharpening filter")
-        
+
         if filters["blur"]:
             image = cv2.GaussianBlur(image, (5, 5), 0)
             transformation_log["transformations"].append("Applied Gaussian blur")
-        
+
         if filters["edge_enhance"]:
             edges = cv2.Canny(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 100, 200)
             edges_colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
             image = cv2.addWeighted(image, 0.8, edges_colored, 0.2, 0)
             transformation_log["transformations"].append("Enhanced edges")
-        
+
         # Color adjustments using PIL
         if adjustments["brightness"] != 1.0:
             enhancer = ImageEnhance.Brightness(pil_image)
             pil_image = enhancer.enhance(adjustments["brightness"])
             transformation_log["transformations"].append(f"Adjusted brightness: {adjustments['brightness']}")
-        
+
         if adjustments["contrast"] != 1.0:
             enhancer = ImageEnhance.Contrast(pil_image)
             pil_image = enhancer.enhance(adjustments["contrast"])
             transformation_log["transformations"].append(f"Adjusted contrast: {adjustments['contrast']}")
-        
+
         if adjustments["saturation"] != 1.0:
             enhancer = ImageEnhance.Color(pil_image)
             pil_image = enhancer.enhance(adjustments["saturation"])
             transformation_log["transformations"].append(f"Adjusted saturation: {adjustments['saturation']}")
-        
+
         # Convert PIL back to CV2 format if needed
         if len(transformation_log["transformations"]) > 3:  # If we did PIL operations
             image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-        
+
         # Auto-enhancement
         if auto_enhance:
             # Auto white balance
@@ -862,7 +862,7 @@ for file_info in image_files:
             result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
             image = cv2.cvtColor(result, cv2.COLOR_LAB2BGR)
             transformation_log["transformations"].append("Applied auto white balance")
-            
+
             # Auto contrast
             lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
             l, a, b = cv2.split(lab)
@@ -870,11 +870,11 @@ for file_info in image_files:
             l = clahe.apply(l)
             image = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
             transformation_log["transformations"].append("Applied adaptive histogram equalization")
-        
+
         # Save transformed image
         output_filename = f"{img_path.stem}_transformed{output_format}"
         output_path = output_dir / output_filename
-        
+
         # Save with quality settings
         if output_format in ['.jpg', '.jpeg']:
             cv2.imwrite(str(output_path), image, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
@@ -882,11 +882,11 @@ for file_info in image_files:
             cv2.imwrite(str(output_path), image, [cv2.IMWRITE_PNG_COMPRESSION, png_compression])
         else:
             cv2.imwrite(str(output_path), image)
-        
+
         transformation_log["output"] = str(output_path)
         transformation_log["output_size"] = output_path.stat().st_size
         transformed_images.append(transformation_log)
-        
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],
@@ -941,7 +941,7 @@ for file_info in archive_files:
         archive_path = Path(file_info["path"])
         extract_dir = Path(extraction_directory) / archive_path.stem
         extract_dir.mkdir(parents=True, exist_ok=True)
-        
+
         archive_data = {
             "path": str(archive_path),
             "name": archive_path.name,
@@ -951,7 +951,7 @@ for file_info in archive_files:
             "compressed_size": archive_path.stat().st_size,
             "extraction_path": str(extract_dir)
         }
-        
+
         # Determine archive type and extract
         if archive_path.suffix.lower() in ['.zip']:
             archive_data["type"] = "zip"
@@ -967,7 +967,7 @@ for file_info in archive_files:
                             "date_time": str(info.date_time)
                         })
                         archive_data["total_size"] += info.file_size
-                
+
                 # Extract with filters
                 for info in zip_ref.infolist():
                     if apply_filters:
@@ -979,15 +979,15 @@ for file_info in archive_files:
                         # Check size limits
                         if max_file_size_mb and info.file_size > max_file_size_mb * 1024 * 1024:
                             continue
-                    
+
                     # Extract file
                     if extract_files:
                         zip_ref.extract(info, extract_dir)
-        
+
         elif archive_path.suffix.lower() in ['.tar', '.tgz', '.tar.gz', '.tar.bz2']:
             archive_data["type"] = "tar"
             mode = 'r:gz' if archive_path.suffix in ['.tgz', '.gz'] else 'r:bz2' if archive_path.suffix == '.bz2' else 'r'
-            
+
             with tarfile.open(archive_path, mode) as tar_ref:
                 # List contents
                 for member in tar_ref.getmembers():
@@ -1001,7 +1001,7 @@ for file_info in archive_files:
                             "mtime": member.mtime
                         })
                         archive_data["total_size"] += member.size
-                
+
                 # Extract with filters
                 if extract_files:
                     for member in tar_ref.getmembers():
@@ -1012,28 +1012,28 @@ for file_info in archive_files:
                                 continue
                             if max_file_size_mb and member.size > max_file_size_mb * 1024 * 1024:
                                 continue
-                        
+
                         tar_ref.extract(member, extract_dir)
-        
+
         elif archive_path.suffix.lower() == '.gz' and not '.tar' in archive_path.name:
             archive_data["type"] = "gzip"
             # Handle single gzipped file
             output_path = extract_dir / archive_path.stem
-            
+
             with gzip.open(archive_path, 'rb') as gz_file:
                 with open(output_path, 'wb') as out_file:
                     shutil.copyfileobj(gz_file, out_file)
-            
+
             archive_data["files"].append({
                 "filename": archive_path.stem,
                 "uncompressed_size": output_path.stat().st_size
             })
             archive_data["total_size"] = output_path.stat().st_size
-        
+
         # Calculate compression ratio
         if archive_data["total_size"] > 0:
             archive_data["compression_ratio"] = archive_data["compressed_size"] / archive_data["total_size"]
-        
+
         # Scan extracted files if requested
         if scan_extracted and extract_files:
             extracted_info = []
@@ -1045,9 +1045,9 @@ for file_info in archive_files:
                         "relative_path": str(extracted_file.relative_to(extract_dir))
                     })
             archive_data["extracted_files"] = extracted_info
-        
+
         processed_archives.append(archive_data)
-        
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],
@@ -1107,7 +1107,7 @@ for archive_name, files in archive_groups.items():
     try:
         output_path = Path(output_directory) / f"{archive_name}{archive_format}"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         archive_info = {
             "name": archive_name,
             "path": str(output_path),
@@ -1117,10 +1117,10 @@ for archive_name, files in archive_groups.items():
             "total_size_after": 0,
             "creation_time": time.time()
         }
-        
+
         if archive_format == ".zip":
             compression = zipfile.ZIP_DEFLATED if compression_level > 0 else zipfile.ZIP_STORED
-            
+
             with zipfile.ZipFile(output_path, 'w', compression=compression) as zip_file:
                 for file_info in files:
                     file_path = Path(file_info["path"])
@@ -1130,10 +1130,10 @@ for archive_name, files in archive_groups.items():
                             arcname = file_path
                         else:
                             arcname = file_path.name
-                        
+
                         # Add file
                         zip_file.write(file_path, arcname=arcname, compress_type=compression)
-                        
+
                         # Track info
                         file_size = file_path.stat().st_size
                         archive_info["files"].append({
@@ -1142,7 +1142,7 @@ for archive_name, files in archive_groups.items():
                             "size": file_size
                         })
                         archive_info["total_size_before"] += file_size
-                
+
                 # Add metadata if provided
                 if include_metadata:
                     metadata = {
@@ -1151,7 +1151,7 @@ for archive_name, files in archive_groups.items():
                         "compression_level": compression_level
                     }
                     zip_file.writestr("_metadata.json", json.dumps(metadata, indent=2))
-        
+
         elif archive_format in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
             if archive_format in [".tar.gz", ".tgz"]:
                 mode = 'w:gz'
@@ -1159,7 +1159,7 @@ for archive_name, files in archive_groups.items():
                 mode = 'w:bz2'
             else:
                 mode = 'w'
-            
+
             with tarfile.open(output_path, mode) as tar_file:
                 for file_info in files:
                     file_path = Path(file_info["path"])
@@ -1169,10 +1169,10 @@ for archive_name, files in archive_groups.items():
                             arcname = file_path
                         else:
                             arcname = file_path.name
-                        
+
                         # Add file
                         tar_file.add(file_path, arcname=arcname)
-                        
+
                         # Track info
                         file_size = file_path.stat().st_size
                         archive_info["files"].append({
@@ -1181,7 +1181,7 @@ for archive_name, files in archive_groups.items():
                             "size": file_size
                         })
                         archive_info["total_size_before"] += file_size
-                
+
                 # Add metadata if provided
                 if include_metadata:
                     metadata = {
@@ -1194,14 +1194,14 @@ for archive_name, files in archive_groups.items():
                     metadata_info.size = len(metadata_content)
                     metadata_info.mtime = time.time()
                     tar_file.addfile(metadata_info, io.BytesIO(metadata_content))
-        
+
         # Get final archive size
         archive_info["total_size_after"] = output_path.stat().st_size
         archive_info["compression_ratio"] = (
             archive_info["total_size_after"] / archive_info["total_size_before"]
             if archive_info["total_size_before"] > 0 else 1
         )
-        
+
         # Verify archive if requested
         if verify_after_creation:
             try:
@@ -1219,9 +1219,9 @@ for archive_name, files in archive_groups.items():
             except Exception as e:
                 archive_info["verified"] = False
                 archive_info["verification_error"] = str(e)
-        
+
         created_archives.append(archive_info)
-        
+
     except Exception as e:
         errors.append({
             "archive": archive_name,
@@ -1279,39 +1279,39 @@ monitored_paths = [Path(p) for p in monitor_paths]
 for base_path in monitored_paths:
     if not base_path.exists():
         continue
-    
+
     # Recursive scan based on configuration
     if recursive_monitoring:
         file_iterator = base_path.rglob("*")
     else:
         file_iterator = base_path.glob("*")
-    
+
     for file_path in file_iterator:
         if not file_path.is_file():
             continue
-        
+
         # Apply filters
         if file_patterns:
             if not any(file_path.match(pattern) for pattern in file_patterns):
                 continue
-        
+
         file_key = str(file_path)
         file_stat = file_path.stat()
-        
+
         # Calculate file hash for change detection
         if detect_content_changes:
             with open(file_path, 'rb') as f:
                 file_hash = hashlib.md5(f.read(1024 * 1024)).hexdigest()  # First 1MB
         else:
             file_hash = None
-        
+
         current_info = {
             "path": file_key,
             "size": file_stat.st_size,
             "mtime": file_stat.st_mtime,
             "hash": file_hash
         }
-        
+
         # Check for events
         if file_key not in file_registry:
             # New file
@@ -1323,7 +1323,7 @@ for base_path in monitored_paths:
             })
         else:
             prev_info = file_registry[file_key]
-            
+
             # Check for modifications
             if prev_info["mtime"] != current_info["mtime"]:
                 event_queue.append({
@@ -1342,7 +1342,7 @@ for base_path in monitored_paths:
                     "timestamp": current_time,
                     "details": {"hash_changed": True}
                 })
-        
+
         # Update registry
         file_registry[file_key] = current_info
 
@@ -1355,7 +1355,7 @@ if detect_deletions:
                 current_files.update(str(p) for p in base_path.rglob("*") if p.is_file())
             else:
                 current_files.update(str(p) for p in base_path.glob("*") if p.is_file())
-    
+
     for file_key in list(file_registry.keys()):
         if file_key not in current_files:
             event_queue.append({
@@ -1376,7 +1376,7 @@ for event in event_queue:
             last_event_time = prev_state.get("last_event_times", {}).get(event["path"], 0)
             if current_time - last_event_time < cooldown_seconds:
                 continue
-        
+
         filtered_events.append(event)
 
 # Update last event times
@@ -1430,13 +1430,13 @@ for event in events:
     try:
         event_type = event["type"]
         file_path = Path(event["path"])
-        
+
         processing_result = {
             "event": event,
             "actions_taken": [],
             "timestamp": time.time()
         }
-        
+
         # Route based on event type
         if event_type == "created":
             # New file actions
@@ -1449,13 +1449,13 @@ for event in events:
                     "action": "backup",
                     "destination": str(backup_path)
                 })
-            
+
             if actions["on_create"].get("notify"):
                 processing_result["actions_taken"].append({
                     "action": "notify",
                     "message": f"New file created: {file_path.name}"
                 })
-            
+
             if actions["on_create"].get("process"):
                 # Trigger processing based on file type
                 if file_path.suffix.lower() in ['.csv', '.xlsx']:
@@ -1468,7 +1468,7 @@ for event in events:
                         "action": "queue_for_processing",
                         "processor": "image_pipeline"
                     })
-        
+
         elif event_type == "modified":
             # File modification actions
             if actions["on_modify"].get("version"):
@@ -1481,12 +1481,12 @@ for event in events:
                     "action": "version",
                     "version_path": str(version_path)
                 })
-            
+
             if actions["on_modify"].get("validate"):
                 # Validate file integrity
                 is_valid = True
                 validation_errors = []
-                
+
                 if file_path.suffix.lower() == '.json':
                     try:
                         with open(file_path, 'r') as f:
@@ -1494,13 +1494,13 @@ for event in events:
                     except json.JSONDecodeError as e:
                         is_valid = False
                         validation_errors.append(str(e))
-                
+
                 processing_result["actions_taken"].append({
                     "action": "validate",
                     "valid": is_valid,
                     "errors": validation_errors
                 })
-        
+
         elif event_type == "deleted":
             # File deletion actions
             if actions["on_delete"].get("log"):
@@ -1508,14 +1508,14 @@ for event in events:
                     "action": "log_deletion",
                     "details": event["details"]
                 })
-            
+
             if actions["on_delete"].get("alert"):
                 processing_result["actions_taken"].append({
                     "action": "alert",
                     "severity": "warning",
                     "message": f"File deleted: {event['path']}"
                 })
-        
+
         # Apply common actions
         if apply_common_actions:
             # Log all events
@@ -1525,20 +1525,20 @@ for event in events:
                 "path": event["path"],
                 "actions": processing_result["actions_taken"]
             }
-            
+
             log_path = Path(log_directory) / f"file_events_{time.strftime('%Y%m%d')}.jsonl"
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             with open(log_path, 'a') as f:
                 f.write(json.dumps(log_entry) + "\\n")
-            
+
             processing_result["actions_taken"].append({
                 "action": "logged",
                 "log_path": str(log_path)
             })
-        
+
         processed_events.append(processing_result)
-        
+
     except Exception as e:
         errors.append({
             "event": event,
@@ -1556,7 +1556,7 @@ summary = {
 for result in processed_events:
     event_type = result["event"]["type"]
     summary["by_event_type"][event_type] = summary["by_event_type"].get(event_type, 0) + 1
-    
+
     for action in result["actions_taken"]:
         action_type = action["action"]
         summary["by_action"][action_type] = summary["by_action"].get(action_type, 0) + 1
@@ -1598,7 +1598,7 @@ import json
 def process_with_retry(file_path, max_retries=3, backoff_factor=2):
     \"\"\"Process file with exponential backoff retry\"\"\"
     last_error = None
-    
+
     for attempt in range(max_retries):
         try:
             # Attempt processing
@@ -1610,7 +1610,7 @@ def process_with_retry(file_path, max_retries=3, backoff_factor=2):
                 sleep_time = backoff_factor ** attempt
                 time.sleep(sleep_time)
             continue
-    
+
     return {
         "success": False,
         "error": str(last_error),
@@ -1621,14 +1621,14 @@ def process_with_retry(file_path, max_retries=3, backoff_factor=2):
 def process_single_file(file_path):
     \"\"\"Process individual file with comprehensive error handling\"\"\"
     path = Path(file_path)
-    
+
     # Validate file exists and is accessible
     if not path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-    
+
     if not path.is_file():
         raise ValueError(f"Not a file: {file_path}")
-    
+
     # Check file lock (platform-specific)
     try:
         with open(path, 'rb') as f:
@@ -1636,24 +1636,24 @@ def process_single_file(file_path):
             f.read(1)
     except IOError as e:
         raise IOError(f"File locked or inaccessible: {e}")
-    
+
     # Process based on file type
     file_size = path.stat().st_size
-    
+
     # Size validation
     if file_size > max_file_size_bytes:
         raise ValueError(f"File too large: {file_size} bytes")
-    
+
     if file_size == 0:
         raise ValueError("File is empty")
-    
+
     # Actual processing logic here
     processing_result = {
         "path": str(path),
         "size": file_size,
         "processed_at": time.time()
     }
-    
+
     return processing_result
 
 # Main processing loop
@@ -1665,7 +1665,7 @@ results = {
 
 for file_info in files_to_process:
     file_path = file_info["path"]
-    
+
     # Pre-processing validation
     if skip_hidden_files and Path(file_path).name.startswith('.'):
         results["skipped"].append({
@@ -1673,14 +1673,14 @@ for file_info in files_to_process:
             "reason": "hidden_file"
         })
         continue
-    
+
     # Process with retry
     result = process_with_retry(
         file_path,
         max_retries=retry_config["max_attempts"],
         backoff_factor=retry_config["backoff_factor"]
     )
-    
+
     if result["success"]:
         results["successful"].append(result)
     else:
@@ -1689,7 +1689,7 @@ for file_info in files_to_process:
             "error": result["error"],
             "attempts": result["attempts"]
         })
-        
+
         # Error recovery actions
         if error_recovery["move_failed"]:
             try:
@@ -1753,15 +1753,15 @@ def process_file_batch(batch):
         try:
             # Simulate file processing
             file_path = Path(file_info["path"])
-            
+
             # Read file in chunks for memory efficiency
             chunk_size = 1024 * 1024  # 1MB chunks
             hasher = hashlib.md5()
-            
+
             with open(file_path, 'rb') as f:
                 while chunk := f.read(chunk_size):
                     hasher.update(chunk)
-            
+
             results.append({
                 "path": str(file_path),
                 "hash": hasher.hexdigest(),
@@ -1789,7 +1789,7 @@ start_time = time.time()
 with concurrent.futures.ThreadPoolExecutor(max_workers=optimal_workers) as executor:
     # Submit all batches
     future_to_batch = {executor.submit(process_file_batch, batch): batch for batch in batches}
-    
+
     # Process completed futures
     for future in concurrent.futures.as_completed(future_to_batch):
         batch_start = time.time()
@@ -1939,32 +1939,32 @@ errors = []
 for file_info in files_to_upload:
     try:
         file_path = Path(file_info["path"])
-        
+
         # Determine S3 key
         if preserve_directory_structure:
             s3_key = str(file_path.relative_to(base_directory))
         else:
             s3_key = file_path.name
-        
+
         if s3_prefix:
             s3_key = f"{s3_prefix}/{s3_key}"
-        
+
         # Determine content type
         content_type, _ = mimetypes.guess_type(str(file_path))
         if not content_type:
             content_type = 'application/octet-stream'
-        
+
         # Upload with metadata
         metadata = {
             'original-path': str(file_path),
             'upload-time': str(time.time()),
             'source-system': source_system_name
         }
-        
+
         # Add custom metadata
         if file_info.get("metadata"):
             metadata.update(file_info["metadata"])
-        
+
         # Upload file
         with open(file_path, 'rb') as f:
             s3_client.put_object(
@@ -1975,7 +1975,7 @@ for file_info in files_to_upload:
                 Metadata=metadata,
                 ServerSideEncryption='AES256' if enable_encryption else None
             )
-        
+
         uploaded_files.append({
             "local_path": str(file_path),
             "s3_key": s3_key,
@@ -1983,11 +1983,11 @@ for file_info in files_to_upload:
             "size": file_path.stat().st_size,
             "url": f"s3://{s3_bucket}/{s3_key}"
         })
-        
+
         # Delete local file if configured
         if delete_after_upload:
             file_path.unlink()
-            
+
     except Exception as e:
         errors.append({
             "file": file_info["path"],

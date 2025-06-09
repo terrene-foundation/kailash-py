@@ -88,7 +88,7 @@ if needs_snapshot:
         elif event['event_type'] == 'Deleted':
             state['deleted'] = True
             state['deleted_at'] = event['timestamp']
-    
+
     # Create snapshot
     snapshot = {
         'aggregate_id': events[0]['aggregate_id'],
@@ -97,7 +97,7 @@ if needs_snapshot:
         'timestamp': datetime.utcnow().isoformat(),
         'events_included': event_count
     }
-    
+
     result = {'snapshot': snapshot, 'created': True}
 else:
     result = {'snapshot': None, 'created': False}
@@ -125,7 +125,7 @@ for event in events:
             continue
         if end_time and event['timestamp'] > end_time:
             break
-            
+
         # Apply event based on type
         if event['event_type'] == 'Created':
             state = event['payload']
@@ -139,9 +139,9 @@ for event in events:
             handler_name = f"handle_{event['event_type'].lower()}"
             if handler_name in custom_handlers:
                 state = custom_handlers[handler_name](state, event)
-        
+
         replayed_events.append(event['event_id'])
-        
+
     except Exception as e:
         errors.append({
             'event_id': event.get('event_id', 'unknown'),
@@ -203,19 +203,19 @@ projections = {
 for event in events:
     # Type-based projection
     projections['by_type'][event['event_type']].append(event)
-    
+
     # Aggregate-based projection
     projections['by_aggregate'][event['aggregate_id']].append(event)
-    
+
     # Date-based projection
     date_key = event['timestamp'][:10]  # YYYY-MM-DD
     projections['by_date'][date_key].append(event)
-    
+
     # Update statistics
     projections['statistics']['total_events'] += 1
     projections['statistics']['event_types'][event['event_type']] += 1
     projections['statistics']['aggregates_affected'].add(event['aggregate_id'])
-    
+
     # Update time range
     if not projections['statistics']['time_range']['start']:
         projections['statistics']['time_range']['start'] = event['timestamp']
@@ -248,7 +248,7 @@ aggregate_ids = query_aggregates if query_aggregates else []
 
 # Filter events up to point in time
 relevant_events = [
-    e for e in events 
+    e for e in events
     if datetime.fromisoformat(e['timestamp']) <= point_in_time
     and (not aggregate_ids or e['aggregate_id'] in aggregate_ids)
 ]
@@ -259,9 +259,9 @@ for event in relevant_events:
     agg_id = event['aggregate_id']
     if agg_id not in states:
         states[agg_id] = {'history': [], 'current': {}}
-    
+
     states[agg_id]['history'].append(event)
-    
+
     # Apply event to current state
     if event['event_type'] == 'Created':
         states[agg_id]['current'] = event['payload']
@@ -376,7 +376,7 @@ for message in messages:
     try:
         # Check message TTL
         if 'ttl' in message['headers']:
-            message_age = (datetime.utcnow() - 
+            message_age = (datetime.utcnow() -
                           datetime.fromisoformat(message['headers']['timestamp'])).total_seconds()
             if message_age > message['headers']['ttl']:
                 dead_letter_messages.append({
@@ -385,12 +385,12 @@ for message in messages:
                     'expired_at': datetime.utcnow().isoformat()
                 })
                 continue
-        
+
         # Process based on topic
         if message['topic'] in topic_handlers:
             handler = topic_handlers[message['topic']]
             result = handler(message['payload'])
-            
+
             processed_messages.append({
                 'message_id': message['message_id'],
                 'result': result,
@@ -403,11 +403,11 @@ for message in messages:
                 'reason': f"No handler for topic: {message['topic']}",
                 'failed_at': datetime.utcnow().isoformat()
             })
-            
+
     except Exception as e:
         # Increment retry count
         message['routing']['retry_count'] += 1
-        
+
         if message['routing']['retry_count'] >= message['routing']['max_retries']:
             # Max retries exceeded - send to dead letter queue
             dead_letter_messages.append({
@@ -463,7 +463,7 @@ metrics = {
 # Enqueue messages
 for message in messages_to_enqueue:
     queue_name = message['routing']['key']
-    
+
     # Check if delayed message
     if message['headers'].get('delayed'):
         scheduled_time = datetime.fromisoformat(message['headers']['scheduled_time'])
@@ -477,7 +477,7 @@ for message in messages_to_enqueue:
             heapq.heappush(priority_queues[queue_name], (2, message))
         else:
             heapq.heappush(priority_queues[queue_name], (1, message))
-    
+
     metrics['messages_enqueued'] += 1
 
 # Process delayed messages that are ready
@@ -491,13 +491,13 @@ while delayed_messages and delayed_messages[0][0] <= current_time:
 dequeued_messages = []
 for queue_name, max_batch_size in dequeue_requests.items():
     batch = []
-    
+
     # Dequeue from priority queue
     while len(batch) < max_batch_size and priority_queues[queue_name]:
         _, message = heapq.heappop(priority_queues[queue_name])
         batch.append(message)
         metrics['messages_dequeued'] += 1
-    
+
     if batch:
         dequeued_messages.extend(batch)
 
@@ -573,7 +573,7 @@ for command in commands:
                 'rejected_at': datetime.utcnow().isoformat()
             })
             continue
-        
+
         # Check if processor exists
         if command['command_type'] not in command_processors:
             rejected_commands.append({
@@ -582,12 +582,12 @@ for command in commands:
                 'rejected_at': datetime.utcnow().isoformat()
             })
             continue
-        
+
         # Process command
         event = command_processors[command['command_type']](command)
         event['command_id'] = command.get('command_id', str(uuid.uuid4()))
         events.append(event)
-        
+
     except Exception as e:
         rejected_commands.append({
             'command': command,
@@ -623,13 +623,13 @@ def query_order_by_id(query, read_model):
 def query_orders_by_customer(query, read_model):
     customer_id = query['parameters']['customer_id']
     all_orders = read_model.get('orders', {})
-    return [order for order in all_orders.values() 
+    return [order for order in all_orders.values()
             if order.get('customer_id') == customer_id]
 
 def query_orders_by_status(query, read_model):
     status = query['parameters']['status']
     all_orders = read_model.get('orders', {})
-    return [order for order in all_orders.values() 
+    return [order for order in all_orders.values()
             if order.get('status') == status]
 
 query_processors = {
@@ -647,7 +647,7 @@ for query in queries:
     try:
         # Generate cache key
         cache_key = f"{query['query_type']}:{json.dumps(query['parameters'], sort_keys=True)}"
-        
+
         # Check cache
         if cache_key in cache:
             cached_entry = cache[cache_key]
@@ -659,19 +659,19 @@ for query in queries:
                 })
                 cache_hits += 1
                 continue
-        
+
         # Process query
         cache_misses += 1
         processor = query_processors.get(query['query_type'])
         if processor:
             query_result = processor(query, read_model)
-            
+
             # Cache result
             cache[cache_key] = {
                 'data': query_result,
                 'expires_at': (datetime.utcnow() + timedelta(seconds=CACHE_TTL)).isoformat()
             }
-            
+
             results.append({
                 'query_id': query.get('query_id'),
                 'result': query_result,
@@ -682,7 +682,7 @@ for query in queries:
                 'query_id': query.get('query_id'),
                 'error': f"Unknown query type: {query['query_type']}"
             })
-            
+
     except Exception as e:
         results.append({
             'query_id': query.get('query_id'),
@@ -725,7 +725,7 @@ if not read_model:
 def handle_order_created(event, model):
     order_data = event['payload']
     order_id = event['aggregate_id']
-    
+
     model['orders'][order_id] = {
         'id': order_id,
         'customer_id': order_data['customer_id'],
@@ -735,7 +735,7 @@ def handle_order_created(event, model):
         'created_at': event['timestamp'],
         'updated_at': event['timestamp']
     }
-    
+
     # Update statistics
     model['statistics']['total_orders'] += 1
     status_counts = model['statistics']['orders_by_status']
@@ -755,7 +755,7 @@ def handle_order_cancelled(event, model):
         old_status = order['status']
         order['status'] = 'cancelled'
         order['cancelled_at'] = event['timestamp']
-        
+
         # Update statistics
         status_counts = model['statistics']['orders_by_status']
         status_counts[old_status] = max(0, status_counts.get(old_status, 0) - 1)
@@ -801,7 +801,7 @@ cqrs_workflow.add_node(read_model_updater)
 cqrs_workflow.add_node(query_handler)
 
 # Connect command flow
-cqrs_workflow.connect("command_handler", "read_model_updater", 
+cqrs_workflow.connect("command_handler", "read_model_updater",
                      mapping={"events": "events"})
 ```
 
@@ -845,12 +845,12 @@ saga_state = {
 for i, step_def in enumerate(saga_steps[saga_type]):
     saga_state['current_step'] = i
     step_name = step_def['step']
-    
+
     try:
         # Execute step
         if step_name in step_handlers:
             step_result = step_handlers[step_name](saga_state['context'])
-            
+
             # Update context with step results
             saga_state['context'][f'{step_name}_result'] = step_result
             saga_state['steps_completed'].append({
@@ -858,7 +858,7 @@ for i, step_def in enumerate(saga_steps[saga_type]):
                 'completed_at': datetime.utcnow().isoformat(),
                 'result': step_result
             })
-            
+
             # Track compensation if needed
             if step_def['compensate']:
                 saga_state['compensations_needed'].insert(0, {
@@ -867,7 +867,7 @@ for i, step_def in enumerate(saga_steps[saga_type]):
                 })
         else:
             raise Exception(f"No handler for step: {step_name}")
-            
+
     except Exception as e:
         # Step failed - start compensation
         saga_state['status'] = 'compensating'
@@ -876,7 +876,7 @@ for i, step_def in enumerate(saga_steps[saga_type]):
             'error': str(e),
             'failed_at': datetime.utcnow().isoformat()
         })
-        
+
         # Execute compensations
         for compensation in saga_state['compensations_needed']:
             try:
@@ -888,7 +888,7 @@ for i, step_def in enumerate(saga_steps[saga_type]):
                     'compensation': compensation['step'],
                     'error': str(comp_error)
                 })
-        
+
         saga_state['status'] = 'failed'
         break
 else:
@@ -930,7 +930,7 @@ for saga in sagas:
         saga['timed_out_at'] = datetime.utcnow().isoformat()
         timed_out_sagas.append(saga)
         continue
-    
+
     # Check status
     if saga['status'] == 'completed':
         completed_sagas.append(saga)
@@ -940,7 +940,7 @@ for saga in sagas:
         if retry_count < len(RETRY_DELAYS):
             last_error_time = datetime.fromisoformat(saga['errors'][-1]['failed_at'])
             retry_delay = timedelta(seconds=RETRY_DELAYS[retry_count])
-            
+
             if datetime.utcnow() - last_error_time >= retry_delay:
                 # Mark for retry
                 saga['status'] = 'pending_retry'
@@ -1020,7 +1020,7 @@ for event in events:
             'started_by': event['event_type'],
             'started_at': datetime.utcnow().isoformat()
         })
-    
+
     # Generate commands based on event
     if event['event_type'] in event_command_map:
         for cmd_spec in event_command_map[event['event_type']]:
@@ -1034,7 +1034,7 @@ for event in events:
                 'created_at': datetime.utcnow().isoformat()
             }
             generated_commands.append(command)
-    
+
     # Track saga progress
     saga_updates.append({
         'saga_id': saga_id,
@@ -1083,7 +1083,7 @@ window_results = []
 
 for event in stream_events:
     event_time = datetime.fromisoformat(event['timestamp'])
-    
+
     # Determine window key
     if window_type == 'tumbling':
         window_start = event_time.replace(second=0, microsecond=0)
@@ -1101,17 +1101,17 @@ for event in stream_events:
         session_gap = window_config.get('gap', 30)
         # Logic for session window detection
         pass
-    
+
     # Add to window
     window = windows[window_key]
     window['events'].append(event)
-    
+
     # Update window boundaries
     if not window['start_time'] or event_time < datetime.fromisoformat(window['start_time']):
         window['start_time'] = event_time.isoformat()
     if not window['end_time'] or event_time > datetime.fromisoformat(window['end_time']):
         window['end_time'] = event_time.isoformat()
-    
+
     # Apply aggregation functions
     for agg_name, agg_func in aggregations.items():
         if agg_name not in window['aggregates']:
@@ -1119,7 +1119,7 @@ for event in stream_events:
         else:
             # Incremental aggregation
             window['aggregates'][agg_name] = agg_func(window['events'])
-    
+
     processed_events.append({
         'event_id': event.get('event_id'),
         'window_key': window_key,
@@ -1179,7 +1179,7 @@ patterns = {
         'sequence': ['ServiceError', 'ServiceError', 'ServiceError'],
         'time_window': 60,  # 1 minute
         'conditions': lambda events: (
-            all(e['payload'].get('service') == events[0]['payload'].get('service') 
+            all(e['payload'].get('service') == events[0]['payload'].get('service')
                 for e in events)
         )
     }
@@ -1200,26 +1200,26 @@ for event in events:
 for entity_id, entity_events in events_by_entity.items():
     # Sort events by time
     entity_events.sort(key=lambda e: e['timestamp'])
-    
+
     for pattern_name, pattern_def in patterns.items():
         sequence = pattern_def['sequence']
         time_window = pattern_def['time_window']
         conditions = pattern_def['conditions']
-        
+
         # Sliding window pattern detection
         for i in range(len(entity_events)):
             match_events = []
             seq_index = 0
             start_time = datetime.fromisoformat(entity_events[i]['timestamp'])
-            
+
             for j in range(i, len(entity_events)):
                 event = entity_events[j]
                 event_time = datetime.fromisoformat(event['timestamp'])
-                
+
                 # Check time window
                 if event_time - start_time > timedelta(seconds=time_window):
                     break
-                
+
                 # Check sequence
                 expected = sequence[seq_index]
                 if expected.startswith('!'):
@@ -1229,7 +1229,7 @@ for entity_id, entity_events in events_by_entity.items():
                 elif event['event_type'] == expected:
                     match_events.append(event)
                     seq_index += 1
-                    
+
                     if seq_index == len(sequence):
                         # Full sequence matched
                         if conditions(match_events):
@@ -1241,7 +1241,7 @@ for entity_id, entity_events in events_by_entity.items():
                                 'confidence': 1.0
                             })
                         break
-            
+
             # Track partial matches
             if 0 < seq_index < len(sequence):
                 partial_matches.append({
@@ -1295,38 +1295,38 @@ for time_bucket in sorted(set(left_by_time.keys()) | set(right_by_time.keys())):
     # Get events within window
     window_start = time_bucket - timedelta(seconds=join_window)
     window_end = time_bucket + timedelta(seconds=join_window)
-    
+
     left_events = []
     right_events = []
-    
+
     # Collect events within window
     for t in [window_start, time_bucket, window_end]:
         if t in left_by_time:
             left_events.extend(left_by_time[t])
         if t in right_by_time:
             right_events.extend(right_by_time[t])
-    
+
     # Create join key indexes
     left_index = defaultdict(list)
     right_index = defaultdict(list)
-    
+
     for event in left_events:
         key_value = event.get(join_key)
         if key_value:
             left_index[key_value].append(event)
-    
+
     for event in right_events:
         key_value = event.get(join_key)
         if key_value:
             right_index[key_value].append(event)
-    
+
     # Perform join based on type
     all_keys = set(left_index.keys()) | set(right_index.keys())
-    
+
     for key in all_keys:
         left_matches = left_index.get(key, [])
         right_matches = right_index.get(key, [])
-        
+
         if left_matches and right_matches:
             # Inner join - cartesian product of matches
             for left_event in left_matches:
@@ -1405,21 +1405,21 @@ for event_request in event_requests:
         aggregate_type = event_request['aggregate_type']
         event_type = event_request['event_type']
         event_data = event_request['data']
-        
+
         # Validate event type
         if aggregate_type not in event_specs:
             raise ValueError(f"Unknown aggregate type: {aggregate_type}")
-        
+
         if event_type not in event_specs[aggregate_type]:
             raise ValueError(f"Unknown event type: {event_type} for {aggregate_type}")
-        
+
         # Validate required fields
         required_fields = event_specs[aggregate_type][event_type]
         missing_fields = [field for field in required_fields if field not in event_data]
-        
+
         if missing_fields:
             raise ValueError(f"Missing required fields: {missing_fields}")
-        
+
         # Create domain event
         domain_event = {
             'event_id': str(uuid.uuid4()),
@@ -1436,9 +1436,9 @@ for event_request in event_requests:
                 'causation_id': event_request.get('causation_id')
             }
         }
-        
+
         created_events.append(domain_event)
-        
+
     except Exception as e:
         validation_errors.append({
             'request': event_request,
@@ -1502,7 +1502,7 @@ policy_violations = []
 
 for event in events:
     event_type = event['event_type']
-    
+
     if event_type in policies:
         for policy in policies[event_type]:
             try:
@@ -1520,7 +1520,7 @@ for event in events:
                                 'metadata': event['metadata']
                             }
                         })
-                
+
             except Exception as e:
                 policy_violations.append({
                     'event_id': event['event_id'],
@@ -1566,7 +1566,7 @@ routing_metrics = {
 for event in events:
     routing_metrics['total_events'] += 1
     routing_metrics['events_by_type'][event['event_type']] += 1
-    
+
     # Route to subscribed services
     for service, event_types in subscriptions.items():
         if '*' in event_types or event['event_type'] in event_types:
@@ -1579,7 +1579,7 @@ for event in events:
                 'retry_count': 0,
                 'acknowledgment_required': True
             }
-            
+
             routed_events[service].append(service_event)
             routing_metrics['events_by_service'][service] += 1
 
@@ -1662,7 +1662,7 @@ for request in requests:
     if circuit_state['status'] == 'open':
         # Check if timeout has passed
         if circuit_state['last_failure_time']:
-            time_since_failure = (datetime.utcnow() - 
+            time_since_failure = (datetime.utcnow() -
                                 datetime.fromisoformat(circuit_state['last_failure_time'])).total_seconds()
             if time_since_failure >= TIMEOUT:
                 # Move to half-open state
@@ -1676,7 +1676,7 @@ for request in requests:
                     'rejected_at': datetime.utcnow().isoformat()
                 })
                 continue
-    
+
     if circuit_state['status'] == 'half_open':
         # Limit requests in half-open state
         if circuit_state['half_open_attempts'] >= HALF_OPEN_REQUESTS:
@@ -1687,7 +1687,7 @@ for request in requests:
             })
             continue
         circuit_state['half_open_attempts'] += 1
-    
+
     # Process request
     try:
         # Simulate processing with handler
@@ -1698,11 +1698,11 @@ for request in requests:
                 'result': result,
                 'processed_at': datetime.utcnow().isoformat()
             })
-            
+
             # Update success count
             circuit_state['success_count'] += 1
             circuit_state['last_success_time'] = datetime.utcnow().isoformat()
-            
+
             # Check state transitions
             if circuit_state['status'] == 'half_open':
                 if circuit_state['success_count'] >= SUCCESS_THRESHOLD:
@@ -1711,17 +1711,17 @@ for request in requests:
                     circuit_state['success_count'] = 0
         else:
             raise Exception("No request handler provided")
-            
+
     except Exception as e:
         # Request failed
         circuit_state['failure_count'] += 1
         circuit_state['last_failure_time'] = datetime.utcnow().isoformat()
-        
+
         # Check failure threshold
         if circuit_state['failure_count'] >= FAILURE_THRESHOLD:
             circuit_state['status'] = 'open'
             circuit_state['success_count'] = 0
-        
+
         rejected_requests.append({
             'request': request,
             'reason': f"Processing failed: {str(e)}",
@@ -1779,7 +1779,7 @@ for failure_reason, messages in failure_groups.items():
         # Check message age
         message_time = datetime.fromisoformat(message['failed_at'])
         age_days = (datetime.utcnow() - message_time).days
-        
+
         if age_days > MAX_AGE_DAYS:
             expired_messages.append({
                 'message': message,
@@ -1787,17 +1787,17 @@ for failure_reason, messages in failure_groups.items():
                 'age_days': age_days
             })
             continue
-        
+
         # Apply retry strategy
         retry_count = message.get('retry_count', 0)
         retry_strategy = message.get('retry_strategy', 'exponential')
-        
+
         if retry_count < message.get('max_retries', 5):
             # Calculate next retry time
             strategy_func = RETRY_STRATEGIES.get(retry_strategy, RETRY_STRATEGIES['exponential'])
             delay_seconds = strategy_func(retry_count)
             next_retry = datetime.utcnow() + timedelta(seconds=delay_seconds)
-            
+
             retry_scheduled.append({
                 'message': message['original_message'],
                 'retry_count': retry_count + 1,
@@ -1869,28 +1869,28 @@ for event in events:
 for aggregate_id, aggregate_events in events_by_aggregate.items():
     # Sort by timestamp
     aggregate_events.sort(key=lambda e: e['timestamp'])
-    
+
     # Find last snapshot
     last_snapshot = None
     last_snapshot_version = 0
-    
+
     for existing_snapshot in snapshots:
-        if (existing_snapshot['aggregate_id'] == aggregate_id and 
+        if (existing_snapshot['aggregate_id'] == aggregate_id and
             existing_snapshot['version'] > last_snapshot_version):
             last_snapshot = existing_snapshot
             last_snapshot_version = existing_snapshot['version']
-    
+
     # Determine which events to keep
     events_since_snapshot = [
-        e for e in aggregate_events 
+        e for e in aggregate_events
         if not last_snapshot or e['timestamp'] > last_snapshot['timestamp']
     ]
-    
+
     # Check if new snapshot needed
     if len(events_since_snapshot) >= SNAPSHOT_INTERVAL:
         # Build new snapshot
         state = last_snapshot['state'] if last_snapshot else {}
-        
+
         for event in events_since_snapshot:
             # Apply event to state
             if event['event_type'].endswith('Created'):
@@ -1899,7 +1899,7 @@ for aggregate_id, aggregate_events in events_by_aggregate.items():
                 state.update(event['data'])
             elif event['event_type'].endswith('Deleted'):
                 state['deleted'] = True
-        
+
         new_snapshot = {
             'aggregate_id': aggregate_id,
             'version': last_snapshot_version + len(events_since_snapshot),
@@ -1907,12 +1907,12 @@ for aggregate_id, aggregate_events in events_by_aggregate.items():
             'timestamp': events_since_snapshot[-1]['timestamp'],
             'created_at': datetime.utcnow().isoformat()
         }
-        
+
         compacted_streams[aggregate_id] = {
             'snapshot': new_snapshot,
             'events_compacted': len(events_since_snapshot)
         }
-    
+
     # Archive old events
     cutoff_date = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
     for event in aggregate_events:

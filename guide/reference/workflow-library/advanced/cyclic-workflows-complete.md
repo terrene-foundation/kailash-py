@@ -51,8 +51,8 @@ workflow.add_node("checker", SwitchNode(
 
 # Create cycle: counter -> checker -> counter
 workflow.connect("counter", "checker", mapping={"result": "input"})
-workflow.connect("checker", "counter", 
-    condition=True,  # Continue cycling 
+workflow.connect("checker", "counter",
+    condition=True,  # Continue cycling
     cycle=True,      # Mark as cycle edge
     mapping={"count": "count"}  # ✅ CRITICAL: Specific field mapping
 )
@@ -72,7 +72,7 @@ print(f"Final count: {results['checker']['count']}")
 ```python
 # ✅ CRITICAL: Only mark the CLOSING edge as cycle=True
 workflow.connect("node_a", "node_b")           # Normal connection
-workflow.connect("node_b", "node_c")           # Normal connection  
+workflow.connect("node_b", "node_c")           # Normal connection
 workflow.connect("node_c", "node_a",           # ✅ CLOSING edge
     cycle=True,                                 # Mark as cycle
     mapping={"output_field": "input_field"}    # Specific mapping
@@ -107,7 +107,7 @@ except:
     prev_results = []   # Default empty list
 
 try:
-    accumulated_value = accumulated_value  
+    accumulated_value = accumulated_value
 except:
     accumulated_value = 0
 
@@ -151,7 +151,7 @@ iteration += 1
 if iteration < 3:
     next_action = "continue"
 elif len(processed) < 10:
-    next_action = "expand"  
+    next_action = "expand"
 else:
     next_action = "finalize"
 
@@ -168,13 +168,13 @@ result = {
 
 # Multi-path router
 workflow.add_node("router", SwitchNode(
-    condition_field="action", 
+    condition_field="action",
     condition_type="string"
 ))
 
 # Path 1: Continue processing
 workflow.add_node("enhancer", PythonCodeNode(
-    name="enhancer", 
+    name="enhancer",
     code='''
 enhanced_data = [x + 1 for x in data]
 result = {"data": enhanced_data, "iteration": iteration, "enhanced": True}
@@ -207,12 +207,12 @@ result = {
 workflow.connect("processor", "router", mapping={"result": "input"})
 
 # Connect conditional paths
-workflow.connect("router", "enhancer", 
+workflow.connect("router", "enhancer",
     condition="continue",
     mapping={"data": "data", "iteration": "iteration"})
 
 workflow.connect("router", "expander",
-    condition="expand", 
+    condition="expand",
     mapping={"data": "data", "iteration": "iteration"})
 
 workflow.connect("router", "finalizer",
@@ -224,7 +224,7 @@ workflow.connect("enhancer", "processor",
     cycle=True,
     mapping={"data": "data", "iteration": "iteration"})
 
-workflow.connect("expander", "processor", 
+workflow.connect("expander", "processor",
     cycle=True,
     mapping={"data": "data", "iteration": "iteration"})
 ```
@@ -266,7 +266,7 @@ improvement = error - new_error if error != float('inf') else 0
 result = {
     "current_value": new_value,
     "error": new_error,
-    "iteration": iteration, 
+    "iteration": iteration,
     "converged": converged,
     "improvement": improvement,
     "target": target,
@@ -288,7 +288,7 @@ workflow.connect("convergence_check", "optimizer",
     cycle=True,
     mapping={
         "current_value": "current_value",
-        "error": "error", 
+        "error": "error",
         "iteration": "iteration"
     }
 )
@@ -335,7 +335,7 @@ result = {
 workflow.add_node("convergence", ConvergenceCheckerNode(
     convergence_checks=[
         "quality_score >= 0.8",     # Quality threshold
-        "data_count >= 500",        # Data volume threshold  
+        "data_count >= 500",        # Data volume threshold
         "iteration >= 3"            # Minimum iterations
     ],
     convergence_logic="any",        # Any condition can trigger convergence
@@ -356,28 +356,28 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 
 class AccumulatorNode(CycleAwareNode):
     """Custom node that accumulates values across iterations."""
-    
+
     def __init__(self, accumulation_field="value", **kwargs):
         super().__init__(**kwargs)
         self.accumulation_field = accumulation_field
-        
+
     async def run(self, **kwargs):
         # Get cycle context
         cycle_info = self.get_cycle_context()
-        
+
         # Safe state access
         prev_state = cycle_info.get("node_state") or {}
         accumulated = prev_state.get("accumulated", [])
-        
+
         # Get current value
         current_value = kwargs.get(self.accumulation_field)
         if current_value is not None:
             accumulated.append(current_value)
-        
+
         # Update state for next iteration
         new_state = {"accumulated": accumulated}
         self.update_cycle_state(new_state)
-        
+
         return {
             "accumulated_values": accumulated,
             "current_sum": sum(accumulated),
@@ -428,37 +428,37 @@ import pytest
 from kailash.testing import WorkflowTestCase
 
 class TestCyclicWorkflow(WorkflowTestCase):
-    
+
     def test_cycle_convergence(self):
         """Test that cycle converges within expected iterations."""
         workflow = self.create_test_cycle()
-        
+
         results, run_id = self.runtime.execute(workflow, parameters={
             "processor": {"initial_value": 0}
         })
-        
+
         # ✅ FLEXIBLE: Use range assertions for cycles
         final_iteration = results["convergence"]["iteration"]
         assert 1 <= final_iteration <= 10, f"Expected 1-10 iterations, got {final_iteration}"
-        
+
         # ✅ FLEXIBLE: Allow early convergence
         assert final_iteration >= 1, "Should run at least 1 iteration"
-        
+
         # ❌ RIGID: Don't use exact counts
         # assert final_iteration == 5  # Cycles may converge early
-    
+
     def test_cycle_state_persistence(self):
         """Test state persistence across iterations."""
         workflow = self.create_accumulator_cycle()
-        
+
         results, run_id = self.runtime.execute(workflow, parameters={
             "accumulator": {"value": 10}
         })
-        
+
         # Test accumulation worked
         accumulated = results["accumulator"]["accumulated_values"]
         assert len(accumulated) > 0, "Should accumulate at least one value"
-        
+
         # ✅ REALISTIC: Account for state limitations
         if len(accumulated) == 1:
             # State persistence may have limitations - this is ok
@@ -476,7 +476,7 @@ workflow.connect("a", "b", cycle=True, mapping={"output": "output"})
 
 # Symptoms:
 # - assert 1 >= 3 (iteration count failures)
-# - assert 0.0 >= 0.7 (quality scores not improving)  
+# - assert 0.0 >= 0.7 (quality scores not improving)
 # - assert 10 == 45 (accumulation completely failing)
 
 # ✅ SOLUTION: Always use specific field mapping
@@ -508,7 +508,7 @@ workflow.connect("a", "cycle_node", cycle=True, mapping={
 cycle_state = cycle_info["node_state"]  # KeyError if not exists
 results = cycle_state["results"]        # KeyError if not exists
 
-# ✅ CORRECT: Safe state access with defaults  
+# ✅ CORRECT: Safe state access with defaults
 cycle_info = cycle_info or {}
 prev_state = cycle_info.get("node_state") or {}
 results = prev_state.get("results", [])
@@ -528,13 +528,13 @@ convergence_check="count >= target_count"
 ### Mistake #5: Multiple Cycle Edges
 ```python
 # ❌ WRONG: Marking multiple edges as cycles
-workflow.connect("a", "b", cycle=True)  # ❌ 
-workflow.connect("b", "c", cycle=True)  # ❌ 
+workflow.connect("a", "b", cycle=True)  # ❌
+workflow.connect("b", "c", cycle=True)  # ❌
 workflow.connect("c", "a", cycle=True)  # ❌ Multiple cycle marks
 
 # ✅ CORRECT: Only mark closing edge
 workflow.connect("a", "b")              # Normal
-workflow.connect("b", "c")              # Normal  
+workflow.connect("b", "c")              # Normal
 workflow.connect("c", "a", cycle=True)  # ✅ Only closing edge
 ```
 
@@ -670,7 +670,7 @@ workflow.connect("quality_gate", "batch_processor",
     cycle=True,
     mapping={
         "batch_number": "batch_number",
-        "quality_scores": "quality_scores", 
+        "quality_scores": "quality_scores",
         "processed_items": "processed_items"
     }
 )
@@ -679,7 +679,7 @@ workflow.connect("quality_gate", "batch_processor",
 ## 🔗 Advanced Topics
 
 - **[Cycle Performance Optimization](../production-ready/performance-optimization.md)** - Scaling cycle patterns
-- **[AI Agent Cycles](ai-agent-coordination.md)** - Multi-agent iterative workflows  
+- **[AI Agent Cycles](ai-agent-coordination.md)** - Multi-agent iterative workflows
 - **[Enterprise Cycle Monitoring](../production-ready/monitoring-alerting.md)** - Production cycle health
 - **[Cycle Testing Strategies](../production-ready/testing-validation.md)** - Comprehensive cycle testing
 

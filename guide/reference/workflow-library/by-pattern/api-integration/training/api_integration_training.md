@@ -161,7 +161,7 @@ merger = MergeNode(id="merger", merge_type="concat")            # Use MergeNode 
 
 ### 📊 Bug Impact Analysis
 - **Frequency**: Occurs in 100% of DataTransformer → DataTransformer connections when first node outputs dict
-- **Severity**: Critical - breaks data flow entirely  
+- **Severity**: Critical - breaks data flow entirely
 - **Workaround**: Type checking + fallback data (data loss occurs)
 - **Best Practice**: Avoid DataTransformer chains, use intermediate nodes
 - **Affects**: api-integration workflows, enterprise customer workflows, any dict processing chains
@@ -181,7 +181,7 @@ def create_api_workflow():
         workflow_id="api_001",
         name="api_integration"
     )
-    
+
     # API client with built-in rate limiting
     api_client = RateLimitedAPINode(
         id="api_client",
@@ -191,7 +191,7 @@ def create_api_workflow():
         timeout=30
     )
     workflow.add_node("api_client", api_client)
-    
+
     # Process response
     processor = DataTransformer(
         id="processor",
@@ -199,7 +199,7 @@ def create_api_workflow():
     )
     workflow.add_node("processor", processor)
     workflow.connect("api_client", "processor", mapping={"response": "data"})
-    
+
     # Save results
     writer = JSONWriterNode(
         id="writer",
@@ -207,7 +207,7 @@ def create_api_workflow():
     )
     workflow.add_node("writer", writer)
     workflow.connect("processor", "writer", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -244,7 +244,7 @@ def create_test_workflow():
         workflow_id="test_api_001",
         name="test_api"
     )
-    
+
     # Mock API response
     mock_api = DataTransformer(
         id="mock_api",
@@ -263,8 +263,8 @@ result = api_response
         ]
     )
     workflow.add_node("mock_api", mock_api)
-    
-    # Process the mock response  
+
+    # Process the mock response
     processor = DataTransformer(
         id="processor",
         transformations=[
@@ -278,7 +278,7 @@ result = {"items": items, "total": total}
     )
     workflow.add_node("processor", processor)
     workflow.connect("mock_api", "processor", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -332,7 +332,7 @@ def create_authenticated_workflow():
         workflow_id="auth_api_001",
         name="authenticated_api"
     )
-    
+
     # OAuth2 authentication
     auth = OAuth2Node(
         id="oauth",
@@ -341,7 +341,7 @@ def create_authenticated_workflow():
         client_secret="${OAUTH_CLIENT_SECRET}"
     )
     workflow.add_node("oauth", auth)
-    
+
     # HTTP request with auth token
     http = HTTPRequestNode(
         id="api_request",
@@ -350,7 +350,7 @@ def create_authenticated_workflow():
     )
     workflow.add_node("api_request", http)
     workflow.connect("oauth", "api_request", mapping={"access_token": "auth_token"})
-    
+
     return workflow
 ```
 

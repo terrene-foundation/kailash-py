@@ -1,6 +1,6 @@
 # Error Lookup Hub
 
-## 🔍 Quick Error Lookup  
+## 🔍 Quick Error Lookup
 | Error Message | File | Quick Fix |
 |---------------|------|-----------|
 | `NameError: name 'NameError' is not defined` | [067](067-phase-6-3-completion-pythoncode-execution-environment.md) | Use bare `except:` |

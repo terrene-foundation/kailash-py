@@ -14,12 +14,13 @@ Patterns demonstrated:
 4. Batch file processing
 """
 
-import os
 import json
+import os
+
 from kailash import Workflow
-from kailash.nodes.transform import DataTransformer
 from kailash.nodes.data import JSONWriterNode
 from kailash.nodes.logic import MergeNode
+from kailash.nodes.transform import DataTransformer
 from kailash.runtime import LocalRuntime
 
 
@@ -28,11 +29,11 @@ def create_document_processing_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="document_processing_001",
         name="document_processing_workflow",
-        description="Process multiple document types and extract structured data"
+        description="Process multiple document types and extract structured data",
     )
-    
+
     # === FILE DISCOVERY ===
-    
+
     # Simulate file discovery (in production, use FileWatcherNode or DirectoryReaderNode)
     file_discoverer = DataTransformer(
         id="file_discoverer",
@@ -55,7 +56,7 @@ discovered_files = [
     },
     {
         "file_path": "data/inputs/transaction_log.json",
-        "file_name": "transaction_log.json", 
+        "file_name": "transaction_log.json",
         "file_type": "json",
         "file_size": 2048,
         "mime_type": "application/json",
@@ -66,7 +67,7 @@ discovered_files = [
         "file_name": "report_template.txt",
         "file_type": "txt",
         "file_size": 512,
-        "mime_type": "text/plain", 
+        "mime_type": "text/plain",
         "discovered_at": "2024-01-15T10:32:00Z"
     },
     {
@@ -97,12 +98,12 @@ result = {
     }
 }
 """
-        ]
+        ],
     )
     workflow.add_node("file_discoverer", file_discoverer)
-    
+
     # === FILE TYPE PROCESSING ===
-    
+
     # Process CSV files
     csv_processor = DataTransformer(
         id="csv_processor",
@@ -136,7 +137,7 @@ else:
     # Expected case: received dict as intended
     files_by_type = data.get("files_by_type", {})
     csv_files_info = files_by_type.get("csv", [])
-    
+
     csv_files = []
     for file_info in csv_files_info:
         # Simulate reading CSV content (in production, use CSVReaderNode)
@@ -145,7 +146,7 @@ else:
             {"customer_id": "CUST-002", "name": "Jane Smith", "email": "jane@example.com", "status": "active"},
             {"customer_id": "CUST-003", "name": "Bob Johnson", "email": "bob@example.com", "status": "inactive"}
         ]
-        
+
         csv_files.append({
             "file_path": file_info["file_path"],
             "file_name": file_info["file_name"],
@@ -160,11 +161,11 @@ else:
 processed_csv = []
 for csv_file in csv_files:
     content = csv_file["content"]
-    
+
     # Extract statistics
     active_count = sum(1 for record in content if record.get("status") == "active")
     inactive_count = len(content) - active_count
-    
+
     processed_file = {
         "file_info": {
             "path": csv_file["file_path"],
@@ -192,11 +193,11 @@ result = {
     "bug_detected": bug_detected
 }
 """
-        ]
+        ],
     )
     workflow.add_node("csv_processor", csv_processor)
     workflow.connect("file_discoverer", "csv_processor", mapping={"result": "data"})
-    
+
     # Process JSON files
     json_processor = DataTransformer(
         id="json_processor",
@@ -232,7 +233,7 @@ else:
     # Expected case: received dict as intended
     files_by_type = data.get("files_by_type", {})
     json_files_info = files_by_type.get("json", [])
-    
+
     json_files = []
     for file_info in json_files_info:
         # Simulate reading JSON content
@@ -244,7 +245,7 @@ else:
             ],
             "metadata": {"version": "1.0", "generated_at": "2024-01-15T10:30:00Z"}
         }
-        
+
         json_files.append({
             "file_path": file_info["file_path"],
             "file_name": file_info["file_name"],
@@ -258,12 +259,12 @@ processed_json = []
 for json_file in json_files:
     content = json_file["content"]
     transactions = content.get("transactions", [])
-    
+
     # Extract analytics
     total_amount = sum(txn.get("amount", 0) for txn in transactions)
     customer_ids = list(set(txn.get("customer_id") for txn in transactions if txn.get("customer_id")))
     avg_amount = total_amount / len(transactions) if transactions else 0
-    
+
     processed_file = {
         "file_info": {
             "path": json_file["file_path"],
@@ -292,11 +293,11 @@ result = {
     "bug_detected": bug_detected
 }
 """
-        ]
+        ],
     )
     workflow.add_node("json_processor", json_processor)
     workflow.connect("file_discoverer", "json_processor", mapping={"result": "data"})
-    
+
     # Process text files
     text_processor = DataTransformer(
         id="text_processor",
@@ -325,12 +326,12 @@ else:
     # Expected case: received dict as intended
     files_by_type = data.get("files_by_type", {})
     text_files_info = files_by_type.get("txt", [])
-    
+
     text_files = []
     for file_info in text_files_info:
         # Simulate reading text content
         mock_content = "Customer Report Template\\n\\nTotal Customers: {total_customers}\\nActive Customers: {active_customers}\\nRevenue: ${total_revenue}\\n\\nGenerated on: {report_date}"
-        
+
         text_files.append({
             "file_path": file_info["file_path"],
             "file_name": file_info["file_name"],
@@ -343,15 +344,15 @@ else:
 processed_text = []
 for text_file in text_files:
     content = text_file["content"]
-    
+
     # Extract text analytics
     word_count = len(content.split())
     line_count = len(content.split("\\n"))
     char_count = len(content)
-    
+
     # Find placeholders/variables (things in {})
     placeholders = re.findall(r'\\{([^}]+)\\}', content)
-    
+
     processed_file = {
         "file_info": {
             "path": text_file["file_path"],
@@ -380,25 +381,22 @@ result = {
     "bug_detected": bug_detected
 }
 """
-        ]
+        ],
     )
     workflow.add_node("text_processor", text_processor)
     workflow.connect("file_discoverer", "text_processor", mapping={"result": "data"})
-    
+
     # === MERGE PROCESSING RESULTS ===
-    
+
     # Merge all processing results
-    result_merger = MergeNode(
-        id="result_merger",
-        merge_type="concat"
-    )
+    result_merger = MergeNode(id="result_merger", merge_type="concat")
     workflow.add_node("result_merger", result_merger)
     workflow.connect("csv_processor", "result_merger", mapping={"result": "data1"})
     workflow.connect("json_processor", "result_merger", mapping={"result": "data2"})
     workflow.connect("text_processor", "result_merger", mapping={"result": "data3"})
-    
+
     # === SUMMARY GENERATION ===
-    
+
     # Generate final processing summary
     summary_generator = DataTransformer(
         id="summary_generator",
@@ -467,18 +465,18 @@ for result_set in processing_results:
         processed_files = result_set.get("processed_files", [])
         all_processed_files.extend(processed_files)
         total_files += result_set.get("file_count", 0)
-        
+
         # Aggregate by file type
         for file_info in processed_files:
             file_type = file_info.get("file_info", {}).get("type", "unknown")
             if file_type not in files_by_type:
                 files_by_type[file_type] = 0
             files_by_type[file_type] += 1
-            
+
             # Collect processing stats
             if file_type not in processing_stats:
                 processing_stats[file_type] = {}
-            
+
             proc_result = file_info.get("processing_result", {})
             if file_type == "csv":
                 processing_stats[file_type]["total_records"] = processing_stats[file_type].get("total_records", 0) + proc_result.get("total_records", 0)
@@ -515,50 +513,66 @@ summary["recommendations"] = [r for r in summary["recommendations"] if r is not 
 
 result = summary
 """
-        ]
+        ],
     )
     workflow.add_node("summary_generator", summary_generator)
-    workflow.connect("result_merger", "summary_generator", mapping={"merged_data": "data"})
-    
+    workflow.connect(
+        "result_merger", "summary_generator", mapping={"merged_data": "data"}
+    )
+
     # === OUTPUT ===
-    
+
     # Save processing summary
     summary_writer = JSONWriterNode(
-        id="summary_writer",
-        file_path="data/outputs/processing_summary.json"
+        id="summary_writer", file_path="data/outputs/processing_summary.json"
     )
     workflow.add_node("summary_writer", summary_writer)
     workflow.connect("summary_generator", "summary_writer", mapping={"result": "data"})
-    
+
     return workflow
 
 
 def create_sample_input_files():
     """Create sample input files for testing."""
     os.makedirs("data/inputs", exist_ok=True)
-    
+
     # Create sample CSV
     csv_content = """customer_id,name,email,status
 CUST-001,John Doe,john@example.com,active
 CUST-002,Jane Smith,jane@example.com,active
 CUST-003,Bob Johnson,bob@example.com,inactive"""
-    
+
     with open("data/inputs/customer_data.csv", "w") as f:
         f.write(csv_content)
-    
+
     # Create sample JSON
     json_content = {
         "transactions": [
-            {"id": "TXN-001", "customer_id": "CUST-001", "amount": 299.99, "timestamp": "2024-01-15T09:00:00Z"},
-            {"id": "TXN-002", "customer_id": "CUST-002", "amount": 149.50, "timestamp": "2024-01-15T09:30:00Z"},
-            {"id": "TXN-003", "customer_id": "CUST-001", "amount": 79.99, "timestamp": "2024-01-15T10:00:00Z"}
+            {
+                "id": "TXN-001",
+                "customer_id": "CUST-001",
+                "amount": 299.99,
+                "timestamp": "2024-01-15T09:00:00Z",
+            },
+            {
+                "id": "TXN-002",
+                "customer_id": "CUST-002",
+                "amount": 149.50,
+                "timestamp": "2024-01-15T09:30:00Z",
+            },
+            {
+                "id": "TXN-003",
+                "customer_id": "CUST-001",
+                "amount": 79.99,
+                "timestamp": "2024-01-15T10:00:00Z",
+            },
         ],
-        "metadata": {"version": "1.0", "generated_at": "2024-01-15T10:30:00Z"}
+        "metadata": {"version": "1.0", "generated_at": "2024-01-15T10:30:00Z"},
     }
-    
+
     with open("data/inputs/transaction_log.json", "w") as f:
         json.dump(json_content, f, indent=2)
-    
+
     # Create sample text file
     text_content = """Customer Report Template
 
@@ -567,7 +581,7 @@ Active Customers: {active_customers}
 Revenue: ${total_revenue}
 
 Generated on: {report_date}"""
-    
+
     with open("data/inputs/report_template.txt", "w") as f:
         f.write(text_content)
 
@@ -576,36 +590,38 @@ def run_document_processing():
     """Execute the document processing workflow."""
     workflow = create_document_processing_workflow()
     runtime = LocalRuntime()
-    
+
     parameters = {}
-    
+
     try:
         print("Starting Document Processing Workflow...")
         print("🔍 Discovering files...")
-        
+
         result, run_id = runtime.execute(workflow, parameters=parameters)
-        
+
         print("\\n✅ Document Processing Complete!")
         print("📁 Output generated: data/outputs/processing_summary.json")
-        
+
         # Show summary
         summary_result = result.get("summary_generator", {}).get("result", {})
         processing_summary = summary_result.get("processing_summary", {})
-        
+
         print("\\n📊 Processing Summary:")
-        print(f"   - Total files processed: {processing_summary.get('total_files_processed', 0)}")
+        print(
+            f"   - Total files processed: {processing_summary.get('total_files_processed', 0)}"
+        )
         print(f"   - Files by type: {processing_summary.get('files_by_type', {})}")
         print(f"   - Successful files: {processing_summary.get('successful_files', 0)}")
-        
+
         # Show recommendations
         recommendations = summary_result.get("recommendations", [])
         if recommendations:
             print("\\n💡 Recommendations:")
             for rec in recommendations:
                 print(f"   - {rec}")
-        
+
         return result
-        
+
     except Exception as e:
         print(f"❌ Document Processing failed: {str(e)}")
         raise
@@ -616,13 +632,13 @@ def main():
     # Create sample input files
     create_sample_input_files()
     print("📝 Created sample input files")
-    
+
     # Create output directories
     os.makedirs("data/outputs", exist_ok=True)
-    
+
     # Run the document processing workflow
     run_document_processing()
-    
+
     # Display generated summary
     print("\\n=== Processing Summary Preview ===")
     try:

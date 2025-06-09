@@ -142,8 +142,8 @@ def create_sample_database(db_path: str = "sample_customers.db") -> str:
 
     cursor.executemany(
         """
-        INSERT INTO customers (id, name, email, age, city, registration_date, is_active, 
-                             total_orders, total_spent) 
+        INSERT INTO customers (id, name, email, age, city, registration_date, is_active,
+                             total_orders, total_spent)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         customers_data,
@@ -161,7 +161,7 @@ def create_sample_database(db_path: str = "sample_customers.db") -> str:
 
     cursor.executemany(
         """
-        INSERT INTO orders (id, customer_id, order_date, amount, status) 
+        INSERT INTO orders (id, customer_id, order_date, amount, status)
         VALUES (?, ?, ?, ?, ?)
     """,
         orders_data,
@@ -213,7 +213,7 @@ def example_1_basic_sql_operations():
 
     print("\n📝 2. INSERT Query - Add new customer")
     insert_result = sql_node.run(
-        query="""INSERT INTO customers (name, email, age, city, registration_date, is_active, total_orders, total_spent) 
+        query="""INSERT INTO customers (name, email, age, city, registration_date, is_active, total_orders, total_spent)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         parameters=[
             "Eva Green",
@@ -420,21 +420,21 @@ def example_3_etl_workflow():
     analytics_code = """
 def execute(customers_data, orders_data):
     analytics_results = []
-    
+
     for customer in customers_data:
         # Find this customer's orders from orders_data
         customer_orders = [order for order in orders_data if order['customer_id'] == customer['id']]
-        
+
         # Calculate metrics using BOTH datasets
         order_count_from_orders = len(customer_orders)  # From orders_data
         total_spent_from_orders = sum(order['amount'] for order in customer_orders)  # From orders_data
         customer_name = customer['name']  # From customers_data
         customer_city = customer['city']  # From customers_data
-        
+
         # Compare stored vs calculated values
         stored_total = customer['total_spent']  # From customers_data
         calculated_total = total_spent_from_orders  # From orders_data
-        
+
         analytics_results.append({
             'customer_name': customer_name,
             'city': customer_city,
@@ -443,7 +443,7 @@ def execute(customers_data, orders_data):
             'order_count': order_count_from_orders,
             'avg_order_value': round(calculated_total / order_count_from_orders, 2) if order_count_from_orders > 0 else 0
         })
-    
+
     return {
         'customers': analytics_results,
         'summary': {

@@ -11,7 +11,7 @@
 | [patient-risk-assessment.py](patient-risk-assessment.py) | Multi-factor patient risk scoring | Intermediate | AI Registry + Risk Models |
 | [treatment-protocol-advisor.py](treatment-protocol-advisor.py) | Evidence-based treatment recommendations | Advanced | AI Registry + Clinical Guidelines |
 
-### 🔬 Research & Analytics  
+### 🔬 Research & Analytics
 | Workflow | Purpose | Complexity | MCP Integration |
 |----------|---------|------------|-----------------|
 | [clinical-trial-analysis.py](clinical-trial-analysis.py) | Patient outcome analysis and reporting | Advanced | AI Registry + Statistical APIs |
@@ -89,8 +89,8 @@ results, run_id = runtime.execute(workflow, parameters={
         "messages": [{"role": "user", "content": """
         Patient: 65-year-old male with diabetes, hypertension, and recent chest pain.
         Recent labs: HbA1c 9.2%, BP 165/95, troponin elevated at 0.8 ng/mL.
-        
-        Please analyze this case using available healthcare AI use cases and provide 
+
+        Please analyze this case using available healthcare AI use cases and provide
         evidence-based recommendations for immediate care and monitoring.
         """}],
         "max_iterations": 2
@@ -109,7 +109,7 @@ from kailash.security import HealthcareSecurityMixin
 
 class HIPAACompliantProcessor(HealthcareSecurityMixin, PythonCodeNode):
     """HIPAA-compliant data processor with automatic PHI protection."""
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.enable_phi_detection = True
@@ -132,7 +132,7 @@ for record in patient_data:
     # Clinical calculations
     bmi = record.get('weight', 0) / ((record.get('height', 1) / 100) ** 2)
     risk_score = calculate_risk_score(record)
-    
+
     processed_results.append({
         "patient_id": record['anonymized_id'],  # No real identifiers
         "bmi": bmi,
@@ -159,12 +159,12 @@ workflow.add_node("clinical_analyzer", IterativeLLMAgentNode(
     model="llama3.2",
     mcp_servers=[{
         "name": "ai-registry",
-        "transport": "stdio", 
+        "transport": "stdio",
         "command": "python",
         "args": ["scripts/start-ai-registry-server.py"]
     }],
-    system_prompt="""You are a clinical AI assistant. Use the AI registry to find relevant 
-    healthcare AI use cases for diagnosis and treatment recommendations. Focus on evidence-based 
+    system_prompt="""You are a clinical AI assistant. Use the AI registry to find relevant
+    healthcare AI use cases for diagnosis and treatment recommendations. Focus on evidence-based
     medical decision making."""
 ))
 
@@ -181,7 +181,7 @@ workflow.add_node("emergency_protocol", PythonCodeNode(
 # Immediate emergency response
 emergency_actions = [
     "Contact emergency physician immediately",
-    "Initiate cardiac monitoring", 
+    "Initiate cardiac monitoring",
     "Prepare for emergency intervention",
     "Alert emergency team"
 ]
@@ -195,7 +195,7 @@ result = {
 '''
 ))
 
-# Routine care pathway  
+# Routine care pathway
 workflow.add_node("routine_protocol", PythonCodeNode(
     name="routine_protocol",
     code='''
@@ -203,7 +203,7 @@ workflow.add_node("routine_protocol", PythonCodeNode(
 routine_actions = [
     "Schedule follow-up appointment",
     "Order additional tests if needed",
-    "Provide patient education materials", 
+    "Provide patient education materials",
     "Monitor symptoms"
 ]
 
@@ -217,11 +217,11 @@ result = {
 ))
 
 # Connect decision tree
-workflow.connect("clinical_analyzer", "decision_router", 
+workflow.connect("clinical_analyzer", "decision_router",
     mapping={"final_response": "clinical_assessment"})
-workflow.connect("decision_router", "emergency_protocol", 
+workflow.connect("decision_router", "emergency_protocol",
     condition="emergency")
-workflow.connect("decision_router", "routine_protocol", 
+workflow.connect("decision_router", "routine_protocol",
     condition="routine")
 ```
 
@@ -233,7 +233,7 @@ workflow = Workflow("outcome_tracking")
 
 # Data aggregation across multiple sources
 workflow.add_node("data_aggregator", PythonCodeNode(
-    name="data_aggregator", 
+    name="data_aggregator",
     code='''
 import pandas as pd
 from datetime import datetime, timedelta
@@ -305,14 +305,14 @@ workflow.add_node("outcome_analyzer", IterativeLLMAgentNode(
     mcp_servers=[{
         "name": "ai-registry",
         "transport": "stdio",
-        "command": "python", 
+        "command": "python",
         "args": ["scripts/start-ai-registry-server.py"]
     }],
     system_prompt="""Analyze patient outcome data using healthcare AI use cases from the registry.
     Focus on identifying patterns, risk factors, and opportunities for quality improvement."""
 ))
 
-workflow.connect("data_aggregator", "outcome_analyzer", 
+workflow.connect("data_aggregator", "outcome_analyzer",
     mapping={"outcome_metrics": "outcome_data"})
 ```
 
@@ -344,25 +344,25 @@ if not trial_data.empty:
     # Check for missing data
     missing_percent = trial_data.isnull().sum() / len(trial_data)
     validation_results["missing_data_report"] = missing_percent.to_dict()
-    
+
     # Outlier detection for numeric columns
     numeric_cols = trial_data.select_dtypes(include=[np.number]).columns
     for col in numeric_cols:
         Q1 = trial_data[col].quantile(0.25)
         Q3 = trial_data[col].quantile(0.75)
         IQR = Q3 - Q1
-        outliers = trial_data[(trial_data[col] < Q1 - 1.5*IQR) | 
+        outliers = trial_data[(trial_data[col] < Q1 - 1.5*IQR) |
                              (trial_data[col] > Q3 + 1.5*IQR)]
         validation_results["outlier_detection"][col] = len(outliers)
-    
+
     # Protocol violation checks (example)
     if 'age' in trial_data.columns:
-        age_violations = trial_data[(trial_data['age'] < 18) | 
+        age_violations = trial_data[(trial_data['age'] < 18) |
                                    (trial_data['age'] > 85)]
         validation_results["protocol_violations"].extend(
             [f"Age violation: {row['patient_id']}" for _, row in age_violations.iterrows()]
         )
-    
+
     # Calculate overall quality score
     quality_factors = [
         1 - missing_percent.mean(),  # Lower missing data = higher quality
@@ -379,14 +379,14 @@ result = validation_results
 # Statistical analysis with AI insights
 workflow.add_node("statistical_analyzer", IterativeLLMAgentNode(
     provider="ollama",
-    model="llama3.2", 
+    model="llama3.2",
     mcp_servers=[{
         "name": "ai-registry",
         "transport": "stdio",
         "command": "python",
         "args": ["scripts/start-ai-registry-server.py"]
     }],
-    system_prompt="""You are a clinical research AI analyst. Use healthcare AI use cases 
+    system_prompt="""You are a clinical research AI analyst. Use healthcare AI use cases
     to analyze clinical trial data and provide statistical insights for regulatory submissions."""
 ))
 
@@ -449,7 +449,7 @@ result = {
 '''
 ))
 
-workflow.connect("compound_analyzer", "safety_assessor", 
+workflow.connect("compound_analyzer", "safety_assessor",
     mapping={"final_response": "compound_analysis"})
 ```
 
@@ -466,7 +466,7 @@ workflow.add_node("roi_calculator", PythonCodeNode(
 # Healthcare AI ROI calculation
 implementation_costs = {
     "software_licenses": 50000,
-    "hardware_infrastructure": 25000, 
+    "hardware_infrastructure": 25000,
     "staff_training": 15000,
     "integration_costs": 20000,
     "ongoing_maintenance": 10000
@@ -482,7 +482,7 @@ ai_benefits = {
 }
 
 total_costs = sum(implementation_costs.values())
-total_benefits = sum(ai_benefits.values()) 
+total_benefits = sum(ai_benefits.values())
 annual_roi = (total_benefits - total_costs) / total_costs * 100
 payback_period = total_costs / total_benefits
 
@@ -496,7 +496,7 @@ result = {
     "business_case": "Approved" if annual_roi > 100 else "Needs Review",
     "key_value_drivers": [
         "Reduced diagnostic errors (27% of benefits)",
-        "Improved patient outcomes (36% of benefits)", 
+        "Improved patient outcomes (36% of benefits)",
         "Staff productivity gains (18% of benefits)"
     ]
 }
@@ -511,7 +511,7 @@ workflow.add_node("business_case", IterativeLLMAgentNode(
     Focus on clinical outcomes, operational efficiency, and financial returns."""
 ))
 
-workflow.connect("roi_calculator", "business_case", 
+workflow.connect("roi_calculator", "business_case",
     mapping={"result": "roi_data"})
 ```
 

@@ -55,7 +55,7 @@ else:
     # Expected case: received dict as intended
     files_by_type = data.get("files_by_type", {})
     csv_files_info = files_by_type.get("csv", [])
-    
+
     csv_files = []
     for file_info in csv_files_info:
         # Read actual CSV content using CSVReaderNode or file operations
@@ -95,7 +95,7 @@ result = {'files': files}
 # Problems:
 # 1. Manual directory scanning logic
 # 2. No error handling for permissions or missing files
-# 3. Limited file type detection capabilities  
+# 3. Limited file type detection capabilities
 # 4. Doesn't integrate with Kailash's file watching capabilities
 ```
 
@@ -123,7 +123,7 @@ discovered_files = [
     },
     {
         "file_path": "data/inputs/transaction_log.json",
-        "file_name": "transaction_log.json", 
+        "file_name": "transaction_log.json",
         "file_type": "json",
         "file_size": 2048,
         "mime_type": "application/json",
@@ -199,7 +199,7 @@ parameters = {
 ```python
 # WRONG: Processing all file types in one complex PythonCodeNode
 file_processor = PythonCodeNode(
-    name="file_processor", 
+    name="file_processor",
     code="""
 import json
 import csv
@@ -248,12 +248,12 @@ result = {"processed_files": processed_csv, "file_count": len(processed_csv)}
     ]
 )
 
-# JSON Processor  
+# JSON Processor
 json_processor = DataTransformer(
     id="json_processor",
     transformations=[
         """
-# Process JSON files specifically  
+# Process JSON files specifically
 json_files_info = data.get("files_by_type", {}).get("json", [])
 processed_json = []
 
@@ -311,7 +311,7 @@ csv_reader = CSVReaderNode(
 
 # For JSON files
 json_reader = JSONReaderNode(
-    id="json_reader", 
+    id="json_reader",
     file_path="data/inputs/data.json"
 )
 
@@ -354,7 +354,7 @@ def create_document_processing_workflow() -> Workflow:
         name="document_processing_workflow",
         description="Process multiple document types and extract structured data"
     )
-    
+
     # === FILE DISCOVERY ===
     file_discoverer = DataTransformer(
         id="file_discoverer",
@@ -363,18 +363,18 @@ def create_document_processing_workflow() -> Workflow:
         ]
     )
     workflow.add_node("file_discoverer", file_discoverer)
-    
+
     # === SPECIALIZED FILE PROCESSORS ===
     # CSV Processor
     csv_processor = DataTransformer(
-        id="csv_processor", 
+        id="csv_processor",
         transformations=[
             # CSV-specific processing with bug workarounds
         ]
     )
     workflow.add_node("csv_processor", csv_processor)
     workflow.connect("file_discoverer", "csv_processor", mapping={"result": "data"})
-    
+
     # JSON Processor
     json_processor = DataTransformer(
         id="json_processor",
@@ -384,7 +384,7 @@ def create_document_processing_workflow() -> Workflow:
     )
     workflow.add_node("json_processor", json_processor)
     workflow.connect("file_discoverer", "json_processor", mapping={"result": "data"})
-    
+
     # Text Processor
     text_processor = DataTransformer(
         id="text_processor",
@@ -394,7 +394,7 @@ def create_document_processing_workflow() -> Workflow:
     )
     workflow.add_node("text_processor", text_processor)
     workflow.connect("file_discoverer", "text_processor", mapping={"result": "data"})
-    
+
     # === MERGE RESULTS ===
     result_merger = MergeNode(
         id="result_merger",
@@ -404,7 +404,7 @@ def create_document_processing_workflow() -> Workflow:
     workflow.connect("csv_processor", "result_merger", mapping={"result": "data1"})
     workflow.connect("json_processor", "result_merger", mapping={"result": "data2"})
     workflow.connect("text_processor", "result_merger", mapping={"result": "data3"})
-    
+
     # === SUMMARY GENERATION ===
     summary_generator = DataTransformer(
         id="summary_generator",
@@ -414,7 +414,7 @@ def create_document_processing_workflow() -> Workflow:
     )
     workflow.add_node("summary_generator", summary_generator)
     workflow.connect("result_merger", "summary_generator", mapping={"merged_data": "data"})
-    
+
     # === OUTPUT ===
     summary_writer = JSONWriterNode(
         id="summary_writer",
@@ -422,7 +422,7 @@ def create_document_processing_workflow() -> Workflow:
     )
     workflow.add_node("summary_writer", summary_writer)
     workflow.connect("summary_generator", "summary_writer", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -442,7 +442,7 @@ new_files = []
 for filename in os.listdir('watch_directory'):
     file_path = os.path.join('watch_directory', filename)
     mtime = os.path.getmtime(file_path)
-    
+
     if filename not in last_check or mtime > last_check[filename]:
         new_files.append(file_path)
         last_check[filename] = mtime
@@ -482,7 +482,7 @@ for event in file_events:
     elif event.get("event_type") == "file_modified":
         processed_events.append({
             "file_path": event.get("file_path"),
-            "action": "reprocess_file", 
+            "action": "reprocess_file",
             "priority": "medium",
             "detected_at": event.get("timestamp")
         })
@@ -536,7 +536,7 @@ workflow.connect("content_analyzer", "report_generator", mapping={"result": "dat
 - Use DataTransformer for complex CSV analytics
 - Handle encoding issues and malformed records
 
-### JSON Files  
+### JSON Files
 - Use JSONReaderNode for reading structured JSON
 - Validate JSON schema before processing
 - Handle nested structures appropriately

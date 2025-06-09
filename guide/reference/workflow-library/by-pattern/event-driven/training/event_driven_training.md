@@ -96,7 +96,7 @@ print(f"Processing {len(events)} events")
 
 for event in events:
     event_type = event.get("event_type")
-    
+
     if event_type == "OrderCreated":
         order_data = event.get("data", {})
         processed_order = {
@@ -109,7 +109,7 @@ for event in events:
             "event_processed_at": datetime.datetime.now().isoformat()
         }
         processed_orders.append(processed_order)
-        
+
     elif event_type == "PaymentProcessed":
         payment_data = event.get("data", {})
         processed_payment = {
@@ -122,7 +122,7 @@ for event in events:
             "event_processed_at": datetime.datetime.now().isoformat()
         }
         processed_payments.append(processed_payment)
-        
+
     elif event_type == "OrderShipped":
         shipping_data = event.get("data", {})
         processed_shipment = {
@@ -268,7 +268,7 @@ def create_event_sourcing_workflow() -> Workflow:
         name="event_sourcing_workflow",
         description="Event sourcing pattern for order management"
     )
-    
+
     # === EVENT GENERATION ===
     event_generator = DataTransformer(
         id="event_generator",
@@ -305,7 +305,7 @@ for order_id in order_ids:
             "correlation_id": str(uuid.uuid4())
         }
     })
-    
+
     # Payment processed event
     events.append({
         "event_id": str(uuid.uuid4()),
@@ -324,7 +324,7 @@ for order_id in order_ids:
             "correlation_id": str(uuid.uuid4())
         }
     })
-    
+
     # Some orders get shipped, others cancelled
     final_event_type = random.choice(["OrderShipped", "OrderCancelled"])
     events.append({
@@ -357,7 +357,7 @@ result = {
         ]
     )
     workflow.add_node("event_generator", event_generator)
-    
+
     # === EVENT PROCESSING ===
     event_processor = DataTransformer(
         id="event_processor",
@@ -367,7 +367,7 @@ result = {
     )
     workflow.add_node("event_processor", event_processor)
     workflow.connect("event_generator", "event_processor", mapping={"result": "data"})
-    
+
     # === STATE RECONSTRUCTION ===
     state_builder = DataTransformer(
         id="state_builder",
@@ -377,7 +377,7 @@ result = {
     )
     workflow.add_node("state_builder", state_builder)
     workflow.connect("event_processor", "state_builder", mapping={"result": "data"})
-    
+
     # === OUTPUTS ===
     # Save event stream for audit trail
     event_store = JSONWriterNode(
@@ -386,7 +386,7 @@ result = {
     )
     workflow.add_node("event_store", event_store)
     workflow.connect("event_generator", "event_store", mapping={"result": "data"})
-    
+
     # Save current state projection
     state_store = JSONWriterNode(
         id="state_store",
@@ -394,7 +394,7 @@ result = {
     )
     workflow.add_node("state_store", state_store)
     workflow.connect("state_builder", "state_store", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -474,7 +474,7 @@ type_filter = FilterNode(
 source_filter = FilterNode(
     id="source_filter",
     condition_field="metadata.source",
-    operator="in", 
+    operator="in",
     value=["order-service", "payment-service"]
 )
 

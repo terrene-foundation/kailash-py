@@ -320,17 +320,17 @@ SQLDatabaseNode
        pool_size=5,
        max_overflow=10
    )
-   
+
    # Add to workflow
    workflow.add_node("database", db_node)
-   
+
    # Execute with runtime parameters
    result = db_node.run(
        query="SELECT * FROM customers WHERE active = ?",
        parameters=[True],
        result_format="dict"
    )
-   
+
    # PostgreSQL with advanced configuration
    pg_node = SQLDatabaseNode(
        connection_string="postgresql://user:pass@host/db",
@@ -339,29 +339,29 @@ SQLDatabaseNode
        pool_recycle=1800,
        connect_args={'connect_timeout': 10}
    )
-   
+
    workflow.add_node("pg_database", pg_node)
-   
+
    # MySQL example
    mysql_node = SQLDatabaseNode(
        connection_string="mysql+pymysql://user:pass@host/db",
        pool_size=8,
        echo=True  # Enable query logging
    )
-   
+
    # Execute with different parameter styles
    # SQLite uses ?
    sqlite_result = db_node.run(
        query="SELECT * FROM users WHERE age > ? AND city = ?",
        parameters=[25, "New York"]
    )
-   
+
    # PostgreSQL uses $1, $2, etc.
    pg_result = pg_node.run(
        query="SELECT * FROM users WHERE age > $1 AND city = $2",
        parameters=[25, "New York"]
    )
-   
+
    # MySQL uses %s
    mysql_result = mysql_node.run(
        query="SELECT * FROM users WHERE age > %s AND city = %s",
@@ -371,7 +371,7 @@ SQLDatabaseNode
 **Configuration Parameters:**
 
 - **connection_string** (str, required): Database connection URL
-  
+
   - SQLite: ``sqlite:///path/to/database.db``
   - PostgreSQL: ``postgresql://user:password@host:port/database``
   - MySQL: ``mysql+pymysql://user:password@host:port/database``

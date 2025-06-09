@@ -12,13 +12,14 @@ A simplified event processing workflow that demonstrates:
 This version focuses on working patterns without complex routing.
 """
 
-import os
 import csv
+import os
 import random
 from datetime import datetime
+
 from kailash import Workflow
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
-from kailash.nodes.transform import FilterNode, DataTransformer
+from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.runtime import LocalRuntime
 
 
@@ -27,37 +28,34 @@ def create_simple_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="simple_event_001",
         name="simple_event_processor",
-        description="Simple event processing pipeline"
+        description="Simple event processing pipeline",
     )
-    
+
     # Read events
-    reader = CSVReaderNode(
-        id="event_reader",
-        file_path="data/events.csv"
-    )
+    reader = CSVReaderNode(id="event_reader", file_path="data/events.csv")
     workflow.add_node("event_reader", reader)
-    
+
     # Filter priority events
     filter_node = FilterNode(id="priority_filter")
     workflow.add_node("priority_filter", filter_node)
     workflow.connect("event_reader", "priority_filter", mapping={"data": "data"})
-    
+
     # Transform and aggregate
     aggregator = DataTransformer(
-        id="event_aggregator",
-        transformations=[]  # Provided at runtime
+        id="event_aggregator", transformations=[]  # Provided at runtime
     )
     workflow.add_node("event_aggregator", aggregator)
-    workflow.connect("priority_filter", "event_aggregator", mapping={"filtered_data": "data"})
-    
+    workflow.connect(
+        "priority_filter", "event_aggregator", mapping={"filtered_data": "data"}
+    )
+
     # Write results
     writer = CSVWriterNode(
-        id="result_writer",
-        file_path="data/outputs/event_summary.csv"
+        id="result_writer", file_path="data/outputs/event_summary.csv"
     )
     workflow.add_node("result_writer", writer)
     workflow.connect("event_aggregator", "result_writer", mapping={"result": "data"})
-    
+
     return workflow
 
 
@@ -65,13 +63,9 @@ def run_simple_processor():
     """Run the simple event processor."""
     workflow = create_simple_workflow()
     runtime = LocalRuntime()
-    
+
     parameters = {
-        "priority_filter": {
-            "field": "priority",
-            "operator": ">=",
-            "value": 7
-        },
+        "priority_filter": {"field": "priority", "operator": ">=", "value": 7},
         "event_aggregator": {
             "transformations": [
                 """
@@ -103,9 +97,9 @@ result = [{
 }]
 """
             ]
-        }
+        },
     }
-    
+
     try:
         print("Running simple event processor...")
         result, run_id = runtime.execute(workflow, parameters=parameters)
@@ -120,24 +114,26 @@ result = [{
 def generate_events():
     """Generate sample events."""
     os.makedirs("data/outputs", exist_ok=True)
-    
+
     events = []
     event_types = ["login", "purchase", "error", "api_call", "system"]
-    
+
     for i in range(30):
-        events.append({
-            "id": f"evt_{i:04d}",
-            "timestamp": datetime.now().isoformat(),
-            "type": random.choice(event_types),
-            "priority": random.randint(1, 10),
-            "source": random.choice(["web", "mobile", "api"])
-        })
-    
+        events.append(
+            {
+                "id": f"evt_{i:04d}",
+                "timestamp": datetime.now().isoformat(),
+                "type": random.choice(event_types),
+                "priority": random.randint(1, 10),
+                "source": random.choice(["web", "mobile", "api"]),
+            }
+        )
+
     with open("data/events.csv", "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=events[0].keys())
         writer.writeheader()
         writer.writerows(events)
-    
+
     print(f"Generated {len(events)} events")
 
 

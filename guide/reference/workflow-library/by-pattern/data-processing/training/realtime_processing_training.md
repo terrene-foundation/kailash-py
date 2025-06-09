@@ -215,7 +215,7 @@ parameters = {
         "condition_field": "severity",
         "routes": {
             "critical": "alert_path",
-            "warning": "monitor_path", 
+            "warning": "monitor_path",
             "normal": "store_path"
         }
     }
@@ -339,7 +339,7 @@ from kailash.runtime import AsyncLocalRuntime
 
 async def create_realtime_pipeline():
     workflow = Workflow(name="event_processor")
-    
+
     # Streaming source
     stream = StreamingDataNode(
         name="event_stream",
@@ -347,32 +347,32 @@ async def create_realtime_pipeline():
         topic="events"
     )
     workflow.add_node(stream)
-    
+
     # Deduplication with state
     dedup = StateStoreNode(name="dedup_store", backend="redis")
     workflow.add_node(dedup)
     workflow.connect(stream.id, dedup.id, mapping={"events": "data"})
-    
+
     # Filter and enrich
     filter_node = FilterNode(name="priority_filter")
     workflow.add_node(filter_node)
     workflow.connect(dedup.id, filter_node.id, mapping={"unique_events": "data"})
-    
+
     # Window aggregation
     window_agg = DataTransformer(name="window_metrics")
     workflow.add_node(window_agg)
     workflow.connect(filter_node.id, window_agg.id, mapping={"filtered_data": "data"})
-    
+
     # Anomaly detection routing
     router = SwitchNode(name="severity_router")
     workflow.add_node(router)
     workflow.connect(window_agg.id, router.id, mapping={"result": "input"})
-    
+
     # Alert path
     alerter = WebhookNode(name="alert_webhook", url="https://alerts.example.com")
     workflow.add_node(alerter)
     workflow.connect(router.id, alerter.id, output_key="critical")
-    
+
     # Execute asynchronously
     runtime = AsyncLocalRuntime()
     await runtime.execute(workflow, parameters={

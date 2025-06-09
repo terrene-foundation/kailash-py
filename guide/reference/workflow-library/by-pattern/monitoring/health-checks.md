@@ -32,7 +32,7 @@ def create_health_check_workflow():
     Multi-service health check with retry logic and detailed status reporting.
     """
     workflow = Workflow(name="service_health_check")
-    
+
     # Define services to monitor
     services_config = PythonCodeNode(
         name="services_config",
@@ -72,7 +72,7 @@ result = {"services": services, "timestamp": datetime.now().isoformat()}
 """
     )
     workflow.add_node(services_config)
-    
+
     # Health check executor
     health_checker = PythonCodeNode(
         name="health_checker",
@@ -86,19 +86,19 @@ async def check_service(session, service):
     start_time = time.time()
     try:
         async with session.get(
-            service['url'], 
+            service['url'],
             timeout=aiohttp.ClientTimeout(total=service['timeout'])
         ) as response:
             elapsed = time.time() - start_time
             status_ok = response.status == service['expected_status']
-            
+
             # Parse response body for detailed health info
             try:
                 body = await response.json()
                 details = body.get('details', {})
             except:
                 details = {}
-            
+
             return {
                 'name': service['name'],
                 'url': service['url'],
@@ -131,17 +131,17 @@ async def check_service(session, service):
 
 async def check_all_services():
     services = input_data['services']
-    
+
     async with aiohttp.ClientSession() as session:
         tasks = [check_service(session, service) for service in services]
         results = await asyncio.gather(*tasks)
-    
+
     # Calculate overall health
     critical_services = [r for r in results if r.get('critical', False)]
     critical_healthy = [r for r in critical_services if r['status'] == 'healthy']
     all_healthy = all(r['status'] == 'healthy' for r in results)
     critical_all_healthy = len(critical_healthy) == len(critical_services)
-    
+
     health_summary = {
         'overall_status': 'healthy' if critical_all_healthy else 'unhealthy',
         'total_services': len(results),
@@ -153,7 +153,7 @@ async def check_all_services():
         'services': results,
         'timestamp': input_data['timestamp']
     }
-    
+
     result = health_summary
 
 # Run async function
@@ -171,7 +171,7 @@ loop.close()
     )
     workflow.add_node(health_checker)
     workflow.connect("services_config", "health_checker")
-    
+
     # Alert decision node
     alert_decision = SwitchNode(
         name="alert_decision",
@@ -179,14 +179,14 @@ loop.close()
     )
     workflow.add_node(alert_decision)
     workflow.connect("health_checker", "alert_decision")
-    
+
     # Alert formatter for critical issues
     alert_formatter = PythonCodeNode(
         name="alert_formatter",
         code="""
 health_data = input_data
 critical_issues = [
-    s for s in health_data['services'] 
+    s for s in health_data['services']
     if s['critical'] and s['status'] != 'healthy'
 ]
 
@@ -215,7 +215,7 @@ result = {
     )
     workflow.add_node(alert_formatter)
     workflow.connect("alert_decision", "alert_formatter", condition="unhealthy")
-    
+
     # Success formatter
     success_formatter = PythonCodeNode(
         name="success_formatter",
@@ -229,7 +229,7 @@ message += f"Average Response Time: {health_data['avg_response_time']}ms\\n\\n"
 
 # Add any warnings for non-critical services
 warnings = [
-    s for s in health_data['services'] 
+    s for s in health_data['services']
     if not s['critical'] and s['status'] != 'healthy'
 ]
 
@@ -247,13 +247,13 @@ result = {
     )
     workflow.add_node(success_formatter)
     workflow.connect("alert_decision", "success_formatter", condition="healthy")
-    
+
     # Convergence for results
     results_merger = ConvergenceNode(name="results_merger")
     workflow.add_node(results_merger)
     workflow.connect("alert_formatter", "results_merger")
     workflow.connect("success_formatter", "results_merger")
-    
+
     return workflow
 
 # Execute health check
@@ -271,7 +271,7 @@ def create_dependency_aware_health_check():
     Health check that understands service dependencies and cascading failures.
     """
     workflow = Workflow(name="dependency_health_check")
-    
+
     # Service dependency graph
     dependency_config = PythonCodeNode(
         name="dependency_config",
@@ -314,7 +314,7 @@ result = {"services": services, "check_time": datetime.now().isoformat()}
 """
     )
     workflow.add_node(dependency_config)
-    
+
     # Dependency-aware health checker
     dep_health_checker = PythonCodeNode(
         name="dep_health_checker",
@@ -346,14 +346,14 @@ async def check_service_health(session, name, config):
 
 async def check_all_with_dependencies():
     services = input_data['services']
-    
+
     # Create dependency graph
     G = nx.DiGraph()
     for service, config in services.items():
         G.add_node(service)
         for dep in config['depends_on']:
             G.add_edge(dep, service)  # dep -> service
-    
+
     # Check all services
     async with aiohttp.ClientSession() as session:
         tasks = {
@@ -363,7 +363,7 @@ async def check_all_with_dependencies():
         results = {}
         for name, task in tasks.items():
             results[name] = await task
-    
+
     # Analyze cascading failures
     impact_analysis = {}
     for service in services:
@@ -377,12 +377,12 @@ async def check_all_with_dependencies():
                 'total_impact': impacted,
                 'impact_count': len(impacted)
             }
-    
+
     # Calculate overall system health
     total_services = len(services)
     healthy_services = sum(1 for r in results.values() if r['healthy'])
     health_percentage = (healthy_services / total_services) * 100
-    
+
     # Determine critical path failures
     critical_paths = []
     for service in services:
@@ -393,7 +393,7 @@ async def check_all_with_dependencies():
                 'root_failure': service,
                 'affected_services': list(affected_paths.keys())
             })
-    
+
     result = {
         'health_percentage': round(health_percentage, 2),
         'service_status': results,
@@ -419,7 +419,7 @@ loop.close()
     )
     workflow.add_node(dep_health_checker)
     workflow.connect("dependency_config", "dep_health_checker")
-    
+
     return workflow
 ```
 
@@ -433,7 +433,7 @@ def create_performance_tracking_workflow():
     Collects and analyzes performance metrics from multiple sources.
     """
     workflow = Workflow(name="performance_metrics_collector")
-    
+
     # Metrics collector configuration
     metrics_config = PythonCodeNode(
         name="metrics_config",
@@ -491,7 +491,7 @@ result = {
 """
     )
     workflow.add_node(metrics_config)
-    
+
     # Metrics collector
     metrics_collector = PythonCodeNode(
         name="metrics_collector",
@@ -505,7 +505,7 @@ async def collect_prometheus_metrics(session, url):
     try:
         async with session.get(url) as response:
             text = await response.text()
-            
+
         # Parse Prometheus format
         metrics = {}
         for line in text.split('\\n'):
@@ -515,7 +515,7 @@ async def collect_prometheus_metrics(session, url):
                     metric_name = parts[0]
                     metric_value = float(parts[1])
                     metrics[metric_name] = metric_value
-        
+
         return metrics
     except:
         return {}
@@ -530,7 +530,7 @@ async def collect_custom_metrics(session, url):
 async def collect_all_metrics():
     endpoints = input_data['endpoints']
     thresholds = input_data['thresholds']
-    
+
     async with aiohttp.ClientSession() as session:
         tasks = []
         for endpoint in endpoints:
@@ -538,17 +538,17 @@ async def collect_all_metrics():
                 tasks.append(collect_prometheus_metrics(session, endpoint['metrics_url']))
             else:
                 tasks.append(collect_custom_metrics(session, endpoint['metrics_url']))
-        
+
         raw_metrics = await asyncio.gather(*tasks)
-    
+
     # Process and normalize metrics
     processed_metrics = []
     alerts = []
-    
+
     for i, endpoint in enumerate(endpoints):
         service = endpoint['service']
         metrics = raw_metrics[i]
-        
+
         if not metrics:
             alerts.append({
                 'service': service,
@@ -557,7 +557,7 @@ async def collect_all_metrics():
                 'message': f'Failed to collect metrics from {service}'
             })
             continue
-        
+
         # Extract key metrics (adapt based on actual metrics)
         processed = {
             'service': service,
@@ -570,7 +570,7 @@ async def collect_all_metrics():
             'active_connections': metrics.get('connections_active', 0),
             'requests_per_second': metrics.get('requests_per_second', 0)
         }
-        
+
         # Check thresholds
         for metric, value in processed.items():
             if metric in thresholds and isinstance(value, (int, float)):
@@ -592,9 +592,9 @@ async def collect_all_metrics():
                         'severity': 'warning',
                         'message': f'{service}: {metric} is {value} (warning threshold: {thresholds[metric]["warning"]})'
                     })
-        
+
         processed_metrics.append(processed)
-    
+
     # Calculate aggregate metrics
     if processed_metrics:
         aggregates = {
@@ -605,7 +605,7 @@ async def collect_all_metrics():
         }
     else:
         aggregates = {}
-    
+
     result = {
         'metrics': processed_metrics,
         'aggregates': aggregates,
@@ -628,7 +628,7 @@ loop.close()
     )
     workflow.add_node(metrics_collector)
     workflow.connect("metrics_config", "metrics_collector")
-    
+
     # Performance analyzer
     performance_analyzer = PythonCodeNode(
         name="performance_analyzer",
@@ -649,28 +649,28 @@ analysis = {
 # Analyze each service
 for metric in metrics_data['metrics']:
     service = metric['service']
-    
+
     # Calculate performance score (0-100)
     scores = []
     if metric['response_time_ms'] > 0:
         rt_score = max(0, 100 - (metric['response_time_ms'] / 5))  # 500ms = 0 score
         scores.append(rt_score)
-    
+
     if metric['error_rate'] >= 0:
         err_score = max(0, 100 - (metric['error_rate'] * 2000))  # 5% = 0 score
         scores.append(err_score)
-    
+
     if metric['cpu_usage'] > 0:
         cpu_score = max(0, 100 - metric['cpu_usage'])
         scores.append(cpu_score)
-    
+
     performance_score = statistics.mean(scores) if scores else 0
-    
+
     analysis['summary'][service] = {
         'performance_score': round(performance_score, 2),
         'status': 'good' if performance_score > 80 else 'degraded' if performance_score > 60 else 'poor'
     }
-    
+
     # Generate recommendations
     if metric['response_time_ms'] > 300:
         analysis['recommendations'].append({
@@ -678,14 +678,14 @@ for metric in metrics_data['metrics']:
             'type': 'performance',
             'recommendation': f'Consider caching or optimizing {service} - response time is {metric["response_time_ms"]}ms'
         })
-    
+
     if metric['cpu_usage'] > 80:
         analysis['recommendations'].append({
             'service': service,
             'type': 'scaling',
             'recommendation': f'Scale up {service} - CPU usage at {metric["cpu_usage"]}%'
         })
-    
+
     if metric['error_rate'] > 0.02:
         analysis['recommendations'].append({
             'service': service,
@@ -701,7 +701,7 @@ if metrics_data['aggregates']:
             'severity': 'warning',
             'prediction': 'System may experience capacity issues in next 2-4 hours based on CPU trends'
         })
-    
+
     if metrics_data['aggregates']['max_error_rate'] > 0.03:
         analysis['predicted_issues'].append({
             'type': 'reliability',
@@ -718,7 +718,7 @@ result = {
     )
     workflow.add_node(performance_analyzer)
     workflow.connect("metrics_collector", "performance_analyzer")
-    
+
     return workflow
 ```
 
@@ -732,7 +732,7 @@ def create_alert_management_workflow():
     Sophisticated alert routing with deduplication, correlation, and escalation.
     """
     workflow = Workflow(name="alert_management")
-    
+
     # Alert ingestion
     alert_ingestion = PythonCodeNode(
         name="alert_ingestion",
@@ -753,7 +753,7 @@ raw_alerts = [
         "timestamp": datetime.now().isoformat()
     },
     {
-        "source": "prometheus", 
+        "source": "prometheus",
         "service": "api_gateway",
         "metric": "error_rate",
         "value": 0.08,
@@ -778,7 +778,7 @@ for alert in raw_alerts:
     # Create unique alert fingerprint
     fingerprint = f"{alert['service']}:{alert['metric']}:{alert['severity']}"
     alert_id = hashlib.md5(fingerprint.encode()).hexdigest()[:8]
-    
+
     alert['alert_id'] = alert_id
     alert['fingerprint'] = fingerprint
     alert['processed_at'] = datetime.now().isoformat()
@@ -792,7 +792,7 @@ result = {
 """
     )
     workflow.add_node(alert_ingestion)
-    
+
     # Alert correlation and deduplication
     alert_processor = PythonCodeNode(
         name="alert_processor",
@@ -819,7 +819,7 @@ for service, alerts in service_alerts.items():
     # Check for correlated issues
     critical_count = sum(1 for a in alerts if a['severity'] == 'critical')
     warning_count = sum(1 for a in alerts if a['severity'] == 'warning')
-    
+
     if critical_count >= 2:
         # Multiple critical alerts - likely service failure
         group = {
@@ -832,7 +832,7 @@ for service, alerts in service_alerts.items():
             'requires_escalation': True
         }
         processed_groups.append(group)
-        
+
         # Create high-priority notification
         notifications.append({
             'type': 'immediate',
@@ -840,7 +840,7 @@ for service, alerts in service_alerts.items():
             'group': group,
             'escalation_level': 1
         })
-    
+
     elif critical_count == 1:
         # Single critical alert
         group = {
@@ -853,14 +853,14 @@ for service, alerts in service_alerts.items():
             'requires_escalation': False
         }
         processed_groups.append(group)
-        
+
         notifications.append({
             'type': 'standard',
             'channels': ['slack_critical', 'email'],
             'group': group,
             'escalation_level': 0
         })
-    
+
     elif warning_count >= 3:
         # Multiple warnings might indicate developing issue
         group = {
@@ -873,7 +873,7 @@ for service, alerts in service_alerts.items():
             'requires_escalation': False
         }
         processed_groups.append(group)
-        
+
         notifications.append({
             'type': 'informational',
             'channels': ['slack_warnings'],
@@ -908,7 +908,7 @@ result = {
     )
     workflow.add_node(alert_processor)
     workflow.connect("alert_ingestion", "alert_processor")
-    
+
     # Notification dispatcher
     notification_dispatcher = PythonCodeNode(
         name="notification_dispatcher",
@@ -923,14 +923,14 @@ dispatched = []
 
 for notif in notification_data['notifications']:
     channels = notif.get('channels', [])
-    
+
     for channel in channels:
         dispatch_record = {
             'channel': channel,
             'timestamp': datetime.now().isoformat(),
             'status': 'dispatched'
         }
-        
+
         if channel == 'pagerduty':
             # Format for PagerDuty
             dispatch_record['payload'] = {
@@ -944,7 +944,7 @@ for notif in notification_data['notifications']:
                     'custom_details': notif
                 }
             }
-        
+
         elif channel.startswith('slack'):
             # Format for Slack
             severity_emoji = {
@@ -953,7 +953,7 @@ for notif in notification_data['notifications']:
                 'standard': '⚠️',
                 'informational': 'ℹ️'
             }
-            
+
             dispatch_record['payload'] = {
                 'channel': '#alerts-critical' if 'critical' in channel else '#alerts-general',
                 'text': f"{severity_emoji.get(notif['type'], '⚠️')} {notif.get('summary', '')}",
@@ -969,7 +969,7 @@ for notif in notification_data['notifications']:
                     }
                 ]
             }
-        
+
         elif channel == 'email':
             # Format for email
             dispatch_record['payload'] = {
@@ -977,14 +977,14 @@ for notif in notification_data['notifications']:
                 'subject': f"[{notif['type'].upper()}] {notif.get('summary', 'Alert')}",
                 'body': json.dumps(notif, indent=2)
             }
-        
+
         elif channel == 'sms':
             # Format for SMS (keep it short)
             dispatch_record['payload'] = {
                 'to': ['+1234567890'],  # On-call number
                 'message': f"{notif['type'].upper()}: {notif.get('summary', 'Critical Alert')[:140]}"
             }
-        
+
         dispatched.append(dispatch_record)
 
 # Summary of dispatched notifications
@@ -1005,7 +1005,7 @@ result = {
     )
     workflow.add_node(notification_dispatcher)
     workflow.connect("alert_processor", "notification_dispatcher")
-    
+
     return workflow
 ```
 
@@ -1019,7 +1019,7 @@ def create_system_monitoring_workflow():
     Monitors system resources, infrastructure health, and capacity planning.
     """
     workflow = Workflow(name="system_monitoring")
-    
+
     # System inventory
     system_inventory = PythonCodeNode(
         name="system_inventory",
@@ -1034,7 +1034,7 @@ systems = [
         "ssh_port": 22
     },
     {
-        "hostname": "api-server-02", 
+        "hostname": "api-server-02",
         "type": "application",
         "ip": "10.0.1.11",
         "metrics_port": 9090,
@@ -1097,7 +1097,7 @@ result = {
 """
     )
     workflow.add_node(system_inventory)
-    
+
     # Resource collector
     resource_collector = PythonCodeNode(
         name="resource_collector",
@@ -1110,14 +1110,14 @@ from datetime import datetime
 async def collect_system_metrics(session, system):
     # In production, would SSH or use agent APIs
     # Simulating realistic metrics here
-    
+
     base_metrics = {
         "timestamp": datetime.now().isoformat(),
         "hostname": system["hostname"],
         "type": system["type"],
         "status": "online"
     }
-    
+
     # Simulate different metrics by system type
     if system["type"] == "application":
         metrics = {
@@ -1133,7 +1133,7 @@ async def collect_system_metrics(session, system):
             "open_files": random.randint(1000, 5000),
             "threads": random.randint(100, 500)
         }
-    
+
     elif system["type"] == "database":
         metrics = {
             **base_metrics,
@@ -1147,7 +1147,7 @@ async def collect_system_metrics(session, system):
             "replication_lag_seconds": random.uniform(0, 2),
             "cache_hit_ratio": random.uniform(0.85, 0.99)
         }
-    
+
     elif system["type"] == "cache":
         metrics = {
             **base_metrics,
@@ -1159,7 +1159,7 @@ async def collect_system_metrics(session, system):
             "connections_current": random.randint(100, 500),
             "ops_per_second": random.uniform(1000, 10000)
         }
-    
+
     elif system["type"] == "load_balancer":
         metrics = {
             **base_metrics,
@@ -1175,42 +1175,42 @@ async def collect_system_metrics(session, system):
                 "unhealthy": random.randint(0, 2)
             }
         }
-    
+
     else:
         metrics = base_metrics
-    
+
     # Simulate occasional issues
     if random.random() < 0.1:  # 10% chance of issues
         if system["type"] == "application":
             metrics["cpu_percent"] = random.uniform(80, 95)
         elif system["type"] == "database":
             metrics["slow_queries"] = random.randint(20, 50)
-    
+
     return metrics
 
 async def collect_all_systems():
     systems = input_data["systems"]
     thresholds = input_data["thresholds"]
-    
+
     # Collect metrics from all systems
     async with aiohttp.ClientSession() as session:
         tasks = [collect_system_metrics(session, system) for system in systems]
         all_metrics = await asyncio.gather(*tasks)
-    
+
     # Analyze metrics against thresholds
     issues = []
     capacity_warnings = []
-    
+
     for metrics in all_metrics:
         system_type = metrics["type"]
         hostname = metrics["hostname"]
         system_thresholds = thresholds.get(system_type, {})
-        
+
         # Check each metric against thresholds
         for metric, value in metrics.items():
             if metric in system_thresholds and isinstance(value, (int, float)):
                 thresh = system_thresholds[metric]
-                
+
                 if "critical" in thresh and value >= thresh["critical"]:
                     issues.append({
                         "hostname": hostname,
@@ -1229,7 +1229,7 @@ async def collect_all_systems():
                         "severity": "warning",
                         "message": f"{hostname}: {metric} at {value:.2f} (warning: {thresh['warning']})"
                     })
-        
+
         # Capacity planning checks
         if system_type == "application":
             if metrics.get("cpu_percent", 0) > 60 and metrics.get("memory_percent", 0) > 70:
@@ -1239,7 +1239,7 @@ async def collect_all_systems():
                     "reason": "High CPU and memory usage",
                     "recommendation": "Consider horizontal scaling"
                 })
-        
+
         elif system_type == "database":
             if metrics.get("connections_active", 0) > 150:
                 capacity_warnings.append({
@@ -1248,7 +1248,7 @@ async def collect_all_systems():
                     "reason": "High connection count",
                     "recommendation": "Increase connection pool size or add read replicas"
                 })
-    
+
     # Calculate fleet-wide statistics
     fleet_stats = {}
     for system_type in set(m["type"] for m in all_metrics):
@@ -1260,7 +1260,7 @@ async def collect_all_systems():
                 "avg_memory": sum(m.get("memory_percent", 0) for m in type_metrics) / len(type_metrics),
                 "healthy": len([m for m in type_metrics if m["status"] == "online"])
             }
-    
+
     result = {
         "metrics": all_metrics,
         "issues": issues,
@@ -1284,7 +1284,7 @@ loop.close()
     )
     workflow.add_node(resource_collector)
     workflow.connect("system_inventory", "resource_collector")
-    
+
     # Capacity analyzer
     capacity_analyzer = PythonCodeNode(
         name="capacity_analyzer",
@@ -1311,7 +1311,7 @@ for system_type, stats in monitoring_data["fleet_stats"].items():
         "average_memory": round(stats["avg_memory"], 2),
         "health_percentage": round((stats["healthy"] / stats["count"]) * 100, 2)
     }
-    
+
     # Simple linear projection (would use ML in production)
     if stats["avg_cpu"] > 60:
         days_until_critical = int((85 - stats["avg_cpu"]) / 0.5)  # Assuming 0.5% daily growth
@@ -1321,7 +1321,7 @@ for system_type, stats in monitoring_data["fleet_stats"].items():
             "prediction": f"CPU likely to reach critical levels in {days_until_critical} days",
             "confidence": "medium"
         })
-    
+
     if stats["avg_memory"] > 70:
         days_until_critical = int((90 - stats["avg_memory"]) / 0.3)  # Assuming 0.3% daily growth
         analysis["predictions"].append({
@@ -1373,7 +1373,7 @@ result = {
     )
     workflow.add_node(capacity_analyzer)
     workflow.connect("resource_collector", "capacity_analyzer")
-    
+
     return workflow
 ```
 
@@ -1387,7 +1387,7 @@ def create_log_aggregation_workflow():
     Aggregates logs from multiple sources, detects patterns, and identifies anomalies.
     """
     workflow = Workflow(name="log_aggregation")
-    
+
     # Log sources configuration
     log_sources = PythonCodeNode(
         name="log_sources",
@@ -1464,7 +1464,7 @@ result = {
 """
     )
     workflow.add_node(log_sources)
-    
+
     # Log collector and parser
     log_collector = PythonCodeNode(
         name="log_collector",
@@ -1480,7 +1480,7 @@ async def collect_elasticsearch_logs(session, source):
     # Simulate ES query (would use actual ES client)
     # Returning sample logs for demo
     logs = []
-    
+
     # Simulate various log entries
     sample_logs = [
         {
@@ -1524,7 +1524,7 @@ async def collect_elasticsearch_logs(session, source):
             "duration_ms": 45
         }
     ]
-    
+
     # Add more logs to simulate volume
     for i in range(100):
         if i % 20 == 0:
@@ -1533,13 +1533,13 @@ async def collect_elasticsearch_logs(session, source):
             logs.append(sample_logs[2])  # Security logs
         else:
             logs.append(sample_logs[4])  # Normal logs
-    
+
     return logs
 
 async def collect_all_logs():
     sources = input_data["sources"]
     patterns = input_data["patterns"]
-    
+
     # Collect logs from all sources
     all_logs = []
     async with aiohttp.ClientSession() as session:
@@ -1547,23 +1547,23 @@ async def collect_all_logs():
             if source["type"] == "elasticsearch":
                 logs = await collect_elasticsearch_logs(session, source)
                 all_logs.extend(logs)
-    
+
     # Analyze logs
     pattern_matches = defaultdict(list)
     service_errors = defaultdict(int)
     error_patterns = Counter()
     timeline = defaultdict(lambda: {"errors": 0, "warnings": 0, "total": 0})
-    
+
     for log in all_logs:
         log_message = log.get("message", "")
         log_level = log.get("level", "INFO")
         service = log.get("service", "unknown")
         timestamp = log.get("@timestamp", "")
-        
+
         # Count by service and level
         if log_level in ["ERROR", "CRITICAL"]:
             service_errors[service] += 1
-        
+
         # Match against patterns
         for pattern_type, pattern_list in patterns.items():
             for pattern in pattern_list:
@@ -1573,10 +1573,10 @@ async def collect_all_logs():
                         "pattern": pattern,
                         "matched_at": datetime.now().isoformat()
                     })
-                    
+
                     if pattern_type == "errors":
                         error_patterns[log_message[:50]] += 1
-        
+
         # Build timeline
         if timestamp:
             minute_key = timestamp[:16]  # Group by minute
@@ -1585,10 +1585,10 @@ async def collect_all_logs():
                 timeline[minute_key]["errors"] += 1
             elif log_level == "WARN":
                 timeline[minute_key]["warnings"] += 1
-    
+
     # Identify anomalies
     anomalies = []
-    
+
     # Check for error spikes
     error_counts = [v["errors"] for v in timeline.values()]
     if error_counts:
@@ -1602,7 +1602,7 @@ async def collect_all_logs():
                     "severity": "high",
                     "message": f"Error spike detected: {stats['errors']} errors (avg: {avg_errors:.1f})"
                 })
-    
+
     # Check for security patterns
     security_matches = len(pattern_matches.get("security", []))
     if security_matches > 5:
@@ -1612,10 +1612,10 @@ async def collect_all_logs():
             "severity": "critical",
             "message": f"Multiple security-related log entries detected: {security_matches} matches"
         })
-    
+
     # Find most common errors
     top_errors = error_patterns.most_common(5)
-    
+
     result = {
         "summary": {
             "total_logs": len(all_logs),
@@ -1647,7 +1647,7 @@ loop.close()
     )
     workflow.add_node(log_collector)
     workflow.connect("log_sources", "log_collector")
-    
+
     # Intelligent log analyzer
     log_analyzer = PythonCodeNode(
         name="log_analyzer",
@@ -1748,7 +1748,7 @@ result = {
     )
     workflow.add_node(log_analyzer)
     workflow.connect("log_collector", "log_analyzer")
-    
+
     return workflow
 ```
 
@@ -1762,7 +1762,7 @@ def create_uptime_monitoring_workflow():
     Monitors service uptime from multiple regions with SLA compliance tracking.
     """
     workflow = Workflow(name="uptime_monitoring")
-    
+
     # Uptime configuration
     uptime_config = PythonCodeNode(
         name="uptime_config",
@@ -1824,7 +1824,7 @@ result = {
 """
     )
     workflow.add_node(uptime_config)
-    
+
     # Multi-region uptime checker
     uptime_checker = PythonCodeNode(
         name="uptime_checker",
@@ -1837,7 +1837,7 @@ import random  # Simulating region checks
 
 async def check_from_region(session, service, region):
     start_time = time.time()
-    
+
     # Simulate regional checks (in production, would use regional endpoints)
     # Add slight variation by region to simulate network differences
     region_latency = {
@@ -1846,13 +1846,13 @@ async def check_from_region(session, service, region):
         "ap-southeast-1": 100,
         "us-west-2": 30
     }
-    
+
     try:
         # Simulate check with 95% success rate
         if random.random() < 0.95:
             response_time = random.uniform(50, 300) + region_latency.get(region["name"], 0)
             await asyncio.sleep(response_time / 1000)  # Simulate network delay
-            
+
             return {
                 "service": service["name"],
                 "region": region["name"],
@@ -1871,7 +1871,7 @@ async def check_from_region(session, service, region):
                 "error": failure_type,
                 "checked_at": datetime.now().isoformat()
             }
-    
+
     except Exception as e:
         return {
             "service": service["name"],
@@ -1884,36 +1884,36 @@ async def check_from_region(session, service, region):
 async def check_all_services():
     services = input_data["services"]
     regions = input_data["regions"]
-    
+
     # Check all services from all regions
     async with aiohttp.ClientSession() as session:
         tasks = []
         for service in services:
             for region in regions:
                 tasks.append(check_from_region(session, service, region))
-        
+
         results = await asyncio.gather(*tasks)
-    
+
     # Aggregate results by service
     service_results = {}
     for service in services:
         service_name = service["name"]
         service_checks = [r for r in results if r["service"] == service_name]
-        
+
         # Calculate uptime (majority voting across regions)
         up_count = len([c for c in service_checks if c["status"] == "up"])
         total_count = len(service_checks)
-        
+
         # Service is considered up if majority of regions report it as up
         is_up = up_count > total_count / 2
-        
+
         # Average response time from successful checks
         successful_checks = [c for c in service_checks if c["status"] == "up"]
         avg_response_time = (
             sum(c.get("response_time", 0) for c in successful_checks) / len(successful_checks)
             if successful_checks else 0
         )
-        
+
         service_results[service_name] = {
             "current_status": "up" if is_up else "down",
             "regions_up": up_count,
@@ -1923,7 +1923,7 @@ async def check_all_services():
             "regional_status": service_checks,
             "sla_target": service["sla_target"]
         }
-    
+
     # Calculate historical uptime (simulated)
     historical_uptime = {}
     for service in services:
@@ -1931,7 +1931,7 @@ async def check_all_services():
         daily_uptime = random.uniform(99.0, 100.0)
         weekly_uptime = random.uniform(99.0, 100.0)
         monthly_uptime = random.uniform(98.5, 100.0)
-        
+
         historical_uptime[service["name"]] = {
             "daily": round(daily_uptime, 3),
             "weekly": round(weekly_uptime, 3),
@@ -1942,7 +1942,7 @@ async def check_all_services():
                 "monthly": monthly_uptime >= service["sla_target"]
             }
         }
-    
+
     result = {
         "current_status": service_results,
         "historical_uptime": historical_uptime,
@@ -1970,7 +1970,7 @@ loop.close()
     )
     workflow.add_node(uptime_checker)
     workflow.connect("uptime_config", "uptime_checker")
-    
+
     # SLA compliance analyzer
     sla_analyzer = PythonCodeNode(
         name="sla_analyzer",
@@ -1989,7 +1989,7 @@ analysis = {
 # Analyze SLA compliance
 for service_name, data in uptime_data["current_status"].items():
     historical = uptime_data["historical_uptime"][service_name]
-    
+
     # Check current status
     if data["current_status"] == "down":
         analysis["alerts"].append({
@@ -2001,7 +2001,7 @@ for service_name, data in uptime_data["current_status"].items():
                 r["region"] for r in data["regional_status"] if r["status"] == "down"
             ]
         })
-    
+
     # Check SLA compliance
     sla_status = {
         "daily": historical["sla_compliant"]["daily"],
@@ -2009,9 +2009,9 @@ for service_name, data in uptime_data["current_status"].items():
         "monthly": historical["sla_compliant"]["monthly"],
         "current_availability": data["availability_percentage"]
     }
-    
+
     analysis["sla_compliance"][service_name] = sla_status
-    
+
     # Generate alerts for SLA violations
     if not historical["sla_compliant"]["monthly"]:
         analysis["alerts"].append({
@@ -2029,7 +2029,7 @@ for service_name, data in uptime_data["current_status"].items():
             "message": f"{service_name} approaching SLA limit: {historical['weekly']}% (target: {data['sla_target']}%)",
             "period": "weekly"
         })
-    
+
     # Performance recommendations
     if data["avg_response_time"] > 500:
         analysis["recommendations"].append({
@@ -2038,7 +2038,7 @@ for service_name, data in uptime_data["current_status"].items():
             "recommendation": f"Optimize {service_name} - average response time is {data['avg_response_time']}ms",
             "priority": "medium"
         })
-    
+
     # Regional issues
     regional_failures = [r for r in data["regional_status"] if r["status"] == "down"]
     if 0 < len(regional_failures) < data["regions_total"]:
@@ -2077,7 +2077,7 @@ result = {
     )
     workflow.add_node(sla_analyzer)
     workflow.connect("uptime_checker", "sla_analyzer")
-    
+
     return workflow
 ```
 
@@ -2091,7 +2091,7 @@ def create_production_dashboard_workflow():
     Unified dashboard workflow that combines all monitoring data into actionable insights.
     """
     workflow = Workflow(name="production_dashboard")
-    
+
     # Dashboard configuration
     dashboard_config = PythonCodeNode(
         name="dashboard_config",
@@ -2150,7 +2150,7 @@ result = {
 """
     )
     workflow.add_node(dashboard_config)
-    
+
     # Collect all monitoring data (would run sub-workflows in production)
     data_collector = PythonCodeNode(
         name="data_collector",
@@ -2241,7 +2241,7 @@ result = {
     )
     workflow.add_node(data_collector)
     workflow.connect("dashboard_config", "data_collector")
-    
+
     # Dashboard analyzer and formatter
     dashboard_analyzer = PythonCodeNode(
         name="dashboard_analyzer",
@@ -2410,7 +2410,7 @@ result = {
     )
     workflow.add_node(dashboard_analyzer)
     workflow.connect("data_collector", "dashboard_analyzer")
-    
+
     # Dashboard publisher
     dashboard_publisher = PythonCodeNode(
         name="dashboard_publisher",
@@ -2451,10 +2451,10 @@ if dashboard_data["requires_attention"]:
 
 *Action Required:* {len(dashboard_data['dashboard']['action_items'])} items
 """
-    
+
     for item in dashboard_data['dashboard']['action_items'][:3]:  # Top 3
         slack_summary += f"\\n• [{item['priority'].upper()}] {item['action']}"
-    
+
     slack_output = {
         "channel": "slack",
         "webhook": "https://hooks.slack.com/services/xxx",
@@ -2499,25 +2499,25 @@ result = {
     )
     workflow.add_node(dashboard_publisher)
     workflow.connect("dashboard_analyzer", "dashboard_publisher")
-    
+
     return workflow
 
 # Example usage of all monitoring workflows
 if __name__ == "__main__":
     runtime = LocalRuntime()
-    
+
     # Run health check
     print("=== HEALTH CHECK ===")
     health_workflow = create_health_check_workflow()
     health_results = runtime.execute(health_workflow)
     print(json.dumps(health_results["results_merger"], indent=2))
-    
+
     # Run performance monitoring
     print("\\n=== PERFORMANCE MONITORING ===")
     perf_workflow = create_performance_tracking_workflow()
     perf_results = runtime.execute(perf_workflow)
     print(json.dumps(perf_results["performance_analyzer"]["analysis"], indent=2))
-    
+
     # Run production dashboard
     print("\\n=== PRODUCTION DASHBOARD ===")
     dashboard_workflow = create_production_dashboard_workflow()
