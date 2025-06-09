@@ -42,7 +42,7 @@ class KailashMCPServer:
             "parameters": ["file_path"]
         },
 
-        # Reference access (Claude.md style)
+        # Reference access (CLAUDE.md style)
         "read_reference": {
             "description": "Access reference documents",
             "parameters": ["reference_type"]  # api-registry, node-catalog, etc.
@@ -160,7 +160,7 @@ workflow = {
 - Building workflow → Get next step recommendations
 
 #### Documentation Access
-- Can read Claude.md for instructions
+- Can read CLAUDE.md for instructions
 - Access api-registry.yaml for correct APIs
 - Search through examples
 - Reference node catalog
