@@ -411,15 +411,16 @@ builder.add_connection("source", "output", "target", "input")
 
 ## Configuration vs Runtime Parameters
 
-### Critical Distinction
-There are two types of parameters when working with nodes:
+### Critical Distinction - UPDATED ARCHITECTURE
+As of Session 061, the SDK has improved parameter handling with proper separation of concerns:
 
-1. **Configuration Parameters** - Set when adding the node to workflow
-2. **Runtime Parameters** - Passed during execution via inputs
+1. **Configuration Parameters** - Set when adding the node to workflow (via `node.configure()`)
+2. **Runtime Parameters** - Passed during execution (via `node.run(**inputs)`)
+3. **Node Lifecycle**: Construction → Configuration → Execution
 
 ### Understanding get_parameters() Method
 
-**IMPORTANT**: The `get_parameters()` method defines ALL parameters a node can accept, both configuration AND runtime parameters. It does NOT distinguish between them - that distinction happens at the workflow level:
+**IMPORTANT**: The `get_parameters()` method defines ALL parameters a node can accept, both configuration AND runtime parameters. The runtime automatically handles the separation:
 
 ```python
 class MyNode(Node):
@@ -437,7 +438,7 @@ The same parameter can be:
 - **Runtime**: Passed via connections from other nodes
 - **Both**: Configuration provides default, runtime overrides it
 
-### How It Works in Practice
+### How It Works in Practice - UPDATED FLOW
 
 ```python
 # Node defines ALL possible parameters
@@ -451,39 +452,37 @@ class FilterNode(Node):
 
 # Usage Option 1: All as configuration (static workflow)
 workflow.add_node("filter", FilterNode(),
-    config={
-        "data": [{"value": 100}, {"value": 200}],  # Static data
-        "column": "value",
-        "threshold": 150
-    }
+    data=[{"value": 100}, {"value": 200}],  # Static data
+    column="value",
+    threshold=150
 )
 
 # Usage Option 2: Mixed (typical pattern)
 workflow.add_node("filter", FilterNode(),
-    config={
-        "column": "value",      # Configuration: which column to filter
-        "threshold": 150        # Configuration: filter threshold
-    }
+    column="value",      # Configuration: which column to filter
+    threshold=150        # Configuration: filter threshold
 )
 # "data" comes from connection at runtime
 workflow.connect("reader", "filter", {"output": "data"})
 
-# During execution:
-# 1. Node receives config: {"column": "value", "threshold": 150}
-# 2. Node receives runtime: {"data": [...from reader...]}
-# 3. Merged inputs: {"column": "value", "threshold": 150, "data": [...]}
+# UPDATED EXECUTION FLOW (Session 061 improvements):
+# 1. LocalRuntime calls node.configure(config) with node configuration
+# 2. LocalRuntime calls node.run(**inputs) with runtime data
+# 3. Runtime automatically merges configuration defaults with runtime inputs
+# 4. Node validation now happens at execution time, not construction time
 ```
 
-### Configuration Parameters (Static)
-These are set once when adding a node to the workflow and remain constant:
+### Configuration Parameters (Static) - UPDATED PATTERNS
+These are set once when adding a node to the workflow. The new architecture properly separates validation:
 
 ```python
-# ✅ CORRECT - Configuration parameters as kwargs
+# ✅ CORRECT - Configuration parameters as kwargs (Session 061 improvements)
 workflow.add_node("reader", CSVReaderNode(),
     file_path="data.csv",         # Configuration parameter
     delimiter=",",                # Configuration parameter
     has_header=True              # Configuration parameter
 )
+# NEW: Required parameters can be omitted during construction (validated at execution)
 
 workflow.add_node("llm", LLMAgentNode(),
     provider="openai",           # Configuration parameter
@@ -491,10 +490,14 @@ workflow.add_node("llm", LLMAgentNode(),
     temperature=0.7             # Configuration parameter
 )
 
-# ❌ WRONG - Don't pass runtime data as configuration
+# ❌ STILL WRONG - Don't pass runtime data as configuration
 workflow.add_node("processor", DataProcessor(),
     data=[1, 2, 3]  # WRONG: data should come from connections
 )
+
+# ✅ NEW PATTERN - Can add nodes without all required params (validated later)
+workflow.add_node("kafka_consumer", KafkaConsumerNode())  # No bootstrap_servers yet
+# Configuration happens later via runtime.execute() parameters
 ```
 
 ### Runtime Parameters (Dynamic)
@@ -723,6 +726,77 @@ workflow.add_node("api", HTTPRequestNode(),
 # Runtime: WHAT data to send/receive
 # The request body and response are runtime parameters
 ```
+
+## Session 061 Architecture Improvements
+
+### Core SDK Changes - BREAKING IMPROVEMENTS
+
+The following core improvements were made to resolve fundamental parameter handling issues:
+
+#### 1. Node Construction vs Runtime Validation
+```python
+# ✅ NEW BEHAVIOR (Session 061+) - Construction separated from validation
+node = KafkaConsumerNode()  # No error - validation happens at execution
+workflow.add_node("consumer", node)  # No error
+
+# Validation happens here, with proper error messages:
+runtime.execute(workflow, parameters={
+    "consumer": {"bootstrap_servers": "localhost:9092"}
+})
+
+# ❌ OLD BEHAVIOR (Pre-Session 061) - Would fail at construction
+node = KafkaConsumerNode()  # ERROR: Required parameter 'bootstrap_servers' not provided
+```
+
+#### 2. Proper Method Calls in Runtime
+```python
+# ✅ NEW BEHAVIOR - Proper method separation
+# 1. Configure the node
+node.configure({"provider": "openai", "model": "gpt-4"})
+# 2. Execute with runtime data
+results = node.run(input_text="Hello world")
+
+# ❌ OLD BEHAVIOR - Mixed execution patterns
+results = node.execute({"provider": "openai", "input_text": "Hello"})  # Confusion
+```
+
+#### 3. Clear Parameter Flow
+```python
+# ✅ IMPROVED FLOW - Clear separation
+# Configuration parameters (static, set once)
+workflow.add_node("processor", ProcessorNode(),
+    model="gpt-4",           # Configuration
+    temperature=0.7          # Configuration
+)
+
+# Runtime parameters (dynamic, flow through connections)
+workflow.connect("input", "processor", {"text": "input_text"})
+
+# Mixed parameters (runtime overrides configuration)
+runtime.execute(workflow, parameters={
+    "processor": {
+        "temperature": 0.9,  # Override configuration
+        "input_text": "..."  # Runtime data
+    }
+})
+```
+
+### Impact on Existing Patterns
+
+**RESOLVED ISSUES:**
+- **Mistake #053**: Configuration vs Runtime Parameters confusion - RESOLVED
+- **Mistake #058**: Node configuration vs runtime parameters confusion - RESOLVED  
+- **Mistake #020**: Configuration parameter validation timing - RESOLVED
+
+**NO BREAKING CHANGES** for end users - all existing workflow patterns continue to work.
+
+### Migration Notes
+
+If you encounter errors after updating:
+
+1. **"Required parameter not provided"** during node construction → This is now normal, validation happens at execution
+2. **"unexpected keyword argument"** → Check you're using the right method (`run()` not `execute()`)
+3. **Parameter confusion** → Use configuration for HOW, runtime for WHAT
 
 ## Remember: When in Doubt, Check the Registry
 
