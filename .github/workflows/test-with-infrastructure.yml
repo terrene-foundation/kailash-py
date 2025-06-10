@@ -102,13 +102,18 @@ jobs:
         # Initialize PostgreSQL databases with tables and data
         PGPASSWORD=kailash123 psql -h localhost -U kailash -d postgres < docker/init-sdk-dev-db.sql
         
-        # Initialize MongoDB
-        echo "Installing MongoDB client..."
-        # Install mongodb client using snap (more reliable on GitHub Actions)
-        sudo apt-get update && sudo apt-get install -y mongodb-clients
-        
+        # Initialize MongoDB using Docker exec (no need to install client)
         echo "Initializing MongoDB..."
-        mongo --host localhost:27017 -u kailash -p kailash123 --authenticationDatabase admin < docker/init-mongo.js
+        # Get the MongoDB container ID
+        MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:7.0" --format "{{.ID}}" | head -1)
+        if [ -n "$MONGO_CONTAINER" ]; then
+          echo "Found MongoDB container: $MONGO_CONTAINER"
+          # Copy the init script to the container and execute it
+          docker cp docker/init-mongo.js "$MONGO_CONTAINER":/tmp/init-mongo.js
+          docker exec "$MONGO_CONTAINER" mongosh -u kailash -p kailash123 --authenticationDatabase admin /tmp/init-mongo.js
+        else
+          echo "⚠️  MongoDB container not found, skipping initialization"
+        fi
     
     - name: Start remaining services
       run: |
