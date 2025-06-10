@@ -80,7 +80,7 @@ result = {
                 "result.value": "value",
                 "result.target": "target",
                 "result.iteration": "iteration",
-            }
+            },
         ).max_iterations(15).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -183,7 +183,7 @@ result = {
                 "result.processed_data": "data",
                 "result.history": "history",
                 "result.iteration": "iteration",
-            }
+            },
         ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -265,7 +265,7 @@ result = {
                 "result.attempt": "attempt",
                 "result.data": "data",  # Keep original data, not processed_data
                 "result.error_threshold": "error_threshold",  # Pass constant through cycles
-            }
+            },
         ).max_iterations(8).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -363,7 +363,7 @@ result = {
                 "result.target": "target",
                 "result.iteration": "iteration",
                 "result.tolerance": "tolerance",  # Pass tolerance through cycles
-            }
+            },
         ).max_iterations(25).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -484,7 +484,7 @@ result = {
                 "result.processed_data": "data",
                 "result.iteration": "iteration",
                 "result.quality_threshold": "quality_threshold",  # Pass threshold through cycles
-            }
+            },
         ).max_iterations(8).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -584,7 +584,7 @@ result = {{
             workflow.create_cycle("file_processing_cycle").connect(
                 "file_processor",
                 "file_processor",
-                mapping={"result.content": "content", "result.iteration": "iteration"}
+                mapping={"result.content": "content", "result.iteration": "iteration"},
             ).max_iterations(8).converge_when("converged == True").build()
 
             runtime = LocalRuntime()
@@ -670,7 +670,7 @@ result = {
             mapping={
                 "result.iteration": "iteration",
                 "result.data_size": "data_size",  # Pass data_size through cycles
-            }
+            },
         ).max_iterations(25).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -745,7 +745,7 @@ result = {
             mapping={
                 "result.iteration": "iteration",
                 "result.local_var": "previous_local",
-            }
+            },
         ).max_iterations(6).converge_when("converged == True").build()
 
         runtime = LocalRuntime()

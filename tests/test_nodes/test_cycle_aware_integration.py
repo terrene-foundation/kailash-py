@@ -176,8 +176,7 @@ class TestCycleAwareWorkflowIntegration:
 
         # Connect in cycle using CycleBuilder
         workflow.create_cycle("quality_improvement").connect(
-            "improver",
-            "improver"
+            "improver", "improver"
         ).max_iterations(15).converge_when("converged == True").build()
 
         # Execute
@@ -264,9 +263,8 @@ class TestCycleAwareWorkflowIntegration:
         # Connect workflow
         workflow.connect("processor", "switch", mapping={"input_data": "input_data"})
 
-        # Conditional routing - continue if not should_exit
-        # Note: CycleBuilder doesn't support condition parameter directly, 
-        # so we keep the regular connect with condition
+        # For conditional cycles with switch nodes, we need to use the old API
+        # because CycleBuilder doesn't support conditional routing yet
         workflow.connect(
             "switch",
             "processor",
@@ -274,13 +272,10 @@ class TestCycleAwareWorkflowIntegration:
             mapping={
                 "false_output.data": "data",
                 "false_output.target_sum": "target_sum",
-            }
+            },
+            cycle=True,
+            max_iterations=20,
         )
-        # Create the cycle separately
-        workflow.create_cycle("conditional_cycle").connect(
-            "processor",
-            "switch"
-        ).max_iterations(20).build()
 
         # Exit path - validate when should_exit is true
         workflow.connect(
@@ -373,7 +368,7 @@ class TestCycleAwareWorkflowIntegration:
         workflow.create_cycle("optimization_cycle").connect(
             "accuracy_check",
             "optimizer",
-            mapping={"result.accuracy": "accuracy", "result.speed": "speed"}
+            mapping={"result.accuracy": "accuracy", "result.speed": "speed"},
         ).max_iterations(30).build()
 
         # Execute

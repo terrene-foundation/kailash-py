@@ -148,7 +148,7 @@ class TestRESTClientNodeCycles:
         workflow.create_cycle("api_retry").connect(
             "rest_client",
             "rest_client",
-            mapping={"retry_count": "retry_count", "url": "url", "method": "method"}
+            mapping={"retry_count": "retry_count", "url": "url", "method": "method"},
         ).max_iterations(12).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -254,7 +254,7 @@ class TestRESTClientNodeCycles:
                 "delay_history": "delay_history",
                 "base_delay": "base_delay",
                 "max_delay": "max_delay",
-            }
+            },
         ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -318,8 +318,7 @@ class TestRESTClientNodeCycles:
         workflow.add_node("conditional_client", ConditionalRetryRESTNode())
 
         workflow.create_cycle("conditional_retry").connect(
-            "conditional_client",
-            "conditional_client"
+            "conditional_client", "conditional_client"
         ).max_iterations(8).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -382,7 +381,7 @@ class TestHTTPRequestNodeCycles:
                 "params": "params",
                 "headers": "headers",
                 "polling_interval": "polling_interval",
-            }
+            },
         ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -500,7 +499,7 @@ class TestHTTPRequestNodeCycles:
                 "total_fetched": "total_fetched",
                 "per_page": "per_page",
                 "next_page": "page",  # Use next_page as the new page number
-            }
+            },
         ).max_iterations(15).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -633,7 +632,7 @@ class TestHTTPRequestNodeCycles:
                 "successful_requests": "successful_requests",
                 "failed_requests": "failed_requests",
                 "requests_to_make": "requests_to_make",
-            }
+            },
         ).max_iterations(35).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -748,8 +747,7 @@ class TestAPINodeCycleIntegration:
         workflow.add_node("circuit_breaker_api", CircuitBreakerAPINode())
 
         workflow.create_cycle("circuit_breaker_cycle").connect(
-            "circuit_breaker_api",
-            "circuit_breaker_api"
+            "circuit_breaker_api", "circuit_breaker_api"
         ).max_iterations(20).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
