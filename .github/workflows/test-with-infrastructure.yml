@@ -23,10 +23,32 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+    - name: Setup Python (self-hosted)
+      run: |
+        # Self-hosted runners have Python pre-installed
+        # Check available Python versions
+        echo "Checking Python setup..."
+        
+        if command -v pyenv &> /dev/null; then
+          echo "Found pyenv, initializing..."
+          export PYENV_ROOT="$HOME/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$(pyenv init -)"
+          
+          echo "Available Python versions:"
+          pyenv versions
+          
+          # Use Python 3.11 if available
+          if pyenv versions | grep -q "3.11"; then
+            echo "✓ Python 3.11 available via pyenv"
+          else
+            echo "⚠️  Python 3.11 not found in pyenv"
+          fi
+        else
+          echo "pyenv not found, checking system Python"
+          which python3
+          python3 --version
+        fi
     
     - name: Install uv
       run: |
@@ -38,13 +60,31 @@ jobs:
     
     - name: Install dependencies
       run: |
+        # Initialize pyenv if available
+        if command -v pyenv &> /dev/null; then
+          export PYENV_ROOT="$HOME/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$(pyenv init -)"
+        fi
+        
         uv sync --frozen
         uv pip install pytest-cov
     
-    - name: Setup Node.js for mock API server
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
+    - name: Check Node.js for mock API server
+      run: |
+        # Self-hosted runners should have Node.js pre-installed
+        echo "Checking Node.js setup..."
+        if command -v node &> /dev/null; then
+          echo "✓ Node.js available: $(node --version)"
+        else
+          echo "⚠️  Node.js not found - mock API server may not work"
+        fi
+        
+        if command -v npm &> /dev/null; then
+          echo "✓ npm available: $(npm --version)"
+        else
+          echo "⚠️  npm not found - mock API server may not work"
+        fi
     
     - name: Start SDK development infrastructure
       run: |
