@@ -78,9 +78,7 @@ class TestLLMAgentNodeCycles:
 
         # Create cycle: LLM refines its own output
         workflow.create_cycle("llm_refinement").connect(
-            "llm",
-            "llm",
-            mapping={"response": "prompt"}
+            "llm", "llm", mapping={"response": "prompt"}
         ).max_iterations(5).converge_when("converged == True").build()
 
         # Execute workflow
@@ -136,7 +134,7 @@ class TestLLMAgentNodeCycles:
             "stateful_llm",
             mapping={
                 "latest_knowledge": "input"
-            }  # Create a feedback loop with meaningful data
+            },  # Create a feedback loop with meaningful data
         ).max_iterations(5).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -194,7 +192,7 @@ class TestLLMAgentNodeCycles:
         workflow.create_cycle("param_mapping").connect(
             "param_llm",
             "param_llm",
-            mapping={"feedback": "feedback", "improved_context": "context_data"}
+            mapping={"feedback": "feedback", "improved_context": "context_data"},
         ).max_iterations(4).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -248,9 +246,7 @@ class TestIterativeLLMAgentCycles:
 
         workflow.add_node("iterative_llm", MockIterativeLLMNode())
         workflow.create_cycle("iterative_llm_cycle").connect(
-            "iterative_llm",
-            "iterative_llm",
-            mapping={"task_result": "task"}
+            "iterative_llm", "iterative_llm", mapping={"task_result": "task"}
         ).max_iterations(5).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -324,7 +320,7 @@ class TestA2ACoordinatorCycles:
         workflow.create_cycle("a2a_coordination").connect(
             "a2a_coord",
             "a2a_coord",
-            mapping={"coordination_rounds": "dummy_input"}  # Create a feedback loop
+            mapping={"coordination_rounds": "dummy_input"},  # Create a feedback loop
         ).max_iterations(6).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -375,8 +371,7 @@ class TestAINodeCyclePerformance:
 
         workflow.add_node("memory_ai", MemoryTestAINode())
         workflow.create_cycle("memory_test").connect(
-            "memory_ai",
-            "memory_ai"
+            "memory_ai", "memory_ai"
         ).max_iterations(15).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
@@ -417,8 +412,7 @@ class TestAINodeCyclePerformance:
 
         workflow.add_node("error_ai", ErrorProneAINode())
         workflow.create_cycle("error_recovery").connect(
-            "error_ai",
-            "error_ai"
+            "error_ai", "error_ai"
         ).max_iterations(5).converge_when("converged == True").build()
 
         runtime = LocalRuntime()

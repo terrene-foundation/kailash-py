@@ -5,26 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2025-06-10
 
 ### Added
-- **Custom Node Development Guide** - Comprehensive documentation for creating custom nodes
-  - Parameter type constraints and patterns (critical for avoiding "abstract class" errors)
-  - Common implementation patterns with examples
-  - Troubleshooting guide for frequent issues
-  - Working examples in `guide/developer/`
+- **Major Documentation Restructuring** - Reorganized documentation for better user experience
+  - Split documentation into `sdk-users/` for SDK users and `# contrib (removed)/` for SDK developers
+  - Created comprehensive workflow library in `sdk-users/workflows/` with production-ready examples
+  - Added quick-start patterns and industry-specific workflows
+  - Improved navigation with clear CLAUDE.md files at each level
+
+- **CycleBuilder API Migration** - Updated test suite to use new fluent cycle API
+  - Migrated 130+ deprecated `workflow.connect(..., cycle=True)` calls to new CycleBuilder pattern
+  - Improved cycle configuration readability with method chaining
+  - Maintained backward compatibility for complex conditional cycles
 
 ### Fixed
-- **HTTPClientNode Backwards Compatibility** - Added deprecated alias for smooth migration
-  - `HTTPClientNode` now available as alias for `HTTPRequestNode`
-  - Deprecation warning guides users to new import
-  - Fixed incorrect import in `custom_nodes_secure.py`
+- **Test Suite Improvements**
+  - Fixed conditional cycle test with SwitchNode parameter passing
+  - Resolved black and isort formatting issues
+  - Updated test patterns to demonstrate best practices for cycle creation
 
 ### Documentation
-- Created comprehensive custom node development guide addressing common SDK issues
-- Added CLAUDE.md navigation file for efficient LLM assistance
-- Documented parameter type constraints (no generic types in NodeParameter)
-- Added troubleshooting section for "Can't instantiate abstract class" errors
+- **Reorganized Documentation Structure**
+  - `sdk-users/`: Building solutions with the SDK
+    - `developer/`: Node creation patterns and troubleshooting
+    - `workflows/`: Production-ready workflow library
+    - `essentials/`: Quick reference and cheatsheets
+  - `# contrib (removed)/`: SDK development resources
+    - `architecture/`: ADRs and design decisions
+    - `project/`: TODOs and development tracking
+    - `training/`: LLM training examples
+  - `shared/`: Resources for both groups
+    - `mistakes/`: Common error patterns and solutions
+    - `frontend/`: UI development resources
+
+- **Updated Sphinx Documentation**
+  - Fixed all broken references to old `guide/` structure
+  - Added workflow library references to quickstart and examples
+  - Ensured clean documentation build with no errors
 
 ## [0.2.1] - 2025-06-09
 

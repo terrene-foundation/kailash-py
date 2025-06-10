@@ -1,7 +1,7 @@
 """Directory processing nodes for file discovery and batch operations."""
 
-import os
 import mimetypes
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
