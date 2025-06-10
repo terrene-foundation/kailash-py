@@ -168,9 +168,13 @@ class WorkflowPerformanceReporter:
         """
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Use centralized output directory
+            project_root = Path(__file__).parent.parent.parent.parent
             output_path = (
-                Path.cwd()
+                project_root
+                / "data"
                 / "outputs"
+                / "reports"
                 / f"workflow_report_{run_id[:8]}_{timestamp}.{format.value}"
             )
 

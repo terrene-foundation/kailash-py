@@ -311,7 +311,7 @@ class DataTransformer(Node):
         return {
             "data": NodeParameter(
                 name="data",
-                type=list,
+                type=Any,
                 required=False,
                 description="Primary input data to transform",
             ),
@@ -357,10 +357,6 @@ class DataTransformer(Node):
         if not transformations:
             return {"result": kwargs.get("data", [])}
 
-        # Debug: Check what kwargs we received
-        print(f"DATATRANSFORMER RUN DEBUG: kwargs keys = {list(kwargs.keys())}")
-        print(f"DATATRANSFORMER RUN DEBUG: kwargs = {kwargs}")
-
         # Get all input data
         input_data = {}
         for key, value in kwargs.items():
@@ -393,14 +389,6 @@ class DataTransformer(Node):
                     # Prepare local context for execution
                     local_vars = input_data.copy()
                     local_vars["result"] = result
-
-                    # Debug: Print available variables
-                    print(
-                        f"DataTransformer DEBUG - Available variables: {list(local_vars.keys())}"
-                    )
-                    print(
-                        f"DataTransformer DEBUG - Input data keys: {list(input_data.keys())}"
-                    )
 
                     # Execute the code block
                     exec(transform_str, safe_globals, local_vars)  # noqa: S102

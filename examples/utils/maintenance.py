@@ -37,7 +37,7 @@ def fix_path_references():
 
     print(f"\nFixed {fixed_count} files")
 
-    # Create examples/data/outputs directory if it doesn't exist
+    # Create data/outputs directory if it doesn't exist
     output_dir = examples_dir / "data" / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nEnsured output directory exists: {output_dir}")

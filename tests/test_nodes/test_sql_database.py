@@ -28,7 +28,7 @@ def db_configs(sqlite_test_database):
             "pool_pre_ping": True,
         },
         "postgres_test": {
-            "connection_string": "postgresql://postgres:password@localhost:5433/test",
+            "connection_string": "postgresql://kailash:kailash123@localhost:5432/transactions",
             "pool_size": 8,
             "max_overflow": 15,
             "pool_timeout": 60,

@@ -81,6 +81,8 @@ Example Workflows:
 """
 
 from kailash.nodes.data.directory import DirectoryReaderNode
+from kailash.nodes.data.event_generation import EventGeneratorNode
+from kailash.nodes.data.file_discovery import FileDiscoveryNode
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode, TextReaderNode
 from kailash.nodes.data.retrieval import RelevanceScorerNode
 from kailash.nodes.data.sharepoint_graph import (
@@ -105,6 +107,10 @@ from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriter
 __all__ = [
     # Directory
     "DirectoryReaderNode",
+    # Event Generation
+    "EventGeneratorNode",
+    # File Discovery
+    "FileDiscoveryNode",
     # Readers
     "CSVReaderNode",
     "JSONReaderNode",

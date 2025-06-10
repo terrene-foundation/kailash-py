@@ -14,12 +14,14 @@ def get_data_dir():
     """
     Get the data directory path.
 
-    Returns absolute path to the examples/data directory if accessible,
+    Returns absolute path to the centralized /data directory if accessible,
     otherwise returns a temporary directory.
     """
-    # Try to use the examples/data directory
-    examples_dir = Path(__file__).parent.parent  # Go up from utils to examples
-    data_dir = examples_dir / "data"
+    # Try to use the centralized data directory
+    project_root = Path(
+        __file__
+    ).parent.parent.parent  # Go up from utils to examples to project root
+    data_dir = project_root / "data" / "inputs"
 
     # Check if we can access it (when running from project root)
     if data_dir.exists() and os.access(data_dir, os.R_OK):
@@ -39,12 +41,12 @@ def get_output_dir():
     """
     Get the output directory path.
 
-    Returns absolute path to the examples/data/outputs directory if accessible,
+    Returns absolute path to the centralized /data/outputs directory if accessible,
     otherwise returns a temporary directory.
     """
-    # Output should be in examples/data/outputs
-    data_dir = get_data_dir()
-    output_dir = data_dir / "outputs"
+    # Output should be in centralized data/outputs
+    project_root = Path(__file__).parent.parent.parent  # Go up to project root
+    output_dir = project_root / "data" / "outputs" / "csv"
 
     # Create directory if it doesn't exist and we have write access
     try:

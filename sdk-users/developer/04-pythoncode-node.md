@@ -1,5 +1,127 @@
 # PythonCodeNode Patterns and Pitfalls
 
+## 🚀 Best Practice: Use `.from_function()` for Better Developer Experience
+
+**STRONGLY RECOMMENDED**: For any non-trivial code (more than 3-5 lines), use the `.from_function()` method instead of string code blocks.
+
+### Why `.from_function()` is Superior
+
+1. **IDE Support**: Full syntax highlighting, auto-completion, and type hints
+2. **Error Detection**: Immediate syntax and type errors in your IDE  
+3. **Debugging**: Set breakpoints and step through code
+4. **Refactoring**: Use IDE refactoring tools safely
+5. **Testing**: Functions can be unit tested independently
+6. **Readability**: Clean, maintainable code structure
+
+### Quick Comparison
+
+❌ **AVOID** - String-based code (no IDE support):
+```python
+node = PythonCodeNode(
+    name="processor",
+    code="""
+def process_data(data):
+    # No syntax highlighting here!
+    # No auto-completion!
+    # No type checking!
+    result = []
+    for item in data:
+        if item['value'] > 100:  # Hope the key exists!
+            result.append(item)
+    return {'filtered': result}
+"""
+)
+```
+
+✅ **PREFERRED** - Function-based (full IDE support):
+```python
+def process_data(data: list) -> dict:
+    """Process data with full IDE support."""
+    # Full syntax highlighting!
+    # Auto-completion works!
+    # Type hints validated!
+    result = []
+    for item in data:
+        if item.get('value', 0) > 100:  # IDE shows available methods
+            result.append(item)
+    return {'filtered': result}
+
+# Create node from function
+node = PythonCodeNode.from_function(
+    func=process_data,
+    name="data_processor",
+    description="Filter high-value items"
+)
+```
+
+## When to Use String Code vs `.from_function()`
+
+### Use `.from_function()` (Default Choice) When:
+- **Complex Logic**: More than 3-5 lines of code
+- **IDE Support Needed**: Want syntax highlighting, auto-completion, debugging
+- **Testing Required**: Function needs unit testing
+- **Reusable Code**: Logic will be used elsewhere
+- **Type Safety**: Want type hints and validation
+
+### Use String Code When:
+
+#### 1. **Dynamic Code Generation**
+```python
+# Code must be constructed at runtime
+def create_filter_node(field: str, operator: str, value: Any):
+    code = f"result = [x for x in input_data if x['{field}'] {operator} {value}]"
+    return PythonCodeNode(name=f"filter_{field}", code=code)
+```
+
+#### 2. **User-Provided Code**
+```python
+# Code comes from users via UI/API/config
+user_code = load_user_transformation(user_id)
+node = PythonCodeNode(name="user_transform", code=user_code)
+```
+
+#### 3. **Workflow Runtime Variables**
+```python
+# Accessing variables only available during execution
+node = PythonCodeNode(
+    name="runtime_context",
+    code="""
+# These are injected by workflow runtime
+result = {
+    'run_id': workflow_run_id,
+    'timestamp': workflow_start_time,
+    'previous_outputs': accumulated_results
+}
+"""
+)
+```
+
+#### 4. **Template-Based Generation**
+```python
+# Using code templates with placeholders
+QUERY_TEMPLATE = "result = df[df['{col}'].{method}()].to_dict('records')"
+node = PythonCodeNode(
+    name="query",
+    code=QUERY_TEMPLATE.format(col=column, method=aggregation)
+)
+```
+
+#### 5. **Workflow Serialization**
+```python
+# Loading from database/file storage
+stored_workflow = load_from_db(workflow_id)
+node = PythonCodeNode(
+    name=stored_workflow['node_name'],
+    code=stored_workflow['node_code']  # Stored as string
+)
+```
+
+#### 6. **Simple One-Liners**
+```python
+# Truly trivial operations
+node = PythonCodeNode(name="add_tax", code="result = input_value * 1.08")
+```
+
 ## ⚠️ Critical: Input Variable Exclusion
 
 **The most important thing to know**: PythonCodeNode excludes input variables from its outputs to prevent circular references.

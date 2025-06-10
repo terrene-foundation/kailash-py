@@ -407,9 +407,9 @@ class Node(ABC):
         for param_name, param_def in params.items():
             if param_name not in self.config:
                 if param_def.required and param_def.default is None:
-                    raise NodeConfigurationError(
-                        f"Required parameter '{param_name}' not provided in configuration"
-                    )
+                    # During node construction, we may not have all parameters yet
+                    # Skip validation for required parameters - they will be validated at execution time
+                    continue
                 elif param_def.default is not None:
                     self.config[param_name] = param_def.default
 

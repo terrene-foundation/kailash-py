@@ -52,21 +52,37 @@ class YourNode(Node):
         return {'result': kwargs['param']}
 ```
 
-### PythonCodeNode (Correct Pattern)
+### PythonCodeNode (Best Practices)
+
+**🚀 DEFAULT: Use `.from_function()` for code > 3 lines**
+```python
+# BEST: Function-based for IDE support
+def process_files(input_data: dict) -> dict:
+    """Full IDE support: highlighting, completion, debugging!"""
+    files = input_data.get("files", [])
+    return {"processed": len(files), "status": "complete"}
+
+processor = PythonCodeNode.from_function(
+    func=process_files,
+    name="processor",
+    description="Process file data"
+)
+```
+
+**String code only for: dynamic generation, user input, templates, one-liners**
+```python
+# OK for simple one-liner
+node = PythonCodeNode(name="calc", code="result = value * 1.1")
+
+# OK for dynamic generation
+code = f"result = data['{user_field}'] > {threshold}"
+node = PythonCodeNode(name="filter", code=code)
+```
+
+**⚠️ Remember: Input variables EXCLUDED from outputs**
 ```python
 # CORRECT: Different variable names for mapping
 workflow.connect("discovery", "processor", mapping={"result": "input_data"})
-
-processor = PythonCodeNode(
-    name="processor",  # Always include name!
-    code="""
-# input_data is available, NOT result
-data = input_data.get("files", [])
-
-# Now result is a NEW variable, will be in outputs
-result = {"processed": len(data)}
-"""
-)
 ```
 
 ### DirectoryReaderNode (Best Practice)
