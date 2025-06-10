@@ -5,22 +5,92 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-## [0.2.1] - 2025-06-08
+## [0.2.2] - 2025-06-10
 
 ### Added
-- **Enhanced Database Connectivity**
-  - SQLDatabaseNode with direct constructor configuration
-  - Support for SQLite, PostgreSQL, and MySQL
-  - Production-ready connection pooling and transaction management
-  - Comprehensive test suite with 1,275+ tests
-  - Database setup/teardown scripts for automated testing
-  - Enhanced examples with production configuration patterns
+- **Major Documentation Restructuring** - Reorganized documentation for better user experience
+  - Split documentation into `sdk-users/` for SDK users and `# contrib (removed)/` for SDK developers
+  - Created comprehensive workflow library in `sdk-users/workflows/` with production-ready examples
+  - Added quick-start patterns and industry-specific workflows
+  - Improved navigation with clear CLAUDE.md files at each level
+
+- **CycleBuilder API Migration** - Updated test suite to use new fluent cycle API
+  - Migrated 130+ deprecated `workflow.connect(..., cycle=True)` calls to new CycleBuilder pattern
+  - Improved cycle configuration readability with method chaining
+  - Maintained backward compatibility for complex conditional cycles
 
 ### Fixed
-- Database connectivity integration from main branch
-- Updated documentation and architecture decisions
+- **Test Suite Improvements**
+  - Fixed conditional cycle test with SwitchNode parameter passing
+  - Resolved black and isort formatting issues
+  - Updated test patterns to demonstrate best practices for cycle creation
+
+### Documentation
+- **Reorganized Documentation Structure**
+  - `sdk-users/`: Building solutions with the SDK
+    - `developer/`: Node creation patterns and troubleshooting
+    - `workflows/`: Production-ready workflow library
+    - `essentials/`: Quick reference and cheatsheets
+  - `# contrib (removed)/`: SDK development resources
+    - `architecture/`: ADRs and design decisions
+    - `project/`: TODOs and development tracking
+    - `training/`: LLM training examples
+  - `shared/`: Resources for both groups
+    - `mistakes/`: Common error patterns and solutions
+    - `frontend/`: UI development resources
+
+- **Updated Sphinx Documentation**
+  - Fixed all broken references to old `guide/` structure
+  - Added workflow library references to quickstart and examples
+  - Ensured clean documentation build with no errors
+
+## [0.2.1] - 2025-06-09
+
+### Added
+- **DirectoryReaderNode** for dynamic file discovery
+  - Recursive directory scanning with pattern matching  
+  - MIME type detection and metadata extraction
+  - Organized output by file type for typed processing
+  - Performance optimizations for large directories
+  - Comprehensive cheatsheet and documentation
+
+- **Enhanced DataTransformer** with critical bug fixes
+  - Fixed dictionary output bug where only keys were passed instead of full dictionaries
+  - Enhanced `validate_inputs()` to accept arbitrary mapped parameters
+  - Improved error handling and debugging capabilities
+  - Backward compatibility maintained
+
+- **Expanded PythonCodeNode Modules** for real-world file processing
+  - Added `csv`, `mimetypes`, `pathlib`, `glob`, `xml` to allowed modules
+  - Enables data science and file processing workflows
+  - Maintains security restrictions for dangerous operations
+
+- **Real-World Workflow Examples**
+  - Fixed 4 out of 5 workflow library examples to use real data sources
+  - Document processor using DirectoryReaderNode for actual file discovery
+  - Health monitoring using real endpoints (JSONPlaceholder, GitHub API, HTTPBin)
+  - Security audit with comprehensive vulnerability scanning
+  - All workflows validated with comprehensive testing
+
+- **Enhanced Documentation**
+  - Updated Sphinx documentation with new nodes and fixes
+  - New cheatsheets: DirectoryReaderNode usage and DataTransformer workarounds
+  - Comprehensive base node fixes documentation
+  - Updated quickstart guide with dynamic file discovery examples
+
+### Fixed
+- **Critical DataTransformer Bug**: Fixed parameter mapping issue affecting data flow between nodes
+- **PythonCodeNode Security**: Safely expanded allowed modules for file processing
+- **Workflow Validation**: All fixed workflows tested and validated with real data sources
+- **Test Suite**: 28/28 tests passing with zero regressions from base node changes
+
+### Documentation
+- Updated README with new capabilities highlights
+- Enhanced Sphinx API documentation for new nodes
+- Comprehensive migration guide for existing users
+- New cheatsheet entries for DirectoryReaderNode and DataTransformer patterns
+
+## [0.2.0] - 2025-06-08
 
 ## [0.2.0] - 2025-06-08
 

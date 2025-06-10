@@ -50,6 +50,63 @@ That's it! You've just built a data processing pipeline.
 Common Use Cases
 ================
 
+Dynamic File Discovery (New in v0.2.1)
+----------------------------------------
+
+Process multiple files dynamically without hardcoding file paths:
+
+.. code-block:: python
+
+   from kailash import Workflow
+   from kailash.nodes.data import DirectoryReaderNode
+
+   w = Workflow("dynamic_files")
+
+   # Discover files automatically
+   w.add_node("DirectoryReaderNode", "discover", config={
+       "directory_path": "./data/uploads",
+       "pattern": "*.{csv,json,xml}",
+       "recursive": True,
+       "include_metadata": True
+   })
+
+   # Process CSV files specifically
+   w.add_node("DataTransformer", "process_csv", config={
+       "transformations": ['''
+   # Get CSV files from discovery
+   files_by_type = locals().get("files_by_type", {})
+   csv_files = files_by_type.get("csv", [])
+
+   processed = []
+   for file_info in csv_files:
+       # Process each CSV file
+       import pandas as pd
+       df = pd.read_csv(file_info["file_path"])
+       summary = {
+           "file": file_info["file_name"],
+           "rows": len(df),
+           "columns": list(df.columns),
+           "size_mb": file_info["file_size"] / 1024 / 1024
+       }
+       processed.append(summary)
+
+   result = {"csv_summaries": processed}
+   ''']
+   })
+
+   # Save processing results
+   w.add_node("JSONWriterNode", "save", config={
+       "file_path": "file_processing_report.json"
+   })
+
+   # Connect with enhanced parameter mapping
+   w.connect("discover", "process_csv", mapping={
+       "files_by_type": "files_by_type"
+   })
+   w.connect("process_csv", "save")
+
+   results = w.run()
+
 Data Processing Pipeline
 ------------------------
 
@@ -619,6 +676,45 @@ Ready for more? Here's where to go next:
 4. **Create Custom Nodes**: :doc:`guides/custom_nodes`
 5. **Production Best Practices**: :doc:`guides/best_practices`
 6. **Learn Phase 5 API**: :doc:`api/workflow` - CycleBuilder and developer tools
+
+Production-Ready Workflow Library
+---------------------------------
+
+For complete, production-ready workflows, explore our comprehensive library:
+
+- **Quick Start Patterns** (``sdk-users/workflows/quick-start/``)
+  
+  - 30-second copy-paste workflows for common tasks
+  - Essential SDK patterns covering 80% of use cases
+  - Fast error-to-solution lookup guide
+
+- **Industry Solutions** (``sdk-users/workflows/by-industry/``)
+  
+  - Healthcare: Clinical diagnostics, patient data processing
+  - Financial Services: Risk analysis, transaction processing
+  - Manufacturing: IoT data processing, quality control
+
+- **Technical Patterns** (``sdk-users/workflows/by-pattern/``)
+  
+  - ETL pipelines with error handling
+  - REST API integrations with retry logic
+  - Event-driven architectures
+  - File processing and monitoring
+  - Security and authentication flows
+
+- **Enterprise Solutions** (``sdk-users/workflows/by-enterprise/``)
+  
+  - Customer 360° integration workflows
+  - Multi-system data synchronization
+  - Business process automation
+
+All workflows include:
+
+- Complete working Python scripts
+- Real-world data examples (no mocks)
+- Error handling and recovery patterns
+- Performance optimization techniques
+- Deployment-ready configurations
 
 Need Help?
 ----------

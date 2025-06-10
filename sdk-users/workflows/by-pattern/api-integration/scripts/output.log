@@ -1,0 +1,34 @@
+Running simple API workflow...
+DEBUG: Type of actual_data: <class 'list'>
+DEBUG: Not a dict, is <class 'list'>
+DEBUG data type: <class 'list'>
+DEBUG data content: ['status', 'data', 'timestamp']
+Workflow failed: Workflow execution failed: WorkflowExecutionError: Node 'data_extractor' failed: Node 'data_extractor' execution failed: RuntimeError: Error executing transformation '
+# Extract and enhance product data
+# Debug: print data structure
+print(f"DEBUG data type: {type(data)}")
+print(f"DEBUG data content: {data}")
+
+# data is the result dict from mock_api
+products = data.get("data", []) if isinstance(data, dict) else data
+enhanced = []
+
+for product in products:
+    enhanced.append({
+        "id": product["id"],
+        "name": product["name"],
+        "price": product["price"],
+        "stock": product["stock"],
+        "category": product["category"],
+        "in_stock": product["stock"] > 0,
+        "price_tier": "high" if product["price"] > 40 else "mid" if product["price"] > 25 else "low"
+    })
+
+result = enhanced
+': string indices must be integers, not 'str'
+Traceback (most recent call last):
+  File "./repos/projects/kailash_python_sdk/src/kailash/nodes/transform/processors.py", line 375, in run
+    exec(transform_str, safe_globals, local_vars)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+TypeError: string indices must be integers, not 'str'

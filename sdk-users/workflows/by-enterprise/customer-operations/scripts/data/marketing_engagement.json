@@ -1,0 +1,38 @@
+[
+  {
+    "customer_id": "1001",
+    "email_opens": 15,
+    "email_clicks": 8,
+    "website_visits": 25,
+    "webinar_attendance": 2,
+    "whitepaper_downloads": 3,
+    "last_engagement": "2023-09-05"
+  },
+  {
+    "customer_id": "1002",
+    "email_opens": 12,
+    "email_clicks": 6,
+    "website_visits": 18,
+    "webinar_attendance": 1,
+    "whitepaper_downloads": 1,
+    "last_engagement": "2023-08-28"
+  },
+  {
+    "customer_id": "1003",
+    "email_opens": 3,
+    "email_clicks": 1,
+    "website_visits": 5,
+    "webinar_attendance": 0,
+    "whitepaper_downloads": 0,
+    "last_engagement": "2023-03-20"
+  },
+  {
+    "customer_id": "1004",
+    "email_opens": 20,
+    "email_clicks": 12,
+    "website_visits": 35,
+    "webinar_attendance": 3,
+    "whitepaper_downloads": 5,
+    "last_engagement": "2023-09-08"
+  }
+]

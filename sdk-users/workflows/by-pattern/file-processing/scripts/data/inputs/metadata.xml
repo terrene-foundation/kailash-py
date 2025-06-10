@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document_metadata>
+    <document>
+        <id>DOC-001</id>
+        <title>Customer Data Export</title>
+        <type>csv</type>
+        <created>2024-01-15T08:00:00Z</created>
+        <modified>2024-01-15T10:30:00Z</modified>
+        <author>System Export</author>
+        <tags>
+            <tag>customer</tag>
+            <tag>export</tag>
+            <tag>data</tag>
+        </tags>
+    </document>
+    <document>
+        <id>DOC-002</id>
+        <title>Transaction Log</title>
+        <type>json</type>
+        <created>2024-01-15T09:00:00Z</created>
+        <modified>2024-01-15T10:30:00Z</modified>
+        <author>API Logger</author>
+        <tags>
+            <tag>transaction</tag>
+            <tag>log</tag>
+            <tag>api</tag>
+        </tags>
+    </document>
+    <document>
+        <id>DOC-003</id>
+        <title>Report Template</title>
+        <type>txt</type>
+        <created>2024-01-14T15:00:00Z</created>
+        <modified>2024-01-15T09:00:00Z</modified>
+        <author>Template Designer</author>
+        <tags>
+            <tag>template</tag>
+            <tag>report</tag>
+            <tag>format</tag>
+        </tags>
+    </document>
+</document_metadata>

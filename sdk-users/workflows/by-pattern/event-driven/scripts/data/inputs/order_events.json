@@ -1,0 +1,152 @@
+{
+  "events": [
+    {
+      "event_id": "evt-001",
+      "event_type": "OrderCreated",
+      "aggregate_id": "ORDER-2024-001",
+      "timestamp": "2024-01-15T08:30:00Z",
+      "data": {
+        "customer_id": "CUST-101",
+        "items": [
+          {"product_id": "PROD-001", "quantity": 2, "price": 29.99},
+          {"product_id": "PROD-002", "quantity": 1, "price": 199.99}
+        ],
+        "total_amount": 259.97,
+        "status": "pending"
+      },
+      "metadata": {
+        "source": "order-service",
+        "version": 1,
+        "correlation_id": "corr-001"
+      }
+    },
+    {
+      "event_id": "evt-002",
+      "event_type": "PaymentProcessed",
+      "aggregate_id": "ORDER-2024-001",
+      "timestamp": "2024-01-15T08:35:00Z",
+      "data": {
+        "payment_id": "PAY-10001",
+        "amount": 259.97,
+        "method": "credit_card",
+        "status": "success"
+      },
+      "metadata": {
+        "source": "payment-service",
+        "version": 1,
+        "correlation_id": "corr-001"
+      }
+    },
+    {
+      "event_id": "evt-003",
+      "event_type": "OrderShipped",
+      "aggregate_id": "ORDER-2024-001",
+      "timestamp": "2024-01-15T14:00:00Z",
+      "data": {
+        "tracking_number": "TRACK-123456",
+        "carrier": "UPS",
+        "status": "shipped"
+      },
+      "metadata": {
+        "source": "fulfillment-service",
+        "version": 1,
+        "correlation_id": "corr-001"
+      }
+    },
+    {
+      "event_id": "evt-004",
+      "event_type": "OrderCreated",
+      "aggregate_id": "ORDER-2024-002",
+      "timestamp": "2024-01-15T09:00:00Z",
+      "data": {
+        "customer_id": "CUST-102",
+        "items": [
+          {"product_id": "PROD-003", "quantity": 1, "price": 499.99}
+        ],
+        "total_amount": 499.99,
+        "status": "pending"
+      },
+      "metadata": {
+        "source": "order-service",
+        "version": 1,
+        "correlation_id": "corr-002"
+      }
+    },
+    {
+      "event_id": "evt-005",
+      "event_type": "PaymentProcessed",
+      "aggregate_id": "ORDER-2024-002",
+      "timestamp": "2024-01-15T09:05:00Z",
+      "data": {
+        "payment_id": "PAY-10002",
+        "amount": 499.99,
+        "method": "paypal",
+        "status": "success"
+      },
+      "metadata": {
+        "source": "payment-service",
+        "version": 1,
+        "correlation_id": "corr-002"
+      }
+    },
+    {
+      "event_id": "evt-006",
+      "event_type": "OrderCancelled",
+      "aggregate_id": "ORDER-2024-002",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "data": {
+        "reason": "Customer request - found cheaper elsewhere",
+        "refund_initiated": true,
+        "status": "cancelled"
+      },
+      "metadata": {
+        "source": "order-service",
+        "version": 1,
+        "correlation_id": "corr-002"
+      }
+    },
+    {
+      "event_id": "evt-007",
+      "event_type": "OrderCreated",
+      "aggregate_id": "ORDER-2024-003",
+      "timestamp": "2024-01-15T11:00:00Z",
+      "data": {
+        "customer_id": "CUST-103",
+        "items": [
+          {"product_id": "PROD-001", "quantity": 5, "price": 29.99},
+          {"product_id": "PROD-004", "quantity": 2, "price": 89.99}
+        ],
+        "total_amount": 329.93,
+        "status": "pending"
+      },
+      "metadata": {
+        "source": "order-service",
+        "version": 1,
+        "correlation_id": "corr-003"
+      }
+    },
+    {
+      "event_id": "evt-008",
+      "event_type": "PaymentProcessed",
+      "aggregate_id": "ORDER-2024-003",
+      "timestamp": "2024-01-15T11:10:00Z",
+      "data": {
+        "payment_id": "PAY-10003",
+        "amount": 329.93,
+        "method": "debit_card",
+        "status": "success"
+      },
+      "metadata": {
+        "source": "payment-service",
+        "version": 1,
+        "correlation_id": "corr-003"
+      }
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "generated_at": "2024-01-15T12:00:00Z",
+    "total_events": 8,
+    "event_types": ["OrderCreated", "PaymentProcessed", "OrderShipped", "OrderCancelled"]
+  }
+}

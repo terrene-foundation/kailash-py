@@ -1,0 +1,7 @@
+Customer Report Template
+
+Total Customers: {total_customers}
+Active Customers: {active_customers}
+Revenue: ${total_revenue}
+
+Generated on: {report_date}

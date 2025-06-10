@@ -27,3 +27,15 @@ Example Categories
 - **Workflow Examples**: Complete workflow patterns and use cases
 - **Integration Examples**: External system integrations (APIs, databases, etc.)
 - **Visualization Examples**: Performance monitoring and reporting
+
+Production Workflow Library
+---------------------------
+
+For production-ready workflows organized by use case, explore the comprehensive workflow library at ``sdk-users/workflows/``:
+
+- **By Pattern** (``by-pattern/``): Technical patterns like ETL, API integration, event-driven
+- **By Industry** (``by-industry/``): Domain-specific solutions for healthcare, finance, manufacturing
+- **By Enterprise** (``by-enterprise/``): Business workflows like Customer 360°, process automation
+- **Quick Start** (``quick-start/``): Copy-paste solutions and essential patterns
+
+Each workflow includes complete Python scripts, real data examples, and deployment instructions.
