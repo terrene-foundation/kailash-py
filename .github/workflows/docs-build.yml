@@ -1,31 +1,30 @@
-name: Deploy Documentation
+name: Build Documentation
 
 on:
-  push:
+  pull_request:
     branches: [ main ]
     paths:
       - 'docs/**'
       - 'README.md'
       - 'CHANGELOG.md'
       - 'mkdocs.yml'
+      - '.github/workflows/docs-build.yml'
       - '.github/workflows/docs-deploy.yml'
-  workflow_dispatch:
+  push:
+    branches-ignore: [ main ]  # Run on all branches except main
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs-build.yml'
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: self-hosted
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,29 +58,11 @@ jobs:
           cd docs
           uv run python build_docs.py
 
-      - name: Install GNU tar for local runner
+      - name: Verify documentation build
         run: |
-          # Check if gtar is available, install if needed
-          if ! command -v gtar &> /dev/null; then
-            if command -v brew &> /dev/null; then
-              echo "Installing GNU tar via Homebrew..."
-              brew install gnu-tar
-            else
-              echo "Homebrew not available, creating gtar symlink..."
-              sudo ln -sf /usr/bin/tar /usr/local/bin/gtar || true
-            fi
+          # Check that the build output exists
+          if [ ! -d "./docs/_build/html" ]; then
+            echo "Documentation build failed - no output directory found"
+            exit 1
           fi
-          # Verify gtar is now available
-          gtar --version || tar --version
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./docs/_build/html
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          echo "✅ Documentation built successfully"
