@@ -371,10 +371,14 @@ class TestParallelCyclePerformance:
         # On fast systems with simple operations, parallel overhead may make it slightly slower
         # Allow up to 10% slower for parallel execution due to overhead
         max_allowed_parallel_time = sequential_time * 1.1
-        assert parallel_time < max_allowed_parallel_time, f"Parallel execution too slow: {parallel_time:.3f}s vs sequential {sequential_time:.3f}s (threshold: {max_allowed_parallel_time:.3f}s)"
-        
+        assert (
+            parallel_time < max_allowed_parallel_time
+        ), f"Parallel execution too slow: {parallel_time:.3f}s vs sequential {sequential_time:.3f}s (threshold: {max_allowed_parallel_time:.3f}s)"
+
         # Speedup calculation - parallel can be slower due to overhead on simple tasks
-        assert speedup > 0.7, f"Parallel execution significantly slower: speedup={speedup:.2f}x (threshold: >0.7x)"
+        assert (
+            speedup > 0.7
+        ), f"Parallel execution significantly slower: speedup={speedup:.2f}x (threshold: >0.7x)"
 
         # Results should be equivalent
         assert len(seq_results) == len(par_results)
