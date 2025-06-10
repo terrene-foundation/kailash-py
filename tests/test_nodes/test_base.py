@@ -123,10 +123,15 @@ class TestBaseNode:
         assert node.config.get("x") == 5.0
 
     def test_node_creation_without_required_params(self):
-        """Test that node creation without required params fails."""
-        with pytest.raises(NodeConfigurationError) as exc_info:
-            SimpleNode(name="Test Node")  # Missing required 'x' parameter
-        assert "Required parameter 'x' not provided" in str(exc_info.value)
+        """Test that node creation without required params succeeds (Session 061 behavior)."""
+        # NEW BEHAVIOR: Node creation succeeds without required params
+        node = SimpleNode(name="Test Node")  # Missing required 'x' parameter - OK
+        assert node.metadata.name == "Test Node"
+
+        # Node can run because SimpleNode provides default value in kwargs.get("x", 0)
+        # This is the new flexible behavior - nodes handle missing params gracefully
+        result = node.run()  # Works fine with default
+        assert result == {"y": 0}  # x defaults to 0, so y = 0 * 2 = 0
 
     def test_node_with_optional_params(self):
         """Test node with optional parameters."""

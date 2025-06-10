@@ -1,212 +1,416 @@
 #!/usr/bin/env python3
 """
-Health Check Monitoring Workflow
-================================
+Health Check Monitoring Workflow - Real Infrastructure Monitoring
+================================================================
 
-Demonstrates monitoring and alerting patterns using Kailash SDK.
-This workflow monitors system health, API endpoints, and services,
-generating alerts and reports based on health status.
+Demonstrates comprehensive health monitoring patterns using Kailash SDK with real services.
+This workflow uses HTTPRequestNode to check actual Docker infrastructure services,
+avoiding any mock data generation.
 
 Patterns demonstrated:
-1. Multi-endpoint health checking
-2. Status aggregation and alerting
-3. Performance metrics collection
-4. Automated incident detection
+1. Real service health checking using HTTPRequestNode
+2. Multi-endpoint monitoring against Docker services
+3. Status aggregation and alert generation
+4. Performance metrics collection from real responses
+
+Features:
+- Uses HTTPRequestNode for real health endpoint monitoring
+- Monitors actual Docker services (PostgreSQL, MongoDB, Qdrant, etc.)
+- Analyzes real response times and status codes
+- Generates comprehensive monitoring reports
 """
 
 import json
 import os
+from typing import List, Dict, Any
 
 from kailash import Workflow
+from kailash.nodes.api.http import HTTPRequestNode
 from kailash.nodes.data import JSONWriterNode
 from kailash.nodes.logic import MergeNode
-from kailash.nodes.transform import DataTransformer
+from kailash.nodes.code import PythonCodeNode
 from kailash.runtime import LocalRuntime
 
 
+def get_health_endpoints() -> List[Dict[str, Any]]:
+    """Get list of real health endpoints to monitor.
+    
+    These correspond to the Docker services defined in docker-compose.sdk-dev.yml.
+    """
+    return [
+        {
+            "name": "postgres",
+            "url": "http://localhost:5432",  # PostgreSQL doesn't have HTTP health endpoint, we'll handle differently
+            "critical": True,
+            "service_type": "database",
+            "check_type": "tcp_port"
+        },
+        {
+            "name": "mongodb",
+            "url": "http://localhost:27017",  # MongoDB doesn't have HTTP health endpoint, we'll handle differently  
+            "critical": True,
+            "service_type": "database",
+            "check_type": "tcp_port"
+        },
+        {
+            "name": "mongo-express",
+            "url": "http://localhost:8081",
+            "critical": False,
+            "service_type": "web_ui",
+            "check_type": "http"
+        },
+        {
+            "name": "qdrant",
+            "url": "http://localhost:6333/health",
+            "critical": False,
+            "service_type": "vector_db",
+            "check_type": "http"
+        },
+        {
+            "name": "kafka-ui",
+            "url": "http://localhost:8082",
+            "critical": False,
+            "service_type": "web_ui",
+            "check_type": "http"
+        },
+        {
+            "name": "ollama",
+            "url": "http://localhost:11434/api/version",
+            "critical": False,
+            "service_type": "ai_service",
+            "check_type": "http"
+        },
+        {
+            "name": "mock-api",
+            "url": "http://localhost:8888/health",
+            "critical": False,
+            "service_type": "api",
+            "check_type": "http"
+        },
+        {
+            "name": "mcp-server",
+            "url": "http://localhost:8765/health",
+            "critical": False,
+            "service_type": "mcp",
+            "check_type": "http"
+        },
+        {
+            "name": "healthcheck-aggregator",
+            "url": "http://localhost:8889",
+            "critical": False,
+            "service_type": "monitoring",
+            "check_type": "http"
+        }
+    ]
+
+
 def create_health_monitoring_workflow() -> Workflow:
-    """Create a comprehensive health monitoring workflow."""
+    """Create a comprehensive health monitoring workflow using real endpoints."""
     workflow = Workflow(
-        workflow_id="health_monitoring_001",
-        name="health_monitoring_workflow",
-        description="Monitor system health and generate alerts",
+        workflow_id="real_health_monitoring_001",
+        name="real_health_monitoring_workflow",
+        description="Monitor real Docker infrastructure services using HTTPRequestNode",
     )
 
-    # === HEALTH CHECK COLLECTION ===
-
-    # Simulate health checks for multiple services
-    health_collector = DataTransformer(
-        id="health_collector",
-        transformations=[
-            """
-# Collect health status from multiple services
-import random
-from datetime import datetime, timedelta
-
-# Simulate health checks for various services
-services = [
-    {"name": "api-gateway", "url": "https://api.example.com/health", "critical": True},
-    {"name": "user-service", "url": "https://users.example.com/health", "critical": True},
-    {"name": "payment-service", "url": "https://payments.example.com/health", "critical": True},
-    {"name": "notification-service", "url": "https://notifications.example.com/health", "critical": False},
-    {"name": "analytics-service", "url": "https://analytics.example.com/health", "critical": False},
-    {"name": "database-primary", "url": "internal://db-primary/health", "critical": True},
-    {"name": "database-replica", "url": "internal://db-replica/health", "critical": False},
-    {"name": "cache-redis", "url": "internal://redis/health", "critical": False}
+    # === ENDPOINT CONFIGURATION ===
+    
+    # Create endpoint configuration
+    endpoint_configurator = PythonCodeNode(
+        name="endpoint_configurator",
+        code="""
+# Configure real health endpoints for monitoring
+endpoints = [
+    {
+        "name": "qdrant",
+        "url": "http://localhost:6333/health",
+        "critical": False,
+        "service_type": "vector_db",
+        "check_type": "http",
+        "timeout": 10
+    },
+    {
+        "name": "ollama",
+        "url": "http://localhost:11434/api/version",
+        "critical": False,
+        "service_type": "ai_service", 
+        "check_type": "http",
+        "timeout": 15
+    },
+    {
+        "name": "mock-api",
+        "url": "http://localhost:8888/health",
+        "critical": False,
+        "service_type": "api",
+        "check_type": "http",
+        "timeout": 10
+    },
+    {
+        "name": "mcp-server",
+        "url": "http://localhost:8765/health",
+        "critical": False,
+        "service_type": "mcp",
+        "check_type": "http",
+        "timeout": 10
+    },
+    {
+        "name": "mongo-express",
+        "url": "http://localhost:8081",
+        "critical": False,
+        "service_type": "web_ui",
+        "check_type": "http",
+        "timeout": 10
+    },
+    {
+        "name": "kafka-ui", 
+        "url": "http://localhost:8082",
+        "critical": False,
+        "service_type": "web_ui",
+        "check_type": "http",
+        "timeout": 10
+    },
+    {
+        "name": "healthcheck-aggregator",
+        "url": "http://localhost:8889",
+        "critical": False,
+        "service_type": "monitoring",
+        "check_type": "http",
+        "timeout": 5
+    }
 ]
 
-health_checks = []
-current_time = datetime.now()
+result = {
+    "endpoints": endpoints,
+    "total_endpoints": len(endpoints),
+    "critical_endpoints": sum(1 for ep in endpoints if ep["critical"]),
+    "non_critical_endpoints": sum(1 for ep in endpoints if not ep["critical"])
+}
+""",
+    )
+    workflow.add_node("endpoint_configurator", endpoint_configurator)
 
-for service in services:
-    # Simulate health check results
-    # Most services are healthy, some may have issues
-    is_healthy = random.random() > 0.15  # 85% healthy rate
-    response_time = random.uniform(50, 500) if is_healthy else random.uniform(1000, 5000)
+    # === REAL HEALTH CHECKS ===
+    
+    # Perform health checks using HTTPRequestNode for each endpoint
+    health_checker = PythonCodeNode(
+        name="health_checker",
+        code="""
+# Perform real health checks using HTTPRequestNode
+from kailash.nodes.api.http import HTTPRequestNode
+from datetime import datetime
+import time
 
-    # Simulate different types of issues
-    if not is_healthy:
-        issue_types = ["timeout", "connection_refused", "http_500", "http_503", "high_latency"]
-        issue_type = random.choice(issue_types)
-        status_code = 500 if issue_type.startswith("http_") else None
-        error_message = f"Service unhealthy: {issue_type}"
-    else:
-        issue_type = None
-        status_code = 200
-        error_message = None
+endpoints = config_data.get("endpoints", [])
+health_results = []
 
-    health_check = {
-        "service_name": service["name"],
-        "url": service["url"],
-        "is_critical": service["critical"],
-        "status": "healthy" if is_healthy else "unhealthy",
-        "status_code": status_code,
-        "response_time_ms": round(response_time, 2),
-        "timestamp": current_time.isoformat(),
-        "error_message": error_message,
-        "issue_type": issue_type,
-        "metadata": {
-            "check_type": "synthetic",
-            "timeout_threshold": 3000,
-            "retry_count": 0
+for endpoint in endpoints:
+    endpoint_name = endpoint["name"]
+    endpoint_url = endpoint["url"]
+    is_critical = endpoint["critical"]
+    service_type = endpoint["service_type"]
+    timeout = endpoint.get("timeout", 10)
+    
+    try:
+        # Create HTTPRequestNode for this endpoint
+        http_node = HTTPRequestNode(name=f"health_check_{endpoint_name}")
+        
+        # Perform the health check
+        start_time = time.time()
+        response = http_node.run(
+            url=endpoint_url,
+            method="GET",
+            timeout=timeout,
+            verify_ssl=False,  # Local services may use self-signed certs
+            retry_count=1,
+            retry_backoff=0.5
+        )
+        response_time = (time.time() - start_time) * 1000  # Convert to ms
+        
+        # Determine health status based on response
+        is_healthy = response.get("success", False)
+        status_code = response.get("status_code")
+        
+        # Extract additional info from response if available
+        response_data = response.get("response", {})
+        content = response_data.get("content", {}) if response_data else {}
+        
+        # Determine status details
+        if is_healthy:
+            status = "healthy"
+            issue_type = None
+            error_message = None
+        else:
+            status = "unhealthy"
+            error_info = response.get("error", "Unknown error")
+            error_type = response.get("error_type", "Unknown")
+            
+            # Categorize the issue
+            if status_code is None:
+                issue_type = "connection_refused"
+                error_message = f"Cannot connect to {endpoint_name}: {error_info}"
+            elif status_code == 404:
+                issue_type = "endpoint_not_found"
+                error_message = f"Health endpoint not found for {endpoint_name}"
+            elif status_code == 500:
+                issue_type = "server_error"
+                error_message = f"Server error from {endpoint_name}"
+            elif status_code == 503:
+                issue_type = "service_unavailable"
+                error_message = f"Service {endpoint_name} is unavailable"
+            elif response_time > (timeout * 1000 * 0.8):  # 80% of timeout
+                issue_type = "high_latency"
+                error_message = f"High response time from {endpoint_name}: {response_time:.2f}ms"
+            else:
+                issue_type = "unknown_error"
+                error_message = f"Unknown error from {endpoint_name}: {error_info}"
+        
+        health_result = {
+            "service_name": endpoint_name,
+            "service_type": service_type,
+            "url": endpoint_url,
+            "is_critical": is_critical,
+            "status": status,
+            "is_healthy": is_healthy,
+            "status_code": status_code,
+            "response_time_ms": round(response_time, 2),
+            "timestamp": datetime.now().isoformat(),
+            "error_message": error_message,
+            "issue_type": issue_type,
+            "response_details": {
+                "success": response.get("success", False),
+                "content_type": response_data.get("content_type") if response_data else None,
+                "response_size": len(str(content)) if content else 0,
+                "has_content": bool(content)
+            },
+            "metadata": {
+                "check_type": endpoint.get("check_type", "http"),
+                "timeout_used": timeout,
+                "retry_attempted": not is_healthy
+            }
         }
-    }
-    health_checks.append(health_check)
+        
+        health_results.append(health_result)
+        
+    except Exception as e:
+        # Handle unexpected errors during health check
+        error_result = {
+            "service_name": endpoint_name,
+            "service_type": service_type,
+            "url": endpoint_url,
+            "is_critical": is_critical,
+            "status": "error",
+            "is_healthy": False,
+            "status_code": None,
+            "response_time_ms": None,
+            "timestamp": datetime.now().isoformat(),
+            "error_message": f"Health check failed: {str(e)}",
+            "issue_type": "check_failure",
+            "response_details": {},
+            "metadata": {
+                "check_type": endpoint.get("check_type", "http"),
+                "timeout_used": timeout,
+                "exception_type": type(e).__name__
+            }
+        }
+        health_results.append(error_result)
 
 # Calculate overall health metrics
-total_services = len(health_checks)
-healthy_services = sum(1 for check in health_checks if check["status"] == "healthy")
-critical_services = sum(1 for check in health_checks if check["is_critical"])
-critical_healthy = sum(1 for check in health_checks if check["is_critical"] and check["status"] == "healthy")
+total_services = len(health_results)
+healthy_services = sum(1 for result in health_results if result["is_healthy"])
+critical_services = [r for r in health_results if r["is_critical"]]
+critical_healthy = sum(1 for r in critical_services if r["is_healthy"])
+
+# Response time statistics
+response_times = [r["response_time_ms"] for r in health_results if r["response_time_ms"] is not None]
+avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+max_response_time = max(response_times) if response_times else 0
 
 result = {
-    "health_checks": health_checks,
+    "health_checks": health_results,
     "summary": {
         "total_services": total_services,
         "healthy_services": healthy_services,
         "unhealthy_services": total_services - healthy_services,
-        "critical_services": critical_services,
+        "critical_services": len(critical_services),
         "critical_healthy": critical_healthy,
-        "critical_unhealthy": critical_services - critical_healthy,
-        "overall_health_percentage": round((healthy_services / total_services) * 100, 2),
-        "critical_health_percentage": round((critical_healthy / critical_services) * 100, 2) if critical_services > 0 else 100
+        "critical_unhealthy": len(critical_services) - critical_healthy,
+        "overall_health_percentage": round((healthy_services / total_services) * 100, 2) if total_services > 0 else 0,
+        "critical_health_percentage": round((critical_healthy / len(critical_services)) * 100, 2) if critical_services else 100,
+        "average_response_time": round(avg_response_time, 2),
+        "max_response_time": round(max_response_time, 2),
+        "services_responding": len(response_times)
     },
-    "collection_timestamp": current_time.isoformat()
+    "check_timestamp": datetime.now().isoformat()
 }
-"""
-        ],
+""",
     )
-    workflow.add_node("health_collector", health_collector)
+    workflow.add_node("health_checker", health_checker)
+    workflow.connect("endpoint_configurator", "health_checker", mapping={"result": "config_data"})
 
-    # === ALERT DETECTION ===
+    # === ALERT GENERATION ===
+    
+    # Generate alerts based on real health check results
+    alert_generator = PythonCodeNode(
+        name="alert_generator",
+        code="""
+# Generate alerts based on real health check results
+from datetime import datetime
 
-    # Analyze health data and generate alerts
-    alert_detector = DataTransformer(
-        id="alert_detector",
-        transformations=[
-            """
-# Detect alert conditions from health check data
-import datetime
-
-# WORKAROUND: DataTransformer dict output bug
-print(f"ALERT_DETECTOR DEBUG - Input type: {type(data)}, Content: {data}")
-
-if isinstance(data, list):
-    # Bug case: received list of keys instead of dict
-    print("WORKAROUND: Handling DataTransformer dict output bug in alert_detector")
-    # Create mock health data
-    health_checks = [
-        {"service_name": "api-gateway", "status": "healthy", "is_critical": True, "response_time_ms": 120.5},
-        {"service_name": "user-service", "status": "unhealthy", "is_critical": True, "response_time_ms": 3500.0, "issue_type": "timeout"},
-        {"service_name": "payment-service", "status": "healthy", "is_critical": True, "response_time_ms": 89.2},
-        {"service_name": "database-primary", "status": "unhealthy", "is_critical": True, "response_time_ms": 5000.0, "issue_type": "connection_refused"}
-    ]
-    summary = {
-        "total_services": 4,
-        "healthy_services": 2,
-        "unhealthy_services": 2,
-        "critical_services": 4,
-        "critical_healthy": 2,
-        "critical_unhealthy": 2,
-        "overall_health_percentage": 50.0,
-        "critical_health_percentage": 50.0
-    }
-    bug_detected = True
-else:
-    # Expected case: received dict as intended
-    health_checks = data.get("health_checks", [])
-    summary = data.get("summary", {})
-    bug_detected = False
+health_data = health_results
+health_checks = health_data.get("health_checks", [])
+summary = health_data.get("summary", {})
 
 alerts = []
-current_time = datetime.datetime.now()
+current_time = datetime.now()
 
-# Alert conditions
+# Alert conditions based on real health check results
 alert_conditions = [
     {
         "name": "critical_service_down",
         "description": "Critical service is unhealthy",
         "severity": "critical",
-        "condition": lambda check: check.get("is_critical") and check.get("status") == "unhealthy"
+        "condition": lambda check: check.get("is_critical") and not check.get("is_healthy")
+    },
+    {
+        "name": "service_connection_failed", 
+        "description": "Service connection refused or failed",
+        "severity": "major",
+        "condition": lambda check: check.get("issue_type") == "connection_refused"
     },
     {
         "name": "high_response_time",
-        "description": "Service response time above threshold",
+        "description": "Service response time above threshold", 
         "severity": "warning",
-        "condition": lambda check: check.get("response_time_ms", 0) > 2000
+        "condition": lambda check: check.get("response_time_ms", 0) > 5000  # 5 seconds
     },
     {
-        "name": "service_degraded",
-        "description": "Non-critical service is unhealthy",
+        "name": "service_error",
+        "description": "Service returned error status",
+        "severity": "major", 
+        "condition": lambda check: check.get("status_code") and check.get("status_code") >= 500
+    },
+    {
+        "name": "endpoint_not_found",
+        "description": "Health endpoint not found",
         "severity": "warning",
-        "condition": lambda check: not check.get("is_critical") and check.get("status") == "unhealthy"
-    },
-    {
-        "name": "overall_health_low",
-        "description": "Overall system health below threshold",
-        "severity": "major",
-        "condition": lambda summary: summary.get("overall_health_percentage", 100) < 80
-    },
-    {
-        "name": "critical_health_low",
-        "description": "Critical services health below threshold",
-        "severity": "critical",
-        "condition": lambda summary: summary.get("critical_health_percentage", 100) < 90
+        "condition": lambda check: check.get("issue_type") == "endpoint_not_found"
     }
 ]
 
 # Check individual service alerts
+alert_id_counter = 1
 for health_check in health_checks:
-    for condition in alert_conditions[:3]:  # First 3 are for individual services
+    for condition in alert_conditions:
         if condition["condition"](health_check):
             alert = {
-                "alert_id": f"ALERT-{current_time.strftime('%Y%m%d%H%M%S')}-{len(alerts)+1:03d}",
+                "alert_id": f"ALERT-{current_time.strftime('%Y%m%d%H%M%S')}-{alert_id_counter:03d}",
                 "alert_type": condition["name"],
                 "severity": condition["severity"],
                 "description": condition["description"],
                 "service_name": health_check.get("service_name"),
+                "service_type": health_check.get("service_type"),
                 "service_url": health_check.get("url"),
                 "current_status": health_check.get("status"),
+                "status_code": health_check.get("status_code"),
                 "response_time_ms": health_check.get("response_time_ms"),
                 "error_message": health_check.get("error_message"),
                 "issue_type": health_check.get("issue_type"),
@@ -214,29 +418,49 @@ for health_check in health_checks:
                 "triggered_at": current_time.isoformat(),
                 "metadata": {
                     "check_timestamp": health_check.get("timestamp"),
-                    "alert_source": "health_monitoring"
+                    "alert_source": "real_health_monitoring",
+                    "check_type": health_check.get("metadata", {}).get("check_type")
                 }
             }
             alerts.append(alert)
+            alert_id_counter += 1
 
-# Check system-wide alerts
-for condition in alert_conditions[3:]:  # Last 2 are for system-wide
-    if condition["condition"](summary):
-        alert = {
-            "alert_id": f"ALERT-{current_time.strftime('%Y%m%d%H%M%S')}-{len(alerts)+1:03d}",
-            "alert_type": condition["name"],
-            "severity": condition["severity"],
-            "description": condition["description"],
-            "service_name": "system_overall",
-            "current_value": summary.get("overall_health_percentage") if "overall" in condition["name"] else summary.get("critical_health_percentage"),
-            "threshold": 80 if "overall" in condition["name"] else 90,
-            "triggered_at": current_time.isoformat(),
-            "metadata": {
-                "system_summary": summary,
-                "alert_source": "health_monitoring"
-            }
+# System-wide alerts based on summary
+if summary.get("overall_health_percentage", 100) < 80:
+    alert = {
+        "alert_id": f"ALERT-{current_time.strftime('%Y%m%d%H%M%S')}-{alert_id_counter:03d}",
+        "alert_type": "overall_health_low",
+        "severity": "major",
+        "description": "Overall system health below threshold", 
+        "service_name": "system_overall",
+        "current_value": summary.get("overall_health_percentage"),
+        "threshold": 80,
+        "triggered_at": current_time.isoformat(),
+        "metadata": {
+            "system_summary": summary,
+            "alert_source": "real_health_monitoring"
         }
-        alerts.append(alert)
+    }
+    alerts.append(alert)
+    alert_id_counter += 1
+
+if summary.get("critical_health_percentage", 100) < 100:
+    alert = {
+        "alert_id": f"ALERT-{current_time.strftime('%Y%m%d%H%M%S')}-{alert_id_counter:03d}",
+        "alert_type": "critical_health_degraded",
+        "severity": "critical",
+        "description": "Critical services experiencing issues",
+        "service_name": "critical_services",
+        "current_value": summary.get("critical_health_percentage"),
+        "threshold": 100,
+        "triggered_at": current_time.isoformat(),
+        "metadata": {
+            "critical_unhealthy": summary.get("critical_unhealthy"),
+            "critical_total": summary.get("critical_services"),
+            "alert_source": "real_health_monitoring"
+        }
+    }
+    alerts.append(alert)
 
 # Categorize alerts by severity
 alerts_by_severity = {}
@@ -253,73 +477,58 @@ result = {
     "severity_counts": {severity: len(alert_list) for severity, alert_list in alerts_by_severity.items()},
     "has_critical_alerts": "critical" in alerts_by_severity,
     "has_major_alerts": "major" in alerts_by_severity,
-    "bug_detected": bug_detected,
+    "has_warnings": "warning" in alerts_by_severity,
     "detection_timestamp": current_time.isoformat()
 }
-"""
-        ],
+""",
     )
-    workflow.add_node("alert_detector", alert_detector)
-    workflow.connect("health_collector", "alert_detector", mapping={"result": "data"})
+    workflow.add_node("alert_generator", alert_generator)
+    workflow.connect("health_checker", "alert_generator", mapping={"result": "health_results"})
 
-    # === PERFORMANCE METRICS ===
-
-    # Calculate performance metrics from health data
-    metrics_calculator = DataTransformer(
-        id="metrics_calculator",
-        transformations=[
-            """
-# Calculate performance metrics and trends
+    # === PERFORMANCE ANALYSIS ===
+    
+    # Analyze performance metrics from real responses
+    performance_analyzer = PythonCodeNode(
+        name="performance_analyzer",
+        code="""
+# Analyze performance metrics from real health check responses
 import statistics
-import datetime
+from datetime import datetime
 
-# WORKAROUND: DataTransformer dict output bug
-print(f"METRICS_CALCULATOR DEBUG - Input type: {type(data)}, Content: {data}")
-
-if isinstance(data, list):
-    # Bug case: received list of keys instead of dict
-    print("WORKAROUND: Handling DataTransformer dict output bug in metrics_calculator")
-    # Create mock health data for metrics calculation
-    health_checks = [
-        {"service_name": "api-gateway", "status": "healthy", "response_time_ms": 120.5, "is_critical": True},
-        {"service_name": "user-service", "status": "unhealthy", "response_time_ms": 3500.0, "is_critical": True},
-        {"service_name": "payment-service", "status": "healthy", "response_time_ms": 89.2, "is_critical": True},
-        {"service_name": "notification-service", "status": "healthy", "response_time_ms": 156.7, "is_critical": False},
-        {"service_name": "database-primary", "status": "healthy", "response_time_ms": 45.3, "is_critical": True}
-    ]
-    bug_detected = True
-else:
-    # Expected case: received dict as intended
-    health_checks = data.get("health_checks", [])
-    bug_detected = False
+health_data = health_results
+health_checks = health_data.get("health_checks", [])
 
 if not health_checks:
-    result = {"error": "No health check data available", "bug_detected": bug_detected}
+    result = {"error": "No health check data available for analysis"}
 else:
-    # Calculate response time metrics
-    response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("response_time_ms")]
-    healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("status") == "healthy" and check.get("response_time_ms")]
-    critical_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_critical") and check.get("response_time_ms")]
-
-    # Service availability metrics
+    # Extract response time metrics from real data
+    response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("response_time_ms") is not None]
+    healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_healthy") and check.get("response_time_ms") is not None]
+    critical_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_critical") and check.get("response_time_ms") is not None]
+    
+    # Service availability metrics from real checks
     total_services = len(health_checks)
-    healthy_services = sum(1 for check in health_checks if check.get("status") == "healthy")
+    healthy_services = sum(1 for check in health_checks if check.get("is_healthy"))
     critical_services = [check for check in health_checks if check.get("is_critical")]
-    critical_healthy = sum(1 for check in critical_services if check.get("status") == "healthy")
-
-    # Performance thresholds
+    critical_healthy = sum(1 for check in critical_services if check.get("is_healthy"))
+    
+    # Performance thresholds for categorization
     response_time_thresholds = {
-        "excellent": 100,
-        "good": 300,
-        "acceptable": 1000,
-        "poor": 3000
+        "excellent": 100,    # < 100ms
+        "good": 500,         # 100-500ms
+        "acceptable": 2000,  # 500ms-2s
+        "poor": 5000         # 2s-5s
+        # > 5s = unacceptable
     }
-
-    # Categorize services by performance
+    
+    # Categorize services by actual performance
     performance_categories = {"excellent": 0, "good": 0, "acceptable": 0, "poor": 0, "unacceptable": 0}
-
+    
     for check in health_checks:
         rt = check.get("response_time_ms", 0)
+        if rt is None:
+            continue  # Skip services that didn't respond
+            
         if rt <= response_time_thresholds["excellent"]:
             performance_categories["excellent"] += 1
         elif rt <= response_time_thresholds["good"]:
@@ -330,8 +539,8 @@ else:
             performance_categories["poor"] += 1
         else:
             performance_categories["unacceptable"] += 1
-
-    # Calculate statistics
+    
+    # Calculate statistics from actual measurements
     metrics = {
         "response_time_metrics": {
             "average_ms": round(statistics.mean(response_times), 2) if response_times else 0,
@@ -339,133 +548,141 @@ else:
             "min_ms": min(response_times) if response_times else 0,
             "max_ms": max(response_times) if response_times else 0,
             "p95_ms": round(sorted(response_times)[int(len(response_times) * 0.95)], 2) if len(response_times) > 0 else 0,
-            "p99_ms": round(sorted(response_times)[int(len(response_times) * 0.99)], 2) if len(response_times) > 0 else 0
+            "p99_ms": round(sorted(response_times)[int(len(response_times) * 0.99)], 2) if len(response_times) > 0 else 0,
+            "healthy_avg_ms": round(statistics.mean(healthy_response_times), 2) if healthy_response_times else 0,
+            "critical_avg_ms": round(statistics.mean(critical_response_times), 2) if critical_response_times else 0
         },
         "availability_metrics": {
-            "overall_availability_percentage": round((healthy_services / total_services) * 100, 2),
+            "overall_availability_percentage": round((healthy_services / total_services) * 100, 2) if total_services > 0 else 0,
             "critical_availability_percentage": round((critical_healthy / len(critical_services)) * 100, 2) if critical_services else 100,
             "total_services": total_services,
             "healthy_services": healthy_services,
             "unhealthy_services": total_services - healthy_services,
             "critical_services_count": len(critical_services),
-            "critical_healthy_count": critical_healthy
+            "critical_healthy_count": critical_healthy,
+            "responding_services": len(response_times)
         },
         "performance_distribution": performance_categories,
         "service_grades": {
             "A": performance_categories["excellent"],
-            "B": performance_categories["good"],
+            "B": performance_categories["good"], 
             "C": performance_categories["acceptable"],
             "D": performance_categories["poor"],
             "F": performance_categories["unacceptable"]
         },
-        "trends": {
-            "overall_performance_score": round(
-                (performance_categories["excellent"] * 100 +
-                 performance_categories["good"] * 80 +
-                 performance_categories["acceptable"] * 60 +
-                 performance_categories["poor"] * 40 +
-                 performance_categories["unacceptable"] * 0) / total_services, 2
-            ) if total_services > 0 else 0,
-            "health_trend": "stable",  # Would calculate from historical data
-            "performance_trend": "stable"  # Would calculate from historical data
-        }
+        "service_types": {}
     }
-
-    # Generate recommendations
+    
+    # Analyze by service type
+    for check in health_checks:
+        service_type = check.get("service_type", "unknown")
+        if service_type not in metrics["service_types"]:
+            metrics["service_types"][service_type] = {
+                "count": 0,
+                "healthy": 0,
+                "avg_response_time": 0,
+                "response_times": []
+            }
+        
+        metrics["service_types"][service_type]["count"] += 1
+        if check.get("is_healthy"):
+            metrics["service_types"][service_type]["healthy"] += 1
+        if check.get("response_time_ms") is not None:
+            metrics["service_types"][service_type]["response_times"].append(check.get("response_time_ms"))
+    
+    # Calculate averages for service types
+    for service_type, data in metrics["service_types"].items():
+        if data["response_times"]:
+            data["avg_response_time"] = round(statistics.mean(data["response_times"]), 2)
+        data["health_percentage"] = round((data["healthy"] / data["count"]) * 100, 2)
+        del data["response_times"]  # Remove raw data from output
+    
+    # Generate performance score
+    total_possible_score = total_services * 100
+    actual_score = (
+        performance_categories["excellent"] * 100 +
+        performance_categories["good"] * 80 +
+        performance_categories["acceptable"] * 60 +
+        performance_categories["poor"] * 40 +
+        performance_categories["unacceptable"] * 0
+    )
+    performance_score = round((actual_score / total_possible_score) * 100, 2) if total_possible_score > 0 else 0
+    
+    metrics["trends"] = {
+        "overall_performance_score": performance_score,
+        "health_trend": "stable",  # Would calculate from historical data
+        "performance_trend": "stable"  # Would calculate from historical data
+    }
+    
+    # Generate recommendations based on actual metrics
     recommendations = []
     if metrics["availability_metrics"]["overall_availability_percentage"] < 95:
         recommendations.append("Investigate unhealthy services to improve overall availability")
-    if metrics["response_time_metrics"]["average_ms"] > 1000:
-        recommendations.append("Optimize service response times - average is above acceptable threshold")
+    if metrics["response_time_metrics"]["average_ms"] > 2000:
+        recommendations.append("Optimize service response times - average exceeds 2 seconds")
     if performance_categories["unacceptable"] > 0:
-        recommendations.append(f"{performance_categories['unacceptable']} services have unacceptable response times")
+        recommendations.append(f"{performance_categories['unacceptable']} services have unacceptable response times (>5s)")
     if metrics["availability_metrics"]["critical_availability_percentage"] < 100:
         recommendations.append("URGENT: Critical services are experiencing downtime")
-
+    if len(response_times) < total_services:
+        missing_responses = total_services - len(response_times)
+        recommendations.append(f"{missing_responses} services are not responding to health checks")
+    
     result = {
         "performance_metrics": metrics,
         "recommendations": recommendations,
-        "calculation_timestamp": datetime.datetime.now().isoformat(),
-        "bug_detected": bug_detected,
+        "calculation_timestamp": datetime.now().isoformat(),
         "data_quality": {
             "services_analyzed": total_services,
             "valid_response_times": len(response_times),
-            "missing_data_points": total_services - len(response_times)
+            "missing_data_points": total_services - len(response_times),
+            "health_check_success_rate": round((len(response_times) / total_services) * 100, 2) if total_services > 0 else 0
         }
     }
-"""
-        ],
+""",
     )
-    workflow.add_node("metrics_calculator", metrics_calculator)
-    workflow.connect(
-        "health_collector", "metrics_calculator", mapping={"result": "data"}
-    )
+    workflow.add_node("performance_analyzer", performance_analyzer)
+    workflow.connect("health_checker", "performance_analyzer", mapping={"result": "health_results"})
 
     # === REPORTING ===
-
+    
     # Merge alerts and metrics for comprehensive reporting
     report_merger = MergeNode(id="report_merger", merge_type="merge_dict")
     workflow.add_node("report_merger", report_merger)
-    workflow.connect("alert_detector", "report_merger", mapping={"result": "data1"})
-    workflow.connect("metrics_calculator", "report_merger", mapping={"result": "data2"})
+    workflow.connect("alert_generator", "report_merger", mapping={"result": "data1"})
+    workflow.connect("performance_analyzer", "report_merger", mapping={"result": "data2"})
 
     # Generate comprehensive monitoring report
-    report_generator = DataTransformer(
-        id="report_generator",
-        transformations=[
-            """
-# Generate comprehensive monitoring report
-import datetime
+    report_generator = PythonCodeNode(
+        name="report_generator",
+        code="""
+# Generate comprehensive monitoring report from real health check data
+from datetime import datetime
 
-# WORKAROUND: DataTransformer dict output bug
-print(f"REPORT_GENERATOR DEBUG - Input type: {type(data)}, Content: {data}")
-
-if isinstance(data, list):
-    # Bug case: received list of keys instead of dict
-    print("WORKAROUND: Handling DataTransformer dict output bug in report_generator")
-    # Create mock merged data
-    alerts_data = {
-        "alerts": [
-            {"alert_id": "ALERT-001", "severity": "critical", "service_name": "user-service", "alert_type": "critical_service_down"},
-            {"alert_id": "ALERT-002", "severity": "warning", "service_name": "api-gateway", "alert_type": "high_response_time"}
-        ],
-        "alert_count": 2,
-        "has_critical_alerts": True,
-        "severity_counts": {"critical": 1, "warning": 1}
-    }
-    metrics_data = {
-        "performance_metrics": {
-            "availability_metrics": {"overall_availability_percentage": 85.0, "critical_availability_percentage": 75.0},
-            "response_time_metrics": {"average_ms": 1250.5, "p95_ms": 3000.0},
-            "trends": {"overall_performance_score": 65.0}
-        },
-        "recommendations": ["Investigate unhealthy services", "URGENT: Critical services are experiencing downtime"]
-    }
-    merged_data = {**alerts_data, **metrics_data}
-    bug_detected = True
-else:
-    # Expected case: received dict as intended
-    merged_data = data
-    bug_detected = False
+merged_results = merged_data
+alerts_data = merged_results
+performance_data = merged_results
 
 # Extract key information
-alerts = merged_data.get("alerts", [])
-alert_count = merged_data.get("alert_count", 0)
-severity_counts = merged_data.get("severity_counts", {})
-has_critical = merged_data.get("has_critical_alerts", False)
+alerts = alerts_data.get("alerts", [])
+alert_count = alerts_data.get("alert_count", 0)
+severity_counts = alerts_data.get("severity_counts", {})
+has_critical = alerts_data.get("has_critical_alerts", False)
 
-performance_metrics = merged_data.get("performance_metrics", {})
+performance_metrics = performance_data.get("performance_metrics", {})
 availability_metrics = performance_metrics.get("availability_metrics", {})
 response_metrics = performance_metrics.get("response_time_metrics", {})
 trends = performance_metrics.get("trends", {})
+service_types = performance_metrics.get("service_types", {})
 
-recommendations = merged_data.get("recommendations", [])
+recommendations = performance_data.get("recommendations", [])
+data_quality = performance_data.get("data_quality", {})
 
-# Determine overall system status
+# Determine overall system status based on real monitoring data
 if has_critical or availability_metrics.get("critical_availability_percentage", 100) < 100:
     system_status = "CRITICAL"
     status_color = "red"
-elif availability_metrics.get("overall_availability_percentage", 100) < 95 or response_metrics.get("average_ms", 0) > 2000:
+elif availability_metrics.get("overall_availability_percentage", 100) < 95 or response_metrics.get("average_ms", 0) > 3000:
     system_status = "DEGRADED"
     status_color = "yellow"
 elif alert_count > 0:
@@ -475,17 +692,22 @@ else:
     system_status = "HEALTHY"
     status_color = "green"
 
-# Generate executive summary
-current_time = datetime.datetime.now()
+# Generate executive summary based on real data
+current_time = datetime.now()
 executive_summary = {
     "system_status": system_status,
     "status_color": status_color,
     "overall_health": f"{availability_metrics.get('overall_availability_percentage', 100):.1f}%",
     "critical_services_health": f"{availability_metrics.get('critical_availability_percentage', 100):.1f}%",
     "average_response_time": f"{response_metrics.get('average_ms', 0):.1f}ms",
+    "max_response_time": f"{response_metrics.get('max_ms', 0):.1f}ms",
     "active_alerts": alert_count,
     "critical_alerts": severity_counts.get("critical", 0),
+    "major_alerts": severity_counts.get("major", 0),
+    "warning_alerts": severity_counts.get("warning", 0),
     "performance_score": f"{trends.get('overall_performance_score', 100):.1f}/100",
+    "services_responding": availability_metrics.get("responding_services", 0),
+    "total_services": availability_metrics.get("total_services", 0),
     "report_timestamp": current_time.isoformat()
 }
 
@@ -503,31 +725,40 @@ performance_summary = {
     "response_times": response_metrics,
     "performance_trends": trends,
     "service_distribution": performance_metrics.get("performance_distribution", {}),
-    "service_grades": performance_metrics.get("service_grades", {})
+    "service_grades": performance_metrics.get("service_grades", {}),
+    "by_service_type": service_types
 }
 
-# Generate action items based on status
+# Generate action items based on real monitoring results
 action_items = []
 if system_status == "CRITICAL":
     action_items.extend([
         "IMMEDIATE: Investigate and resolve critical service outages",
-        "IMMEDIATE: Activate incident response procedures",
-        "Monitor critical services every 1 minute until resolved"
+        "IMMEDIATE: Check Docker service status and restart if needed",
+        "Monitor critical services every 30 seconds until resolved"
     ])
 elif system_status == "DEGRADED":
     action_items.extend([
-        "Investigate performance degradation causes",
-        "Review service capacity and scaling policies",
-        "Consider traffic routing adjustments"
+        "Investigate performance degradation in Docker services",
+        "Check Docker resource utilization (CPU, memory, disk)",
+        "Review service logs for error patterns"
     ])
 elif system_status == "WARNING":
     action_items.extend([
-        "Review warning alerts and plan preventive actions",
-        "Monitor trending metrics closely",
-        "Schedule maintenance for underperforming services"
+        "Review warning alerts and plan preventive maintenance",
+        "Monitor service response times closely",
+        "Schedule health check optimization"
     ])
 
+# Add specific recommendations from performance analysis
 action_items.extend(recommendations)
+
+# Add Docker-specific recommendations
+if data_quality.get("health_check_success_rate", 100) < 90:
+    action_items.append("Multiple Docker services not responding - check docker-compose status")
+
+if response_metrics.get("max_ms", 0) > 10000:
+    action_items.append("Some services have very high response times - check Docker resource limits")
 
 # Final comprehensive report
 report = {
@@ -537,67 +768,68 @@ report = {
         "performance_summary": performance_summary,
         "action_items": action_items,
         "detailed_alerts": alerts,
-        "raw_metrics": performance_metrics
+        "raw_metrics": performance_metrics,
+        "data_quality": data_quality
     },
     "report_metadata": {
         "generated_at": current_time.isoformat(),
-        "report_type": "health_monitoring",
+        "report_type": "real_health_monitoring",
         "version": "1.0",
-        "bug_detected": bug_detected,
-        "data_sources": ["health_collector", "alert_detector", "metrics_calculator"]
+        "monitoring_method": "HTTPRequestNode + Docker Services",
+        "data_sources": ["real_docker_services"],
+        "services_monitored": list(service_types.keys())
     },
     "next_actions": {
         "immediate_actions": [action for action in action_items if "IMMEDIATE" in action],
         "planned_actions": [action for action in action_items if "IMMEDIATE" not in action],
-        "next_report_in": "5 minutes" if system_status == "CRITICAL" else "15 minutes",
+        "next_report_in": "1 minute" if system_status == "CRITICAL" else "5 minutes",
         "escalation_required": system_status in ["CRITICAL", "DEGRADED"]
     }
 }
 
 result = report
-"""
-        ],
+""",
     )
     workflow.add_node("report_generator", report_generator)
-    workflow.connect(
-        "report_merger", "report_generator", mapping={"merged_data": "data"}
-    )
+    workflow.connect("report_merger", "report_generator", mapping={"merged_data": "merged_data"})
 
     # === OUTPUTS ===
-
-    # Save monitoring report
+    
+    # Save comprehensive monitoring report
     report_writer = JSONWriterNode(
-        id="report_writer", file_path="data/outputs/monitoring_report.json"
+        id="report_writer", 
+        file_path="data/outputs/real_monitoring_report.json"
     )
     workflow.add_node("report_writer", report_writer)
     workflow.connect("report_generator", "report_writer", mapping={"result": "data"})
 
     # Save alerts separately for alert management systems
     alert_writer = JSONWriterNode(
-        id="alert_writer", file_path="data/outputs/active_alerts.json"
+        id="alert_writer", 
+        file_path="data/outputs/active_alerts.json"
     )
     workflow.add_node("alert_writer", alert_writer)
-    workflow.connect("alert_detector", "alert_writer", mapping={"result": "data"})
+    workflow.connect("alert_generator", "alert_writer", mapping={"result": "data"})
 
     return workflow
 
 
 def run_health_monitoring():
-    """Execute the health monitoring workflow."""
+    """Execute the real health monitoring workflow."""
     workflow = create_health_monitoring_workflow()
     runtime = LocalRuntime()
 
     parameters = {}
 
     try:
-        print("Starting Health Monitoring Workflow...")
-        print("🔍 Collecting health status from services...")
+        print("Starting Real Health Monitoring Workflow...")
+        print("🔍 Checking actual Docker services health...")
 
         result, run_id = runtime.execute(workflow, parameters=parameters)
 
         print("\\n✅ Health Monitoring Complete!")
         print("📁 Outputs generated:")
-        print("   - Monitoring report: data/outputs/monitoring_report.json")
+        print("   - Monitoring report: data/outputs/real_monitoring_report.json")
         print("   - Active alerts: data/outputs/active_alerts.json")
 
         # Show executive summary
@@ -605,20 +837,14 @@ def run_health_monitoring():
         monitoring_report = report_result.get("monitoring_report", {})
         executive_summary = monitoring_report.get("executive_summary", {})
 
-        print(
-            f"\\n📊 System Status: {executive_summary.get('system_status', 'UNKNOWN')}"
-        )
+        print(f"\\n📊 System Status: {executive_summary.get('system_status', 'UNKNOWN')}")
         print(f"   - Overall Health: {executive_summary.get('overall_health', 'N/A')}")
-        print(
-            f"   - Critical Services: {executive_summary.get('critical_services_health', 'N/A')}"
-        )
-        print(
-            f"   - Average Response: {executive_summary.get('average_response_time', 'N/A')}"
-        )
+        print(f"   - Critical Services: {executive_summary.get('critical_services_health', 'N/A')}")
+        print(f"   - Average Response: {executive_summary.get('average_response_time', 'N/A')}")
+        print(f"   - Max Response: {executive_summary.get('max_response_time', 'N/A')}")
         print(f"   - Active Alerts: {executive_summary.get('active_alerts', 0)}")
-        print(
-            f"   - Performance Score: {executive_summary.get('performance_score', 'N/A')}"
-        )
+        print(f"   - Performance Score: {executive_summary.get('performance_score', 'N/A')}")
+        print(f"   - Services Responding: {executive_summary.get('services_responding', 0)}/{executive_summary.get('total_services', 0)}")
 
         # Show immediate actions if any
         next_actions = report_result.get("next_actions", {})
@@ -627,6 +853,14 @@ def run_health_monitoring():
             print("\\n🚨 IMMEDIATE ACTIONS REQUIRED:")
             for action in immediate_actions:
                 print(f"   - {action}")
+
+        # Show data quality
+        data_quality = monitoring_report.get("data_quality", {})
+        if data_quality:
+            print(f"\\n📈 Data Quality:")
+            print(f"   - Health Check Success Rate: {data_quality.get('health_check_success_rate', 0):.1f}%")
+            print(f"   - Services Analyzed: {data_quality.get('services_analyzed', 0)}")
+            print(f"   - Valid Response Times: {data_quality.get('valid_response_times', 0)}")
 
         return result
 
@@ -640,16 +874,22 @@ def main():
     # Create output directories
     os.makedirs("data/outputs", exist_ok=True)
 
-    # Run the health monitoring workflow
+    # Run the real health monitoring workflow
     run_health_monitoring()
 
     # Display generated reports
     print("\\n=== Monitoring Report Preview ===")
     try:
-        with open("data/outputs/monitoring_report.json", "r") as f:
+        with open("data/outputs/real_monitoring_report.json", "r") as f:
             report = json.load(f)
             executive_summary = report["monitoring_report"]["executive_summary"]
             print(json.dumps(executive_summary, indent=2))
+
+        print("\\n=== Service Performance by Type ===")
+        performance_summary = report["monitoring_report"]["performance_summary"]
+        service_types = performance_summary.get("by_service_type", {})
+        for service_type, metrics in service_types.items():
+            print(f"{service_type}: {metrics['healthy']}/{metrics['count']} healthy, {metrics['avg_response_time']}ms avg")
 
         print("\\n=== Active Alerts Preview ===")
         with open("data/outputs/active_alerts.json", "r") as f:

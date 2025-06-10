@@ -130,8 +130,9 @@ Quick reference for finding documented mistakes and solutions. Each mistake has 
 - [074](074-generic-output-mapping-in-cycles.md) - Generic Output Mapping Fails ⚠️
 - [011](011-cycle-aware-nodes-parameter-passing.md) - Cycle-Aware Node Parameter Issues
 
-### API Design (64)
+### API Design (64, 77)
 - [064](064-mcp-client-as-separate-node.md) - MCP Client as Separate Node ⚠️
+- [077](077-pythoncode-string-blocks-vs-from-function.md) - PythonCodeNode String vs from_function() ⚠️
 
 ### Other Categories
 - **Documentation**: [024](024-inconsistent-documentation.md), [039](039-insufficient-logging.md), [040](040-missing-metrics-collection.md)
@@ -145,4 +146,4 @@ Quick reference for finding documented mistakes and solutions. Each mistake has 
 3. Add entry to relevant category above
 
 ---
-Total: 73 documented mistakes | Most common: Config/Runtime confusion
+Total: 74 documented mistakes | Most common: Config/Runtime confusion

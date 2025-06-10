@@ -37,6 +37,33 @@ file_path = str(get_input_data_path("customers.csv"))
 
 **Migration**: Update hardcoded paths to use centralized utilities.
 
+### ✅ Session 062: PythonCodeNode Best Practices
+
+**New Default**: Use `.from_function()` for code > 3 lines:
+
+```python
+# ✅ BEST: Full IDE support
+def process_data(input_data: list) -> dict:
+    """Process with syntax highlighting, debugging, etc."""
+    import pandas as pd
+    df = pd.DataFrame(input_data)
+    return {"count": len(df), "data": df.to_dict('records')}
+
+node = PythonCodeNode.from_function(
+    func=process_data,
+    name="processor"
+)
+
+# ✅ String code only for specific cases:
+# - Dynamic code generation
+# - User-provided code
+# - Simple one-liners
+# - Template-based code
+node = PythonCodeNode(name="calc", code="result = value * 2")
+```
+
+**Migration Tool**: Use `scripts/refactor-pythoncode-strings.py` to convert existing code.
+
 ## Issue: "Can't instantiate abstract class"
 
 ### Error Message

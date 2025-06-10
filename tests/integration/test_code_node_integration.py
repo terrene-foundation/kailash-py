@@ -110,6 +110,9 @@ class TestPythonCodeNodeIntegration:
 
             def process(self, data: pd.DataFrame) -> pd.DataFrame:
                 """Calculate running statistics."""
+                # Handle both DataFrame and list of dicts from CSV reader
+                if isinstance(data, list):
+                    data = pd.DataFrame(data)
                 # Convert to numeric first (CSV reader returns strings)
                 data["value"] = pd.to_numeric(data["value"])
                 values = data["value"].values

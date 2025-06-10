@@ -191,10 +191,12 @@ class Workflow:
 
         # Store node instance and metadata
         try:
+            # Use the node instance's actual config, which includes both original config and any updates
+            actual_config = node_instance.config.copy()
             node_instance_data = NodeInstance(
                 node_id=node_id,
                 node_type=node_type,
-                config=config,
+                config=actual_config,
                 position=(len(self.nodes) * 150, 100),
             )
             self.nodes[node_id] = node_instance_data
@@ -203,8 +205,10 @@ class Workflow:
 
         self._node_instances[node_id] = node_instance
 
-        # Add to graph
-        self.graph.add_node(node_id, node=node_instance, type=node_type, config=config)
+        # Add to graph with actual config
+        self.graph.add_node(
+            node_id, node=node_instance, type=node_type, config=actual_config
+        )
         logger.info(f"Added node '{node_id}' of type '{node_type}'")
 
     def _add_node_internal(
@@ -707,8 +711,11 @@ class Workflow:
                 # This shouldn't happen, but handle gracefully
                 raise WorkflowValidationError("Unable to determine execution order")
 
-    def validate(self) -> None:
+    def validate(self, runtime_parameters: Optional[Dict[str, Any]] = None) -> None:
         """Validate the workflow structure.
+
+        Args:
+            runtime_parameters: Parameters that will be provided at runtime (Session 061)
 
         Raises:
             WorkflowValidationError: If workflow is invalid
@@ -758,14 +765,19 @@ class Workflow:
                         # Check nested config
                         found_in_config = param_name in node_instance.config["config"]
 
-                    if not found_in_config:
+                    # Session 061: Check if parameter will be provided at runtime
+                    found_in_runtime = False
+                    if runtime_parameters and node_id in runtime_parameters:
+                        found_in_runtime = param_name in runtime_parameters[node_id]
+
+                    if not found_in_config and not found_in_runtime:
                         if param_def.default is None:
                             missing_inputs.append(param_name)
 
             if missing_inputs:
                 raise WorkflowValidationError(
                     f"Node '{node_id}' missing required inputs: {missing_inputs}. "
-                    f"Provide these inputs via connections or node configuration"
+                    f"Provide these inputs via connections, node configuration, or runtime parameters"
                 )
 
         logger.info(f"Workflow '{self.name}' validated successfully")

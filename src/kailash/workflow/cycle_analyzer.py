@@ -84,7 +84,14 @@ class CycleAnalyzer:
         self.analysis_level = analysis_level
         self.enable_profiling = enable_profiling
         self.enable_debugging = enable_debugging
-        self.output_directory = Path(output_directory) if output_directory else None
+
+        # Set output directory - use centralized location if not specified
+        if output_directory:
+            self.output_directory = Path(output_directory)
+        else:
+            # Use centralized output directory by default
+            project_root = Path(__file__).parent.parent.parent.parent
+            self.output_directory = project_root / "data" / "outputs" / "cycle_analysis"
 
         # Initialize components based on configuration
         debug_level = {

@@ -1,0 +1,86 @@
+# Configuration for auto-labeling PRs based on file paths
+
+# Area labels
+"area/core":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/kailash/nodes/**/*
+      - src/kailash/workflow/**/*
+      - src/kailash/runtime/**/*
+
+"area/mcp":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/kailash/mcp/**/*
+      - examples/mcp_examples/**/*
+      - tests/test_nodes/test_mcp.py
+
+"area/api":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/kailash/api/**/*
+      - tests/test_api/**/*
+
+"area/quality":
+  - changed-files:
+    - any-glob-to-any-file:
+      - tests/**/*
+      - .github/workflows/*
+      - pytest.ini
+      - pytest-ci.ini
+
+"area/workflows":
+  - changed-files:
+    - any-glob-to-any-file:
+      - examples/workflow_examples/**/*
+      - sdk-users/workflows/**/*
+
+"area/docs":
+  - changed-files:
+    - any-glob-to-any-file:
+      - docs/**/*
+      - "*.md"
+      - sdk-users/**/*.md
+      - # contrib (removed)/**/*.md
+
+"area/studio":
+  - changed-files:
+    - any-glob-to-any-file:
+      - studio/**/*
+      - examples/studio_examples/**/*
+
+# Type labels
+"type/test":
+  - changed-files:
+    - any-glob-to-any-file:
+      - tests/**/*
+      - "**/test_*.py"
+      - "**/*_test.py"
+
+"type/docs":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/*.md"
+      - "**/*.rst"
+      - docs/**/*
+
+"type/enhancement":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/**/*
+      - "!tests/**/*"
+  - head-branch:
+    - 'feat/**'
+    - 'feature/**'
+    - 'enhance/**'
+
+"type/bug":
+  - head-branch:
+    - 'fix/**'
+    - 'bugfix/**'
+    - 'hotfix/**'
+
+"type/refactor":
+  - head-branch:
+    - 'refactor/**'
+    - 'cleanup/**'

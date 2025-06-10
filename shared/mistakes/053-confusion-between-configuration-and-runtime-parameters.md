@@ -1,4 +1,7 @@
-# Mistake #053: Confusion Between Configuration and Runtime Parameters
+# Mistake #053: Confusion Between Configuration and Runtime Parameters - RESOLVED
+
+## Status: RESOLVED (Session 061)
+This fundamental architecture issue has been resolved with core SDK improvements that properly separate node construction, configuration, and execution.
 
 ## Problem
 Users frequently confused which parameters should be passed as configuration (when adding nodes) vs runtime parameters (data flowing through connections).
@@ -44,13 +47,30 @@ Added comprehensive documentation in validation-guide.md explaining:
 - Confusion about why data isn't flowing correctly
 - Incorrect workflow patterns that don't follow the node-based architecture
 
+## Resolution Details (Session 061)
+
+**Core SDK Changes Made:**
+1. **Node Construction**: Removed validation of required parameters during construction
+2. **LocalRuntime**: Added proper `node.configure()` call before execution  
+3. **Execution Method**: Fixed runtime to call `node.run(**inputs)` instead of `node.execute(inputs)`
+4. **Parameter Separation**: Clear separation between configuration and runtime data
+
+**Impact:**
+- NO BREAKING CHANGES for end users
+- Nodes can now be created without all required parameters
+- Validation happens at execution time with proper error messages
+- Better separation of configuration (HOW) vs runtime data (WHAT)
+
 ## Fixed In
-Session 40 - Added comprehensive guidance to validation-guide.md
+- Session 40 - Added comprehensive guidance to validation-guide.md
+- **Session 061 - FULLY RESOLVED with core architecture improvements**
 
 ## Related Issues
 #49 (Missing Data Source Nodes) - same root misunderstanding
+#058 (Node configuration vs runtime parameters confusion) - RESOLVED
+#020 (Configuration parameter validation timing) - RESOLVED
 
 ## Categories
-api-design, configuration
+api-design, configuration, **RESOLVED**
 
 ---
