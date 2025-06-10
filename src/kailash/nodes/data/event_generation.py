@@ -1,10 +1,9 @@
 """Event generation nodes for event-driven architectures."""
 
-import json
 import random
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 

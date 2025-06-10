@@ -187,12 +187,10 @@ def comp_calculator(data=None):
 def hr_exporter(data=None):
     """Auto-converted from PythonCodeNode string code."""
     import json
-    import os
 
     # Ensure outputs directory exists
     from examples.utils.data_paths import (
         ensure_output_dir_exists,
-        get_input_data_path,
         get_output_data_path,
     )
 

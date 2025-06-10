@@ -1,13 +1,11 @@
 """Monitoring and health check nodes for system observability."""
 
 import asyncio
-import json
 import socket
 import subprocess
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlparse
+from typing import Any, Dict, List
 
 import requests
 

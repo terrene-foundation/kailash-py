@@ -6,8 +6,6 @@ from typing import Any, Dict
 import pandas as pd
 
 from examples.utils.data_paths import (
-    ensure_output_dir_exists,
-    get_output_data_path,
     get_test_data_path,
 )
 from examples.utils.paths import get_output_dir

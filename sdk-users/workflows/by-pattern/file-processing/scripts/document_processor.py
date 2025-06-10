@@ -25,15 +25,12 @@ import os
 from pathlib import Path
 
 from kailash import Workflow
+from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import (
     DirectoryReaderNode,
-    CSVReaderNode,
-    JSONReaderNode,
-    TextReaderNode,
     JSONWriterNode,
 )
 from kailash.nodes.logic import MergeNode
-from kailash.nodes.code import PythonCodeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -41,7 +38,7 @@ def ensure_input_data_exists():
     """Ensure sample input data exists for processing."""
     input_dir = Path("data/inputs")
     input_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Only create files if they don't exist
     csv_file = input_dir / "customer_data.csv"
     if not csv_file.exists():
@@ -52,7 +49,7 @@ CUST-003,Bob Johnson,bob@example.com,inactive,2024-01-17,79.99
 CUST-004,Alice Wilson,alice@example.com,active,2024-01-18,399.00
 CUST-005,Charlie Brown,charlie@example.com,inactive,2024-01-19,25.99"""
         csv_file.write_text(csv_content)
-    
+
     json_file = input_dir / "transaction_log.json"
     if not json_file.exists():
         json_content = {
@@ -64,7 +61,7 @@ CUST-005,Charlie Brown,charlie@example.com,inactive,2024-01-19,25.99"""
                     "currency": "USD",
                     "timestamp": "2024-01-15T09:00:00Z",
                     "product": "Premium Plan",
-                    "status": "completed"
+                    "status": "completed",
                 },
                 {
                     "id": "TXN-002",
@@ -73,7 +70,7 @@ CUST-005,Charlie Brown,charlie@example.com,inactive,2024-01-19,25.99"""
                     "currency": "USD",
                     "timestamp": "2024-01-15T09:30:00Z",
                     "product": "Standard Plan",
-                    "status": "completed"
+                    "status": "completed",
                 },
                 {
                     "id": "TXN-003",
@@ -82,18 +79,18 @@ CUST-005,Charlie Brown,charlie@example.com,inactive,2024-01-19,25.99"""
                     "currency": "USD",
                     "timestamp": "2024-01-15T10:00:00Z",
                     "product": "Add-on Service",
-                    "status": "pending"
-                }
+                    "status": "pending",
+                },
             ],
             "metadata": {
                 "version": "1.0",
                 "generated_at": "2024-01-15T10:30:00Z",
                 "total_transactions": 3,
-                "total_amount": 529.48
-            }
+                "total_amount": 529.48,
+            },
         }
         json_file.write_text(json.dumps(json_content, indent=2))
-    
+
     txt_file = input_dir / "report_template.txt"
     if not txt_file.exists():
         txt_content = """Customer Report Template
@@ -130,7 +127,7 @@ Notes:
 ======
 {additional_notes}"""
         txt_file.write_text(txt_content)
-    
+
     xml_file = input_dir / "metadata.xml"
     if not xml_file.exists():
         xml_content = """<?xml version="1.0" encoding="UTF-8"?>
@@ -173,19 +170,25 @@ def create_document_processing_workflow() -> Workflow:
     )
 
     # === REAL FILE DISCOVERY ===
-    
+
     # Discover actual files in the input directory
     file_discoverer = DirectoryReaderNode(
         name="file_discoverer",
         directory_path="data/inputs",
         recursive=False,  # Scan only the inputs directory
-        file_patterns=["*.csv", "*.json", "*.txt", "*.xml", "*.md"],  # Include common formats
-        include_hidden=False
+        file_patterns=[
+            "*.csv",
+            "*.json",
+            "*.txt",
+            "*.xml",
+            "*.md",
+        ],  # Include common formats
+        include_hidden=False,
     )
     workflow.add_node("file_discoverer", file_discoverer)
 
     # === REAL CSV PROCESSING ===
-    
+
     # Extract CSV files from discovery and process them
     csv_file_extractor = PythonCodeNode(
         name="csv_file_extractor",
@@ -201,7 +204,11 @@ result = {
 """,
     )
     workflow.add_node("csv_file_extractor", csv_file_extractor)
-    workflow.connect("file_discoverer", "csv_file_extractor", mapping={"files_by_type": "discovery_data"})
+    workflow.connect(
+        "file_discoverer",
+        "csv_file_extractor",
+        mapping={"files_by_type": "discovery_data"},
+    )
 
     # Process each CSV file using CSVReaderNode
     csv_processor = PythonCodeNode(
@@ -268,10 +275,12 @@ result = {
 """,
     )
     workflow.add_node("csv_processor", csv_processor)
-    workflow.connect("csv_file_extractor", "csv_processor", mapping={"result": "file_data"})
+    workflow.connect(
+        "csv_file_extractor", "csv_processor", mapping={"result": "file_data"}
+    )
 
     # === REAL JSON PROCESSING ===
-    
+
     # Extract and process JSON files
     json_file_extractor = PythonCodeNode(
         name="json_file_extractor",
@@ -287,7 +296,11 @@ result = {
 """,
     )
     workflow.add_node("json_file_extractor", json_file_extractor)
-    workflow.connect("file_discoverer", "json_file_extractor", mapping={"files_by_type": "discovery_data"})
+    workflow.connect(
+        "file_discoverer",
+        "json_file_extractor",
+        mapping={"files_by_type": "discovery_data"},
+    )
 
     json_processor = PythonCodeNode(
         name="json_processor",
@@ -368,10 +381,12 @@ result = {
 """,
     )
     workflow.add_node("json_processor", json_processor)
-    workflow.connect("json_file_extractor", "json_processor", mapping={"result": "file_data"})
+    workflow.connect(
+        "json_file_extractor", "json_processor", mapping={"result": "file_data"}
+    )
 
     # === REAL TEXT PROCESSING ===
-    
+
     # Extract and process text files (txt, xml, md)
     text_file_extractor = PythonCodeNode(
         name="text_file_extractor",
@@ -390,7 +405,11 @@ result = {
 """,
     )
     workflow.add_node("text_file_extractor", text_file_extractor)
-    workflow.connect("file_discoverer", "text_file_extractor", mapping={"files_by_type": "discovery_data"})
+    workflow.connect(
+        "file_discoverer",
+        "text_file_extractor",
+        mapping={"files_by_type": "discovery_data"},
+    )
 
     text_processor = PythonCodeNode(
         name="text_processor",
@@ -477,10 +496,12 @@ result = {
 """,
     )
     workflow.add_node("text_processor", text_processor)
-    workflow.connect("text_file_extractor", "text_processor", mapping={"result": "file_data"})
+    workflow.connect(
+        "text_file_extractor", "text_processor", mapping={"result": "file_data"}
+    )
 
     # === MERGE ALL PROCESSING RESULTS ===
-    
+
     # Merge all processing results using MergeNode
     result_merger = MergeNode(id="result_merger", merge_type="merge_dict")
     workflow.add_node("result_merger", result_merger)
@@ -489,7 +510,7 @@ result = {
     workflow.connect("text_processor", "result_merger", mapping={"result": "data3"})
 
     # === COMPREHENSIVE ANALYSIS ===
-    
+
     # Generate comprehensive analysis report
     final_analyzer = PythonCodeNode(
         name="final_analyzer",
@@ -587,14 +608,16 @@ result = comprehensive_report
 """,
     )
     workflow.add_node("final_analyzer", final_analyzer)
-    workflow.connect("result_merger", "final_analyzer", mapping={"merged_data": "merged_data"})
+    workflow.connect(
+        "result_merger", "final_analyzer", mapping={"merged_data": "merged_data"}
+    )
 
     # === OUTPUT ===
-    
+
     # Save comprehensive processing report
     report_writer = JSONWriterNode(
-        id="report_writer", 
-        file_path="data/outputs/comprehensive_document_analysis.json"
+        id="report_writer",
+        file_path="data/outputs/comprehensive_document_analysis.json",
     )
     workflow.add_node("report_writer", report_writer)
     workflow.connect("final_analyzer", "report_writer", mapping={"result": "data"})
@@ -624,7 +647,9 @@ def run_document_processing():
         file_breakdown = final_result.get("file_type_breakdown", {})
 
         print("\\n📊 Processing Summary:")
-        print(f"   - Total files processed: {processing_summary.get('total_files_processed', 0)}")
+        print(
+            f"   - Total files processed: {processing_summary.get('total_files_processed', 0)}"
+        )
         print(f"   - Success rate: {processing_summary.get('success_rate', 0):.1f}%")
         print(f"   - CSV files: {file_breakdown.get('csv', {}).get('processed', 0)}")
         print(f"   - JSON files: {file_breakdown.get('json', {}).get('processed', 0)}")
@@ -670,12 +695,12 @@ def main():
             report = json.load(f)
             processing_summary = report["processing_summary"]
             print(json.dumps(processing_summary, indent=2))
-            
+
             print("\\n=== File Type Breakdown ===")
             file_breakdown = report["file_type_breakdown"]
             for file_type, stats in file_breakdown.items():
                 print(f"{file_type.upper()}: {stats}")
-                
+
     except Exception as e:
         print(f"Could not read report: {e}")
 

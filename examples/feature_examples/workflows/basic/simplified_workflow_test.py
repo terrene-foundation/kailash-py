@@ -11,17 +11,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from examples.utils.data_paths import get_input_data_path, get_output_data_path
 
 # Ensure module is in path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode
-from kailash.runtime.local import LocalRuntime
 
 # Import from the Kailash SDK
 from kailash.workflow.graph import Workflow
-from kailash.workflow.visualization import WorkflowVisualizer
 
 # Create sample data (Docker infrastructure pattern)
 sample_data = pd.DataFrame(

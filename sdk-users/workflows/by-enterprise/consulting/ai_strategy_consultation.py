@@ -37,7 +37,7 @@ And access resources like registry://stats for statistics.
 
 import os
 
-from examples.utils.data_paths import get_output_data_path, ensure_output_dir_exists
+from examples.utils.data_paths import get_output_data_path
 from kailash import Workflow
 from kailash.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
 from kailash.nodes.code import PythonCodeNode
@@ -122,7 +122,10 @@ def create_ai_strategy_workflow() -> Workflow:
 
     # Save results
     workflow.add_node(
-        "save_report", JSONWriterNode(file_path=str(get_output_data_path("consulting/temp_report.json")))
+        "save_report",
+        JSONWriterNode(
+            file_path=str(get_output_data_path("consulting/temp_report.json"))
+        ),
     )
 
     # Connect workflow
@@ -166,7 +169,9 @@ def run_with_mock_data():
             "auto_discover_tools": False,
         },
         # report_generator is now a function-based node - no parameters needed
-        "save_report": {"file_path": str(get_output_data_path("consulting/ai_strategy_report.json"))},
+        "save_report": {
+            "file_path": str(get_output_data_path("consulting/ai_strategy_report.json"))
+        },
     }
 
     print("\nExecuting workflow...")
@@ -275,7 +280,11 @@ Use multiple iterations to build a comprehensive strategic analysis.""",
             "enable_detailed_logging": True,
         },
         # report_generator is now a function-based node - no parameters needed
-        "save_report": {"file_path": str(get_output_data_path("consulting/ai_strategy_consultation_mcp.json"))},
+        "save_report": {
+            "file_path": str(
+                get_output_data_path("consulting/ai_strategy_consultation_mcp.json")
+            )
+        },
     }
 
     print("\nExecuting workflow with MCP integration...")

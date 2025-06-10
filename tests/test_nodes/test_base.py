@@ -6,7 +6,6 @@ import pytest
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import (
-    NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )

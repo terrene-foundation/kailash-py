@@ -81,9 +81,9 @@ def create_data_cleaning_workflow():
         if iteration is None:
             iteration = 0
         if quality_score is None:
-            prev_quality = 0.0
+            pass
         else:
-            prev_quality = quality_score
+            pass
 
         iteration += 1
         print(f"\nData Cleaning Iteration {iteration}")
@@ -91,8 +91,8 @@ def create_data_cleaning_workflow():
 
         # Calculate initial quality metrics
         missing_before = df.isnull().sum().sum()
-        duplicates_before = df.duplicated().sum()
-        total_cells = df.shape[0] * df.shape[1]
+        df.duplicated().sum()
+        df.shape[0] * df.shape[1]
 
         # Perform cleaning operations
         # 1. Remove duplicates
@@ -248,7 +248,7 @@ def create_data_cleaning_workflow():
         # Combine with cleaning quality score
         final_quality = (quality_score + validation_score) / 2
 
-        print(f"Validation Results:")
+        print("Validation Results:")
         for check_name, passed in validation_results:
             status = "✓" if passed else "✗"
             print(f"  {status} {check_name}")
@@ -327,7 +327,6 @@ def create_model_training_workflow():
     # Define data loader function (better IDE support)
     def load_training_data(**kwargs):
         """Generate synthetic dataset for model training."""
-        import numpy as np
         from sklearn.datasets import make_classification
         from sklearn.model_selection import train_test_split
 
@@ -373,7 +372,6 @@ def create_model_training_workflow():
         **kwargs,
     ):
         """Train machine learning model iteratively."""
-        import pickle
 
         import numpy as np
         from sklearn.linear_model import SGDClassifier
@@ -479,7 +477,6 @@ def create_model_training_workflow():
     # Define model evaluation function (better IDE support)
     def evaluate_model(data=None, **kwargs):
         """Evaluate model performance on validation data."""
-        import numpy as np
         from sklearn.metrics import (
             accuracy_score,
             f1_score,
@@ -593,7 +590,6 @@ def create_api_retry_workflow():
     # Define API caller function (better IDE support)
     def simulate_api_call(attempt=None, last_error=None, **kwargs):
         """Simulate API call with realistic failure patterns."""
-        import json
         import random
         import time
 
@@ -651,7 +647,7 @@ def create_api_retry_workflow():
                 "timestamp": time.time(),
             }
 
-            print(f"✅ API call successful!")
+            print("✅ API call successful!")
             print(f"Response ID: {response_data['id']}")
 
             return {

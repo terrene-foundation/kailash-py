@@ -6,8 +6,8 @@ instead of manual file operations.
 """
 
 from kailash import Workflow
-from kailash.nodes.data import DirectoryReaderNode, JSONWriterNode
 from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import DirectoryReaderNode, JSONWriterNode
 from kailash.runtime import LocalRuntime
 
 

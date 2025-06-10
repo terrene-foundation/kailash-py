@@ -22,8 +22,8 @@ from kailash.nodes.data import (
     DirectoryReaderNode,
     JSONWriterNode,
 )
-from kailash.nodes.transform import DataTransformer
 from kailash.nodes.logic import MergeNode
+from kailash.nodes.transform import DataTransformer
 from kailash.runtime import LocalRuntime
 
 

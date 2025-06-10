@@ -1,13 +1,9 @@
 """Security scanning and audit nodes for security assessment."""
 
-import json
-import os
-import re
 import socket
-import subprocess
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 import requests
@@ -451,7 +447,7 @@ class SecurityScannerNode(Node):
                     "type": "port_scan_summary",
                     "target": target,
                     "severity": "info",
-                    "title": f"Port Scan Results",
+                    "title": "Port Scan Results",
                     "description": f"Found {len(open_ports)} open ports",
                     "details": {
                         "open_ports": open_ports,
@@ -497,7 +493,7 @@ class SecurityScannerNode(Node):
                             "type": "potential_vulnerability",
                             "target": target,
                             "severity": vuln_info["severity"],
-                            "title": f"Potentially Vulnerable Server Version",
+                            "title": "Potentially Vulnerable Server Version",
                             "description": f"Server header indicates potentially vulnerable version: {server_header}",
                             "details": {
                                 "server_header": server_header,

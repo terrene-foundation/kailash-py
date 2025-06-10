@@ -297,7 +297,7 @@ class LocalRuntime:
                 )
 
                 # Update node config with parameters (Session 061: direct config update)
-                node_config = {**node_instance.config, **parameters.get(node_id, {})}
+                {**node_instance.config, **parameters.get(node_id, {})}
                 node_instance.config.update(parameters.get(node_id, {}))
 
                 if self.debug:

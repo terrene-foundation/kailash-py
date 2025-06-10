@@ -3,8 +3,6 @@
 import hashlib
 import mimetypes
 import os
-import re
-import stat
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -333,7 +331,7 @@ class FileDiscoveryNode(Node):
                             }
                         )
 
-        except Exception as e:
+        except Exception:
             stats["access_errors"] += 1
             raise
 

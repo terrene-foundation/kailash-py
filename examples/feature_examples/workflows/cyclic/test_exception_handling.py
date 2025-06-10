@@ -15,7 +15,7 @@ def name_error_test(**kwargs):
     """Auto-converted from PythonCodeNode string code."""
     try:
         # This will raise NameError
-        value = undefined_variable
+        pass
     except NameError as e:
         print(f"Successfully caught NameError: {e}")
         result = {"error_caught": "NameError", "message": str(e)}
@@ -36,14 +36,14 @@ def multi_exception_test(**kwargs):
     # Test KeyError
     try:
         d = {"a": 1}
-        value = d["missing_key"]
+        d["missing_key"]
     except KeyError as e:
         errors_caught.append(f"KeyError: {e}")
 
     # Test IndexError
     try:
         lst = [1, 2, 3]
-        value = lst[10]
+        lst[10]
     except IndexError as e:
         errors_caught.append(f"IndexError: {e}")
 
@@ -73,7 +73,7 @@ def data_science_exceptions(data=None, **kwargs):
     try:
         df = pd.DataFrame({"a": [1, 2, 3]})
         # This will raise KeyError
-        value = df["missing_column"]
+        df["missing_column"]
     except KeyError as e:
         exceptions_handled.append(f"Pandas KeyError handled: column {e} not found")
 
@@ -81,7 +81,7 @@ def data_science_exceptions(data=None, **kwargs):
     try:
         arr = np.array([1, 2, 3])
         # This will raise IndexError
-        value = arr[10]
+        arr[10]
     except IndexError as e:
         exceptions_handled.append(f"Numpy IndexError handled: {e}")
 
