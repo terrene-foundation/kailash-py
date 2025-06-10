@@ -222,10 +222,10 @@ Development Guidelines
 
 For developers extending the Studio, comprehensive guidelines are available:
 
-- **Architecture Patterns**: See ``guide/frontend/architecture.md``
-- **Component Development**: See ``guide/frontend/components.md``
-- **API Integration**: See ``guide/frontend/api-integration.md``
-- **Testing Strategies**: See ``guide/frontend/testing.md``
+- **Architecture Patterns**: See ``shared/frontend/architecture.md``
+- **Component Development**: See ``shared/frontend/components.md``
+- **API Integration**: See ``shared/frontend/api-integration.md``
+- **Testing Strategies**: See ``shared/frontend/testing.md``
 
 Component Structure
 -------------------
@@ -332,10 +332,10 @@ References
 ==========
 
 - **Architecture Decision**: See ADR-0033 for multi-tenant architecture details
-- **Frontend Guidelines**: ``guide/frontend/``
+- **Frontend Guidelines**: ``shared/frontend/``
 - **API Documentation**: :doc:`/api/workflow_api`
-- **Node Catalog**: ``guide/reference/node-catalog.md``
+- **Node Catalog**: ``sdk-users/nodes/comprehensive-node-catalog.md``
 
 .. note::
    For the latest updates on Workflow Studio development, check the
-   project's GitHub issues and the ``guide/todos/000-master.md`` file.
+   project's GitHub issues and the ``# contrib (removed)/project/todos/000-master.md`` file.

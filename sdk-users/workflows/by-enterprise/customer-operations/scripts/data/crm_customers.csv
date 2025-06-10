@@ -1,0 +1,6 @@
+customer_id,email,phone,company,created_date,status,source,industry
+1001,john.doe@acme.com,555-0123,Acme Corp,2023-01-15,active,website,technology
+1002,jane.smith@globex.com,555-0124,Globex Corporation,2023-02-20,active,referral,manufacturing
+1003,bob.johnson@,555-0125,,2023-03-10,inactive,advertisement,
+1004,alice.brown@techco.com,555-0126,TechCo,2023-04-05,active,partner,technology
+1005,charlie.wilson@,invalid-phone,,2023-05-12,active,website,retail

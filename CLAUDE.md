@@ -1,38 +1,19 @@
 # Kailash SDK - Development Workflow Guide
 
-## 🎯 Primary Development Workflow
+## 📁 Quick Directory Access by Role
 
-### **Every Session: Check Current Status**
-1. **Current Session**: Check `guide/todos/000-master.md` - What's happening NOW
-2. **Task Status**: Update todos from "pending" → "in_progress" → "completed"
-
-### **Phase 1: Plan → Research**
-- **Research**: `guide/adr/` (architecture), `guide/features/` (patterns)
-- **Reference**: `guide/reference/CLAUDE.md` → cheatsheet, validation, patterns
-- **Plan**: Clear implementation approach
-- **Create & start todos**: Add new tasks from plan → mark "in_progress" in `guide/todos/000-master.md`
-
-### **Phase 2: Implement → Validate → Test**
-- **Implement**: Use `guide/reference/cheatsheet/` for copy-paste patterns
-- **Validate**: Check `guide/reference/validation/validation-guide.md` for LLM rules
-- **Node Selection**: Use `guide/reference/nodes/comprehensive-node-catalog.md`
-- **Track mistakes**: In `guide/mistakes/current-session-mistakes.md`
-- **Test**: Run tests, debug, learn
-
-### **Phase 3: Document → Update → Release**
-- **Update todos**: Mark completed in `guide/todos/000-master.md`
-- **Update mistakes**: From current-session → numbered files in `guide/mistakes/`
-- **Update patterns**: Add learnings to `guide/reference/cheatsheet/`, `guide/reference/pattern-library/`
-- **Update workflows**: Add end-to-end patterns to `guide/reference/workflow-library/`
-- **Align docs**: Ensure CLAUDE.md ↔ README.md consistency
-- **Release**: Commit → PR
+| **SDK Users** (Building with SDK) | **SDK Contributors** (Developing SDK) | **Shared** (Both Groups) |
+|-----------------------------------|--------------------------------------|-------------------------|
+| [sdk-users/developer/](sdk-users/developer/) - Build from scratch | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) - ADR, design | [shared/mistakes/](shared/mistakes/) - Error lookup |
+| [sdk-users/workflows/](sdk-users/workflows/) - Lift examples | [# contrib (removed)/training/](# contrib (removed)/training/) - LLM training data | [shared/frontend/](shared/frontend/) - UI development |
+| [sdk-users/essentials/](sdk-users/essentials/) - Quick patterns | [# contrib (removed)/research/](# contrib (removed)/research/) - LLM research | [shared/prd/](shared/prd/) - Product vision |
 
 ## ⚡ Critical Validation Rules
 1. **Node Names**: ALL end with "Node" (`CSVReaderNode` ✓)
-2. **Methods**: ALL use snake_case (`add_node()` ✓)
-3. **Config vs Runtime**: Config=HOW (static), Runtime=WHAT (data flow)
-4. **PythonCodeNode**: Always include `name` parameter first
-5. **Cycle Mapping**: Use `mapping={"output": "input"}` for data flow
+2. **PythonCodeNode**: Input variables EXCLUDED from outputs!
+   - `mapping={"result": "input_data"}` ✓
+   - `mapping={"result": "result"}` ✗
+3. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
 
 ## 🚀 Quick Code Patterns
 ```python
@@ -42,21 +23,57 @@ workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
 workflow.connect("reader", "writer", mapping={"data": "data"})
 runtime.execute(workflow, parameters={})
 
-# PythonCodeNode with cycles
-code = "try:\n    count = input_count + 1\nexcept:\n    count = 1\nresult = {'count': count}"
-node = PythonCodeNode(name="counter", code=code)
+# PythonCodeNode (correct pattern)
+workflow.connect("discovery", "processor", mapping={"result": "input_data"})
+processor = PythonCodeNode(name="processor", code="result = {'count': len(input_data)}")
 ```
 
-## 📁 Quick Directory Access
-| I need to... | Go to | Check |
-|--------------|-------|-------|
-| **Fix an error** | [guide/mistakes/CLAUDE.md](guide/mistakes/CLAUDE.md) | Error lookup table |
-| **Find patterns/validation** | [guide/reference/CLAUDE.md](guide/reference/CLAUDE.md) | Cheatsheet, validation, nodes, workflows |
-| **Run examples** | `examples/README.md` | Security restrictions & example list |
-| **Run tests** | `tests/integration/README.md` | Test commands & troubleshooting |  
-| **Frontend work** | `studio/README.md` | React setup & development guide |
-| **Architecture decisions** | `guide/adr/README.md` | ADR index & process |
+## 🔗 Quick Links by Need
+
+| **I need to...** | **SDK User** | **SDK Contributor** |
+|-------------------|--------------|---------------------|
+| **Build a workflow** | [sdk-users/workflows/](sdk-users/workflows/) | - |
+| **Fix an error** | [sdk-users/developer/07-troubleshooting.md](sdk-users/developer/07-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) |
+| **Find patterns** | [sdk-users/essentials/](sdk-users/essentials/) | - |
+| **Train LLMs** | - | [# contrib (removed)/training/](# contrib (removed)/training/) |
+| **Design architecture** | - | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
+| **Version operations** | - | [# contrib (removed)/operations/](# contrib (removed)/operations/) |
+| **Track progress** | - | [# contrib (removed)/project/todos/](# contrib (removed)/project/todos/) |
+
+## 🎯 Primary Development Workflow
+
+### **Every Session: Check Current Status**
+1. **Current Session**: Check `# contrib (removed)/project/todos/000-master.md` - What's happening NOW
+2. **Task Status**: Update todos from "pending" → "in_progress" → "completed"
+
+### **Phase 1: Plan → Research**
+- **Research**: `# contrib (removed)/architecture/adr/` (architecture decisions)
+- **Reference**: `sdk-users/` (user patterns) + `# contrib (removed)/` (internal docs)
+- **Development**: `sdk-users/developer/` (building with SDK) vs `# contrib (removed)/development/` (SDK development)
+- **Plan**: Clear implementation approach
+- **Create & start todos**: Add new tasks → mark "in_progress" in `# contrib (removed)/project/todos/`
+
+### **Phase 2: Implement → Validate → Test**
+- **Implement**: Use `sdk-users/essentials/` for user patterns
+- **Custom Nodes**: `sdk-users/developer/CLAUDE.md` for usage patterns
+- **Create Example**: MUST create working example in `examples/` directory
+- **Validate**: Check `sdk-users/validation-guide.md` for user rules
+- **Node Selection**: Use `sdk-users/nodes/comprehensive-node-catalog.md`
+- **Track mistakes**: In `shared/mistakes/current-session-mistakes.md`
+- **Test**: Run tests, debug, learn
+
+### **Phase 3: Document → Update → Release**
+- **Update todos**: Mark completed in `# contrib (removed)/project/todos/`
+- **Update mistakes**: From current-session → numbered files in `shared/mistakes/`
+- **Update user patterns**: Add learnings to `sdk-users/essentials/`, `sdk-users/patterns/`
+- **Update training data**: Add examples to `# contrib (removed)/training/workflow-examples/`
+- **Update workflows**: Add end-to-end patterns to `sdk-users/workflows/`
+- **Align docs**: Ensure CLAUDE.md ↔ README.md consistency
+- **Release**: Commit → PR
 
 ---
 
-**Kailash Python SDK**: AI workflow automation with node-based architecture.
+**Quick Start**: 
+- **Building solutions?** → [sdk-users/CLAUDE.md](sdk-users/CLAUDE.md)
+- **Developing SDK?** → [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md)
+- **Need error help?** → [shared/mistakes/CLAUDE.md](shared/mistakes/CLAUDE.md)

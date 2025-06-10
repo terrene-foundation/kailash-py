@@ -202,6 +202,49 @@ Data Nodes
 Data nodes handle input/output operations for various file formats and data
 sources.
 
+DirectoryReaderNode (New in v0.2.1)
+------------------------------------
+
+.. autoclass:: kailash.nodes.data.directory.DirectoryReaderNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.nodes.data import DirectoryReaderNode
+
+   # Discover files dynamically
+   dir_reader = DirectoryReaderNode(
+       directory_path="./data/inputs",
+       recursive=True,
+       pattern="*.{csv,json,xml}",
+       include_metadata=True
+   )
+
+   workflow.add_node("file_discoverer", dir_reader)
+
+   # Use different outputs for different purposes
+   workflow.connect(
+       "file_discoverer", "csv_processor",
+       mapping={"files_by_type": "files_by_type"}
+   )
+
+   workflow.connect(
+       "file_discoverer", "stats_reporter",
+       mapping={"directory_stats": "stats"}
+   )
+
+**Key Features:**
+
+- Dynamic file discovery with pattern matching
+- MIME type detection and metadata extraction  
+- Organized output by file type for typed processing
+- Performance optimization for large directories
+- Recursive scanning with configurable depth
+
 Readers
 -------
 
@@ -320,17 +363,17 @@ SQLDatabaseNode
        pool_size=5,
        max_overflow=10
    )
-   
+
    # Add to workflow
    workflow.add_node("database", db_node)
-   
+
    # Execute with runtime parameters
    result = db_node.run(
        query="SELECT * FROM customers WHERE active = ?",
        parameters=[True],
        result_format="dict"
    )
-   
+
    # PostgreSQL with advanced configuration
    pg_node = SQLDatabaseNode(
        connection_string="postgresql://user:pass@host/db",
@@ -339,29 +382,29 @@ SQLDatabaseNode
        pool_recycle=1800,
        connect_args={'connect_timeout': 10}
    )
-   
+
    workflow.add_node("pg_database", pg_node)
-   
+
    # MySQL example
    mysql_node = SQLDatabaseNode(
        connection_string="mysql+pymysql://user:pass@host/db",
        pool_size=8,
        echo=True  # Enable query logging
    )
-   
+
    # Execute with different parameter styles
    # SQLite uses ?
    sqlite_result = db_node.run(
        query="SELECT * FROM users WHERE age > ? AND city = ?",
        parameters=[25, "New York"]
    )
-   
+
    # PostgreSQL uses $1, $2, etc.
    pg_result = pg_node.run(
        query="SELECT * FROM users WHERE age > $1 AND city = $2",
        parameters=[25, "New York"]
    )
-   
+
    # MySQL uses %s
    mysql_result = mysql_node.run(
        query="SELECT * FROM users WHERE age > %s AND city = %s",
@@ -371,7 +414,7 @@ SQLDatabaseNode
 **Configuration Parameters:**
 
 - **connection_string** (str, required): Database connection URL
-  
+
   - SQLite: ``sqlite:///path/to/database.db``
   - PostgreSQL: ``postgresql://user:password@host:port/database``
   - MySQL: ``mysql+pymysql://user:password@host:port/database``
@@ -527,8 +570,8 @@ Sort
        "reverse": True  # Highest priority first
    })
 
-DataTransformer
----------------
+DataTransformer (Enhanced in v0.2.1)
+-------------------------------------
 
 .. autoclass:: kailash.nodes.transform.processors.DataTransformer
    :members:
@@ -547,6 +590,40 @@ DataTransformer
            {"type": "drop", "columns": ["temp_field", "debug_info"]}
        ]
    })
+
+**Enhanced Parameter Mapping (v0.2.1):**
+
+DataTransformer now accepts arbitrary mapped parameters from other nodes, enabling 
+more flexible data flow patterns:
+
+.. code-block:: python
+
+   # Connect with complex data mapping
+   workflow.connect(
+       "file_discoverer", "processor",
+       mapping={
+           "files_by_type": "files_by_type",
+           "directory_stats": "stats",
+           "metadata": "file_metadata"
+       }
+   )
+
+   processor = DataTransformer(transformations=['''
+   # All mapped parameters are now available
+   files_by_type = locals().get("files_by_type", {})
+   stats = locals().get("stats", {})
+   metadata = locals().get("file_metadata", {})
+   
+   # Process the data
+   csv_files = files_by_type.get("csv", [])
+   result = {"processed_files": len(csv_files), "total_size": stats.get("total_size", 0)}
+   '''])
+
+**Bug Fixes in v0.2.1:**
+
+- Fixed dictionary output bug where only keys were passed instead of full dictionaries
+- Enhanced input validation to accept arbitrary mapped parameters
+- Improved error handling and debugging capabilities
 
 Text Processing
 ---------------
@@ -1190,8 +1267,8 @@ Code Nodes
 
 Nodes for executing custom code.
 
-PythonCodeNode
---------------
+PythonCodeNode (Enhanced in v0.2.1)
+------------------------------------
 
 .. autoclass:: kailash.nodes.code.python.PythonCodeNode
    :members:
@@ -1237,6 +1314,58 @@ PythonCodeNode
    ''',
        "function_name": "process_data"
    })
+
+**Enhanced File Processing (v0.2.1):**
+
+PythonCodeNode now supports additional modules for real-world file processing:
+
+.. code-block:: python
+
+   # File processing with new modules
+   file_processor = PythonCodeNode(name="file_processor", code='''
+   import csv
+   import pathlib
+   import mimetypes
+   import glob
+   import xml.etree.ElementTree as ET
+   
+   # Process CSV files
+   with open(file_path, 'r') as f:
+       reader = csv.DictReader(f)
+       data = list(reader)
+   
+   # Detect MIME types
+   mime_type = mimetypes.guess_type(file_path)[0]
+   
+   # Modern path operations
+   path = pathlib.Path(file_path)
+   file_info = {
+       "name": path.name,
+       "size": path.stat().st_size,
+       "suffix": path.suffix
+   }
+   
+   # Pattern matching
+   related_files = glob.glob(f"{path.parent}/*.{path.suffix[1:]}")
+   
+   result = {
+       "data": data,
+       "mime_type": mime_type,
+       "file_info": file_info,
+       "related_files": related_files
+   }
+   ''')
+
+**New Allowed Modules (v0.2.1):**
+
+- ``csv`` - CSV file processing
+- ``mimetypes`` - MIME type detection  
+- ``pathlib`` - Modern path operations
+- ``glob`` - File pattern matching
+- ``xml`` - XML processing
+
+These modules enable real-world data science and file processing workflows while
+maintaining security restrictions for dangerous operations.
 
 Custom Node Development
 =======================

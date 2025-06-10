@@ -19,9 +19,9 @@ wait_for_db() {
     local port=$2
     local timeout=30
     local count=0
-    
+
     echo "⏳ Waiting for database at $host:$port to be ready..."
-    
+
     while [ $count -lt $timeout ]; do
         if nc -z $host $port 2>/dev/null; then
             echo "✅ Database is ready!"
@@ -30,7 +30,7 @@ wait_for_db() {
         sleep 1
         count=$((count + 1))
     done
-    
+
     echo "❌ Timeout waiting for database at $host:$port"
     return 1
 }

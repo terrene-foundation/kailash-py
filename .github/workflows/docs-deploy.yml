@@ -44,7 +44,7 @@ jobs:
         run: |
           # Check if Python is available
           python3 --version || { echo "Python 3 not found"; exit 1; }
-          
+
           # Install uv if not available, using workspace directory to avoid permission issues
           if ! command -v uv &> /dev/null; then
             export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
@@ -53,7 +53,7 @@ jobs:
             echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
             export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
           fi
-          
+
           # Verify uv is working
           uv --version
 

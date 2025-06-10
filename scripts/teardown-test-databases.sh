@@ -17,15 +17,15 @@ check_docker() {
 remove_container() {
     local container_name=$1
     local display_name=$2
-    
+
     echo "🛑 Stopping $display_name container..."
-    
+
     if docker stop "$container_name" 2>/dev/null; then
         echo "✅ $display_name container stopped"
     else
         echo "ℹ️  $display_name container was not running"
     fi
-    
+
     if docker rm "$container_name" 2>/dev/null; then
         echo "🗑️  $display_name container removed"
     else

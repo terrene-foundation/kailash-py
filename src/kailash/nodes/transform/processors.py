@@ -332,11 +332,34 @@ class DataTransformer(Node):
             },  # Support for up to 5 additional arguments
         }
 
+    def validate_inputs(self, **kwargs) -> Dict[str, Any]:
+        """Override validate_inputs to accept arbitrary parameters for transformations.
+
+        DataTransformer needs to accept any input parameters that might be mapped
+        from other nodes, not just the predefined parameters in get_parameters().
+        This enables flexible data flow in workflows.
+        """
+        # First, do the standard validation for defined parameters
+        validated = super().validate_inputs(**kwargs)
+
+        # Then, add any extra parameters that aren't in the schema
+        # These will be passed to the transformation context
+        defined_params = set(self.get_parameters().keys())
+        for key, value in kwargs.items():
+            if key not in defined_params:
+                validated[key] = value  # Accept arbitrary additional parameters
+
+        return validated
+
     def run(self, **kwargs) -> Dict[str, Any]:
         # Extract the transformation functions
         transformations = kwargs.get("transformations", [])
         if not transformations:
             return {"result": kwargs.get("data", [])}
+
+        # Debug: Check what kwargs we received
+        print(f"DATATRANSFORMER RUN DEBUG: kwargs keys = {list(kwargs.keys())}")
+        print(f"DATATRANSFORMER RUN DEBUG: kwargs = {kwargs}")
 
         # Get all input data
         input_data = {}
@@ -370,6 +393,14 @@ class DataTransformer(Node):
                     # Prepare local context for execution
                     local_vars = input_data.copy()
                     local_vars["result"] = result
+
+                    # Debug: Print available variables
+                    print(
+                        f"DataTransformer DEBUG - Available variables: {list(local_vars.keys())}"
+                    )
+                    print(
+                        f"DataTransformer DEBUG - Input data keys: {list(input_data.keys())}"
+                    )
 
                     # Execute the code block
                     exec(transform_str, safe_globals, local_vars)  # noqa: S102

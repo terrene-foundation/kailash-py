@@ -73,7 +73,7 @@ result = {
         )
 
         # Create cycle with proper parameter mapping
-        workflow.connect(
+        workflow.create_cycle("python_basic_cycle").connect(
             "python_processor",
             "python_processor",
             mapping={
@@ -81,10 +81,7 @@ result = {
                 "result.target": "target",
                 "result.iteration": "iteration",
             },
-            cycle=True,
-            max_iterations=15,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(15).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -179,7 +176,7 @@ result = {
             ),
         )
 
-        workflow.connect(
+        workflow.create_cycle("complex_python_cycle").connect(
             "complex_python",
             "complex_python",
             mapping={
@@ -187,10 +184,7 @@ result = {
                 "result.history": "history",
                 "result.iteration": "iteration",
             },
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -264,7 +258,7 @@ result = {
             ),
         )
 
-        workflow.connect(
+        workflow.create_cycle("error_handling_cycle").connect(
             "error_python",
             "error_python",
             mapping={
@@ -272,10 +266,7 @@ result = {
                 "result.data": "data",  # Keep original data, not processed_data
                 "result.error_threshold": "error_threshold",  # Pass constant through cycles
             },
-            cycle=True,
-            max_iterations=8,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(8).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -364,7 +355,7 @@ result = {
             ),
         )
 
-        workflow.connect(
+        workflow.create_cycle("newton_method_cycle").connect(
             "newton_method",
             "newton_method",
             mapping={
@@ -373,10 +364,7 @@ result = {
                 "result.iteration": "iteration",
                 "result.tolerance": "tolerance",  # Pass tolerance through cycles
             },
-            cycle=True,
-            max_iterations=25,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(25).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -489,7 +477,7 @@ result = {
             ),
         )
 
-        workflow.connect(
+        workflow.create_cycle("data_processing_cycle").connect(
             "data_processor",
             "data_processor",
             mapping={
@@ -497,10 +485,7 @@ result = {
                 "result.iteration": "iteration",
                 "result.quality_threshold": "quality_threshold",  # Pass threshold through cycles
             },
-            cycle=True,
-            max_iterations=8,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(8).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -596,14 +581,11 @@ result = {{
                 ),
             )
 
-            workflow.connect(
+            workflow.create_cycle("file_processing_cycle").connect(
                 "file_processor",
                 "file_processor",
                 mapping={"result.content": "content", "result.iteration": "iteration"},
-                cycle=True,
-                max_iterations=8,
-                convergence_check="converged == True",
-            )
+            ).max_iterations(8).converge_when("converged == True").build()
 
             runtime = LocalRuntime()
             results, run_id = runtime.execute(
@@ -682,17 +664,14 @@ result = {
             ),
         )
 
-        workflow.connect(
+        workflow.create_cycle("memory_test_cycle").connect(
             "memory_python",
             "memory_python",
             mapping={
                 "result.iteration": "iteration",
                 "result.data_size": "data_size",  # Pass data_size through cycles
             },
-            cycle=True,
-            max_iterations=25,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(25).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
@@ -760,17 +739,14 @@ result = {
             ),
         )
 
-        workflow.connect(
+        workflow.create_cycle("context_isolation_cycle").connect(
             "context_python",
             "context_python",
             mapping={
                 "result.iteration": "iteration",
                 "result.local_var": "previous_local",
             },
-            cycle=True,
-            max_iterations=6,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(6).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow, parameters={"iteration": 0})

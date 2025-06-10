@@ -16,6 +16,12 @@ Welcome to the Kailash Python SDK v0.2.0 documentation! This major release intro
 the **Universal Hybrid Cyclic Graph Architecture**, enabling powerful iterative workflows
 with automatic convergence detection and high-performance execution.
 
+**Recent Updates (v0.2.1):**
+- 🔍 **DirectoryReaderNode** for dynamic file discovery and metadata extraction
+- 🐛 **Enhanced DataTransformer** with critical bug fixes for reliable data flow
+- 📁 **Real-World Workflows** using actual data sources instead of mock data
+- ⚡ **Improved Stability** with comprehensive testing and validation
+
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started

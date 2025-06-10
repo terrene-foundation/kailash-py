@@ -1,0 +1,4 @@
+customer_id,name,email,status
+CUST-001,John Doe,john@example.com,active
+CUST-002,Jane Smith,jane@example.com,active
+CUST-003,Bob Johnson,bob@example.com,inactive

@@ -174,14 +174,10 @@ class TestCycleAwareWorkflowIntegration:
         # Add node that improves and checks its own convergence
         workflow.add_node("improver", SimpleQualityImprover())
 
-        # Connect in cycle
-        workflow.connect(
-            "improver",
-            "improver",
-            cycle=True,
-            max_iterations=15,
-            convergence_check="converged == True",
-        )
+        # Connect in cycle using CycleBuilder
+        workflow.create_cycle("quality_improvement").connect(
+            "improver", "improver"
+        ).max_iterations(15).converge_when("converged == True").build()
 
         # Execute
         runtime = LocalRuntime()
@@ -267,7 +263,8 @@ class TestCycleAwareWorkflowIntegration:
         # Connect workflow
         workflow.connect("processor", "switch", mapping={"input_data": "input_data"})
 
-        # Conditional routing - continue if not should_exit
+        # For conditional cycles with switch nodes, we need to use the old API
+        # because CycleBuilder doesn't support conditional routing yet
         workflow.connect(
             "switch",
             "processor",
@@ -368,13 +365,11 @@ class TestCycleAwareWorkflowIntegration:
         workflow.connect("optimizer", "speed_check", mapping={"speed": "value"})
 
         # Continue cycling for optimization
-        workflow.connect(
+        workflow.create_cycle("optimization_cycle").connect(
             "accuracy_check",
             "optimizer",
             mapping={"result.accuracy": "accuracy", "result.speed": "speed"},
-            cycle=True,
-            max_iterations=30,
-        )
+        ).max_iterations(30).build()
 
         # Execute
         runtime = LocalRuntime()
@@ -450,7 +445,9 @@ class TestCycleAwareWorkflowIntegration:
         workflow.connect(
             "coordinator", "convergence", mapping={"cycle_info.active_agents": "value"}
         )
-        workflow.connect("convergence", "task_gen", cycle=True, max_iterations=10)
+        workflow.create_cycle("a2a_coordination").connect(
+            "convergence", "task_gen"
+        ).max_iterations(10).build()
 
         # Execute
         runtime = LocalRuntime()
@@ -588,7 +585,9 @@ class TestCycleAwareWorkflowIntegration:
         workflow.connect(
             "error_handler", "convergence", mapping={"should_continue": "value"}
         )
-        workflow.connect("convergence", "processor", cycle=True, max_iterations=10)
+        workflow.create_cycle("error_retry").connect(
+            "convergence", "processor"
+        ).max_iterations(10).build()
 
         # Execute
         runtime = LocalRuntime()
@@ -676,7 +675,9 @@ class TestCycleAwarePerformance:
         workflow.connect(
             "accumulator", "convergence", mapping={"chunks_count": "value"}
         )
-        workflow.connect("convergence", "accumulator", cycle=True, max_iterations=20)
+        workflow.create_cycle("accumulation_cycle").connect(
+            "convergence", "accumulator"
+        ).max_iterations(20).build()
 
         # Execute
         runtime = LocalRuntime()
