@@ -39,7 +39,7 @@
 - 🔁 **Cyclic Workflows (v0.2.0)**: Universal Hybrid Cyclic Graph Architecture with 30,000+ iterations/second performance
 - 🛠️ **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler for production-ready cyclic workflows
 - 📈 **High Performance**: Optimized execution engine supporting 100,000+ iteration workflows
-- 📁 **Enhanced Documentation**: Reorganized structure for SDK users and contributors
+- 📁 **Enhanced Documentation (v0.2.2)**: Reorganized structure with production-ready workflow library
 
 ## 🎯 Who Is This For?
 
@@ -131,9 +131,12 @@ export_workflow(workflow, "customer_analysis.yaml")
 **Build solutions with the SDK:**
 - `sdk-users/` - Everything you need to build with Kailash
   - `developer/` - Node creation patterns and troubleshooting
-  - `workflows/` - Production-ready workflow library
+  - `workflows/` - Production-ready workflow library (NEW in v0.2.2)
+    - Quick-start patterns (30-second workflows)
+    - Industry-specific solutions (healthcare, finance)
+    - Enterprise integration patterns
   - `essentials/` - Quick reference and cheatsheets
-  - `nodes/` - Comprehensive node catalog
+  - `nodes/` - Comprehensive node catalog (66+ nodes)
   - `patterns/` - Architectural patterns
 
 ### For SDK Contributors
@@ -160,7 +163,7 @@ export_workflow(workflow, "customer_analysis.yaml")
 
 ## 🔥 Advanced Features
 
-### Cyclic Workflows (NEW in v0.2.0)
+### Cyclic Workflows (Enhanced in v0.2.2)
 
 Build iterative workflows with the new CycleBuilder API:
 
@@ -311,8 +314,9 @@ ruff check .
 - ✅ Self-organizing agent systems
 - ✅ Hierarchical RAG architecture
 - ✅ REST API wrapper
-- ✅ Cyclic workflow support
+- ✅ Cyclic workflow support with CycleBuilder API
 - ✅ Production security framework
+- ✅ Comprehensive workflow library (v0.2.2)
 - 🚧 Visual workflow builder (in progress)
 - 🚧 Docker runtime
 - 🚧 Cloud deployment tools
