@@ -18,7 +18,6 @@ def main():
     from examples.utils.data_paths import (
         ensure_output_dir_exists,
         get_input_data_path,
-        get_output_data_path,
     )
 
     # Get paths to data files in centralized location

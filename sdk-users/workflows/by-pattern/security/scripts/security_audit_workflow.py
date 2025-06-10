@@ -22,13 +22,12 @@ Features:
 
 import json
 import os
-from typing import List, Dict, Any
+from typing import Any, Dict
 
 from kailash import Workflow
-from kailash.nodes.api.http import HTTPRequestNode
-from kailash.nodes.data import SQLDatabaseNode, JSONWriterNode
-from kailash.nodes.logic import MergeNode
 from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import JSONWriterNode
+from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -41,15 +40,15 @@ def get_security_targets() -> Dict[str, Any]:
                 "connection_string": "postgresql://kailash:kailash123@localhost:5432/postgres",
                 "critical": True,
                 "service_type": "database",
-                "assessment_type": "database_security"
+                "assessment_type": "database_security",
             },
             {
                 "name": "mongodb",
                 "connection_string": "mongodb://kailash:kailash123@localhost:27017/kailash",
                 "critical": True,
                 "service_type": "nosql_database",
-                "assessment_type": "database_security"
-            }
+                "assessment_type": "database_security",
+            },
         ],
         "api_endpoints": [
             {
@@ -57,30 +56,30 @@ def get_security_targets() -> Dict[str, Any]:
                 "url": "http://localhost:8888",
                 "critical": False,
                 "service_type": "api",
-                "assessment_type": "api_security"
+                "assessment_type": "api_security",
             },
             {
                 "name": "mcp-server",
                 "url": "http://localhost:8765",
                 "critical": False,
                 "service_type": "mcp",
-                "assessment_type": "api_security"
+                "assessment_type": "api_security",
             },
             {
                 "name": "mongo-express",
                 "url": "http://localhost:8081",
                 "critical": True,  # Admin interface - high security importance
                 "service_type": "admin_ui",
-                "assessment_type": "web_security"
+                "assessment_type": "web_security",
             },
             {
                 "name": "kafka-ui",
                 "url": "http://localhost:8082",
                 "critical": True,  # Admin interface - high security importance
                 "service_type": "admin_ui",
-                "assessment_type": "web_security"
-            }
-        ]
+                "assessment_type": "web_security",
+            },
+        ],
     }
 
 
@@ -93,7 +92,7 @@ def create_security_audit_workflow() -> Workflow:
     )
 
     # === SECURITY TARGET CONFIGURATION ===
-    
+
     # Configure real security assessment targets
     target_configurator = PythonCodeNode(
         name="target_configurator",
@@ -153,7 +152,7 @@ result = {
     workflow.add_node("target_configurator", target_configurator)
 
     # === REAL DATABASE SECURITY SCANNING ===
-    
+
     # Perform database security assessment using SQLDatabaseNode
     database_scanner = PythonCodeNode(
         name="database_scanner",
@@ -371,10 +370,12 @@ result = {
 """,
     )
     workflow.add_node("database_scanner", database_scanner)
-    workflow.connect("target_configurator", "database_scanner", mapping={"result": "config_data"})
+    workflow.connect(
+        "target_configurator", "database_scanner", mapping={"result": "config_data"}
+    )
 
     # === REAL API SECURITY SCANNING ===
-    
+
     # Perform API security assessment using HTTPRequestNode
     api_scanner = PythonCodeNode(
         name="api_scanner",
@@ -633,10 +634,12 @@ result = {
 """,
     )
     workflow.add_node("api_scanner", api_scanner)
-    workflow.connect("target_configurator", "api_scanner", mapping={"result": "config_data"})
+    workflow.connect(
+        "target_configurator", "api_scanner", mapping={"result": "config_data"}
+    )
 
     # === VULNERABILITY AGGREGATION ===
-    
+
     # Merge database and API security findings
     security_merger = MergeNode(id="security_merger", merge_type="merge_dict")
     workflow.add_node("security_merger", security_merger)
@@ -644,7 +647,7 @@ result = {
     workflow.connect("api_scanner", "security_merger", mapping={"result": "data2"})
 
     # === RISK ASSESSMENT ===
-    
+
     # Analyze security findings and calculate risk scores
     risk_assessor = PythonCodeNode(
         name="risk_assessor",
@@ -845,10 +848,12 @@ result = {
 """,
     )
     workflow.add_node("risk_assessor", risk_assessor)
-    workflow.connect("security_merger", "risk_assessor", mapping={"merged_data": "security_data"})
+    workflow.connect(
+        "security_merger", "risk_assessor", mapping={"merged_data": "security_data"}
+    )
 
     # === SECURITY REPORTING ===
-    
+
     # Generate comprehensive security audit report
     security_reporter = PythonCodeNode(
         name="security_reporter",
@@ -1028,22 +1033,23 @@ result = report
 """,
     )
     workflow.add_node("security_reporter", security_reporter)
-    workflow.connect("risk_assessor", "security_reporter", mapping={"result": "risk_results"})
+    workflow.connect(
+        "risk_assessor", "security_reporter", mapping={"result": "risk_results"}
+    )
 
     # === OUTPUTS ===
-    
+
     # Save comprehensive security audit report
     audit_writer = JSONWriterNode(
-        id="audit_writer", 
-        file_path="data/outputs/comprehensive_security_audit_report.json"
+        id="audit_writer",
+        file_path="data/outputs/comprehensive_security_audit_report.json",
     )
     workflow.add_node("audit_writer", audit_writer)
     workflow.connect("security_reporter", "audit_writer", mapping={"result": "data"})
 
     # Save vulnerability details for tracking
     vuln_writer = JSONWriterNode(
-        id="vuln_writer", 
-        file_path="data/outputs/vulnerability_assessment_details.json"
+        id="vuln_writer", file_path="data/outputs/vulnerability_assessment_details.json"
     )
     workflow.add_node("vuln_writer", vuln_writer)
     workflow.connect("risk_assessor", "vuln_writer", mapping={"result": "data"})
@@ -1060,35 +1066,59 @@ def run_security_audit():
 
     try:
         print("Starting Real Security Audit Workflow...")
-        print("🔍 Scanning actual Docker infrastructure for security vulnerabilities...")
+        print(
+            "🔍 Scanning actual Docker infrastructure for security vulnerabilities..."
+        )
 
         result, run_id = runtime.execute(workflow, parameters=parameters)
 
         print("\\n✅ Security Audit Complete!")
         print("📁 Outputs generated:")
-        print("   - Comprehensive audit report: data/outputs/comprehensive_security_audit_report.json")
-        print("   - Vulnerability details: data/outputs/vulnerability_assessment_details.json")
+        print(
+            "   - Comprehensive audit report: data/outputs/comprehensive_security_audit_report.json"
+        )
+        print(
+            "   - Vulnerability details: data/outputs/vulnerability_assessment_details.json"
+        )
 
         # Show security dashboard
         audit_result = result.get("security_reporter", {}).get("result", {})
         security_report = audit_result.get("security_audit_report", {})
         security_dashboard = security_report.get("security_dashboard", {})
 
-        print(f"\\n📊 Security Posture: {security_dashboard.get('security_posture', 'UNKNOWN')}")
-        print(f"   - Total Vulnerabilities: {security_dashboard.get('total_vulnerabilities', 0)}")
-        print(f"   - Critical/High Risk: {security_dashboard.get('critical_high_vulns', 0)}")
-        print(f"   - Highest Risk Score: {security_dashboard.get('highest_risk_score', 0)}/10")
-        print(f"   - Average Risk Score: {security_dashboard.get('average_risk_score', 0)}/10")
-        print(f"   - Remediation Budget: {security_dashboard.get('remediation_budget_required', 'N/A')}")
-        print(f"   - Critical Budget: {security_dashboard.get('critical_remediation_budget', 'N/A')}")
-        print(f"   - Scan Success Rate: {security_dashboard.get('scan_success_rate', 0)}%")
+        print(
+            f"\\n📊 Security Posture: {security_dashboard.get('security_posture', 'UNKNOWN')}"
+        )
+        print(
+            f"   - Total Vulnerabilities: {security_dashboard.get('total_vulnerabilities', 0)}"
+        )
+        print(
+            f"   - Critical/High Risk: {security_dashboard.get('critical_high_vulns', 0)}"
+        )
+        print(
+            f"   - Highest Risk Score: {security_dashboard.get('highest_risk_score', 0)}/10"
+        )
+        print(
+            f"   - Average Risk Score: {security_dashboard.get('average_risk_score', 0)}/10"
+        )
+        print(
+            f"   - Remediation Budget: {security_dashboard.get('remediation_budget_required', 'N/A')}"
+        )
+        print(
+            f"   - Critical Budget: {security_dashboard.get('critical_remediation_budget', 'N/A')}"
+        )
+        print(
+            f"   - Scan Success Rate: {security_dashboard.get('scan_success_rate', 0)}%"
+        )
 
         # Show key findings
         key_findings = security_report.get("key_findings", [])
         if key_findings:
             print("\\n🚨 KEY SECURITY FINDINGS:")
             for finding in key_findings[:3]:  # Show top 3 findings
-                print(f"   - [{finding.get('severity', 'unknown').upper()}] {finding.get('finding', 'N/A')}")
+                print(
+                    f"   - [{finding.get('severity', 'unknown').upper()}] {finding.get('finding', 'N/A')}"
+                )
 
         # Show immediate actions
         action_plan = security_report.get("action_plan", {})

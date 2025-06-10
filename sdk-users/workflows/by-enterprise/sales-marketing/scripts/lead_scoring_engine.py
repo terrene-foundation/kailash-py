@@ -16,19 +16,19 @@ Features:
 
 import os
 import sys
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
-import json
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+)
 
 from kailash import Workflow
-from kailash.nodes.data import CSVReaderNode, SQLDatabaseNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.logic import SwitchNode, MergeNode
 from kailash.nodes.api import RestClientNode
-from kailash.nodes.transform import DataTransformer
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import SQLDatabaseNode
+from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -37,30 +37,30 @@ def create_lead_scoring_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="lead_scoring_001",
         name="enterprise_lead_scoring",
-        description="AI-powered lead scoring and qualification system"
+        description="AI-powered lead scoring and qualification system",
     )
-    
+
     # Data collection from multiple sources
     add_lead_sources(workflow)
-    
+
     # Lead enrichment pipeline
     add_enrichment_pipeline(workflow)
-    
+
     # Scoring engine
     add_scoring_engine(workflow)
-    
+
     # Lead routing and assignment
     add_routing_system(workflow)
-    
+
     # Analytics and reporting
     add_analytics_pipeline(workflow)
-    
+
     return workflow
 
 
 def add_lead_sources(workflow: Workflow):
     """Add multiple lead data sources."""
-    
+
     # CRM lead data
     crm_reader = SQLDatabaseNode(
         id="crm_leads",
@@ -86,23 +86,23 @@ def add_lead_sources(workflow: Workflow):
         WHERE l.status IN ('new', 'working', 'nurturing')
         AND l.last_activity_date >= NOW() - INTERVAL '30 days'
         """,
-        operation_type="read"
+        operation_type="read",
     )
     workflow.add_node("crm_leads", crm_reader)
-    
+
     # Marketing automation data
     marketing_data = RestClientNode(
         id="marketing_data",
         url="${MARKETING_API}/leads/engagement",
         method="GET",
-        headers={"Authorization": "Bearer ${MARKETING_API_KEY}"}
+        headers={"Authorization": "Bearer ${MARKETING_API_KEY}"},
     )
     workflow.add_node("marketing_data", marketing_data)
-    
+
     # Website behavior data
     behavior_tracker = PythonCodeNode(
         name="behavior_tracker",
-        code='''
+        code="""
 import random
 from datetime import datetime, timedelta
 
@@ -144,15 +144,15 @@ result = {
     'tracking_period': '30_days',
     'data_quality': 'high'
 }
-'''
+""",
     )
     workflow.add_node("behavior_tracker", behavior_tracker)
     workflow.connect("crm_leads", "behavior_tracker", mapping={"data": "crm_data"})
-    
+
     # Email engagement data
     email_engagement = PythonCodeNode(
         name="email_engagement",
-        code='''
+        code="""
 # Simulate email engagement data
 engagement_data = []
 
@@ -176,26 +176,29 @@ for email in lead_emails[:100]:
     engagement_data.append(engagement)
 
 result = {'email_metrics': engagement_data}
-'''
+""",
     )
     workflow.add_node("email_engagement", email_engagement)
-    
+
     # Merge all lead data
-    lead_merger = MergeNode(
-        id="lead_merger",
-        merge_strategy="combine_dict"
-    )
+    lead_merger = MergeNode(id="lead_merger", merge_strategy="combine_dict")
     workflow.add_node("lead_merger", lead_merger)
-    
+
     workflow.connect("crm_leads", "lead_merger", mapping={"data": "crm_data"})
-    workflow.connect("marketing_data", "lead_merger", mapping={"response": "marketing_data"})
-    workflow.connect("behavior_tracker", "lead_merger", mapping={"result": "behavior_data"})
-    workflow.connect("email_engagement", "lead_merger", mapping={"result": "email_data"})
+    workflow.connect(
+        "marketing_data", "lead_merger", mapping={"response": "marketing_data"}
+    )
+    workflow.connect(
+        "behavior_tracker", "lead_merger", mapping={"result": "behavior_data"}
+    )
+    workflow.connect(
+        "email_engagement", "lead_merger", mapping={"result": "email_data"}
+    )
 
 
 def add_enrichment_pipeline(workflow: Workflow):
     """Add lead enrichment with external data."""
-    
+
     lead_enricher = PythonCodeNode(
         name="lead_enricher",
         code='''
@@ -277,7 +280,7 @@ result = {
         'avg_completeness': sum(l['data_completeness'] for l in enriched_leads) / len(enriched_leads) if enriched_leads else 0
     }
 }
-'''
+''',
     )
     workflow.add_node("lead_enricher", lead_enricher)
     workflow.connect("lead_merger", "lead_enricher", mapping={"merged": "merged_data"})
@@ -285,10 +288,10 @@ result = {
 
 def add_scoring_engine(workflow: Workflow):
     """Add multi-dimensional lead scoring engine."""
-    
+
     scoring_engine = PythonCodeNode(
         name="scoring_engine",
-        code='''
+        code="""
 import numpy as np
 from datetime import datetime
 
@@ -492,19 +495,21 @@ result = {
         'sales_ready': sum(1 for l in scored_leads if l['sales_indicators']['ready_for_contact'])
     }
 }
-'''
+""",
     )
     workflow.add_node("scoring_engine", scoring_engine)
-    workflow.connect("lead_enricher", "scoring_engine", mapping={"result": "enrichment_data"})
+    workflow.connect(
+        "lead_enricher", "scoring_engine", mapping={"result": "enrichment_data"}
+    )
 
 
 def add_routing_system(workflow: Workflow):
     """Add intelligent lead routing and assignment."""
-    
+
     # Lead router
     lead_router = PythonCodeNode(
         name="lead_router",
-        code='''
+        code="""
 # Intelligent lead routing based on score and criteria
 scored_leads = scoring_data.get('scored_leads', [])
 
@@ -620,15 +625,17 @@ result = {
     'routing_summary': routing_summary,
     'rep_workload': rep_workload
 }
-'''
+""",
     )
     workflow.add_node("lead_router", lead_router)
-    workflow.connect("scoring_engine", "lead_router", mapping={"result": "scoring_data"})
-    
+    workflow.connect(
+        "scoring_engine", "lead_router", mapping={"result": "scoring_data"}
+    )
+
     # Notification sender
     notification_sender = PythonCodeNode(
         name="notification_sender",
-        code='''
+        code="""
 # Send notifications to sales reps
 routing_data = routing_result
 assignments = routing_data.get('assignments', [])
@@ -677,18 +684,20 @@ result = {
     'notifications_sent': len(notifications),
     'notifications': notifications
 }
-'''
+""",
     )
     workflow.add_node("notification_sender", notification_sender)
-    workflow.connect("lead_router", "notification_sender", mapping={"result": "routing_result"})
+    workflow.connect(
+        "lead_router", "notification_sender", mapping={"result": "routing_result"}
+    )
 
 
 def add_analytics_pipeline(workflow: Workflow):
     """Add analytics and reporting for lead scoring performance."""
-    
+
     analytics_processor = PythonCodeNode(
         name="analytics_processor",
-        code='''
+        code="""
 # Generate comprehensive analytics
 routing_data = routing_result
 scored_leads = routing_data.get('routed_leads', [])
@@ -797,91 +806,106 @@ result = {
     'export_ready': True,
     'report_format': 'executive_dashboard'
 }
-'''
+""",
     )
     workflow.add_node("analytics_processor", analytics_processor)
-    workflow.connect("lead_router", "analytics_processor", mapping={"result": "routing_result"})
-    workflow.connect("scoring_engine", "analytics_processor", mapping={"result": "scoring_data"})
-    
+    workflow.connect(
+        "lead_router", "analytics_processor", mapping={"result": "routing_result"}
+    )
+    workflow.connect(
+        "scoring_engine", "analytics_processor", mapping={"result": "scoring_data"}
+    )
+
     # Report writer
     report_writer = SQLDatabaseNode(
         id="report_writer",
         connection_string="${ANALYTICS_DB}",
         operation_type="write",
         table_name="lead_scoring_analytics",
-        if_exists="append"
+        if_exists="append",
     )
     workflow.add_node("report_writer", report_writer)
-    workflow.connect("analytics_processor", "report_writer", mapping={"analytics": "data"})
+    workflow.connect(
+        "analytics_processor", "report_writer", mapping={"analytics": "data"}
+    )
 
 
 def main():
     """Execute the lead scoring workflow."""
     # Create workflow
     workflow = create_lead_scoring_workflow()
-    
+
     # Set up runtime
     runtime = LocalRuntime()
-    
+
     # Configure parameters
     parameters = {
         "crm_leads": {
-            "connection_string": os.getenv("CRM_DATABASE", 
-                "postgresql://user:pass@localhost/crm")
+            "connection_string": os.getenv(
+                "CRM_DATABASE", "postgresql://user:pass@localhost/crm"
+            )
         },
         "marketing_data": {
-            "url": os.getenv("MARKETING_API", "https://api.marketing.com") + "/leads/engagement",
-            "headers": {"Authorization": f"Bearer {os.getenv('MARKETING_API_KEY', 'demo-key')}"}
+            "url": os.getenv("MARKETING_API", "https://api.marketing.com")
+            + "/leads/engagement",
+            "headers": {
+                "Authorization": f"Bearer {os.getenv('MARKETING_API_KEY', 'demo-key')}"
+            },
         },
         "report_writer": {
-            "connection_string": os.getenv("ANALYTICS_DB",
-                "postgresql://user:pass@localhost/analytics")
-        }
+            "connection_string": os.getenv(
+                "ANALYTICS_DB", "postgresql://user:pass@localhost/analytics"
+            )
+        },
     }
-    
+
     # Execute workflow
     print("Starting Lead Scoring Engine...")
     print("=" * 50)
-    
+
     try:
         result, run_id = runtime.execute(workflow, parameters=parameters)
-        
+
         # Display results
         if result:
-            analytics = result.get('analytics', {})
-            quality_metrics = analytics.get('lead_quality_metrics', {})
-            routing_metrics = analytics.get('routing_metrics', {})
-            predictions = analytics.get('conversion_predictions', {})
-            
+            analytics = result.get("analytics", {})
+            quality_metrics = analytics.get("lead_quality_metrics", {})
+            routing_metrics = analytics.get("routing_metrics", {})
+            predictions = analytics.get("conversion_predictions", {})
+
             print("\nLead Quality Summary:")
             print("-" * 30)
             print(f"Total Leads Scored: {quality_metrics.get('total_leads', 0)}")
             print(f"Average Score: {quality_metrics.get('average_score', 0):.1f}")
-            print(f"Sales Ready: {quality_metrics.get('sales_ready_percentage', 0):.1f}%")
-            
+            print(
+                f"Sales Ready: {quality_metrics.get('sales_ready_percentage', 0):.1f}%"
+            )
+
             print("\nGrade Distribution:")
-            for grade, count in quality_metrics.get('grade_distribution', {}).items():
+            for grade, count in quality_metrics.get("grade_distribution", {}).items():
                 print(f"  Grade {grade}: {count} leads")
-            
+
             print("\nRouting Summary:")
             print(f"Total Routed: {routing_metrics.get('total_routed', 0)}")
             print(f"Hot Leads: {routing_metrics.get('hot_leads_routed', 0)}")
-            
+
             print("\nPredictions:")
-            print(f"Expected Conversions: {predictions.get('predicted_conversions', 0)}")
+            print(
+                f"Expected Conversions: {predictions.get('predicted_conversions', 0)}"
+            )
             print(f"Predicted Revenue: ${predictions.get('predicted_revenue', 0):,.2f}")
-            
+
             print("\nKey Insights:")
-            for insight in analytics.get('key_insights', []):
+            for insight in analytics.get("key_insights", []):
                 print(f"  [{insight['type'].upper()}] {insight['message']}")
-            
-            print(f"\nWorkflow completed successfully!")
+
+            print("\nWorkflow completed successfully!")
             print(f"Run ID: {run_id}")
-            
+
     except Exception as e:
         print(f"Error executing workflow: {str(e)}")
         return 1
-    
+
     return 0
 
 

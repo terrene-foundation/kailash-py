@@ -12,7 +12,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 # Import templates to add convenience methods to Workflow class
-import kailash.workflow.templates
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
@@ -26,12 +25,10 @@ def clean_text(data=None, iteration=None, quality_score=None, **kwargs):
     try:
         text = data.get("text", "") if isinstance(data, dict) else str(data)
         iteration = iteration
-        quality = quality_score
     except:
         # First iteration
         text = "  Hello,   WORLD!  This is a TEST...   with BAD formatting!!!  "
         iteration = 0
-        quality = 0.0
 
     iteration += 1
     print(f"\\nText Cleaning Iteration {iteration}")

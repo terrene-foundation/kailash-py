@@ -91,11 +91,9 @@ def train_model(model=None, epoch=None, **kwargs):
     try:
         accuracy = accuracy
         epoch = epoch
-        best_accuracy = best_accuracy
     except NameError:
         accuracy = 0.1  # Start with low accuracy
         epoch = 0
-        best_accuracy = 0.0
 
     epoch += 1
 

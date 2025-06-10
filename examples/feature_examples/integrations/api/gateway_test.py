@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 def validate_data(input_data: dict, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
-    import json
     from datetime import datetime
 
     # Validate input data
@@ -254,7 +253,7 @@ def create_notification_workflow() -> Workflow:
         # Check for critical conditions
         risk_levels = summary.get("by_risk_level", {})
         high_risk_count = risk_levels.get("high", 0)
-        total = summary.get("total_records", 0)
+        summary.get("total_records", 0)
 
         if high_risk_count > 10:
             alerts.append(

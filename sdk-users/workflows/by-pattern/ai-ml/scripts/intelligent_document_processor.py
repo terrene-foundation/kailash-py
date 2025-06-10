@@ -21,7 +21,7 @@ from kailash import Workflow
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.data import CSVReaderNode, DocumentSourceNode, RelevanceScorerNode
 from kailash.nodes.logic import MergeNode
-from kailash.nodes.transform import HierarchicalChunkerNode, FilterNode
+from kailash.nodes.transform import FilterNode, HierarchicalChunkerNode
 from kailash.runtime import LocalRuntime
 
 

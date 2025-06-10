@@ -24,13 +24,12 @@ Features:
 
 import json
 import os
-from typing import List, Dict, Any
+from typing import Any, Dict
 
 from kailash import Workflow
-from kailash.nodes.api.http import HTTPRequestNode
+from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONWriterNode
 from kailash.nodes.logic import MergeNode
-from kailash.nodes.code import PythonCodeNode
 from kailash.runtime import LocalRuntime
 
 
@@ -41,23 +40,23 @@ def get_api_endpoints() -> Dict[str, Any]:
             "base_url": "https://jsonplaceholder.typicode.com",
             "endpoints": {
                 "users": "/users",
-                "posts": "/posts", 
+                "posts": "/posts",
                 "comments": "/comments",
-                "albums": "/albums"
+                "albums": "/albums",
             },
             "description": "Free fake JSON API for testing and prototyping",
-            "auth_required": False
+            "auth_required": False,
         },
         "github": {
             "base_url": "https://api.github.com",
             "endpoints": {
                 "repos": "/repos/{owner}/{repo}",
                 "user": "/users/{username}",
-                "orgs": "/orgs/{org}"
+                "orgs": "/orgs/{org}",
             },
             "description": "GitHub REST API for repository and user data",
             "auth_required": False,  # For public data
-            "rate_limit": "60 requests per hour"
+            "rate_limit": "60 requests per hour",
         },
         "httpbin": {
             "base_url": "https://httpbin.org",
@@ -65,11 +64,11 @@ def get_api_endpoints() -> Dict[str, Any]:
                 "get": "/get",
                 "post": "/post",
                 "headers": "/headers",
-                "status": "/status/{code}"
+                "status": "/status/{code}",
             },
             "description": "HTTP testing service for request/response validation",
-            "auth_required": False
-        }
+            "auth_required": False,
+        },
     }
 
 
@@ -82,7 +81,7 @@ def create_real_api_integration_workflow() -> Workflow:
     )
 
     # === API CONFIGURATION ===
-    
+
     # Configure real API endpoints
     api_configurator = PythonCodeNode(
         name="api_configurator",
@@ -125,10 +124,10 @@ result = {
     workflow.add_node("api_configurator", api_configurator)
 
     # === JSONPLACEHOLDER API INTEGRATION ===
-    
+
     # Fetch real user data from JSONPlaceholder
     jsonplaceholder_integrator = PythonCodeNode(
-        name="jsonplaceholder_integrator", 
+        name="jsonplaceholder_integrator",
         code="""
 # Integrate with JSONPlaceholder API using HTTPRequestNode
 from kailash.nodes.api.http import HTTPRequestNode
@@ -256,10 +255,14 @@ result = {
 """,
     )
     workflow.add_node("jsonplaceholder_integrator", jsonplaceholder_integrator)
-    workflow.connect("api_configurator", "jsonplaceholder_integrator", mapping={"result": "config_data"})
+    workflow.connect(
+        "api_configurator",
+        "jsonplaceholder_integrator",
+        mapping={"result": "config_data"},
+    )
 
     # === GITHUB API INTEGRATION ===
-    
+
     # Fetch real repository data from GitHub API
     github_integrator = PythonCodeNode(
         name="github_integrator",
@@ -398,10 +401,12 @@ result = {
 """,
     )
     workflow.add_node("github_integrator", github_integrator)
-    workflow.connect("api_configurator", "github_integrator", mapping={"result": "config_data"})
+    workflow.connect(
+        "api_configurator", "github_integrator", mapping={"result": "config_data"}
+    )
 
     # === HTTPBIN API INTEGRATION ===
-    
+
     # Test HTTP methods and headers using HTTPBin
     httpbin_integrator = PythonCodeNode(
         name="httpbin_integrator",
@@ -538,19 +543,23 @@ result = {
 """,
     )
     workflow.add_node("httpbin_integrator", httpbin_integrator)
-    workflow.connect("api_configurator", "httpbin_integrator", mapping={"result": "config_data"})
+    workflow.connect(
+        "api_configurator", "httpbin_integrator", mapping={"result": "config_data"}
+    )
 
     # === MERGE API INTEGRATION RESULTS ===
-    
+
     # Merge all API integration results
     api_merger = MergeNode(id="api_merger", merge_type="merge_dict")
     workflow.add_node("api_merger", api_merger)
-    workflow.connect("jsonplaceholder_integrator", "api_merger", mapping={"result": "data1"})
+    workflow.connect(
+        "jsonplaceholder_integrator", "api_merger", mapping={"result": "data1"}
+    )
     workflow.connect("github_integrator", "api_merger", mapping={"result": "data2"})
     workflow.connect("httpbin_integrator", "api_merger", mapping={"result": "data3"})
 
     # === API PERFORMANCE ANALYSIS ===
-    
+
     # Analyze API integration performance and results
     api_analyzer = PythonCodeNode(
         name="api_analyzer",
@@ -680,13 +689,15 @@ result = analysis_report
 """,
     )
     workflow.add_node("api_analyzer", api_analyzer)
-    workflow.connect("api_merger", "api_analyzer", mapping={"merged_data": "merged_data"})
+    workflow.connect(
+        "api_merger", "api_analyzer", mapping={"merged_data": "merged_data"}
+    )
 
     # === COMPREHENSIVE REPORTING ===
-    
+
     # Generate comprehensive API integration report
     report_generator = PythonCodeNode(
-        name="report_generator", 
+        name="report_generator",
         code="""
 # Generate comprehensive API integration report
 from datetime import datetime
@@ -810,22 +821,23 @@ result = report
 """,
     )
     workflow.add_node("report_generator", report_generator)
-    workflow.connect("api_analyzer", "report_generator", mapping={"result": "analysis_results"})
+    workflow.connect(
+        "api_analyzer", "report_generator", mapping={"result": "analysis_results"}
+    )
 
     # === OUTPUTS ===
-    
+
     # Save comprehensive API integration report
     report_writer = JSONWriterNode(
-        id="report_writer", 
-        file_path="data/outputs/comprehensive_api_integration_report.json"
+        id="report_writer",
+        file_path="data/outputs/comprehensive_api_integration_report.json",
     )
     workflow.add_node("report_writer", report_writer)
     workflow.connect("report_generator", "report_writer", mapping={"result": "data"})
 
     # Save raw API integration data
     raw_data_writer = JSONWriterNode(
-        id="raw_data_writer", 
-        file_path="data/outputs/raw_api_integration_data.json"
+        id="raw_data_writer", file_path="data/outputs/raw_api_integration_data.json"
     )
     workflow.add_node("raw_data_writer", raw_data_writer)
     workflow.connect("api_merger", "raw_data_writer", mapping={"merged_data": "data"})
@@ -848,7 +860,9 @@ def run_real_api_integration():
 
         print("\\n✅ API Integration Complete!")
         print("📁 Outputs generated:")
-        print("   - Comprehensive report: data/outputs/comprehensive_api_integration_report.json")
+        print(
+            "   - Comprehensive report: data/outputs/comprehensive_api_integration_report.json"
+        )
         print("   - Raw integration data: data/outputs/raw_api_integration_data.json")
 
         # Show executive summary
@@ -856,19 +870,27 @@ def run_real_api_integration():
         api_report = report_result.get("api_integration_report", {})
         executive_summary = api_report.get("executive_summary", {})
 
-        print(f"\\n📊 Integration Status: {executive_summary.get('integration_status', 'UNKNOWN')}")
+        print(
+            f"\\n📊 Integration Status: {executive_summary.get('integration_status', 'UNKNOWN')}"
+        )
         print(f"   - APIs Integrated: {executive_summary.get('apis_integrated', 0)}")
         print(f"   - Success Rate: {executive_summary.get('success_rate', 'N/A')}")
-        print(f"   - Total API Calls: {executive_summary.get('total_endpoint_calls', 0)}")
+        print(
+            f"   - Total API Calls: {executive_summary.get('total_endpoint_calls', 0)}"
+        )
         print(f"   - Successful Calls: {executive_summary.get('successful_calls', 0)}")
-        print(f"   - APIs Tested: {', '.join(executive_summary.get('apis_tested', []))}")
+        print(
+            f"   - APIs Tested: {', '.join(executive_summary.get('apis_tested', []))}"
+        )
 
         # Show key findings
         key_findings = api_report.get("key_findings", [])
         if key_findings:
             print("\\n💡 KEY FINDINGS:")
             for finding in key_findings[:3]:  # Show top 3 findings
-                print(f"   - [{finding.get('type', 'unknown').upper()}] {finding.get('finding', 'N/A')}")
+                print(
+                    f"   - [{finding.get('type', 'unknown').upper()}] {finding.get('finding', 'N/A')}"
+                )
 
         # Show recommendations
         recommendations = api_report.get("technical_recommendations", [])
@@ -904,7 +926,9 @@ def main():
         integration_summary = report["api_integration_report"]["integration_summary"]
         by_api = integration_summary.get("by_api", {})
         for api_name, metrics in by_api.items():
-            print(f"{api_name}: {metrics['endpoints_tested']} endpoints, {metrics['success_rate']} success rate")
+            print(
+                f"{api_name}: {metrics['endpoints_tested']} endpoints, {metrics['success_rate']} success rate"
+            )
 
         print("\\n=== Key Findings ===")
         key_findings = report["api_integration_report"]["key_findings"]

@@ -9,6 +9,7 @@ This example demonstrates:
 """
 
 from typing import Any, Dict
+
 from kailash.nodes.base import Node, NodeParameter
 
 

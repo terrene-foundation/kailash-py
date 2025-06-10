@@ -18,9 +18,9 @@ import json
 import os
 
 from kailash import Workflow
-from kailash.nodes.data import JSONWriterNode, EventGeneratorNode
-from kailash.nodes.transform import DataTransformer
 from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import EventGeneratorNode, JSONWriterNode
+from kailash.nodes.transform import DataTransformer
 from kailash.runtime import LocalRuntime
 
 
@@ -441,19 +441,19 @@ def create_simple_event_workflow() -> Workflow:
             "UserRegistered": {
                 "username": "user_{id}",
                 "email": "{username}@example.com",
-                "plan": "premium"
+                "plan": "premium",
             },
             "UserLoggedIn": {
                 "ip_address": "192.168.1.{random_ip}",
-                "device": "Chrome/Windows"
+                "device": "Chrome/Windows",
             },
             "SubscriptionCreated": {
                 "plan": "premium",
                 "price": 99.99,
-                "billing_cycle": "monthly"
-            }
+                "billing_cycle": "monthly",
+            },
         },
-        seed=42  # For reproducible results
+        seed=42,  # For reproducible results
     )
     workflow.add_node("event_source", event_source)
 

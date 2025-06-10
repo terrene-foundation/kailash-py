@@ -53,7 +53,7 @@ Example:
 
 import os
 
-from examples.utils.data_paths import get_input_data_path, get_output_data_path
+from examples.utils.data_paths import get_input_data_path
 from kailash.access_control import (
     NodePermission,
     PermissionEffect,

@@ -16,18 +16,18 @@ Features:
 
 import os
 import sys
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+)
 
 from kailash import Workflow
-from kailash.nodes.data import SQLDatabaseNode, KafkaConsumerNode
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.api import RestClientNode
-from kailash.nodes.transform import DataTransformer
+from kailash.nodes.data import KafkaConsumerNode, SQLDatabaseNode
+from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime import LocalRuntime
 
 
@@ -36,40 +36,40 @@ def create_financial_processor_workflow() -> Workflow:
     workflow = Workflow(
         workflow_id="financial_processor_001",
         name="enterprise_financial_processor",
-        description="Real-time financial transaction processing with compliance"
+        description="Real-time financial transaction processing with compliance",
     )
-    
+
     # Transaction ingestion from multiple sources
     add_transaction_sources(workflow)
-    
+
     # Data validation and enrichment
     add_validation_pipeline(workflow)
-    
+
     # Fraud detection system
     add_fraud_detection(workflow)
-    
+
     # Compliance checks
     add_compliance_pipeline(workflow)
-    
+
     # Reporting and analytics
     add_reporting_system(workflow)
-    
+
     return workflow
 
 
 def add_transaction_sources(workflow: Workflow):
     """Add multiple transaction data sources."""
-    
+
     # Real-time transaction stream
     stream_consumer = KafkaConsumerNode(
         id="transaction_stream",
         bootstrap_servers="${KAFKA_BROKERS}",
         topic="financial_transactions",
         group_id="processor_group",
-        batch_size=1000
+        batch_size=1000,
     )
     workflow.add_node("transaction_stream", stream_consumer)
-    
+
     # Batch transaction database
     batch_reader = SQLDatabaseNode(
         id="batch_transactions",
@@ -90,14 +90,14 @@ def add_transaction_sources(workflow: Workflow):
         AND timestamp >= NOW() - INTERVAL '1 hour'
         LIMIT 5000
         """,
-        operation_type="read"
+        operation_type="read",
     )
     workflow.add_node("batch_transactions", batch_reader)
-    
+
     # API webhook receiver (simulated)
     webhook_receiver = PythonCodeNode(
         name="webhook_receiver",
-        code='''
+        code="""
 # Simulate webhook transaction data
 import json
 from datetime import datetime
@@ -135,33 +135,37 @@ result = {
     'source': 'webhook',
     'batch_id': f'WEBHOOK-{int(datetime.now().timestamp())}'
 }
-'''
+""",
     )
     workflow.add_node("webhook_receiver", webhook_receiver)
-    
+
     # Merge all transaction sources
     transaction_merger = MergeNode(
-        id="transaction_merger",
-        merge_strategy="concatenate"
+        id="transaction_merger", merge_strategy="concatenate"
     )
     workflow.add_node("transaction_merger", transaction_merger)
-    
+
     # Connect sources to merger
-    workflow.connect("transaction_stream", "transaction_merger", 
-                    mapping={"messages": "stream_data"})
-    workflow.connect("batch_transactions", "transaction_merger", 
-                    mapping={"data": "batch_data"})
-    workflow.connect("webhook_receiver", "transaction_merger", 
-                    mapping={"transactions": "webhook_data"})
+    workflow.connect(
+        "transaction_stream", "transaction_merger", mapping={"messages": "stream_data"}
+    )
+    workflow.connect(
+        "batch_transactions", "transaction_merger", mapping={"data": "batch_data"}
+    )
+    workflow.connect(
+        "webhook_receiver",
+        "transaction_merger",
+        mapping={"transactions": "webhook_data"},
+    )
 
 
 def add_validation_pipeline(workflow: Workflow):
     """Add transaction validation and enrichment."""
-    
+
     # Transaction validator
     validator = PythonCodeNode(
         name="transaction_validator",
-        code='''
+        code="""
 from datetime import datetime
 import re
 
@@ -242,25 +246,29 @@ result = {
         'validation_rate': len(validated_transactions) / len(all_transactions) if all_transactions else 0
     }
 }
-'''
+""",
     )
     workflow.add_node("transaction_validator", validator)
-    workflow.connect("transaction_merger", "transaction_validator",
-                    mapping={"merged": "merged_data"})
-    
+    workflow.connect(
+        "transaction_merger", "transaction_validator", mapping={"merged": "merged_data"}
+    )
+
     # Route based on validation
     validation_router = SwitchNode(
         id="validation_router",
-        condition="validation_rate >= 0.95"  # 95% validation threshold
+        condition="validation_rate >= 0.95",  # 95% validation threshold
     )
     workflow.add_node("validation_router", validation_router)
-    workflow.connect("transaction_validator", "validation_router",
-                    mapping={"result": "validation_result"})
+    workflow.connect(
+        "transaction_validator",
+        "validation_router",
+        mapping={"result": "validation_result"},
+    )
 
 
 def add_fraud_detection(workflow: Workflow):
     """Add ML-based fraud detection system."""
-    
+
     # Fraud detection model
     fraud_detector = PythonCodeNode(
         name="fraud_detector",
@@ -369,19 +377,22 @@ result = {
         'fraud_rate': len(fraud_alerts) / len(valid_transactions) if valid_transactions else 0
     }
 }
-'''
+''',
     )
     workflow.add_node("fraud_detector", fraud_detector)
-    
+
     # Connect valid transactions to fraud detection
-    workflow.connect("validation_router", "fraud_detector",
-                    output_key="true_output",
-                    mapping={"validation_result": "validation_data"})
+    workflow.connect(
+        "validation_router",
+        "fraud_detector",
+        output_key="true_output",
+        mapping={"validation_result": "validation_data"},
+    )
 
 
 def add_compliance_pipeline(workflow: Workflow):
     """Add regulatory compliance checks."""
-    
+
     compliance_checker = PythonCodeNode(
         name="compliance_checker",
         code='''
@@ -513,20 +524,21 @@ result = {
         'compliance_rate': len(compliant_transactions) / len(all_transactions) if all_transactions else 0
     }
 }
-'''
+''',
     )
     workflow.add_node("compliance_checker", compliance_checker)
-    workflow.connect("fraud_detector", "compliance_checker",
-                    mapping={"result": "fraud_data"})
+    workflow.connect(
+        "fraud_detector", "compliance_checker", mapping={"result": "fraud_data"}
+    )
 
 
 def add_reporting_system(workflow: Workflow):
     """Add automated reporting and analytics."""
-    
+
     # Real-time metrics calculator
     metrics_calculator = PythonCodeNode(
         name="metrics_calculator",
-        code='''
+        code="""
 from datetime import datetime
 import numpy as np
 
@@ -600,16 +612,19 @@ result = {
     'timestamp': datetime.now().isoformat(),
     'reporting_period': 'real_time'
 }
-'''
+""",
     )
     workflow.add_node("metrics_calculator", metrics_calculator)
-    workflow.connect("compliance_checker", "metrics_calculator",
-                    mapping={"result": "compliance_data"})
-    
+    workflow.connect(
+        "compliance_checker",
+        "metrics_calculator",
+        mapping={"result": "compliance_data"},
+    )
+
     # Report generator
     report_generator = PythonCodeNode(
         name="report_generator",
-        code='''
+        code="""
 from datetime import datetime
 
 # Generate various reports
@@ -685,77 +700,79 @@ result = {
     'distribution_list': ['cfo@company.com', 'risk-team@company.com', 'ops@company.com'],
     'next_report_due': datetime.now().isoformat()
 }
-'''
+""",
     )
     workflow.add_node("report_generator", report_generator)
-    workflow.connect("metrics_calculator", "report_generator",
-                    mapping={"result": "metrics_result"})
-    
+    workflow.connect(
+        "metrics_calculator", "report_generator", mapping={"result": "metrics_result"}
+    )
+
     # Output writer
     output_writer = SQLDatabaseNode(
         id="output_writer",
         connection_string="${ANALYTICS_DB}",
         operation_type="write",
         table_name="financial_analytics",
-        if_exists="append"
+        if_exists="append",
     )
     workflow.add_node("output_writer", output_writer)
-    workflow.connect("report_generator", "output_writer",
-                    mapping={"reports": "data"})
+    workflow.connect("report_generator", "output_writer", mapping={"reports": "data"})
 
 
 def main():
     """Execute the financial processor workflow."""
     # Create workflow
     workflow = create_financial_processor_workflow()
-    
+
     # Set up runtime
     runtime = LocalRuntime()
-    
+
     # Configure parameters
     parameters = {
         "transaction_stream": {
             "bootstrap_servers": os.getenv("KAFKA_BROKERS", "localhost:9092"),
-            "consumer_timeout_ms": 1000
+            "consumer_timeout_ms": 1000,
         },
         "batch_transactions": {
-            "connection_string": os.getenv("TRANSACTION_DB", 
-                "postgresql://user:pass@localhost/transactions")
+            "connection_string": os.getenv(
+                "TRANSACTION_DB", "postgresql://user:pass@localhost/transactions"
+            )
         },
         "output_writer": {
-            "connection_string": os.getenv("ANALYTICS_DB",
-                "postgresql://user:pass@localhost/analytics")
-        }
+            "connection_string": os.getenv(
+                "ANALYTICS_DB", "postgresql://user:pass@localhost/analytics"
+            )
+        },
     }
-    
+
     # Execute workflow
     print("Starting Financial Data Processor...")
     print("=" * 50)
-    
+
     try:
         result, run_id = runtime.execute(workflow, parameters=parameters)
-        
+
         # Display results
         if result:
-            reports = result.get('reports', {})
-            exec_summary = reports.get('executive_summary', {})
-            
+            reports = result.get("reports", {})
+            exec_summary = reports.get("executive_summary", {})
+
             print("\nExecutive Summary:")
             print("-" * 30)
-            for metric, value in exec_summary.get('key_metrics', {}).items():
+            for metric, value in exec_summary.get("key_metrics", {}).items():
                 print(f"{metric}: {value}")
-            
+
             print("\nAlerts:")
-            for alert in exec_summary.get('alerts', []):
+            for alert in exec_summary.get("alerts", []):
                 print(f"- [{alert['severity'].upper()}] {alert['message']}")
-            
-            print(f"\nWorkflow completed successfully!")
+
+            print("\nWorkflow completed successfully!")
             print(f"Run ID: {run_id}")
-            
+
     except Exception as e:
         print(f"Error executing workflow: {str(e)}")
         return 1
-    
+
     return 0
 
 

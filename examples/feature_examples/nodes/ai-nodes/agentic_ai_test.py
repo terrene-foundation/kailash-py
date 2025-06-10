@@ -23,7 +23,7 @@ import requests
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from kailash.mcp import MCPClient, MCPServer
+from kailash.mcp import MCPClient
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 
 # Note: MCPResource and MCPClient are now MCP services, not nodes
@@ -164,7 +164,7 @@ def demonstrate_llm_agent_docker():
         print(f"Response: {result['response']['content'][:500]}...")
         print("\n   📊 Performance with Docker:")
         print(f"      - Model: {result['response']['model']}")
-        print(f"      - Provider: Docker Ollama")
+        print("      - Provider: Docker Ollama")
         print(f"      - Tokens: {result['usage']['total_tokens']}")
 
 
@@ -365,9 +365,9 @@ def demonstrate_embedding_generator():
 
     # Demonstrate Docker infrastructure integration
     print("\n🐳 Docker Infrastructure Integration:")
-    print(f"   ✅ Ollama provider: Docker container at localhost:11434")
+    print("   ✅ Ollama provider: Docker container at localhost:11434")
     print(f"   ✅ Embedding model: {embedding_model}")
-    print(f"   ✅ Vector storage: Qdrant at localhost:6333")
+    print("   ✅ Vector storage: Qdrant at localhost:6333")
     print("   🔗 Full stack embeddings pipeline ready")
 
     # Compare multiple models if available
@@ -469,7 +469,7 @@ def demonstrate_mcp_ecosystem():
 
     # Demonstrate MCP client service
     print("\n📦 MCPClient Service - Tool Discovery:")
-    client = MCPClient()
+    MCPClient()
 
     # Mock server configuration for demonstration
     mock_server_config = {

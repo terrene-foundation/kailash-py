@@ -22,19 +22,18 @@ Features:
 
 import json
 import os
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from kailash import Workflow
-from kailash.nodes.api.http import HTTPRequestNode
+from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONWriterNode
 from kailash.nodes.logic import MergeNode
-from kailash.nodes.code import PythonCodeNode
 from kailash.runtime import LocalRuntime
 
 
 def get_health_endpoints() -> List[Dict[str, Any]]:
     """Get list of real health endpoints to monitor.
-    
+
     These correspond to the Docker services defined in docker-compose.sdk-dev.yml.
     """
     return [
@@ -43,64 +42,64 @@ def get_health_endpoints() -> List[Dict[str, Any]]:
             "url": "http://localhost:5432",  # PostgreSQL doesn't have HTTP health endpoint, we'll handle differently
             "critical": True,
             "service_type": "database",
-            "check_type": "tcp_port"
+            "check_type": "tcp_port",
         },
         {
             "name": "mongodb",
-            "url": "http://localhost:27017",  # MongoDB doesn't have HTTP health endpoint, we'll handle differently  
+            "url": "http://localhost:27017",  # MongoDB doesn't have HTTP health endpoint, we'll handle differently
             "critical": True,
             "service_type": "database",
-            "check_type": "tcp_port"
+            "check_type": "tcp_port",
         },
         {
             "name": "mongo-express",
             "url": "http://localhost:8081",
             "critical": False,
             "service_type": "web_ui",
-            "check_type": "http"
+            "check_type": "http",
         },
         {
             "name": "qdrant",
             "url": "http://localhost:6333/health",
             "critical": False,
             "service_type": "vector_db",
-            "check_type": "http"
+            "check_type": "http",
         },
         {
             "name": "kafka-ui",
             "url": "http://localhost:8082",
             "critical": False,
             "service_type": "web_ui",
-            "check_type": "http"
+            "check_type": "http",
         },
         {
             "name": "ollama",
             "url": "http://localhost:11434/api/version",
             "critical": False,
             "service_type": "ai_service",
-            "check_type": "http"
+            "check_type": "http",
         },
         {
             "name": "mock-api",
             "url": "http://localhost:8888/health",
             "critical": False,
             "service_type": "api",
-            "check_type": "http"
+            "check_type": "http",
         },
         {
             "name": "mcp-server",
             "url": "http://localhost:8765/health",
             "critical": False,
             "service_type": "mcp",
-            "check_type": "http"
+            "check_type": "http",
         },
         {
             "name": "healthcheck-aggregator",
             "url": "http://localhost:8889",
             "critical": False,
             "service_type": "monitoring",
-            "check_type": "http"
-        }
+            "check_type": "http",
+        },
     ]
 
 
@@ -113,7 +112,7 @@ def create_health_monitoring_workflow() -> Workflow:
     )
 
     # === ENDPOINT CONFIGURATION ===
-    
+
     # Create endpoint configuration
     endpoint_configurator = PythonCodeNode(
         name="endpoint_configurator",
@@ -189,7 +188,7 @@ result = {
     workflow.add_node("endpoint_configurator", endpoint_configurator)
 
     # === REAL HEALTH CHECKS ===
-    
+
     # Perform health checks using HTTPRequestNode for each endpoint
     health_checker = PythonCodeNode(
         name="health_checker",
@@ -344,10 +343,12 @@ result = {
 """,
     )
     workflow.add_node("health_checker", health_checker)
-    workflow.connect("endpoint_configurator", "health_checker", mapping={"result": "config_data"})
+    workflow.connect(
+        "endpoint_configurator", "health_checker", mapping={"result": "config_data"}
+    )
 
     # === ALERT GENERATION ===
-    
+
     # Generate alerts based on real health check results
     alert_generator = PythonCodeNode(
         name="alert_generator",
@@ -483,10 +484,12 @@ result = {
 """,
     )
     workflow.add_node("alert_generator", alert_generator)
-    workflow.connect("health_checker", "alert_generator", mapping={"result": "health_results"})
+    workflow.connect(
+        "health_checker", "alert_generator", mapping={"result": "health_results"}
+    )
 
     # === PERFORMANCE ANALYSIS ===
-    
+
     # Analyze performance metrics from real responses
     performance_analyzer = PythonCodeNode(
         name="performance_analyzer",
@@ -642,15 +645,19 @@ else:
 """,
     )
     workflow.add_node("performance_analyzer", performance_analyzer)
-    workflow.connect("health_checker", "performance_analyzer", mapping={"result": "health_results"})
+    workflow.connect(
+        "health_checker", "performance_analyzer", mapping={"result": "health_results"}
+    )
 
     # === REPORTING ===
-    
+
     # Merge alerts and metrics for comprehensive reporting
     report_merger = MergeNode(id="report_merger", merge_type="merge_dict")
     workflow.add_node("report_merger", report_merger)
     workflow.connect("alert_generator", "report_merger", mapping={"result": "data1"})
-    workflow.connect("performance_analyzer", "report_merger", mapping={"result": "data2"})
+    workflow.connect(
+        "performance_analyzer", "report_merger", mapping={"result": "data2"}
+    )
 
     # Generate comprehensive monitoring report
     report_generator = PythonCodeNode(
@@ -791,22 +798,22 @@ result = report
 """,
     )
     workflow.add_node("report_generator", report_generator)
-    workflow.connect("report_merger", "report_generator", mapping={"merged_data": "merged_data"})
+    workflow.connect(
+        "report_merger", "report_generator", mapping={"merged_data": "merged_data"}
+    )
 
     # === OUTPUTS ===
-    
+
     # Save comprehensive monitoring report
     report_writer = JSONWriterNode(
-        id="report_writer", 
-        file_path="data/outputs/real_monitoring_report.json"
+        id="report_writer", file_path="data/outputs/real_monitoring_report.json"
     )
     workflow.add_node("report_writer", report_writer)
     workflow.connect("report_generator", "report_writer", mapping={"result": "data"})
 
     # Save alerts separately for alert management systems
     alert_writer = JSONWriterNode(
-        id="alert_writer", 
-        file_path="data/outputs/active_alerts.json"
+        id="alert_writer", file_path="data/outputs/active_alerts.json"
     )
     workflow.add_node("alert_writer", alert_writer)
     workflow.connect("alert_generator", "alert_writer", mapping={"result": "data"})
@@ -837,14 +844,24 @@ def run_health_monitoring():
         monitoring_report = report_result.get("monitoring_report", {})
         executive_summary = monitoring_report.get("executive_summary", {})
 
-        print(f"\\n📊 System Status: {executive_summary.get('system_status', 'UNKNOWN')}")
+        print(
+            f"\\n📊 System Status: {executive_summary.get('system_status', 'UNKNOWN')}"
+        )
         print(f"   - Overall Health: {executive_summary.get('overall_health', 'N/A')}")
-        print(f"   - Critical Services: {executive_summary.get('critical_services_health', 'N/A')}")
-        print(f"   - Average Response: {executive_summary.get('average_response_time', 'N/A')}")
+        print(
+            f"   - Critical Services: {executive_summary.get('critical_services_health', 'N/A')}"
+        )
+        print(
+            f"   - Average Response: {executive_summary.get('average_response_time', 'N/A')}"
+        )
         print(f"   - Max Response: {executive_summary.get('max_response_time', 'N/A')}")
         print(f"   - Active Alerts: {executive_summary.get('active_alerts', 0)}")
-        print(f"   - Performance Score: {executive_summary.get('performance_score', 'N/A')}")
-        print(f"   - Services Responding: {executive_summary.get('services_responding', 0)}/{executive_summary.get('total_services', 0)}")
+        print(
+            f"   - Performance Score: {executive_summary.get('performance_score', 'N/A')}"
+        )
+        print(
+            f"   - Services Responding: {executive_summary.get('services_responding', 0)}/{executive_summary.get('total_services', 0)}"
+        )
 
         # Show immediate actions if any
         next_actions = report_result.get("next_actions", {})
@@ -857,10 +874,14 @@ def run_health_monitoring():
         # Show data quality
         data_quality = monitoring_report.get("data_quality", {})
         if data_quality:
-            print(f"\\n📈 Data Quality:")
-            print(f"   - Health Check Success Rate: {data_quality.get('health_check_success_rate', 0):.1f}%")
+            print("\\n📈 Data Quality:")
+            print(
+                f"   - Health Check Success Rate: {data_quality.get('health_check_success_rate', 0):.1f}%"
+            )
             print(f"   - Services Analyzed: {data_quality.get('services_analyzed', 0)}")
-            print(f"   - Valid Response Times: {data_quality.get('valid_response_times', 0)}")
+            print(
+                f"   - Valid Response Times: {data_quality.get('valid_response_times', 0)}"
+            )
 
         return result
 
@@ -889,7 +910,9 @@ def main():
         performance_summary = report["monitoring_report"]["performance_summary"]
         service_types = performance_summary.get("by_service_type", {})
         for service_type, metrics in service_types.items():
-            print(f"{service_type}: {metrics['healthy']}/{metrics['count']} healthy, {metrics['avg_response_time']}ms avg")
+            print(
+                f"{service_type}: {metrics['healthy']}/{metrics['count']} healthy, {metrics['avg_response_time']}ms avg"
+            )
 
         print("\\n=== Active Alerts Preview ===")
         with open("data/outputs/active_alerts.json", "r") as f:
