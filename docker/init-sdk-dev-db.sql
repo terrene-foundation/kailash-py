@@ -1,21 +1,8 @@
 -- Initialize SDK Development Databases
 -- This script creates all necessary databases and tables for Kailash SDK examples
 
--- Create databases
-CREATE DATABASE IF NOT EXISTS transactions;
-CREATE DATABASE IF NOT EXISTS compliance;
-CREATE DATABASE IF NOT EXISTS analytics;
-CREATE DATABASE IF NOT EXISTS crm;
-CREATE DATABASE IF NOT EXISTS marketing;
-CREATE DATABASE IF NOT EXISTS reports;
-
--- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE transactions TO kailash;
-GRANT ALL PRIVILEGES ON DATABASE compliance TO kailash;
-GRANT ALL PRIVILEGES ON DATABASE analytics TO kailash;
-GRANT ALL PRIVILEGES ON DATABASE crm TO kailash;
-GRANT ALL PRIVILEGES ON DATABASE marketing TO kailash;
-GRANT ALL PRIVILEGES ON DATABASE reports TO kailash;
+-- Note: Database creation is handled by the workflow script
+-- This file only contains table creation and sample data
 
 -- Connect to transactions database
 \c transactions;

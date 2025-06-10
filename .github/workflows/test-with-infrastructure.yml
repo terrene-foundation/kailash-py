@@ -70,18 +70,36 @@ jobs:
     
     - name: Wait for services and initialize databases
       run: |
-        # Wait for Qdrant to be ready
+        # Wait for Qdrant to be ready (try different endpoints)
         echo "Waiting for Qdrant to start..."
-        for i in {1..30}; do
-          if curl -f http://localhost:6333/health >/dev/null 2>&1; then
+        for i in {1..60}; do
+          # Try the root endpoint first (more likely to respond)
+          if curl -f http://localhost:6333/ >/dev/null 2>&1; then
+            echo "✅ Qdrant is ready"
+            break
+          elif curl -f http://localhost:6333/health >/dev/null 2>&1; then
+            echo "✅ Qdrant is ready"
+            break
+          elif curl -f http://localhost:6333/readyz >/dev/null 2>&1; then
             echo "✅ Qdrant is ready"
             break
           fi
-          echo "Waiting for Qdrant... (attempt $i/30)"
-          sleep 2
+          echo "Waiting for Qdrant... (attempt $i/60)"
+          sleep 3
         done
         
-        # Initialize PostgreSQL databases
+        # If Qdrant still not ready, continue anyway (it's not critical for basic tests)
+        if ! curl -f http://localhost:6333/ >/dev/null 2>&1; then
+          echo "⚠️  Qdrant not responding, but continuing with other services"
+        fi
+        
+        # Create PostgreSQL databases
+        echo "Creating databases..."
+        for db in transactions compliance analytics crm marketing reports; do
+          PGPASSWORD=kailash123 createdb -h localhost -U kailash "$db" 2>/dev/null || echo "Database $db may already exist"
+        done
+        
+        # Initialize PostgreSQL databases with tables and data
         PGPASSWORD=kailash123 psql -h localhost -U kailash -d postgres < docker/init-sdk-dev-db.sql
         
         # Initialize MongoDB
