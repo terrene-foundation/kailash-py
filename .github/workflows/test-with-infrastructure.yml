@@ -103,7 +103,12 @@ jobs:
         PGPASSWORD=kailash123 psql -h localhost -U kailash -d postgres < docker/init-sdk-dev-db.sql
         
         # Initialize MongoDB
-        mongosh --host localhost:27017 -u kailash -p kailash123 --authenticationDatabase admin < docker/init-mongo.js
+        echo "Installing MongoDB client..."
+        # Install mongodb client using snap (more reliable on GitHub Actions)
+        sudo apt-get update && sudo apt-get install -y mongodb-clients
+        
+        echo "Initializing MongoDB..."
+        mongo --host localhost:27017 -u kailash -p kailash123 --authenticationDatabase admin < docker/init-mongo.js
     
     - name: Start remaining services
       run: |
