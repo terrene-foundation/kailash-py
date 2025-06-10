@@ -91,11 +91,23 @@ jobs:
         echo "Starting SDK development infrastructure with docker-compose..."
         cd docker
         
+        # Check which docker-compose command is available
+        if command -v docker-compose &> /dev/null; then
+          DOCKER_COMPOSE="docker-compose"
+          echo "Using docker-compose (hyphenated)"
+        elif docker compose version &> /dev/null; then
+          DOCKER_COMPOSE="docker compose"
+          echo "Using docker compose (plugin)"
+        else
+          echo "ERROR: Neither docker-compose nor docker compose found!"
+          exit 1
+        fi
+        
         # Stop any existing containers
-        docker compose -f docker-compose.sdk-dev.yml down -v || true
+        $DOCKER_COMPOSE -f docker-compose.sdk-dev.yml down -v || true
         
         # Start all services
-        docker compose -f docker-compose.sdk-dev.yml up -d
+        $DOCKER_COMPOSE -f docker-compose.sdk-dev.yml up -d
         
         # Wait for services to be ready
         echo "Waiting for services to start..."
@@ -103,7 +115,7 @@ jobs:
         
         # Check service health
         echo "Checking service health..."
-        docker compose -f docker-compose.sdk-dev.yml ps
+        $DOCKER_COMPOSE -f docker-compose.sdk-dev.yml ps
     
     - name: Create environment file
       run: |
@@ -170,7 +182,18 @@ jobs:
       run: |
         echo "Stopping SDK development infrastructure..."
         cd docker
-        docker compose -f docker-compose.sdk-dev.yml down -v || true
+        
+        # Use the same docker-compose command as in start
+        if command -v docker-compose &> /dev/null; then
+          DOCKER_COMPOSE="docker-compose"
+        elif docker compose version &> /dev/null; then
+          DOCKER_COMPOSE="docker compose"
+        else
+          echo "WARNING: docker-compose not found, cannot stop containers"
+          exit 0
+        fi
+        
+        $DOCKER_COMPOSE -f docker-compose.sdk-dev.yml down -v || true
     
     - name: Upload test results
       if: always()
