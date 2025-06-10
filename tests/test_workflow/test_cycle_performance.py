@@ -377,7 +377,7 @@ class TestParallelCyclePerformance:
         #
         # Instead of asserting parallel is faster, we ensure it's not drastically slower
         # and that results are correct
-        
+
         # Allow parallel to be up to 50% slower in CI environments
         max_allowed_parallel_time = sequential_time * 1.5
         assert (
@@ -396,11 +396,15 @@ class TestParallelCyclePerformance:
             seq_proc = seq_results.get(f"processor_{i}", {})
             par_proc = par_results.get(f"processor_{i}", {})
             assert seq_proc.get("iteration") == par_proc.get("iteration")
-            
+
         # Log performance characteristics for debugging
         if speedup < 1.0:
-            print(f"INFO: Parallel execution was slower than sequential by {((1/speedup) - 1) * 100:.1f}%")
-            print("This is expected in CI environments with limited cores or small workloads.")
+            print(
+                f"INFO: Parallel execution was slower than sequential by {((1/speedup) - 1) * 100:.1f}%"
+            )
+            print(
+                "This is expected in CI environments with limited cores or small workloads."
+            )
 
 
 class TestCycleOverhead:
