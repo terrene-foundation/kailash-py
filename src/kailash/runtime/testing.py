@@ -229,12 +229,12 @@ class NodeTestHelper:
         """Test node execution with given inputs."""
         if should_fail:
             try:
-                result = node.execute(**inputs)
+                result = node.run(**inputs)
                 assert False, "Node execution should have failed but didn't"
             except (NodeValidationError, WorkflowExecutionError):
                 return {}
         else:
-            result = node.execute(**inputs)
+            result = node.run(**inputs)
 
             # Check expected output keys
             for key in expected_keys:

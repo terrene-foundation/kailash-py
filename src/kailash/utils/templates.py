@@ -327,7 +327,7 @@ A Kailash workflow project.
 
 - `workflows/`: Workflow definitions
 - `nodes/`: Custom node implementations
-- `examples/data/`: Input data files
+- `data/inputs/`: Input data files
 - `outputs/`: Output files
 
 ## Usage
@@ -363,7 +363,7 @@ workflow = Workflow(
 )
 
 # Add nodes
-workflow.add_node("reader", CSVReaderNode(), file_path="examples/examples/data/input.csv")
+workflow.add_node("reader", CSVReaderNode(), file_path="data/inputs/csv/input.csv")
 workflow.add_node("filter", Filter(), field="value", operator=">", value=100)
 workflow.add_node("sort", Sort(), field="value", reverse=True)
 workflow.add_node("aggregate", Aggregator(), group_by="category", operation="sum")
@@ -482,8 +482,8 @@ workflow = Workflow(
 )
 
 # Data ingestion
-workflow.add_node("csv_reader", CSVReaderNode(), file_path="examples/examples/data/sales_data.csv")
-workflow.add_node("json_reader", JSONReaderNode(), file_path="examples/examples/data/product_data.json")
+workflow.add_node("csv_reader", CSVReaderNode(), file_path="data/inputs/csv/sales_data.csv")
+workflow.add_node("json_reader", JSONReaderNode(), file_path="data/inputs/json/product_data.json")
 
 # Transform data
 workflow.add_node("filter_sales", Filter(), field="amount", operator=">", value=1000)
@@ -553,7 +553,7 @@ workflow = Workflow(
 )
 
 # Data ingestion
-workflow.add_node("read_data", CSVReaderNode(), file_path="examples/examples/data/text_data.csv")
+workflow.add_node("read_data", CSVReaderNode(), file_path="data/inputs/csv/text_data.csv")
 
 # Preprocessing
 workflow.add_node("extract_text", Map(), field="content")
@@ -616,7 +616,7 @@ workflow = Workflow(
 )
 
 # Read configuration
-workflow.add_node("read_config", JSONReaderNode(), file_path="examples/examples/data/api_config.json")
+workflow.add_node("read_config", JSONReaderNode(), file_path="data/inputs/json/api_config.json")
 
 # Process with AI agent
 workflow.add_node("chat_agent", ChatAgent(),

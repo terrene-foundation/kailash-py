@@ -9,15 +9,6 @@ on:
       - 'CHANGELOG.md'
       - 'mkdocs.yml'
       - '.github/workflows/docs-deploy.yml'
-  pull_request:
-    branches: [ main ]
-    types: [closed]
-    paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'CHANGELOG.md'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -30,13 +21,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: self-hosted
-    # Only run if it's a push to main OR a merged PR
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,18 +74,14 @@ jobs:
           # Verify gtar is now available
           gtar --version || tar --version
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs/_build/html
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: self-hosted
-    needs: build
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

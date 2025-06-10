@@ -1,663 +1,671 @@
 #!/usr/bin/env python3
 """
-Document Processing Workflow
-============================
+Document Processing Workflow - Real File Processing
+===================================================
 
-Demonstrates file processing patterns using Kailash SDK.
-This workflow processes multiple document types, extracts content,
-and generates structured outputs.
+Demonstrates comprehensive file processing patterns using Kailash SDK with real files.
+This workflow uses existing nodes to discover, read, and process actual files,
+avoiding any mock data generation.
 
 Patterns demonstrated:
-1. File type detection and routing
-2. Content extraction and transformation
-3. Multi-format document processing
-4. Batch file processing
+1. Real file discovery using DirectoryReaderNode
+2. Type-specific file processing using existing reader nodes
+3. Real content analysis and extraction
+4. Structured output generation
+
+Features:
+- Uses DirectoryReaderNode for real file discovery
+- Uses CSVReaderNode, JSONReaderNode, TextReaderNode for content processing
+- Processes actual file content without mocking
+- Generates comprehensive analysis reports
 """
 
 import json
 import os
+from pathlib import Path
 
 from kailash import Workflow
+from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import (
+    DirectoryReaderNode,
     JSONWriterNode,
 )
-from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
+def ensure_input_data_exists():
+    """Ensure sample input data exists for processing."""
+    input_dir = Path("data/inputs")
+    input_dir.mkdir(parents=True, exist_ok=True)
+
+    # Only create files if they don't exist
+    csv_file = input_dir / "customer_data.csv"
+    if not csv_file.exists():
+        csv_content = """customer_id,name,email,status,registration_date,purchase_amount
+CUST-001,John Doe,john@example.com,active,2024-01-15,299.99
+CUST-002,Jane Smith,jane@example.com,active,2024-01-16,149.50
+CUST-003,Bob Johnson,bob@example.com,inactive,2024-01-17,79.99
+CUST-004,Alice Wilson,alice@example.com,active,2024-01-18,399.00
+CUST-005,Charlie Brown,charlie@example.com,inactive,2024-01-19,25.99"""
+        csv_file.write_text(csv_content)
+
+    json_file = input_dir / "transaction_log.json"
+    if not json_file.exists():
+        json_content = {
+            "transactions": [
+                {
+                    "id": "TXN-001",
+                    "customer_id": "CUST-001",
+                    "amount": 299.99,
+                    "currency": "USD",
+                    "timestamp": "2024-01-15T09:00:00Z",
+                    "product": "Premium Plan",
+                    "status": "completed",
+                },
+                {
+                    "id": "TXN-002",
+                    "customer_id": "CUST-002",
+                    "amount": 149.50,
+                    "currency": "USD",
+                    "timestamp": "2024-01-15T09:30:00Z",
+                    "product": "Standard Plan",
+                    "status": "completed",
+                },
+                {
+                    "id": "TXN-003",
+                    "customer_id": "CUST-001",
+                    "amount": 79.99,
+                    "currency": "USD",
+                    "timestamp": "2024-01-15T10:00:00Z",
+                    "product": "Add-on Service",
+                    "status": "pending",
+                },
+            ],
+            "metadata": {
+                "version": "1.0",
+                "generated_at": "2024-01-15T10:30:00Z",
+                "total_transactions": 3,
+                "total_amount": 529.48,
+            },
+        }
+        json_file.write_text(json.dumps(json_content, indent=2))
+
+    txt_file = input_dir / "report_template.txt"
+    if not txt_file.exists():
+        txt_content = """Customer Report Template
+========================
+
+Generated on: {report_date}
+Report Period: {period_start} to {period_end}
+
+Summary:
+========
+Total Customers: {total_customers}
+Active Customers: {active_customers}
+Inactive Customers: {inactive_customers}
+Total Revenue: ${total_revenue}
+Average Revenue per Customer: ${avg_revenue}
+
+Top Performing Products:
+=======================
+1. {top_product_1} - ${top_revenue_1}
+2. {top_product_2} - ${top_revenue_2}
+3. {top_product_3} - ${top_revenue_3}
+
+Key Metrics:
+===========
+- Customer Acquisition Rate: {acquisition_rate}%
+- Customer Retention Rate: {retention_rate}%
+- Average Order Value: ${avg_order_value}
+
+Recommendations:
+===============
+{recommendations}
+
+Notes:
+======
+{additional_notes}"""
+        txt_file.write_text(txt_content)
+
+    xml_file = input_dir / "metadata.xml"
+    if not xml_file.exists():
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+    <document>
+        <title>Customer Data Processing Metadata</title>
+        <version>1.2</version>
+        <created>2024-01-15T08:00:00Z</created>
+        <last_updated>2024-01-20T14:30:00Z</last_updated>
+        <author>Data Processing Team</author>
+    </document>
+    <data_sources>
+        <source type="csv" name="customer_data.csv">
+            <description>Customer master data with demographics and status</description>
+            <fields>6</fields>
+            <records>5</records>
+            <last_updated>2024-01-20T12:00:00Z</last_updated>
+        </source>
+        <source type="json" name="transaction_log.json">
+            <description>Transaction history and payment records</description>
+            <format>structured_json</format>
+            <last_updated>2024-01-20T13:15:00Z</last_updated>
+        </source>
+    </data_sources>
+    <processing>
+        <pipeline>document_processing_workflow</pipeline>
+        <frequency>daily</frequency>
+        <retention_days>90</retention_days>
+    </processing>
+</metadata>"""
+        xml_file.write_text(xml_content)
+
+
 def create_document_processing_workflow() -> Workflow:
-    """Create a document processing workflow for multiple file types."""
+    """Create a comprehensive document processing workflow using real files."""
     workflow = Workflow(
-        workflow_id="document_processing_001",
-        name="document_processing_workflow",
-        description="Process multiple document types and extract structured data",
+        workflow_id="real_document_processing_001",
+        name="real_document_processing_workflow",
+        description="Process real documents using DirectoryReader and specialized file readers",
     )
 
-    # === FILE DISCOVERY ===
+    # === REAL FILE DISCOVERY ===
 
-    # Discover files in the input directory using PythonCodeNode
-    file_discoverer = PythonCodeNode(
+    # Discover actual files in the input directory
+    file_discoverer = DirectoryReaderNode(
         name="file_discoverer",
-        code="""
-# Discover files in input directory
-import os
-from datetime import datetime
-
-# Scan actual directory
-input_dir = "data/inputs"
-discovered_files = []
-
-try:
-    for filename in os.listdir(input_dir):
-        file_path = os.path.join(input_dir, filename)
-        
-        # Skip directories
-        if os.path.isdir(file_path):
-            continue
-        
-        # Get file info
-        file_stat = os.stat(file_path)
-        file_ext = os.path.splitext(filename)[1].lower()
-        
-        # Map extensions to types
-        ext_to_type = {
-            '.csv': 'csv',
-            '.json': 'json',
-            '.txt': 'txt',
-            '.xml': 'xml',
-            '.md': 'markdown'
-        }
-        
-        file_type = ext_to_type.get(file_ext, 'unknown')
-        
-        # Guess mime type based on extension
-        ext_to_mime = {
-            '.csv': 'text/csv',
-            '.json': 'application/json',
-            '.txt': 'text/plain',
-            '.xml': 'application/xml',
-            '.md': 'text/markdown'
-        }
-        mime_type = ext_to_mime.get(file_ext, 'application/octet-stream')
-        
-        discovered_files.append({
-            "file_path": file_path,
-            "file_name": filename,
-            "file_type": file_type,
-            "file_size": file_stat.st_size,
-            "mime_type": mime_type,
-            "discovered_at": datetime.now().isoformat()
-        })
-    
-    print(f"Discovered {len(discovered_files)} files in {input_dir}")
-    
-except FileNotFoundError:
-    print(f"Input directory '{input_dir}' not found")
-    discovered_files = []
-except Exception as e:
-    print(f"Error discovering files: {e}")
-    discovered_files = []
-
-# Group files by type for processing
-files_by_type = {}
-for file_info in discovered_files:
-    file_type = file_info["file_type"]
-    if file_type not in files_by_type:
-        files_by_type[file_type] = []
-    files_by_type[file_type].append(file_info)
-
-# Store results - PythonCodeNode automatically wraps in 'result' key
-result = {
-    "discovered_files": discovered_files,
-    "files_by_type": files_by_type,
-    "total_files": len(discovered_files),
-    "file_types": list(files_by_type.keys()),
-    "discovery_summary": {
-        file_type: len(files) for file_type, files in files_by_type.items()
-    }
-}
-""",
+        directory_path="data/inputs",
+        recursive=False,  # Scan only the inputs directory
+        file_patterns=[
+            "*.csv",
+            "*.json",
+            "*.txt",
+            "*.xml",
+            "*.md",
+        ],  # Include common formats
+        include_hidden=False,
     )
     workflow.add_node("file_discoverer", file_discoverer)
 
-    # === FILE TYPE PROCESSING ===
+    # === REAL CSV PROCESSING ===
 
-    # Process CSV files using PythonCodeNode to read real files
+    # Extract CSV files from discovery and process them
+    csv_file_extractor = PythonCodeNode(
+        name="csv_file_extractor",
+        code="""
+# Extract CSV files from discovery results
+files_by_type = discovery_data.get("files_by_type", {})
+csv_files = files_by_type.get("csv", [])
+
+result = {
+    "csv_files": csv_files,
+    "csv_count": len(csv_files)
+}
+""",
+    )
+    workflow.add_node("csv_file_extractor", csv_file_extractor)
+    workflow.connect(
+        "file_discoverer",
+        "csv_file_extractor",
+        mapping={"files_by_type": "discovery_data"},
+    )
+
+    # Process each CSV file using CSVReaderNode
     csv_processor = PythonCodeNode(
         name="csv_processor",
         code="""
-# Process CSV files by reading actual content
-import csv
-from datetime import datetime
+# Process CSV files using CSVReaderNode for each discovered file
+from kailash.nodes.data import CSVReaderNode
+import json
 
-# Get discovered files from discovery_data
-files_by_type = discovery_data.get("files_by_type", {})
-csv_files_info = files_by_type.get("csv", [])
+csv_files = file_data.get("csv_files", [])
+processed_csv_results = []
 
-print(f"Processing {len(csv_files_info)} CSV files")
-
-processed_csv = []
-for file_info in csv_files_info:
-    file_path = file_info["file_path"]
+for csv_file_info in csv_files:
+    file_path = csv_file_info["file_path"]
     
     try:
-        # Read actual CSV file
-        with open(file_path, 'r') as f:
-            reader = csv.DictReader(f)
-            content = list(reader)
+        # Create and execute CSVReaderNode for this file
+        csv_reader = CSVReaderNode(name=f"csv_reader_{csv_file_info['file_name']}")
+        csv_result = csv_reader.run(file_path=file_path, headers=True)
         
-        print(f"Read {len(content)} records from {file_path}")
+        # Extract the actual data
+        csv_data = csv_result.get("data", [])
         
-        # Extract statistics
-        active_count = sum(1 for record in content if record.get("status") == "active")
-        inactive_count = len(content) - active_count
+        # Analyze the CSV content
+        total_records = len(csv_data)
+        columns = list(csv_data[0].keys()) if csv_data else []
         
-        # Get unique email domains
-        email_domains = []
-        for record in content:
-            email = record.get("email", "")
-            if "@" in email:
-                domain = email.split("@")[1]
-                if domain not in email_domains:
-                    email_domains.append(domain)
+        # Calculate statistics based on actual data
+        active_count = sum(1 for record in csv_data if record.get("status") == "active")
+        total_amount = 0
+        for record in csv_data:
+            amount_str = record.get("purchase_amount", "0")
+            try:
+                amount = float(amount_str)
+                total_amount += amount
+            except (ValueError, TypeError):
+                pass
         
-        processed_file = {
-            "file_info": {
-                "path": file_info["file_path"],
-                "name": file_info["file_name"],
-                "type": "csv",
-                "size": file_info["file_size"]
-            },
-            "processing_result": {
-                "total_records": len(content),
-                "active_customers": active_count,
-                "inactive_customers": inactive_count,
-                "email_domains": email_domains,
-                "columns": list(content[0].keys()) if content else [],
-                "sample_records": content[:3]  # First 3 records as sample
-            },
-            "metadata": {
-                "processed_at": datetime.now().isoformat(),
-                "processor": "csv_processor"
-            }
+        processing_result = {
+            "file_info": csv_file_info,
+            "total_records": total_records,
+            "columns": columns,
+            "active_customers": active_count,
+            "inactive_customers": total_records - active_count,
+            "total_purchase_amount": total_amount,
+            "average_purchase": total_amount / total_records if total_records > 0 else 0,
+            "sample_records": csv_data[:3]  # First 3 records
         }
-        processed_csv.append(processed_file)
+        
+        processed_csv_results.append(processing_result)
         
     except Exception as e:
-        print(f"Error processing CSV file {file_path}: {e}")
-        processed_file = {
-            "file_info": {
-                "path": file_info["file_path"],
-                "name": file_info["file_name"],
-                "type": "csv"
-            },
+        error_result = {
+            "file_info": csv_file_info,
             "error": str(e),
-            "metadata": {
-                "processed_at": datetime.now().isoformat(),
-                "processor": "csv_processor"
-            }
+            "error_type": type(e).__name__
         }
-        processed_csv.append(processed_file)
+        processed_csv_results.append(error_result)
 
-# Store results - PythonCodeNode automatically wraps in 'result' key
 result = {
-    "processed_files": processed_csv,
-    "file_count": len(processed_csv),
-    "total_records": sum(f["processing_result"]["total_records"] for f in processed_csv if "processing_result" in f)
+    "processed_csv_files": processed_csv_results,
+    "csv_files_processed": len(processed_csv_results)
 }
 """,
     )
     workflow.add_node("csv_processor", csv_processor)
     workflow.connect(
-        "file_discoverer", "csv_processor", mapping={"result": "discovery_data"}
+        "csv_file_extractor", "csv_processor", mapping={"result": "file_data"}
     )
 
-    # Process JSON files using PythonCodeNode to read real files
+    # === REAL JSON PROCESSING ===
+
+    # Extract and process JSON files
+    json_file_extractor = PythonCodeNode(
+        name="json_file_extractor",
+        code="""
+# Extract JSON files from discovery results
+files_by_type = discovery_data.get("files_by_type", {})
+json_files = files_by_type.get("json", [])
+
+result = {
+    "json_files": json_files,
+    "json_count": len(json_files)
+}
+""",
+    )
+    workflow.add_node("json_file_extractor", json_file_extractor)
+    workflow.connect(
+        "file_discoverer",
+        "json_file_extractor",
+        mapping={"files_by_type": "discovery_data"},
+    )
+
     json_processor = PythonCodeNode(
         name="json_processor",
         code="""
-# Process JSON files by reading actual content
-import json
-from datetime import datetime
+# Process JSON files using JSONReaderNode for each discovered file
+from kailash.nodes.data import JSONReaderNode
 
-# Get discovered files from discovery_data
-files_by_type = discovery_data.get("files_by_type", {})
-json_files_info = files_by_type.get("json", [])
+json_files = file_data.get("json_files", [])
+processed_json_results = []
 
-print(f"Processing {len(json_files_info)} JSON files")
-
-processed_json = []
-for file_info in json_files_info:
-    file_path = file_info["file_path"]
+for json_file_info in json_files:
+    file_path = json_file_info["file_path"]
     
     try:
-        # Read actual JSON file
-        with open(file_path, 'r') as f:
-            content = json.load(f)
+        # Create and execute JSONReaderNode for this file
+        json_reader = JSONReaderNode(name=f"json_reader_{json_file_info['file_name']}")
+        json_result = json_reader.run(file_path=file_path)
         
-        print(f"Read JSON data from {file_path}")
+        # Extract the actual data
+        json_data = json_result.get("data", {})
         
-        # Extract analytics based on content structure
-        if "transactions" in content:
-            # Transaction log processing
-            transactions = content.get("transactions", [])
-            total_amount = sum(txn.get("amount", 0) for txn in transactions)
-            customer_ids = list(set(txn.get("customer_id") for txn in transactions if txn.get("customer_id")))
-            avg_amount = total_amount / len(transactions) if transactions else 0
+        # Analyze JSON structure and content
+        if isinstance(json_data, dict):
+            keys = list(json_data.keys())
             
-            processing_result = {
-                "data_type": "transaction_log",
-                "transaction_count": len(transactions),
-                "total_amount": total_amount,
-                "average_amount": round(avg_amount, 2),
-                "unique_customers": len(customer_ids),
-                "customer_ids": customer_ids,
-                "metadata": content.get("metadata", {})
-            }
+            # Handle transaction log structure
+            if "transactions" in json_data:
+                transactions = json_data.get("transactions", [])
+                metadata = json_data.get("metadata", {})
+                
+                total_transactions = len(transactions)
+                total_amount = sum(txn.get("amount", 0) for txn in transactions)
+                completed_transactions = sum(1 for txn in transactions if txn.get("status") == "completed")
+                
+                processing_result = {
+                    "file_info": json_file_info,
+                    "data_type": "transaction_log",
+                    "total_transactions": total_transactions,
+                    "completed_transactions": completed_transactions,
+                    "pending_transactions": total_transactions - completed_transactions,
+                    "total_amount": total_amount,
+                    "average_transaction": total_amount / total_transactions if total_transactions > 0 else 0,
+                    "metadata": metadata,
+                    "sample_transactions": transactions[:3]
+                }
+            else:
+                # Generic JSON processing
+                processing_result = {
+                    "file_info": json_file_info,
+                    "data_type": "generic_json",
+                    "top_level_keys": keys,
+                    "key_count": len(keys),
+                    "is_array": isinstance(json_data, list),
+                    "sample_content": str(json_data)[:200] + "..." if len(str(json_data)) > 200 else str(json_data)
+                }
         else:
-            # Generic JSON processing
             processing_result = {
-                "data_type": "generic",
-                "key_count": len(content) if isinstance(content, dict) else 0,
-                "is_array": isinstance(content, list),
-                "array_length": len(content) if isinstance(content, list) else 0,
-                "keys": list(content.keys()) if isinstance(content, dict) else [],
-                "sample": str(content)[:200] + "..." if len(str(content)) > 200 else str(content)
+                "file_info": json_file_info,
+                "data_type": "json_array",
+                "array_length": len(json_data) if isinstance(json_data, list) else 0,
+                "sample_content": str(json_data)[:200] + "..." if len(str(json_data)) > 200 else str(json_data)
             }
         
-        processed_file = {
-            "file_info": {
-                "path": file_info["file_path"],
-                "name": file_info["file_name"],
-                "type": "json",
-                "size": file_info["file_size"]
-            },
-            "processing_result": processing_result,
-            "metadata": {
-                "processed_at": datetime.now().isoformat(),
-                "processor": "json_processor"
-            }
-        }
-        processed_json.append(processed_file)
+        processed_json_results.append(processing_result)
         
     except Exception as e:
-        print(f"Error processing JSON file {file_path}: {e}")
-        processed_file = {
-            "file_info": {
-                "path": file_info["file_path"],
-                "name": file_info["file_name"],
-                "type": "json"
-            },
+        error_result = {
+            "file_info": json_file_info,
             "error": str(e),
-            "metadata": {
-                "processed_at": datetime.now().isoformat(),
-                "processor": "json_processor"
-            }
+            "error_type": type(e).__name__
         }
-        processed_json.append(processed_file)
+        processed_json_results.append(error_result)
 
-# Store results - PythonCodeNode automatically wraps in 'result' key
 result = {
-    "processed_files": processed_json,
-    "file_count": len(processed_json),
-    "total_transactions": sum(f["processing_result"].get("transaction_count", 0) for f in processed_json if "processing_result" in f)
+    "processed_json_files": processed_json_results,
+    "json_files_processed": len(processed_json_results)
 }
 """,
     )
     workflow.add_node("json_processor", json_processor)
     workflow.connect(
-        "file_discoverer", "json_processor", mapping={"result": "discovery_data"}
+        "json_file_extractor", "json_processor", mapping={"result": "file_data"}
     )
 
-    # Process text and other files using PythonCodeNode to read real files
+    # === REAL TEXT PROCESSING ===
+
+    # Extract and process text files (txt, xml, md)
+    text_file_extractor = PythonCodeNode(
+        name="text_file_extractor",
+        code="""
+# Extract text-based files from discovery results
+files_by_type = discovery_data.get("files_by_type", {})
+
+text_files = []
+for file_type in ["txt", "xml", "markdown"]:
+    text_files.extend(files_by_type.get(file_type, []))
+
+result = {
+    "text_files": text_files,
+    "text_count": len(text_files)
+}
+""",
+    )
+    workflow.add_node("text_file_extractor", text_file_extractor)
+    workflow.connect(
+        "file_discoverer",
+        "text_file_extractor",
+        mapping={"files_by_type": "discovery_data"},
+    )
+
     text_processor = PythonCodeNode(
         name="text_processor",
         code="""
-# Process text and other file types by reading actual content
+# Process text files using TextReaderNode for each discovered file
+from kailash.nodes.data import TextReaderNode
 import re
-from datetime import datetime
 
-# Get discovered files from discovery_data
-files_by_type = discovery_data.get("files_by_type", {})
+text_files = file_data.get("text_files", [])
+processed_text_results = []
 
-# Process txt, xml, and markdown files
-file_types_to_process = ["txt", "xml", "markdown"]
-all_text_files = []
-
-for file_type in file_types_to_process:
-    files_info = files_by_type.get(file_type, [])
-    all_text_files.extend(files_info)
-
-print(f"Processing {len(all_text_files)} text-based files")
-
-processed_text = []
-for file_info in all_text_files:
-    file_path = file_info["file_path"]
-    file_type = file_info["file_type"]
+for text_file_info in text_files:
+    file_path = text_file_info["file_path"]
+    file_type = text_file_info["file_type"]
     
     try:
-        # Read actual text file
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Create and execute TextReaderNode for this file
+        text_reader = TextReaderNode(name=f"text_reader_{text_file_info['file_name']}")
+        text_result = text_reader.run(file_path=file_path, encoding="utf-8")
         
-        print(f"Read {len(content)} characters from {file_path}")
+        # Extract the actual text content
+        text_content = text_result.get("text", "")
         
-        # Extract text analytics
-        word_count = len(content.split())
-        line_count = len(content.split("\\n"))
-        char_count = len(content)
+        # Analyze text content
+        word_count = len(text_content.split())
+        line_count = len(text_content.split("\\n"))
+        char_count = len(text_content)
         
-        # File-type specific processing
+        # File-type specific analysis
         if file_type == "txt":
-            # Find placeholders/variables (things in {})
-            placeholders = re.findall(r'\\{([^}]+)\\}', content)
-            specific_info = {
-                "placeholders": placeholders,
-                "placeholder_count": len(placeholders)
+            # Find template placeholders
+            placeholders = re.findall(r'\\{([^}]+)\\}', text_content)
+            specific_analysis = {
+                "template_placeholders": list(set(placeholders)),
+                "placeholder_count": len(placeholders),
+                "unique_placeholders": len(set(placeholders))
             }
         elif file_type == "xml":
-            # Extract XML tags
-            tags = re.findall(r'<([^/>]+)>', content)
+            # Extract XML tags and structure
+            tags = re.findall(r'<([^/>\\s]+)[^>]*>', text_content)
             unique_tags = list(set(tags))
-            specific_info = {
-                "unique_tags": unique_tags,
-                "tag_count": len(unique_tags)
+            specific_analysis = {
+                "xml_tags": unique_tags,
+                "tag_count": len(tags),
+                "unique_tag_count": len(unique_tags),
+                "is_well_formed": text_content.count("<") == text_content.count(">")
             }
         elif file_type == "markdown":
-            # Extract markdown headers
-            headers = re.findall(r'^#+\\s+(.+)$', content, re.MULTILINE)
-            specific_info = {
+            # Extract markdown structure
+            headers = re.findall(r'^#+\\s+(.+)$', text_content, re.MULTILINE)
+            links = re.findall(r'\\[([^\\]]+)\\]\\(([^)]+)\\)', text_content)
+            specific_analysis = {
                 "headers": headers,
-                "header_count": len(headers)
+                "header_count": len(headers),
+                "links": links,
+                "link_count": len(links)
             }
         else:
-            specific_info = {}
+            specific_analysis = {}
         
-        processed_file = {
-            "file_info": {
-                "path": file_info["file_path"],
-                "name": file_info["file_name"],
-                "type": file_type,
-                "size": file_info["file_size"]
-            },
-            "processing_result": {
-                "word_count": word_count,
-                "line_count": line_count,
-                "character_count": char_count,
-                "preview": content[:200] + "..." if len(content) > 200 else content,
-                **specific_info
-            },
-            "metadata": {
-                "processed_at": datetime.now().isoformat(),
-                "processor": "text_processor"
-            }
+        processing_result = {
+            "file_info": text_file_info,
+            "word_count": word_count,
+            "line_count": line_count,
+            "character_count": char_count,
+            "content_preview": text_content[:300] + "..." if len(text_content) > 300 else text_content,
+            "specific_analysis": specific_analysis
         }
-        processed_text.append(processed_file)
+        
+        processed_text_results.append(processing_result)
         
     except Exception as e:
-        print(f"Error processing text file {file_path}: {e}")
-        processed_file = {
-            "file_info": {
-                "path": file_info["file_path"],
-                "name": file_info["file_name"],
-                "type": file_type
-            },
+        error_result = {
+            "file_info": text_file_info,
             "error": str(e),
-            "metadata": {
-                "processed_at": datetime.now().isoformat(),
-                "processor": "text_processor"
-            }
+            "error_type": type(e).__name__
         }
-        processed_text.append(processed_file)
+        processed_text_results.append(error_result)
 
-# Store results - PythonCodeNode automatically wraps in 'result' key
 result = {
-    "processed_files": processed_text,
-    "file_count": len(processed_text),
-    "total_words": sum(f["processing_result"]["word_count"] for f in processed_text if "processing_result" in f)
+    "processed_text_files": processed_text_results,
+    "text_files_processed": len(processed_text_results)
 }
 """,
     )
     workflow.add_node("text_processor", text_processor)
     workflow.connect(
-        "file_discoverer", "text_processor", mapping={"result": "discovery_data"}
+        "text_file_extractor", "text_processor", mapping={"result": "file_data"}
     )
 
-    # === MERGE PROCESSING RESULTS ===
+    # === MERGE ALL PROCESSING RESULTS ===
 
-    # Merge all processing results using PythonCodeNode
-    result_merger = PythonCodeNode(
-        name="result_merger",
-        code="""
-# Merge processing results from all processors
-# Inputs come as csv_result, json_result, text_result (wrapped in 'result' key)
-
-all_results = []
-
-# Add CSV processor results
-if csv_result and isinstance(csv_result, dict):
-    all_results.append(csv_result)
-
-# Add JSON processor results
-if json_result and isinstance(json_result, dict):
-    all_results.append(json_result)
-
-# Add text processor results
-if text_result and isinstance(text_result, dict):
-    all_results.append(text_result)
-
-print(f"Merged {len(all_results)} processor results")
-
-# Store results - PythonCodeNode automatically wraps in 'result' key
-result = all_results
-""",
-    )
+    # Merge all processing results using MergeNode
+    result_merger = MergeNode(id="result_merger", merge_type="merge_dict")
     workflow.add_node("result_merger", result_merger)
-    workflow.connect("csv_processor", "result_merger", mapping={"result": "csv_result"})
-    workflow.connect(
-        "json_processor", "result_merger", mapping={"result": "json_result"}
-    )
-    workflow.connect(
-        "text_processor", "result_merger", mapping={"result": "text_result"}
-    )
+    workflow.connect("csv_processor", "result_merger", mapping={"result": "data1"})
+    workflow.connect("json_processor", "result_merger", mapping={"result": "data2"})
+    workflow.connect("text_processor", "result_merger", mapping={"result": "data3"})
 
-    # === SUMMARY GENERATION ===
+    # === COMPREHENSIVE ANALYSIS ===
 
-    # Generate final processing summary using PythonCodeNode
-    summary_generator = PythonCodeNode(
-        name="summary_generator",
+    # Generate comprehensive analysis report
+    final_analyzer = PythonCodeNode(
+        name="final_analyzer",
         code="""
-# Generate comprehensive processing summary
+# Generate comprehensive analysis from all processed files
 from datetime import datetime
 
-# Input comes as 'merged_results' which is a list of processor results
-processing_results = merged_results if isinstance(merged_results, list) else []
+merged_results = merged_data
+csv_results = merged_results.get("processed_csv_files", [])
+json_results = merged_results.get("processed_json_files", [])
+text_results = merged_results.get("processed_text_files", [])
 
-print(f"Generating summary from {len(processing_results)} processor results")
+# Aggregate statistics
+total_files_processed = len(csv_results) + len(json_results) + len(text_results)
+successful_processing = sum(1 for result in csv_results + json_results + text_results if "error" not in result)
+failed_processing = total_files_processed - successful_processing
 
-# Aggregate all processing results
-all_processed_files = []
-total_files = 0
-files_by_type = {}
-processing_stats = {}
-failed_files = 0
-
-for result_set in processing_results:
-    if isinstance(result_set, dict):
-        processed_files = result_set.get("processed_files", [])
-        all_processed_files.extend(processed_files)
-        total_files += result_set.get("file_count", 0)
-        
-        # Aggregate by file type
-        for file_info in processed_files:
-            # Check for errors
-            if "error" in file_info:
-                failed_files += 1
-                continue
-                
-            file_type = file_info.get("file_info", {}).get("type", "unknown")
-            if file_type not in files_by_type:
-                files_by_type[file_type] = 0
-            files_by_type[file_type] += 1
-            
-            # Collect processing stats
-            if file_type not in processing_stats:
-                processing_stats[file_type] = {}
-            
-            proc_result = file_info.get("processing_result", {})
-            if file_type == "csv":
-                processing_stats[file_type]["total_records"] = processing_stats[file_type].get("total_records", 0) + proc_result.get("total_records", 0)
-                processing_stats[file_type]["columns_found"] = proc_result.get("columns", [])
-            elif file_type == "json":
-                if proc_result.get("data_type") == "transaction_log":
-                    processing_stats[file_type]["total_transactions"] = processing_stats[file_type].get("total_transactions", 0) + proc_result.get("transaction_count", 0)
-                    processing_stats[file_type]["total_amount"] = processing_stats[file_type].get("total_amount", 0) + proc_result.get("total_amount", 0)
-            elif file_type in ["txt", "xml", "markdown"]:
-                processing_stats[file_type]["total_words"] = processing_stats[file_type].get("total_words", 0) + proc_result.get("word_count", 0)
-                processing_stats[file_type]["total_lines"] = processing_stats[file_type].get("total_lines", 0) + proc_result.get("line_count", 0)
-
-# Generate final summary
-summary = {
-    "processing_summary": {
-        "total_files_processed": total_files,
-        "files_by_type": files_by_type,
-        "processing_stats": processing_stats,
-        "successful_files": total_files - failed_files,
-        "failed_files": failed_files
+# File type breakdown
+file_type_summary = {
+    "csv": {
+        "processed": len(csv_results),
+        "successful": sum(1 for r in csv_results if "error" not in r),
+        "total_records": sum(r.get("total_records", 0) for r in csv_results if "total_records" in r),
+        "total_customers": sum(r.get("total_records", 0) for r in csv_results if "total_records" in r),
+        "active_customers": sum(r.get("active_customers", 0) for r in csv_results if "active_customers" in r),
+        "total_revenue": sum(r.get("total_purchase_amount", 0) for r in csv_results if "total_purchase_amount" in r)
     },
-    "detailed_results": all_processed_files,
-    "metadata": {
-        "processed_at": datetime.now().isoformat(),
-        "workflow_version": "2.0",
-        "processor": "document_processing_workflow"
+    "json": {
+        "processed": len(json_results),
+        "successful": sum(1 for r in json_results if "error" not in r),
+        "total_transactions": sum(r.get("total_transactions", 0) for r in json_results if "total_transactions" in r),
+        "completed_transactions": sum(r.get("completed_transactions", 0) for r in json_results if "completed_transactions" in r),
+        "transaction_amount": sum(r.get("total_amount", 0) for r in json_results if "total_amount" in r)
     },
-    "recommendations": []
+    "text": {
+        "processed": len(text_results),
+        "successful": sum(1 for r in text_results if "error" not in r),
+        "total_words": sum(r.get("word_count", 0) for r in text_results if "word_count" in r),
+        "total_lines": sum(r.get("line_count", 0) for r in text_results if "line_count" in r),
+        "total_characters": sum(r.get("character_count", 0) for r in text_results if "character_count" in r)
+    }
 }
 
-# Generate recommendations based on results
-if "csv" in files_by_type:
-    for file in all_processed_files:
-        if file.get("file_info", {}).get("type") == "csv":
-            proc_result = file.get("processing_result", {})
-            if proc_result.get("inactive_customers", 0) > 0:
-                summary["recommendations"].append("Review inactive customers in CSV files")
-                break
+# Generate insights
+insights = []
+if file_type_summary["csv"]["active_customers"] > 0:
+    active_rate = (file_type_summary["csv"]["active_customers"] / file_type_summary["csv"]["total_customers"]) * 100
+    insights.append(f"Customer activation rate: {active_rate:.1f}%")
 
-if "json" in files_by_type:
-    summary["recommendations"].append("Analyze transaction patterns in JSON files")
+if file_type_summary["json"]["total_transactions"] > 0:
+    completion_rate = (file_type_summary["json"]["completed_transactions"] / file_type_summary["json"]["total_transactions"]) * 100
+    insights.append(f"Transaction completion rate: {completion_rate:.1f}%")
 
-if "txt" in files_by_type or "xml" in files_by_type:
-    summary["recommendations"].append("Update text templates with current data")
+if file_type_summary["csv"]["total_revenue"] > 0 and file_type_summary["csv"]["total_customers"] > 0:
+    avg_revenue = file_type_summary["csv"]["total_revenue"] / file_type_summary["csv"]["total_customers"]
+    insights.append(f"Average revenue per customer: ${avg_revenue:.2f}")
 
-if "markdown" in files_by_type:
-    summary["recommendations"].append("Review documentation for accuracy")
+# Generate recommendations
+recommendations = []
+if failed_processing > 0:
+    recommendations.append(f"Review {failed_processing} files that failed processing")
 
-# Store results - PythonCodeNode automatically wraps in 'result' key
-result = summary
+if file_type_summary["csv"]["active_customers"] < file_type_summary["csv"]["total_customers"]:
+    inactive_count = file_type_summary["csv"]["total_customers"] - file_type_summary["csv"]["active_customers"]
+    recommendations.append(f"Re-engage {inactive_count} inactive customers")
+
+if file_type_summary["json"]["completed_transactions"] < file_type_summary["json"]["total_transactions"]:
+    pending_count = file_type_summary["json"]["total_transactions"] - file_type_summary["json"]["completed_transactions"]
+    recommendations.append(f"Follow up on {pending_count} pending transactions")
+
+# Create comprehensive report
+comprehensive_report = {
+    "processing_summary": {
+        "total_files_processed": total_files_processed,
+        "successful_processing": successful_processing,
+        "failed_processing": failed_processing,
+        "success_rate": (successful_processing / total_files_processed * 100) if total_files_processed > 0 else 0
+    },
+    "file_type_breakdown": file_type_summary,
+    "business_insights": insights,
+    "recommendations": recommendations,
+    "detailed_results": {
+        "csv_analysis": csv_results,
+        "json_analysis": json_results,
+        "text_analysis": text_results
+    },
+    "report_metadata": {
+        "generated_at": datetime.now().isoformat(),
+        "workflow_version": "real_file_processing_v1.0",
+        "processing_method": "DirectoryReader + Specialized FileReaders"
+    }
+}
+
+result = comprehensive_report
 """,
     )
-    workflow.add_node("summary_generator", summary_generator)
+    workflow.add_node("final_analyzer", final_analyzer)
     workflow.connect(
-        "result_merger", "summary_generator", mapping={"result": "merged_results"}
+        "result_merger", "final_analyzer", mapping={"merged_data": "merged_data"}
     )
 
     # === OUTPUT ===
 
-    # Save processing summary
-    summary_writer = JSONWriterNode(
-        id="summary_writer", file_path="data/outputs/processing_summary.json"
+    # Save comprehensive processing report
+    report_writer = JSONWriterNode(
+        id="report_writer",
+        file_path="data/outputs/comprehensive_document_analysis.json",
     )
-    workflow.add_node("summary_writer", summary_writer)
-    workflow.connect("summary_generator", "summary_writer", mapping={"result": "data"})
+    workflow.add_node("report_writer", report_writer)
+    workflow.connect("final_analyzer", "report_writer", mapping={"result": "data"})
 
     return workflow
 
 
-def create_sample_input_files():
-    """Create sample input files for testing."""
-    os.makedirs("data/inputs", exist_ok=True)
-
-    # Create sample CSV
-    csv_content = """customer_id,name,email,status
-CUST-001,John Doe,john@example.com,active
-CUST-002,Jane Smith,jane@example.com,active
-CUST-003,Bob Johnson,bob@example.com,inactive"""
-
-    with open("data/inputs/customer_data.csv", "w") as f:
-        f.write(csv_content)
-
-    # Create sample JSON
-    json_content = {
-        "transactions": [
-            {
-                "id": "TXN-001",
-                "customer_id": "CUST-001",
-                "amount": 299.99,
-                "timestamp": "2024-01-15T09:00:00Z",
-            },
-            {
-                "id": "TXN-002",
-                "customer_id": "CUST-002",
-                "amount": 149.50,
-                "timestamp": "2024-01-15T09:30:00Z",
-            },
-            {
-                "id": "TXN-003",
-                "customer_id": "CUST-001",
-                "amount": 79.99,
-                "timestamp": "2024-01-15T10:00:00Z",
-            },
-        ],
-        "metadata": {"version": "1.0", "generated_at": "2024-01-15T10:30:00Z"},
-    }
-
-    with open("data/inputs/transaction_log.json", "w") as f:
-        json.dump(json_content, f, indent=2)
-
-    # Create sample text file
-    text_content = """Customer Report Template
-
-Total Customers: {total_customers}
-Active Customers: {active_customers}
-Revenue: ${total_revenue}
-
-Generated on: {report_date}"""
-
-    with open("data/inputs/report_template.txt", "w") as f:
-        f.write(text_content)
-
-
 def run_document_processing():
-    """Execute the document processing workflow."""
+    """Execute the real document processing workflow."""
     workflow = create_document_processing_workflow()
     runtime = LocalRuntime()
 
     parameters = {}
 
     try:
-        print("Starting Document Processing Workflow...")
-        print("🔍 Discovering files...")
+        print("Starting Real Document Processing Workflow...")
+        print("🔍 Discovering actual files in data/inputs/...")
 
         result, run_id = runtime.execute(workflow, parameters=parameters)
 
         print("\\n✅ Document Processing Complete!")
-        print("📁 Output generated: data/outputs/processing_summary.json")
+        print("📁 Output generated: data/outputs/comprehensive_document_analysis.json")
 
-        # Show summary
-        summary_result = result.get("summary_generator", {}).get("result", {})
-        processing_summary = summary_result.get("processing_summary", {})
+        # Show processing summary
+        final_result = result.get("final_analyzer", {}).get("result", {})
+        processing_summary = final_result.get("processing_summary", {})
+        file_breakdown = final_result.get("file_type_breakdown", {})
 
         print("\\n📊 Processing Summary:")
         print(
             f"   - Total files processed: {processing_summary.get('total_files_processed', 0)}"
         )
-        print(f"   - Files by type: {processing_summary.get('files_by_type', {})}")
-        print(f"   - Successful files: {processing_summary.get('successful_files', 0)}")
+        print(f"   - Success rate: {processing_summary.get('success_rate', 0):.1f}%")
+        print(f"   - CSV files: {file_breakdown.get('csv', {}).get('processed', 0)}")
+        print(f"   - JSON files: {file_breakdown.get('json', {}).get('processed', 0)}")
+        print(f"   - Text files: {file_breakdown.get('text', {}).get('processed', 0)}")
+
+        # Show business insights
+        insights = final_result.get("business_insights", [])
+        if insights:
+            print("\\n💡 Business Insights:")
+            for insight in insights:
+                print(f"   - {insight}")
 
         # Show recommendations
-        recommendations = summary_result.get("recommendations", [])
+        recommendations = final_result.get("recommendations", [])
         if recommendations:
-            print("\\n💡 Recommendations:")
+            print("\\n🎯 Recommendations:")
             for rec in recommendations:
                 print(f"   - {rec}")
 
@@ -670,9 +678,9 @@ def run_document_processing():
 
 def main():
     """Main entry point."""
-    # Create sample input files
-    create_sample_input_files()
-    print("📝 Created sample input files")
+    # Ensure input data exists
+    ensure_input_data_exists()
+    print("📝 Input data verified/created")
 
     # Create output directories
     os.makedirs("data/outputs", exist_ok=True)
@@ -680,14 +688,21 @@ def main():
     # Run the document processing workflow
     run_document_processing()
 
-    # Display generated summary
-    print("\\n=== Processing Summary Preview ===")
+    # Display generated report preview
+    print("\\n=== Document Analysis Report Preview ===")
     try:
-        with open("data/outputs/processing_summary.json", "r") as f:
-            summary = json.load(f)
-            print(json.dumps(summary["processing_summary"], indent=2))
+        with open("data/outputs/comprehensive_document_analysis.json", "r") as f:
+            report = json.load(f)
+            processing_summary = report["processing_summary"]
+            print(json.dumps(processing_summary, indent=2))
+
+            print("\\n=== File Type Breakdown ===")
+            file_breakdown = report["file_type_breakdown"]
+            for file_type, stats in file_breakdown.items():
+                print(f"{file_type.upper()}: {stats}")
+
     except Exception as e:
-        print(f"Could not read summary: {e}")
+        print(f"Could not read report: {e}")
 
 
 if __name__ == "__main__":

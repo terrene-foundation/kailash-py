@@ -91,7 +91,7 @@ class ParallelRuntime:
 
         try:
             # Validate workflow
-            workflow.validate()
+            workflow.validate(runtime_parameters=parameters)
 
             # Initialize semaphore for concurrent execution control
             self.semaphore = asyncio.Semaphore(self.max_workers)
@@ -398,7 +398,7 @@ class ParallelRuntime:
                     async def execute_with_metrics():
                         with collector.collect(node_id=node_id) as context:
                             result = await loop.run_in_executor(
-                                None, lambda: node_instance.execute(**inputs)
+                                None, lambda: node_instance.run(**inputs)
                             )
                             return result, context.result()
 

@@ -2,6 +2,68 @@
 
 Common issues and their solutions when developing custom nodes.
 
+## Session 061/062 Breaking Changes
+
+### ✅ Session 061: Node Creation Without Required Params
+
+**New Behavior**: Nodes can be created without required parameters (validated at execution):
+
+```python
+# ✅ Now OK: Create node without required params
+node = CSVReaderNode(name="reader")  # Missing file_path - OK!
+
+# ✅ Configure before execution
+node.configure(file_path="data.csv")
+result = node.run()
+
+# ✅ Or pass at runtime
+runtime.execute(workflow, parameters={"reader": {"file_path": "data.csv"}})
+```
+
+**Old Behavior**: Required parameters during construction caused errors.
+
+### ✅ Session 062: Centralized Data Paths
+
+**New Pattern**: Use centralized data utilities:
+
+```python
+# ✅ CORRECT: Centralized data access
+from examples.utils.data_paths import get_input_data_path
+file_path = str(get_input_data_path("customers.csv"))
+
+# ❌ OLD: Hardcoded paths (now discouraged)
+# file_path = "examples/data/customers.csv"
+```
+
+**Migration**: Update hardcoded paths to use centralized utilities.
+
+### ✅ Session 062: PythonCodeNode Best Practices
+
+**New Default**: Use `.from_function()` for code > 3 lines:
+
+```python
+# ✅ BEST: Full IDE support
+def process_data(input_data: list) -> dict:
+    """Process with syntax highlighting, debugging, etc."""
+    import pandas as pd
+    df = pd.DataFrame(input_data)
+    return {"count": len(df), "data": df.to_dict('records')}
+
+node = PythonCodeNode.from_function(
+    func=process_data,
+    name="processor"
+)
+
+# ✅ String code only for specific cases:
+# - Dynamic code generation
+# - User-provided code
+# - Simple one-liners
+# - Template-based code
+node = PythonCodeNode(name="calc", code="result = value * 2")
+```
+
+**Migration Tool**: Use `scripts/refactor-pythoncode-strings.py` to convert existing code.
+
 ## Issue: "Can't instantiate abstract class"
 
 ### Error Message

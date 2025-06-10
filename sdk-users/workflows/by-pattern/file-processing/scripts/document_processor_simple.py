@@ -18,9 +18,9 @@ import os
 
 from kailash import Workflow
 from kailash.nodes.data import (
-    JSONWriterNode,
     CSVReaderNode,
     JSONReaderNode,
+    JSONWriterNode,
     TextReaderNode,
 )
 from kailash.nodes.transform import DataTransformer

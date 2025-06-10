@@ -67,6 +67,9 @@ pip install kailash
 git clone https://github.com/terrene-foundation/kailash-py.git
 cd kailash-python-sdk
 uv sync
+
+# Set up SDK development infrastructure (optional but recommended)
+./scripts/setup-sdk-environment.sh
 ```
 
 ### Your First Workflow
@@ -282,7 +285,23 @@ assert results["analyze"]["result"]["total_customers"] == len(test_data)
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! We use a **Claude Code-driven workflow** for all team collaboration.
+
+### 🚀 New Team Member?
+**Start Here → [NEW_TEAM_MEMBER.md](NEW_TEAM_MEMBER.md)**
+
+### For Contributors
+- **SDK Users**: See [sdk-users/CLAUDE.md](sdk-users/CLAUDE.md) for building with the SDK
+- **SDK Contributors**: See [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md) for SDK development
+- **Team Collaboration**: Use [Claude Code Workflow System](# contrib (removed)/operations/claude-code-workflows/) for all project management
+
+### Claude Code Workflow
+All project management is done through conversational interaction with Claude Code:
+- **No manual TODO editing** - Claude Code handles all updates
+- **No direct GitHub issues** - Created through planning sessions
+- **All progress tracked** - Through natural conversation
+
+See [Contributing Guide](CONTRIBUTING.md) for complete details.
 
 ### Development Setup
 
@@ -301,6 +320,9 @@ pytest
 black .
 isort .
 ruff check .
+
+# Test all examples
+python scripts/test-all-examples.py
 ```
 
 ## 📈 Project Status

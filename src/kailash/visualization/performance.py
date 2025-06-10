@@ -63,8 +63,12 @@ class PerformanceVisualizer:
             Dictionary mapping chart names to file paths
         """
         if output_dir is None:
-            # Use relative path that works from project root or create in current directory
-            output_dir = Path.cwd() / "outputs" / "performance"
+            # Use centralized output directory
+            # Get project root and use data/outputs/visualizations/performance
+            project_root = Path(__file__).parent.parent.parent.parent
+            output_dir = (
+                project_root / "data" / "outputs" / "visualizations" / "performance"
+            )
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Get run data
@@ -719,7 +723,16 @@ class PerformanceVisualizer:
     ) -> Path:
         """Compare performance across multiple runs."""
         if output_path is None:
-            output_path = Path.cwd() / "outputs" / "performance" / "comparison.png"
+            # Use centralized output directory
+            project_root = Path(__file__).parent.parent.parent.parent
+            output_path = (
+                project_root
+                / "data"
+                / "outputs"
+                / "visualizations"
+                / "performance"
+                / "comparison.png"
+            )
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))

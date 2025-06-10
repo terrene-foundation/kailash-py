@@ -1,0 +1,68 @@
+name: Build Documentation
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs-build.yml'
+      - '.github/workflows/docs-deploy.yml'
+  push:
+    branches-ignore: [ main ]  # Run on all branches except main
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python and uv for local runner
+        run: |
+          # Check if Python is available
+          python3 --version || { echo "Python 3 not found"; exit 1; }
+
+          # Install uv if not available, using workspace directory to avoid permission issues
+          if ! command -v uv &> /dev/null; then
+            export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+            export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
+            export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
+          fi
+
+          # Verify uv is working
+          uv --version
+
+      - name: Install dependencies
+        run: |
+          # Create virtual environment in workspace
+          uv venv .venv --python python3
+          uv sync
+
+      - name: Build documentation
+        run: |
+          # Ensure uv is in PATH and activate environment
+          export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
+          cd docs
+          uv run python build_docs.py
+
+      - name: Verify documentation build
+        run: |
+          # Check that the build output exists
+          if [ ! -d "./docs/_build/html" ]; then
+            echo "Documentation build failed - no output directory found"
+            exit 1
+          fi
+          echo "✅ Documentation built successfully"

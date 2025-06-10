@@ -311,7 +311,7 @@ class DataTransformer(Node):
         return {
             "data": NodeParameter(
                 name="data",
-                type=list,
+                type=Any,
                 required=False,
                 description="Primary input data to transform",
             ),

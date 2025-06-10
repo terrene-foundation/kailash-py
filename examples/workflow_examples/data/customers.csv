@@ -1,6 +1,0 @@
-customer_id,name,email,age,purchase_total
-C001,John Doe,john@example.com,30,1500.00
-C002,Jane Smith,jane@example.com,25,2200.50
-C003,Bob Johnson,bob@example.com,42,980.75
-C004,Alice Brown,alice@example.com,35,3400.25
-C005,Charlie Davis,charlie@example.com,28,750.00

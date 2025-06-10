@@ -1,0 +1,67 @@
+{
+  "task_id": "b4b3fe38-eb34-40ad-b942-091e034d0733",
+  "run_id": "dcd9d2e9-ab24-4c87-980f-72313f809b09",
+  "node_id": "customer_reader",
+  "node_type": "CSVReaderNode",
+  "status": "completed",
+  "started_at": "2025-06-08T13:53:54.762711+00:00",
+  "ended_at": "2025-06-08T13:53:54.765473+00:00",
+  "completed_at": "2025-06-08T13:53:54.765473+00:00",
+  "created_at": "2025-06-08T13:53:54.762727+00:00",
+  "result": {
+    "data": [
+      {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "555-0123",
+        "ssn": "123-45-6789",
+        "balance": "1500"
+      },
+      {
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "phone": "555-0124",
+        "ssn": "987-65-4321",
+        "balance": "2500"
+      },
+      {
+        "name": "Bob Johnson",
+        "email": "bob@example.com",
+        "phone": "555-0125",
+        "ssn": "456-78-9012",
+        "balance": "800"
+      },
+      {
+        "name": "Alice Brown",
+        "email": "alice@example.com",
+        "phone": "555-0126",
+        "ssn": "789-01-2345",
+        "balance": "3200"
+      }
+    ]
+  },
+  "error": null,
+  "metadata": {
+    "execution_time": 0.0007081031799316406
+  },
+  "input_data": null,
+  "output_data": null,
+  "metrics": {
+    "duration": 0.0007081031799316406,
+    "memory_usage": 129.546875,
+    "memory_usage_mb": 129.546875,
+    "cpu_usage": 0.0,
+    "custom_metrics": {
+      "memory_delta_mb": 0.0625,
+      "io_read_bytes": 0,
+      "io_write_bytes": 0,
+      "io_read_count": 0,
+      "io_write_count": 0,
+      "thread_count": 2,
+      "context_switches": 1666
+    }
+  },
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

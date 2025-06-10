@@ -2,16 +2,18 @@
 
 ## Data I/O
 ```python
-# CSV Reading
+# CSV Reading with centralized data paths (Session 062)
+from examples.utils.data_paths import get_input_data_path, get_output_data_path
+
 workflow.add_node("csv_in", CSVReaderNode(),
-    file_path="data.csv",
+    file_path=str(get_input_data_path("customers.csv")),
     delimiter=",",
     has_header=True
 )
 
-# JSON Writing
+# JSON Writing to centralized output
 workflow.add_node("json_out", JSONWriterNode(),
-    file_path="output.json",
+    file_path=str(get_output_data_path("results.json")),
     indent=2
 )
 ```

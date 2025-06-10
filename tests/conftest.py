@@ -13,6 +13,12 @@ from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.workflow import Workflow
 
+# Import SDK development infrastructure support
+try:
+    from .conftest_sdk_dev import *
+except ImportError:
+    pass  # SDK dev infrastructure is optional
+
 
 class MockNode(Node):
     """Mock node for testing."""
