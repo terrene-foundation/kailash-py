@@ -1,0 +1,44 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and create minimal README for setup.py
+COPY pyproject.toml setup.py ./
+COPY src/kailash/__init__.py src/kailash/
+RUN echo "# Kailash MCP Server" > README.md
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir mcp aiohttp
+
+# Copy source code and required files
+COPY src/ ./src/
+COPY # contrib (removed)/research/combined_ai_registry.json ./research/
+
+# Create health check script
+RUN echo '#!/usr/bin/env python3\n\
+import asyncio\n\
+from aiohttp import web\n\
+\n\
+async def health(request):\n\
+    return web.json_response({"status": "healthy", "service": "mcp-server"})\n\
+\n\
+async def create_app():\n\
+    app = web.Application()\n\
+    app.router.add_get("/health", health)\n\
+    return app\n\
+\n\
+if __name__ == "__main__":\n\
+    app = asyncio.run(create_app())\n\
+    web.run_app(app, host="0.0.0.0", port=8765)\n' > /app/health_server.py
+
+# Expose ports
+EXPOSE 8765
+
+# Start MCP server with health endpoint
+CMD ["python", "-m", "kailash.mcp.ai_registry_server"]
