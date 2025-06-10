@@ -113,8 +113,8 @@ class LocalRuntime:
         run_id = None
 
         try:
-            # Validate workflow
-            workflow.validate()
+            # Validate workflow with runtime parameters (Session 061)
+            workflow.validate(runtime_parameters=parameters)
 
             # Initialize tracking
             if task_manager:
@@ -296,6 +296,10 @@ class LocalRuntime:
                     parameters=parameters.get(node_id, {}),
                 )
 
+                # Update node config with parameters (Session 061: direct config update)
+                {**node_instance.config, **parameters.get(node_id, {})}
+                node_instance.config.update(parameters.get(node_id, {}))
+
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
@@ -391,21 +395,36 @@ class LocalRuntime:
         """
         inputs = {}
 
-        # Start with node configuration
-        inputs.update(node_instance.config)
+        # NOTE: Node configuration is handled separately in configure() call
+        # Only add runtime inputs and data from connected nodes here
+
+        # Add runtime parameters (those not used for node configuration)
+        # Map specific runtime parameters for known node types
+        if "consumer_timeout_ms" in parameters:
+            inputs["timeout_ms"] = parameters["consumer_timeout_ms"]
+
+        # Add other potential runtime parameters that are not configuration
+        runtime_param_names = {"max_messages", "timeout_ms", "limit", "offset"}
+        for param_name, param_value in parameters.items():
+            if param_name in runtime_param_names:
+                inputs[param_name] = param_value
 
         # Add connected inputs from other nodes
         for edge in workflow.graph.in_edges(node_id, data=True):
             source_node_id = edge[0]
             mapping = edge[2].get("mapping", {})
 
-            print(f"LOCAL RUNTIME DEBUG: Processing edge {source_node_id} -> {node_id}")
-            print(f"  Edge data: {edge[2]}")
-            print(f"  Mapping: {mapping}")
+            if self.debug:
+                self.logger.debug(f"Processing edge {source_node_id} -> {node_id}")
+                self.logger.debug(f"  Edge data: {edge[2]}")
+                self.logger.debug(f"  Mapping: {mapping}")
 
             if source_node_id in node_outputs:
                 source_outputs = node_outputs[source_node_id]
-                print(f"  Source outputs: {list(source_outputs.keys())}")
+                if self.debug:
+                    self.logger.debug(
+                        f"  Source outputs: {list(source_outputs.keys())}"
+                    )
 
                 # Check if the source node failed
                 if isinstance(source_outputs, dict) and source_outputs.get("failed"):
@@ -416,19 +435,24 @@ class LocalRuntime:
                 for source_key, target_key in mapping.items():
                     if source_key in source_outputs:
                         inputs[target_key] = source_outputs[source_key]
-                        print(
-                            f"  MAPPED: {source_key} -> {target_key} (type: {type(source_outputs[source_key])})"
-                        )
+                        if self.debug:
+                            self.logger.debug(
+                                f"  MAPPED: {source_key} -> {target_key} (type: {type(source_outputs[source_key])})"
+                            )
                     else:
-                        print(
-                            f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
-                        )
+                        if self.debug:
+                            self.logger.debug(
+                                f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
+                            )
                         self.logger.warning(
                             f"Source output '{source_key}' not found in node '{source_node_id}'. "
                             f"Available outputs: {list(source_outputs.keys())}"
                         )
             else:
-                print(f"  No outputs found for source node {source_node_id}")
+                if self.debug:
+                    self.logger.debug(
+                        f"  No outputs found for source node {source_node_id}"
+                    )
 
         # Apply parameter overrides
         inputs.update(parameters)

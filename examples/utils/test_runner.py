@@ -37,21 +37,23 @@ def test_all_examples():
         "test_runner.py",  # This test runner
     }
 
-    # Folders to search for examples
+    # Folders to search for examples (all end with _examples for consistency)
     example_folders = [
+        "feature_examples",
         "node_examples",
-        "workflow_examples",
         "integration_examples",
-        "visualization_examples",
-        "studio_examples",
     ]
 
-    # Find all .py files in the example subdirectories
+    # Find all .py files in the example subdirectories (recursively)
     for folder in example_folders:
         folder_path = examples_root / folder
         if folder_path.exists():
-            for file in folder_path.glob("*.py"):
-                if file.name not in exclude_files and not file.name.startswith("_"):
+            for file in folder_path.rglob("*.py"):  # Use rglob for recursive search
+                if (
+                    file.name not in exclude_files
+                    and not file.name.startswith("_")
+                    and not file.name.startswith("test_")
+                ):
                     example_files.append(file.relative_to(examples_root))
 
     # Sort for consistent output

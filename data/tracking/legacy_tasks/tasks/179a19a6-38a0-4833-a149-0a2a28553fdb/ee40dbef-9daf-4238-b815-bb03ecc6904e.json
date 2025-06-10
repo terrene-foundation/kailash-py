@@ -1,0 +1,20 @@
+{
+  "task_id": "ee40dbef-9daf-4238-b815-bb03ecc6904e",
+  "run_id": "179a19a6-38a0-4833-a149-0a2a28553fdb",
+  "node_id": "validator",
+  "node_type": "PythonCodeNode",
+  "status": "failed",
+  "started_at": "2025-06-07T09:11:24.686867+00:00",
+  "ended_at": "2025-06-07T09:11:24.689899+00:00",
+  "completed_at": "2025-06-07T09:11:24.689899+00:00",
+  "created_at": "2025-06-07T09:11:24.686879+00:00",
+  "result": null,
+  "error": "Function execution failed: Missing required columns: ['customer_id', 'purchase_total']\nTraceback (most recent call last):\n  File \"./repos/projects/kailash_python_sdk/src/kailash/nodes/code/python.py\", line 317, in execute_function\n    return func(**kwargs)\n           ^^^^^^^^^^^^^^\n  File \"./repos/projects/kailash_python_sdk/examples/workflow_examples/workflow_complex.py\", line 52, in validate_data\n    raise ValueError(f\"Missing required columns: {missing_columns}\")\nValueError: Missing required columns: ['customer_id', 'purchase_total']\n",
+  "metadata": {},
+  "input_data": null,
+  "output_data": null,
+  "metrics": null,
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

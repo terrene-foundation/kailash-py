@@ -399,8 +399,16 @@ class WorkflowVisualizer:
 
         # Determine output path
         if output_path is None:
-            # Create default directory if it doesn't exist
-            output_dir = Path.cwd() / "outputs" / "workflow_executions"
+            # Use centralized output directory
+            # Get project root and use data/outputs/visualizations
+            project_root = Path(__file__).parent.parent.parent.parent
+            output_dir = (
+                project_root
+                / "data"
+                / "outputs"
+                / "visualizations"
+                / "workflow_executions"
+            )
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"execution_{run_id}.md"
         else:

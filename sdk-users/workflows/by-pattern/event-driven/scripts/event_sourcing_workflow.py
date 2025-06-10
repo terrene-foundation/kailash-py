@@ -18,9 +18,9 @@ import json
 import os
 
 from kailash import Workflow
-from kailash.nodes.data import JSONWriterNode
-from kailash.nodes.transform import DataTransformer
 from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import EventGeneratorNode, JSONWriterNode
+from kailash.nodes.transform import DataTransformer
 from kailash.runtime import LocalRuntime
 
 
@@ -431,79 +431,39 @@ def create_simple_event_workflow() -> Workflow:
         description="Simple event processing without external files",
     )
 
-    # Use inline event data
-    event_source = DataTransformer(
-        id="event_source",
-        transformations=[
-            """
-# Use predefined events for testing
-events = [
-    {
-        "event_id": "evt-test-001",
-        "event_type": "UserRegistered",
-        "aggregate_id": "USER-001",
-        "timestamp": "2024-01-15T10:00:00Z",
-        "data": {
-            "username": "john_doe",
-            "email": "john@example.com",
-            "plan": "premium"
+    # Use EventGeneratorNode instead of DataTransformer with embedded code
+    event_source = EventGeneratorNode(
+        event_types=["UserRegistered", "UserLoggedIn", "SubscriptionCreated"],
+        event_count=3,
+        aggregate_prefix="USER",
+        source_service="test-service",
+        custom_data_templates={
+            "UserRegistered": {
+                "username": "user_{id}",
+                "email": "{username}@example.com",
+                "plan": "premium",
+            },
+            "UserLoggedIn": {
+                "ip_address": "192.168.1.{random_ip}",
+                "device": "Chrome/Windows",
+            },
+            "SubscriptionCreated": {
+                "plan": "premium",
+                "price": 99.99,
+                "billing_cycle": "monthly",
+            },
         },
-        "metadata": {
-            "source": "auth-service",
-            "version": 1
-        }
-    },
-    {
-        "event_id": "evt-test-002",
-        "event_type": "UserLoggedIn",
-        "aggregate_id": "USER-001",
-        "timestamp": "2024-01-15T10:05:00Z",
-        "data": {
-            "ip_address": "192.168.1.100",
-            "device": "Chrome/Windows"
-        },
-        "metadata": {
-            "source": "auth-service",
-            "version": 1
-        }
-    },
-    {
-        "event_id": "evt-test-003",
-        "event_type": "SubscriptionCreated",
-        "aggregate_id": "USER-001",
-        "timestamp": "2024-01-15T10:10:00Z",
-        "data": {
-            "plan": "premium",
-            "price": 99.99,
-            "billing_cycle": "monthly"
-        },
-        "metadata": {
-            "source": "billing-service",
-            "version": 1
-        }
-    }
-]
-
-result = {
-    "events": events,
-    "event_count": len(events),
-    "event_types": list(set(e["event_type"] for e in events))
-}
-"""
-        ],
+        seed=42,  # For reproducible results
     )
     workflow.add_node("event_source", event_source)
 
-    # Simple event counter
+    # Simple event counter using a focused DataTransformer
     event_counter = DataTransformer(
-        id="event_counter",
         transformations=[
             """
-# Count events by type
-events = data.get("events", []) if isinstance(data, dict) else []
-
+# Count events by type - now with real event data
 event_counts = {}
-for event in events:
+for event in data:
     event_type = event.get("event_type", "unknown")
     event_counts[event_type] = event_counts.get(event_type, 0) + 1
 
@@ -516,7 +476,7 @@ result = {
         ],
     )
     workflow.add_node("event_counter", event_counter)
-    workflow.connect("event_source", "event_counter", mapping={"result": "data"})
+    workflow.connect("event_source", "event_counter", mapping={"events": "data"})
 
     return workflow
 

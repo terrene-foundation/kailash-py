@@ -80,7 +80,7 @@ class ParallelCyclicRuntime:
 
         try:
             # Validate workflow
-            workflow.validate()
+            workflow.validate(runtime_parameters=parameters)
 
             # Check for cycles first
             if self.enable_cycles and workflow.has_cycles():
@@ -380,7 +380,7 @@ class ParallelCyclicRuntime:
             # Execute node with metrics collection
             collector = MetricsCollector()
             with collector.collect(node_id=node_id) as metrics_context:
-                outputs = node_instance.execute(**inputs)
+                outputs = node_instance.run(**inputs)
 
             # Get performance metrics
             performance_metrics = metrics_context.result()

@@ -168,7 +168,7 @@ class CyclicWorkflowExecutor:
             WorkflowValidationError: If workflow is invalid
         """
         # Validate workflow (including cycles)
-        workflow.validate()
+        workflow.validate(runtime_parameters=parameters)
 
         # Generate run ID if not provided
         if not run_id:

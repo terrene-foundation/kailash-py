@@ -8,9 +8,9 @@ import pytest
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import (
-    NodeConfigurationError,
     NodeExecutionError,
     RuntimeExecutionError,
+    WorkflowValidationError,
 )
 from kailash.tracking.manager import TaskManager
 from kailash.workflow.graph import Workflow
@@ -208,7 +208,7 @@ class TestErrorPropagation:
         assert "Tracked failure" in str(error_task.error)
 
     def test_validation_error_before_execution(self):
-        """Test that validation errors prevent execution."""
+        """Test that validation errors occur during workflow validation (Session 061 behavior)."""
 
         class ValidationNode(Node):
             def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -224,13 +224,18 @@ class TestErrorPropagation:
             def run(self, **kwargs) -> Dict[str, Any]:
                 return {"result": kwargs.get("required_param")}
 
-        Workflow(workflow_id="validation_error", name="Validation Error")
+        workflow = Workflow(workflow_id="validation_error", name="Validation Error")
 
-        # Add node without required parameter
-        with pytest.raises(NodeConfigurationError) as exc_info:
-            ValidationNode(name="validation")  # Missing required_param
+        # NEW BEHAVIOR: Node creation succeeds without required parameter
+        node = ValidationNode(name="validation")  # Missing required_param - OK now
+        workflow.add_node("validation", node)
 
-        assert "Required parameter 'required_param' not provided" in str(exc_info.value)
+        # NEW BEHAVIOR: Validation error occurs during workflow validation, before execution
+        runtime = LocalRuntime()
+        with pytest.raises(WorkflowValidationError) as exc_info:
+            runtime.execute(workflow)
+
+        assert "required_param" in str(exc_info.value)
 
     def test_error_message_context(self):
         """Test that error messages include helpful context."""

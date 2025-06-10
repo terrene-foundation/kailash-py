@@ -1,6 +1,53 @@
 # Current Release Status
 
-## Latest Release: v0.2.2
+## Next Release: v0.3.0
+
+**Planned Date**: June 10, 2025
+**Status**: 🟡 In Preparation
+**Type**: Minor Release (Parameter Lifecycle Architecture)
+**PR**: TBD
+**PyPI**: TBD
+**GitHub**: TBD
+
+### Release Theme
+Parameter Lifecycle Architecture & Data Consolidation - Major architectural improvements for flexible node construction and centralized data management
+
+### Key Features
+1. **Parameter Lifecycle Architecture** (Session 061/062)
+   - Nodes can be created without required parameters
+   - Parameters validated at execution time
+   - Clear separation: Construction → Configuration → Execution
+   - More flexible workflow construction patterns
+
+2. **Data Consolidation**
+   - Centralized `/data/` directory structure
+   - Standardized data access utilities
+   - Backward compatibility maintained
+   - 2,487+ files reorganized
+
+3. **Runtime Architecture Fixes**
+   - Fixed critical bug: `execute()` → `run()`
+   - Workflow validation supports runtime parameters
+   - Improved error handling and messages
+
+4. **PythonCodeNode Enhancements**
+   - Better `from_function()` with full IDE support
+   - Enhanced data science capabilities
+   - Improved type inference
+   - Best practices documentation
+
+5. **Enterprise Workflow Library**
+   - Production-ready workflow patterns
+   - Control flow implementations
+   - Industry-specific examples
+   - Migration guides from code-heavy patterns
+
+### Breaking Changes
+- Runtime method change (`execute()` → `run()`)
+- Workflow validation API accepts runtime parameters
+- Data file reorganization (backward compatible)
+
+## Previous Release: v0.2.2
 
 **Release Date**: 2025-06-10
 **Status**: ✅ Released

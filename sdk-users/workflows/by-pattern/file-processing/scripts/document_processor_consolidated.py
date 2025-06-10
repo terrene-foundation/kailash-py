@@ -16,11 +16,11 @@ import json
 import os
 
 from kailash import Workflow
+from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import (
     DirectoryReaderNode,
     JSONWriterNode,
 )
-from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 

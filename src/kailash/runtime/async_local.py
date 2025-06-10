@@ -227,7 +227,7 @@ class AsyncLocalRuntime:
                     outputs = await node_instance.execute_async(**inputs)
                 else:
                     # Fall back to synchronous execution
-                    outputs = node_instance.execute(**inputs)
+                    outputs = node_instance.run(**inputs)
 
                 execution_time = (
                     datetime.now(timezone.utc) - start_time

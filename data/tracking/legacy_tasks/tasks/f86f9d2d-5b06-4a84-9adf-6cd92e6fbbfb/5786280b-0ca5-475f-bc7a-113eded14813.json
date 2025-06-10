@@ -1,0 +1,20 @@
+{
+  "task_id": "5786280b-0ca5-475f-bc7a-113eded14813",
+  "run_id": "f86f9d2d-5b06-4a84-9adf-6cd92e6fbbfb",
+  "node_id": "transformer",
+  "node_type": "PythonCodeNode",
+  "status": "failed",
+  "started_at": null,
+  "ended_at": "2025-06-07T09:11:25.500564+00:00",
+  "completed_at": "2025-06-07T09:11:25.500564+00:00",
+  "created_at": "2025-06-07T09:11:25.494926+00:00",
+  "result": null,
+  "error": "Invalid state transition from TaskStatus.PENDING to TaskStatus.COMPLETED. Valid transitions: TaskStatus.RUNNING, TaskStatus.SKIPPED, TaskStatus.CANCELLED, TaskStatus.FAILED",
+  "metadata": {},
+  "input_data": null,
+  "output_data": null,
+  "metrics": null,
+  "dependencies": [],
+  "parent_task_id": null,
+  "retry_count": 0
+}

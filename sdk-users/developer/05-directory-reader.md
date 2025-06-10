@@ -216,10 +216,17 @@ DirectoryReaderNode(
     directory_path="/Users/john/project/data"  # Not portable
 )
 
-# CORRECT: Relative or configurable paths
+# BETTER: Relative or configurable paths
 DirectoryReaderNode(
     name="scanner",
     directory_path="data/inputs"  # Relative to project
+)
+
+# BEST: Centralized data utilities (Session 062)
+from examples.utils.data_paths import get_input_data_path
+DirectoryReaderNode(
+    name="scanner",
+    directory_path=str(get_input_data_path(""))  # Centralized, maintainable
 )
 ```
 

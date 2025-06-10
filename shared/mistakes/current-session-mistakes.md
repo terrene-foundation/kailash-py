@@ -44,3 +44,12 @@ All mistakes from this session have been documented in individual files.
 - **Symptoms**: Assertions failing for accumulated data across iterations
 - **Root cause**: Over-optimistic assumptions about cycle state management
 - **Solution**: Made tests more flexible and documented known limitations
+
+## Session 062 Mistakes (Documented)
+
+### 1. PythonCodeNode String Blocks vs from_function()
+- **What happened**: Many examples used multi-line string code blocks for complex logic
+- **Symptoms**: No IDE support (syntax highlighting, auto-completion, debugging)
+- **Root cause**: Historical pattern from early SDK development
+- **Solution**: Documented best practice to use `.from_function()` for code > 3 lines
+- **Documented in**: 077-pythoncode-string-blocks-vs-from-function.md

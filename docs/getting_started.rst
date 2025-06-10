@@ -2,10 +2,11 @@
 Getting Started
 ===============
 
-Welcome to the Kailash Python SDK v0.2.0! This guide will help you get up and running quickly.
+Welcome to the Kailash Python SDK v0.3.0! This guide will help you get up and running quickly.
 
-**New in v0.2.0**: Universal Hybrid Cyclic Graph Architecture with high-performance iterative workflows,
-automatic convergence detection, and comprehensive developer tools.
+**New in v0.3.0**: Parameter Lifecycle Architecture with flexible node construction, 
+Centralized Data Management, enhanced PythonCodeNode capabilities, and comprehensive 
+Enterprise Workflow Library for production-ready patterns.
 
 Prerequisites
 =============
@@ -70,6 +71,50 @@ Or use the CLI:
 .. code-block:: bash
 
    kailash --version
+
+Key Features in v0.3.0
+=======================
+
+Before we create your first workflow, here are the major improvements in v0.3.0:
+
+**Parameter Lifecycle Architecture**
+------------------------------------
+
+Nodes can now be created without required parameters, making workflow construction more flexible:
+
+.. code-block:: python
+
+   # v0.3.0: Create nodes without parameters
+   reader = CSVReaderNode(name="reader")
+   workflow.add_node("reader", reader)
+   
+   # Parameters provided at execution
+   results = runtime.execute(workflow, parameters={"reader": {"file_path": "data.csv"}})
+
+**Centralized Data Management**
+-------------------------------
+
+Access data files using the new centralized utilities:
+
+.. code-block:: python
+
+   from examples.utils.data_paths import get_input_data_path, get_output_data_path
+   
+   input_file = get_input_data_path("customers.csv")
+   output_file = get_output_data_path("results.csv")
+
+**Enhanced PythonCodeNode**
+---------------------------
+
+Better support for data science and function-based development:
+
+.. code-block:: python
+
+   # Create from function with IDE support
+   def process_data(input_data: list) -> dict:
+       return {"count": len(input_data), "processed": True}
+   
+   processor = PythonCodeNode.from_function(process_data, name="processor")
 
 Your First Workflow
 ===================
@@ -245,21 +290,21 @@ For custom logic:
 
 - **PythonCodeNode**: Execute Python code safely
 
-Cycle-Aware Nodes (New in v0.2.0)
----------------------------------
+Cycle-Aware Nodes (Enhanced in v0.3.0)
+---------------------------------------
 
-For iterative processing:
+For iterative processing with improved lifecycle management:
 
-- **CycleAwareNode**: Base class with convergence detection
-- **Built-in cycle support**: All nodes can participate in cycles
-- **Automatic state management**: Track iterations and convergence
+- **CycleAwareNode**: Base class with convergence detection and flexible parameter handling
+- **Built-in cycle support**: All nodes can participate in cycles with runtime parameter support
+- **Automatic state management**: Track iterations and convergence with centralized data paths
 
 Next Steps
 ==========
 
 Now that you've created your first workflow:
 
-1. **Master Cyclic Workflows**: Learn about the new :doc:`guides/cyclic_workflows` (v0.2.0)
+1. **Master Cyclic Workflows**: Learn about enhanced :doc:`guides/cyclic_workflows` with v0.3.0 improvements
 2. **Explore Examples**: Check out the :doc:`examples/index` section
 3. **Build Complex Workflows**: See :doc:`guides/workflows`
 4. **Create Custom Nodes**: Learn in :doc:`guides/custom_nodes`
@@ -326,8 +371,8 @@ API Integration
    workflow.connect_sequential(["read_requests", "call_api", "save_responses"])
    workflow.run()
 
-Iterative Processing (New in v0.2.0)
-------------------------------------
+Iterative Processing (Enhanced in v0.3.0)
+------------------------------------------
 
 Create workflows that iterate until convergence:
 
