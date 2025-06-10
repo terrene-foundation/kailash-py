@@ -2,6 +2,30 @@
 
 This guide covers frequently used patterns when creating custom nodes.
 
+## Session 062: Centralized Data Access Pattern
+
+Always use centralized data utilities for file operations:
+
+```python
+from examples.utils.data_paths import get_input_data_path, get_output_data_path, ensure_output_dir_exists
+
+class FileProcessorNode(Node):
+    """Process files using centralized data paths."""
+    
+    def run(self, **kwargs) -> Dict[str, Any]:
+        # ✅ CORRECT: Use centralized data utilities
+        input_file = get_input_data_path("customers.csv")
+        output_dir = ensure_output_dir_exists("csv")
+        output_file = output_dir / "processed_customers.csv"
+        
+        # Process file...
+        return {"output_path": str(output_file)}
+
+# ❌ WRONG: Hardcoded paths
+# input_file = "examples/data/customers.csv"
+# output_file = "outputs/processed.csv"
+```
+
 ## Data Processing Pattern
 
 Process data with validation and error handling:

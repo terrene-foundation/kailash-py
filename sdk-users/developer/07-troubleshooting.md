@@ -2,6 +2,41 @@
 
 Common issues and their solutions when developing custom nodes.
 
+## Session 061/062 Breaking Changes
+
+### ✅ Session 061: Node Creation Without Required Params
+
+**New Behavior**: Nodes can be created without required parameters (validated at execution):
+
+```python
+# ✅ Now OK: Create node without required params
+node = CSVReaderNode(name="reader")  # Missing file_path - OK!
+
+# ✅ Configure before execution
+node.configure(file_path="data.csv")
+result = node.run()
+
+# ✅ Or pass at runtime
+runtime.execute(workflow, parameters={"reader": {"file_path": "data.csv"}})
+```
+
+**Old Behavior**: Required parameters during construction caused errors.
+
+### ✅ Session 062: Centralized Data Paths
+
+**New Pattern**: Use centralized data utilities:
+
+```python
+# ✅ CORRECT: Centralized data access
+from examples.utils.data_paths import get_input_data_path
+file_path = str(get_input_data_path("customers.csv"))
+
+# ❌ OLD: Hardcoded paths (now discouraged)
+# file_path = "examples/data/customers.csv"
+```
+
+**Migration**: Update hardcoded paths to use centralized utilities.
+
 ## Issue: "Can't instantiate abstract class"
 
 ### Error Message
