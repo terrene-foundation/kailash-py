@@ -19,11 +19,11 @@ def process_customer_data(customers: list, transactions: list) -> dict:
         # Validate inputs
         if not customers or not transactions:
             raise ValueError("Missing required input data")
-        
+
         # Process with error handling
         result = complex_processing(customers, transactions)
         return {'result': result, 'status': 'success'}
-    
+
     except Exception as e:
         logger.error(f"Processing failed: {e}")
         return {'result': [], 'status': 'error', 'error': str(e)}
@@ -66,31 +66,31 @@ output_file = get_output_data_path(f"results_{timestamp}.json")
 # ✅ PRODUCTION WORKFLOW STRUCTURE
 def create_production_workflow():
     workflow = Workflow("production-etl", "Production ETL Pipeline")
-    
+
     # 1. Input validation (fail-fast)
     validator = PythonCodeNode.from_function(
         name="input_validator",
         func=validate_all_inputs
     )
-    
+
     # 2. Main processing with error handling
     processor = PythonCodeNode.from_function(
         name="main_processor",
         func=process_with_fallback
     )
-    
+
     # 3. Results validation
     result_validator = PythonCodeNode.from_function(
-        name="result_validator", 
+        name="result_validator",
         func=validate_outputs
     )
-    
+
     # Connect with descriptive mappings
-    workflow.connect("input_validator", "main_processor", 
+    workflow.connect("input_validator", "main_processor",
                     mapping={"result": "validated_inputs"})
     workflow.connect("main_processor", "result_validator",
                     mapping={"result": "processed_data"})
-    
+
     return workflow
 ```
 
@@ -182,15 +182,15 @@ def robust_api_call(data: dict) -> dict:
         response = external_api.process(data)
         logger.info(f"API call successful for {len(data)} records")
         return {'result': response, 'status': 'success'}
-    
+
     except APITimeoutError as e:
         logger.warning(f"API timeout, retrying: {e}")
         raise  # Will be retried
-    
+
     except APIRateLimitError as e:
         logger.warning(f"Rate limit hit, backing off: {e}")
         raise  # Will be retried with exponential backoff
-    
+
     except Exception as e:
         logger.error(f"Unrecoverable API error: {e}")
         return {'result': [], 'status': 'error', 'error': str(e)}
@@ -214,10 +214,10 @@ def test_workflow_with_production_data():
     """Test workflow with realistic production data volumes."""
     # Load production-sized test data
     large_dataset = load_test_data(size=10000)
-    
+
     # Execute workflow
     results, run_id = runtime.execute(workflow, inputs={"data": large_dataset})
-    
+
     # Validate results
     assert results["final_output"]["status"] == "success"
     assert len(results["final_output"]["result"]) > 0
@@ -227,9 +227,9 @@ def test_error_handling():
     """Test workflow handles errors gracefully."""
     # Test with malformed data
     bad_data = [{"invalid": "data"}]
-    
+
     results, run_id = runtime.execute(workflow, inputs={"data": bad_data})
-    
+
     # Should handle gracefully, not crash
     assert "error" in results["final_output"]
     assert results["final_output"]["status"] == "error"
@@ -238,9 +238,9 @@ def test_error_handling():
 def test_external_service_failure(mock_api):
     """Test workflow handles external service failures."""
     mock_api.side_effect = ConnectionError("Service unavailable")
-    
+
     results, run_id = runtime.execute(workflow, inputs={"data": test_data})
-    
+
     # Should fallback gracefully
     assert results["final_output"]["status"] in ["fallback_success", "error"]
     assert "fallback_applied" in results["final_output"]
@@ -267,7 +267,7 @@ class ProductionConfig:
     timeout_seconds: int = int(os.getenv('TIMEOUT_SECONDS', '300'))
     memory_limit_mb: int = int(os.getenv('MEMORY_LIMIT_MB', '2048'))
     log_level: str = os.getenv('LOG_LEVEL', 'INFO')
-    
+
     def validate(self):
         """Validate configuration before startup."""
         if self.max_workers < 1:
@@ -299,7 +299,7 @@ health_checker = HealthChecker()
 def health_check():
     """Health check endpoint for load balancers."""
     status = health_checker.check_all()
-    
+
     return jsonify({
         'status': 'healthy' if status['overall'] else 'unhealthy',
         'checks': status['checks'],

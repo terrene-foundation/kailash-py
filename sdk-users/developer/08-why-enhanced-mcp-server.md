@@ -8,11 +8,11 @@ While Anthropic's MCP Python SDK provides excellent protocol implementation and 
 
 The official MCP Python SDK gives us:
 
-✅ **Complete MCP Protocol**: Full protocol compliance and message handling  
-✅ **FastMCP Framework**: Easy server creation with decorators (`@mcp.tool()`, `@mcp.resource()`)  
-✅ **Transport Layers**: stdio, HTTP, SSE support  
-✅ **Type Safety**: Strong typing for tools, resources, prompts  
-✅ **Session Management**: Connection lifecycle and error handling  
+✅ **Complete MCP Protocol**: Full protocol compliance and message handling
+✅ **FastMCP Framework**: Easy server creation with decorators (`@mcp.tool()`, `@mcp.resource()`)
+✅ **Transport Layers**: stdio, HTTP, SSE support
+✅ **Type Safety**: Strong typing for tools, resources, prompts
+✅ **Session Management**: Connection lifecycle and error handling
 
 **Example with Raw SDK**:
 ```python
@@ -216,29 +216,29 @@ async def get_weather(city: str) -> dict:
     # Manual cache logic
     cache_key = f"weather:{city}"
     now = time.time()
-    
+
     if cache_key in _cache and (now - _cache_timestamps[cache_key]) < 300:
         # Manual cache hit tracking
         logging.info(f"Cache hit for {city}")
         return _cache[cache_key]
-    
+
     # Manual timing for metrics
     start_time = time.time()
-    
+
     try:
         # Manual API call
         result = await weather_api.call(city)
-        
+
         # Manual cache storage
         _cache[cache_key] = result
         _cache_timestamps[cache_key] = now
-        
+
         # Manual metrics
         duration = time.time() - start_time
         logging.info(f"Weather API call took {duration:.3f}s")
-        
+
         return result
-        
+
     except Exception as e:
         # Manual error handling
         duration = time.time() - start_time
@@ -260,7 +260,7 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-**Problems**: 
+**Problems**:
 - ~50 lines of boilerplate for basic production features
 - Manual cache management and cleanup
 - Inconsistent error handling across tools
@@ -308,7 +308,7 @@ server = MCPServer("my-server")
 
 ### ❌ **What We Avoided (Replacement)**
 - **Don't Reinvent Protocol**: Anthropic's implementation is excellent
-- **Don't Replace FastMCP**: Their decorator system works well  
+- **Don't Replace FastMCP**: Their decorator system works well
 - **Don't Break Ecosystem**: Stay compatible with MCP tooling
 - **Don't Create Fork**: Upstream changes benefit us automatically
 

@@ -47,7 +47,7 @@ class YourNode(Node):
                 description='Description'
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         return {'result': kwargs['param']}
 ```

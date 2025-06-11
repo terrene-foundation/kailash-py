@@ -55,28 +55,28 @@ Extract → Transform → Load with validation at each step
 ```python
 def create_etl_workflow():
     workflow = Workflow("etl-pattern", "ETL with Validation")
-    
+
     # Extract
     source_reader = CSVReaderNode(name="source", file_path=input_path)
     workflow.add_node("source", source_reader)
-    
+
     # Validate input
     validator = PythonCodeNode.from_function(name="validator", func=validate_input)
     workflow.add_node("validator", validator)
-    
+
     # Transform
     transformer = PythonCodeNode.from_function(name="transformer", func=transform_data)
     workflow.add_node("transformer", transformer)
-    
+
     # Load
     writer = JSONWriterNode(name="writer", file_path=output_path)
     workflow.add_node("writer", writer)
-    
+
     # Connect with error handling
     workflow.connect("source", "validator", mapping={"data": "raw_data"})
     workflow.connect("validator", "transformer", mapping={"result": "validated_data"})
     workflow.connect("transformer", "writer", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -95,12 +95,12 @@ def normalize_customer_ids(customers: list, transactions: list) -> dict:
             .str.zfill(3)
             .apply(lambda x: f'C{x}')
         )
-    
+
     # Ensure transaction IDs match format
     transaction_df = pd.DataFrame(transactions)
     if 'customer_id' in transaction_df.columns:
         transaction_df['customer_id_norm'] = transaction_df['customer_id']
-    
+
     return {
         'result': {
             'customers': customer_df.to_dict('records'),
@@ -121,13 +121,13 @@ Combine rule-based logic with AI insights
 ```python
 def create_ai_enhanced_workflow():
     workflow = Workflow("ai-enhanced", "AI-Enhanced Analysis")
-    
+
     # 1. Rule-based analysis
     rule_processor = PythonCodeNode.from_function(
-        name="rule_processor", 
+        name="rule_processor",
         func=calculate_rule_based_score
     )
-    
+
     # 2. AI analysis
     ai_analyzer = LLMAgentNode(
         name="ai_analyzer",
@@ -135,18 +135,18 @@ def create_ai_enhanced_workflow():
         system_prompt="You are a domain expert. Analyze the data and provide insights.",
         prompt="Analyze this data: {{rule_results}}"
     )
-    
+
     # 3. Combine results
     result_combiner = PythonCodeNode.from_function(
         name="combiner",
         func=combine_rule_and_ai_results
     )
-    
+
     # Connect AI feedback loop
     workflow.connect("rule_processor", "ai_analyzer", mapping={"result": "rule_results"})
     workflow.connect("rule_processor", "combiner", mapping={"result": "rule_analysis"})
     workflow.connect("ai_analyzer", "combiner", mapping={"response": "ai_analysis"})
-    
+
     return workflow
 ```
 
@@ -160,7 +160,7 @@ def safe_processing_function(input_data: dict) -> dict:
         # Main processing logic
         processed = complex_processing(input_data)
         return {'result': processed, 'status': 'success'}
-    
+
     except ValidationError as e:
         # Data validation failed - return partial results
         return {
@@ -169,7 +169,7 @@ def safe_processing_function(input_data: dict) -> dict:
             'error': str(e),
             'fallback_applied': True
         }
-    
+
     except ProcessingError as e:
         # Processing failed - use fallback method
         fallback_result = simple_fallback_processing(input_data)
@@ -179,7 +179,7 @@ def safe_processing_function(input_data: dict) -> dict:
             'error': str(e),
             'fallback_applied': True
         }
-    
+
     except Exception as e:
         # Unknown error - return error state
         return {
@@ -206,7 +206,7 @@ class WorkflowComponents:
             func=validate_data_quality
         )
         return reader, validator
-    
+
     @staticmethod
     def create_ai_analysis_stage(name_prefix: str, domain_prompt: str):
         """Reusable AI analysis component."""
@@ -221,21 +221,21 @@ class WorkflowComponents:
 # Compose workflows from components
 def create_composed_workflow():
     workflow = Workflow("composed", "Composed Workflow")
-    
+
     # Add standard components
     customer_reader, customer_validator = WorkflowComponents.create_data_ingestion_stage(
         "customer", get_input_data_path("customers.csv")
     )
-    
+
     risk_analyzer = WorkflowComponents.create_ai_analysis_stage(
         "risk", "You are a risk assessment expert..."
     )
-    
+
     # Connect components
     workflow.add_node("customer_reader", customer_reader)
     workflow.add_node("customer_validator", customer_validator)
     workflow.add_node("risk_analyzer", risk_analyzer)
-    
+
     return workflow
 ```
 
@@ -247,18 +247,18 @@ def batch_process_large_dataset(input_data: list, batch_size: int = 1000) -> dic
     """Process large datasets in batches."""
     results = []
     total_records = len(input_data)
-    
+
     for i in range(0, total_records, batch_size):
         batch = input_data[i:i + batch_size]
-        
+
         # Process batch
         batch_result = process_batch(batch)
         results.extend(batch_result)
-        
+
         # Progress tracking
         progress = min((i + batch_size) / total_records * 100, 100)
         print(f"Processed {progress:.1f}% ({i + len(batch)}/{total_records})")
-    
+
     return {
         'result': results,
         'total_processed': len(results),
@@ -296,7 +296,7 @@ Make data transformations obvious in connections:
 
 ```python
 # ✅ CLEAR data flow with descriptive mapping names
-workflow.connect("customer_reader", "risk_calculator", 
+workflow.connect("customer_reader", "risk_calculator",
                 mapping={"data": "customer_profiles"})
 workflow.connect("transaction_reader", "risk_calculator",
                 mapping={"data": "transaction_history"})
@@ -311,25 +311,25 @@ Validate inputs early in the pipeline:
 def validate_workflow_inputs(customers: list, transactions: list) -> dict:
     """Validate all inputs before processing begins."""
     errors = []
-    
+
     # Check required fields
     if not customers:
         errors.append("Customer data is empty")
-    
+
     if not transactions:
         errors.append("Transaction data is empty")
-    
+
     # Validate data quality
     customer_df = pd.DataFrame(customers)
     required_customer_fields = ['customer_id', 'tier']
     missing_fields = [f for f in required_customer_fields if f not in customer_df.columns]
-    
+
     if missing_fields:
         errors.append(f"Missing customer fields: {missing_fields}")
-    
+
     if errors:
         return {'result': None, 'errors': errors, 'valid': False}
-    
+
     return {'result': {'customers': customers, 'transactions': transactions}, 'valid': True}
 ```
 
@@ -338,7 +338,7 @@ def validate_workflow_inputs(customers: list, transactions: list) -> dict:
 When designing a new workflow:
 
 1. **📋 Plan**: Document data sources, transformations, outputs
-2. **🔍 Research**: Check existing nodes before writing custom code  
+2. **🔍 Research**: Check existing nodes before writing custom code
 3. **⚡ Start Simple**: Build basic flow first, add complexity later
 4. **🧪 Test Early**: Test each function independently before creating nodes
 5. **🔗 Connect**: Use descriptive mapping names for clarity
