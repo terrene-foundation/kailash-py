@@ -1,0 +1,110 @@
+name: Project Management Automation
+
+on:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  pull_request:
+    types: [opened, closed, reopened, ready_for_review, converted_to_draft]
+  issue_comment:
+    types: [created]
+
+env:
+  PROJECT_NUMBER: 1  # Update with your actual project number
+
+jobs:
+  add-to-project:
+    name: Add to Project Board
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    steps:
+      - uses: actions/add-to-project@v0.5.0
+        with:
+          project-url: https://github.com/${{ github.repository }}/projects/${{ env.PROJECT_NUMBER }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  label-based-on-files:
+    name: Auto-label based on files changed
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Label PR based on paths
+        uses: actions/labeler@v4
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          configuration-path: .github/labeler.yml
+
+  update-project-status:
+    name: Update Project Card Status
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Move to In Review
+        if: github.event.action == 'ready_for_review'
+        uses: alex-page/github-project-automation-plus@v0.8.3
+        with:
+          project: Kailash SDK Development
+          column: In Review
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Move to Done
+        if: github.event.action == 'closed' && github.event.pull_request.merged
+        uses: alex-page/github-project-automation-plus@v0.8.3
+        with:
+          project: Kailash SDK Development
+          column: Done
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  session-milestone:
+    name: Create Session Milestone
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '/session start')
+    steps:
+      - name: Parse session number
+        id: parse
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          SESSION=$(echo "$COMMENT" | grep -oP '(?<=/session start )\d+')
+          echo "session=$SESSION" >> $GITHUB_OUTPUT
+      
+      - name: Create milestone
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh milestone create \
+            --repo ${{ github.repository }} \
+            --title "Session ${{ steps.parse.outputs.session }}" \
+            --description "Development session ${{ steps.parse.outputs.session }}" \
+            --due-on $(date -d "+7 days" +%Y-%m-%d)
+
+  priority-assignment:
+    name: Auto-assign based on priority
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'labeled'
+    steps:
+      - name: Check for P0 or P1 labels
+        if: contains(github.event.label.name, 'P0-critical') || contains(github.event.label.name, 'P1-high')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Notify team of high priority issue
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --body "🚨 High priority issue detected! Team notification sent."
+
+  stale-management:
+    name: Manage stale issues
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * *'  # Daily at midnight
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: '👋 This issue has been inactive for 30 days. Please update or it will be closed.'
+          stale-pr-message: '👋 This PR has been inactive for 14 days. Please update or it will be closed.'
+          stale-issue-label: 'status/stale'
+          stale-pr-label: 'status/stale'
+          days-before-issue-stale: 30
+          days-before-pr-stale: 14
+          days-before-close: 7
