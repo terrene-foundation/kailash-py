@@ -28,7 +28,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Label PR based on paths
         uses: actions/labeler@v4
         with:
@@ -47,7 +47,7 @@ jobs:
           project: Kailash SDK Development
           column: In Review
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Move to Done
         if: github.event.action == 'closed' && github.event.pull_request.merged
         uses: alex-page/github-project-automation-plus@v0.8.3
@@ -67,7 +67,7 @@ jobs:
           COMMENT="${{ github.event.comment.body }}"
           SESSION=$(echo "$COMMENT" | grep -oP '(?<=/session start )\d+')
           echo "session=$SESSION" >> $GITHUB_OUTPUT
-      
+
       - name: Create milestone
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
