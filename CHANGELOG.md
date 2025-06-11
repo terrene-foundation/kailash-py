@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2025-06-11
+
+### Fixed
+- **CRITICAL: PythonCodeNode Output Validation Consistency** - Framework-level fix
+  - All PythonCodeNode outputs now consistently wrapped in `"result"` key
+  - Functions returning dicts no longer cause "Required output 'result' not provided" errors
+  - Both dict and non-dict function returns work identically
+  - Manufacturing workflows (IoT, Quality Control, Supply Chain, Production Planning) now execute successfully
+  - Updated core implementation in `/src/kailash/nodes/code/python.py`
+
+### Added
+- **Complete Manufacturing Workflow Library** - Production-ready industrial workflows
+  - IoT Sensor Processing - Real-time anomaly detection and predictive maintenance
+  - Quality Control - Six Sigma statistical process control with control charts
+  - Supply Chain Optimization - EOQ calculations and supplier performance management
+  - Production Planning - Capacity analysis and schedule optimization
+  - All workflows use real manufacturing data and industry-standard algorithms
+
+### Documentation
+- **Updated PythonCodeNode Documentation** - Reflects output consistency changes
+  - Added "Output Handling (Framework Update)" section to developer guide
+  - Updated troubleshooting guide with Session 064 fix details
+  - Updated CLAUDE.md critical validation rules
+  - Created comprehensive mistake documentation (078-pythoncode-output-validation-consistency-fix.md)
+
+### Testing
+- All core PythonCodeNode tests pass (33/33)
+- All manufacturing workflows execute end-to-end successfully
+- Backward compatibility maintained for existing workflows
+
 ## [0.3.1] - 2025-06-11
 
 ### Added

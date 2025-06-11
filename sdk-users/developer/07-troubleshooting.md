@@ -37,6 +37,28 @@ file_path = str(get_input_data_path("customers.csv"))
 
 **Migration**: Update hardcoded paths to use centralized utilities.
 
+### ✅ Session 064: PythonCodeNode Output Consistency Fix
+
+**Framework Fix**: All PythonCodeNode outputs now consistently wrapped in `"result"` key:
+
+```python
+# ✅ FIXED: Both dict and non-dict returns work consistently
+def returns_dict(data):
+    return {"processed": data, "count": len(data)}
+
+def returns_simple(x):
+    return x * 2
+
+# Both outputs are wrapped in {"result": ...}
+node1 = PythonCodeNode.from_function(func=returns_dict)
+node2 = PythonCodeNode.from_function(func=returns_simple)
+
+# ✅ Always connect using "result" key
+workflow.connect("node1", "node2", {"result": "input_data"})
+```
+
+**Previously**: Dict returns caused validation errors ("Required output 'result' not provided").
+
 ### ✅ Session 062: PythonCodeNode Best Practices
 
 **New Default**: Use `.from_function()` for code > 3 lines:

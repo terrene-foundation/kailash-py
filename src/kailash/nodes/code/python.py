@@ -451,8 +451,12 @@ class FunctionWrapper:
         """Execute the wrapped function."""
         result = self.executor.execute_function(self.func, inputs)
 
-        # Wrap non-dict results in a dict
+        # Always wrap results in "result" key for consistent validation
+        # This ensures both dict and non-dict returns have the same structure
         if not isinstance(result, dict):
+            result = {"result": result}
+        else:
+            # For dict results, wrap the entire dict in "result" key
             result = {"result": result}
 
         return result
@@ -604,8 +608,12 @@ class ClassWrapper:
         # Execute the method
         result = self.executor.execute_function(method, inputs)
 
-        # Wrap non-dict results in a dict
+        # Always wrap results in "result" key for consistent validation
+        # This ensures both dict and non-dict returns have the same structure
         if not isinstance(result, dict):
+            result = {"result": result}
+        else:
+            # For dict results, wrap the entire dict in "result" key
             result = {"result": result}
 
         return result
