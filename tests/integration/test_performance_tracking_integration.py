@@ -336,7 +336,9 @@ class TestPerformanceTrackingIntegration:
 
         source_schema = {
             "input": {},  # No inputs required
-            "output": {"result": NodeParameter(name="result", type=list, required=True)},
+            "output": {
+                "result": NodeParameter(name="result", type=list, required=True)
+            },
         }
 
         custom_schema = {
