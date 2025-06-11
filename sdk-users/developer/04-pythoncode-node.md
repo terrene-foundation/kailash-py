@@ -7,7 +7,7 @@
 ### Why `.from_function()` is Superior
 
 1. **IDE Support**: Full syntax highlighting, auto-completion, and type hints
-2. **Error Detection**: Immediate syntax and type errors in your IDE  
+2. **Error Detection**: Immediate syntax and type errors in your IDE
 3. **Debugging**: Set breakpoints and step through code
 4. **Refactoring**: Use IDE refactoring tools safely
 5. **Testing**: Functions can be unit tested independently
@@ -316,7 +316,7 @@ else:
 4. **Document your mappings**:
    ```python
    # Map discovery results to 'files_found' variable
-   workflow.connect("scanner", "processor", 
+   workflow.connect("scanner", "processor",
                    mapping={"discovered_files": "files_found"})
    ```
 
@@ -332,6 +332,72 @@ else:
 ### "NameError: name 'X' is not defined"
 **Cause**: Expected input not provided in mapping
 **Fix**: Check workflow connections and mappings
+
+## Functions Must Be Defined in Scope
+
+### The Problem: External Function References
+```python
+# ❌ WRONG: Function defined outside node's scope
+def calculate_payment(principal, rate, months):
+    monthly_rate = rate / 12
+    if monthly_rate == 0:
+        return principal / months
+    payment = principal * (monthly_rate * (1 + monthly_rate)**months) / ((1 + monthly_rate)**months - 1)
+    return round(payment, 2)
+
+# This won't work - calculate_payment not available in code string
+node = PythonCodeNode(
+    name="processor",
+    code="payment = calculate_payment(amount, rate, 36)"  # NameError!
+)
+```
+
+### Solution 1: Use .from_function() (PREFERRED for >3 lines)
+```python
+# ✅ BEST: Use from_function for complex logic
+def process_loan_application(application_data: dict) -> dict:
+    """Process loan with payment calculation."""
+
+    def calculate_payment(principal, rate, months):
+        monthly_rate = rate / 12
+        if monthly_rate == 0:
+            return principal / months
+        payment = principal * (monthly_rate * (1 + monthly_rate)**months) / ((1 + monthly_rate)**months - 1)
+        return round(payment, 2)
+
+    amount = application_data['amount']
+    rate = application_data['interest_rate']
+    terms = application_data.get('terms_months', 36)
+
+    monthly_payment = calculate_payment(amount, rate, terms)
+
+    return {
+        'approved_amount': amount,
+        'monthly_payment': monthly_payment,
+        'total_cost': monthly_payment * terms
+    }
+
+# Create node from function
+node = PythonCodeNode.from_function(
+    func=process_loan_application,
+    name="loan_processor",
+    description="Calculate loan terms and payments"
+)
+```
+
+### Solution 2: Inline Simple Calculations
+```python
+# ✅ OK: For truly simple calculations, inline the logic
+node = PythonCodeNode(
+    name="simple_calc",
+    code="result = {'payment': (amount * rate * (1 + rate)**months) / ((1 + rate)**months - 1)}"
+)
+```
+
+### Why This Matters
+- **Scope Isolation**: PythonCodeNode executes in isolated namespace
+- **No Global Access**: Can't access functions defined outside
+- **Best Practice**: Use .from_function() for any non-trivial logic
 
 ## When to Use PythonCodeNode
 

@@ -14,7 +14,7 @@ Shows how to build robust data transformation pipelines.
 
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -36,7 +36,7 @@ from kailash.workflow.visualization import WorkflowVisualizer
 def create_data_cleaner():
     """Create a node that cleans and validates data."""
 
-    def clean_data(data: list) -> Dict[str, Any]:
+    def clean_data(data: list) -> dict[str, Any]:
         """Clean and validate customer data."""
         df = pd.DataFrame(data)
         initial_count = len(df)
@@ -107,7 +107,7 @@ def create_data_cleaner():
 def create_feature_engineer():
     """Create a node that engineers new features."""
 
-    def engineer_features(data: list) -> Dict[str, Any]:
+    def engineer_features(data: list) -> dict[str, Any]:
         """Create new features from existing data."""
         df = pd.DataFrame(data)
 
@@ -214,7 +214,7 @@ def create_feature_engineer():
 def create_data_aggregator():
     """Create a node that aggregates data by groups."""
 
-    def aggregate_data(data: list, group_by: list, metrics: dict) -> Dict[str, Any]:
+    def aggregate_data(data: list, group_by: list, metrics: dict) -> dict[str, Any]:
         """Aggregate data by specified groups and metrics."""
         df = pd.DataFrame(data)
 
@@ -290,7 +290,7 @@ def create_data_aggregator():
 def create_quality_checker():
     """Create a node that checks data quality."""
 
-    def check_quality(data: list) -> Dict[str, Any]:
+    def check_quality(data: list) -> dict[str, Any]:
         """Check data quality and generate report."""
         df = pd.DataFrame(data)
 

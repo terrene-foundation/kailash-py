@@ -3,7 +3,7 @@
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import NodeParameter, register_node
@@ -16,16 +16,16 @@ class IterationState:
     iteration: int
     phase: str  # discovery, planning, execution, reflection, convergence, synthesis
     start_time: float
-    end_time: Optional[float] = None
-    discoveries: Dict[str, Any] = field(default_factory=dict)
-    plan: Dict[str, Any] = field(default_factory=dict)
-    execution_results: Dict[str, Any] = field(default_factory=dict)
-    reflection: Dict[str, Any] = field(default_factory=dict)
-    convergence_decision: Dict[str, Any] = field(default_factory=dict)
+    end_time: float | None = None
+    discoveries: dict[str, Any] = field(default_factory=dict)
+    plan: dict[str, Any] = field(default_factory=dict)
+    execution_results: dict[str, Any] = field(default_factory=dict)
+    reflection: dict[str, Any] = field(default_factory=dict)
+    convergence_decision: dict[str, Any] = field(default_factory=dict)
     success: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "iteration": self.iteration,
@@ -50,15 +50,15 @@ class MCPToolCapability:
     name: str
     description: str
     primary_function: str
-    input_requirements: List[str]
+    input_requirements: list[str]
     output_format: str
     domain: str
     complexity: str  # simple, medium, complex
-    dependencies: List[str]
+    dependencies: list[str]
     confidence: float
     server_source: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "description": self.description,
@@ -111,7 +111,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         ... )
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Get parameters for iterative LLM agent configuration."""
         base_params = super().get_parameters()
 
@@ -189,7 +189,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         base_params.update(iterative_params)
         return base_params
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute iterative LLM agent with 6-phase process.
 
@@ -220,7 +220,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
         # Initialize iterative execution state
         start_time = time.time()
-        iterations: List[IterationState] = []
+        iterations: list[IterationState] = []
         global_discoveries = {
             "servers": {},
             "tools": {},
@@ -354,11 +354,11 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
     def _phase_discovery(
         self,
-        kwargs: Dict[str, Any],
-        global_discoveries: Dict[str, Any],
+        kwargs: dict[str, Any],
+        global_discoveries: dict[str, Any],
         discovery_mode: str,
-        discovery_budget: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        discovery_budget: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Phase 1: Discover MCP servers, tools, and resources.
 
@@ -450,8 +450,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
         return discoveries
 
     def _discover_server_tools(
-        self, server_config: Any, budget: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, server_config: Any, budget: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Discover tools from a specific MCP server."""
         # Use existing MCP tool discovery from parent class
         try:
@@ -497,8 +497,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
             return []
 
     def _discover_server_resources(
-        self, server_config: Any, budget: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, server_config: Any, budget: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Discover resources from a specific MCP server."""
         # Mock implementation - in real version would use MCP resource discovery
         try:
@@ -532,7 +532,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
             return []
 
     def _analyze_tool_capability(
-        self, tool: Dict[str, Any], server_id: str
+        self, tool: dict[str, Any], server_id: str
     ) -> MCPToolCapability:
         """Analyze tool description to understand semantic capabilities."""
         # Extract tool information
@@ -593,11 +593,11 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
     def _phase_planning(
         self,
-        kwargs: Dict[str, Any],
-        discoveries: Dict[str, Any],
-        global_discoveries: Dict[str, Any],
-        previous_iterations: List[IterationState],
-    ) -> Dict[str, Any]:
+        kwargs: dict[str, Any],
+        discoveries: dict[str, Any],
+        global_discoveries: dict[str, Any],
+        previous_iterations: list[IterationState],
+    ) -> dict[str, Any]:
         """Phase 2: Create execution plan based on discoveries."""
         messages = kwargs.get("messages", [])
         user_query = ""
@@ -659,8 +659,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
         return plan
 
     def _phase_execution(
-        self, kwargs: Dict[str, Any], plan: Dict[str, Any], discoveries: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, kwargs: dict[str, Any], plan: dict[str, Any], discoveries: dict[str, Any]
+    ) -> dict[str, Any]:
         """Phase 3: Execute the planned actions."""
         execution_results = {
             "steps_completed": [],
@@ -710,10 +710,10 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
     def _phase_reflection(
         self,
-        kwargs: Dict[str, Any],
-        execution_results: Dict[str, Any],
-        previous_iterations: List[IterationState],
-    ) -> Dict[str, Any]:
+        kwargs: dict[str, Any],
+        execution_results: dict[str, Any],
+        previous_iterations: list[IterationState],
+    ) -> dict[str, Any]:
         """Phase 4: Reflect on execution results and assess progress."""
         reflection = {
             "quality_assessment": {},
@@ -794,12 +794,12 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
     def _phase_convergence(
         self,
-        kwargs: Dict[str, Any],
+        kwargs: dict[str, Any],
         iteration_state: IterationState,
-        previous_iterations: List[IterationState],
-        convergence_criteria: Dict[str, Any],
-        global_discoveries: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        previous_iterations: list[IterationState],
+        convergence_criteria: dict[str, Any],
+        global_discoveries: dict[str, Any],
+    ) -> dict[str, Any]:
         """Phase 5: Decide whether to continue iterating or stop."""
         convergence_result = {
             "should_stop": False,
@@ -1140,9 +1140,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
     def _phase_synthesis(
         self,
-        kwargs: Dict[str, Any],
-        iterations: List[IterationState],
-        global_discoveries: Dict[str, Any],
+        kwargs: dict[str, Any],
+        iterations: list[IterationState],
+        global_discoveries: dict[str, Any],
     ) -> str:
         """Phase 6: Synthesize results from all iterations into final response."""
         messages = kwargs.get("messages", [])
@@ -1203,7 +1203,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         return synthesis
 
     def _update_global_discoveries(
-        self, global_discoveries: Dict[str, Any], new_discoveries: Dict[str, Any]
+        self, global_discoveries: dict[str, Any], new_discoveries: dict[str, Any]
     ) -> None:
         """Update global discoveries with new findings."""
         # Update servers
@@ -1229,9 +1229,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
     def _adapt_strategy(
         self,
-        kwargs: Dict[str, Any],
+        kwargs: dict[str, Any],
         iteration_state: IterationState,
-        previous_iterations: List[IterationState],
+        previous_iterations: list[IterationState],
     ) -> None:
         """Adapt strategy for next iteration based on results."""
         # Simple adaptation logic (in real implementation, use more sophisticated ML)
@@ -1249,8 +1249,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 )
 
     def _calculate_resource_usage(
-        self, iterations: List[IterationState]
-    ) -> Dict[str, Any]:
+        self, iterations: list[IterationState]
+    ) -> dict[str, Any]:
         """Calculate resource usage across all iterations."""
         total_duration = sum(
             (iter_state.end_time - iter_state.start_time)

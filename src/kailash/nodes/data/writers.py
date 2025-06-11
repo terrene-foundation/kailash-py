@@ -31,7 +31,7 @@ Downstream Consumers:
 
 import csv
 import json
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.security import safe_open, validate_file_path
@@ -96,7 +96,7 @@ class CSVWriterNode(Node):
         >>> # result = {'rows_written': 2, 'file_path': 'output.csv'}
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for CSV writing.
 
         Provides comprehensive parameters for flexible CSV output,
@@ -144,7 +144,7 @@ class CSVWriterNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute CSV writing operation.
 
         Intelligently handles different data structures, automatically
@@ -280,7 +280,7 @@ class JSONWriterNode(Node):
         >>> # result = {'file_path': 'response.json'}
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for JSON writing.
 
         Minimal parameters reflecting JSON's flexibility while
@@ -320,7 +320,7 @@ class JSONWriterNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute JSON writing operation.
 
         Serializes data to JSON format with proper formatting
@@ -431,7 +431,7 @@ class TextWriterNode(Node):
         >>> # result = {'file_path': 'app.log', 'bytes_written': 25}
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for text writing.
 
         Comprehensive parameters supporting various text writing
@@ -478,7 +478,7 @@ class TextWriterNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute text writing operation.
 
         Writes text to file with specified encoding and mode.

@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from kailash.nodes.base import Node
 
@@ -50,8 +50,8 @@ class DockerNodeWrapper:
         node: Node,
         node_id: str,
         base_image: str = "python:3.11-slim",
-        work_dir: Optional[Path] = None,
-        sdk_path: Optional[Path] = None,
+        work_dir: Path | None = None,
+        sdk_path: Path | None = None,
     ):
         """
         Initialize a Docker node wrapper.
@@ -335,7 +335,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-    def prepare_inputs(self, inputs: Dict[str, Any]):
+    def prepare_inputs(self, inputs: dict[str, Any]):
         """
         Prepare inputs for node execution.
 
@@ -349,8 +349,8 @@ ENTRYPOINT ["/app/entrypoint.py"]
     def run_container(
         self,
         network: str = None,
-        env_vars: Dict[str, str] = None,
-        resource_limits: Dict[str, str] = None,
+        env_vars: dict[str, str] = None,
+        resource_limits: dict[str, str] = None,
     ) -> bool:
         """
         Run the node in a Docker container.
@@ -416,13 +416,13 @@ ENTRYPOINT ["/app/entrypoint.py"]
             # Check if there's an error file
             error_file = self.output_dir / "error.json"
             if error_file.exists():
-                with open(error_file, "r") as f:
+                with open(error_file) as f:
                     error_data = json.load(f)
                     error_msg = f"Node execution error: {error_data.get('error', 'Unknown error')}"
 
             raise NodeExecutionError(error_msg)
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """
         Get the results of node execution.
 
@@ -431,12 +431,12 @@ ENTRYPOINT ["/app/entrypoint.py"]
         """
         result_file = self.output_dir / "result.json"
         if result_file.exists():
-            with open(result_file, "r") as f:
+            with open(result_file) as f:
                 return json.load(f)
 
         error_file = self.output_dir / "error.json"
         if error_file.exists():
-            with open(error_file, "r") as f:
+            with open(error_file) as f:
                 error_data = json.load(f)
                 raise NodeExecutionError(
                     f"Node {self.node_id} execution failed: {error_data.get('error', 'Unknown error')}"
@@ -464,10 +464,10 @@ class DockerRuntime:
         self,
         base_image: str = "python:3.11-slim",
         network_name: str = "kailash-network",
-        work_dir: Optional[str] = None,
-        sdk_path: Optional[str] = None,
-        resource_limits: Optional[Dict[str, str]] = None,
-        task_manager: Optional[TaskManager] = None,
+        work_dir: str | None = None,
+        sdk_path: str | None = None,
+        resource_limits: dict[str, str] | None = None,
+        task_manager: TaskManager | None = None,
     ):
         """
         Initialize the Docker runtime.
@@ -516,14 +516,14 @@ class DockerRuntime:
         # Track node wrappers
         self.node_wrappers = {}
 
-    def _create_task_run(self, workflow: Workflow) -> Optional[str]:
+    def _create_task_run(self, workflow: Workflow) -> str | None:
         """Create a task run if task manager is available."""
         if self.task_manager:
             return self.task_manager.create_run(workflow.name)
         return None
 
     def _update_task_status(
-        self, run_id: Optional[str], node_id: str, status: str, output: Any = None
+        self, run_id: str | None, node_id: str, status: str, output: Any = None
     ):
         """Update task status if task manager is available."""
         if self.task_manager and run_id:
@@ -534,9 +534,7 @@ class DockerRuntime:
                 )
                 self.task_manager.update_run_status(run_id, "failed", error_msg)
 
-    def _complete_task_run(
-        self, run_id: Optional[str], status: str, result: Any = None
-    ):
+    def _complete_task_run(self, run_id: str | None, status: str, result: Any = None):
         """Complete task run if task manager is available."""
         if self.task_manager and run_id:
             if status == "completed":
@@ -567,9 +565,9 @@ class DockerRuntime:
     def execute(
         self,
         workflow: Workflow,
-        inputs: Dict[str, Dict[str, Any]] = None,
-        node_resource_limits: Dict[str, Dict[str, str]] = None,
-    ) -> Tuple[Dict[str, Dict[str, Any]], str]:
+        inputs: dict[str, dict[str, Any]] = None,
+        node_resource_limits: dict[str, dict[str, str]] = None,
+    ) -> tuple[dict[str, dict[str, Any]], str]:
         """
         Execute a workflow using Docker containers.
 

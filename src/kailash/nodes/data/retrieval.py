@@ -1,6 +1,6 @@
 """Document retrieval nodes for finding relevant content using various similarity methods."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -9,7 +9,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 class RelevanceScorerNode(Node):
     """Scores chunk relevance using various similarity methods including embeddings similarity."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "chunks": NodeParameter(
                 name="chunks",
@@ -45,7 +45,7 @@ class RelevanceScorerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         chunks = kwargs.get("chunks", [])
         query_embeddings = kwargs.get("query_embedding", [])
         chunk_embeddings = kwargs.get("chunk_embeddings", [])
@@ -98,8 +98,8 @@ class RelevanceScorerNode(Node):
         return {"relevant_chunks": top_chunks}
 
     def _cosine_similarity_scoring(
-        self, chunks: List[Dict], query_embeddings: List, chunk_embeddings: List
-    ) -> List[Dict]:
+        self, chunks: list[dict], query_embeddings: list, chunk_embeddings: list
+    ) -> list[dict]:
         """Score chunks using cosine similarity."""
         # Extract actual embedding vectors from the embedding objects
         # EmbeddingGeneratorNode returns embeddings in format: {"embedding": [...], "text": "...", "dimensions": X}
@@ -131,7 +131,7 @@ class RelevanceScorerNode(Node):
                 return 0.5
 
             try:
-                dot_product = sum(x * y for x, y in zip(a, b))
+                dot_product = sum(x * y for x, y in zip(a, b, strict=False))
                 norm_a = sum(x * x for x in a) ** 0.5
                 norm_b = sum(x * x for x in b) ** 0.5
                 return dot_product / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
@@ -162,16 +162,16 @@ class RelevanceScorerNode(Node):
         return scored_chunks
 
     def _bm25_scoring(
-        self, chunks: List[Dict], query_embeddings: List, chunk_embeddings: List
-    ) -> List[Dict]:
+        self, chunks: list[dict], query_embeddings: list, chunk_embeddings: list
+    ) -> list[dict]:
         """Score chunks using BM25 algorithm (future implementation)."""
         # TODO: Implement BM25 scoring
         # For now, return chunks with default scores
         return [{**chunk, "relevance_score": 0.5} for chunk in chunks]
 
     def _tfidf_scoring(
-        self, chunks: List[Dict], query_embeddings: List, chunk_embeddings: List
-    ) -> List[Dict]:
+        self, chunks: list[dict], query_embeddings: list, chunk_embeddings: list
+    ) -> list[dict]:
         """Score chunks using TF-IDF similarity (future implementation)."""
         # TODO: Implement TF-IDF scoring
         # For now, return chunks with default scores

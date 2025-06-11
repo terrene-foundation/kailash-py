@@ -1,6 +1,6 @@
 """Example demonstrating Python code nodes with explicit schemas."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
@@ -17,7 +17,7 @@ def main():
 
     def transform_user_data(
         user_id: int, name: str, age: int, active: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Transform user data into a standardized format."""
         return {
             "id": user_id,
@@ -106,7 +106,7 @@ def main():
             self.total_sum = 0.0
             self.values = []
 
-        def process(self, values: list, operation: str = "sum") -> Dict[str, Any]:
+        def process(self, values: list, operation: str = "sum") -> dict[str, Any]:
             """Process a batch of values."""
             self.values.extend(values)
             self.total_count += len(values)
@@ -207,7 +207,7 @@ def main():
     print("3. Schema Validation Examples")
     print("-" * 28)
 
-    def strict_calculator(a: float, b: float, operation: str) -> Dict[str, Any]:
+    def strict_calculator(a: float, b: float, operation: str) -> dict[str, Any]:
         """Strict calculator with validation."""
         if operation not in ["add", "subtract", "multiply", "divide"]:
             raise ValueError(f"Invalid operation: {operation}")

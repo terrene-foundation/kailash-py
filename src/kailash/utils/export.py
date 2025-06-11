@@ -5,7 +5,7 @@ import logging
 import re
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError
@@ -26,9 +26,9 @@ class ResourceSpec(BaseModel):
 
     cpu: str = Field("100m", description="CPU request")
     memory: str = Field("128Mi", description="Memory request")
-    cpu_limit: Optional[str] = Field(None, description="CPU limit")
-    memory_limit: Optional[str] = Field(None, description="Memory limit")
-    gpu: Optional[int] = Field(None, description="Number of GPUs")
+    cpu_limit: str | None = Field(None, description="CPU limit")
+    memory_limit: str | None = Field(None, description="Memory limit")
+    gpu: int | None = Field(None, description="Number of GPUs")
 
 
 class ContainerMapping(BaseModel):
@@ -36,15 +36,15 @@ class ContainerMapping(BaseModel):
 
     python_node: str = Field(..., description="Python node class name")
     container_image: str = Field(..., description="Docker container image")
-    command: List[str] = Field(default_factory=list, description="Container command")
-    args: List[str] = Field(default_factory=list, description="Container arguments")
-    env: Dict[str, str] = Field(
+    command: list[str] = Field(default_factory=list, description="Container command")
+    args: list[str] = Field(default_factory=list, description="Container arguments")
+    env: dict[str, str] = Field(
         default_factory=dict, description="Environment variables"
     )
     resources: ResourceSpec = Field(
         default_factory=ResourceSpec, description="Resource specs"
     )
-    mount_paths: Dict[str, str] = Field(
+    mount_paths: dict[str, str] = Field(
         default_factory=dict, description="Volume mount paths"
     )
 
@@ -58,7 +58,7 @@ class ExportConfig(BaseModel):
     include_resources: bool = Field(True, description="Include resource specifications")
     validate_output: bool = Field(True, description="Validate exported format")
     container_registry: str = Field("", description="Container registry URL")
-    partial_export: Set[str] = Field(default_factory=set, description="Nodes to export")
+    partial_export: set[str] = Field(default_factory=set, description="Nodes to export")
 
 
 class NodeMapper:
@@ -71,7 +71,7 @@ class NodeMapper:
             ConfigurationException: If initialization fails
         """
         try:
-            self.mappings: Dict[str, ContainerMapping] = {}
+            self.mappings: dict[str, ContainerMapping] = {}
             self._initialize_default_mappings()
         except Exception as e:
             raise ConfigurationException(
@@ -198,7 +198,7 @@ class ExportValidator:
     """Validates exported workflow formats."""
 
     @staticmethod
-    def validate_yaml(data: Dict[str, Any]) -> bool:
+    def validate_yaml(data: dict[str, Any]) -> bool:
         """Validate YAML export format.
 
         Args:
@@ -271,7 +271,7 @@ class ExportValidator:
         return True
 
     @staticmethod
-    def validate_json(data: Dict[str, Any]) -> bool:
+    def validate_json(data: dict[str, Any]) -> bool:
         """Validate JSON export format.
 
         Args:
@@ -300,7 +300,7 @@ class ManifestGenerator:
 
     def generate_manifest(
         self, workflow: Workflow, node_mapper: NodeMapper
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate deployment manifest for a workflow.
 
         Args:
@@ -373,7 +373,7 @@ class ManifestGenerator:
 
     def _generate_node_spec(
         self, node_id: str, node_instance, node: Node, node_mapper: NodeMapper
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate node specification for manifest.
 
         Args:
@@ -479,7 +479,7 @@ class ManifestGenerator:
 class WorkflowExporter:
     """Main exporter for Kailash workflows."""
 
-    def __init__(self, config: Optional[ExportConfig] = None):
+    def __init__(self, config: ExportConfig | None = None):
         """Initialize the workflow exporter.
 
         Args:
@@ -506,7 +506,7 @@ class WorkflowExporter:
                 f"Failed to initialize workflow exporter: {e}"
             ) from e
 
-    def to_yaml(self, workflow: Workflow, output_path: Optional[str] = None) -> str:
+    def to_yaml(self, workflow: Workflow, output_path: str | None = None) -> str:
         """Export workflow to YAML format.
 
         Args:
@@ -552,7 +552,7 @@ class WorkflowExporter:
         except Exception as e:
             raise ExportException(f"Failed to export workflow to YAML: {e}") from e
 
-    def to_json(self, workflow: Workflow, output_path: Optional[str] = None) -> str:
+    def to_json(self, workflow: Workflow, output_path: str | None = None) -> str:
         """Export workflow to JSON format.
 
         Args:
@@ -598,7 +598,7 @@ class WorkflowExporter:
         except Exception as e:
             raise ExportException(f"Failed to export workflow to JSON: {e}") from e
 
-    def to_manifest(self, workflow: Workflow, output_path: Optional[str] = None) -> str:
+    def to_manifest(self, workflow: Workflow, output_path: str | None = None) -> str:
         """Export workflow as deployment manifest.
 
         Args:
@@ -645,7 +645,7 @@ class WorkflowExporter:
 
     def export_with_templates(
         self, workflow: Workflow, template_name: str, output_dir: str
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Export workflow using predefined templates.
 
         Args:
@@ -722,7 +722,7 @@ class WorkflowExporter:
 
         return exports
 
-    def _prepare_export_data(self, workflow: Workflow) -> Dict[str, Any]:
+    def _prepare_export_data(self, workflow: Workflow) -> dict[str, Any]:
         """Prepare workflow data for export.
 
         Args:
@@ -876,7 +876,7 @@ class WorkflowExporter:
 def export_workflow(
     workflow: Workflow,
     format: str = "yaml",
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     **config,
 ) -> str:
     """Export a workflow to specified format.

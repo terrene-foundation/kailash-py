@@ -10,7 +10,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -46,7 +46,7 @@ def create_sample_workflow():
     )
 
     # Create transformer using PythonCodeNode
-    def transform_data(data: list) -> Dict[str, Any]:
+    def transform_data(data: list) -> dict[str, Any]:
         """Transform customer data."""
         # Simulate data transformation
         transformed = []
@@ -74,7 +74,7 @@ def create_sample_workflow():
     )
 
     # Create classifier using PythonCodeNode
-    def classify_customers(data: list) -> Dict[str, Any]:
+    def classify_customers(data: list) -> dict[str, Any]:
         """Classify customers into segments."""
         # Simulate classification
         segments = []

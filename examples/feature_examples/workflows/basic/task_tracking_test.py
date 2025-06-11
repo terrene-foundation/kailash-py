@@ -9,7 +9,7 @@ import random
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from examples.utils.paths import get_data_dir, get_output_dir
 
@@ -43,7 +43,7 @@ def demonstrate_basic_task_tracking():
         name="read_data", file_path=str(get_data_dir() / "input.csv")
     )
 
-    def transform_data(data: list) -> Dict[str, Any]:
+    def transform_data(data: list) -> dict[str, Any]:
         """Simple data transformation."""
         transformed = []
         for record in data:
@@ -173,7 +173,7 @@ def demonstrate_task_progress_tracking():
         workflow_id="long_running_workflow", name="long_running_workflow"
     )
 
-    def long_process(data: list) -> Dict[str, Any]:
+    def long_process(data: list) -> dict[str, Any]:
         """Simulate a long-running process."""
         results = []
         total = len(data)
@@ -254,7 +254,7 @@ def demonstrate_task_error_handling():
     # Create a workflow that might fail
     workflow = Workflow(workflow_id="unreliable_workflow", name="unreliable_workflow")
 
-    def unreliable_process(data: list, failure_rate: float = 0.5) -> Dict[str, Any]:
+    def unreliable_process(data: list, failure_rate: float = 0.5) -> dict[str, Any]:
         """Process that randomly fails."""
         if random.random() < failure_rate:
             raise Exception("Random failure occurred")

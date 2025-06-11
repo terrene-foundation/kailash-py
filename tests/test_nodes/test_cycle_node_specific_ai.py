@@ -9,7 +9,7 @@ Covers:
 - A2ACoordinatorNode: Agent coordination cycles
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
@@ -20,7 +20,7 @@ from kailash.runtime.local import LocalRuntime
 class MockLLMNode(CycleAwareNode):
     """Mock LLM node for testing cycles."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "prompt": NodeParameter(
                 name="prompt", type=str, required=False, default=""
@@ -30,7 +30,7 @@ class MockLLMNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Simulate iterative LLM refinement."""
         kwargs.get("prompt", "")
         quality_threshold = kwargs.get("quality_threshold", 0.8)
@@ -101,14 +101,14 @@ class TestLLMAgentNodeCycles:
         workflow = Workflow("llm-state-preservation", "LLM State Preservation")
 
         class StatefulLLMNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "input": NodeParameter(
                         name="input", type=str, required=False, default=""
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
                 prev_state = self.get_previous_state(context)
 
@@ -152,7 +152,7 @@ class TestLLMAgentNodeCycles:
         workflow = Workflow("llm-parameter-mapping", "LLM Parameter Mapping")
 
         class ParameterMappingLLMNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "query": NodeParameter(
                         name="query", type=str, required=False, default=""
@@ -165,7 +165,7 @@ class TestLLMAgentNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 query = kwargs.get("query", "")
                 context_data = kwargs.get("context_data", "")
                 feedback = kwargs.get("feedback", "")
@@ -219,14 +219,14 @@ class TestIterativeLLMAgentCycles:
 
         # Note: Using a mock since IterativeLLMAgentNode requires actual LLM setup
         class MockIterativeLLMNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "task": NodeParameter(
                         name="task", type=str, required=False, default=""
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
                 task = kwargs.get("task", "")
 
@@ -266,7 +266,7 @@ class TestA2ACoordinatorCycles:
         workflow = Workflow("a2a-coordination-cycle", "A2A Coordination Cycle")
 
         class MockA2ACoordinatorNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "agents": NodeParameter(
                         name="agents", type=list, required=False, default=[]
@@ -282,7 +282,7 @@ class TestA2ACoordinatorCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 agents = kwargs.get("agents", ["agent1", "agent2", "agent3"])
                 threshold = kwargs.get("consensus_threshold", 0.8)
                 iteration = self.get_iteration(context)
@@ -348,10 +348,10 @@ class TestAINodeCyclePerformance:
         workflow = Workflow("ai-memory-test", "AI Memory Test")
 
         class MemoryTestAINode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {}
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
 
                 # Simulate memory-intensive AI operation
@@ -388,10 +388,10 @@ class TestAINodeCyclePerformance:
         workflow = Workflow("ai-error-handling", "AI Error Handling")
 
         class ErrorProneAINode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {}
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
 
                 # Simulate transient errors in first few iterations

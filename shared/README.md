@@ -100,5 +100,5 @@ The mistake database is organized by patterns:
 
 ---
 
-**For SDK usage**: [../sdk-users/README.md](../sdk-users/README.md)  
+**For SDK usage**: [../sdk-users/README.md](../sdk-users/README.md)
 **For SDK development**: [../# contrib (removed)/README.md](../# contrib (removed)/README.md)

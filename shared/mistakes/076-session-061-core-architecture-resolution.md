@@ -110,7 +110,7 @@ node = SomeNode()  # Create without all params
 workflow.add_node("id", node)
 runtime.execute(workflow, parameters={"id": {"required_param": "value"}})
 
-# ✅ STILL WORKS: Old explicit pattern  
+# ✅ STILL WORKS: Old explicit pattern
 node = SomeNode(required_param="value")
 workflow.add_node("id", node)
 runtime.execute(workflow)
@@ -123,7 +123,7 @@ runtime.execute(workflow)
 
 ## Related Resolved Issues
 - **#020**: Configuration Parameter Validation - RESOLVED
-- **#053**: Confusion Between Configuration and Runtime Parameters - RESOLVED  
+- **#053**: Confusion Between Configuration and Runtime Parameters - RESOLVED
 - **#058**: Node Configuration vs Runtime Parameters Confusion - RESOLVED
 
 ## Categories
@@ -131,7 +131,7 @@ core-architecture, api-design, user-experience, **RESOLVED**
 
 ---
 
-**Session**: 061 - Enterprise workflow patterns and infrastructure  
-**Impact**: Major architectural improvement  
-**Breaking Changes**: None  
-**Documentation Impact**: High  
+**Session**: 061 - Enterprise workflow patterns and infrastructure
+**Impact**: Major architectural improvement
+**Breaking Changes**: None
+**Documentation Impact**: High

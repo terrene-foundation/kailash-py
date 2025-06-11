@@ -103,7 +103,7 @@ See Also:
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from . import Workflow
 from .templates import CycleTemplates
@@ -113,11 +113,11 @@ from .templates import CycleTemplates
 class CyclificationOpportunity:
     """Represents an opportunity to convert a DAG pattern to a cycle."""
 
-    nodes: List[str]
+    nodes: list[str]
     pattern_type: str
     confidence: float
     description: str
-    suggested_convergence: Optional[str] = None
+    suggested_convergence: str | None = None
     estimated_benefit: str = "unknown"
     implementation_complexity: str = "medium"
 
@@ -127,10 +127,10 @@ class CyclificationSuggestion:
     """Detailed suggestion for converting nodes to a cycle."""
 
     opportunity: CyclificationOpportunity
-    implementation_steps: List[str]
+    implementation_steps: list[str]
     code_example: str
     expected_outcome: str
-    risks: List[str]
+    risks: list[str]
 
 
 class DAGToCycleConverter:
@@ -150,9 +150,9 @@ class DAGToCycleConverter:
         """
         self.workflow = workflow
         self.graph = workflow.graph
-        self.opportunities: List[CyclificationOpportunity] = []
+        self.opportunities: list[CyclificationOpportunity] = []
 
-    def analyze_cyclification_opportunities(self) -> List[CyclificationOpportunity]:
+    def analyze_cyclification_opportunities(self) -> list[CyclificationOpportunity]:
         """
         Analyze workflow for patterns that could benefit from cyclification.
 
@@ -322,7 +322,7 @@ class DAGToCycleConverter:
                 )
                 self.opportunities.append(opportunity)
 
-    def _find_related_nodes(self, node_id: str) -> List[str]:
+    def _find_related_nodes(self, node_id: str) -> list[str]:
         """Find nodes that are closely related to the given node."""
         related = []
 
@@ -343,7 +343,7 @@ class DAGToCycleConverter:
         # Check if there's an edge between the nodes in either direction
         return graph.has_edge(node1, node2) or graph.has_edge(node2, node1)
 
-    def generate_detailed_suggestions(self) -> List[CyclificationSuggestion]:
+    def generate_detailed_suggestions(self) -> list[CyclificationSuggestion]:
         """
         Generate detailed suggestions with implementation guidance.
 
@@ -602,9 +602,9 @@ print(f"Created convergence cycle: {{cycle_id}}")
 
     def convert_to_cycle(
         self,
-        nodes: List[str],
+        nodes: list[str],
         convergence_strategy: str = "error_reduction",
-        cycle_type: Optional[str] = None,
+        cycle_type: str | None = None,
         **kwargs,
     ) -> str:
         """
@@ -643,7 +643,7 @@ print(f"Created convergence cycle: {{cycle_id}}")
         else:
             raise ValueError(f"Unknown cycle type: {cycle_type}")
 
-    def _detect_cycle_type(self, nodes: List[str], strategy: str) -> str:
+    def _detect_cycle_type(self, nodes: list[str], strategy: str) -> str:
         """Detect the most appropriate cycle type for given nodes and strategy."""
         if strategy == "error_reduction" or strategy == "quality_improvement":
             return "optimization"
@@ -659,7 +659,7 @@ print(f"Created convergence cycle: {{cycle_id}}")
             # Default to optimization for unknown strategies
             return "optimization"
 
-    def _convert_to_optimization_cycle(self, nodes: List[str], **kwargs) -> str:
+    def _convert_to_optimization_cycle(self, nodes: list[str], **kwargs) -> str:
         """Convert nodes to optimization cycle."""
         if len(nodes) < 2:
             raise ValueError("Optimization cycle requires at least 2 nodes")
@@ -668,14 +668,14 @@ print(f"Created convergence cycle: {{cycle_id}}")
             self.workflow, processor_node=nodes[0], evaluator_node=nodes[1], **kwargs
         )
 
-    def _convert_to_retry_cycle(self, nodes: List[str], **kwargs) -> str:
+    def _convert_to_retry_cycle(self, nodes: list[str], **kwargs) -> str:
         """Convert nodes to retry cycle."""
         if len(nodes) < 1:
             raise ValueError("Retry cycle requires at least 1 node")
 
         return CycleTemplates.retry_cycle(self.workflow, target_node=nodes[0], **kwargs)
 
-    def _convert_to_data_quality_cycle(self, nodes: List[str], **kwargs) -> str:
+    def _convert_to_data_quality_cycle(self, nodes: list[str], **kwargs) -> str:
         """Convert nodes to data quality cycle."""
         if len(nodes) < 2:
             raise ValueError("Data quality cycle requires at least 2 nodes")
@@ -684,7 +684,7 @@ print(f"Created convergence cycle: {{cycle_id}}")
             self.workflow, cleaner_node=nodes[0], validator_node=nodes[1], **kwargs
         )
 
-    def _convert_to_batch_processing_cycle(self, nodes: List[str], **kwargs) -> str:
+    def _convert_to_batch_processing_cycle(self, nodes: list[str], **kwargs) -> str:
         """Convert nodes to batch processing cycle."""
         if len(nodes) < 1:
             raise ValueError("Batch processing cycle requires at least 1 node")
@@ -693,7 +693,7 @@ print(f"Created convergence cycle: {{cycle_id}}")
             self.workflow, processor_node=nodes[0], **kwargs
         )
 
-    def _convert_to_convergence_cycle(self, nodes: List[str], **kwargs) -> str:
+    def _convert_to_convergence_cycle(self, nodes: list[str], **kwargs) -> str:
         """Convert nodes to convergence cycle."""
         if len(nodes) < 1:
             raise ValueError("Convergence cycle requires at least 1 node")
@@ -702,7 +702,7 @@ print(f"Created convergence cycle: {{cycle_id}}")
             self.workflow, processor_node=nodes[0], **kwargs
         )
 
-    def generate_migration_report(self) -> Dict[str, Any]:
+    def generate_migration_report(self) -> dict[str, Any]:
         """
         Generate comprehensive migration report with analysis and recommendations.
 
@@ -745,8 +745,8 @@ print(f"Created convergence cycle: {{cycle_id}}")
         }
 
     def _generate_migration_recommendations(
-        self, opportunities: List[CyclificationOpportunity]
-    ) -> List[str]:
+        self, opportunities: list[CyclificationOpportunity]
+    ) -> list[str]:
         """Generate high-level recommendations for migration."""
         recommendations = []
 
@@ -779,8 +779,8 @@ print(f"Created convergence cycle: {{cycle_id}}")
         return recommendations
 
     def _suggest_implementation_order(
-        self, opportunities: List[CyclificationOpportunity]
-    ) -> List[Dict[str, Any]]:
+        self, opportunities: list[CyclificationOpportunity]
+    ) -> list[dict[str, Any]]:
         """Suggest order for implementing cyclification opportunities."""
         # Sort by: confidence desc, complexity asc (low=1, medium=2, high=3)
         complexity_score = {"low": 1, "medium": 2, "high": 3}

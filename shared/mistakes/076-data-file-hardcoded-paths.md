@@ -1,8 +1,8 @@
 # Mistake #076: Hardcoded Data File Paths
 
-**Date**: 2025-06-10  
-**Session**: 062  
-**Severity**: Medium  
+**Date**: 2025-06-10
+**Session**: 062
+**Severity**: Medium
 **Status**: Active (Session 062 Consolidation)
 
 ## Problem Description
@@ -75,7 +75,7 @@ temp_file = "data/temp.csv"                     # Central data
 # ✅ CORRECT: Use centralized data utilities
 from examples.utils.data_paths import (
     get_input_data_path,
-    get_output_data_path, 
+    get_output_data_path,
     ensure_output_dir_exists,
     get_customer_csv_path
 )
@@ -99,13 +99,13 @@ def main():
     # Get file paths using utilities
     input_file = get_input_data_path("customers.csv")
     output_dir = ensure_output_dir_exists("csv")
-    
+
     # Create nodes with centralized paths
     reader = CSVReaderNode(file_path=str(input_file))
     writer = CSVWriterNode(
         file_path=str(output_dir / "processed_data.csv")
     )
-    
+
     # Execute workflow
     data = reader.execute()
     results = process_data(data)
@@ -154,7 +154,7 @@ test_csv = get_test_data_path("sample.csv", "csv")
 # ✅ Handle missing files gracefully
 def load_customer_data():
     file_path = get_input_data_path("customers.csv")
-    
+
     if not file_path.exists():
         # Provide helpful error message
         available_files = list(get_central_data_dir().glob("**/*.csv"))
@@ -162,7 +162,7 @@ def load_customer_data():
             f"Customer data not found at {file_path}\n"
             f"Available CSV files: {[f.name for f in available_files]}"
         )
-    
+
     return pd.read_csv(file_path)
 ```
 
@@ -170,10 +170,10 @@ def load_customer_data():
 ```python
 def process_customer_data():
     """Process customer data from centralized location.
-    
+
     Required Files:
         - data/inputs/csv/customers.csv: Customer master data
-        
+
     Generated Files:
         - data/outputs/csv/processed_customers.csv: Processed results
         - data/outputs/csv/customer_summary.csv: Summary statistics
@@ -208,15 +208,15 @@ grep -r "open(" examples/ --include="*.py" | grep -v "get_.*_path"
 def test_centralized_data_access():
     """Test that centralized data utilities work correctly."""
     from examples.utils.data_paths import get_input_data_path, get_output_data_path
-    
+
     # Test input file access
     customer_file = get_input_data_path("customers.csv")
     assert customer_file.exists(), f"Customer file not found: {customer_file}"
-    
+
     # Test output directory creation
     output_dir = ensure_output_dir_exists("csv")
     assert output_dir.exists(), f"Output directory not created: {output_dir}"
-    
+
     # Test file operations
     test_data = [{"id": 1, "name": "test"}]
     output_file = get_output_data_path("test_output.csv")
@@ -227,7 +227,7 @@ def test_centralized_data_access():
 ## Related Issues
 
 - **Mistake #049**: Missing data source nodes in workflow design
-- **Mistake #009**: File path inconsistencies  
+- **Mistake #009**: File path inconsistencies
 - **Session 061**: Parameter lifecycle architecture changes
 
 ## Resolution Status

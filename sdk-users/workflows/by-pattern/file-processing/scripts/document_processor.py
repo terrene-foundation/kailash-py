@@ -26,10 +26,7 @@ from pathlib import Path
 
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import (
-    DirectoryReaderNode,
-    JSONWriterNode,
-)
+from kailash.nodes.data import DirectoryReaderNode, JSONWriterNode
 from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
@@ -223,19 +220,19 @@ processed_csv_results = []
 
 for csv_file_info in csv_files:
     file_path = csv_file_info["file_path"]
-    
+
     try:
         # Create and execute CSVReaderNode for this file
         csv_reader = CSVReaderNode(name=f"csv_reader_{csv_file_info['file_name']}")
         csv_result = csv_reader.run(file_path=file_path, headers=True)
-        
+
         # Extract the actual data
         csv_data = csv_result.get("data", [])
-        
+
         # Analyze the CSV content
         total_records = len(csv_data)
         columns = list(csv_data[0].keys()) if csv_data else []
-        
+
         # Calculate statistics based on actual data
         active_count = sum(1 for record in csv_data if record.get("status") == "active")
         total_amount = 0
@@ -246,7 +243,7 @@ for csv_file_info in csv_files:
                 total_amount += amount
             except (ValueError, TypeError):
                 pass
-        
+
         processing_result = {
             "file_info": csv_file_info,
             "total_records": total_records,
@@ -257,9 +254,9 @@ for csv_file_info in csv_files:
             "average_purchase": total_amount / total_records if total_records > 0 else 0,
             "sample_records": csv_data[:3]  # First 3 records
         }
-        
+
         processed_csv_results.append(processing_result)
-        
+
     except Exception as e:
         error_result = {
             "file_info": csv_file_info,
@@ -313,28 +310,28 @@ processed_json_results = []
 
 for json_file_info in json_files:
     file_path = json_file_info["file_path"]
-    
+
     try:
         # Create and execute JSONReaderNode for this file
         json_reader = JSONReaderNode(name=f"json_reader_{json_file_info['file_name']}")
         json_result = json_reader.run(file_path=file_path)
-        
+
         # Extract the actual data
         json_data = json_result.get("data", {})
-        
+
         # Analyze JSON structure and content
         if isinstance(json_data, dict):
             keys = list(json_data.keys())
-            
+
             # Handle transaction log structure
             if "transactions" in json_data:
                 transactions = json_data.get("transactions", [])
                 metadata = json_data.get("metadata", {})
-                
+
                 total_transactions = len(transactions)
                 total_amount = sum(txn.get("amount", 0) for txn in transactions)
                 completed_transactions = sum(1 for txn in transactions if txn.get("status") == "completed")
-                
+
                 processing_result = {
                     "file_info": json_file_info,
                     "data_type": "transaction_log",
@@ -363,9 +360,9 @@ for json_file_info in json_files:
                 "array_length": len(json_data) if isinstance(json_data, list) else 0,
                 "sample_content": str(json_data)[:200] + "..." if len(str(json_data)) > 200 else str(json_data)
             }
-        
+
         processed_json_results.append(processing_result)
-        
+
     except Exception as e:
         error_result = {
             "file_info": json_file_info,
@@ -424,20 +421,20 @@ processed_text_results = []
 for text_file_info in text_files:
     file_path = text_file_info["file_path"]
     file_type = text_file_info["file_type"]
-    
+
     try:
         # Create and execute TextReaderNode for this file
         text_reader = TextReaderNode(name=f"text_reader_{text_file_info['file_name']}")
         text_result = text_reader.run(file_path=file_path, encoding="utf-8")
-        
+
         # Extract the actual text content
         text_content = text_result.get("text", "")
-        
+
         # Analyze text content
         word_count = len(text_content.split())
         line_count = len(text_content.split("\\n"))
         char_count = len(text_content)
-        
+
         # File-type specific analysis
         if file_type == "txt":
             # Find template placeholders
@@ -469,7 +466,7 @@ for text_file_info in text_files:
             }
         else:
             specific_analysis = {}
-        
+
         processing_result = {
             "file_info": text_file_info,
             "word_count": word_count,
@@ -478,9 +475,9 @@ for text_file_info in text_files:
             "content_preview": text_content[:300] + "..." if len(text_content) > 300 else text_content,
             "specific_analysis": specific_analysis
         }
-        
+
         processed_text_results.append(processing_result)
-        
+
     except Exception as e:
         error_result = {
             "file_info": text_file_info,
@@ -691,7 +688,7 @@ def main():
     # Display generated report preview
     print("\\n=== Document Analysis Report Preview ===")
     try:
-        with open("data/outputs/comprehensive_document_analysis.json", "r") as f:
+        with open("data/outputs/comprehensive_document_analysis.json") as f:
             report = json.load(f)
             processing_summary = report["processing_summary"]
             print(json.dumps(processing_summary, indent=2))

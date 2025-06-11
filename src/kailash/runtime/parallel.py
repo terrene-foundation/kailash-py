@@ -8,8 +8,8 @@ import asyncio
 import logging
 import time
 from collections import deque
-from datetime import datetime, timezone
-from typing import Any, Deque, Dict, Optional, Set, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import networkx as nx
 
@@ -66,9 +66,9 @@ class ParallelRuntime:
     async def execute(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager] = None,
-        parameters: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow with parallel node execution.
 
         Args:
@@ -159,10 +159,10 @@ class ParallelRuntime:
     async def _execute_workflow_parallel(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager],
-        run_id: Optional[str],
-        parameters: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        task_manager: TaskManager | None,
+        run_id: str | None,
+        parameters: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
         """Execute the workflow nodes in parallel where possible.
 
         This method uses a dynamic scheduling approach to run independent nodes
@@ -323,11 +323,11 @@ class ParallelRuntime:
         self,
         workflow: Workflow,
         node_id: str,
-        node_outputs: Dict[str, Dict[str, Any]],
-        parameters: Dict[str, Any],
-        task_manager: Optional[TaskManager],
-        run_id: Optional[str],
-    ) -> Tuple[Dict[str, Any], bool]:
+        node_outputs: dict[str, dict[str, Any]],
+        parameters: dict[str, Any],
+        task_manager: TaskManager | None,
+        run_id: str | None,
+    ) -> tuple[dict[str, Any], bool]:
         """Execute a single node asynchronously.
 
         Args:
@@ -359,7 +359,7 @@ class ParallelRuntime:
                     run_id=run_id,
                     node_id=node_id,
                     node_type=node_instance.__class__.__name__,
-                    started_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
                 )
         except Exception as e:
             self.logger.warning(f"Failed to create task for node '{node_id}': {e}")
@@ -409,7 +409,7 @@ class ParallelRuntime:
                     task.update_status(
                         TaskStatus.COMPLETED,
                         result=outputs,
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                         metadata={"execution_time": performance_metrics.duration},
                     )
 
@@ -431,7 +431,7 @@ class ParallelRuntime:
             # Update task status
             if task:
                 task.update_status(
-                    TaskStatus.FAILED, error=str(e), ended_at=datetime.now(timezone.utc)
+                    TaskStatus.FAILED, error=str(e), ended_at=datetime.now(UTC)
                 )
 
             # Return error result
@@ -448,9 +448,9 @@ class ParallelRuntime:
         workflow: Workflow,
         node_id: str,
         node_instance: Any,
-        node_outputs: Dict[str, Dict[str, Any]],
-        parameters: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        node_outputs: dict[str, dict[str, Any]],
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
         """Prepare inputs for a node execution.
 
         Args:
@@ -520,9 +520,9 @@ class ParallelRuntime:
         self,
         workflow: Workflow,
         failed_node: str,
-        failed_nodes: Set[str],
-        pending_nodes: Set[str],
-        ready_nodes: Deque[str],
+        failed_nodes: set[str],
+        pending_nodes: set[str],
+        ready_nodes: deque[str],
     ) -> None:
         """Mark all dependent nodes as failed.
 

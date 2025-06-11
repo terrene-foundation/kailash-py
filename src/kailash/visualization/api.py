@@ -27,7 +27,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 try:
     from fastapi import (
@@ -59,8 +59,8 @@ if FASTAPI_AVAILABLE:
     class RunRequest(BaseModel):
         """Request model for starting monitoring."""
 
-        run_id: Optional[str] = None
-        config: Optional[Dict[str, Any]] = None
+        run_id: str | None = None
+        config: dict[str, Any] | None = None
 
     class MetricsResponse(BaseModel):
         """Response model for metrics data."""
@@ -80,12 +80,12 @@ if FASTAPI_AVAILABLE:
         node_id: str
         node_type: str
         status: str
-        started_at: Optional[datetime]
-        ended_at: Optional[datetime]
-        duration: Optional[float]
-        cpu_usage: Optional[float]
-        memory_usage_mb: Optional[float]
-        error_message: Optional[str]
+        started_at: datetime | None
+        ended_at: datetime | None
+        duration: float | None
+        cpu_usage: float | None
+        memory_usage_mb: float | None
+        error_message: str | None
 
     class RunResponse(BaseModel):
         """Response model for run information."""
@@ -93,8 +93,8 @@ if FASTAPI_AVAILABLE:
         run_id: str
         workflow_name: str
         status: str
-        started_at: Optional[datetime]
-        ended_at: Optional[datetime]
+        started_at: datetime | None
+        ended_at: datetime | None
         total_tasks: int
         completed_tasks: int
         failed_tasks: int
@@ -105,7 +105,7 @@ if FASTAPI_AVAILABLE:
         run_id: str
         format: str = "html"
         include_charts: bool = True
-        compare_runs: Optional[List[str]] = None
+        compare_runs: list[str] | None = None
         detail_level: str = "detailed"
 
 
@@ -123,7 +123,7 @@ class DashboardAPIServer:
     def __init__(
         self,
         task_manager: TaskManager,
-        dashboard_config: Optional[DashboardConfig] = None,
+        dashboard_config: DashboardConfig | None = None,
     ):
         """Initialize API server.
 
@@ -145,8 +145,8 @@ class DashboardAPIServer:
         self.reporter = WorkflowPerformanceReporter(task_manager)
 
         # WebSocket connections for real-time updates
-        self._websocket_connections: List[WebSocket] = []
-        self._broadcast_task: Optional[asyncio.Task] = None
+        self._websocket_connections: list[WebSocket] = []
+        self._broadcast_task: asyncio.Task | None = None
 
         # Create FastAPI app
         self.app = FastAPI(
@@ -177,7 +177,7 @@ class DashboardAPIServer:
             """Health check endpoint."""
             return {"status": "healthy", "timestamp": datetime.now()}
 
-        @self.app.get("/api/v1/runs", response_model=List[RunResponse])
+        @self.app.get("/api/v1/runs", response_model=list[RunResponse])
         async def list_runs(limit: int = 10, offset: int = 0):
             """Get list of workflow runs."""
             try:
@@ -243,7 +243,7 @@ class DashboardAPIServer:
                 self.logger.error(f"Failed to get run {run_id}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/v1/runs/{run_id}/tasks", response_model=List[TaskResponse])
+        @self.app.get("/api/v1/runs/{run_id}/tasks", response_model=list[TaskResponse])
         async def get_run_tasks(run_id: str):
             """Get tasks for a specific run."""
             try:
@@ -352,7 +352,7 @@ class DashboardAPIServer:
                 self.logger.error(f"Failed to get current metrics: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/v1/metrics/history", response_model=List[MetricsResponse])
+        @self.app.get("/api/v1/metrics/history", response_model=list[MetricsResponse])
         async def get_metrics_history(minutes: int = 30):
             """Get metrics history for specified time period."""
             try:
@@ -475,7 +475,7 @@ class DashboardAPIServer:
         run_id: str,
         output_path: Path,
         report_format: ReportFormat,
-        compare_runs: Optional[List[str]] = None,
+        compare_runs: list[str] | None = None,
     ):
         """Generate report in background task."""
         try:
@@ -564,7 +564,7 @@ class SimpleDashboardAPI:
     def __init__(
         self,
         task_manager: TaskManager,
-        dashboard_config: Optional[DashboardConfig] = None,
+        dashboard_config: DashboardConfig | None = None,
     ):
         """Initialize simple API interface.
 
@@ -578,7 +578,7 @@ class SimpleDashboardAPI:
         self.reporter = WorkflowPerformanceReporter(task_manager)
         self.logger = logger
 
-    def get_runs(self, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
+    def get_runs(self, limit: int = 10, offset: int = 0) -> list[dict[str, Any]]:
         """Get list of workflow runs."""
         all_runs = self.task_manager.list_runs()
         runs = all_runs[offset : offset + limit]
@@ -604,7 +604,7 @@ class SimpleDashboardAPI:
 
         return result
 
-    def get_run_details(self, run_id: str) -> Optional[Dict[str, Any]]:
+    def get_run_details(self, run_id: str) -> dict[str, Any] | None:
         """Get details for a specific run."""
         run = self.task_manager.get_run(run_id)
         if not run:
@@ -641,17 +641,17 @@ class SimpleDashboardAPI:
             ],
         }
 
-    def start_monitoring(self, run_id: Optional[str] = None) -> Dict[str, Any]:
+    def start_monitoring(self, run_id: str | None = None) -> dict[str, Any]:
         """Start real-time monitoring."""
         self.dashboard.start_monitoring(run_id)
         return {"status": "started", "run_id": run_id}
 
-    def stop_monitoring(self) -> Dict[str, Any]:
+    def stop_monitoring(self) -> dict[str, Any]:
         """Stop real-time monitoring."""
         self.dashboard.stop_monitoring()
         return {"status": "stopped"}
 
-    def get_current_metrics(self) -> Optional[Dict[str, Any]]:
+    def get_current_metrics(self) -> dict[str, Any] | None:
         """Get current live metrics."""
         metrics = self.dashboard.get_current_metrics()
         if not metrics:
@@ -668,7 +668,7 @@ class SimpleDashboardAPI:
             "avg_task_duration": metrics.avg_task_duration,
         }
 
-    def get_metrics_history(self, minutes: int = 30) -> List[Dict[str, Any]]:
+    def get_metrics_history(self, minutes: int = 30) -> list[dict[str, Any]]:
         """Get metrics history."""
         history = self.dashboard.get_metrics_history(minutes=minutes)
 
@@ -690,8 +690,8 @@ class SimpleDashboardAPI:
         self,
         run_id: str,
         format: str = "html",
-        output_path: Optional[Union[str, Path]] = None,
-        compare_runs: Optional[List[str]] = None,
+        output_path: str | Path | None = None,
+        compare_runs: list[str] | None = None,
     ) -> Path:
         """Generate performance report."""
         try:
@@ -708,9 +708,7 @@ class SimpleDashboardAPI:
             compare_runs=compare_runs,
         )
 
-    def generate_dashboard(
-        self, output_path: Optional[Union[str, Path]] = None
-    ) -> Path:
+    def generate_dashboard(self, output_path: str | Path | None = None) -> Path:
         """Generate live dashboard HTML."""
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -718,9 +716,7 @@ class SimpleDashboardAPI:
 
         return self.dashboard.generate_live_report(output_path, include_charts=True)
 
-    def export_metrics_json(
-        self, output_path: Optional[Union[str, Path]] = None
-    ) -> Path:
+    def export_metrics_json(self, output_path: str | Path | None = None) -> Path:
         """Export current metrics as JSON."""
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

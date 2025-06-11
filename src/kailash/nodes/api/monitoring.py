@@ -4,8 +4,8 @@ import asyncio
 import socket
 import subprocess
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -92,7 +92,7 @@ class HealthCheckNode(Node):
         >>> assert 'health_results' in result
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "targets": NodeParameter(
                 name="targets",
@@ -130,7 +130,7 @@ class HealthCheckNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         targets = kwargs["targets"]
         timeout = kwargs.get("timeout", 30)
         retries = kwargs.get("retries", 2)
@@ -162,12 +162,12 @@ class HealthCheckNode(Node):
             "healthy_count": len([r for r in results if r["status"] == "healthy"]),
             "unhealthy_count": len([r for r in results if r["status"] == "unhealthy"]),
             "execution_time": execution_time,
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat() + "Z",
         }
 
     async def _run_checks_parallel(
-        self, targets: List[Dict], timeout: int, retries: int, include_metrics: bool
-    ) -> List[Dict[str, Any]]:
+        self, targets: list[dict], timeout: int, retries: int, include_metrics: bool
+    ) -> list[dict[str, Any]]:
         """Run health checks in parallel using asyncio."""
 
         async def run_single_check(target):
@@ -184,8 +184,8 @@ class HealthCheckNode(Node):
         return await asyncio.gather(*tasks, return_exceptions=True)
 
     def _run_checks_sequential(
-        self, targets: List[Dict], timeout: int, retries: int, include_metrics: bool
-    ) -> List[Dict[str, Any]]:
+        self, targets: list[dict], timeout: int, retries: int, include_metrics: bool
+    ) -> list[dict[str, Any]]:
         """Run health checks sequentially."""
         return [
             self._perform_health_check(target, timeout, retries, include_metrics)
@@ -193,8 +193,8 @@ class HealthCheckNode(Node):
         ]
 
     def _perform_health_check(
-        self, target: Dict, timeout: int, retries: int, include_metrics: bool
-    ) -> Dict[str, Any]:
+        self, target: dict, timeout: int, retries: int, include_metrics: bool
+    ) -> dict[str, Any]:
         """Perform a single health check with retry logic."""
 
         check_type = target.get("type", "unknown")
@@ -228,7 +228,7 @@ class HealthCheckNode(Node):
                 result["check_id"] = check_id
                 result["check_type"] = check_type
                 result["target"] = target
-                result["timestamp"] = datetime.now(timezone.utc).isoformat() + "Z"
+                result["timestamp"] = datetime.now(UTC).isoformat() + "Z"
 
                 # If successful, return immediately
                 if result["status"] == "healthy":
@@ -245,7 +245,7 @@ class HealthCheckNode(Node):
                         "details": {"error": str(e), "error_type": type(e).__name__},
                         "response_time": time.time() - start_time,
                         "attempt": attempt + 1,
-                        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                        "timestamp": datetime.now(UTC).isoformat() + "Z",
                     }
 
                 # Wait before retry (exponential backoff)
@@ -253,7 +253,7 @@ class HealthCheckNode(Node):
 
         return result
 
-    def _check_http(self, target: Dict, timeout: int) -> Dict[str, Any]:
+    def _check_http(self, target: dict, timeout: int) -> dict[str, Any]:
         """Perform HTTP health check."""
         url = target["url"]
         expected_status = target.get("expected_status", 200)
@@ -296,7 +296,7 @@ class HealthCheckNode(Node):
             },
         }
 
-    def _check_tcp(self, target: Dict, timeout: int) -> Dict[str, Any]:
+    def _check_tcp(self, target: dict, timeout: int) -> dict[str, Any]:
         """Perform TCP port connectivity check."""
         host = target["host"]
         port = target["port"]
@@ -321,7 +321,7 @@ class HealthCheckNode(Node):
         finally:
             sock.close()
 
-    def _check_disk(self, target: Dict) -> Dict[str, Any]:
+    def _check_disk(self, target: dict) -> dict[str, Any]:
         """Perform disk space check."""
         import shutil
 
@@ -365,7 +365,7 @@ class HealthCheckNode(Node):
                 "details": {"path": path, "error": str(e)},
             }
 
-    def _check_command(self, target: Dict, timeout: int) -> Dict[str, Any]:
+    def _check_command(self, target: dict, timeout: int) -> dict[str, Any]:
         """Perform custom command health check."""
         command = target["command"]
         expected_exit_code = target.get("expected_exit_code", 0)
@@ -409,7 +409,7 @@ class HealthCheckNode(Node):
                 "details": {"command": command, "timeout": timeout},
             }
 
-    def _check_database(self, target: Dict, timeout: int) -> Dict[str, Any]:
+    def _check_database(self, target: dict, timeout: int) -> dict[str, Any]:
         """Perform database connectivity check."""
         # This is a simplified example - in production, you'd use actual database drivers
         db_type = target.get("db_type", "postgresql")
@@ -421,8 +421,8 @@ class HealthCheckNode(Node):
         return self._check_tcp({"host": host, "port": port}, timeout)
 
     def _generate_summary(
-        self, results: List[Dict], execution_time: float
-    ) -> Dict[str, Any]:
+        self, results: list[dict], execution_time: float
+    ) -> dict[str, Any]:
         """Generate summary statistics from health check results."""
         total_checks = len(results)
         healthy_checks = len([r for r in results if r.get("status") == "healthy"])

@@ -12,14 +12,13 @@ This script validates that all example files:
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-def get_example_files() -> List[Path]:
+def get_example_files() -> list[Path]:
     """Get all Python example files."""
     examples_dir = project_root / "examples"
     example_files = []
@@ -56,7 +55,7 @@ def get_example_files() -> List[Path]:
     return sorted(example_files)
 
 
-def check_syntax(file_path: Path) -> Tuple[bool, str]:
+def check_syntax(file_path: Path) -> tuple[bool, str]:
     """Check if a file has valid Python syntax."""
     result = subprocess.run(
         [sys.executable, "-m", "py_compile", str(file_path)],
@@ -66,7 +65,7 @@ def check_syntax(file_path: Path) -> Tuple[bool, str]:
     return result.returncode == 0, result.stderr
 
 
-def check_imports(file_path: Path) -> Tuple[bool, str]:
+def check_imports(file_path: Path) -> tuple[bool, str]:
     """Check if a file imports without errors."""
     # Create a test script that imports the module
     test_code = f"""
@@ -95,11 +94,11 @@ except Exception as e:
     return result.returncode == 0, result.stdout + result.stderr
 
 
-def check_data_paths(file_path: Path) -> Tuple[bool, List[str]]:
+def check_data_paths(file_path: Path) -> tuple[bool, list[str]]:
     """Check if file uses hardcoded data paths."""
     issues = []
 
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         content = f.read()
         lines = content.split("\n")
 

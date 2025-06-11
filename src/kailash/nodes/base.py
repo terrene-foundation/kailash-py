@@ -21,8 +21,8 @@ Key Components:
 import json
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set, Type
+from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -60,10 +60,10 @@ class NodeMetadata(BaseModel):
     version: str = Field("1.0.0", description="Node version")
     author: str = Field("", description="Node author")
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Node creation date",
     )
-    tags: Set[str] = Field(default_factory=set, description="Node tags")
+    tags: set[str] = Field(default_factory=set, description="Node tags")
 
 
 class NodeParameter(BaseModel):
@@ -94,7 +94,7 @@ class NodeParameter(BaseModel):
     """
 
     name: str
-    type: Type
+    type: type
     required: bool = True
     default: Any = None
     description: str = ""
@@ -208,7 +208,7 @@ class Node(ABC):
             ) from e
 
     @abstractmethod
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         This abstract method must be implemented by all concrete nodes to
@@ -254,9 +254,8 @@ class Node(ABC):
             - to_dict(): Includes parameters in serialization
             - Workflow.connect(): Validates compatible connections
         """
-        pass
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define output parameters for this node.
 
         This optional method allows nodes to specify their output schema for
@@ -313,7 +312,7 @@ class Node(ABC):
         return {}
 
     @abstractmethod
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic.
 
         This is the core method that implements the node's data processing
@@ -361,7 +360,6 @@ class Node(ABC):
             - LocalRuntime: During workflow execution
             - TestRunner: During unit testing
         """
-        pass
 
     def _validate_config(self):
         """Validate node configuration against defined parameters.
@@ -428,8 +426,8 @@ class Node(ABC):
                             f"Conversion failed: {e}"
                         ) from e
 
-    def validate_inputs(self, **kwargs) -> Dict[str, Any]:
-        """Validate runtime inputs against node requirements.
+    def validate_inputs(self, **kwargs) -> dict[str, Any]:
+        r"""Validate runtime inputs against node requirements.
 
         This method validates inputs provided at execution time against the
         node's parameter schema. It ensures type safety and provides helpful
@@ -521,7 +519,7 @@ class Node(ABC):
 
         return validated
 
-    def validate_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_outputs(self, outputs: dict[str, Any]) -> dict[str, Any]:
         """Validate outputs against schema and JSON-serializability.
 
         This enhanced method validates outputs in two ways:
@@ -661,7 +659,7 @@ class Node(ABC):
         except (TypeError, ValueError):
             return False
 
-    def execute(self, **runtime_inputs) -> Dict[str, Any]:
+    def execute(self, **runtime_inputs) -> dict[str, Any]:
         """Execute the node with validation and error handling.
 
         This is the main entry point for node execution that orchestrates
@@ -711,7 +709,7 @@ class Node(ABC):
             - Metrics enable performance monitoring
             - Validation ensures data integrity
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         try:
             self.logger.info(f"Executing node {self.id}")
 
@@ -735,7 +733,7 @@ class Node(ABC):
             # Validate outputs
             validated_outputs = self.validate_outputs(outputs)
 
-            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
+            execution_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.info(
                 f"Node {self.id} executed successfully in {execution_time:.3f}s"
             )
@@ -754,7 +752,7 @@ class Node(ABC):
                 f"Node '{self.id}' execution failed: {type(e).__name__}: {e}"
             ) from e
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert node to dictionary representation.
 
         Serializes the node instance to a dictionary format suitable for:
@@ -866,7 +864,7 @@ class NodeRegistry:
     """
 
     _instance = None
-    _nodes: Dict[str, Type[Node]] = {}
+    _nodes: dict[str, type[Node]] = {}
 
     def __new__(cls):
         """Ensure singleton instance.
@@ -882,7 +880,7 @@ class NodeRegistry:
         return cls._instance
 
     @classmethod
-    def register(cls, node_class: Type[Node], alias: Optional[str] = None):
+    def register(cls, node_class: type[Node], alias: str | None = None):
         """Register a node class.
 
         Adds a node class to the global registry, making it available
@@ -940,7 +938,7 @@ class NodeRegistry:
         logging.info(f"Registered node '{node_name}'")
 
     @classmethod
-    def get(cls, node_name: str) -> Type[Node]:
+    def get(cls, node_name: str) -> type[Node]:
         """Get a registered node class by name.
 
         Retrieves a node class from the registry for instantiation.
@@ -983,7 +981,7 @@ class NodeRegistry:
         return cls._nodes[node_name]
 
     @classmethod
-    def list_nodes(cls) -> Dict[str, Type[Node]]:
+    def list_nodes(cls) -> dict[str, type[Node]]:
         """List all registered nodes.
 
         Returns a copy of the registry for discovery purposes.
@@ -1030,7 +1028,7 @@ class NodeRegistry:
         logging.info("Cleared all registered nodes")
 
 
-def register_node(alias: Optional[str] = None):
+def register_node(alias: str | None = None):
     """Decorator to register a node class.
 
     Provides a convenient decorator pattern for automatic node
@@ -1077,7 +1075,7 @@ def register_node(alias: Optional[str] = None):
         ...         return pd.read_csv(file)
     """
 
-    def decorator(node_class: Type[Node]):
+    def decorator(node_class: type[Node]):
         """Inner decorator that performs registration.
 
         Args:

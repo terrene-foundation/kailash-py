@@ -14,7 +14,7 @@ Key Design Principles:
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.access_control import (
     AccessDecision,
@@ -146,7 +146,7 @@ class NodeWithAccessControl(Node):
         else:
             raise NotImplementedError("Node must implement _execute() method")
 
-    def _should_check_access(self, user_context: Optional[UserContext]) -> bool:
+    def _should_check_access(self, user_context: UserContext | None) -> bool:
         """
         Determine if access control should be checked.
 
@@ -179,7 +179,7 @@ class NodeWithAccessControl(Node):
         # Fall back to class name
         return self.__class__.__name__
 
-    def _mask_fields(self, data: Dict[str, Any], fields: list[str]) -> Dict[str, Any]:
+    def _mask_fields(self, data: dict[str, Any], fields: list[str]) -> dict[str, Any]:
         """Mask specified fields in output data"""
         masked_data = data.copy()
         for field in fields:
@@ -188,7 +188,7 @@ class NodeWithAccessControl(Node):
         return masked_data
 
     def _handle_access_denied(
-        self, decision: AccessDecision, inputs: Dict[str, Any]
+        self, decision: AccessDecision, inputs: dict[str, Any]
     ) -> Any:
         """
         Handle access denied scenarios.
@@ -333,6 +333,6 @@ def add_access_control(node_instance, **acl_config):
         setattr(node_instance, key, value)
 
     # Mark this node as access-controlled
-    setattr(node_instance, "_access_controlled", True)
+    node_instance._access_controlled = True
 
     return node_instance

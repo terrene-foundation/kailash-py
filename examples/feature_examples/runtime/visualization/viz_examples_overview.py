@@ -47,7 +47,7 @@ ax1.set_ylabel("Number of Examples")
 ax1.set_xticklabels(categories, rotation=45, ha="right")
 
 # Add value labels on bars
-for bar, count in zip(bars, counts):
+for bar, count in zip(bars, counts, strict=False):
     height = bar.get_height()
     ax1.text(
         bar.get_x() + bar.get_width() / 2.0,
@@ -104,7 +104,7 @@ ax3.set_xlabel("Number of Examples")
 ax3.invert_yaxis()
 
 # Add value labels
-for i, (bar, count) in enumerate(zip(bars, feature_counts)):
+for i, (bar, count) in enumerate(zip(bars, feature_counts, strict=False)):
     width = bar.get_width()
     ax3.text(
         width + 0.1,

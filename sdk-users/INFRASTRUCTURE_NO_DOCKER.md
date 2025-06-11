@@ -152,11 +152,11 @@ class SimpleVectorSearch:
     def __init__(self):
         self.vectors = []
         self.metadata = []
-    
+
     def add(self, vector, metadata):
         self.vectors.append(vector)
         self.metadata.append(metadata)
-    
+
     def search(self, query_vector, k=5):
         similarities = cosine_similarity([query_vector], self.vectors)[0]
         top_k = np.argsort(similarities)[-k:][::-1]
@@ -173,12 +173,12 @@ class FileDocumentStore:
     def __init__(self, base_path="./documents"):
         self.base_path = Path(base_path)
         self.base_path.mkdir(exist_ok=True)
-    
+
     def insert(self, doc_id, document):
         path = self.base_path / f"{doc_id}.json"
         with open(path, 'w') as f:
             json.dump(document, f)
-    
+
     def find(self, doc_id):
         path = self.base_path / f"{doc_id}.json"
         if path.exists():

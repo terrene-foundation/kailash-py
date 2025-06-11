@@ -23,7 +23,7 @@ Downstream consumers:
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -79,7 +79,7 @@ class SharePointGraphReader(Node):
             author="Kailash SDK",
         )
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for SharePoint Graph operations."""
         return {
             "tenant_id": NodeParameter(
@@ -149,7 +149,7 @@ class SharePointGraphReader(Node):
 
     def _authenticate(
         self, tenant_id: str, client_id: str, client_secret: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Authenticate with Microsoft Graph API using MSAL.
 
         Returns dict with token and headers for stateless operation.
@@ -184,7 +184,7 @@ class SharePointGraphReader(Node):
             },
         }
 
-    def _get_site_data(self, site_url: str, headers: Dict[str, str]) -> Dict[str, Any]:
+    def _get_site_data(self, site_url: str, headers: dict[str, str]) -> dict[str, Any]:
         """Get SharePoint site data from Graph API."""
         # Convert SharePoint URL to Graph API site ID format
         site_id = site_url.replace("https://", "").replace(
@@ -201,8 +201,8 @@ class SharePointGraphReader(Node):
             )
 
     def _list_libraries(
-        self, site_id: str, headers: Dict[str, str]
-    ) -> List[Dict[str, Any]]:
+        self, site_id: str, headers: dict[str, str]
+    ) -> list[dict[str, Any]]:
         """List all document libraries in the site."""
         drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
         response = requests.get(drives_url, headers=headers)
@@ -215,8 +215,8 @@ class SharePointGraphReader(Node):
             )
 
     def _get_drive_id(
-        self, site_id: str, library_name: str, headers: Dict[str, str]
-    ) -> Optional[str]:
+        self, site_id: str, library_name: str, headers: dict[str, str]
+    ) -> str | None:
         """Get the drive ID for a specific library."""
         libraries = self._list_libraries(site_id, headers)
         for lib in libraries:
@@ -225,8 +225,8 @@ class SharePointGraphReader(Node):
         return None
 
     def _list_files(
-        self, site_id: str, library_name: str, folder_path: str, headers: Dict[str, str]
-    ) -> Dict[str, Any]:
+        self, site_id: str, library_name: str, folder_path: str, headers: dict[str, str]
+    ) -> dict[str, Any]:
         """List files in a specific library and folder."""
         drive_id = self._get_drive_id(site_id, library_name, headers)
         if not drive_id:
@@ -289,8 +289,8 @@ class SharePointGraphReader(Node):
         file_name: str,
         folder_path: str,
         local_path: str,
-        headers: Dict[str, str],
-    ) -> Dict[str, Any]:
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
         """Download a file from SharePoint."""
         drive_id = self._get_drive_id(site_id, library_name, headers)
         if not drive_id:
@@ -344,8 +344,8 @@ class SharePointGraphReader(Node):
             )
 
     def _search_files(
-        self, site_id: str, library_name: str, query: str, headers: Dict[str, str]
-    ) -> Dict[str, Any]:
+        self, site_id: str, library_name: str, query: str, headers: dict[str, str]
+    ) -> dict[str, Any]:
         """Search for files in a library."""
         drive_id = self._get_drive_id(site_id, library_name, headers)
         if not drive_id:
@@ -383,7 +383,7 @@ class SharePointGraphReader(Node):
                 f"Search failed: {response.status_code} - {response.text}"
             )
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute SharePoint Graph operation.
 
         This method is stateless and returns JSON-serializable results
@@ -494,7 +494,7 @@ class SharePointGraphWriter(Node):
             author="Kailash SDK",
         )
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for SharePoint upload operations."""
         return {
             "tenant_id": NodeParameter(
@@ -549,7 +549,7 @@ class SharePointGraphWriter(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute SharePoint upload operation."""
         # Validate required parameters
         tenant_id = kwargs.get("tenant_id")

@@ -2,8 +2,8 @@
 
 import socket
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -87,7 +87,7 @@ class SecurityScannerNode(Node):
         >>> assert 'security_findings' in result
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "scan_types": NodeParameter(
                 name="scan_types",
@@ -138,7 +138,7 @@ class SecurityScannerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         scan_types = kwargs["scan_types"]
         targets = kwargs["targets"]
         scan_depth = kwargs.get("scan_depth", "basic")
@@ -169,7 +169,7 @@ class SecurityScannerNode(Node):
                         "severity": "info",
                         "title": f"Scan Error: {scan_type}",
                         "description": f"Failed to complete {scan_type} scan: {str(e)}",
-                        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                        "timestamp": datetime.now(UTC).isoformat() + "Z",
                     }
                     target_findings.append(error_finding)
 
@@ -205,12 +205,12 @@ class SecurityScannerNode(Node):
                 [f for f in all_findings if 1 <= f.get("risk_score", 0) < 4]
             ),
             "execution_time": execution_time,
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat() + "Z",
         }
 
     def _perform_scan(
         self, scan_type: str, target: str, scan_depth: str, ports: str, timeout: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Perform a specific type of security scan."""
 
         if scan_type == "web_security":
@@ -233,13 +233,13 @@ class SecurityScannerNode(Node):
                     "severity": "info",
                     "title": f"Unsupported Scan Type: {scan_type}",
                     "description": f"Scan type '{scan_type}' is not supported",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             ]
 
     def _scan_web_security(
         self, target: str, scan_depth: str, timeout: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Perform web application security scan."""
         findings = []
 
@@ -266,13 +266,13 @@ class SecurityScannerNode(Node):
                     "severity": "medium",
                     "title": "Connection Error",
                     "description": f"Failed to connect to target: {str(e)}",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
         return findings
 
-    def _scan_ssl(self, target: str, timeout: int) -> List[Dict[str, Any]]:
+    def _scan_ssl(self, target: str, timeout: int) -> list[dict[str, Any]]:
         """Perform SSL/TLS security scan."""
         findings = []
 
@@ -290,7 +290,7 @@ class SecurityScannerNode(Node):
                         "title": "SSL/TLS Not Used",
                         "description": "Target does not use HTTPS encryption",
                         "recommendation": "Implement SSL/TLS encryption",
-                        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                        "timestamp": datetime.now(UTC).isoformat() + "Z",
                     }
                 )
                 return findings
@@ -323,8 +323,7 @@ class SecurityScannerNode(Node):
                                     "title": "SSL Certificate Expiring",
                                     "description": f"SSL certificate expires in {days_until_expiry} days",
                                     "details": {"expiry_date": cert["notAfter"]},
-                                    "timestamp": datetime.now(timezone.utc).isoformat()
-                                    + "Z",
+                                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                                 }
                             )
 
@@ -336,7 +335,7 @@ class SecurityScannerNode(Node):
                         "severity": "low",
                         "title": "SSL Check Error",
                         "description": f"Failed to perform detailed SSL check: {str(e)}",
-                        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                        "timestamp": datetime.now(UTC).isoformat() + "Z",
                     }
                 )
 
@@ -348,7 +347,7 @@ class SecurityScannerNode(Node):
                     "severity": "low",
                     "title": "SSL Scan Error",
                     "description": f"SSL scan failed: {str(e)}",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
@@ -356,7 +355,7 @@ class SecurityScannerNode(Node):
 
     def _scan_ports(
         self, target: str, ports: str, timeout: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Perform port scan."""
         findings = []
 
@@ -432,8 +431,7 @@ class SecurityScannerNode(Node):
                                 "description": f"Port {port} ({service}) is open and accessible",
                                 "details": {"port": port, "service": service},
                                 "recommendation": f"Ensure {service} service is properly secured",
-                                "timestamp": datetime.now(timezone.utc).isoformat()
-                                + "Z",
+                                "timestamp": datetime.now(UTC).isoformat() + "Z",
                             }
                         )
 
@@ -453,7 +451,7 @@ class SecurityScannerNode(Node):
                         "open_ports": open_ports,
                         "total_scanned": len(port_list),
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
@@ -461,7 +459,7 @@ class SecurityScannerNode(Node):
 
     def _scan_services(
         self, target: str, ports: str, timeout: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Perform service detection scan."""
         # For now, this is a simplified version
         # In a full implementation, you would use nmap or similar tools
@@ -469,7 +467,7 @@ class SecurityScannerNode(Node):
 
     def _scan_vulnerabilities(
         self, target: str, scan_depth: str, timeout: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Perform vulnerability scan using known CVE patterns."""
         findings = []
 
@@ -500,7 +498,7 @@ class SecurityScannerNode(Node):
                                 "potential_cve": vuln_info["cve"],
                             },
                             "recommendation": "Update server software to latest version",
-                            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                            "timestamp": datetime.now(UTC).isoformat() + "Z",
                         }
                     )
 
@@ -512,13 +510,13 @@ class SecurityScannerNode(Node):
                     "severity": "low",
                     "title": "Vulnerability Scan Error",
                     "description": f"Failed to perform vulnerability scan: {str(e)}",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
         return findings
 
-    def _scan_headers(self, target: str, timeout: int) -> List[Dict[str, Any]]:
+    def _scan_headers(self, target: str, timeout: int) -> list[dict[str, Any]]:
         """Perform HTTP security headers analysis."""
         findings = []
 
@@ -546,7 +544,7 @@ class SecurityScannerNode(Node):
                             "title": f"Missing Security Header: {header}",
                             "description": f"Missing {header} header for {description}",
                             "recommendation": f"Implement {header} header",
-                            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                            "timestamp": datetime.now(UTC).isoformat() + "Z",
                         }
                     )
 
@@ -558,7 +556,7 @@ class SecurityScannerNode(Node):
                     "severity": "low",
                     "title": "Header Scan Error",
                     "description": f"Failed to analyze headers: {str(e)}",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
@@ -566,13 +564,13 @@ class SecurityScannerNode(Node):
 
     def _check_security_headers(
         self, target: str, response: requests.Response
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Check for security headers in response."""
         return self._scan_headers(target, 30)  # Reuse header scan logic
 
     def _check_ssl_redirect(
         self, target: str, response: requests.Response
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Check if HTTP redirects to HTTPS."""
         findings = []
 
@@ -585,7 +583,7 @@ class SecurityScannerNode(Node):
                     "title": "No HTTPS Redirect",
                     "description": "HTTP requests are not redirected to HTTPS",
                     "recommendation": "Implement automatic HTTPS redirect",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
@@ -593,7 +591,7 @@ class SecurityScannerNode(Node):
 
     def _check_directory_listing(
         self, target: str, response: requests.Response
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Check for directory listing vulnerabilities."""
         findings = []
 
@@ -606,13 +604,13 @@ class SecurityScannerNode(Node):
                     "title": "Directory Listing Enabled",
                     "description": "Directory listing is enabled, potentially exposing sensitive files",
                     "recommendation": "Disable directory listing",
-                    "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
                 }
             )
 
         return findings
 
-    def _check_common_files(self, target: str, timeout: int) -> List[Dict[str, Any]]:
+    def _check_common_files(self, target: str, timeout: int) -> list[dict[str, Any]]:
         """Check for common sensitive files."""
         findings = []
 
@@ -646,7 +644,7 @@ class SecurityScannerNode(Node):
                             "description": f"Sensitive file {file_path} is publicly accessible",
                             "details": {"file_path": file_path, "url": url},
                             "recommendation": "Restrict access to sensitive files",
-                            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                            "timestamp": datetime.now(UTC).isoformat() + "Z",
                         }
                     )
             except:
@@ -656,7 +654,7 @@ class SecurityScannerNode(Node):
 
     def _check_injection_points(
         self, target: str, timeout: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Check for basic injection vulnerabilities."""
         # This is a simplified check - real implementations would be much more thorough
         findings = []
@@ -683,7 +681,7 @@ class SecurityScannerNode(Node):
                             "title": "Potential Injection Vulnerability",
                             "description": f"Test payload reflected in response: {payload[:50]}...",
                             "recommendation": "Implement proper input validation and sanitization",
-                            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                            "timestamp": datetime.now(UTC).isoformat() + "Z",
                         }
                     )
                     break  # Don't continue testing if one is found
@@ -692,7 +690,7 @@ class SecurityScannerNode(Node):
 
         return findings
 
-    def _check_authentication(self, target: str, timeout: int) -> List[Dict[str, Any]]:
+    def _check_authentication(self, target: str, timeout: int) -> list[dict[str, Any]]:
         """Check for authentication-related issues."""
         findings = []
 
@@ -716,8 +714,7 @@ class SecurityScannerNode(Node):
                                 "description": f"Login page at {path} is not using HTTPS",
                                 "details": {"login_path": path},
                                 "recommendation": "Use HTTPS for all authentication pages",
-                                "timestamp": datetime.now(timezone.utc).isoformat()
-                                + "Z",
+                                "timestamp": datetime.now(UTC).isoformat() + "Z",
                             }
                         )
                 except:
@@ -726,8 +723,8 @@ class SecurityScannerNode(Node):
         return findings
 
     def _calculate_risk_scores(
-        self, findings: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, findings: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Calculate risk scores for findings."""
         severity_scores = {
             "critical": 10,
@@ -757,8 +754,8 @@ class SecurityScannerNode(Node):
         return findings
 
     def _add_compliance_mapping(
-        self, findings: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, findings: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Add compliance framework mapping to findings."""
         compliance_mapping = {
             "missing_security_header": ["OWASP Top 10", "PCI DSS"],
@@ -777,11 +774,11 @@ class SecurityScannerNode(Node):
 
     def _generate_scan_summary(
         self,
-        findings: List[Dict],
-        targets: List[str],
-        scan_types: List[str],
+        findings: list[dict],
+        targets: list[str],
+        scan_types: list[str],
         execution_time: float,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate summary of security scan results."""
 
         # Count findings by severity

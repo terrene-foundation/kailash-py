@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 
@@ -86,7 +86,7 @@ class PerformanceInsight:
     title: str
     description: str
     recommendation: str
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -134,9 +134,7 @@ class WorkflowPerformanceReporter:
         report = reporter.generate_report(run_id, output_path="report.html")
     """
 
-    def __init__(
-        self, task_manager: TaskManager, config: Optional[ReportConfig] = None
-    ):
+    def __init__(self, task_manager: TaskManager, config: ReportConfig | None = None):
         """Initialize performance reporter.
 
         Args:
@@ -151,9 +149,9 @@ class WorkflowPerformanceReporter:
     def generate_report(
         self,
         run_id: str,
-        output_path: Optional[Union[str, Path]] = None,
+        output_path: str | Path | None = None,
         format: ReportFormat = ReportFormat.HTML,
-        compare_runs: Optional[List[str]] = None,
+        compare_runs: list[str] | None = None,
     ) -> Path:
         """Generate comprehensive performance report.
 
@@ -211,7 +209,7 @@ class WorkflowPerformanceReporter:
         self.logger.info(f"Generated {format.value.upper()} report: {output_path}")
         return output_path
 
-    def _analyze_workflow_run(self, run_id: str) -> Dict[str, Any]:
+    def _analyze_workflow_run(self, run_id: str) -> dict[str, Any]:
         """Perform detailed analysis of a workflow run.
 
         Args:
@@ -264,7 +262,7 @@ class WorkflowPerformanceReporter:
         }
 
     def _calculate_workflow_summary(
-        self, run: Any, tasks: List[TaskRun]
+        self, run: Any, tasks: list[TaskRun]
     ) -> WorkflowSummary:
         """Calculate summary statistics for the workflow run."""
         summary = WorkflowSummary(
@@ -340,7 +338,7 @@ class WorkflowPerformanceReporter:
 
         return summary
 
-    def _analyze_task_performance(self, tasks: List[TaskRun]) -> Dict[str, Any]:
+    def _analyze_task_performance(self, tasks: list[TaskRun]) -> dict[str, Any]:
         """Analyze performance patterns across tasks."""
         analysis = {
             "by_node_type": {},
@@ -403,7 +401,7 @@ class WorkflowPerformanceReporter:
 
         return analysis
 
-    def _identify_bottlenecks(self, tasks: List[TaskRun]) -> List[Dict[str, Any]]:
+    def _identify_bottlenecks(self, tasks: list[TaskRun]) -> list[dict[str, Any]]:
         """Identify performance bottlenecks in the workflow."""
         bottlenecks = []
 
@@ -497,7 +495,7 @@ class WorkflowPerformanceReporter:
 
         return sorted(bottlenecks, key=lambda x: x["value"], reverse=True)
 
-    def _analyze_resource_utilization(self, tasks: List[TaskRun]) -> Dict[str, Any]:
+    def _analyze_resource_utilization(self, tasks: list[TaskRun]) -> dict[str, Any]:
         """Analyze overall resource utilization patterns."""
         analysis = {
             "cpu_distribution": {},
@@ -581,7 +579,7 @@ class WorkflowPerformanceReporter:
 
         return analysis
 
-    def _analyze_errors(self, tasks: List[TaskRun]) -> Dict[str, Any]:
+    def _analyze_errors(self, tasks: list[TaskRun]) -> dict[str, Any]:
         """Analyze error patterns and failure modes."""
         analysis = {
             "error_summary": {},
@@ -634,7 +632,7 @@ class WorkflowPerformanceReporter:
 
         return analysis
 
-    def _generate_insights(self, analysis: Dict[str, Any]) -> List[PerformanceInsight]:
+    def _generate_insights(self, analysis: dict[str, Any]) -> list[PerformanceInsight]:
         """Generate actionable insights from analysis results."""
         insights = []
 
@@ -741,8 +739,8 @@ class WorkflowPerformanceReporter:
         return insights
 
     def _generate_analysis_charts(
-        self, run_id: str, tasks: List[TaskRun]
-    ) -> Dict[str, str]:
+        self, run_id: str, tasks: list[TaskRun]
+    ) -> dict[str, str]:
         """Generate analysis charts and return file paths."""
         charts = {}
 
@@ -755,7 +753,7 @@ class WorkflowPerformanceReporter:
 
         return charts
 
-    def _compare_runs(self, run_ids: List[str]) -> Dict[str, Any]:
+    def _compare_runs(self, run_ids: list[str]) -> dict[str, Any]:
         """Compare performance across multiple runs."""
         comparison = {"runs": [], "trends": {}, "relative_performance": {}}
 
@@ -814,9 +812,9 @@ class WorkflowPerformanceReporter:
 
     def _generate_html_report(
         self,
-        analysis: Dict[str, Any],
-        insights: List[PerformanceInsight],
-        comparison_data: Optional[Dict[str, Any]] = None,
+        analysis: dict[str, Any],
+        insights: list[PerformanceInsight],
+        comparison_data: dict[str, Any] | None = None,
     ) -> str:
         """Generate HTML report content."""
         run_info = analysis["run_info"]
@@ -982,9 +980,9 @@ class WorkflowPerformanceReporter:
 
     def _generate_markdown_report(
         self,
-        analysis: Dict[str, Any],
-        insights: List[PerformanceInsight],
-        comparison_data: Optional[Dict[str, Any]] = None,
+        analysis: dict[str, Any],
+        insights: list[PerformanceInsight],
+        comparison_data: dict[str, Any] | None = None,
     ) -> str:
         """Generate Markdown report content."""
         run_info = analysis["run_info"]
@@ -1098,9 +1096,9 @@ class WorkflowPerformanceReporter:
 
     def _generate_json_report(
         self,
-        analysis: Dict[str, Any],
-        insights: List[PerformanceInsight],
-        comparison_data: Optional[Dict[str, Any]] = None,
+        analysis: dict[str, Any],
+        insights: list[PerformanceInsight],
+        comparison_data: dict[str, Any] | None = None,
     ) -> str:
         """Generate JSON report content."""
         report_data = {
@@ -1144,7 +1142,7 @@ class WorkflowPerformanceReporter:
 
         return json.dumps(report_data, indent=2, default=str)
 
-    def _generate_comparison_html(self, comparison_data: Dict[str, Any]) -> str:
+    def _generate_comparison_html(self, comparison_data: dict[str, Any]) -> str:
         """Generate HTML for run comparison section."""
         runs = comparison_data.get("runs", [])
         trends = comparison_data.get("trends", {})

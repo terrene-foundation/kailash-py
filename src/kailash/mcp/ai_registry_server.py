@@ -11,7 +11,7 @@ Run as: python -m kailash.mcp.ai_registry_server
 import asyncio
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp.server import Server
 from mcp.types import Resource, TextContent, Tool
@@ -32,7 +32,7 @@ class AIRegistryServer:
         self._setup_tools()
         self._setup_resources()
 
-    def _load_registry_data(self, registry_file: str) -> Dict[str, Any]:
+    def _load_registry_data(self, registry_file: str) -> dict[str, Any]:
         """Load AI Registry data from JSON file."""
         # Handle both absolute and relative paths
         if not os.path.isabs(registry_file):
@@ -48,7 +48,7 @@ class AIRegistryServer:
                 registry_file = os.path.join(project_root, registry_file)
 
         try:
-            with open(registry_file, "r", encoding="utf-8") as f:
+            with open(registry_file, encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError:
             # Return mock data if file not found
@@ -425,10 +425,10 @@ class AIRegistryServer:
     def _search_use_cases(
         self,
         query: str,
-        domains: Optional[List[str]] = None,
-        methods: Optional[List[str]] = None,
+        domains: list[str] | None = None,
+        methods: list[str] | None = None,
         limit: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Search use cases with filters."""
         use_cases = self.registry_data.get("use_cases", [])
         results = []
@@ -460,8 +460,8 @@ class AIRegistryServer:
         return {"results": results[:limit], "count": len(results), "query": query}
 
     def _filter_by_domain(
-        self, domain: str, status: Optional[str] = None, limit: int = 20
-    ) -> Dict[str, Any]:
+        self, domain: str, status: str | None = None, limit: int = 20
+    ) -> dict[str, Any]:
         """Filter use cases by domain."""
         use_cases = self.registry_data.get("use_cases", [])
         filtered = []
@@ -473,7 +473,7 @@ class AIRegistryServer:
 
         return {"domain": domain, "count": len(filtered), "use_cases": filtered[:limit]}
 
-    def _get_use_case_details(self, use_case_id: int) -> Dict[str, Any]:
+    def _get_use_case_details(self, use_case_id: int) -> dict[str, Any]:
         """Get detailed information for a specific use case."""
         use_case = self._get_use_case_by_id(use_case_id)
         if use_case:
@@ -486,7 +486,7 @@ class AIRegistryServer:
 
     def _analyze_domain_trends(
         self, domain: str, include_details: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze trends within a specific domain."""
         use_cases = [
             uc
@@ -518,9 +518,9 @@ class AIRegistryServer:
     def _recommend_similar(
         self,
         use_case_id: int,
-        similarity_factors: Optional[List[str]] = None,
+        similarity_factors: list[str] | None = None,
         limit: int = 5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Find similar use cases."""
         reference_case = self._get_use_case_by_id(use_case_id)
         if not reference_case:
@@ -542,8 +542,8 @@ class AIRegistryServer:
         }
 
     def _estimate_complexity(
-        self, use_case_id: int, organization_context: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+        self, use_case_id: int, organization_context: dict | None = None
+    ) -> dict[str, Any]:
         """Estimate implementation complexity."""
         use_case = self._get_use_case_by_id(use_case_id)
         if not use_case:
@@ -587,8 +587,8 @@ class AIRegistryServer:
         }
 
     def _suggest_implementation_path(
-        self, use_case_id: int, organization_context: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+        self, use_case_id: int, organization_context: dict | None = None
+    ) -> dict[str, Any]:
         """Suggest implementation roadmap."""
         use_case = self._get_use_case_by_id(use_case_id)
         if not use_case:
@@ -626,8 +626,8 @@ class AIRegistryServer:
         }
 
     def _filter_by_method(
-        self, method: str, min_maturity: Optional[str] = None, limit: int = 15
-    ) -> Dict[str, Any]:
+        self, method: str, min_maturity: str | None = None, limit: int = 15
+    ) -> dict[str, Any]:
         """Filter use cases by AI method."""
         use_cases = self.registry_data.get("use_cases", [])
         filtered = []
@@ -644,7 +644,7 @@ class AIRegistryServer:
 
     # Helper methods
 
-    def _get_use_case_by_id(self, use_case_id: int) -> Optional[Dict[str, Any]]:
+    def _get_use_case_by_id(self, use_case_id: int) -> dict[str, Any] | None:
         """Get use case by ID."""
         for use_case in self.registry_data.get("use_cases", []):
             if use_case.get("use_case_id") == use_case_id:
@@ -652,7 +652,7 @@ class AIRegistryServer:
         return None
 
     def _calculate_similarity(
-        self, case1: Dict[str, Any], case2: Dict[str, Any]
+        self, case1: dict[str, Any], case2: dict[str, Any]
     ) -> float:
         """Calculate similarity between two use cases."""
         score = 0.0

@@ -45,7 +45,7 @@ import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from kailash.workflow.cycle_debugger import CycleExecutionTrace
 
@@ -83,13 +83,13 @@ class PerformanceMetrics:
     min_iteration_time: float = float("inf")
     max_iteration_time: float = 0.0
     iteration_time_stddev: float = 0.0
-    memory_stats: Dict[str, float] = field(default_factory=dict)
-    cpu_stats: Dict[str, float] = field(default_factory=dict)
-    convergence_stats: Dict[str, Any] = field(default_factory=dict)
-    bottlenecks: List[str] = field(default_factory=list)
-    optimization_opportunities: List[str] = field(default_factory=list)
+    memory_stats: dict[str, float] = field(default_factory=dict)
+    cpu_stats: dict[str, float] = field(default_factory=dict)
+    convergence_stats: dict[str, Any] = field(default_factory=dict)
+    bottlenecks: list[str] = field(default_factory=list)
+    optimization_opportunities: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert metrics to dictionary for serialization.
 
         Returns:
@@ -141,8 +141,8 @@ class CycleProfiler:
             enable_advanced_metrics: Whether to enable advanced statistical analysis.
         """
         self.enable_advanced_metrics = enable_advanced_metrics
-        self.traces: List[CycleExecutionTrace] = []
-        self.performance_history: List[PerformanceMetrics] = []
+        self.traces: list[CycleExecutionTrace] = []
+        self.performance_history: list[PerformanceMetrics] = []
 
     def add_trace(self, trace: CycleExecutionTrace):
         """
@@ -260,7 +260,7 @@ class CycleProfiler:
 
         return metrics
 
-    def compare_cycles(self, cycle_ids: List[str]) -> Dict[str, Any]:
+    def compare_cycles(self, cycle_ids: list[str]) -> dict[str, Any]:
         """
         Compare performance across multiple specific cycles.
 
@@ -338,8 +338,8 @@ class CycleProfiler:
         return comparison
 
     def get_optimization_recommendations(
-        self, trace: Optional[CycleExecutionTrace] = None
-    ) -> List[Dict[str, Any]]:
+        self, trace: CycleExecutionTrace | None = None
+    ) -> list[dict[str, Any]]:
         """
         Generate detailed optimization recommendations.
 
@@ -459,7 +459,7 @@ class CycleProfiler:
 
         return recommendations
 
-    def generate_performance_report(self) -> Dict[str, Any]:
+    def generate_performance_report(self) -> dict[str, Any]:
         """
         Generate comprehensive performance report.
 
@@ -560,8 +560,8 @@ class CycleProfiler:
         logger.info(f"Exported profiling data to {filepath} in {format} format")
 
     def _analyze_convergence_performance(
-        self, convergence_data: List[float]
-    ) -> Dict[str, Any]:
+        self, convergence_data: list[float]
+    ) -> dict[str, Any]:
         """Analyze convergence performance characteristics."""
         if not convergence_data:
             return {}
@@ -582,8 +582,8 @@ class CycleProfiler:
         }
 
     def _analyze_convergence_pattern(
-        self, convergence_trend: List[Tuple[int, Optional[float]]]
-    ) -> Dict[str, Any]:
+        self, convergence_trend: list[tuple[int, float | None]]
+    ) -> dict[str, Any]:
         """Analyze convergence pattern for stability."""
         valid_points = [value for _, value in convergence_trend if value is not None]
 
@@ -608,7 +608,7 @@ class CycleProfiler:
             "reason": "high_volatility" if unstable else "stable",
         }
 
-    def _identify_bottlenecks(self, metrics: PerformanceMetrics) -> List[str]:
+    def _identify_bottlenecks(self, metrics: PerformanceMetrics) -> list[str]:
         """Identify performance bottlenecks from metrics."""
         bottlenecks = []
 
@@ -636,7 +636,7 @@ class CycleProfiler:
 
         return bottlenecks
 
-    def _identify_optimizations(self, metrics: PerformanceMetrics) -> List[str]:
+    def _identify_optimizations(self, metrics: PerformanceMetrics) -> list[str]:
         """Identify optimization opportunities."""
         optimizations = []
 
@@ -697,7 +697,7 @@ class CycleProfiler:
 
         return statistics.mean(score_components) if score_components else 0.5
 
-    def _analyze_performance_trends(self) -> Dict[str, Any]:
+    def _analyze_performance_trends(self) -> dict[str, Any]:
         """Analyze performance trends over time."""
         if len(self.performance_history) < 2:
             return {"trend": "insufficient_data"}
@@ -720,7 +720,7 @@ class CycleProfiler:
             "performance_history_length": len(self.performance_history),
         }
 
-    def _get_cycle_comparisons(self) -> Dict[str, Any]:
+    def _get_cycle_comparisons(self) -> dict[str, Any]:
         """Get comparative analysis across all cycles."""
         if len(self.traces) < 2:
             return {"comparison": "insufficient_data"}

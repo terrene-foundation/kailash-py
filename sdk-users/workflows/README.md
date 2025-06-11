@@ -32,7 +32,7 @@ A comprehensive, token-efficient library of production-ready workflows consolida
 | [security/](by-pattern/security/) | ✅ Complete | Security audits, vulnerability scanning | **✅ Session 063** |
 | [event-driven/](by-pattern/event-driven/) | ✅ Complete | Event sourcing, state management | Full documentation |
 
-### 🏭 Enterprise Workflows (Business Functions)  
+### 🏭 Enterprise Workflows (Business Functions)
 | Directory | Domain | Status | Scripts |
 |-----------|--------|--------|---------|
 | [data-processing/](by-enterprise/data-processing/) | Financial data, ETL | ✅ Complete | financial_processor_minimal.py |

@@ -10,7 +10,7 @@ import logging
 # Ensure module is in path
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class StateAccumulatorNode(Node):
     """A node that accumulates values in the workflow state."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "value": NodeParameter(
                 name="value", type=Any, required=True, description="Value to accumulate"
@@ -42,7 +42,7 @@ class StateAccumulatorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         value = kwargs.get("value")
         key = kwargs.get("key")
 
@@ -56,7 +56,7 @@ class StateAccumulatorNode(Node):
 class StateProcessorNode(Node):
     """A node that processes accumulated state values."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "state_values": NodeParameter(
                 name="state_values",
@@ -73,7 +73,7 @@ class StateProcessorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         state_values = kwargs.get("state_values", [])
         operation = kwargs.get("operation", "sum")
 

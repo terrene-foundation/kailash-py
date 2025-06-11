@@ -13,7 +13,7 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +31,7 @@ class TeamStatus:
         self.active_dir = self.todo_dir / "active"
         self.completed_dir = self.todo_dir / "completed"
 
-    def get_github_data(self) -> Dict[str, Any]:
+    def get_github_data(self) -> dict[str, Any]:
         """Fetch data from GitHub Projects and Issues."""
         data = {"issues": [], "prs": [], "project_items": []}
 
@@ -86,7 +86,7 @@ class TeamStatus:
 
         return data
 
-    def calculate_workload(self, github_data: Dict[str, Any]) -> Dict[str, Dict]:
+    def calculate_workload(self, github_data: dict[str, Any]) -> dict[str, dict]:
         """Calculate workload per team member."""
         workload = defaultdict(
             lambda: {
@@ -108,7 +108,7 @@ class TeamStatus:
                 workload[login]["total_tasks"] += 1
 
                 # Check if in progress or blocked
-                labels = [l["name"] for l in issue.get("labels", [])]
+                labels = [line["name"] for line in issue.get("labels", [])]
                 if "in-progress" in labels:
                     workload[login]["in_progress"] += 1
                 if "blocked" in labels:
@@ -156,7 +156,7 @@ class TeamStatus:
         report.append("\n## 🚀 In Progress\n")
         in_progress_count = 0
         for issue in github_data["issues"]:
-            labels = [l["name"] for l in issue.get("labels", [])]
+            labels = [line["name"] for line in issue.get("labels", [])]
             if "in-progress" in labels:
                 assignees = ", ".join([a["login"] for a in issue.get("assignees", [])])
                 report.append(f"- {issue['title']} (@{assignees})")
@@ -169,7 +169,7 @@ class TeamStatus:
         report.append("\n## 🚨 Blocked Items\n")
         blocked_count = 0
         for issue in github_data["issues"]:
-            labels = [l["name"] for l in issue.get("labels", [])]
+            labels = [line["name"] for line in issue.get("labels", [])]
             if "blocked" in labels:
                 assignees = ", ".join([a["login"] for a in issue.get("assignees", [])])
                 created = datetime.fromisoformat(
@@ -270,7 +270,7 @@ class TeamStatus:
         """Get current session number from master TODO."""
         master_file = self.todo_dir / "000-master.md"
         if master_file.exists():
-            with open(master_file, "r") as f:
+            with open(master_file) as f:
                 content = f.read()
             import re
 
@@ -279,13 +279,13 @@ class TeamStatus:
                 return match.group(1)
         return "Unknown"
 
-    def _parse_session_goals(self) -> List[Dict]:
+    def _parse_session_goals(self) -> list[dict]:
         """Parse session goals from master TODO."""
         goals = []
         master_file = self.todo_dir / "000-master.md"
 
         if master_file.exists():
-            with open(master_file, "r") as f:
+            with open(master_file) as f:
                 content = f.read()
 
             import re

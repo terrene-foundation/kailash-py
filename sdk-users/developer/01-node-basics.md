@@ -8,7 +8,7 @@ Custom nodes extend the Kailash SDK by adding new functionality. Every custom no
 
 The `Node` base class provides:
 - Parameter validation (improved in Session 061)
-- Configuration management  
+- Configuration management
 - Execution lifecycle (construction → configuration → execution)
 - Error handling
 - Integration with workflows
@@ -59,7 +59,7 @@ from kailash.nodes.base import Node, NodeParameter
 
 class TextUppercaseNode(Node):
     """Converts text to uppercase."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define parameters for uppercase conversion."""
         return {
@@ -77,16 +77,16 @@ class TextUppercaseNode(Node):
                 description='Whether to add UPPERCASE: prefix'
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Convert text to uppercase."""
         text = kwargs['text']
         add_prefix = kwargs.get('add_prefix', False)
-        
+
         result = text.upper()
         if add_prefix:
             result = f"UPPERCASE: {result}"
-            
+
         return {'result': result}
 ```
 
@@ -200,7 +200,7 @@ runtime.execute(workflow, parameters={
 **OLD (Pre-Session 061)**: Required parameters at construction:
 
 ```python
-# ❌ OLD: Required all parameters at construction  
+# ❌ OLD: Required all parameters at construction
 kafka_consumer = KafkaConsumerNode(
     bootstrap_servers="localhost:9092"  # Had to provide during construction
 )

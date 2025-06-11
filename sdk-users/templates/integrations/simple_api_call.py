@@ -7,7 +7,7 @@ This template shows how to use HTTP nodes for API integration.
 """
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.api.http import HTTPRequestNode
 from kailash.nodes.code.python import PythonCodeNode
@@ -20,7 +20,7 @@ OUTPUT_FILE = "outputs/api_response.json"
 API_KEY = os.getenv("API_KEY", "your-api-key")
 
 
-def process_response(response: Dict) -> Dict[str, Any]:
+def process_response(response: dict) -> dict[str, Any]:
     """Process the API response"""
     # Extract data from response
     if response.get("status_code") == 200:

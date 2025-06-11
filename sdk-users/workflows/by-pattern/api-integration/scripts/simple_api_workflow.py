@@ -272,7 +272,7 @@ def main():
     # Display the saved report
     print("\n=== Saved Report Preview ===")
     try:
-        with open("data/outputs/inventory_report.json", "r") as f:
+        with open("data/outputs/inventory_report.json") as f:
             report = json.load(f)
             print(json.dumps(report, indent=2)[:500] + "...")
     except Exception as e:

@@ -1,6 +1,6 @@
 """AI agent nodes for the Kailash SDK."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -66,7 +66,7 @@ class ChatAgent(Node):
         >>> assert "temperature" in params
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "messages": NodeParameter(
                 name="messages",
@@ -104,7 +104,7 @@ class ChatAgent(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         messages = kwargs["messages"]
         model = kwargs.get("model", "default")
         temperature = kwargs.get("temperature", 0.7)
@@ -213,7 +213,7 @@ class RetrievalAgent(Node):
         >>> assert "top_k" in params
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "query": NodeParameter(
                 name="query", type=str, required=True, description="Query for retrieval"
@@ -247,7 +247,7 @@ class RetrievalAgent(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         query = kwargs["query"]
         documents = kwargs["documents"]
         top_k = kwargs.get("top_k", 5)
@@ -301,7 +301,7 @@ class RetrievalAgent(Node):
 class FunctionCallingAgent(Node):
     """Agent that can call functions based on input."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "query": NodeParameter(
                 name="query", type=str, required=True, description="User query"
@@ -328,7 +328,7 @@ class FunctionCallingAgent(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         query = kwargs["query"]
         available_functions = kwargs["available_functions"]
         context = kwargs.get("context", {})
@@ -403,7 +403,7 @@ class FunctionCallingAgent(Node):
 class PlanningAgent(Node):
     """Agent that creates execution plans."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "goal": NodeParameter(
                 name="goal", type=str, required=True, description="Goal to achieve"
@@ -430,7 +430,7 @@ class PlanningAgent(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         goal = kwargs["goal"]
         available_tools = kwargs["available_tools"]
         constraints = kwargs.get("constraints", {})

@@ -13,7 +13,7 @@ from pathlib import Path
 def check_syntax(file_path: Path):
     """Check a file for syntax errors."""
     try:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             content = f.read()
         ast.parse(content)
         return None
@@ -131,7 +131,7 @@ def run_example_with_security(example_path: str):
 
         try:
             # Execute the example
-            with open(example_file, "r") as f:
+            with open(example_file) as f:
                 code = f.read()
 
             # Create a namespace for execution
@@ -174,7 +174,7 @@ def main():
                     if error:
                         print(error)
                         # Show context
-                        with open(file_path, "r") as f:
+                        with open(file_path) as f:
                             lines = f.readlines()
                             line_no = int(error.split("Line ")[1].split(":")[0])
                             start = max(0, line_no - 3)

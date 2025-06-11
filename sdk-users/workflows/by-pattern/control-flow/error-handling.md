@@ -22,7 +22,7 @@ from kailash.runtime import LocalRuntime
 def create_basic_error_handling():
     """Basic error handling with fallback."""
     workflow = Workflow("error_handling_basic", "API call with error handling")
-    
+
     # Primary API call
     api_call = RestClientNode(
         id="api_call",
@@ -31,7 +31,7 @@ def create_basic_error_handling():
         retry_count=0  # Handle retries manually
     )
     workflow.add_node("api_call", api_call)
-    
+
     # Error checker
     error_checker = PythonCodeNode(
         name="error_checker",
@@ -99,14 +99,14 @@ result = {
 '''
     )
     workflow.add_node("error_checker", error_checker)
-    
+
     # Error router
     error_router = SwitchNode(
         id="error_router",
         condition="should_use_fallback == True"
     )
     workflow.add_node("error_router", error_router)
-    
+
     # Fallback handler
     fallback_handler = PythonCodeNode(
         name="fallback_handler",
@@ -154,7 +154,7 @@ result = fallback_data
 '''
     )
     workflow.add_node("fallback_handler", fallback_handler)
-    
+
     # Success processor (for successful API calls)
     success_processor = DataTransformer(
         id="success_processor",
@@ -163,15 +163,15 @@ result = fallback_data
         ]
     )
     workflow.add_node("success_processor", success_processor)
-    
+
     # Connect error handling flow
     workflow.connect("api_call", "error_checker", mapping={"response": "api_result"})
     workflow.connect("error_checker", "error_router", mapping={"result": "error_check_result"})
-    workflow.connect("error_router", "fallback_handler", 
+    workflow.connect("error_router", "fallback_handler",
                     output_key="true_output", mapping={"error_check_result": "error_check_result"})
-    workflow.connect("error_router", "success_processor", 
+    workflow.connect("error_router", "success_processor",
                     output_key="false_output", mapping={"error_check_result": "data"})
-    
+
     return workflow
 ```
 
@@ -182,7 +182,7 @@ result = fallback_data
 def create_retry_pattern():
     """Sophisticated retry with exponential backoff and jitter."""
     workflow = Workflow("retry_pattern", "Resilient API calls with smart retry")
-    
+
     # Retry coordinator
     retry_coordinator = PythonCodeNode(
         name="retry_coordinator",
@@ -207,14 +207,14 @@ retry_state['attempt'] += 1
 if retry_state['attempt'] > 1:
     # Exponential backoff: delay = base * 2^(attempt-1)
     delay = retry_state['base_delay'] * (2 ** (retry_state['attempt'] - 2))
-    
+
     # Cap at maximum delay
     delay = min(delay, retry_state['max_delay'])
-    
+
     # Add jitter (±25%) to avoid thundering herd
     jitter = delay * 0.25 * (2 * random.random() - 1)
     delay = delay + jitter
-    
+
     # Wait
     time.sleep(delay)
     retry_state['total_elapsed'] += delay
@@ -230,7 +230,7 @@ result = {
 '''
     )
     workflow.add_node("retry_coordinator", retry_coordinator)
-    
+
     # Operation to retry (e.g., API call)
     retryable_operation = RestClientNode(
         id="retryable_operation",
@@ -238,7 +238,7 @@ result = {
         timeout=5000
     )
     workflow.add_node("retryable_operation", retryable_operation)
-    
+
     # Retry decision maker
     retry_decider = PythonCodeNode(
         name="retry_decider",
@@ -297,13 +297,13 @@ result = {
 '''
     )
     workflow.add_node("retry_decider", retry_decider)
-    
+
     # Connect retry loop
-    workflow.connect("retry_coordinator", "retryable_operation", 
+    workflow.connect("retry_coordinator", "retryable_operation",
                     mapping={"result": "retry_context"})
-    workflow.connect("retryable_operation", "retry_decider", 
+    workflow.connect("retryable_operation", "retry_decider",
                     mapping={"response": "operation_response"})
-    
+
     return workflow
 ```
 
@@ -314,7 +314,7 @@ result = {
 def create_circuit_breaker():
     """Circuit breaker to prevent cascade failures."""
     workflow = Workflow("circuit_breaker", "Protect downstream services")
-    
+
     # Circuit breaker state manager
     circuit_breaker = PythonCodeNode(
         name="circuit_breaker",
@@ -357,7 +357,7 @@ state_changed = False
 if circuit_state['state'] == CLOSED:
     # Normal operation - allow request
     allow_request = True
-    
+
     # Check if we should open circuit
     if circuit_state['failure_count'] >= failure_threshold:
         circuit_state['state'] = OPEN
@@ -382,7 +382,7 @@ elif circuit_state['state'] == OPEN:
 elif circuit_state['state'] == HALF_OPEN:
     # Testing recovery - allow limited requests
     allow_request = True
-    
+
     # Check if we should close (recovered) or open (still failing)
     if circuit_state['success_count'] >= success_threshold:
         # Recovery successful
@@ -406,14 +406,14 @@ result = {
 '''
     )
     workflow.add_node("circuit_breaker", circuit_breaker)
-    
+
     # Request router based on circuit state
     request_router = SwitchNode(
         id="request_router",
         condition="allow_request == True"
     )
     workflow.add_node("request_router", request_router)
-    
+
     # Protected operation
     protected_operation = RestClientNode(
         id="protected_operation",
@@ -421,7 +421,7 @@ result = {
         timeout=3000
     )
     workflow.add_node("protected_operation", protected_operation)
-    
+
     # Circuit breaker response handler
     response_handler = PythonCodeNode(
         name="response_handler",
@@ -458,7 +458,7 @@ result = {
 '''
     )
     workflow.add_node("response_handler", response_handler)
-    
+
     # Fast fail response for circuit open
     fast_fail = PythonCodeNode(
         name="fast_fail",
@@ -489,17 +489,17 @@ def get_cached_response():
 '''
     )
     workflow.add_node("fast_fail", fast_fail)
-    
+
     # Connect circuit breaker flow
-    workflow.connect("circuit_breaker", "request_router", 
+    workflow.connect("circuit_breaker", "request_router",
                     mapping={"result": "breaker_state"})
-    workflow.connect("request_router", "protected_operation", 
+    workflow.connect("request_router", "protected_operation",
                     output_key="true_output")
-    workflow.connect("request_router", "fast_fail", 
+    workflow.connect("request_router", "fast_fail",
                     output_key="false_output", mapping={"breaker_state": "breaker_state"})
-    workflow.connect("protected_operation", "response_handler", 
+    workflow.connect("protected_operation", "response_handler",
                     mapping={"response": "response_data"})
-    
+
     return workflow
 ```
 
@@ -510,10 +510,10 @@ def get_cached_response():
 def create_error_aggregation():
     """Aggregate errors from multiple sources for comprehensive reporting."""
     workflow = Workflow("error_aggregation", "Multi-source error handling")
-    
+
     # Multiple operations that might fail
     operations = ["database", "api", "file_system", "cache"]
-    
+
     # Create parallel operations
     for op in operations:
         if op == "database":
@@ -527,9 +527,9 @@ def create_error_aggregation():
                 name=f"{op}_operation",
                 code="result = {'data': read_from_cache()}"
             )
-        
+
         workflow.add_node(f"{op}_operation", node)
-    
+
     # Error collector for each operation
     for op in operations:
         error_collector = PythonCodeNode(
@@ -592,7 +592,7 @@ result = error_report
         workflow.add_node(f"{op}_error_collector", error_collector)
         workflow.connect(f"{op}_operation", f"{op}_error_collector",
                         mapping={"response": f"{op}_result"})
-    
+
     # Central error aggregator
     error_aggregator = PythonCodeNode(
         name="error_aggregator",
@@ -607,10 +607,10 @@ for source in ["database", "api", "file_system", "cache"]:
     error_report = locals().get(f'{source}_error_report', {})
     if error_report.get('has_error'):
         all_errors.append(error_report)
-        
+
         if error_report['severity'] == 'critical':
             critical_errors.append(error_report)
-        
+
         if error_report['impact'] != 'none':
             degraded_services.append({
                 'service': error_report['source'],
@@ -664,12 +664,12 @@ def get_recommended_response(health):
 '''
     )
     workflow.add_node("error_aggregator", error_aggregator)
-    
+
     # Connect all error collectors to aggregator
     for op in operations:
         workflow.connect(f"{op}_error_collector", "error_aggregator",
                         mapping={"result": f"{op}_error_report"})
-    
+
     return workflow
 ```
 

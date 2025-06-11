@@ -2,8 +2,8 @@
 
 import random
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -84,7 +84,7 @@ class EventGeneratorNode(Node):
         >>> assert result['metadata']['total_events'] == 5
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "event_types": NodeParameter(
                 name="event_types",
@@ -135,7 +135,7 @@ class EventGeneratorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         event_types = kwargs["event_types"]
         event_count = kwargs.get("event_count", 10)
         aggregate_prefix = kwargs.get("aggregate_prefix", "AGG")
@@ -149,7 +149,7 @@ class EventGeneratorNode(Node):
 
         # Generate events
         events = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create a set of aggregate IDs for realistic event grouping
         num_aggregates = max(1, event_count // 3)  # Roughly 3 events per aggregate
@@ -165,7 +165,7 @@ class EventGeneratorNode(Node):
             # Generate timestamp within range
             hours_offset = random.uniform(-time_range_hours, 0)
             event_timestamp = now.timestamp() + hours_offset * 3600
-            event_time = datetime.fromtimestamp(event_timestamp, tz=timezone.utc)
+            event_time = datetime.fromtimestamp(event_timestamp, tz=UTC)
 
             # Generate event data
             event_data = self._generate_event_data(
@@ -213,8 +213,8 @@ class EventGeneratorNode(Node):
         }
 
     def _generate_event_data(
-        self, event_type: str, aggregate_id: str, template: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, event_type: str, aggregate_id: str, template: dict[str, Any]
+    ) -> dict[str, Any]:
         """Generate event-specific data based on type and template."""
 
         # Default data generators by event type
@@ -239,7 +239,7 @@ class EventGeneratorNode(Node):
                 "tracking_number": f"TRACK-{random.randint(100000, 999999)}",
                 "carrier": random.choice(["UPS", "FedEx", "DHL", "USPS"]),
                 "status": "shipped",
-                "estimated_delivery": datetime.now(timezone.utc)
+                "estimated_delivery": datetime.now(UTC)
                 .replace(day=datetime.now().day + random.randint(1, 7))
                 .isoformat()
                 + "Z",
@@ -293,5 +293,5 @@ class EventGeneratorNode(Node):
             return {
                 "event_data": f"Generated data for {event_type}",
                 "aggregate_id": aggregate_id,
-                "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat() + "Z",
             }

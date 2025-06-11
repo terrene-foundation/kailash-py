@@ -1,8 +1,8 @@
 """Task manager for workflow execution tracking."""
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from kailash.sdk_exceptions import StorageException, TaskException, TaskStateError
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class TaskManager:
     """Manages task tracking for workflow executions."""
 
-    def __init__(self, storage_backend: Optional[StorageBackend] = None):
+    def __init__(self, storage_backend: StorageBackend | None = None):
         """Initialize task manager.
 
         Args:
@@ -37,13 +37,13 @@ class TaskManager:
             self.logger = logger
 
             # In-memory caches
-            self._runs: Dict[str, WorkflowRun] = {}
-            self._tasks: Dict[str, TaskRun] = {}
+            self._runs: dict[str, WorkflowRun] = {}
+            self._tasks: dict[str, TaskRun] = {}
         except Exception as e:
             raise TaskException(f"Failed to initialize task manager: {e}") from e
 
     def create_run(
-        self, workflow_name: str, metadata: Optional[Dict[str, Any]] = None
+        self, workflow_name: str, metadata: dict[str, Any] | None = None
     ) -> str:
         """Create a new workflow run.
 
@@ -80,7 +80,7 @@ class TaskManager:
         return run.run_id
 
     def update_run_status(
-        self, run_id: str, status: str, error: Optional[str] = None
+        self, run_id: str, status: str, error: str | None = None
     ) -> None:
         """Update workflow run status.
 
@@ -129,12 +129,12 @@ class TaskManager:
     def create_task(
         self,
         node_id: str,
-        input_data: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        input_data: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         run_id: str = "test-run-id",
         node_type: str = "default-node-type",
-        dependencies: Optional[List[str]] = None,
-        started_at: Optional[datetime] = None,
+        dependencies: list[str] | None = None,
+        started_at: datetime | None = None,
     ) -> TaskRun:
         """Create a new task.
 
@@ -197,10 +197,10 @@ class TaskManager:
         self,
         task_id: str,
         status: TaskStatus,
-        result: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        ended_at: Optional[datetime] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        ended_at: datetime | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Update task status.
 
@@ -249,7 +249,7 @@ class TaskManager:
 
         self.logger.info(f"Updated task {task_id} status to: {status}")
 
-    def get_run(self, run_id: str) -> Optional[WorkflowRun]:
+    def get_run(self, run_id: str) -> WorkflowRun | None:
         """Get workflow run by ID.
 
         Args:
@@ -276,7 +276,7 @@ class TaskManager:
                 self._runs[run_id] = run
         return run
 
-    def get_task(self, task_id: str) -> Optional[TaskRun]:
+    def get_task(self, task_id: str) -> TaskRun | None:
         """Get task by ID.
 
         Args:
@@ -304,8 +304,8 @@ class TaskManager:
         return task
 
     def list_runs(
-        self, workflow_name: Optional[str] = None, status: Optional[str] = None
-    ) -> List[RunSummary]:
+        self, workflow_name: str | None = None, status: str | None = None
+    ) -> list[RunSummary]:
         """List workflow runs.
 
         Args:
@@ -353,9 +353,9 @@ class TaskManager:
     def list_tasks(
         self,
         run_id: str,
-        node_id: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-    ) -> List[TaskSummary]:
+        node_id: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> list[TaskSummary]:
         """List tasks for a run.
 
         Args:
@@ -392,7 +392,7 @@ class TaskManager:
 
         return summaries
 
-    def get_run_summary(self, run_id: str) -> Optional[RunSummary]:
+    def get_run_summary(self, run_id: str) -> RunSummary | None:
         """Get summary for a specific run.
 
         Args:
@@ -441,7 +441,7 @@ class TaskManager:
         self.logger.info("Cleared task manager cache")
 
     def complete_task(
-        self, task_id: str, output_data: Optional[Dict[str, Any]] = None
+        self, task_id: str, output_data: dict[str, Any] | None = None
     ) -> None:
         """Complete a task successfully.
 
@@ -567,7 +567,7 @@ class TaskManager:
 
         self.logger.info(f"Deleted task {task_id}")
 
-    def get_tasks_by_status(self, status: TaskStatus) -> List[TaskRun]:
+    def get_tasks_by_status(self, status: TaskStatus) -> list[TaskRun]:
         """Get tasks by status.
 
         Args:
@@ -588,7 +588,7 @@ class TaskManager:
         except Exception as e:
             raise StorageException(f"Failed to query tasks by status: {e}") from e
 
-    def get_tasks_by_node(self, node_id: str) -> List[TaskRun]:
+    def get_tasks_by_node(self, node_id: str) -> list[TaskRun]:
         """Get tasks by node ID.
 
         Args:
@@ -609,7 +609,7 @@ class TaskManager:
         except Exception as e:
             raise StorageException(f"Failed to query tasks by node: {e}") from e
 
-    def get_task_history(self, task_id: str) -> List[TaskRun]:
+    def get_task_history(self, task_id: str) -> list[TaskRun]:
         """Get task history (original task and all retries).
 
         Args:
@@ -658,7 +658,7 @@ class TaskManager:
 
     def get_tasks_by_timerange(
         self, start_time: datetime, end_time: datetime
-    ) -> List[TaskRun]:
+    ) -> list[TaskRun]:
         """Get tasks created between start_time and end_time.
 
         Args:
@@ -683,15 +683,15 @@ class TaskManager:
                     # Ensure timezone-aware comparison
                     task_created_at = t.created_at
                     if task_created_at and task_created_at.tzinfo is None:
-                        task_created_at = task_created_at.replace(tzinfo=timezone.utc)
+                        task_created_at = task_created_at.replace(tzinfo=UTC)
 
                     start_aware = start_time
                     if start_aware.tzinfo is None:
-                        start_aware = start_aware.replace(tzinfo=timezone.utc)
+                        start_aware = start_aware.replace(tzinfo=UTC)
 
                     end_aware = end_time
                     if end_aware.tzinfo is None:
-                        end_aware = end_aware.replace(tzinfo=timezone.utc)
+                        end_aware = end_aware.replace(tzinfo=UTC)
 
                     if (
                         task_created_at
@@ -703,7 +703,7 @@ class TaskManager:
         except Exception as e:
             raise StorageException(f"Failed to query tasks by timerange: {e}") from e
 
-    def get_task_statistics(self) -> Dict[str, Any]:
+    def get_task_statistics(self) -> dict[str, Any]:
         """Get task statistics.
 
         Returns:
@@ -751,7 +751,7 @@ class TaskManager:
         except Exception as e:
             raise StorageException(f"Failed to get tasks for cleanup: {e}") from e
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         deleted = 0
 
         for task in tasks:
@@ -759,7 +759,7 @@ class TaskManager:
                 # Ensure timezone-aware comparison
                 task_created_at = task.created_at
                 if task_created_at.tzinfo is None:
-                    task_created_at = task_created_at.replace(tzinfo=timezone.utc)
+                    task_created_at = task_created_at.replace(tzinfo=UTC)
 
                 if task_created_at < cutoff:
                     try:
@@ -796,7 +796,7 @@ class TaskManager:
 
         self.logger.info(f"Updated metrics for task {task_id}")
 
-    def get_running_tasks(self) -> List[TaskRun]:
+    def get_running_tasks(self) -> list[TaskRun]:
         """Get all currently running tasks.
 
         Returns:
@@ -807,7 +807,7 @@ class TaskManager:
         """
         return self.get_tasks_by_status(TaskStatus.RUNNING)
 
-    def get_task_dependencies(self, task_id: str) -> List[TaskRun]:
+    def get_task_dependencies(self, task_id: str) -> list[TaskRun]:
         """Get tasks that are dependencies for the given task.
 
         Args:
@@ -861,7 +861,7 @@ class TaskManager:
         except Exception as e:
             raise StorageException(f"Failed to save task: {e}") from e
 
-    def get_run_tasks(self, run_id: str) -> List[TaskRun]:
+    def get_run_tasks(self, run_id: str) -> list[TaskRun]:
         """Get all tasks for a specific run.
 
         Args:
@@ -882,7 +882,7 @@ class TaskManager:
 
         return tasks
 
-    def get_workflow_tasks(self, workflow_id: str) -> List[TaskRun]:
+    def get_workflow_tasks(self, workflow_id: str) -> list[TaskRun]:
         """Get all tasks for a workflow.
 
         This is a compatibility method that returns all tasks across all runs for a workflow.

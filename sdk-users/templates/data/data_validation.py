@@ -12,7 +12,7 @@ Customization Points:
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
@@ -58,8 +58,8 @@ VALIDATION_RULES = {
 
 
 def validate_record(
-    record: Dict, rules: Dict, seen_values: Dict[str, Set]
-) -> Dict[str, Any]:
+    record: dict, rules: dict, seen_values: dict[str, set]
+) -> dict[str, Any]:
     """Validate a single record against rules"""
     errors = []
     warnings = []
@@ -232,7 +232,7 @@ def validate_record(
     }
 
 
-def validate_dataset(data: List[Dict], rules: Dict) -> Dict[str, Any]:
+def validate_dataset(data: list[dict], rules: dict) -> dict[str, Any]:
     """Validate entire dataset"""
     valid_records = []
     invalid_records = []
@@ -311,7 +311,7 @@ def validate_dataset(data: List[Dict], rules: Dict) -> Dict[str, Any]:
     }
 
 
-def generate_validation_report(validation_result: Dict) -> Dict[str, Any]:
+def generate_validation_report(validation_result: dict) -> dict[str, Any]:
     """Generate detailed validation report"""
     report = validation_result["validation_report"]
 

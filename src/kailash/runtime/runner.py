@@ -1,7 +1,7 @@
 """Main runner for workflow execution."""
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking import TaskManager
@@ -11,7 +11,7 @@ from kailash.workflow import Workflow
 class WorkflowRunner:
     """High-level interface for running workflows."""
 
-    def __init__(self, debug: bool = False, task_manager: Optional[TaskManager] = None):
+    def __init__(self, debug: bool = False, task_manager: TaskManager | None = None):
         """Initialize the workflow runner.
 
         Args:
@@ -36,9 +36,9 @@ class WorkflowRunner:
     def run(
         self,
         workflow: Workflow,
-        parameters: Optional[Dict[str, Dict[str, Any]]] = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
         runtime_type: str = "local",
-    ) -> Tuple[Dict[str, Any], str]:
+    ) -> tuple[dict[str, Any], str]:
         """Run a workflow.
 
         Args:
@@ -82,7 +82,7 @@ class WorkflowRunner:
         runtime = LocalRuntime(debug=self.debug)
         return runtime.validate_workflow(workflow)
 
-    def get_run_status(self, run_id: str) -> Dict[str, Any]:
+    def get_run_status(self, run_id: str) -> dict[str, Any]:
         """Get status of a workflow run.
 
         Args:
@@ -94,7 +94,7 @@ class WorkflowRunner:
         return self.task_manager.get_run_status(run_id)
 
     def get_run_history(
-        self, workflow_name: Optional[str] = None, limit: int = 10
+        self, workflow_name: str | None = None, limit: int = 10
     ) -> list:
         """Get run history.
 

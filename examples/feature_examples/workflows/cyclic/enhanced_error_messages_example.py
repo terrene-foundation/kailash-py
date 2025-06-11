@@ -16,7 +16,7 @@ Key Features Demonstrated:
 - Comprehensive validation with detailed feedback
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
@@ -39,7 +39,7 @@ class SimpleNode(Node):
             )
         }
 
-    def run(self, context: Any = None, **inputs) -> Dict[str, Any]:
+    def run(self, context: Any = None, **inputs) -> dict[str, Any]:
         return {"output": inputs.get("input_value", 0) * 2}
 
 

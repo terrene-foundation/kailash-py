@@ -4,7 +4,6 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
-from typing import Dict, Optional, Set
 
 import psutil
 
@@ -18,13 +17,13 @@ class CycleSafetyManager:
 
     def __init__(self):
         """Initialize cycle safety manager."""
-        self.active_cycles: Dict[str, "CycleMonitor"] = {}
+        self.active_cycles: dict[str, "CycleMonitor"] = {}
         self.global_memory_limit = None  # MB
         self.global_timeout = None  # seconds
         self._lock = threading.Lock()
 
     def set_global_limits(
-        self, memory_limit: Optional[int] = None, timeout: Optional[float] = None
+        self, memory_limit: int | None = None, timeout: float | None = None
     ) -> None:
         """Set global resource limits.
 
@@ -38,9 +37,9 @@ class CycleSafetyManager:
     def start_monitoring(
         self,
         cycle_id: str,
-        max_iterations: Optional[int] = None,
-        timeout: Optional[float] = None,
-        memory_limit: Optional[int] = None,
+        max_iterations: int | None = None,
+        timeout: float | None = None,
+        memory_limit: int | None = None,
     ) -> "CycleMonitor":
         """Start monitoring a cycle.
 
@@ -88,7 +87,7 @@ class CycleSafetyManager:
                 monitor.stop()
                 del self.active_cycles[cycle_id]
 
-    def check_all_cycles(self) -> Dict[str, bool]:
+    def check_all_cycles(self) -> dict[str, bool]:
         """Check all active cycles for violations.
 
         Returns:
@@ -102,7 +101,7 @@ class CycleSafetyManager:
 
         return violations
 
-    def get_cycle_status(self, cycle_id: str) -> Optional[Dict[str, any]]:
+    def get_cycle_status(self, cycle_id: str) -> dict[str, any] | None:
         """Get status of a specific cycle.
 
         Args:
@@ -116,7 +115,7 @@ class CycleSafetyManager:
                 return self.active_cycles[cycle_id].get_status()
         return None
 
-    def detect_deadlocks(self) -> Set[str]:
+    def detect_deadlocks(self) -> set[str]:
         """Detect potential deadlocks in active cycles.
 
         Returns:
@@ -138,9 +137,9 @@ class CycleMonitor:
     def __init__(
         self,
         cycle_id: str,
-        max_iterations: Optional[int] = None,
-        timeout: Optional[float] = None,
-        memory_limit: Optional[int] = None,
+        max_iterations: int | None = None,
+        timeout: float | None = None,
+        memory_limit: int | None = None,
     ):
         """Initialize cycle monitor.
 
@@ -256,7 +255,7 @@ class CycleMonitor:
         time_since_progress = time.time() - self.last_progress_time
         return time_since_progress > stall_threshold
 
-    def get_status(self) -> Dict[str, any]:
+    def get_status(self) -> dict[str, any]:
         """Get current monitor status.
 
         Returns:

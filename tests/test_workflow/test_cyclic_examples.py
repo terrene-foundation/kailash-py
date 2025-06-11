@@ -1,6 +1,6 @@
 """Tests based on cyclic workflow examples."""
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -30,7 +30,7 @@ class IncrementNode(Node):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs):
+    def run(self, context: dict[str, Any], **kwargs):
         value = kwargs.get("value", 0)
         step = kwargs.get("step", 1)
 
@@ -67,7 +67,7 @@ class QualityImproverNode(Node):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs):
+    def run(self, context: dict[str, Any], **kwargs):
         quality = kwargs.get("quality", 0.0)
         data = kwargs.get("data", {})
 

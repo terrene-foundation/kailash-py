@@ -118,7 +118,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -126,31 +126,21 @@ logger = logging.getLogger(__name__)
 class SecurityError(Exception):
     """Raised when a security policy violation is detected."""
 
-    pass
-
 
 class PathTraversalError(SecurityError):
     """Raised when path traversal attempt is detected."""
-
-    pass
 
 
 class CommandInjectionError(SecurityError):
     """Raised when command injection attempt is detected."""
 
-    pass
-
 
 class ExecutionTimeoutError(SecurityError):
     """Raised when execution exceeds allowed time limit."""
 
-    pass
-
 
 class MemoryLimitError(SecurityError):
     """Raised when memory usage exceeds allowed limit."""
-
-    pass
 
 
 class SecurityConfig:
@@ -158,11 +148,11 @@ class SecurityConfig:
 
     def __init__(
         self,
-        allowed_directories: Optional[List[str]] = None,
+        allowed_directories: list[str] | None = None,
         max_file_size: int = 100 * 1024 * 1024,  # 100MB
         execution_timeout: float = 300.0,  # 5 minutes
         memory_limit: int = 512 * 1024 * 1024,  # 512MB
-        allowed_file_extensions: Optional[List[str]] = None,
+        allowed_file_extensions: list[str] | None = None,
         enable_audit_logging: bool = True,
         enable_path_validation: bool = True,
         enable_command_validation: bool = True,
@@ -242,8 +232,8 @@ def set_security_config(config: SecurityConfig) -> None:
 
 
 def validate_file_path(
-    file_path: Union[str, Path],
-    config: Optional[SecurityConfig] = None,
+    file_path: str | Path,
+    config: SecurityConfig | None = None,
     operation: str = "access",
 ) -> Path:
     """
@@ -343,9 +333,9 @@ def validate_file_path(
 
 
 def safe_open(
-    file_path: Union[str, Path],
+    file_path: str | Path,
     mode: str = "r",
-    config: Optional[SecurityConfig] = None,
+    config: SecurityConfig | None = None,
     **kwargs,
 ):
     """
@@ -391,9 +381,7 @@ def safe_open(
     return open(validated_path, mode, **kwargs)
 
 
-def validate_command_string(
-    command: str, config: Optional[SecurityConfig] = None
-) -> str:
+def validate_command_string(command: str, config: SecurityConfig | None = None) -> str:
     """
     Validate command strings to prevent injection attacks.
 
@@ -445,7 +433,7 @@ def validate_command_string(
 
 @contextmanager
 def execution_timeout(
-    timeout: Optional[float] = None, config: Optional[SecurityConfig] = None
+    timeout: float | None = None, config: SecurityConfig | None = None
 ):
     """
     Context manager to enforce execution timeouts.
@@ -485,8 +473,8 @@ def execution_timeout(
 def sanitize_input(
     value: Any,
     max_length: int = 10000,
-    allowed_types: Optional[List[type]] = None,
-    config: Optional[SecurityConfig] = None,
+    allowed_types: list[type] | None = None,
+    config: SecurityConfig | None = None,
 ) -> Any:
     """
     Sanitize input values to prevent injection attacks.
@@ -776,7 +764,7 @@ def sanitize_input(
 
 
 def create_secure_temp_dir(
-    prefix: str = "kailash_", config: Optional[SecurityConfig] = None
+    prefix: str = "kailash_", config: SecurityConfig | None = None
 ) -> Path:
     """
     Create a secure temporary directory.
@@ -804,8 +792,8 @@ def create_secure_temp_dir(
 
 
 def validate_node_parameters(
-    parameters: Dict[str, Any], config: Optional[SecurityConfig] = None
-) -> Dict[str, Any]:
+    parameters: dict[str, Any], config: SecurityConfig | None = None
+) -> dict[str, Any]:
     """
     Validate and sanitize node parameters.
 

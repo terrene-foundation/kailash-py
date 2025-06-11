@@ -6,14 +6,13 @@ the multi-agent system to use what's installed.
 """
 
 import subprocess
-from typing import Dict, List
 
 from kailash import Workflow
 from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from kailash.runtime import LocalRuntime
 
 
-def get_available_ollama_models() -> List[Dict[str, str]]:
+def get_available_ollama_models() -> list[dict[str, str]]:
     """Get list of available Ollama models with their full names."""
     try:
         result = subprocess.run(
@@ -46,7 +45,7 @@ def get_available_ollama_models() -> List[Dict[str, str]]:
         return []
 
 
-def create_adaptive_workflow(available_models: List[Dict[str, str]]) -> Workflow:
+def create_adaptive_workflow(available_models: list[dict[str, str]]) -> Workflow:
     """Create a workflow adapted to available models."""
     workflow = Workflow(
         workflow_id="adaptive_a2a",
@@ -171,7 +170,7 @@ def get_role_prompt(role: str, model: str) -> str:
     return prompts.get(role, f"You are a {role} using {model}.")
 
 
-def get_role_attention_filter(role: str) -> Dict:
+def get_role_attention_filter(role: str) -> dict:
     """Get attention filter configuration for each role."""
     filters = {
         "researcher": {

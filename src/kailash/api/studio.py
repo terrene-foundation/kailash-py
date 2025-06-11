@@ -13,9 +13,9 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -49,25 +49,25 @@ class NodeDefinition(BaseModel):
     category: str
     name: str
     description: str
-    parameters: List[Dict[str, Any]]
-    inputs: List[Dict[str, Any]]
-    outputs: List[Dict[str, Any]]
+    parameters: list[dict[str, Any]]
+    inputs: list[dict[str, Any]]
+    outputs: list[dict[str, Any]]
 
 
 class WorkflowCreate(BaseModel):
     """Workflow creation request"""
 
     name: str
-    description: Optional[str] = None
-    definition: Dict[str, Any]
+    description: str | None = None
+    definition: dict[str, Any]
 
 
 class WorkflowUpdate(BaseModel):
     """Workflow update request"""
 
-    name: Optional[str] = None
-    description: Optional[str] = None
-    definition: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    description: str | None = None
+    definition: dict[str, Any] | None = None
 
 
 class WorkflowResponse(BaseModel):
@@ -75,8 +75,8 @@ class WorkflowResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
-    definition: Dict[str, Any]
+    description: str | None
+    definition: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 
@@ -84,7 +84,7 @@ class WorkflowResponse(BaseModel):
 class ExecutionRequest(BaseModel):
     """Workflow execution request"""
 
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: dict[str, Any] | None = None
 
 
 class ExecutionResponse(BaseModel):
@@ -94,16 +94,16 @@ class ExecutionResponse(BaseModel):
     workflow_id: str
     status: str
     started_at: datetime
-    completed_at: Optional[datetime]
-    result: Optional[Dict[str, Any]]
-    error: Optional[str]
+    completed_at: datetime | None
+    result: dict[str, Any] | None
+    error: str | None
 
 
 class WorkflowImportRequest(BaseModel):
     """Workflow import request"""
 
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     format: str = Field(..., pattern="^(yaml|json|python)$")
     content: str
 
@@ -113,10 +113,10 @@ class WorkflowImportResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
-    definition: Dict[str, Any]
+    description: str | None
+    definition: dict[str, Any]
     created_at: datetime
-    warnings: List[str] = []
+    warnings: list[str] = []
 
 
 class WorkflowStudioAPI:
@@ -135,8 +135,8 @@ class WorkflowStudioAPI:
         self.setup_middleware()
         self.setup_routes()
         self.setup_storage()
-        self.active_executions: Dict[str, asyncio.Task] = {}
-        self.websocket_connections: Dict[str, List[WebSocket]] = {}
+        self.active_executions: dict[str, asyncio.Task] = {}
+        self.websocket_connections: dict[str, list[WebSocket]] = {}
 
         # Register custom nodes on startup
         self.app.add_event_handler("startup", self._register_custom_nodes)
@@ -231,7 +231,7 @@ class WorkflowStudioAPI:
             return {"status": "healthy", "tenant_id": self.tenant_id}
 
         # Node discovery endpoints
-        @self.app.get("/api/nodes", response_model=Dict[str, List[NodeDefinition]])
+        @self.app.get("/api/nodes", response_model=dict[str, list[NodeDefinition]])
         async def list_nodes():
             """List all available nodes grouped by category"""
             try:
@@ -385,7 +385,7 @@ class WorkflowStudioAPI:
 
         # Add alias for backward compatibility
         @self.app.get(
-            "/api/nodes/discover", response_model=Dict[str, List[NodeDefinition]]
+            "/api/nodes/discover", response_model=dict[str, list[NodeDefinition]]
         )
         async def discover_nodes():
             """Alias for list_nodes endpoint for backward compatibility"""
@@ -420,7 +420,7 @@ class WorkflowStudioAPI:
             )
 
         # Workflow management endpoints
-        @self.app.get("/api/workflows", response_model=List[WorkflowResponse])
+        @self.app.get("/api/workflows", response_model=list[WorkflowResponse])
         async def list_workflows(
             limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)
         ):
@@ -434,7 +434,7 @@ class WorkflowStudioAPI:
 
             for workflow_file in workflow_files[offset : offset + limit]:
                 try:
-                    with open(workflow_file, "r") as f:
+                    with open(workflow_file) as f:
                         data = json.load(f)
                         workflows.append(WorkflowResponse(**data))
                 except Exception as e:
@@ -446,7 +446,7 @@ class WorkflowStudioAPI:
         async def create_workflow(workflow: WorkflowCreate):
             """Create a new workflow"""
             workflow_id = str(uuid.uuid4())
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             workflow_data = {
                 "id": workflow_id,
@@ -471,7 +471,7 @@ class WorkflowStudioAPI:
             if not workflow_file.exists():
                 raise HTTPException(status_code=404, detail="Workflow not found")
 
-            with open(workflow_file, "r") as f:
+            with open(workflow_file) as f:
                 data = json.load(f)
 
             return WorkflowResponse(**data)
@@ -484,7 +484,7 @@ class WorkflowStudioAPI:
                 raise HTTPException(status_code=404, detail="Workflow not found")
 
             # Load existing workflow
-            with open(workflow_file, "r") as f:
+            with open(workflow_file) as f:
                 data = json.load(f)
 
             # Update fields
@@ -495,7 +495,7 @@ class WorkflowStudioAPI:
             if update.definition is not None:
                 data["definition"] = update.definition
 
-            data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            data["updated_at"] = datetime.now(UTC).isoformat()
 
             # Save updated workflow
             with open(workflow_file, "w") as f:
@@ -524,7 +524,7 @@ class WorkflowStudioAPI:
             if not workflow_file.exists():
                 raise HTTPException(status_code=404, detail="Workflow not found")
 
-            with open(workflow_file, "r") as f:
+            with open(workflow_file) as f:
                 workflow_data = json.load(f)
 
             # Create execution record
@@ -533,7 +533,7 @@ class WorkflowStudioAPI:
                 "id": execution_id,
                 "workflow_id": workflow_id,
                 "status": "running",
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "completed_at": None,
                 "result": None,
                 "error": None,
@@ -560,7 +560,7 @@ class WorkflowStudioAPI:
             except Exception as e:
                 execution_data["status"] = "failed"
                 execution_data["error"] = str(e)
-                execution_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+                execution_data["completed_at"] = datetime.now(UTC).isoformat()
 
                 with open(execution_file, "w") as f:
                     json.dump(execution_data, f, indent=2)
@@ -576,7 +576,7 @@ class WorkflowStudioAPI:
             if not execution_file.exists():
                 raise HTTPException(status_code=404, detail="Execution not found")
 
-            with open(execution_file, "r") as f:
+            with open(execution_file) as f:
                 data = json.load(f)
 
             return ExecutionResponse(**data)
@@ -602,7 +602,7 @@ class WorkflowStudioAPI:
                         break
 
                     # Send current status
-                    with open(execution_file, "r") as f:
+                    with open(execution_file) as f:
                         data = json.load(f)
                     await websocket.send_json(data)
 
@@ -633,7 +633,7 @@ class WorkflowStudioAPI:
             if not workflow_file.exists():
                 raise HTTPException(status_code=404, detail="Workflow not found")
 
-            with open(workflow_file, "r") as f:
+            with open(workflow_file) as f:
                 workflow_data = json.load(f)
 
             # Create workflow from definition
@@ -686,7 +686,7 @@ class WorkflowStudioAPI:
                     warnings.append(f"Workflow validation warning: {str(e)}")
 
                 # Create workflow record
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 workflow_data = {
                     "id": workflow_id,
                     "name": request.name,
@@ -718,7 +718,7 @@ class WorkflowStudioAPI:
         execution_id: str,
         workflow: Workflow,
         runtime: LocalRuntime,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
     ):
         """Execute workflow asynchronously and update status"""
         execution_file = self.executions_path / f"{execution_id}.json"
@@ -728,11 +728,11 @@ class WorkflowStudioAPI:
             result, run_id = runtime.execute(workflow, parameters=parameters)
 
             # Update execution record
-            with open(execution_file, "r") as f:
+            with open(execution_file) as f:
                 execution_data = json.load(f)
 
             execution_data["status"] = "completed"
-            execution_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+            execution_data["completed_at"] = datetime.now(UTC).isoformat()
             execution_data["result"] = result
 
             with open(execution_file, "w") as f:
@@ -743,11 +743,11 @@ class WorkflowStudioAPI:
 
         except Exception as e:
             # Update execution record with error
-            with open(execution_file, "r") as f:
+            with open(execution_file) as f:
                 execution_data = json.load(f)
 
             execution_data["status"] = "failed"
-            execution_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+            execution_data["completed_at"] = datetime.now(UTC).isoformat()
             execution_data["error"] = str(e)
 
             with open(execution_file, "w") as f:
@@ -761,7 +761,7 @@ class WorkflowStudioAPI:
             if execution_id in self.active_executions:
                 del self.active_executions[execution_id]
 
-    async def _notify_websocket_clients(self, execution_id: str, data: Dict[str, Any]):
+    async def _notify_websocket_clients(self, execution_id: str, data: dict[str, Any]):
         """Notify all WebSocket clients watching this execution"""
         if execution_id in self.websocket_connections:
             for websocket in self.websocket_connections[execution_id]:
@@ -851,7 +851,7 @@ class WorkflowStudioAPI:
 
         return "\n".join(lines)
 
-    def _parse_python_workflow(self, python_code: str) -> Dict[str, Any]:
+    def _parse_python_workflow(self, python_code: str) -> dict[str, Any]:
         """Parse Python code to extract workflow definition.
 
         This is a simplified parser that extracts workflow structure from Python code.
@@ -868,7 +868,7 @@ class WorkflowStudioAPI:
             },
         }
 
-    def _format_config(self, config: Dict[str, Any]) -> str:
+    def _format_config(self, config: dict[str, Any]) -> str:
         """Format config dict as Python code"""
         if not config:
             return ""

@@ -52,8 +52,9 @@ import inspect
 import logging
 import resource
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type, Union, get_type_hints
+from typing import Any, get_type_hints
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import (
@@ -171,8 +172,8 @@ class CodeExecutor:
 
     def __init__(
         self,
-        allowed_modules: Optional[List[str]] = None,
-        security_config: Optional[SecurityConfig] = None,
+        allowed_modules: list[str] | None = None,
+        security_config: SecurityConfig | None = None,
     ):
         """Initialize the code executor.
 
@@ -269,7 +270,7 @@ class CodeExecutor:
         except SyntaxError as e:
             raise NodeExecutionError(f"Invalid Python syntax: {e}")
 
-    def execute_code(self, code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_code(self, code: str, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute Python code with given inputs.
 
         Args:
@@ -350,7 +351,7 @@ class CodeExecutor:
             logger.error(error_msg)
             raise NodeExecutionError(error_msg)
 
-    def execute_function(self, func: Callable, inputs: Dict[str, Any]) -> Any:
+    def execute_function(self, func: Callable, inputs: dict[str, Any]) -> Any:
         """Execute a Python function with given inputs.
 
         Args:
@@ -404,7 +405,7 @@ class FunctionWrapper:
         node = wrapper.to_node(name="dropna_processor")
     """
 
-    def __init__(self, func: Callable, executor: Optional[CodeExecutor] = None):
+    def __init__(self, func: Callable, executor: CodeExecutor | None = None):
         """Initialize the function wrapper.
 
         Args:
@@ -422,7 +423,7 @@ class FunctionWrapper:
             # Handle cases where type hints can't be resolved
             self.type_hints = {}
 
-    def get_input_types(self) -> Dict[str, Type]:
+    def get_input_types(self) -> dict[str, type]:
         """Extract input types from function signature.
 
         Returns:
@@ -438,7 +439,7 @@ class FunctionWrapper:
             input_types[param_name] = param_type
         return input_types
 
-    def get_output_type(self) -> Type:
+    def get_output_type(self) -> type:
         """Extract output type from function signature.
 
         Returns:
@@ -446,7 +447,7 @@ class FunctionWrapper:
         """
         return self.type_hints.get("return", Any)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute the wrapped function."""
         result = self.executor.execute_function(self.func, inputs)
 
@@ -458,10 +459,10 @@ class FunctionWrapper:
 
     def to_node(
         self,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        input_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        output_schema: Optional[Dict[str, "NodeParameter"]] = None,
+        name: str | None = None,
+        description: str | None = None,
+        input_schema: dict[str, "NodeParameter"] | None = None,
+        output_schema: dict[str, "NodeParameter"] | None = None,
     ) -> "PythonCodeNode":
         """Convert function to a PythonCodeNode.
 
@@ -507,9 +508,9 @@ class ClassWrapper:
 
     def __init__(
         self,
-        cls: Type,
-        method_name: Optional[str] = None,
-        executor: Optional[CodeExecutor] = None,
+        cls: type,
+        method_name: str | None = None,
+        executor: CodeExecutor | None = None,
     ):
         """Initialize the class wrapper.
 
@@ -570,7 +571,7 @@ class ClassWrapper:
             # Handle descriptor objects like properties
             self.type_hints = {}
 
-    def get_input_types(self) -> Dict[str, Type]:
+    def get_input_types(self) -> dict[str, type]:
         """Extract input types from method signature."""
         input_types = {}
         for param_name, param in self.signature.parameters.items():
@@ -582,11 +583,11 @@ class ClassWrapper:
             input_types[param_name] = param_type
         return input_types
 
-    def get_output_type(self) -> Type:
+    def get_output_type(self) -> type:
         """Extract output type from method signature."""
         return self.type_hints.get("return", Any)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute the wrapped method."""
         # Create instance if needed
         if self.instance is None:
@@ -611,10 +612,10 @@ class ClassWrapper:
 
     def to_node(
         self,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        input_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        output_schema: Optional[Dict[str, "NodeParameter"]] = None,
+        name: str | None = None,
+        description: str | None = None,
+        input_schema: dict[str, "NodeParameter"] | None = None,
+        output_schema: dict[str, "NodeParameter"] | None = None,
     ) -> "PythonCodeNode":
         """Convert class to a PythonCodeNode.
 
@@ -707,15 +708,15 @@ class PythonCodeNode(Node):
     def __init__(
         self,
         name: str,
-        code: Optional[str] = None,
-        function: Optional[Callable] = None,
-        class_type: Optional[Type] = None,
-        process_method: Optional[str] = None,
-        input_types: Optional[Dict[str, Type]] = None,
-        output_type: Optional[Type] = None,
-        input_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        output_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        description: Optional[str] = None,
+        code: str | None = None,
+        function: Callable | None = None,
+        class_type: type | None = None,
+        process_method: str | None = None,
+        input_types: dict[str, type] | None = None,
+        output_type: type | None = None,
+        input_schema: dict[str, "NodeParameter"] | None = None,
+        output_schema: dict[str, "NodeParameter"] | None = None,
+        description: str | None = None,
         **kwargs,
     ):
         """Initialize a Python code node.
@@ -784,7 +785,7 @@ class PythonCodeNode(Node):
         if not hasattr(self, "_skip_validation"):
             self._skip_validation = True
 
-    def get_parameters(self) -> Dict[str, "NodeParameter"]:
+    def get_parameters(self) -> dict[str, "NodeParameter"]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -841,7 +842,7 @@ class PythonCodeNode(Node):
 
         return parameters
 
-    def validate_inputs(self, **kwargs) -> Dict[str, Any]:
+    def validate_inputs(self, **kwargs) -> dict[str, Any]:
         """Validate runtime inputs.
 
         For code-based nodes, we accept any inputs since the code
@@ -860,7 +861,7 @@ class PythonCodeNode(Node):
         # Otherwise use standard validation for function/class nodes
         return super().validate_inputs(**kwargs)
 
-    def get_output_schema(self) -> Dict[str, "NodeParameter"]:
+    def get_output_schema(self) -> dict[str, "NodeParameter"]:
         """Define output parameters for this node.
 
         Returns:
@@ -880,7 +881,7 @@ class PythonCodeNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic.
 
         Args:
@@ -923,10 +924,10 @@ class PythonCodeNode(Node):
     def from_function(
         cls,
         func: Callable,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        input_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        output_schema: Optional[Dict[str, "NodeParameter"]] = None,
+        name: str | None = None,
+        description: str | None = None,
+        input_schema: dict[str, "NodeParameter"] | None = None,
+        output_schema: dict[str, "NodeParameter"] | None = None,
         **kwargs,
     ) -> "PythonCodeNode":
         """Create a node from a Python function.
@@ -961,12 +962,12 @@ class PythonCodeNode(Node):
     @classmethod
     def from_class(
         cls,
-        class_type: Type,
-        process_method: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        input_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        output_schema: Optional[Dict[str, "NodeParameter"]] = None,
+        class_type: type,
+        process_method: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        input_schema: dict[str, "NodeParameter"] | None = None,
+        output_schema: dict[str, "NodeParameter"] | None = None,
         **kwargs,
     ) -> "PythonCodeNode":
         """Create a node from a Python class.
@@ -1003,13 +1004,13 @@ class PythonCodeNode(Node):
     @classmethod
     def from_file(
         cls,
-        file_path: Union[str, Path],
-        function_name: Optional[str] = None,
-        class_name: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        input_schema: Optional[Dict[str, "NodeParameter"]] = None,
-        output_schema: Optional[Dict[str, "NodeParameter"]] = None,
+        file_path: str | Path,
+        function_name: str | None = None,
+        class_name: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        input_schema: dict[str, "NodeParameter"] | None = None,
+        output_schema: dict[str, "NodeParameter"] | None = None,
     ) -> "PythonCodeNode":
         """Create a node from a Python file.
 
@@ -1084,7 +1085,7 @@ class PythonCodeNode(Node):
                 f"No suitable function or class found in {file_path}"
             )
 
-    def execute_code(self, inputs: Dict[str, Any]) -> Any:
+    def execute_code(self, inputs: dict[str, Any]) -> Any:
         """Execute the code with given inputs.
 
         This is a convenience method that directly executes the code
@@ -1115,7 +1116,7 @@ class PythonCodeNode(Node):
         else:
             raise NodeExecutionError("No execution method available")
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self) -> dict[str, Any]:
         """Get node configuration for serialization.
 
         Returns:

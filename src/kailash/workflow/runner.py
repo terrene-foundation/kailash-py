@@ -5,7 +5,7 @@ allowing for complex multi-stage processing pipelines.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -23,8 +23,8 @@ class WorkflowConnection:
         self,
         source_workflow_id: str,
         target_workflow_id: str,
-        condition: Optional[Dict[str, Any]] = None,
-        state_mapping: Optional[Dict[str, str]] = None,
+        condition: dict[str, Any] | None = None,
+        state_mapping: dict[str, str] | None = None,
     ):
         """Initialize a workflow connection.
 
@@ -88,7 +88,7 @@ class WorkflowConnection:
             )
             return True
 
-    def map_state(self, state: BaseModel) -> Dict[str, Any]:
+    def map_state(self, state: BaseModel) -> dict[str, Any]:
         """Map state fields according to the mapping configuration.
 
         Args:
@@ -142,8 +142,8 @@ class WorkflowRunner:
         self,
         source_workflow_id: str,
         target_workflow_id: str,
-        condition: Optional[Dict[str, Any]] = None,
-        state_mapping: Optional[Dict[str, str]] = None,
+        condition: dict[str, Any] | None = None,
+        state_mapping: dict[str, str] | None = None,
     ) -> None:
         """Connect two workflows.
 
@@ -182,7 +182,7 @@ class WorkflowRunner:
 
     def get_next_workflows(
         self, current_workflow_id: str, state: BaseModel
-    ) -> List[Tuple[str, Dict[str, Any]]]:
+    ) -> list[tuple[str, dict[str, Any]]]:
         """Get the next workflows to execute based on current state.
 
         Args:
@@ -206,9 +206,9 @@ class WorkflowRunner:
         self,
         entry_workflow_id: str,
         initial_state: BaseModel,
-        task_manager: Optional[TaskManager] = None,
+        task_manager: TaskManager | None = None,
         max_steps: int = 10,  # Prevent infinite loops
-    ) -> Tuple[BaseModel, Dict[str, Dict[str, Any]]]:
+    ) -> tuple[BaseModel, dict[str, dict[str, Any]]]:
         """Execute a sequence of connected workflows.
 
         Args:

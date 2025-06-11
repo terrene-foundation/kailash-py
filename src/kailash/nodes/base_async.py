@@ -4,8 +4,8 @@ This module extends the base Node class with asynchronous execution capabilities
 allowing for more efficient handling of I/O-bound operations in workflows.
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 
 from kailash.nodes.base import Node
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -45,7 +45,7 @@ class AsyncNode(Node):
     - TaskManager: Tracks node execution status
     """
 
-    def execute(self, **runtime_inputs) -> Dict[str, Any]:
+    def execute(self, **runtime_inputs) -> dict[str, Any]:
         """Execute the node synchronously by running async code in a new event loop.
 
         This override allows AsyncNode to work with synchronous runtimes like LocalRuntime.
@@ -90,7 +90,7 @@ class AsyncNode(Node):
                 asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
             return asyncio.run(self.execute_async(**runtime_inputs))
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Asynchronous execution method for the node.
 
         This method should be overridden by subclasses that require asynchronous
@@ -108,7 +108,7 @@ class AsyncNode(Node):
         # Default implementation calls the synchronous run() method
         return self.run(**kwargs)
 
-    async def execute_async(self, **runtime_inputs) -> Dict[str, Any]:
+    async def execute_async(self, **runtime_inputs) -> dict[str, Any]:
         """Execute the node asynchronously with validation and error handling.
 
         This method follows the same pattern as execute() but supports asynchronous
@@ -129,7 +129,7 @@ class AsyncNode(Node):
             NodeValidationError: If inputs or outputs are invalid
             NodeExecutionError: If execution fails
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         try:
             self.logger.info(f"Executing node {self.id} asynchronously")
 
@@ -153,7 +153,7 @@ class AsyncNode(Node):
             # Validate outputs
             validated_outputs = self.validate_outputs(outputs)
 
-            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
+            execution_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.info(
                 f"Node {self.id} executed successfully in {execution_time:.3f}s"
             )

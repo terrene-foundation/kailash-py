@@ -9,7 +9,7 @@ and shows best practices for handling run metadata and filtering.
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from examples.utils.paths import get_data_dir
 
@@ -27,12 +27,12 @@ def create_sample_workflow(workflow_id: str, description: str) -> Workflow:
     workflow.description = description
 
     # Simple data generator node
-    def generate_data() -> Dict[str, Any]:
+    def generate_data() -> dict[str, Any]:
         """Generate sample data."""
         return {"data": [{"id": i, "value": i * 10} for i in range(5)]}
 
     # Simple data processing node
-    def process_data(data: list) -> Dict[str, Any]:
+    def process_data(data: list) -> dict[str, Any]:
         """Process data with some delay."""
         time.sleep(0.1)  # Simulate processing
         return {
@@ -117,7 +117,7 @@ def demonstrate_filtered_list_runs():
     print("   ✓ Created successful workflow run")
 
     # Failed workflow
-    def failing_process(data: list) -> Dict[str, Any]:
+    def failing_process(data: list) -> dict[str, Any]:
         raise Exception("Intentional failure for demonstration")
 
     fail_workflow = Workflow("fail_workflow", name="fail_workflow")
@@ -271,7 +271,7 @@ def demonstrate_timezone_safe_list_runs():
                     try:
                         import json
 
-                        with open(run_file, "r") as f:
+                        with open(run_file) as f:
                             run_data = json.load(f)
                             print(
                                 f"   - Run {run_data.get('run_id', 'unknown')[:8]}... "

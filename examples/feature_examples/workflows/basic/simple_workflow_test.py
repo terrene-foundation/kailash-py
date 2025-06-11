@@ -1,7 +1,7 @@
 """Simple workflow example connecting CSV reader to Python nodes."""
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -15,10 +15,7 @@ def main():
     """Simple example of connecting data nodes to Python nodes."""
 
     # Setup paths using centralized data utilities
-    from examples.utils.data_paths import (
-        ensure_output_dir_exists,
-        get_input_data_path,
-    )
+    from examples.utils.data_paths import ensure_output_dir_exists, get_input_data_path
 
     # Get paths to data files in centralized location
     customer_file = get_input_data_path("customer_value.csv")
@@ -39,7 +36,7 @@ def main():
     # 2. Create custom Python node for filtering
     print("Step 2: Creating filter node...")
 
-    def filter_high_value(data: list, threshold: float) -> Dict[str, Any]:
+    def filter_high_value(data: list, threshold: float) -> dict[str, Any]:
         """Filter customers with high claim amounts."""
         df = pd.DataFrame(data)
 
@@ -108,7 +105,7 @@ def main():
     # 3. Create summary node
     print("Step 3: Creating summary node...")
 
-    def summarize_by_region(data: list) -> Dict[str, Any]:
+    def summarize_by_region(data: list) -> dict[str, Any]:
         """Summarize data by region."""
         df = pd.DataFrame(data)
 
@@ -189,7 +186,7 @@ def main():
     print("\n\n=== Chaining Multiple Nodes ===")
 
     # Create another processing node
-    def add_risk_score(data: list) -> Dict[str, Any]:
+    def add_risk_score(data: list) -> dict[str, Any]:
         """Add risk scores to customer data."""
         df = pd.DataFrame(data)
 

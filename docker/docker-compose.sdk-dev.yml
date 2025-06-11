@@ -151,9 +151,9 @@ services:
     # Pull a small model on startup
     entrypoint: ["/bin/sh", "-c"]
     command: |
-      "ollama serve & 
-       sleep 5 && 
-       ollama pull llama3.2:1b && 
+      "ollama serve &
+       sleep 5 &&
+       ollama pull llama3.2:1b &&
        wait"
 
   # Mock API Server

@@ -2,9 +2,9 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from kailash.sdk_exceptions import KailashStorageError
@@ -16,7 +16,7 @@ from .base import StorageBackend
 class FileSystemStorage(StorageBackend):
     """Filesystem-based storage backend."""
 
-    def __init__(self, base_path: Optional[str] = None):
+    def __init__(self, base_path: str | None = None):
         """Initialize filesystem storage.
 
         Args:
@@ -47,26 +47,26 @@ class FileSystemStorage(StorageBackend):
         with open(run_path, "w") as f:
             json.dump(run.to_dict(), f, indent=2)
 
-    def load_run(self, run_id: str) -> Optional[WorkflowRun]:
+    def load_run(self, run_id: str) -> WorkflowRun | None:
         """Load a workflow run by ID."""
         run_path = self.runs_dir / f"{run_id}.json"
         if not run_path.exists():
             return None
 
-        with open(run_path, "r") as f:
+        with open(run_path) as f:
             data = json.load(f)
 
         return WorkflowRun.model_validate(data)
 
     def list_runs(
-        self, workflow_name: Optional[str] = None, status: Optional[str] = None
-    ) -> List[WorkflowRun]:
+        self, workflow_name: str | None = None, status: str | None = None
+    ) -> list[WorkflowRun]:
         """List workflow runs."""
         runs = []
 
         for run_file in self.runs_dir.glob("*.json"):
             try:
-                with open(run_file, "r") as f:
+                with open(run_file) as f:
                     data = json.load(f)
 
                 run = WorkflowRun.model_validate(data)
@@ -89,14 +89,13 @@ class FileSystemStorage(StorageBackend):
                 # Ensure datetime is timezone-aware
                 if run.started_at.tzinfo is None:
                     # Assume UTC for naive datetimes
-                    from datetime import timezone
 
-                    return run.started_at.replace(tzinfo=timezone.utc)
+                    return run.started_at.replace(tzinfo=UTC)
                 return run.started_at
             # Return a very old date for runs without started_at
-            from datetime import datetime, timezone
+            from datetime import datetime
 
-            return datetime.min.replace(tzinfo=timezone.utc)
+            return datetime.min.replace(tzinfo=UTC)
 
         runs.sort(key=safe_datetime_key, reverse=True)
         return runs
@@ -135,7 +134,7 @@ class FileSystemStorage(StorageBackend):
         except Exception as e:
             raise KailashStorageError(f"Failed to save task: {e}") from e
 
-    def get_task(self, task_id: str) -> Optional[TaskRun]:
+    def get_task(self, task_id: str) -> TaskRun | None:
         """Load a task by ID.
 
         Args:
@@ -151,14 +150,14 @@ class FileSystemStorage(StorageBackend):
             # First check direct path for tests
             task_path = self.tasks_dir / f"{task_id}.json"
             if task_path.exists():
-                with open(task_path, "r") as tf:
+                with open(task_path) as tf:
                     task_data = json.load(tf)
                 task = TaskRun.model_validate(task_data)
 
                 # Load metrics if available
                 metrics_path = self.metrics_dir / f"{task_id}.json"
                 if metrics_path.exists():
-                    with open(metrics_path, "r") as mf:
+                    with open(metrics_path) as mf:
                         metrics_data = json.load(mf)
                     task.metrics = TaskMetrics.model_validate(metrics_data)
 
@@ -167,20 +166,20 @@ class FileSystemStorage(StorageBackend):
             # Then check index for run_id
             index_path = self._get_index_file()
             if index_path.exists():
-                with open(index_path, "r") as f:
+                with open(index_path) as f:
                     index = json.load(f)
                     if task_id in index.get("tasks", {}):
                         run_id = index["tasks"][task_id]["run_id"]
                         run_task_path = self.tasks_dir / run_id / f"{task_id}.json"
                         if run_task_path.exists():
-                            with open(run_task_path, "r") as tf:
+                            with open(run_task_path) as tf:
                                 task_data = json.load(tf)
                             task = TaskRun.model_validate(task_data)
 
                             # Load metrics if available
                             metrics_path = self.metrics_dir / f"{task_id}.json"
                             if metrics_path.exists():
-                                with open(metrics_path, "r") as mf:
+                                with open(metrics_path) as mf:
                                     metrics_data = json.load(mf)
                                 task.metrics = TaskMetrics.model_validate(metrics_data)
 
@@ -193,7 +192,7 @@ class FileSystemStorage(StorageBackend):
                 raise
             raise KailashStorageError(f"Failed to get task: {e}") from e
 
-    def load_task(self, task_id: str) -> Optional[TaskRun]:
+    def load_task(self, task_id: str) -> TaskRun | None:
         """Load a task by ID."""
         # Search all run directories
         for run_dir in self.tasks_dir.iterdir():
@@ -202,7 +201,7 @@ class FileSystemStorage(StorageBackend):
 
             task_path = run_dir / f"{task_id}.json"
             if task_path.exists():
-                with open(task_path, "r") as f:
+                with open(task_path) as f:
                     data = json.load(f)
                 return TaskRun.model_validate(data)
 
@@ -211,9 +210,9 @@ class FileSystemStorage(StorageBackend):
     def list_tasks(
         self,
         run_id: str,
-        node_id: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-    ) -> List[TaskRun]:
+        node_id: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> list[TaskRun]:
         """List tasks for a run."""
         tasks = []
         run_tasks_dir = self.tasks_dir / run_id
@@ -223,7 +222,7 @@ class FileSystemStorage(StorageBackend):
 
         for task_file in run_tasks_dir.glob("*.json"):
             try:
-                with open(task_file, "r") as f:
+                with open(task_file) as f:
                     data = json.load(f)
 
                 task = TaskRun.model_validate(data)
@@ -246,9 +245,8 @@ class FileSystemStorage(StorageBackend):
                 # Ensure datetime is timezone-aware
                 if task.started_at.tzinfo is None:
                     # Assume UTC for naive datetimes
-                    from datetime import timezone
 
-                    return task.started_at.replace(tzinfo=timezone.utc)
+                    return task.started_at.replace(tzinfo=UTC)
                 return task.started_at
             # Use task_id as fallback for tasks without started_at
             return task.task_id
@@ -290,7 +288,7 @@ class FileSystemStorage(StorageBackend):
 
     def import_run(self, input_path: str) -> str:
         """Import a run and its tasks."""
-        with open(input_path, "r") as f:
+        with open(input_path) as f:
             import_data = json.load(f)
 
         # Import run
@@ -383,7 +381,7 @@ class FileSystemStorage(StorageBackend):
             # Update index
             index_path = self._get_index_file()
             if index_path.exists():
-                with open(index_path, "r") as f:
+                with open(index_path) as f:
                     index = json.load(f)
 
                 if task_id in index.get("tasks", {}):
@@ -396,7 +394,7 @@ class FileSystemStorage(StorageBackend):
                 raise
             raise KailashStorageError(f"Failed to delete task: {e}") from e
 
-    def get_all_tasks(self) -> List[TaskRun]:
+    def get_all_tasks(self) -> list[TaskRun]:
         """Get all tasks.
 
         Returns:
@@ -411,7 +409,7 @@ class FileSystemStorage(StorageBackend):
             # First load tasks in the main tasks directory (for tests)
             for task_file in self.tasks_dir.glob("*.json"):
                 if task_file.is_file():
-                    with open(task_file, "r") as f:
+                    with open(task_file) as f:
                         task_data = json.load(f)
 
                     task = TaskRun.model_validate(task_data)
@@ -419,7 +417,7 @@ class FileSystemStorage(StorageBackend):
                     # Load metrics if available
                     metrics_path = self.metrics_dir / f"{task.task_id}.json"
                     if metrics_path.exists():
-                        with open(metrics_path, "r") as f:
+                        with open(metrics_path) as f:
                             metrics_data = json.load(f)
                         task.metrics = TaskMetrics.model_validate(metrics_data)
 
@@ -432,7 +430,7 @@ class FileSystemStorage(StorageBackend):
 
                 # Load all tasks in the run directory
                 for task_file in run_dir.glob("*.json"):
-                    with open(task_file, "r") as f:
+                    with open(task_file) as f:
                         task_data = json.load(f)
 
                     task = TaskRun.model_validate(task_data)
@@ -440,7 +438,7 @@ class FileSystemStorage(StorageBackend):
                     # Load metrics if available
                     metrics_path = self.metrics_dir / f"{task.task_id}.json"
                     if metrics_path.exists():
-                        with open(metrics_path, "r") as f:
+                        with open(metrics_path) as f:
                             metrics_data = json.load(f)
                         task.metrics = TaskMetrics.model_validate(metrics_data)
 
@@ -450,7 +448,7 @@ class FileSystemStorage(StorageBackend):
         except Exception as e:
             raise KailashStorageError(f"Failed to get all tasks: {e}") from e
 
-    def get_tasks_by_run(self, run_id: str) -> List[TaskRun]:
+    def get_tasks_by_run(self, run_id: str) -> list[TaskRun]:
         """Get all tasks for a specific run.
 
         Args:
@@ -466,11 +464,11 @@ class FileSystemStorage(StorageBackend):
 
     def query_tasks(
         self,
-        node_id: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-        started_after: Optional[datetime] = None,
-        completed_before: Optional[datetime] = None,
-    ) -> List[TaskRun]:
+        node_id: str | None = None,
+        status: TaskStatus | None = None,
+        started_after: datetime | None = None,
+        completed_before: datetime | None = None,
+    ) -> list[TaskRun]:
         """Query tasks with filters.
 
         Args:
@@ -536,7 +534,7 @@ class FileSystemStorage(StorageBackend):
             # Load existing index
             if index_path.exists():
                 try:
-                    with open(index_path, "r") as f:
+                    with open(index_path) as f:
                         index = json.load(f)
                 except json.JSONDecodeError:
                     # Handle case where the file is empty or invalid

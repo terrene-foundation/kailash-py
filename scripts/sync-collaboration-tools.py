@@ -17,7 +17,7 @@ import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -36,7 +36,7 @@ class CollaborationSync:
         self.completed_dir = self.todo_dir / "completed"
         self.team_profiles = self._load_team_profiles()
 
-    def _load_team_profiles(self) -> Dict[str, Dict]:
+    def _load_team_profiles(self) -> dict[str, dict]:
         """Load team profiles from file."""
         profiles_path = Path(
             "# contrib (removed)/operations/claude-code-workflows/team-profiles.md"
@@ -49,7 +49,7 @@ class CollaborationSync:
         profiles = {}
         current_dev = None
 
-        with open(profiles_path, "r") as f:
+        with open(profiles_path) as f:
             for line in f:
                 if line.startswith("## "):
                     # Extract developer ID
@@ -71,7 +71,7 @@ class CollaborationSync:
 
         return profiles
 
-    def parse_natural_language_response(self, response: str) -> Dict[str, Any]:
+    def parse_natural_language_response(self, response: str) -> dict[str, Any]:
         """Parse Claude Code natural language response into structured data."""
         parsed = {"tasks": [], "assignments": {}, "workload": {}, "actions": []}
 
@@ -149,14 +149,14 @@ class CollaborationSync:
 
         logger.info("Synchronization complete!")
 
-    def parse_session_goals(self) -> List[Dict]:
+    def parse_session_goals(self) -> list[dict]:
         """Parse active TODO files to extract session goals."""
         goals = []
 
         # Parse master TODO
         master_file = self.todo_dir / "000-master.md"
         if master_file.exists():
-            with open(master_file, "r") as f:
+            with open(master_file) as f:
                 content = f.read()
 
             # Extract current session number
@@ -182,7 +182,7 @@ class CollaborationSync:
         # Parse area-specific TODOs
         for todo_file in self.active_dir.glob("*.md"):
             area = todo_file.stem
-            with open(todo_file, "r") as f:
+            with open(todo_file) as f:
                 content = f.read()
 
             # Extract TODOs
@@ -201,7 +201,7 @@ class CollaborationSync:
         logger.info(f"Found {len(goals)} session goals")
         return goals
 
-    def sync_goals_to_stories(self, goals: List[Dict]):
+    def sync_goals_to_stories(self, goals: list[dict]):
         """Ensure GitHub Project stories exist for session goals."""
         # Get existing project items
         existing_stories = self.get_project_stories()
@@ -218,7 +218,7 @@ class CollaborationSync:
                 logger.info(f"Creating story: {story_title}")
                 self.create_project_story(story_title, goal)
 
-    def get_project_stories(self) -> List[Dict]:
+    def get_project_stories(self) -> list[dict]:
         """Fetch all stories from GitHub Project."""
         cmd = [
             "gh",
@@ -245,7 +245,7 @@ class CollaborationSync:
             logger.error(f"Failed to fetch project items: {e}")
             return []
 
-    def create_project_story(self, title: str, goal: Dict):
+    def create_project_story(self, title: str, goal: dict):
         """Create a new story in GitHub Project."""
         # First create as draft issue
         body = f"""
@@ -309,13 +309,13 @@ class CollaborationSync:
         if completed_stories:
             self.update_master_todo(completed_stories)
 
-    def update_master_todo(self, completed_stories: List[Dict]):
+    def update_master_todo(self, completed_stories: list[dict]):
         """Update master TODO with completed items."""
         master_file = self.todo_dir / "000-master.md"
         if not master_file.exists():
             return
 
-        with open(master_file, "r") as f:
+        with open(master_file) as f:
             content = f.read()
 
         # Mark completed items
@@ -405,7 +405,7 @@ class CollaborationSync:
             # Generate execution report
             self._generate_execution_report(parsed)
 
-    def _create_issue_from_task(self, task: Dict, developer: str, skill_match: int):
+    def _create_issue_from_task(self, task: dict, developer: str, skill_match: int):
         """Create GitHub issue from task details."""
         session = self._get_current_session()
         title = f"[Session {session}] {task['description']}"
@@ -459,19 +459,19 @@ class CollaborationSync:
         """Get current session number from master TODO."""
         master_file = self.todo_dir / "000-master.md"
         if master_file.exists():
-            with open(master_file, "r") as f:
+            with open(master_file) as f:
                 content = f.read()
             match = re.search(r"Session (\d+)", content)
             if match:
                 return match.group(1)
         return "Unknown"
 
-    def _update_todos_from_plan(self, parsed: Dict):
+    def _update_todos_from_plan(self, parsed: dict):
         """Update TODO files based on executed plan."""
         # Update master TODO with new tasks
         master_file = self.todo_dir / "000-master.md"
         if master_file.exists():
-            with open(master_file, "r") as f:
+            with open(master_file) as f:
                 content = f.read()
 
             # Add new tasks to active section
@@ -510,7 +510,7 @@ class CollaborationSync:
 
                     logger.info(f"Updated master TODO with {len(new_tasks)} new tasks")
 
-    def _generate_execution_report(self, parsed: Dict):
+    def _generate_execution_report(self, parsed: dict):
         """Generate report of plan execution."""
         report = []
         report.append("# Claude Code Plan Execution Report")
@@ -585,7 +585,7 @@ def main():
 
         # Check if it's a file path
         if Path(response).exists():
-            with open(response, "r") as f:
+            with open(response) as f:
                 response = f.read()
 
         if args.parse_only:

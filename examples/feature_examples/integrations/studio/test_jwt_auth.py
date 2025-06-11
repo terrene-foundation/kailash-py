@@ -21,7 +21,7 @@ Usage:
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -34,12 +34,12 @@ class StudioAPIClient:
 
     def __init__(self, base_url: str = BASE_URL):
         self.base_url = base_url
-        self.access_token: Optional[str] = None
-        self.refresh_token: Optional[str] = None
-        self.tenant_id: Optional[str] = None
-        self.user_email: Optional[str] = None
+        self.access_token: str | None = None
+        self.refresh_token: str | None = None
+        self.tenant_id: str | None = None
+        self.user_email: str | None = None
 
-    def register(self, email: str, username: str, password: str) -> Dict[str, Any]:
+    def register(self, email: str, username: str, password: str) -> dict[str, Any]:
         """Register a new user"""
         response = requests.post(
             f"{self.base_url}/api/auth/register",
@@ -53,7 +53,7 @@ class StudioAPIClient:
 
         return data
 
-    def login(self, email: str, password: str) -> Dict[str, Any]:
+    def login(self, email: str, password: str) -> dict[str, Any]:
         """Login with existing credentials"""
         response = requests.post(
             f"{self.base_url}/api/auth/login",
@@ -68,7 +68,7 @@ class StudioAPIClient:
 
         return data
 
-    def refresh_access_token(self) -> Dict[str, Any]:
+    def refresh_access_token(self) -> dict[str, Any]:
         """Refresh the access token using refresh token"""
         response = requests.post(
             f"{self.base_url}/api/auth/refresh",
@@ -82,7 +82,7 @@ class StudioAPIClient:
 
         return data
 
-    def get_current_user(self) -> Dict[str, Any]:
+    def get_current_user(self) -> dict[str, Any]:
         """Get current user information"""
         response = requests.get(
             f"{self.base_url}/api/auth/me", headers=self._auth_headers()
@@ -95,8 +95,8 @@ class StudioAPIClient:
         return data
 
     def create_workflow(
-        self, name: str, description: str, definition: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, name: str, description: str, definition: dict[str, Any]
+    ) -> dict[str, Any]:
         """Create a new workflow"""
         response = requests.post(
             f"{self.base_url}/api/workflows",
@@ -106,7 +106,7 @@ class StudioAPIClient:
         response.raise_for_status()
         return response.json()
 
-    def list_workflows(self) -> list[Dict[str, Any]]:
+    def list_workflows(self) -> list[dict[str, Any]]:
         """List workflows for the current tenant"""
         response = requests.get(
             f"{self.base_url}/api/workflows", headers=self._auth_headers()
@@ -115,8 +115,8 @@ class StudioAPIClient:
         return response.json()
 
     def execute_workflow(
-        self, workflow_id: str, parameters: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        self, workflow_id: str, parameters: dict[str, Any] = None
+    ) -> dict[str, Any]:
         """Execute a workflow"""
         response = requests.post(
             f"{self.base_url}/api/workflows/{workflow_id}/execute",
@@ -126,7 +126,7 @@ class StudioAPIClient:
         response.raise_for_status()
         return response.json()
 
-    def get_execution_status(self, execution_id: str) -> Dict[str, Any]:
+    def get_execution_status(self, execution_id: str) -> dict[str, Any]:
         """Get execution status"""
         response = requests.get(
             f"{self.base_url}/api/executions/{execution_id}",
@@ -135,7 +135,7 @@ class StudioAPIClient:
         response.raise_for_status()
         return response.json()
 
-    def create_api_key(self, name: str, scopes: list[str] = None) -> Dict[str, Any]:
+    def create_api_key(self, name: str, scopes: list[str] = None) -> dict[str, Any]:
         """Create an API key"""
         response = requests.post(
             f"{self.base_url}/api/apikeys",
@@ -148,7 +148,7 @@ class StudioAPIClient:
         response.raise_for_status()
         return response.json()
 
-    def list_api_keys(self) -> list[Dict[str, Any]]:
+    def list_api_keys(self) -> list[dict[str, Any]]:
         """List API keys"""
         response = requests.get(
             f"{self.base_url}/api/apikeys", headers=self._auth_headers()
@@ -156,7 +156,7 @@ class StudioAPIClient:
         response.raise_for_status()
         return response.json()
 
-    def create_custom_node(self, node_config: Dict[str, Any]) -> Dict[str, Any]:
+    def create_custom_node(self, node_config: dict[str, Any]) -> dict[str, Any]:
         """Create a custom node"""
         response = requests.post(
             f"{self.base_url}/api/custom-nodes",
@@ -166,7 +166,7 @@ class StudioAPIClient:
         response.raise_for_status()
         return response.json()
 
-    def _auth_headers(self) -> Dict[str, str]:
+    def _auth_headers(self) -> dict[str, str]:
         """Get authorization headers"""
         return {
             "Authorization": f"Bearer {self.access_token}",

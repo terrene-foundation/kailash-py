@@ -12,7 +12,7 @@ Covers:
 import json
 import os
 import tempfile
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
@@ -25,7 +25,7 @@ from kailash.runtime.local import LocalRuntime
 class MockDataTransformerNode(CycleAwareNode):
     """Mock data transformer for testing cycles."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "transformation_type": NodeParameter(
@@ -36,7 +36,7 @@ class MockDataTransformerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         data = kwargs.get("data", [])
         transformation_type = kwargs.get("transformation_type", "clean")
         quality_threshold = kwargs.get("quality_threshold", 0.8)
@@ -134,7 +134,7 @@ class MockDataTransformerNode(CycleAwareNode):
 class MockEmbeddingGeneratorNode(CycleAwareNode):
     """Mock embedding generator for testing cycles."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "texts": NodeParameter(name="texts", type=list, required=False, default=[]),
             "model_name": NodeParameter(
@@ -148,7 +148,7 @@ class MockEmbeddingGeneratorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         texts = kwargs.get("texts", [])
         model_name = kwargs.get("model_name", "mock-embedding-model")
         refinement_iterations = kwargs.get("refinement_iterations", 3)
@@ -233,7 +233,7 @@ class TestDataTransformerCycles:
         workflow = Workflow("data-cleaning-cycle", "Data Cleaning Cycle")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(name="data", type=list, required=False),
                     "transformation_type": NodeParameter(
@@ -244,7 +244,7 @@ class TestDataTransformerCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "data": kwargs.get("data", []),
                     "transformation_type": kwargs.get("transformation_type", "clean"),
@@ -309,7 +309,7 @@ class TestDataTransformerCycles:
         workflow = Workflow("multi-stage-transform", "Multi Stage Transform")
 
         class MultiStageTransformerNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -319,7 +319,7 @@ class TestDataTransformerCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 data = kwargs.get("data", [])
                 kwargs.get("stage", "clean")
                 iteration = self.get_iteration(context)
@@ -413,7 +413,7 @@ class TestDataTransformerCycles:
         )
 
         class QualityConvergenceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "dataset": NodeParameter(
                         name="dataset", type=list, required=False, default=[]
@@ -423,7 +423,7 @@ class TestDataTransformerCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 dataset = kwargs.get("dataset", [])
                 target_quality = kwargs.get("target_quality", 0.9)
                 iteration = self.get_iteration(context)
@@ -492,7 +492,7 @@ class TestDataTransformerCycles:
                 }
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "dataset": NodeParameter(name="dataset", type=list, required=False),
                     "target_quality": NodeParameter(
@@ -500,7 +500,7 @@ class TestDataTransformerCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "dataset": kwargs.get("dataset", []),
                     "target_quality": kwargs.get("target_quality", 0.85),
@@ -568,7 +568,7 @@ class TestEmbeddingGeneratorCycles:
         workflow = Workflow("embedding-refinement-cycle", "Embedding Refinement Cycle")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "texts": NodeParameter(name="texts", type=list, required=False),
                     "model_name": NodeParameter(
@@ -579,7 +579,7 @@ class TestEmbeddingGeneratorCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "texts": kwargs.get("texts", []),
                     "model_name": kwargs.get("model_name", "text-embedding-ada-002"),
@@ -648,7 +648,7 @@ class TestEmbeddingGeneratorCycles:
         workflow = Workflow("rag-embedding-cycle", "RAG Embedding Cycle")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "query": NodeParameter(name="query", type=str, required=False),
                     "documents": NodeParameter(
@@ -657,7 +657,7 @@ class TestEmbeddingGeneratorCycles:
                     "top_k": NodeParameter(name="top_k", type=int, required=False),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "query": kwargs.get("query", ""),
                     "documents": kwargs.get("documents", []),
@@ -665,7 +665,7 @@ class TestEmbeddingGeneratorCycles:
                 }
 
         class RAGEmbeddingNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "query": NodeParameter(
                         name="query", type=str, required=False, default=""
@@ -678,7 +678,7 @@ class TestEmbeddingGeneratorCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 query = kwargs.get("query", "")
                 documents = kwargs.get("documents", [])
                 top_k = kwargs.get("top_k", 3)
@@ -816,7 +816,7 @@ class TestDataIOCycles:
             workflow = Workflow("csv-processing-cycle", "CSV Processing Cycle")
 
             class CSVProcessorNode(CycleAwareNode):
-                def get_parameters(self) -> Dict[str, NodeParameter]:
+                def get_parameters(self) -> dict[str, NodeParameter]:
                     return {
                         "data": NodeParameter(
                             name="data", type=list, required=False, default=[]
@@ -826,7 +826,7 @@ class TestDataIOCycles:
                         ),
                     }
 
-                def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+                def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                     data = kwargs.get("data", [])
                     batch_size = kwargs.get("batch_size", 2)
                     iteration = self.get_iteration(context)
@@ -883,14 +883,14 @@ class TestDataIOCycles:
             # Initial flow
             # Add a data source node for batch_size parameter
             class DataSourceNode(CycleAwareNode):
-                def get_parameters(self) -> Dict[str, NodeParameter]:
+                def get_parameters(self) -> dict[str, NodeParameter]:
                     return {
                         "batch_size": NodeParameter(
                             name="batch_size", type=int, required=False
                         )
                     }
 
-                def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+                def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                     return {"batch_size": kwargs.get("batch_size", 2)}
 
             workflow.add_node("data_source", DataSourceNode())
@@ -944,7 +944,7 @@ class TestDataIOCycles:
             workflow = Workflow("json-incremental-cycle", "JSON Incremental Cycle")
 
             class JSONIncrementalProcessor(CycleAwareNode):
-                def get_parameters(self) -> Dict[str, NodeParameter]:
+                def get_parameters(self) -> dict[str, NodeParameter]:
                     return {
                         "json_data": NodeParameter(
                             name="json_data", type=dict, required=False, default={}
@@ -957,7 +957,7 @@ class TestDataIOCycles:
                         ),
                     }
 
-                def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+                def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                     json_data = kwargs.get("json_data", {})
                     items_per_iteration = kwargs.get("items_per_iteration", 2)
                     iteration = self.get_iteration(context)
@@ -1005,14 +1005,14 @@ class TestDataIOCycles:
 
             # Add a data source node for items_per_iteration parameter
             class DataSourceNode(CycleAwareNode):
-                def get_parameters(self) -> Dict[str, NodeParameter]:
+                def get_parameters(self) -> dict[str, NodeParameter]:
                     return {
                         "items_per_iteration": NodeParameter(
                             name="items_per_iteration", type=int, required=False
                         )
                     }
 
-                def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+                def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                     return {"items_per_iteration": kwargs.get("items_per_iteration", 2)}
 
             workflow.add_node("data_source", DataSourceNode())
@@ -1063,7 +1063,7 @@ class TestDataNodePerformance:
         workflow = Workflow("large-dataset-cycle", "Large Dataset Cycle")
 
         class LargeDataProcessorNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "dataset": NodeParameter(
                         name="dataset", type=list, required=False, default=[]
@@ -1076,7 +1076,7 @@ class TestDataNodePerformance:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 dataset = kwargs.get("dataset", [])
                 chunk_size = kwargs.get("chunk_size", 1000)
                 iteration = self.get_iteration(context)
@@ -1121,7 +1121,7 @@ class TestDataNodePerformance:
 
         # Add a data source node for parameters
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "dataset": NodeParameter(name="dataset", type=list, required=False),
                     "chunk_size": NodeParameter(
@@ -1129,7 +1129,7 @@ class TestDataNodePerformance:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "dataset": kwargs.get("dataset", []),
                     "chunk_size": kwargs.get("chunk_size", 1000),

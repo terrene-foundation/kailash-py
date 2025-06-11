@@ -99,8 +99,8 @@ See Also:
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 import networkx as nx
 
@@ -127,15 +127,15 @@ class WorkflowState:
             run_id: Unique execution run ID
         """
         self.run_id = run_id
-        self.node_outputs: Dict[str, Any] = {}
-        self.execution_order: List[str] = []
-        self.metadata: Dict[str, Any] = {}
+        self.node_outputs: dict[str, Any] = {}
+        self.execution_order: list[str] = []
+        self.metadata: dict[str, Any] = {}
 
 
 class CyclicWorkflowExecutor:
     """Execution engine supporting cyclic workflows with fixed parameter propagation."""
 
-    def __init__(self, safety_manager: Optional[CycleSafetyManager] = None):
+    def __init__(self, safety_manager: CycleSafetyManager | None = None):
         """Initialize cyclic workflow executor.
 
         Args:
@@ -148,10 +148,10 @@ class CyclicWorkflowExecutor:
     def execute(
         self,
         workflow: Workflow,
-        parameters: Optional[Dict[str, Any]] = None,
-        task_manager: Optional[TaskManager] = None,
-        run_id: Optional[str] = None,
-    ) -> Tuple[Dict[str, Any], str]:
+        parameters: dict[str, Any] | None = None,
+        task_manager: TaskManager | None = None,
+        run_id: str | None = None,
+    ) -> tuple[dict[str, Any], str]:
         """Execute workflow with cycle support.
 
         Args:
@@ -223,10 +223,10 @@ class CyclicWorkflowExecutor:
     def _execute_with_cycles(
         self,
         workflow: Workflow,
-        parameters: Optional[Dict[str, Any]],
+        parameters: dict[str, Any] | None,
         run_id: str,
-        task_manager: Optional[TaskManager] = None,
-    ) -> Dict[str, Any]:
+        task_manager: TaskManager | None = None,
+    ) -> dict[str, Any]:
         """Execute workflow with cycle handling.
 
         Args:
@@ -264,8 +264,8 @@ class CyclicWorkflowExecutor:
     def _create_execution_plan(
         self,
         workflow: Workflow,
-        dag_edges: List[Tuple],
-        cycle_groups: Dict[str, List[Tuple]],
+        dag_edges: list[tuple],
+        cycle_groups: dict[str, list[tuple]],
     ) -> "ExecutionPlan":
         """Create execution plan handling cycles.
 
@@ -329,8 +329,8 @@ class CyclicWorkflowExecutor:
         workflow: Workflow,
         plan: "ExecutionPlan",
         state: WorkflowState,
-        task_manager: Optional[TaskManager] = None,
-    ) -> Dict[str, Any]:
+        task_manager: TaskManager | None = None,
+    ) -> dict[str, Any]:
         """Execute the workflow plan.
 
         Args:
@@ -377,8 +377,8 @@ class CyclicWorkflowExecutor:
         workflow: Workflow,
         cycle_group: "CycleGroup",
         state: WorkflowState,
-        task_manager: Optional[TaskManager] = None,
-    ) -> Dict[str, Any]:
+        task_manager: TaskManager | None = None,
+    ) -> dict[str, Any]:
         """Execute a cycle group with proper parameter propagation.
 
         Args:
@@ -432,7 +432,7 @@ class CyclicWorkflowExecutor:
                         run_id=state.run_id,
                         node_id=f"cycle_group_{cycle_id}",
                         node_type="CycleGroup",
-                        started_at=datetime.now(timezone.utc),
+                        started_at=datetime.now(UTC),
                         metadata={
                             "cycle_id": cycle_id,
                             "max_iterations": cycle_config.get("max_iterations"),
@@ -463,7 +463,7 @@ class CyclicWorkflowExecutor:
                             run_id=state.run_id,
                             node_id=f"cycle_{cycle_id}_iteration_{loop_count}",
                             node_type="CycleIteration",
-                            started_at=datetime.now(timezone.utc),
+                            started_at=datetime.now(UTC),
                             metadata={
                                 "cycle_id": cycle_id,
                                 "iteration": loop_count,
@@ -552,7 +552,7 @@ class CyclicWorkflowExecutor:
                         task_manager.update_task_status(
                             iteration_task_id,
                             TaskStatus.COMPLETED,
-                            ended_at=datetime.now(timezone.utc),
+                            ended_at=datetime.now(UTC),
                             result=iteration_results,
                             metadata={
                                 "converged": (
@@ -579,7 +579,7 @@ class CyclicWorkflowExecutor:
                     task_manager.update_task_status(
                         cycle_task_id,
                         TaskStatus.COMPLETED,
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                         result=results,
                         metadata={
                             "total_iterations": loop_count,
@@ -603,11 +603,11 @@ class CyclicWorkflowExecutor:
         workflow: Workflow,
         node_id: str,
         state: WorkflowState,
-        cycle_state: Optional[CycleState] = None,
-        cycle_edges: Optional[List[Tuple]] = None,
-        previous_iteration_results: Optional[Dict[str, Any]] = None,
-        task_manager: Optional[TaskManager] = None,
-        iteration: Optional[int] = None,
+        cycle_state: CycleState | None = None,
+        cycle_edges: list[tuple] | None = None,
+        previous_iteration_results: dict[str, Any] | None = None,
+        task_manager: TaskManager | None = None,
+        iteration: int | None = None,
     ) -> Any:
         """Execute a single node with proper parameter handling for cycles.
 
@@ -757,7 +757,7 @@ class CyclicWorkflowExecutor:
                     run_id=state.run_id,
                     node_id=task_node_id,
                     node_type=node.__class__.__name__,
-                    started_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
                     metadata=task_metadata,
                 )
                 if task:
@@ -794,7 +794,7 @@ class CyclicWorkflowExecutor:
                         task.task_id,
                         TaskStatus.COMPLETED,
                         result=result,
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                         metadata={"execution_time": performance_metrics.duration},
                     )
 
@@ -811,7 +811,7 @@ class CyclicWorkflowExecutor:
                         task.task_id,
                         TaskStatus.FAILED,
                         error=str(e),
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                     )
                 except Exception as update_error:
                     logger.warning(
@@ -831,16 +831,16 @@ class ExecutionPlan:
 
     def __init__(self):
         """Initialize execution plan."""
-        self.stages: List["ExecutionStage"] = []
-        self.cycle_groups: Dict[str, "CycleGroup"] = {}
+        self.stages: list["ExecutionStage"] = []
+        self.cycle_groups: dict[str, "CycleGroup"] = {}
 
     def add_cycle_group(
         self,
         cycle_id: str,
-        nodes: Set[str],
-        entry_nodes: Set[str],
-        exit_nodes: Set[str],
-        edges: List[Tuple],
+        nodes: set[str],
+        entry_nodes: set[str],
+        exit_nodes: set[str],
+        edges: list[tuple],
     ) -> None:
         """Add a cycle group to the plan.
 
@@ -859,7 +859,7 @@ class ExecutionPlan:
             edges=edges,
         )
 
-    def build_stages(self, topo_order: List[str], dag_graph: nx.DiGraph) -> None:
+    def build_stages(self, topo_order: list[str], dag_graph: nx.DiGraph) -> None:
         """Build execution stages.
 
         Args:
@@ -914,7 +914,7 @@ class ExecutionStage:
     def __init__(
         self,
         is_cycle: bool,
-        nodes: Optional[List[str]] = None,
+        nodes: list[str] | None = None,
         cycle_group: Optional["CycleGroup"] = None,
     ):
         """Initialize execution stage.
@@ -935,10 +935,10 @@ class CycleGroup:
     def __init__(
         self,
         cycle_id: str,
-        nodes: Set[str],
-        entry_nodes: Set[str],
-        exit_nodes: Set[str],
-        edges: List[Tuple],
+        nodes: set[str],
+        entry_nodes: set[str],
+        exit_nodes: set[str],
+        edges: list[tuple],
     ):
         """Initialize cycle group.
 
@@ -955,7 +955,7 @@ class CycleGroup:
         self.exit_nodes = exit_nodes
         self.edges = edges
 
-    def get_execution_order(self, full_graph: nx.DiGraph) -> List[str]:
+    def get_execution_order(self, full_graph: nx.DiGraph) -> list[str]:
         """Get execution order for nodes in cycle.
 
         Args:

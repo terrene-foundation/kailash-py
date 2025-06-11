@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import asyncio
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -21,7 +21,7 @@ from kailash.workflow import Workflow
 class SimpleAsyncNode(AsyncNode):
     """Simple async node for testing."""
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define parameters for the node."""
         from kailash.nodes.base import NodeParameter
 
@@ -35,12 +35,12 @@ class SimpleAsyncNode(AsyncNode):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous fallback implementation."""
         value = kwargs.get("value", 0)
         return {"output": value * 2}
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Async run implementation."""
         await asyncio.sleep(0.1)
         value = kwargs.get("value", 0)
@@ -190,12 +190,12 @@ async def test_parallel_execution_with_error_handling():
 
     # Create error node
     class ErrorNode(AsyncNode):
-        def get_parameters(self) -> Dict[str, Any]:
+        def get_parameters(self) -> dict[str, Any]:
             """Define parameters for the node."""
 
             return {}
 
-        def run(self, **kwargs) -> Dict[str, Any]:
+        def run(self, **kwargs) -> dict[str, Any]:
             """Synchronous fallback implementation."""
             raise ValueError("Simulated error in sync mode")
 

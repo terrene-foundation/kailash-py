@@ -17,7 +17,7 @@ The document processor workflow demonstrates how to:
 ### Key Features
 
 ✅ **Real File Processing** - No mocks, uses actual file system
-✅ **Multi-Format Support** - CSV, JSON, TXT files handled seamlessly  
+✅ **Multi-Format Support** - CSV, JSON, TXT files handled seamlessly
 ✅ **Comprehensive Analysis** - File metadata, content analysis, and statistics
 ✅ **Production Ready** - Error handling and proper data validation
 ✅ **Docker Compatible** - Works with containerized file systems
@@ -68,14 +68,14 @@ file_discovery = DirectoryReaderNode(
 ```python
 # CSV processing for structured data
 csv_processor = CSVReaderNode(
-    name="csv_processor", 
+    name="csv_processor",
     file_path=""  # Set at runtime
 )
 
 # JSON processing for configuration/metadata
 json_processor = JSONReaderNode(
     name="json_processor",
-    file_path=""  # Set at runtime  
+    file_path=""  # Set at runtime
 )
 
 # Text processing for content analysis
@@ -162,7 +162,7 @@ file_router = SwitchNode(
     name="file_router",
     condition_mapping={
         "csv_files": "file_extension == 'csv'",
-        "json_files": "file_extension == 'json'", 
+        "json_files": "file_extension == 'json'",
         "text_files": "file_extension == 'txt'"
     }
 )
@@ -204,7 +204,7 @@ enhancer = PythonCodeNode.from_function(
 
 ---
 
-**Next Steps**: 
+**Next Steps**:
 - Review `scripts/document_processor.py` for implementation details
 - Adapt the pattern for your specific file types and processing needs
 - See training examples in `# contrib (removed)/training/workflow-examples/file-processing-training/`

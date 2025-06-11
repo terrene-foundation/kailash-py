@@ -35,7 +35,7 @@ Requirements:
 """
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.ai import IterativeLLMAgentNode
@@ -853,7 +853,7 @@ result = final_report
     return workflow
 
 
-def create_sample_patient_data() -> Dict[str, Any]:
+def create_sample_patient_data() -> dict[str, Any]:
     """Create sample patient data for testing."""
     return {
         "patient_id": "MRN123456789",
