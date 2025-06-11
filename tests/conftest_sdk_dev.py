@@ -64,10 +64,24 @@ def start_sdk_dev_infrastructure():
 
 
 def pytest_configure(config):
-    """Configure pytest to start SDK infrastructure if needed."""
+    """Configure pytest to start SDK infrastructure if needed and register custom markers."""
+    # Start SDK infrastructure if needed
     if os.getenv("SDK_DEV_MODE") == "true":
         if not start_sdk_dev_infrastructure():
             pytest.exit("Failed to start SDK development infrastructure", 1)
+
+    # Register custom markers
+    config.addinivalue_line(
+        "markers",
+        "requires_infrastructure: mark test as requiring SDK development infrastructure",
+    )
+    config.addinivalue_line("markers", "requires_kafka: mark test as requiring Kafka")
+    config.addinivalue_line(
+        "markers", "requires_mongodb: mark test as requiring MongoDB"
+    )
+    config.addinivalue_line(
+        "markers", "requires_qdrant: mark test as requiring Qdrant vector database"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -108,19 +122,3 @@ def sdk_infrastructure():
         "mock_api": os.getenv("WEBHOOK_API"),
         "mcp_server": os.getenv("MCP_SERVER_URL"),
     }
-
-
-# Markers for infrastructure-dependent tests
-def pytest_configure(config):
-    """Register custom markers."""
-    config.addinivalue_line(
-        "markers",
-        "requires_infrastructure: mark test as requiring SDK development infrastructure",
-    )
-    config.addinivalue_line("markers", "requires_kafka: mark test as requiring Kafka")
-    config.addinivalue_line(
-        "markers", "requires_mongodb: mark test as requiring MongoDB"
-    )
-    config.addinivalue_line(
-        "markers", "requires_qdrant: mark test as requiring Qdrant vector database"
-    )

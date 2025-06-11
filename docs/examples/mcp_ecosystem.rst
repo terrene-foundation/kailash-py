@@ -138,3 +138,77 @@ See Also
 - :doc:`../api/gateway` - WorkflowAPIGateway documentation
 - :doc:`../api/workflow_api` - Workflow API wrapper
 - `MCP Protocol <https://modelcontextprotocol.io>`_ - Model Context Protocol
+
+Enhanced MCP Server (New in v0.3.1)
+-----------------------------------
+
+The Kailash SDK now includes an **Enhanced MCP Server** that provides powerful default
+capabilities for any workflow:
+
+Default Tools Available
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Every workflow automatically gets access to these tools via MCP:
+
+- **workflow_execute**: Execute any Kailash workflow by ID
+- **workflow_list**: List available workflows with descriptions
+- **workflow_info**: Get detailed information about a specific workflow
+- **node_info**: Get information about available nodes and their parameters
+- **task_status**: Check the status of running workflow executions
+- **result_retrieve**: Get the results of completed workflow executions
+
+Example Usage
+~~~~~~~~~~~~~
+
+Start the enhanced MCP server:
+
+.. code-block:: python
+
+    from kailash.mcp.server_enhanced import EnhancedMCPServer
+
+    # Create server with your workflows
+    server = EnhancedMCPServer(
+        name="finance-workflows",
+        workflow_registry={
+            "credit-risk": credit_risk_workflow,
+            "portfolio-opt": portfolio_optimization_workflow,
+            "fraud-detect": fraud_detection_workflow
+        }
+    )
+
+    # Start serving
+    server.serve()
+
+Now any MCP client can discover and execute your workflows:
+
+.. code-block:: python
+
+    # From any MCP client
+    tools = await client.list_tools()
+    # Returns: workflow_execute, workflow_list, etc.
+
+    # Execute a workflow
+    result = await client.call_tool(
+        "workflow_execute",
+        workflow_id="credit-risk",
+        parameters={"customer_file": "customers.csv"}
+    )
+
+Benefits
+~~~~~~~~
+
+1. **Zero Configuration**: Default tools work out of the box
+2. **Workflow Discovery**: Clients can discover available workflows dynamically
+3. **Async Execution**: Non-blocking workflow execution with status tracking
+4. **Result Management**: Automatic result storage and retrieval
+5. **Integration Ready**: Works with any MCP-compatible client (Claude, VS Code, etc.)
+
+Use Cases
+~~~~~~~~~
+
+- **AI Assistants**: Give Claude or other LLMs access to your workflows
+- **IDE Integration**: Execute workflows directly from VS Code
+- **ChatOps**: Run workflows from Slack or Discord
+- **API Gateway**: Expose workflows through a unified MCP interface
+
+See :doc:`../api/mcp_integration` for detailed API documentation.

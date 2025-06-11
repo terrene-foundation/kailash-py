@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-06-11
+
+### Added
+- **Complete Finance Workflow Library** - Production-ready financial workflows
+  - Credit Risk Assessment (simple and comprehensive with AI analysis)
+  - Portfolio Optimization (Modern Portfolio Theory with rebalancing)
+  - Trading Signals (Technical indicators with AI sentiment analysis)
+  - Fraud Detection (Real-time transaction monitoring)
+  - All workflows use PythonCodeNode.from_function() best practices
+
+### Improved
+- **PythonCodeNode Training Data** - Comprehensive anti-pattern documentation
+  - Portfolio optimization training patterns (risk calculation, rebalancing logic, Sharpe ratio)
+  - Trading signals training patterns (technical indicators, signal aggregation)
+  - Fraud detection training patterns (velocity checking, multi-timeframe analysis)
+  - Documented common mistakes to prevent recurring errors
+
+### Documentation
+- **Enhanced Developer Guides** - Session 064 workflow design improvements
+  - Workflow library completion guidelines
+  - File naming conventions (README.md for navigation, QUICK_REFERENCE.md for implementation)
+  - PythonCodeNode best practices documentation in CLAUDE.md
+  - Code formatting and testing procedures
+
+### Technical
+- **Code Quality Improvements** - Applied formatting and linting standards
+  - Black code formatting applied to all finance workflows
+  - isort import organization completed
+  - Ruff linting validation (77 minor issues noted, all workflows functional)
+  - Comprehensive testing of all 5 finance workflows
+
 ## [0.3.0] - 2025-06-10
 
 ### Added
@@ -110,7 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **DirectoryReaderNode** for dynamic file discovery
-  - Recursive directory scanning with pattern matching  
+  - Recursive directory scanning with pattern matching
   - MIME type detection and metadata extraction
   - Organized output by file type for typed processing
   - Performance optimizations for large directories

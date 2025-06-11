@@ -179,9 +179,9 @@ def process_batch(**kwargs):
     import time
 
     # Get batch information
-    start_index = start_index if "start_index" in locals() else 0
-    batch_size = batch_size if "batch_size" in locals() else 10
-    batch_number = batch_number if "batch_number" in locals() else 1
+    start_index = kwargs.get("start_index", 0)
+    batch_size = kwargs.get("batch_size", 10)
+    batch_number = kwargs.get("batch_number", 1)
 
     end_index = start_index + batch_size
 
