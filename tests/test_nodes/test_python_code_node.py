@@ -97,13 +97,14 @@ def test_python_code_node():
     func_node = PythonCodeNode.from_function(func=transform_data, name="transformer")
 
     data = [{"value": 1}, {"value": 2}, {"value": 3}]
-    # Use run method - when function returns dict, it's returned as-is
+    # Use run method - all outputs are now wrapped in "result" key
     result_dict = func_node.run(data=data)
     print(f"Transform result: {result_dict}")
-    # Function returns a dict, so it's not wrapped
-    assert result_dict["count"] == 3
-    assert result_dict["sum"] == 6
-    assert result_dict["doubled"] == [2, 4, 6]
+    # Function returns are now consistently wrapped in "result"
+    actual_result = result_dict["result"]
+    assert actual_result["count"] == 3
+    assert actual_result["sum"] == 6
+    assert actual_result["doubled"] == [2, 4, 6]
 
     # Test with a function that returns a non-dict value
     def compute_sum(values: list) -> int:
