@@ -1,0 +1,4 @@
+customer_id,name,email,status,total_purchases
+C001,Alice Johnson,alice@example.com,active,1200
+C002,Bob Smith,bob@example.com,inactive,800
+C003,Carol White,carol@example.com,active,500

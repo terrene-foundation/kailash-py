@@ -2,30 +2,75 @@
 
 This reference guide lists all available nodes in the Kailash SDK and their primary use cases. **Always prefer using these specialized nodes over PythonCodeNode when possible.**
 
+*Total: 80+ specialized nodes across 6 categories*
+
 ## Table of Contents
-- [Data Nodes](#data-nodes)
-- [Transform Nodes](#transform-nodes)
-- [AI/ML Nodes](#aiml-nodes)
-- [API Nodes](#api-nodes)
-- [Logic Nodes](#logic-nodes)
-- [Code Nodes](#code-nodes)
+- [AI/ML Nodes](#aiml-nodes) - 30+ nodes for LLM agents, embeddings, self-organizing agents
+- [Data Processing Nodes](#data-processing-nodes) - 20+ nodes for files, databases, streaming
+- [API Integration Nodes](#api-integration-nodes) - 10+ nodes for HTTP, REST, GraphQL
+- [Logic & Control Nodes](#logic--control-nodes) - 8+ nodes for routing, merging, loops
+- [Transform Nodes](#transform-nodes) - 8+ nodes for data transformation
+- [Code Execution Nodes](#code-execution-nodes) - 1 node for custom Python code
 - [When to Use PythonCodeNode](#when-to-use-pythoncodenode)
 
-## Data Nodes
+## AI/ML Nodes
+
+### LLM Agents
+- **LLMAgentNode**: General-purpose LLM agent with unified provider support
+  ```python
+  # Use instead of PythonCodeNode calling OpenAI/Anthropic APIs
+  node = LLMAgentNode(provider="openai", model="gpt-4")
+  ```
+- **IterativeLLMAgentNode**: LLM agent with iterative refinement capabilities
+- **ChatAgent**: Conversational agent with context management
+- **RetrievalAgent**: RAG-enabled agent for document retrieval
+- **FunctionCallingAgent**: Agent with function calling capabilities
+- **PlanningAgent**: Agent specialized for planning and orchestration
+
+### Agent Coordination & Communication
+- **A2AAgentNode**: Agent-to-agent communication node
+- **A2ACoordinatorNode**: Coordinates multiple A2A agents
+- **SharedMemoryPoolNode**: Shared memory for agent coordination
+
+### Self-Organizing Agents
+- **AgentPoolManagerNode**: Manages pools of agents dynamically
+- **ProblemAnalyzerNode**: Analyzes problems for optimal agent assignment
+- **SelfOrganizingAgentNode**: Self-organizing agent with adaptive behavior
+- **SolutionEvaluatorNode**: Evaluates solutions from multiple agents
+- **TeamFormationNode**: Forms teams of agents for complex tasks
+
+### Intelligent Orchestration
+- **OrchestrationManagerNode**: Manages complex multi-agent orchestrations
+- **QueryAnalysisNode**: Analyzes queries for intelligent routing
+- **ConvergenceDetectorNode**: Detects convergence in iterative processes
+- **IntelligentCacheNode**: Smart caching for LLM responses
+- **MCPAgentNode**: MCP-enabled agent with enhanced capabilities
+
+### Embeddings & ML Models
+- **EmbeddingGeneratorNode**: Generate text embeddings with caching
+  ```python
+  # Use instead of PythonCodeNode with OpenAI embeddings
+  node = EmbeddingGeneratorNode(provider="openai", model="text-embedding-ada-002")
+  ```
+- **TextClassifier**: Classify text into categories
+- **SentimentAnalyzer**: Analyze sentiment in text
+- **NamedEntityRecognizer**: Extract named entities from text
+- **TextSummarizer**: Summarize long text documents
+- **ModelPredictor**: General ML model predictions
+
+## Data Processing Nodes
 
 ### File Readers
-- **CSVReaderNode**: Read CSV files with configurable delimiters and headers
+- **CSVReaderNode**: Read CSV files with configurable options
   ```python
   # Use instead of PythonCodeNode with pd.read_csv()
   node = CSVReaderNode(file_path="data.csv", headers=True, delimiter=",")
   ```
-
 - **JSONReaderNode**: Read JSON files into Python objects
   ```python
   # Use instead of PythonCodeNode with json.load()
   node = JSONReaderNode(file_path="data.json")
   ```
-
 - **TextReaderNode**: Read plain text files
   ```python
   # Use instead of PythonCodeNode with open().read()
@@ -34,22 +79,8 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 
 ### File Writers
 - **CSVWriterNode**: Write data to CSV files
-  ```python
-  # Use instead of PythonCodeNode with df.to_csv()
-  node = CSVWriterNode(file_path="output.csv", headers=True)
-  ```
-
 - **JSONWriterNode**: Write data to JSON files
-  ```python
-  # Use instead of PythonCodeNode with json.dump()
-  node = JSONWriterNode(file_path="output.json", pretty=True)
-  ```
-
 - **TextWriterNode**: Write text to files
-  ```python
-  # Use instead of PythonCodeNode with open().write()
-  node = TextWriterNode(file_path="output.txt")
-  ```
 
 ### Database Operations
 - **SQLDatabaseNode**: Execute SQL queries and commands
@@ -62,8 +93,8 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
   ```
 
 ### SharePoint Integration
-- **SharePointGraphReader**: Read files from SharePoint
-- **SharePointGraphWriter**: Write files to SharePoint
+- **SharePointGraphReader**: Read files from SharePoint via Graph API
+- **SharePointGraphWriter**: Write files to SharePoint via Graph API
 
 ### Vector Database & Embeddings
 - **EmbeddingNode**: Generate embeddings from text
@@ -76,96 +107,20 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 - **WebSocketNode**: Handle WebSocket connections
 - **EventStreamNode**: Process event streams
 
-### Data Sources
+### Data Sources & Discovery
 - **DocumentSourceNode**: Load documents as workflow input
 - **QuerySourceNode**: Generate queries as workflow input
+- **DirectoryReaderNode**: Read directory contents and discover files
+- **FileDiscoveryNode**: Discover files matching patterns
+- **EventGeneratorNode**: Generate events for workflows
 
-### Retrieval
+### Data Retrieval
 - **RelevanceScorerNode**: Score document relevance for RAG pipelines
 
-## Transform Nodes
-
-### Data Processing
-- **FilterNode**: Filter data based on conditions
-  ```python
-  # Use instead of PythonCodeNode with df[df['column'] > value]
-  node = FilterNode(condition="age > 30")
-  ```
-
-- **Map**: Apply transformations to each item
-  ```python
-  # Use instead of PythonCodeNode with list comprehensions or df.apply()
-  node = Map(function=lambda x: x.upper())
-  ```
-
-- **Sort**: Sort data by specified criteria
-  ```python
-  # Use instead of PythonCodeNode with sorted() or df.sort_values()
-  node = Sort(key="timestamp", reverse=True)
-  ```
-
-- **DataTransformer**: General-purpose data transformation
-  ```python
-  # Use for complex transformations before resorting to PythonCodeNode
-  node = DataTransformer(operations=[...])
-  ```
-
-### Text Processing
-- **HierarchicalChunkerNode**: Split documents into hierarchical chunks
-- **ChunkTextExtractorNode**: Extract text from chunks
-- **QueryTextWrapperNode**: Wrap queries with context
-- **ContextFormatterNode**: Format context for LLM consumption
-
-## AI/ML Nodes
-
-### LLM Agents
-- **LLMAgentNode**: General-purpose LLM agent
-  ```python
-  # Use instead of PythonCodeNode calling OpenAI/Anthropic APIs
-  node = LLMAgentNode(
-      provider="openai",
-      model="gpt-4",
-      system_prompt="You are a helpful assistant"
-  )
-  ```
-
-- **IterativeLLMAgentNode**: LLM agent with iterative refinement
-- **ChatAgent**: Conversational agent
-- **RetrievalAgent**: RAG-enabled agent
-- **FunctionCallingAgent**: Agent with function calling capabilities
-- **PlanningAgent**: Agent for planning and reasoning
-
-### Agent Coordination
-- **A2AAgentNode**: Agent-to-agent communication
-- **A2ACoordinatorNode**: Coordinate multiple agents
-- **SharedMemoryPoolNode**: Shared memory for agent coordination
-
-### Self-Organizing Agents
-- **AgentPoolManagerNode**: Manage a pool of agents
-- **ProblemAnalyzerNode**: Analyze problems for agent assignment
-- **SelfOrganizingAgentNode**: Self-organizing agent capabilities
-- **SolutionEvaluatorNode**: Evaluate agent solutions
-- **TeamFormationNode**: Form agent teams dynamically
-
-### Intelligent Orchestration
-- **OrchestrationManagerNode**: Manage complex orchestrations
-- **QueryAnalysisNode**: Analyze queries for routing
-- **ConvergenceDetectorNode**: Detect convergence in iterative processes
-- **IntelligentCacheNode**: Smart caching for LLM responses
-- **MCPAgentNode**: MCP-enabled agent
-
-### Embeddings & ML Models
-- **EmbeddingGeneratorNode**: Generate text embeddings
-- **TextClassifier**: Classify text into categories
-- **SentimentAnalyzer**: Analyze sentiment
-- **NamedEntityRecognizer**: Extract named entities
-- **TextSummarizer**: Summarize text
-- **ModelPredictor**: General ML model predictions
-
-## API Nodes
+## API Integration Nodes
 
 ### HTTP Clients
-- **HTTPRequestNode**: Make HTTP requests
+- **HTTPRequestNode**: Make HTTP requests with full configuration
   ```python
   # Use instead of PythonCodeNode with requests library
   node = HTTPRequestNode(
@@ -174,11 +129,10 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
       headers={"Authorization": "Bearer token"}
   )
   ```
+- **AsyncHTTPRequestNode**: Asynchronous HTTP requests
 
-- **AsyncHTTPRequestNode**: Async HTTP requests
-
-### REST API
-- **RESTClientNode**: RESTful API client
+### REST API Clients
+- **RESTClientNode**: RESTful API client with built-in patterns
   ```python
   # Use instead of PythonCodeNode for REST APIs
   node = RESTClientNode(
@@ -187,23 +141,24 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
       method="POST"
   )
   ```
+- **AsyncRESTClientNode**: Asynchronous REST client
 
-- **AsyncRESTClientNode**: Async REST client
-
-### GraphQL
+### GraphQL Clients
 - **GraphQLClientNode**: GraphQL API client
-- **AsyncGraphQLClientNode**: Async GraphQL client
+- **AsyncGraphQLClientNode**: Asynchronous GraphQL client
 
 ### Authentication
-- **BasicAuthNode**: Basic authentication
-- **OAuth2Node**: OAuth2 authentication
-- **APIKeyNode**: API key authentication
+- **BasicAuthNode**: Basic authentication handling
+- **OAuth2Node**: OAuth 2.0 authentication flow
+- **APIKeyNode**: API key authentication management
 
-### Rate Limiting
-- **RateLimitedAPINode**: API client with rate limiting
+### Rate Limiting & Monitoring
+- **RateLimitedAPINode**: API client with built-in rate limiting
 - **AsyncRateLimitedAPINode**: Async rate-limited API client
+- **HealthCheckNode**: API health monitoring
+- **SecurityScannerNode**: Security scanning for APIs
 
-## Logic Nodes
+## Logic & Control Nodes
 
 ### Control Flow
 - **SwitchNode**: Conditional routing (if/else logic)
@@ -215,8 +170,7 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
       false_output="error_path"
   )
   ```
-
-- **AsyncSwitchNode**: Async conditional routing
+- **AsyncSwitchNode**: Asynchronous conditional routing
 
 ### Data Merging
 - **MergeNode**: Merge multiple data streams
@@ -224,18 +178,44 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
   # Use instead of PythonCodeNode combining multiple inputs
   node = MergeNode(merge_strategy="concat")
   ```
+- **AsyncMergeNode**: Asynchronous data merging
 
-- **AsyncMergeNode**: Async data merging
-
-### Loops & Cycles
-- **LoopNode**: Execute nodes in a loop
+### Loops & Convergence
+- **LoopNode**: Execute nodes in a loop with conditions
 - **ConvergenceCheckerNode**: Check for convergence conditions
-- **MultiCriteriaConvergenceNode**: Complex convergence criteria
+- **MultiCriteriaConvergenceNode**: Multi-criteria convergence detection
 
 ### Workflow Composition
 - **WorkflowNode**: Embed workflows within workflows
 
-## Code Nodes
+## Transform Nodes
+
+### Data Processing
+- **FilterNode**: Filter data based on conditions
+  ```python
+  # Use instead of PythonCodeNode with df[df['column'] > value]
+  node = FilterNode(condition="age > 30")
+  ```
+- **Filter**: Basic filter operation
+- **Map**: Apply transformations to each item
+  ```python
+  # Use instead of PythonCodeNode with list comprehensions or df.apply()
+  node = Map(function=lambda x: x.upper())
+  ```
+- **Sort**: Sort data by specified criteria
+  ```python
+  # Use instead of PythonCodeNode with sorted() or df.sort_values()
+  node = Sort(key="timestamp", reverse=True)
+  ```
+- **DataTransformer**: General-purpose data transformation
+
+### Text Processing
+- **HierarchicalChunkerNode**: Split documents into hierarchical chunks
+- **ChunkTextExtractorNode**: Extract text from document chunks
+- **QueryTextWrapperNode**: Wrap queries with additional context
+- **ContextFormatterNode**: Format context for LLM consumption
+
+## Code Execution Nodes
 
 ### Python Execution
 - **PythonCodeNode**: Execute arbitrary Python code
