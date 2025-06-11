@@ -1,8 +1,8 @@
 # Mistake #077: Complex Routing Anti-Pattern
 
-**Date**: 2025-06-11  
-**Session**: 064  
-**Severity**: High  
+**Date**: 2025-06-11
+**Session**: 064
+**Severity**: High
 **Status**: Active (Session 064 - Finance Workflows)
 
 ## Problem Description
@@ -64,10 +64,10 @@ def process_all_decisions(risk_assessments: list) -> dict:
         'declined': [],
         'review': []
     }
-    
+
     for assessment in risk_assessments:
         decision = assessment.get('decision', 'review')
-        
+
         if decision == 'approved':
             # Process approved application
             approval_letter = {
@@ -78,7 +78,7 @@ def process_all_decisions(risk_assessments: list) -> dict:
                 'letter_generated': datetime.now().isoformat()
             }
             results['approved'].append(approval_letter)
-            
+
         elif decision == 'declined':
             # Process declined application
             decline_letter = {
@@ -87,7 +87,7 @@ def process_all_decisions(risk_assessments: list) -> dict:
                 'reapply_date': (datetime.now() + timedelta(days=180)).isoformat()
             }
             results['declined'].append(decline_letter)
-            
+
         else:  # review
             # Queue for manual review
             review_item = {
@@ -97,7 +97,7 @@ def process_all_decisions(risk_assessments: list) -> dict:
                 'assigned_to': 'credit_review_team'
             }
             results['review'].append(review_item)
-    
+
     # Return comprehensive results
     return {
         'processed': results,
@@ -117,7 +117,7 @@ workflow.add_node("decision_processor", PythonCodeNode.from_function(
 ))
 
 # Simple linear connection
-workflow.connect("risk_scorer", "decision_processor", 
+workflow.connect("risk_scorer", "decision_processor",
                 mapping={"result": "risk_assessments"})
 ```
 
@@ -136,19 +136,19 @@ declined_only = [a for a in assessments if a['decision'] == 'declined']
 ```python
 def process_decisions(assessments: list) -> dict:
     """Process using dispatch pattern."""
-    
+
     # Define processors
     processors = {
         'approved': process_approval,
         'declined': process_decline,
         'review': process_review
     }
-    
+
     results = {}
     for decision_type, processor in processors.items():
         items = [a for a in assessments if a.get('decision') == decision_type]
         results[decision_type] = processor(items)
-    
+
     return {'result': results}
 ```
 
@@ -206,9 +206,9 @@ def test_linear_processing():
         {'customer_id': 'C002', 'decision': 'declined', 'risk_score': 0.2},
         {'customer_id': 'C003', 'decision': 'review', 'risk_score': 0.5}
     ]
-    
+
     result = process_all_decisions(test_data)
-    
+
     assert result['statistics']['total'] == 3
     assert result['statistics']['approved'] == 1
     assert result['statistics']['declined'] == 1
