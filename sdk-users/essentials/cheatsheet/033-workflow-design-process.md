@@ -62,28 +62,28 @@ Extract → Transform → Load with validation at each step
 ```python
 def create_etl_workflow():
     workflow = Workflow("etl-pattern", "ETL with Validation")
-    
+
     # Extract
     source_reader = CSVReaderNode(name="source", file_path=input_path)
     workflow.add_node("source", source_reader)
-    
+
     # Validate input
     validator = PythonCodeNode.from_function(name="validator", func=validate_input)
     workflow.add_node("validator", validator)
-    
+
     # Transform
     transformer = PythonCodeNode.from_function(name="transformer", func=transform_data)
     workflow.add_node("transformer", transformer)
-    
+
     # Load
     writer = JSONWriterNode(name="writer", file_path=output_path)
     workflow.add_node("writer", writer)
-    
+
     # Connect with error handling
     workflow.connect("source", "validator", mapping={"data": "raw_data"})
     workflow.connect("validator", "transformer", mapping={"result": "validated_data"})
     workflow.connect("transformer", "writer", mapping={"result": "data"})
-    
+
     return workflow
 ```
 
@@ -93,24 +93,24 @@ Combine multiple data sources with proper ID normalization
 ```python
 def create_integration_workflow():
     workflow = Workflow("integration", "Multi-Source Data Integration")
-    
+
     # Multiple data sources
     customer_reader = CSVReaderNode(name="customer_reader", file_path=customer_path)
     transaction_reader = CSVReaderNode(name="transaction_reader", file_path=transaction_path)
-    
+
     # ID normalization (handles format mismatches)
     id_normalizer = PythonCodeNode.from_function(
         name="id_normalizer",
         func=normalize_customer_ids
     )
-    
+
     # Data merger
     merger = MergeNode(name="merger")
-    
+
     # Connect sources to normalizer
     workflow.connect("customer_reader", "id_normalizer", mapping={"data": "customers"})
     workflow.connect("transaction_reader", "id_normalizer", mapping={"data": "transactions"})
-    
+
     return workflow
 ```
 
@@ -138,7 +138,7 @@ Make data transformations obvious in connections:
 
 ```python
 # ✅ CLEAR data flow with descriptive mapping names
-workflow.connect("customer_reader", "risk_calculator", 
+workflow.connect("customer_reader", "risk_calculator",
                 mapping={"data": "customer_profiles"})
 workflow.connect("transaction_reader", "risk_calculator",
                 mapping={"data": "transaction_history"})
@@ -153,25 +153,25 @@ Validate inputs early in the pipeline:
 def validate_workflow_inputs(customers: list, transactions: list) -> dict:
     """Validate all inputs before processing begins."""
     errors = []
-    
+
     # Check required fields
     if not customers:
         errors.append("Customer data is empty")
-    
+
     if not transactions:
         errors.append("Transaction data is empty")
-    
+
     # Validate data quality
     customer_df = pd.DataFrame(customers)
     required_customer_fields = ['customer_id', 'tier']
     missing_fields = [f for f in required_customer_fields if f not in customer_df.columns]
-    
+
     if missing_fields:
         errors.append(f"Missing customer fields: {missing_fields}")
-    
+
     if errors:
         return {'result': None, 'errors': errors, 'valid': False}
-    
+
     return {'result': {'customers': customers, 'transactions': transactions}, 'valid': True}
 ```
 
@@ -180,7 +180,7 @@ def validate_workflow_inputs(customers: list, transactions: list) -> dict:
 When designing a new workflow:
 
 1. **📋 Plan**: Document data sources, transformations, outputs
-2. **🔍 Research**: Check existing nodes before writing custom code  
+2. **🔍 Research**: Check existing nodes before writing custom code
 3. **⚡ Start Simple**: Build basic flow first, add complexity later
 4. **🧪 Test Early**: Test each function independently before creating nodes
 5. **🔗 Connect**: Use descriptive mapping names for clarity

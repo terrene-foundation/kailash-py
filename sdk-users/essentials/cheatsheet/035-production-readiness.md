@@ -29,20 +29,20 @@ def process_customer_data(customers: list, transactions: list) -> dict:
         # Validate inputs
         if not customers or not transactions:
             raise ValueError("Missing required input data")
-        
+
         # Process with comprehensive error handling
         result = complex_processing(customers, transactions)
-        
+
         return {
-            'result': result, 
+            'result': result,
             'status': 'success',
             'processed_count': len(result)
         }
-    
+
     except ValueError as e:
         logger.error(f"Input validation failed: {e}")
         return {'result': [], 'status': 'validation_error', 'error': str(e)}
-    
+
     except Exception as e:
         logger.error(f"Processing failed: {e}")
         return {'result': [], 'status': 'processing_error', 'error': str(e)}
@@ -68,7 +68,7 @@ class ProductionConfig:
     max_workers: int = int(os.getenv('MAX_WORKERS', '4'))
     timeout_seconds: int = int(os.getenv('TIMEOUT_SECONDS', '300'))
     log_level: str = os.getenv('LOG_LEVEL', 'INFO')
-    
+
     def validate(self):
         """Validate configuration before startup."""
         if not self.openai_api_key:
@@ -92,21 +92,21 @@ def secure_file_processor(file_name: str) -> dict:
         # Validate file name (prevent path traversal)
         if '..' in file_name or file_name.startswith('/'):
             raise ValueError(f"Invalid file name: {file_name}")
-        
+
         # Use centralized, secure path resolution
         input_file = get_input_data_path(file_name)
-        
+
         # Validate file exists and is readable
         if not input_file.exists():
             raise FileNotFoundError(f"Input file not found: {input_file}")
-        
+
         # Process with size limits
         file_size = input_file.stat().st_size
         if file_size > 100 * 1024 * 1024:  # 100MB limit
             raise ValueError(f"File too large: {file_size} bytes")
-        
+
         return {'status': 'success', 'file_path': str(input_file)}
-        
+
     except Exception as e:
         return {'status': 'error', 'error': str(e)}
 ```
@@ -119,24 +119,24 @@ def batch_process_large_dataset(input_data: list, batch_size: int = 1000) -> dic
     """Process large datasets in batches for memory efficiency."""
     results = []
     total_records = len(input_data)
-    
+
     for i in range(0, total_records, batch_size):
         batch = input_data[i:i + batch_size]
-        
+
         try:
             # Process batch
             batch_result = process_batch(batch)
             results.extend(batch_result)
-            
+
             # Progress tracking
             progress = min((i + batch_size) / total_records * 100, 100)
             print(f"Processed {progress:.1f}% ({len(results)}/{total_records})")
-            
+
         except Exception as e:
             # Log error but continue with next batch
             print(f"Batch {i//batch_size + 1} failed: {e}")
             continue
-    
+
     return {
         'result': results,
         'total_processed': len(results),
@@ -156,31 +156,31 @@ large_processor = PythonCodeNode.from_function(
 def memory_efficient_processing(data: list) -> dict:
     """Process data with memory efficiency."""
     import gc
-    
+
     try:
         # Process in chunks to manage memory
         chunk_size = 500
         processed_chunks = []
-        
+
         for i in range(0, len(data), chunk_size):
             chunk = data[i:i + chunk_size]
-            
+
             # Process chunk
             processed_chunk = transform_data_chunk(chunk)
             processed_chunks.append(processed_chunk)
-            
+
             # Force garbage collection after each chunk
             gc.collect()
-        
+
         # Combine results
         final_result = combine_chunks(processed_chunks)
-        
+
         return {
             'result': final_result,
             'chunks_processed': len(processed_chunks),
             'memory_efficient': True
         }
-        
+
     except MemoryError:
         return {
             'result': [],
@@ -207,26 +207,26 @@ def robust_api_call(data: dict) -> dict:
     try:
         # Make API call
         response = external_api.process(data)
-        
+
         # Validate response
         if not response or 'error' in response:
             raise APIResponseError(f"Invalid API response: {response}")
-        
+
         logger.info(f"API call successful for {len(data)} records")
         return {'result': response, 'status': 'success'}
-    
+
     except requests.exceptions.Timeout:
         logger.warning("API call timed out, will retry")
         raise  # Will be retried by tenacity
-    
+
     except requests.exceptions.ConnectionError:
         logger.warning("API connection failed, will retry")
         raise  # Will be retried by tenacity
-    
+
     except APIRateLimitError as e:
         logger.warning(f"Rate limit exceeded: {e}")
         raise  # Will be retried with exponential backoff
-    
+
     except Exception as e:
         logger.error(f"Unrecoverable API error: {e}")
         return {
@@ -250,13 +250,13 @@ def process_with_fallback(primary_data: dict, fallback_data: dict = None) -> dic
     try:
         # Primary processing path
         result = complex_primary_processing(primary_data)
-        
+
         return {
             'result': result,
             'status': 'primary_success',
             'processing_method': 'primary'
         }
-        
+
     except CriticalError as e:
         # Some errors shouldn't have fallbacks
         return {
@@ -265,24 +265,24 @@ def process_with_fallback(primary_data: dict, fallback_data: dict = None) -> dic
             'error': str(e),
             'requires_manual_intervention': True
         }
-        
+
     except Exception as e:
         # Try fallback processing
         logger.warning(f"Primary processing failed: {e}, trying fallback")
-        
+
         try:
             if fallback_data:
                 result = simple_fallback_processing(fallback_data)
             else:
                 result = simple_fallback_processing(primary_data)
-            
+
             return {
                 'result': result,
                 'status': 'fallback_success',
                 'processing_method': 'fallback',
                 'primary_error': str(e)
             }
-            
+
         except Exception as fallback_error:
             return {
                 'result': [],
@@ -302,7 +302,7 @@ from datetime import datetime
 
 def setup_production_logging():
     """Configure structured logging for production."""
-    
+
     # Create custom formatter for structured logs
     class StructuredFormatter(logging.Formatter):
         def format(self, record):
@@ -314,59 +314,59 @@ def setup_production_logging():
                 'function': record.funcName,
                 'line': record.lineno
             }
-            
+
             # Add extra fields if present
             if hasattr(record, 'workflow_id'):
                 log_entry['workflow_id'] = record.workflow_id
             if hasattr(record, 'run_id'):
                 log_entry['run_id'] = record.run_id
-                
+
             return json.dumps(log_entry)
-    
+
     # Configure logger
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    
+
     handler = logging.StreamHandler()
     handler.setFormatter(StructuredFormatter())
     logger.addHandler(handler)
-    
+
     return logger
 
 # Use in production workflows
 def monitored_processing(data: list, run_id: str) -> dict:
     """Processing with comprehensive monitoring."""
     logger = logging.getLogger(__name__)
-    
+
     # Create logger adapter with context
     log_extra = {'run_id': run_id, 'workflow_id': 'production_etl'}
     contextual_logger = logging.LoggerAdapter(logger, log_extra)
-    
+
     start_time = datetime.utcnow()
     contextual_logger.info(f"Starting processing for {len(data)} records")
-    
+
     try:
         result = process_data(data)
-        
+
         duration = (datetime.utcnow() - start_time).total_seconds()
         contextual_logger.info(
             f"Processing completed successfully in {duration:.2f}s, "
             f"processed {len(result)} records"
         )
-        
+
         return {
             'result': result,
             'status': 'success',
             'processing_time': duration,
             'records_processed': len(result)
         }
-        
+
     except Exception as e:
         duration = (datetime.utcnow() - start_time).total_seconds()
         contextual_logger.error(
             f"Processing failed after {duration:.2f}s: {str(e)}"
         )
-        
+
         return {
             'result': [],
             'status': 'error',
@@ -401,7 +401,7 @@ def monitored_processing(data: list, run_id: str) -> dict:
 - [ ] Output doesn't expose sensitive data
 - [ ] Access control configured
 
-### Monitoring Validation  
+### Monitoring Validation
 - [ ] Structured logging implemented
 - [ ] Key metrics collected
 - [ ] Alert rules configured

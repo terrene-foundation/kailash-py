@@ -150,20 +150,20 @@ class WeatherMCPServer:
         )
         self.setup_tools()
         self.setup_resources()
-    
+
     def setup_tools(self):
         @self.server.tool(cache_key="current", cache_ttl=300)
         async def get_current_weather(city: str) -> dict:
             """Get current weather with 5-minute caching."""
             api_key = self.server.config.get("weather.api_key")
-            
+
             async with aiohttp.ClientSession() as session:
                 url = f"https://api.weather.com/current?city={city}&key={api_key}"
                 async with session.get(url) as response:
                     return await response.json()
-        
+
         @self.server.tool(
-            cache_key="forecast", 
+            cache_key="forecast",
             cache_ttl=1800,  # 30 minutes
             format_response="markdown"
         )
@@ -177,13 +177,13 @@ class WeatherMCPServer:
                     for i in range(days)
                 ]
             }
-    
+
     def setup_resources(self):
         @self.server.resource("weather://config")
         def get_config() -> str:
             """Weather service configuration."""
             return f"Weather API v{self.server.config.get('server.version')}"
-    
+
     def run(self):
         """Start the weather server."""
         self.server.run()
@@ -320,12 +320,12 @@ async def api_data(endpoint: str) -> dict:
 # Regular health checks
 async def health_check():
     stats = server.get_server_stats()
-    
+
     # Check error rates
     error_rate = stats['metrics']['server']['overall_error_rate']
     if error_rate > 0.05:  # 5% threshold
         logger.warning(f"High error rate: {error_rate:.2%}")
-    
+
     # Check cache performance
     for cache_name, cache_stats in stats['cache'].items():
         hit_rate = cache_stats['hit_rate']
@@ -341,7 +341,7 @@ async def robust_operation(data: str) -> dict:
     """Well-designed tool with proper error handling."""
     if not data:
         raise ValueError("Data cannot be empty")
-    
+
     try:
         result = await process_data(data)
         return {"success": True, "result": result}
