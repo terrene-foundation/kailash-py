@@ -51,7 +51,7 @@ repos:
         name: Check TOML syntax
       - id: check-json
         name: Check JSON syntax
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*node_modules/.*)$
       - id: check-merge-conflict
         name: Check for merge conflicts
       - id: check-added-large-files
@@ -69,7 +69,7 @@ repos:
         name: Check for deprecated log.warn
       - id: python-no-eval
         name: Check for eval() usage
-        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py|guide/reference/templates/.*|src/kailash/api/mcp_integration\.py|tests/test_security/.*|examples/.*|src/kailash/nodes/logic/convergence\.py|src/kailash/nodes/logic/loop\.py|src/kailash/workflow/convergence\.py|src/kailash/workflow/cycle_builder\.py|src/kailash/workflow/cycle_config\.py)$
+        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py|guide/reference/templates/.*|src/kailash/api/mcp_integration\.py|tests/test_security/.*|examples/.*|src/kailash/nodes/logic/convergence\.py|src/kailash/nodes/logic/loop\.py|src/kailash/workflow/convergence\.py|src/kailash/workflow/cycle_builder\.py|src/kailash/workflow/cycle_config\.py|sdk-users/templates/.*\.py)$
       - id: python-use-type-annotations
         name: Require type annotations
       - id: python-check-blanket-noqa

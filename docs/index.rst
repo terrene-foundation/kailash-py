@@ -12,15 +12,20 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK v0.2.0 documentation! This major release introduces
-the **Universal Hybrid Cyclic Graph Architecture**, enabling powerful iterative workflows
-with automatic convergence detection and high-performance execution.
+Welcome to the Kailash Python SDK v0.3.1 documentation! This release completes the
+**Finance Workflow Library** with production-ready financial workflows powered by AI and
+modern quantitative methods.
 
-**Recent Updates (v0.2.1):**
-- 🔍 **DirectoryReaderNode** for dynamic file discovery and metadata extraction
-- 🐛 **Enhanced DataTransformer** with critical bug fixes for reliable data flow
-- 📁 **Real-World Workflows** using actual data sources instead of mock data
-- ⚡ **Improved Stability** with comprehensive testing and validation
+**Recent Updates (v0.3.1):**
+- 💼 **Complete Finance Workflow Library** - Production-ready credit risk, portfolio optimization, trading signals, fraud detection
+- 🧠 **PythonCodeNode Best Practices** - Enhanced from_function() patterns with comprehensive training data
+- 🚀 **Enhanced MCP Server** - Zero-configuration workflow exposure with default tools for discovery and execution
+- 📚 **Enhanced Documentation** - Updated workflow design guidelines and developer best practices
+- ✅ **Code Quality Standards** - Applied black/isort formatting and comprehensive testing
+
+**Previous Major Release (v0.2.0):**
+- 🔁 **Universal Hybrid Cyclic Graph Architecture** with 30,000+ iterations/second performance
+- 🛠️ **Developer Tools** - CycleAnalyzer, CycleDebugger, CycleProfiler for production cyclic workflows
 
 .. toctree::
    :maxdepth: 2
@@ -106,6 +111,7 @@ Key Features
    - **A2A (Agent-to-Agent)**: Direct communication between AI agents
    - **Self-Organizing Agent Pools**: Autonomous team formation and problem solving
    - **MCP (Model Context Protocol)**: AI context management and tool discovery
+   - **Enhanced MCP Server**: Zero-config workflow exposure with built-in discovery tools
    - **Intelligent Orchestration**: Adaptive workflows with convergence detection
    - **Multi-Agent Workflows**: Coordinated agent teams for complex tasks
 
@@ -144,6 +150,13 @@ Key Features
    - Interactive charts with Chart.js integration
    - Resource utilization monitoring (CPU, memory, I/O)
    - Execution history and bottleneck analysis
+
+💼 **Finance Workflow Library** (New in v0.3.1)
+   - **Credit Risk Assessment**: AI-powered risk scoring with customer and transaction analysis
+   - **Portfolio Optimization**: Modern Portfolio Theory with Sharpe ratio optimization and rebalancing
+   - **Trading Signals**: Technical indicators (RSI, MACD, Bollinger Bands) with AI sentiment analysis
+   - **Fraud Detection**: Real-time transaction monitoring with velocity analysis and pattern detection
+   - **Production-Ready**: All workflows use PythonCodeNode.from_function() best practices
 
 Quick Example
 -------------
@@ -221,6 +234,75 @@ Coordinated AI Workflow Example
            "problem_description": "Analyze customer churn patterns and predict future behavior"
        }
    })
+
+Finance Workflow Example (New in v0.3.1)
+----------------------------------------
+
+**Credit Risk Assessment with AI Analysis:**
+
+.. code-block:: python
+
+   from kailash.workflow import Workflow
+   from kailash.nodes.data import CSVReaderNode, JSONWriterNode
+   from kailash.nodes.code import PythonCodeNode
+   from kailash.nodes.ai import LLMAgentNode
+   from kailash.runtime import LocalRuntime
+
+   def calculate_risk_metrics(customers, transactions):
+       """Calculate comprehensive risk metrics for credit assessment."""
+       import pandas as pd
+       import numpy as np
+
+       # Convert to DataFrames
+       customers_df = pd.DataFrame(customers)
+       transactions_df = pd.DataFrame(transactions)
+
+       # Calculate transaction metrics per customer
+       transaction_metrics = transactions_df.groupby("customer_id").agg({
+           "amount": ["sum", "mean", "count", "std"],
+           "transaction_date": ["min", "max"]
+       }).reset_index()
+
+       # Merge with customer data and calculate risk scores
+       risk_df = pd.merge(customers_df, transaction_metrics, on="customer_id", how="left")
+
+       # Calculate composite risk score (0-100, higher is better/lower risk)
+       risk_df["risk_score"] = (
+           risk_df["tier_score"] * 0.4 +
+           risk_df["transaction_score"] * 0.3 +
+           risk_df["amount_score"] * 0.3
+       ).clip(0, 100)
+
+       return {"result": risk_df.to_dict("records")}
+
+   # Create workflow
+   workflow = Workflow("credit-risk-assessment", "Credit Risk Assessment System")
+
+   # Add nodes
+   workflow.add_node("customer_reader", CSVReaderNode(file_path="customers.csv"))
+   workflow.add_node("transaction_reader", CSVReaderNode(file_path="transactions.csv"))
+   workflow.add_node("risk_calculator", PythonCodeNode.from_function(func=calculate_risk_metrics))
+
+   # AI-powered risk analysis
+   workflow.add_node("risk_analyzer", LLMAgentNode(
+       model="gpt-4",
+       system_prompt="You are a financial risk assessment expert. Analyze customer risk data.",
+       prompt="Analyze the following customer risk metrics: {{risk_metrics}}"
+   ))
+
+   workflow.add_node("report_writer", JSONWriterNode(
+       file_path="credit_risk_reports.json", pretty_print=True
+   ))
+
+   # Connect nodes
+   workflow.connect("customer_reader", "risk_calculator", mapping={"data": "customers"})
+   workflow.connect("transaction_reader", "risk_calculator", mapping={"data": "transactions"})
+   workflow.connect("risk_calculator", "risk_analyzer", mapping={"result": "risk_metrics"})
+   workflow.connect("risk_analyzer", "report_writer", mapping={"response": "data"})
+
+   # Execute
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow)
 
 Cyclic Workflow Example (New in v0.2.0)
 ---------------------------------------

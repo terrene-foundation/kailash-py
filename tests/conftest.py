@@ -2,8 +2,9 @@
 
 import shutil
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, Generator
+from typing import Any
 
 import pytest
 
@@ -15,7 +16,7 @@ from kailash.workflow import Workflow
 
 # Import SDK development infrastructure support
 try:
-    from .conftest_sdk_dev import *
+    from .conftest_sdk_dev import sdk_infrastructure
 except ImportError:
     pass  # SDK dev infrastructure is optional
 
@@ -34,7 +35,7 @@ class MockNode(Node):
         )
         super().__init__(metadata=metadata, **kwargs)
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define input parameters for the mock node."""
         from kailash.nodes.base import NodeParameter
 
@@ -47,7 +48,7 @@ class MockNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         value = kwargs.get("value", 0)
         return {"result": value * 2}
