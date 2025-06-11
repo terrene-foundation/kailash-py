@@ -65,7 +65,7 @@ class TestBasicRuntime:
 
         assert len(results) == 1
         assert "doubler" in results
-        assert results["doubler"]["result"] == 10
+        assert results["doubler"]["result"]["result"] == 10
 
     def test_data_nodes(self):
         """Test data reader/writer nodes exist."""
