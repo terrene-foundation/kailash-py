@@ -18,9 +18,9 @@ echo ""
 create_project() {
     local name="$1"
     local description="$2"
-    
+
     echo "📋 Checking if project '$name' exists..."
-    
+
     # Check if project exists (this is a simplified check)
     if gh project list --owner "$REPO_OWNER" --format json | jq -e ".[] | select(.title == \"$name\")" > /dev/null; then
         echo "   ✓ Project already exists"
@@ -45,7 +45,7 @@ create_label() {
     local name="$1"
     local color="$2"
     local description="$3"
-    
+
     # Check if label exists
     if gh label list --json name | jq -e ".[] | select(.name == \"$name\")" > /dev/null 2>&1; then
         echo "   ✓ Label '$name' already exists"

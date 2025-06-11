@@ -81,10 +81,8 @@ def process_1(input_data: dict, **kwargs):
 
     time.sleep(0.05)  # Simulate work
     # When connected via {"result": "data"}, input is 'data'
-    try:
-        input_data = data.get("data", [])
-    except:
-        input_data = []
+    data = kwargs.get("data", {})
+    input_data = data.get("data", []) if isinstance(data, dict) else []
     processed = [x * 2 for x in input_data[:50]] if input_data else []
     result = {"processed": processed, "branch": "1"}
 
@@ -97,10 +95,8 @@ def process_2(input_data: dict, **kwargs):
 
     time.sleep(0.05)  # Simulate work
     # When connected via {"result": "data"}, input is 'data'
-    try:
-        input_data = data.get("data", [])
-    except:
-        input_data = []
+    data = kwargs.get("data", {})
+    input_data = data.get("data", []) if isinstance(data, dict) else []
     processed = [x**2 for x in input_data[50:]] if input_data else []
     result = {"processed": processed, "branch": "2"}
 
@@ -113,10 +109,8 @@ def process_3(**kwargs):
 
     time.sleep(0.02)  # Simulate lighter work
     # When connected via {"result": "metadata"}, input is 'metadata'
-    try:
-        input_metadata = metadata.get("metadata", {})
-    except:
-        input_metadata = {}
+    metadata = kwargs.get("metadata", {})
+    input_metadata = metadata.get("metadata", {}) if isinstance(metadata, dict) else {}
     if input_metadata:
         enhanced = {**input_metadata, "processed_at": "runtime"}
     else:
@@ -129,26 +123,26 @@ def process_3(**kwargs):
 def aggregate(**kwargs):
     """Auto-converted from PythonCodeNode string code."""
     combined = []
-    try:
-        # Extract 'processed' from the result dict
-        p1_data = processed_1.get("processed", [])
-        if p1_data:
-            combined.extend(p1_data)
-    except:
-        pass
-    try:
-        # Extract 'processed' from the result dict
-        p2_data = processed_2.get("processed", [])
-        if p2_data:
-            combined.extend(p2_data)
-    except:
-        pass
+    processed_1 = kwargs.get("processed_1", {})
+    processed_2 = kwargs.get("processed_2", {})
+    enhanced_metadata = kwargs.get("enhanced_metadata", {})
 
-    try:
-        # Extract 'enhanced_metadata' from the result dict
-        metadata_val = enhanced_metadata.get("enhanced_metadata", {})
-    except:
-        metadata_val = {}
+    # Extract 'processed' from the result dict
+    p1_data = processed_1.get("processed", []) if isinstance(processed_1, dict) else []
+    if p1_data:
+        combined.extend(p1_data)
+
+    # Extract 'processed' from the result dict
+    p2_data = processed_2.get("processed", []) if isinstance(processed_2, dict) else []
+    if p2_data:
+        combined.extend(p2_data)
+
+    # Extract 'enhanced_metadata' from the result dict
+    metadata_val = (
+        enhanced_metadata.get("enhanced_metadata", {})
+        if isinstance(enhanced_metadata, dict)
+        else {}
+    )
 
     result = {
         "combined_data": combined,
@@ -162,19 +156,15 @@ def aggregate(**kwargs):
 def iterate(iteration=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
     # Access inputs from namespace - use try/except for safety
-    try:
-        current_value = value
-        current_target = target
-    except:
-        current_value = 10
-        current_target = 100
+    value = kwargs.get("value", 10)
+    target = kwargs.get("target", 100)
+    current_value = value
+    current_target = target
 
     # Access context for cycle info
-    try:
-        cycle_info = context.get("cycle", {})
-        iteration = cycle_info.get("iteration", 0)
-    except:
-        iteration = 0
+    context = kwargs.get("context", {})
+    cycle_info = context.get("cycle", {}) if isinstance(context, dict) else {}
+    iteration = cycle_info.get("iteration", 0)
 
     # Process
     new_value = current_value * 1.2
@@ -193,12 +183,10 @@ def iterate(iteration=None, **kwargs):
 def finalize(**kwargs):
     """Auto-converted from PythonCodeNode string code."""
     # Access inputs from namespace
-    try:
-        final_value = value
-        final_target = target
-    except:
-        final_value = 0
-        final_target = 0
+    value = kwargs.get("value", 0)
+    target = kwargs.get("target", 100)
+    final_value = value
+    final_target = target
 
     # Calculate final results
     result = {

@@ -543,11 +543,11 @@ def main():
     # Display generated files
     print("\n=== Generated Files ===")
     try:
-        with open("data/outputs/event_stream.json", "r") as f:
+        with open("data/outputs/event_stream.json") as f:
             events = json.load(f)
             print(f"Event stream: {len(events.get('events', []))} events")
 
-        with open("data/outputs/current_state.json", "r") as f:
+        with open("data/outputs/current_state.json") as f:
             state = json.load(f)
             print(f"Current state: {len(state.get('current_state', []))} orders")
 

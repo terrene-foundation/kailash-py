@@ -1,7 +1,7 @@
 """Advanced LLM Agent node with LangChain integration and MCP support."""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -119,7 +119,7 @@ class LLMAgentNode(Node):
         ... )
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "provider": NodeParameter(
                 name="provider",
@@ -226,7 +226,7 @@ class LLMAgentNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute the LLM agent with the specified configuration.
 
@@ -584,8 +584,8 @@ class LLMAgentNode(Node):
             return False
 
     def _load_conversation_memory(
-        self, conversation_id: Optional[str], memory_config: dict
-    ) -> Dict[str, Any]:
+        self, conversation_id: str | None, memory_config: dict
+    ) -> dict[str, Any]:
         """
         Load conversation memory for persistent conversations.
 
@@ -675,8 +675,8 @@ class LLMAgentNode(Node):
         }
 
     def _retrieve_mcp_context(
-        self, mcp_servers: List[dict], mcp_context: List[str]
-    ) -> List[Dict[str, Any]]:
+        self, mcp_servers: list[dict], mcp_context: list[str]
+    ) -> list[dict[str, Any]]:
         """
         Retrieve context from Model Context Protocol (MCP) servers.
 
@@ -893,7 +893,7 @@ class LLMAgentNode(Node):
 
         return os.environ.get("KAILASH_USE_REAL_MCP", "false").lower() == "true"
 
-    def _discover_mcp_tools(self, mcp_servers: List[dict]) -> List[Dict[str, Any]]:
+    def _discover_mcp_tools(self, mcp_servers: list[dict]) -> list[dict[str, Any]]:
         """
         Discover available tools from MCP servers.
 
@@ -995,8 +995,8 @@ class LLMAgentNode(Node):
         return discovered_tools
 
     def _merge_tools(
-        self, existing_tools: List[dict], mcp_tools: List[dict]
-    ) -> List[dict]:
+        self, existing_tools: list[dict], mcp_tools: list[dict]
+    ) -> list[dict]:
         """
         Merge MCP discovered tools with existing tools, avoiding duplicates.
 
@@ -1027,8 +1027,8 @@ class LLMAgentNode(Node):
         return merged_tools
 
     def _perform_rag_retrieval(
-        self, messages: List[dict], rag_config: dict, mcp_context: List[dict]
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], rag_config: dict, mcp_context: list[dict]
+    ) -> dict[str, Any]:
         """
         Perform Retrieval Augmented Generation (RAG) to find relevant documents.
 
@@ -1188,12 +1188,12 @@ class LLMAgentNode(Node):
 
     def _prepare_conversation(
         self,
-        messages: List[dict],
-        system_prompt: Optional[str],
+        messages: list[dict],
+        system_prompt: str | None,
         memory: dict,
-        mcp_context: List[dict],
+        mcp_context: list[dict],
         rag_context: dict,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """Prepare enriched conversation with all context."""
         enriched_messages = []
 
@@ -1229,8 +1229,8 @@ class LLMAgentNode(Node):
         return enriched_messages
 
     def _mock_llm_response(
-        self, messages: List[dict], tools: List[dict], generation_config: dict
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], tools: list[dict], generation_config: dict
+    ) -> dict[str, Any]:
         """Generate mock LLM response for testing."""
         last_user_message = ""
         for msg in reversed(messages):
@@ -1291,13 +1291,13 @@ class LLMAgentNode(Node):
         self,
         provider: str,
         model: str,
-        messages: List[dict],
-        tools: List[dict],
+        messages: list[dict],
+        tools: list[dict],
         generation_config: dict,
         streaming: bool,
         timeout: int,
         max_retries: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate LLM response using LangChain (mock implementation)."""
         # This would be the real LangChain integration
         return {
@@ -1320,10 +1320,10 @@ class LLMAgentNode(Node):
         self,
         provider: str,
         model: str,
-        messages: List[dict],
-        tools: List[dict],
+        messages: list[dict],
+        tools: list[dict],
         generation_config: dict,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate LLM response using provider architecture."""
         try:
             from .ai_providers import get_provider
@@ -1368,10 +1368,10 @@ class LLMAgentNode(Node):
         self,
         provider: str,
         model: str,
-        messages: List[dict],
-        tools: List[dict],
+        messages: list[dict],
+        tools: list[dict],
         generation_config: dict,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate LLM response using direct API calls (mock implementation)."""
         return {
             "id": "fallback_response_456",
@@ -1392,17 +1392,16 @@ class LLMAgentNode(Node):
     def _update_conversation_memory(
         self,
         conversation_id: str,
-        messages: List[dict],
+        messages: list[dict],
         response: dict,
         memory_config: dict,
     ) -> None:
         """Update conversation memory with new exchange."""
         # Mock memory update (in real implementation, persist to storage)
-        pass
 
     def _calculate_usage_metrics(
-        self, messages: List[dict], response: dict, model: str, provider: str
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], response: dict, model: str, provider: str
+    ) -> dict[str, Any]:
         """Calculate token usage and cost metrics."""
         usage = response.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
@@ -1433,8 +1432,8 @@ class LLMAgentNode(Node):
         }
 
     async def _execute_mcp_tool_call(
-        self, tool_call: dict, mcp_tools: List[dict]
-    ) -> Dict[str, Any]:
+        self, tool_call: dict, mcp_tools: list[dict]
+    ) -> dict[str, Any]:
         """Execute an MCP tool call.
 
         Args:

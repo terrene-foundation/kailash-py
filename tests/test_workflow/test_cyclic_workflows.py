@@ -1,6 +1,6 @@
 """Tests for cyclic workflow functionality."""
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -37,7 +37,7 @@ class CounterNode(Node):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs):
+    def run(self, context: dict[str, Any], **kwargs):
         count = kwargs.get("count", 0)
         increment = kwargs.get("increment", 1)
 
@@ -188,7 +188,7 @@ class TestCyclicWorkflowBasics:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs):
+            def run(self, context: dict[str, Any], **kwargs):
                 value = kwargs.get("value", 0)
 
                 # Get previous state

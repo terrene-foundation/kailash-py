@@ -212,7 +212,7 @@ def run_secure_etl():
 
             # Display first few lines of output
             print("\n📋 Output preview:")
-            with open(output_file, "r") as f:
+            with open(output_file) as f:
                 for i, line in enumerate(f):
                     if i < 5:  # Show first 5 lines
                         print(f"  {line.strip()}")

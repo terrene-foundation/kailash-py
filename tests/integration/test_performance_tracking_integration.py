@@ -1,7 +1,7 @@
 """Integration tests for performance tracking and visualization."""
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -27,22 +27,22 @@ class TestPerformanceTrackingIntegration:
         workflow = Workflow(workflow_id="perf_test", name="Performance Test")
 
         # Create input data source node
-        def data_source() -> Dict[str, Any]:
+        def data_source() -> dict[str, Any]:
             """Provides initial data for the workflow."""
             return {"result": "test_data"}
 
         # Create nodes with different performance characteristics
-        def fast_node(data: str) -> Dict[str, Any]:
+        def fast_node(data: str) -> dict[str, Any]:
             """Fast executing node."""
             time.sleep(0.01)
             return {"result": f"fast_{data}"}
 
-        def slow_node(data: str) -> Dict[str, Any]:
+        def slow_node(data: str) -> dict[str, Any]:
             """Slow executing node."""
             time.sleep(0.1)
             return {"result": f"slow_{data}"}
 
-        def cpu_intensive_node(data: str) -> Dict[str, Any]:
+        def cpu_intensive_node(data: str) -> dict[str, Any]:
             """CPU intensive node."""
             # Do some computation
             total = 0
@@ -241,11 +241,11 @@ class TestPerformanceTrackingIntegration:
         # Create workflow with failing node
         workflow = Workflow(workflow_id="fail_test", name="Fail Test")
 
-        def data_source() -> Dict[str, Any]:
+        def data_source() -> dict[str, Any]:
             """Provides initial data for the workflow."""
             return {"result": "test_data"}
 
-        def failing_node(data: str) -> Dict[str, Any]:
+        def failing_node(data: str) -> dict[str, Any]:
             """Node that fails after some processing."""
             time.sleep(0.05)
             raise RuntimeError("Simulated failure")
@@ -314,11 +314,11 @@ class TestPerformanceTrackingIntegration:
         # Create workflow with custom metrics
         workflow = Workflow(workflow_id="custom_test", name="Custom Test")
 
-        def data_source() -> Dict[str, Any]:
+        def data_source() -> dict[str, Any]:
             """Provides initial data for the workflow."""
             return {"data": [10, 20, 60, 70, 80]}
 
-        def custom_metrics_node(data: list) -> Dict[str, Any]:
+        def custom_metrics_node(data: list) -> dict[str, Any]:
             """Node that would report custom metrics."""
             processed = len(data)
             filtered = sum(1 for item in data if item > 50)
@@ -387,11 +387,11 @@ class TestPerformanceTrackingIntegration:
         # Create workflow with parallel branches
         workflow = Workflow(workflow_id="parallel_test", name="Parallel Test")
 
-        def data_source() -> Dict[str, Any]:
+        def data_source() -> dict[str, Any]:
             """Provides initial data for the workflow."""
             return {"result": "test_data"}
 
-        def process_branch(data: str, branch_id: int) -> Dict[str, Any]:
+        def process_branch(data: str, branch_id: int) -> dict[str, Any]:
             """Process data in a branch."""
             time.sleep(0.05 * branch_id)  # Different delays
             return {"result": f"{data}_branch_{branch_id}"}

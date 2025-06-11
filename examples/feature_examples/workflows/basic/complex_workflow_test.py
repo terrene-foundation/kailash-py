@@ -14,7 +14,7 @@ This represents a realistic business workflow for customer analysis.
 
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ from kailash.workflow.visualization import WorkflowVisualizer
 def create_data_validator():
     """Create a node that validates customer data."""
 
-    def validate_data(data: list) -> Dict[str, Any]:
+    def validate_data(data: list) -> dict[str, Any]:
         """Validate customer data for required fields."""
         df = pd.DataFrame(data)
 
@@ -82,7 +82,7 @@ def create_data_validator():
 def create_customer_segmenter():
     """Create a node that segments customers."""
 
-    def segment_customers(data: list) -> Dict[str, Any]:
+    def segment_customers(data: list) -> dict[str, Any]:
         """Segment customers by purchase amount."""
         df = pd.DataFrame(data)
         df["purchase_total"] = pd.to_numeric(df["purchase_total"], errors="coerce")
@@ -128,7 +128,7 @@ def create_customer_segmenter():
 def create_transaction_analyzer():
     """Create a node that analyzes transaction data."""
 
-    def analyze_transactions(data: list, customer_data: list) -> Dict[str, Any]:
+    def analyze_transactions(data: list, customer_data: list) -> dict[str, Any]:
         """Analyze transactions and join with customer data."""
         transactions_df = pd.DataFrame(data)
         customers_df = pd.DataFrame(customer_data)
@@ -183,7 +183,7 @@ def create_report_generator():
 
     def generate_report(
         customer_data: list, transaction_metrics: dict
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a comprehensive report."""
         df = pd.DataFrame(customer_data)
 

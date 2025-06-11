@@ -44,7 +44,7 @@ Example:
     ... })
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 
@@ -142,7 +142,7 @@ class EmbeddingNode(Node):
         self._model = None
         self._model_info = {}
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the embedding node."""
         return {
             "model": NodeParameter(
@@ -188,7 +188,7 @@ class EmbeddingNode(Node):
             ),
         }
 
-    def configure(self, config: Dict[str, Any]) -> None:
+    def configure(self, config: dict[str, Any]) -> None:
         """Configure the embedding node with model settings.
 
         Validates configuration, initializes the embedding model, and
@@ -241,7 +241,7 @@ class EmbeddingNode(Node):
             "max_tokens": self.config.get("max_tokens", 8192),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Generate embeddings for input texts.
 
         Implementation of the abstract run method from the base Node class.
@@ -254,7 +254,7 @@ class EmbeddingNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Generate embeddings for input texts.
 
         Processes the input texts through the configured embedding model,
@@ -295,7 +295,7 @@ class EmbeddingNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"Failed to generate embeddings: {str(e)}")
 
-    def _generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def _generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for a batch of texts.
 
         This is a placeholder for actual embedding generation logic.
@@ -310,7 +310,7 @@ class EmbeddingNode(Node):
         dim = self._model_info.get("dimensions", 768)
         return [np.random.randn(dim).tolist() for _ in texts]
 
-    def _normalize_embeddings(self, embeddings: List[List[float]]) -> List[List[float]]:
+    def _normalize_embeddings(self, embeddings: list[list[float]]) -> list[list[float]]:
         """Normalize embedding vectors to unit length.
 
         Normalizes each embedding vector to have a magnitude of 1.0,
@@ -442,7 +442,7 @@ class VectorDatabaseNode(Node):
         self._client = None
         self._index = None
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the vector database node."""
         return {
             "provider": NodeParameter(
@@ -484,7 +484,7 @@ class VectorDatabaseNode(Node):
             ),
         }
 
-    def configure(self, config: Dict[str, Any]) -> None:
+    def configure(self, config: dict[str, Any]) -> None:
         """Configure the vector database connection.
 
         Establishes connection to the vector database, validates the index,
@@ -529,7 +529,7 @@ class VectorDatabaseNode(Node):
         self._client = f"{provider}_client"
         self._index = self.config.get("index_name")
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute vector database operations.
 
         Implementation of the abstract run method from the base Node class.
@@ -542,7 +542,7 @@ class VectorDatabaseNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute vector database operations.
 
         Performs the requested operation (upsert, query, delete, fetch)
@@ -573,7 +573,7 @@ class VectorDatabaseNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"Vector operation failed: {str(e)}")
 
-    def _upsert_vectors(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def _upsert_vectors(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Insert or update vectors in the database.
 
         Args:
@@ -600,7 +600,7 @@ class VectorDatabaseNode(Node):
             "index": self._index,
         }
 
-    def _query_vectors(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def _query_vectors(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Query similar vectors from the database.
 
         Args:
@@ -631,7 +631,7 @@ class VectorDatabaseNode(Node):
             "count": min(k, 5),
         }
 
-    def _delete_vectors(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def _delete_vectors(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Delete vectors from the database.
 
         Args:
@@ -648,7 +648,7 @@ class VectorDatabaseNode(Node):
         # Placeholder for actual deletion
         return {"operation": "delete", "status": "success", "count": len(ids)}
 
-    def _fetch_vectors(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def _fetch_vectors(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Fetch specific vectors by ID.
 
         Args:
@@ -748,7 +748,7 @@ class TextSplitterNode(Node):
         tags={"text", "processing", "nlp"},
     )
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the text splitter node."""
         return {
             "strategy": NodeParameter(
@@ -788,7 +788,7 @@ class TextSplitterNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Split text into chunks using configured strategy.
 
         Implementation of the abstract run method from the base Node class.
@@ -801,7 +801,7 @@ class TextSplitterNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Split text into chunks using configured strategy.
 
         Args:
@@ -854,7 +854,7 @@ class TextSplitterNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"Text splitting failed: {str(e)}")
 
-    def _recursive_split(self, text: str) -> List[str]:
+    def _recursive_split(self, text: str) -> list[str]:
         """Split text recursively using multiple separators.
 
         Args:
@@ -878,7 +878,7 @@ class TextSplitterNode(Node):
 
         return chunks
 
-    def _character_split(self, text: str) -> List[str]:
+    def _character_split(self, text: str) -> list[str]:
         """Split text by character count.
 
         Args:
@@ -908,7 +908,7 @@ class TextSplitterNode(Node):
 
         return chunks
 
-    def _sentence_split(self, text: str) -> List[str]:
+    def _sentence_split(self, text: str) -> list[str]:
         """Split text by sentences.
 
         Args:
@@ -936,7 +936,7 @@ class TextSplitterNode(Node):
 
         return chunks
 
-    def _token_split(self, text: str) -> List[str]:
+    def _token_split(self, text: str) -> list[str]:
         """Split text by token count.
 
         Args:

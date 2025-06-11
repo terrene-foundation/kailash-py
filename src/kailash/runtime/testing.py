@@ -1,7 +1,7 @@
 """Testing utilities for Kailash workflows and nodes."""
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.local import LocalRuntime
@@ -21,7 +21,7 @@ class MockNode(Node):
         self._fail_message = kwargs.get("fail_message", "Mock failure")
         self._execution_count = 0
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define mock parameters."""
         return {
             "input": NodeParameter(
@@ -43,7 +43,7 @@ class MockNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute mock node logic."""
         self._execution_count += 1
 
@@ -64,8 +64,8 @@ class TestDataGenerator:
 
     @staticmethod
     def generate_csv_data(
-        rows: int = 10, columns: List[str] = None
-    ) -> List[Dict[str, Any]]:
+        rows: int = 10, columns: list[str] = None
+    ) -> list[dict[str, Any]]:
         """Generate mock CSV data."""
         if columns is None:
             columns = ["id", "name", "value", "category"]
@@ -88,7 +88,7 @@ class TestDataGenerator:
         return data
 
     @staticmethod
-    def generate_json_data(structure: str = "simple") -> Union[Dict, List]:
+    def generate_json_data(structure: str = "simple") -> dict | list:
         """Generate mock JSON data."""
         if structure == "simple":
             return {
@@ -154,8 +154,8 @@ class WorkflowTestHelper:
         self,
         workflow: Workflow,
         with_tracking: bool = True,
-        parameters: Optional[Dict] = None,
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        parameters: dict | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Run a workflow with optional tracking."""
         if with_tracking:
             self.task_manager = TaskManager()
@@ -165,7 +165,7 @@ class WorkflowTestHelper:
         return self.runtime.execute(workflow, self.task_manager, parameters)
 
     def assert_workflow_success(
-        self, workflow: Workflow, expected_nodes: Optional[List[str]] = None
+        self, workflow: Workflow, expected_nodes: list[str] | None = None
     ):
         """Assert that a workflow runs successfully."""
         results, run_id = self.run_workflow(workflow)
@@ -182,10 +182,10 @@ class WorkflowTestHelper:
 
     def assert_node_output(
         self,
-        results: Dict[str, Any],
+        results: dict[str, Any],
         node_id: str,
-        expected_keys: List[str],
-        expected_values: Optional[Dict] = None,
+        expected_keys: list[str],
+        expected_values: dict | None = None,
     ):
         """Assert that a node produced expected output."""
         assert node_id in results, f"Node {node_id} not found in results"
@@ -208,7 +208,7 @@ class NodeTestHelper:
     """Helper class for testing individual nodes."""
 
     @staticmethod
-    def test_node_parameters(node: Node, expected_params: Dict[str, type]):
+    def test_node_parameters(node: Node, expected_params: dict[str, type]):
         """Test that a node has expected parameters."""
         params = node.get_parameters()
 
@@ -222,10 +222,10 @@ class NodeTestHelper:
     @staticmethod
     def test_node_execution(
         node: Node,
-        inputs: Dict[str, Any],
-        expected_keys: List[str],
+        inputs: dict[str, Any],
+        expected_keys: list[str],
         should_fail: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Test node execution with given inputs."""
         if should_fail:
             try:
@@ -244,7 +244,7 @@ class NodeTestHelper:
 
     @staticmethod
     def test_node_validation(
-        node: Node, valid_inputs: Dict[str, Any], invalid_inputs: List[Dict[str, Any]]
+        node: Node, valid_inputs: dict[str, Any], invalid_inputs: list[dict[str, Any]]
     ):
         """Test node input validation."""
         # Test valid inputs
@@ -269,7 +269,7 @@ class TestReporter:
         """Initialize reporter with task manager."""
         self.task_manager = task_manager
 
-    def generate_run_report(self, run_id: str) -> Dict[str, Any]:
+    def generate_run_report(self, run_id: str) -> dict[str, Any]:
         """Generate a detailed report for a workflow run."""
         run = self.task_manager.get_run_summary(run_id)
         tasks = self.task_manager.list_tasks(run_id)
@@ -305,7 +305,7 @@ class TestReporter:
 
         return report
 
-    def save_report(self, report: Dict[str, Any], output_path: str):
+    def save_report(self, report: dict[str, Any], output_path: str):
         """Save report to file."""
         with open(output_path, "w") as f:
             json.dump(report, f, indent=2, default=str)
@@ -325,7 +325,7 @@ def create_test_node(node_type: str = "MockNode", **config) -> Node:
 
 
 def create_test_workflow(
-    name: str = "test_workflow", nodes: Optional[List[Dict]] = None
+    name: str = "test_workflow", nodes: list[dict] | None = None
 ) -> Workflow:
     """Create a test workflow with specified nodes."""
     workflow = Workflow(name=name)

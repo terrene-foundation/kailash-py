@@ -119,7 +119,7 @@ for file in file_list:
         if modified_str:
             # Remove 'Z' and add UTC offset for parsing
             modified = datetime.fromisoformat(modified_str.replace('Z', '+00:00'))
-            
+
             if modified > cutoff:
                 recent_files.append({
                     'name': file['name'],

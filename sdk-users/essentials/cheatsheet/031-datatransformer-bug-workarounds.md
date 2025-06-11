@@ -8,7 +8,7 @@
 # Expected input to DataTransformer
 data = {"files": [...], "count": 5}
 
-# What actually arrives (BUG)  
+# What actually arrives (BUG)
 data = ["files", "count"]  # List of keys only!
 ```
 
@@ -116,10 +116,10 @@ def detect_datatransformer_bug(data, expected_keys=None):
     '''Detect if DataTransformer bug occurred'''
     if not isinstance(data, list):
         return False
-    
+
     if expected_keys:
         return all(key in data for key in expected_keys)
-    
+
     # Generic detection: list of strings that look like dict keys
     return len(data) > 0 and all(isinstance(x, str) for x in data)
 
@@ -153,7 +153,7 @@ workflow.connect(
 
 # Use specific variable mapping
 workflow.connect(
-    "source", "transformer", 
+    "source", "transformer",
     mapping={
         "files_by_type": "files_by_type",      # ✅ Direct mapping
         "directory_stats": "directory_stats"
@@ -171,7 +171,7 @@ complex_transform = DataTransformer(transformations=["""
 # Process complex nested data...
 """])
 
-# ✅ Simple chained transformations  
+# ✅ Simple chained transformations
 file_extractor = DataTransformer(transformations=["""
 files = files_by_type.get("csv", [])
 result = {"csv_files": files}
@@ -196,7 +196,7 @@ try:
         # Fallback processing
         result = process_with_workaround(data)
         result["workaround_applied"] = True
-        
+
 except Exception as e:
     # Graceful degradation
     result = {

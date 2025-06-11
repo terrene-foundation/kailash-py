@@ -47,9 +47,9 @@ workflow.add_node("standard_processing", DataTransformer(
 
 # Connect conditional branches
 workflow.connect("reader", "value_router", mapping={"data": "data"})
-workflow.connect("value_router", "premium_processing", 
+workflow.connect("value_router", "premium_processing",
                 output_key="true_output", mapping={"data": "data"})
-workflow.connect("value_router", "standard_processing", 
+workflow.connect("value_router", "standard_processing",
                 output_key="false_output", mapping={"data": "data"})
 
 # Execute
@@ -171,9 +171,9 @@ customer_type = SwitchNode(id="customer_type", condition="type == 'enterprise'")
 workflow.add_node("customer_type", customer_type)
 
 # Connect decision tree
-workflow.connect("quality_check", "customer_type", 
+workflow.connect("quality_check", "customer_type",
                 output_key="true_output", mapping={"data": "data"})
-workflow.connect("quality_check", "data_cleansing", 
+workflow.connect("quality_check", "data_cleansing",
                 output_key="false_output", mapping={"data": "data"})
 ```
 
@@ -186,24 +186,24 @@ workflow = Workflow("resilient_parallel", "Fault-Tolerant Aggregation")
 for service in ["service_a", "service_b", "service_c"]:
     # API call
     workflow.add_node(f"{service}_api", RestClientNode())
-    
+
     # Error handler for this service
     workflow.add_node(f"{service}_error_handler", SwitchNode(
         condition="status_code == 200"
     ))
-    
+
     # Fallback for failed calls
     workflow.add_node(f"{service}_fallback", DataTransformer(
         transformations=["lambda x: {'data': 'default', 'source': 'fallback'}"]
     ))
-    
+
     # Connect with error handling
     workflow.connect(f"{service}_api", f"{service}_error_handler")
-    workflow.connect(f"{service}_error_handler", "merger", 
+    workflow.connect(f"{service}_error_handler", "merger",
                     output_key="true_output", mapping={"response": f"{service}_data"})
-    workflow.connect(f"{service}_error_handler", f"{service}_fallback", 
+    workflow.connect(f"{service}_error_handler", f"{service}_fallback",
                     output_key="false_output")
-    workflow.connect(f"{service}_fallback", "merger", 
+    workflow.connect(f"{service}_fallback", "merger",
                     mapping={"result": f"{service}_data"})
 ```
 

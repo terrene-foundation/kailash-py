@@ -41,7 +41,7 @@ import json
 import logging
 import os
 from contextlib import AsyncExitStack
-from typing import Any, Dict, List, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,8 @@ class MCPClient:
         self._discovered_resources = {}  # Cache discovered resources
 
     async def discover_tools(
-        self, server_config: Union[str, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, server_config: str | dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Discover available tools from an MCP server.
 
         Args:
@@ -169,9 +169,9 @@ class MCPClient:
 
     async def call_tool(
         self,
-        server_config: Union[str, Dict[str, Any]],
+        server_config: str | dict[str, Any],
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> Any:
         """Call a tool on an MCP server.
 
@@ -260,8 +260,8 @@ class MCPClient:
             return {"error": str(e)}
 
     async def list_resources(
-        self, server_config: Union[str, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, server_config: str | dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """List available resources from an MCP server.
 
         Args:
@@ -350,9 +350,7 @@ class MCPClient:
             logger.error(f"Failed to list resources: {e}")
             return []
 
-    async def read_resource(
-        self, server_config: Union[str, Dict[str, Any]], uri: str
-    ) -> Any:
+    async def read_resource(self, server_config: str | dict[str, Any], uri: str) -> Any:
         """Read a resource from an MCP server.
 
         Args:
@@ -438,7 +436,7 @@ class MCPClient:
             logger.error(f"Failed to read resource: {e}")
             return {"error": str(e)}
 
-    def _get_server_key(self, server_config: Union[str, Dict[str, Any]]) -> str:
+    def _get_server_key(self, server_config: str | dict[str, Any]) -> str:
         """Generate a unique key for caching server data."""
         if isinstance(server_config, str):
             return server_config

@@ -12,7 +12,6 @@ Perfect for understanding the core mechanics before diving into complex examples
 
 import json
 import time
-from typing import Dict, List
 
 from kailash import Workflow
 from kailash.nodes.ai.self_organizing import (
@@ -86,7 +85,7 @@ def create_simple_agent_pool() -> Workflow:
     return workflow, agent_specs
 
 
-def demonstrate_pool_management(workflow: Workflow, agent_specs: List[Dict]):
+def demonstrate_pool_management(workflow: Workflow, agent_specs: list[dict]):
     """Demonstrate agent pool management capabilities."""
     print("\n" + "=" * 50)
     print("1. AGENT POOL MANAGEMENT")
@@ -169,7 +168,7 @@ def demonstrate_problem_analysis(workflow: Workflow):
 
 
 def demonstrate_team_formation(
-    workflow: Workflow, pool_manager, problem_analysis: Dict
+    workflow: Workflow, pool_manager, problem_analysis: dict
 ):
     """Demonstrate team formation strategies."""
     print("\n" + "=" * 50)
@@ -227,7 +226,7 @@ def demonstrate_team_formation(
 
 
 def demonstrate_collaboration(
-    workflow: Workflow, teams: Dict[str, List], problem_analysis: Dict
+    workflow: Workflow, teams: dict[str, list], problem_analysis: dict
 ):
     """Demonstrate agent collaboration."""
     print("\n" + "=" * 50)
@@ -303,7 +302,7 @@ def demonstrate_collaboration(
     return integrated_solution
 
 
-def demonstrate_evaluation(workflow: Workflow, solution: Dict, problem_analysis: Dict):
+def demonstrate_evaluation(workflow: Workflow, solution: dict, problem_analysis: dict):
     """Demonstrate solution evaluation."""
     print("\n" + "=" * 50)
     print("5. SOLUTION EVALUATION")

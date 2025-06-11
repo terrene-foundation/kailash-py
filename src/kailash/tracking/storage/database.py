@@ -2,7 +2,6 @@
 
 import json
 from datetime import datetime
-from typing import List, Optional
 from uuid import uuid4
 
 from ..models import TaskMetrics, TaskRun, TaskStatus, WorkflowRun
@@ -160,7 +159,7 @@ class DatabaseStorage(StorageBackend):
 
         self.conn.commit()
 
-    def load_run(self, run_id: str) -> Optional[WorkflowRun]:
+    def load_run(self, run_id: str) -> WorkflowRun | None:
         """Load a workflow run by ID."""
         cursor = self.conn.cursor()
 
@@ -177,7 +176,7 @@ class DatabaseStorage(StorageBackend):
 
         # Convert row to dict
         columns = [desc[0] for desc in cursor.description]
-        data = dict(zip(columns, row))
+        data = dict(zip(columns, row, strict=False))
 
         # Parse JSON metadata
         data["metadata"] = json.loads(data["metadata"] or "{}")
@@ -189,8 +188,8 @@ class DatabaseStorage(StorageBackend):
         return WorkflowRun.model_validate(data)
 
     def list_runs(
-        self, workflow_name: Optional[str] = None, status: Optional[str] = None
-    ) -> List[WorkflowRun]:
+        self, workflow_name: str | None = None, status: str | None = None
+    ) -> list[WorkflowRun]:
         """List workflow runs."""
         cursor = self.conn.cursor()
 
@@ -213,7 +212,7 @@ class DatabaseStorage(StorageBackend):
         columns = [desc[0] for desc in cursor.description]
 
         for row in cursor.fetchall():
-            data = dict(zip(columns, row))
+            data = dict(zip(columns, row, strict=False))
             data["metadata"] = json.loads(data["metadata"] or "{}")
 
             # Load task IDs
@@ -277,7 +276,7 @@ class DatabaseStorage(StorageBackend):
 
         self.conn.commit()
 
-    def load_task(self, task_id: str) -> Optional[TaskRun]:
+    def load_task(self, task_id: str) -> TaskRun | None:
         """Load a task by ID."""
         cursor = self.conn.cursor()
 
@@ -305,7 +304,7 @@ class DatabaseStorage(StorageBackend):
 
         # Convert row to dict
         columns = [desc[0] for desc in cursor.description]
-        data = dict(zip(columns, row))
+        data = dict(zip(columns, row, strict=False))
 
         # Parse JSON fields
         if data["result"]:
@@ -341,7 +340,7 @@ class DatabaseStorage(StorageBackend):
         metrics_row = cursor.fetchone()
         if metrics_row:
             metrics_columns = [desc[0] for desc in cursor.description]
-            metrics_data = dict(zip(metrics_columns, metrics_row))
+            metrics_data = dict(zip(metrics_columns, metrics_row, strict=False))
 
             # Parse custom metrics if present
             if metrics_data.get("custom_metrics"):
@@ -362,9 +361,9 @@ class DatabaseStorage(StorageBackend):
     def list_tasks(
         self,
         run_id: str,
-        node_id: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-    ) -> List[TaskRun]:
+        node_id: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> list[TaskRun]:
         """List tasks for a run."""
         cursor = self.conn.cursor()
 
@@ -387,7 +386,7 @@ class DatabaseStorage(StorageBackend):
         columns = [desc[0] for desc in cursor.description]
 
         for row in cursor.fetchall():
-            data = dict(zip(columns, row))
+            data = dict(zip(columns, row, strict=False))
 
             # Parse JSON fields
             if data["result"]:
@@ -451,7 +450,7 @@ class DatabaseStorage(StorageBackend):
 
     def import_run(self, input_path: str) -> str:
         """Import a run and its tasks."""
-        with open(input_path, "r") as f:
+        with open(input_path) as f:
             import_data = json.load(f)
 
         # Import run
@@ -472,7 +471,7 @@ class DatabaseStorage(StorageBackend):
 
         return run.run_id
 
-    def get_task(self, task_id: str) -> Optional[TaskRun]:
+    def get_task(self, task_id: str) -> TaskRun | None:
         """Load a task by ID.
 
         Alias for load_task for API compatibility.
@@ -485,7 +484,7 @@ class DatabaseStorage(StorageBackend):
         """
         return self.load_task(task_id)
 
-    def get_all_tasks(self) -> List[TaskRun]:
+    def get_all_tasks(self) -> list[TaskRun]:
         """Get all tasks.
 
         Returns:
@@ -498,7 +497,7 @@ class DatabaseStorage(StorageBackend):
         columns = [desc[0] for desc in cursor.description]
 
         for row in cursor.fetchall():
-            data = dict(zip(columns, row))
+            data = dict(zip(columns, row, strict=False))
 
             # Parse JSON fields
             if data["result"]:
@@ -532,11 +531,11 @@ class DatabaseStorage(StorageBackend):
 
     def query_tasks(
         self,
-        node_id: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-        started_after: Optional[datetime] = None,
-        completed_before: Optional[datetime] = None,
-    ) -> List[TaskRun]:
+        node_id: str | None = None,
+        status: TaskStatus | None = None,
+        started_after: datetime | None = None,
+        completed_before: datetime | None = None,
+    ) -> list[TaskRun]:
         """Query tasks with filters.
 
         Args:
@@ -583,7 +582,7 @@ class DatabaseStorage(StorageBackend):
         columns = [desc[0] for desc in cursor.description]
 
         for row in cursor.fetchall():
-            data = dict(zip(columns, row))
+            data = dict(zip(columns, row, strict=False))
 
             # Parse JSON fields
             if data["result"]:

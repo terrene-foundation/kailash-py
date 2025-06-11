@@ -24,7 +24,7 @@ Features:
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
@@ -33,7 +33,7 @@ from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
-def get_api_endpoints() -> Dict[str, Any]:
+def get_api_endpoints() -> dict[str, Any]:
     """Get list of real API endpoints to demonstrate integration patterns."""
     return {
         "jsonplaceholder": {
@@ -149,10 +149,10 @@ try:
         timeout=30,
         headers={"Accept": "application/json"}
     )
-    
+
     users_success = users_response.get("success", False)
     users_data = users_response.get("response", {}).get("content", []) if users_success else []
-    
+
     # Process real user data
     processed_users = []
     if users_success and isinstance(users_data, list):
@@ -169,7 +169,7 @@ try:
                     "address_city": user.get("address", {}).get("city", "N/A") if user.get("address") else "N/A"
                 }
                 processed_users.append(processed_user)
-    
+
     users_result = {
         "endpoint": "users",
         "url": users_url,
@@ -180,7 +180,7 @@ try:
         "fetched_at": datetime.now().isoformat()
     }
     integration_results.append(users_result)
-    
+
 except Exception as e:
     users_result = {
         "endpoint": "users",
@@ -198,14 +198,14 @@ try:
     http_node = HTTPRequestNode(name="posts_fetcher")
     posts_response = http_node.run(
         url=posts_url,
-        method="GET", 
+        method="GET",
         timeout=30,
         headers={"Accept": "application/json"}
     )
-    
+
     posts_success = posts_response.get("success", False)
     posts_data = posts_response.get("response", {}).get("content", []) if posts_success else []
-    
+
     # Analyze real posts data
     posts_analysis = {}
     if posts_success and isinstance(posts_data, list):
@@ -216,7 +216,7 @@ try:
                 user_id = post.get("userId")
                 if user_id:
                     user_post_counts[user_id] = user_post_counts.get(user_id, 0) + 1
-        
+
         posts_analysis = {
             "total_posts": len(posts_data),
             "unique_users": len(user_post_counts),
@@ -224,7 +224,7 @@ try:
             "user_post_counts": user_post_counts,
             "sample_posts": posts_data[:3]  # First 3 posts for reference
         }
-    
+
     posts_result = {
         "endpoint": "posts",
         "url": posts_url,
@@ -234,7 +234,7 @@ try:
         "fetched_at": datetime.now().isoformat()
     }
     integration_results.append(posts_result)
-    
+
 except Exception as e:
     posts_result = {
         "endpoint": "posts",
@@ -290,10 +290,10 @@ try:
             "User-Agent": "Kailash-SDK-Demo"
         }
     )
-    
+
     repo_success = repo_response.get("success", False)
     repo_data = repo_response.get("response", {}).get("content", {}) if repo_success else {}
-    
+
     # Process real repository data
     repo_analysis = {}
     if repo_success and isinstance(repo_data, dict):
@@ -313,7 +313,7 @@ try:
             "has_wiki": repo_data.get("has_wiki", False),
             "license": repo_data.get("license", {}).get("name", "N/A") if repo_data.get("license") else "N/A"
         }
-    
+
     repo_result = {
         "endpoint": "repository",
         "url": repo_url,
@@ -323,7 +323,7 @@ try:
         "fetched_at": datetime.now().isoformat()
     }
     integration_results.append(repo_result)
-    
+
 except Exception as e:
     repo_result = {
         "endpoint": "repository",
@@ -348,10 +348,10 @@ try:
             "User-Agent": "Kailash-SDK-Demo"
         }
     )
-    
+
     user_success = user_response.get("success", False)
     user_data = user_response.get("response", {}).get("content", {}) if user_success else {}
-    
+
     # Process real user data
     user_analysis = {}
     if user_success and isinstance(user_data, dict):
@@ -370,7 +370,7 @@ try:
             "account_type": user_data.get("type"),
             "is_site_admin": user_data.get("site_admin", False)
         }
-    
+
     user_result = {
         "endpoint": "user",
         "url": user_url,
@@ -380,7 +380,7 @@ try:
         "fetched_at": datetime.now().isoformat()
     }
     integration_results.append(user_result)
-    
+
 except Exception as e:
     user_result = {
         "endpoint": "user",
@@ -439,10 +439,10 @@ try:
             "timestamp": datetime.now().isoformat()
         }
     )
-    
+
     get_success = get_response.get("success", False)
     get_data = get_response.get("response", {}).get("content", {}) if get_success else {}
-    
+
     # Analyze GET response
     get_analysis = {}
     if get_success and isinstance(get_data, dict):
@@ -454,7 +454,7 @@ try:
             "user_agent": get_data.get("headers", {}).get("User-Agent"),
             "custom_header": get_data.get("headers", {}).get("X-Custom-Header")
         }
-    
+
     get_result = {
         "endpoint": "get_test",
         "url": get_url,
@@ -465,7 +465,7 @@ try:
         "tested_at": datetime.now().isoformat()
     }
     integration_results.append(get_result)
-    
+
 except Exception as e:
     get_result = {
         "endpoint": "get_test",
@@ -493,10 +493,10 @@ try:
             "X-Client": "Kailash-SDK"
         }
     )
-    
+
     headers_success = headers_response.get("success", False)
     headers_data = headers_response.get("response", {}).get("content", {}) if headers_success else {}
-    
+
     # Analyze headers response
     headers_analysis = {}
     if headers_success and isinstance(headers_data, dict):
@@ -510,18 +510,18 @@ try:
             "host": received_headers.get("Host"),
             "all_headers": received_headers
         }
-    
+
     headers_result = {
         "endpoint": "headers_test",
         "url": headers_url,
-        "method": "GET", 
+        "method": "GET",
         "success": headers_success,
         "analysis": headers_analysis,
         "response_code": headers_response.get("status_code"),
         "tested_at": datetime.now().isoformat()
     }
     integration_results.append(headers_result)
-    
+
 except Exception as e:
     headers_result = {
         "endpoint": "headers_test",
@@ -572,7 +572,7 @@ api_results = [merged_results.get("api_name"), merged_results.get("integration_r
 
 # Extract individual API results
 jsonplaceholder_data = merged_results.get("api_name") == "jsonplaceholder"
-github_data = merged_results.get("api_name") == "github" 
+github_data = merged_results.get("api_name") == "github"
 httpbin_data = merged_results.get("api_name") == "httpbin"
 
 all_integrations = []
@@ -582,7 +582,7 @@ for key, value in merged_results.items():
         integration_results = value.get("integration_results", [])
         successful_calls = value.get("successful_calls", 0)
         total_calls = value.get("total_calls", 0)
-        
+
         api_summary = {
             "api_name": api_name,
             "total_endpoints_tested": total_calls,
@@ -602,7 +602,7 @@ overall_success_rate = (total_successful / total_api_calls * 100) if total_api_c
 insights = []
 for api in all_integrations:
     api_name = api.get("api_name", "unknown")
-    
+
     if api_name == "jsonplaceholder":
         # Analyze user and posts data
         for result in api.get("integration_results", []):
@@ -614,7 +614,7 @@ for api in all_integrations:
                 total_posts = posts_analysis.get("total_posts", 0)
                 unique_users = posts_analysis.get("unique_users", 0)
                 insights.append(f"JSONPlaceholder: Analyzed {total_posts} posts from {unique_users} users")
-    
+
     elif api_name == "github":
         # Analyze repository and user data
         for result in api.get("integration_results", []):
@@ -630,7 +630,7 @@ for api in all_integrations:
                 public_repos = user_analysis.get("public_repos", 0)
                 followers = user_analysis.get("followers", 0)
                 insights.append(f"GitHub: User '{username}' has {public_repos} public repos and {followers} followers")
-    
+
     elif api_name == "httpbin":
         # Analyze HTTP testing results
         for result in api.get("integration_results", []):
@@ -674,7 +674,7 @@ analysis_report = {
     "integration_patterns_demonstrated": [
         "Real public API integration without authentication",
         "Multi-endpoint API orchestration",
-        "Response data processing and analysis", 
+        "Response data processing and analysis",
         "Error handling for network failures",
         "HTTP method and header testing"
     ],
@@ -772,10 +772,10 @@ for api in api_breakdown:
             "impact": "Suitable for testing data transformation workflows",
             "recommendation": "Use for development and testing workflows"
         })
-    
+
     if api_name == "github" and api.get("success_rate", 0) > 0:
         key_findings.append({
-            "type": "real_world_integration", 
+            "type": "real_world_integration",
             "finding": "GitHub API integration successful with real repository data",
             "impact": "Demonstrates capability for production API integrations",
             "recommendation": "Implement authentication for production usage"
@@ -810,7 +810,7 @@ report = {
         ],
         "production_considerations": [
             "Add authentication for APIs that require it",
-            "Implement proper rate limiting and backoff strategies", 
+            "Implement proper rate limiting and backoff strategies",
             "Add monitoring and alerting for API failures",
             "Consider caching for frequently accessed data"
         ]
@@ -917,7 +917,7 @@ def main():
     # Display generated reports
     print("\\n=== API Integration Report Preview ===")
     try:
-        with open("data/outputs/comprehensive_api_integration_report.json", "r") as f:
+        with open("data/outputs/comprehensive_api_integration_report.json") as f:
             report = json.load(f)
             executive_summary = report["api_integration_report"]["executive_summary"]
             print(json.dumps(executive_summary, indent=2))

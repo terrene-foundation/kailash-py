@@ -11,7 +11,7 @@ Tests performance characteristics of cycles including:
 import gc
 import os
 import time
-from typing import Any, Dict
+from typing import Any
 
 import psutil
 import pytest
@@ -26,14 +26,14 @@ from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
 class PerformanceCounterNode(CycleAwareNode):
     """Simple counter for performance testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "increment": NodeParameter(
                 name="increment", type=int, required=False, default=1
             )
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Count with minimal overhead."""
         iteration = self.get_iteration(context)
         increment = kwargs.get("increment", 1)
@@ -55,7 +55,7 @@ class PerformanceCounterNode(CycleAwareNode):
 class StateAccumulatorNode(CycleAwareNode):
     """Node that accumulates state to test memory performance."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data_size": NodeParameter(
                 name="data_size", type=int, required=False, default=1000
@@ -65,7 +65,7 @@ class StateAccumulatorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Accumulate data to test memory usage."""
         data_size = kwargs.get("data_size", 1000)
         accumulate = kwargs.get("accumulate", True)
@@ -108,7 +108,7 @@ class StateAccumulatorNode(CycleAwareNode):
 class ComputeIntensiveNode(CycleAwareNode):
     """Node with configurable computational complexity."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "complexity": NodeParameter(
                 name="complexity", type=int, required=False, default=1000
@@ -116,7 +116,7 @@ class ComputeIntensiveNode(CycleAwareNode):
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Perform computation with configurable complexity."""
         complexity = kwargs.get("complexity", 1000)
         data = kwargs.get("data", list(range(100)))
@@ -200,14 +200,14 @@ class TestLargeScaleIterations:
         class EarlyConvergenceNode(CycleAwareNode):
             """Node that converges early based on condition."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "target": NodeParameter(
                         name="target", type=int, required=False, default=100
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process until target reached."""
                 target = kwargs.get("target", 100)
                 iteration = self.get_iteration(context)
@@ -417,14 +417,14 @@ class TestCycleOverhead:
         class SimpleComputeNode(CycleAwareNode):
             """Simple computation for overhead testing."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "value": NodeParameter(
                         name="value", type=float, required=False, default=1.0
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Simple computation."""
                 value = kwargs.get("value", 1.0)
                 iteration = self.get_iteration(context)
@@ -456,14 +456,14 @@ class TestCycleOverhead:
         class SimpleNode(Node):
             """Simple computation for non-cyclic testing."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "value": NodeParameter(
                         name="value", type=float, required=False, default=1.0
                     )
                 }
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 """Simple computation."""
                 value = kwargs.get("value", 1.0)
 

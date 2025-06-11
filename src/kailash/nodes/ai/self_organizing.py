@@ -10,7 +10,7 @@ import time
 import uuid
 from collections import defaultdict, deque
 from enum import Enum
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from kailash.nodes.ai.a2a import A2AAgentNode
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -125,7 +125,7 @@ class AgentPoolManagerNode(Node):
         self.capability_index = defaultdict(set)
         self.team_history = deque(maxlen=100)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "action": NodeParameter(
                 name="action",
@@ -179,7 +179,7 @@ class AgentPoolManagerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute pool management action."""
         action = kwargs.get("action", "list")
 
@@ -198,7 +198,7 @@ class AgentPoolManagerNode(Node):
         else:
             return {"success": False, "error": f"Unknown action: {action}"}
 
-    def _register_agent(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _register_agent(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Register a new agent in the pool."""
         agent_id = kwargs.get("agent_id")
         if not agent_id:
@@ -235,7 +235,7 @@ class AgentPoolManagerNode(Node):
             "pool_size": len(self.agent_registry),
         }
 
-    def _unregister_agent(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _unregister_agent(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Remove an agent from the pool."""
         agent_id = kwargs.get("agent_id")
 
@@ -258,7 +258,7 @@ class AgentPoolManagerNode(Node):
             "pool_size": len(self.agent_registry),
         }
 
-    def _find_by_capability(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _find_by_capability(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Find agents matching required capabilities."""
         required_capabilities = set(kwargs.get("required_capabilities", []))
         min_performance = kwargs.get("min_performance", 0.7)
@@ -305,7 +305,7 @@ class AgentPoolManagerNode(Node):
             "total_pool_size": len(self.agent_registry),
         }
 
-    def _update_status(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_status(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Update agent status."""
         agent_id = kwargs.get("agent_id")
         new_status = kwargs.get("status")
@@ -357,7 +357,7 @@ class AgentPoolManagerNode(Node):
             "last_active": self.agent_registry[agent_id]["last_active"],
         }
 
-    def _get_metrics(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_metrics(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Get performance metrics for an agent or all agents."""
         agent_id = kwargs.get("agent_id")
 
@@ -409,7 +409,7 @@ class AgentPoolManagerNode(Node):
                 },
             }
 
-    def _list_agents(self) -> Dict[str, Any]:
+    def _list_agents(self) -> dict[str, Any]:
         """List all agents in the pool."""
         agents = []
         for agent_id, agent_data in self.agent_registry.items():
@@ -499,7 +499,7 @@ class ProblemAnalyzerNode(Node):
             "domain": ["domain_expertise", "validation", "interpretation"],
         }
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "problem_description": NodeParameter(
                 name="problem_description",
@@ -530,7 +530,7 @@ class ProblemAnalyzerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Analyze the problem to determine requirements."""
         problem_description = kwargs["problem_description"]
         context = kwargs.get("context", {})
@@ -627,8 +627,8 @@ class ProblemAnalyzerNode(Node):
         }
 
     def _hierarchical_decomposition(
-        self, problem: str, capabilities: Set[str]
-    ) -> List[Dict]:
+        self, problem: str, capabilities: set[str]
+    ) -> list[dict]:
         """Decompose problem hierarchically."""
         # Simple heuristic decomposition
         phases = []
@@ -708,7 +708,7 @@ class ProblemAnalyzerNode(Node):
 
         return phases
 
-    def _simple_decomposition(self, problem: str, capabilities: Set[str]) -> List[Dict]:
+    def _simple_decomposition(self, problem: str, capabilities: set[str]) -> list[dict]:
         """Simple task decomposition."""
         tasks = []
         for i, cap in enumerate(capabilities):
@@ -731,8 +731,8 @@ class ProblemAnalyzerNode(Node):
         return int(base_time * complexity_factor * parallelization_factor)
 
     def _prioritize_capabilities(
-        self, capabilities: Set[str], problem: str
-    ) -> List[str]:
+        self, capabilities: set[str], problem: str
+    ) -> list[str]:
         """Prioritize capabilities based on problem."""
         # Simple prioritization based on problem keywords
         priority_map = {
@@ -789,7 +789,7 @@ class TeamFormationNode(Node):
         self.formation_history = deque(maxlen=50)
         self.team_performance_cache = {}
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "problem_analysis": NodeParameter(
                 name="problem_analysis",
@@ -835,7 +835,7 @@ class TeamFormationNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Form an optimal team."""
         problem_analysis = kwargs.get("problem_analysis", {})
         available_agents = kwargs.get("available_agents", [])
@@ -901,8 +901,8 @@ class TeamFormationNode(Node):
         }
 
     def _capability_matching_formation(
-        self, problem: Dict, agents: List[Dict], constraints: Dict
-    ) -> List[Dict]:
+        self, problem: dict, agents: list[dict], constraints: dict
+    ) -> list[dict]:
         """Form team by matching capabilities to requirements."""
         required_capabilities = set(problem.get("required_capabilities", []))
         selected_agents = []
@@ -947,8 +947,8 @@ class TeamFormationNode(Node):
         return selected_agents
 
     def _swarm_based_formation(
-        self, problem: Dict, agents: List[Dict], constraints: Dict
-    ) -> List[Dict]:
+        self, problem: dict, agents: list[dict], constraints: dict
+    ) -> list[dict]:
         """Form team using swarm intelligence principles."""
         required_capabilities = set(problem.get("required_capabilities", []))
         problem.get("complexity_score", 0.5)
@@ -1024,8 +1024,8 @@ class TeamFormationNode(Node):
         return best_cluster
 
     def _market_based_formation(
-        self, problem: Dict, agents: List[Dict], constraints: Dict
-    ) -> List[Dict]:
+        self, problem: dict, agents: list[dict], constraints: dict
+    ) -> list[dict]:
         """Form team using market-based auction mechanism."""
         required_capabilities = problem.get("required_capabilities", [])
         budget = constraints.get("budget", 100)
@@ -1069,8 +1069,8 @@ class TeamFormationNode(Node):
         return selected_agents
 
     def _hierarchical_formation(
-        self, problem: Dict, agents: List[Dict], constraints: Dict
-    ) -> List[Dict]:
+        self, problem: dict, agents: list[dict], constraints: dict
+    ) -> list[dict]:
         """Form team with hierarchical structure."""
         required_capabilities = problem.get("required_capabilities", [])
 
@@ -1108,8 +1108,8 @@ class TeamFormationNode(Node):
         return team
 
     def _random_formation(
-        self, problem: Dict, agents: List[Dict], constraints: Dict
-    ) -> List[Dict]:
+        self, problem: dict, agents: list[dict], constraints: dict
+    ) -> list[dict]:
         """Random team formation for baseline comparison."""
         team_size = min(
             problem.get("estimated_agents", 5),
@@ -1120,8 +1120,8 @@ class TeamFormationNode(Node):
         return random.sample(agents, team_size)
 
     def _optimize_team(
-        self, team: List[Dict], problem: Dict, all_agents: List[Dict]
-    ) -> Dict[str, Any]:
+        self, team: list[dict], problem: dict, all_agents: list[dict]
+    ) -> dict[str, Any]:
         """Optimize team composition."""
         current_fitness = self._calculate_team_fitness(team, problem)
 
@@ -1154,7 +1154,7 @@ class TeamFormationNode(Node):
             "fitness_improvement": best_fitness - current_fitness,
         }
 
-    def _calculate_team_fitness(self, team: List[Dict], problem: Dict) -> float:
+    def _calculate_team_fitness(self, team: list[dict], problem: dict) -> float:
         """Calculate how well a team matches problem requirements."""
         required_capabilities = set(problem.get("required_capabilities", []))
 
@@ -1187,8 +1187,8 @@ class TeamFormationNode(Node):
         return max(0, min(1, fitness))
 
     def _calculate_team_metrics(
-        self, team: List[Dict], problem: Dict
-    ) -> Dict[str, Any]:
+        self, team: list[dict], problem: dict
+    ) -> dict[str, Any]:
         """Calculate comprehensive team metrics."""
         required_capabilities = set(problem.get("required_capabilities", []))
         team_capabilities = set()
@@ -1231,7 +1231,7 @@ class SelfOrganizingAgentNode(A2AAgentNode):
         self.collaboration_history = deque(maxlen=50)
         self.skill_adaptations = defaultdict(float)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         params = super().get_parameters()
 
         # Add self-organization specific parameters
@@ -1283,7 +1283,7 @@ class SelfOrganizingAgentNode(A2AAgentNode):
 
         return params
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute self-organizing agent behavior."""
         agent_id = kwargs.get("agent_id")
         capabilities = kwargs.get("capabilities", [])
@@ -1339,7 +1339,7 @@ Guidelines:
 
         return result
 
-    def _adapt_to_team(self, agent_id: str, team_context: Dict, mode: str):
+    def _adapt_to_team(self, agent_id: str, team_context: dict, mode: str):
         """Adapt behavior to team dynamics."""
         team_id = team_context.get("team_id")
         if not team_id:
@@ -1368,7 +1368,7 @@ Guidelines:
                     self.skill_adaptations[cap] *= 1.1  # Enhance
 
     def _enhance_task_with_context(
-        self, task: str, team_context: Dict, capabilities: List[str]
+        self, task: str, team_context: dict, capabilities: list[str]
     ) -> str:
         """Enhance task description with team context."""
         enhanced = task
@@ -1389,7 +1389,7 @@ Guidelines:
         return enhanced
 
     def _track_collaboration(
-        self, agent_id: str, team_context: Dict, task: str, result: Dict
+        self, agent_id: str, team_context: dict, task: str, result: dict
     ):
         """Track collaboration history and performance."""
         team_id = team_context.get("team_id", "unknown")
@@ -1442,7 +1442,7 @@ class SolutionEvaluatorNode(Node):
         super().__init__()
         self.evaluation_history = deque(maxlen=100)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "solution": NodeParameter(
                 name="solution",
@@ -1481,7 +1481,7 @@ class SolutionEvaluatorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Evaluate solution quality."""
         solution = kwargs.get("solution", {})
         requirements = kwargs.get("problem_requirements", {})
@@ -1569,8 +1569,8 @@ class SolutionEvaluatorNode(Node):
         }
 
     def _generate_feedback(
-        self, scores: Dict[str, float], requirements: Dict, overall: float
-    ) -> Dict[str, Any]:
+        self, scores: dict[str, float], requirements: dict, overall: float
+    ) -> dict[str, Any]:
         """Generate specific feedback for improvement."""
         feedback = {"strengths": [], "weaknesses": [], "suggestions": []}
 
@@ -1596,8 +1596,8 @@ class SolutionEvaluatorNode(Node):
         return feedback
 
     def _recommend_actions(
-        self, scores: Dict[str, float], feedback: Dict, iteration: int
-    ) -> List[str]:
+        self, scores: dict[str, float], feedback: dict, iteration: int
+    ) -> list[str]:
         """Recommend specific actions for improvement."""
         actions = []
 

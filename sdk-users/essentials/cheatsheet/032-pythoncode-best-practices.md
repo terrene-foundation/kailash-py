@@ -49,24 +49,24 @@ from typing import Dict, Any
 def process_customer_data(input_data: list, threshold: float = 100) -> Dict[str, Any]:
     """
     Process customer data with filtering and aggregation.
-    
+
     Args:
         input_data: List of customer records
         threshold: Minimum value threshold
-        
+
     Returns:
         Dictionary with summary statistics
     """
     # Full IDE support here!
     df = pd.DataFrame(input_data)
-    
+
     # IDE shows available columns and methods
     if 'value' not in df.columns:
         return {'error': 'Missing value column'}
-    
+
     # Type hints and auto-completion work
     filtered = df[df['value'] > threshold]
-    
+
     # IDE validates column names
     if not filtered.empty and 'category' in filtered.columns:
         summary = filtered.groupby('category').agg({
@@ -77,7 +77,7 @@ def process_customer_data(input_data: list, threshold: float = 100) -> Dict[str,
             'total_records': len(filtered),
             'threshold_used': threshold
         }
-    
+
     return {'summary': {}, 'total_records': 0}
 
 # Create node from function - clean and testable!
@@ -96,15 +96,15 @@ processor = PythonCodeNode.from_function(
 def clean_data(raw_data: list) -> pd.DataFrame:
     """Clean and prepare data with full IDE support."""
     df = pd.DataFrame(raw_data)
-    
+
     # Handle missing values
     df['value'] = pd.to_numeric(df['value'], errors='coerce')
     df = df.dropna(subset=['value'])
-    
+
     # Normalize text fields
     if 'category' in df.columns:
         df['category'] = df['category'].str.strip().str.lower()
-    
+
     return df
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -112,10 +112,10 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     # IDE helps with pandas methods
     df['value_squared'] = df['value'] ** 2
     df['value_log'] = np.log1p(df['value'])
-    
+
     # Create bins with IDE validation
     df['value_bin'] = pd.qcut(df['value'], q=5, labels=['XS', 'S', 'M', 'L', 'XL'])
-    
+
     return df
 
 def generate_insights(df: pd.DataFrame) -> Dict[str, Any]:
@@ -132,7 +132,7 @@ def generate_insights(df: pd.DataFrame) -> Dict[str, Any]:
             'max': df['value'].max()
         }
     }
-    
+
     return insights
 
 # Compose into workflow nodes
@@ -165,26 +165,26 @@ import joblib
 def prepare_ml_data(input_data: list, target_column: str = 'target') -> Dict[str, Any]:
     """Prepare data for machine learning with validation."""
     df = pd.DataFrame(input_data)
-    
+
     # Validate target column exists
     if target_column not in df.columns:
         return {'error': f'Target column {target_column} not found'}
-    
+
     # Separate features and target
     feature_columns = [col for col in df.columns if col != target_column]
     X = df[feature_columns].select_dtypes(include=[np.number])
     y = df[target_column]
-    
+
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
-    
+
     # Scale features
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
-    
+
     return {
         'X_train': X_train_scaled.tolist(),
         'X_test': X_test_scaled.tolist(),
@@ -199,7 +199,7 @@ def train_model(X_train: list, y_train: list, **params) -> Dict[str, Any]:
     # Convert back to numpy arrays
     X_train = np.array(X_train)
     y_train = np.array(y_train)
-    
+
     # Train model with IDE parameter hints
     model = RandomForestRegressor(
         n_estimators=params.get('n_estimators', 100),
@@ -207,9 +207,9 @@ def train_model(X_train: list, y_train: list, **params) -> Dict[str, Any]:
         min_samples_split=params.get('min_samples_split', 2),
         random_state=42
     )
-    
+
     model.fit(X_train, y_train)
-    
+
     # Return serializable model
     return {
         'model': model,
@@ -282,10 +282,10 @@ def test_process_function():
         {'id': 1, 'value': 100, 'category': 'A'},
         {'id': 2, 'value': 200, 'category': 'B'}
     ]
-    
+
     # Test the function directly
     result = process_customer_data(test_data, threshold=150)
-    
+
     assert 'summary' in result
     assert result['total_records'] == 1
     print("✅ Function test passed!")
@@ -347,7 +347,7 @@ node = PythonCodeNode.from_function(
 
 Use `.from_function()` and enjoy:
 - 🎯 Accurate code completion
-- 🐛 Immediate error detection  
+- 🐛 Immediate error detection
 - 🔍 Easy debugging
 - ✅ Testable functions
 - 📝 Proper documentation

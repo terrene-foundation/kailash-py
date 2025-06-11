@@ -116,7 +116,7 @@ See Also:
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from . import Workflow
 
@@ -137,10 +137,10 @@ class ValidationIssue:
     category: str
     code: str
     message: str
-    node_id: Optional[str] = None
-    cycle_id: Optional[str] = None
-    suggestion: Optional[str] = None
-    documentation_link: Optional[str] = None
+    node_id: str | None = None
+    cycle_id: str | None = None
+    suggestion: str | None = None
+    documentation_link: str | None = None
 
 
 class CycleLinter:
@@ -160,9 +160,9 @@ class CycleLinter:
         """
         self.workflow = workflow
         self.graph = workflow.graph
-        self.issues: List[ValidationIssue] = []
+        self.issues: list[ValidationIssue] = []
 
-    def check_all(self) -> List[ValidationIssue]:
+    def check_all(self) -> list[ValidationIssue]:
         """
         Run all validation checks on the workflow.
 
@@ -536,7 +536,7 @@ class CycleLinter:
                             )
                         )
 
-    def _get_cycle_id(self, cycle_nodes: List[str]) -> str:
+    def _get_cycle_id(self, cycle_nodes: list[str]) -> str:
         """Generate a cycle identifier from cycle nodes."""
         return f"cycle_{'-'.join(sorted(cycle_nodes))}"
 
@@ -658,23 +658,23 @@ class CycleLinter:
         node_id_lower = node_id.lower()
         return any(keyword in node_id_lower for keyword in file_keywords)
 
-    def get_issues_by_severity(self, severity: IssueSeverity) -> List[ValidationIssue]:
+    def get_issues_by_severity(self, severity: IssueSeverity) -> list[ValidationIssue]:
         """Get all issues of a specific severity level."""
         return [issue for issue in self.issues if issue.severity == severity]
 
-    def get_issues_by_category(self, category: str) -> List[ValidationIssue]:
+    def get_issues_by_category(self, category: str) -> list[ValidationIssue]:
         """Get all issues of a specific category."""
         return [issue for issue in self.issues if issue.category == category]
 
-    def get_issues_for_cycle(self, cycle_id: str) -> List[ValidationIssue]:
+    def get_issues_for_cycle(self, cycle_id: str) -> list[ValidationIssue]:
         """Get all issues for a specific cycle."""
         return [issue for issue in self.issues if issue.cycle_id == cycle_id]
 
-    def get_issues_for_node(self, node_id: str) -> List[ValidationIssue]:
+    def get_issues_for_node(self, node_id: str) -> list[ValidationIssue]:
         """Get all issues for a specific node."""
         return [issue for issue in self.issues if issue.node_id == node_id]
 
-    def generate_report(self) -> Dict[str, Any]:
+    def generate_report(self) -> dict[str, Any]:
         """
         Generate comprehensive validation report.
 
@@ -724,7 +724,7 @@ class CycleLinter:
             "recommendations": self._generate_recommendations(),
         }
 
-    def _generate_recommendations(self) -> List[str]:
+    def _generate_recommendations(self) -> list[str]:
         """Generate high-level recommendations based on found issues."""
         recommendations = []
 

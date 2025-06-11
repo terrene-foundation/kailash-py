@@ -70,7 +70,7 @@ def add_lead_sources(workflow: Workflow):
         id="crm_leads",
         connection_string="${CRM_DATABASE}",
         query="""
-        SELECT 
+        SELECT
             l.lead_id,
             l.email,
             l.first_name,

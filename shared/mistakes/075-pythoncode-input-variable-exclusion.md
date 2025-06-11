@@ -19,7 +19,7 @@ workflow.connect("node1", "node2", mapping={"result": "result"})
 # In node2's PythonCodeNode:
 code = """
 # result is available as input
-data = result.get("data")  
+data = result.get("data")
 
 # But reassigning result won't work!
 result = {"processed": data}  # This won't be in output!
@@ -49,7 +49,7 @@ workflow.connect("node1", "node2", mapping={"result": "input_data"})
 # In node2's PythonCodeNode:
 code = """
 # input_data is available as input
-data = input_data.get("data")  
+data = input_data.get("data")
 
 # Now we can create result as a new variable
 result = {"processed": data}  # This WILL be in output!
@@ -72,7 +72,7 @@ workflow.connect("discovery", "processor", mapping={"result": "discovery_data"})
 # WRONG
 workflow.connect("merger", "summarizer", mapping={"result": "result"})
 
-# CORRECT  
+# CORRECT
 workflow.connect("merger", "summarizer", mapping={"result": "merged_data"})
 ```
 
@@ -100,7 +100,7 @@ workflow.connect("transformer", "writer", mapping={"result": "transformed_data"}
 3. **Document the mapping** in comments:
    ```python
    # Map discovery results to 'files_found' variable
-   workflow.connect("scanner", "processor", 
+   workflow.connect("scanner", "processor",
                    mapping={"discovered_files": "files_found"})
    ```
 

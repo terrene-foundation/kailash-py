@@ -10,7 +10,7 @@ This guide documents the data file consolidation implemented in Session 062. Pre
 
 Data files were scattered across multiple locations:
 - `/examples/data/` - Example input files
-- `/examples/*/outputs/` - Generated outputs 
+- `/examples/*/outputs/` - Generated outputs
 - `/tests/sample_data/` - Test fixtures
 - `/data/` - Some central files
 - `/examples/cycle_patterns/cycle_analysis_output/` - Cycle analysis results
@@ -39,7 +39,7 @@ This created several issues:
 /data/
 ├── inputs/           # Input data files (read-only)
 │   ├── csv/         # CSV input files
-│   ├── json/        # JSON input files  
+│   ├── json/        # JSON input files
 │   ├── txt/         # Text input files
 │   ├── images/      # Image input files
 │   ├── workflows/   # Workflow definition files
@@ -101,7 +101,7 @@ from examples.utils.data_paths import (
 
 # Usage examples
 customer_file = get_input_data_path("customers.csv")
-output_file = get_output_data_path("results.csv") 
+output_file = get_output_data_path("results.csv")
 output_dir = ensure_output_dir_exists("csv")
 ```
 
@@ -226,7 +226,7 @@ with open(output_path, "w") as f:
 Located in `/data/inputs/csv/`:
 - `customers.csv` - Standard customer data for examples
 - `transactions.csv` - Transaction data
-- `events.csv` - Event data  
+- `events.csv` - Event data
 - `customer_value.csv` - Customer analysis data
 - `raw_customers.csv` - Unprocessed customer data
 
@@ -248,7 +248,7 @@ Located in `/data/outputs/csv/`:
 - Include data type: `customer_transactions.json`
 - Version if needed: `customers_v2.csv`
 
-### Output Files  
+### Output Files
 - Include processing type: `filtered_customers.csv`
 - Add timestamp if temporal: `daily_summary_2024-01-15.csv`
 - Include result type: `analysis_results.json`
@@ -355,7 +355,7 @@ print(f"Available CSV files: {available_files}")
 
 1. **Data Catalog**: Automatic discovery and documentation of data files
 2. **Schema Registry**: Centralized schema definitions for data files
-3. **Versioning**: Data file versioning and change tracking  
+3. **Versioning**: Data file versioning and change tracking
 4. **Validation**: Automatic data quality validation
 5. **Monitoring**: Data usage analytics and optimization
 

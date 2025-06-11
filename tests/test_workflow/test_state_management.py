@@ -5,8 +5,6 @@ This module tests the functionality of the StateManager and WorkflowStateWrapper
 classes to ensure they correctly handle immutable state updates.
 """
 
-from typing import Dict, List, Optional
-
 import pytest
 from pydantic import BaseModel, Field
 
@@ -19,7 +17,7 @@ class NestedModel(BaseModel):
 
     value: str = "default"
     count: int = 0
-    items: List[str] = Field(default_factory=list)
+    items: list[str] = Field(default_factory=list)
 
 
 class TestState(BaseModel):
@@ -28,10 +26,10 @@ class TestState(BaseModel):
     name: str = "test"
     enabled: bool = True
     count: int = 0
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     nested: NestedModel = Field(default_factory=NestedModel)
-    optional: Optional[str] = None
-    data: Dict[str, str] = Field(default_factory=dict)
+    optional: str | None = None
+    data: dict[str, str] = Field(default_factory=dict)
 
 
 class TestStateManager:

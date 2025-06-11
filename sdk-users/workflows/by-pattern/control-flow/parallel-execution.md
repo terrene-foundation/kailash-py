@@ -20,7 +20,7 @@ from kailash.runtime import LocalRuntime
 def create_parallel_api_workflow():
     """Aggregate data from multiple APIs in parallel."""
     workflow = Workflow("data_aggregation", "Parallel API Data Collection")
-    
+
     # Define multiple API endpoints to call in parallel
     apis = {
         "weather": "https://api.weather.com/current",
@@ -28,7 +28,7 @@ def create_parallel_api_workflow():
         "stocks": "https://api.stocks.com/market",
         "traffic": "https://api.traffic.com/conditions"
     }
-    
+
     # Create API nodes - these will execute in parallel
     for name, url in apis.items():
         api_node = RestClientNode(
@@ -38,19 +38,19 @@ def create_parallel_api_workflow():
             timeout=5000  # 5 second timeout
         )
         workflow.add_node(f"{name}_api", api_node)
-    
+
     # Merge all results
     merger = MergeNode(
         id="data_merger",
         merge_strategy="combine_dict"
     )
     workflow.add_node("data_merger", merger)
-    
+
     # Connect all APIs to merger - automatic parallel execution
     for name in apis.keys():
-        workflow.connect(f"{name}_api", "data_merger", 
+        workflow.connect(f"{name}_api", "data_merger",
                         mapping={"response": f"{name}_data"})
-    
+
     return workflow
 
 # Execute - all APIs called simultaneously
@@ -74,7 +74,7 @@ from kailash.nodes.code import PythonCodeNode
 def create_parallel_batch_processor():
     """Process large datasets in parallel chunks."""
     workflow = Workflow("batch_processor", "Parallel Batch Processing")
-    
+
     # Split data into chunks for parallel processing
     data_splitter = PythonCodeNode(
         name="data_splitter",
@@ -106,7 +106,7 @@ result = {
 '''
     )
     workflow.add_node("data_splitter", data_splitter)
-    
+
     # Create parallel processors for each chunk type
     chunk_processors = []
     for i in range(4):  # Assume 4 parallel processors
@@ -125,7 +125,7 @@ result = {
         )
         workflow.add_node(f"chunk_processor_{i}", processor)
         chunk_processors.append(f"chunk_processor_{i}")
-    
+
     # Distribute chunks to processors
     chunk_router = PythonCodeNode(
         name="chunk_router",
@@ -144,7 +144,7 @@ result = distributed_chunks
 '''
     )
     workflow.add_node("chunk_router", chunk_router)
-    
+
     # Result aggregator
     result_aggregator = PythonCodeNode(
         name="result_aggregator",
@@ -168,7 +168,7 @@ result = {
 '''
     )
     workflow.add_node("result_aggregator", result_aggregator)
-    
+
     return workflow
 ```
 
@@ -179,14 +179,14 @@ result = {
 def create_resilient_parallel_workflow():
     """Parallel execution with isolated error handling."""
     workflow = Workflow("resilient_parallel", "Fault-Tolerant Parallel Processing")
-    
+
     # Define services with different reliability levels
     services = [
         {"name": "reliable_service", "url": "https://stable.api.com/data", "timeout": 3000},
         {"name": "flaky_service", "url": "https://flaky.api.com/data", "timeout": 5000},
         {"name": "slow_service", "url": "https://slow.api.com/data", "timeout": 10000}
     ]
-    
+
     # Create isolated processing paths
     for service in services:
         # API call
@@ -196,14 +196,14 @@ def create_resilient_parallel_workflow():
             timeout=service['timeout']
         )
         workflow.add_node(f"{service['name']}_api", api_node)
-        
+
         # Error checker for this service
         error_checker = SwitchNode(
             id=f"{service['name']}_checker",
             condition="status_code == 200 and response is not None"
         )
         workflow.add_node(f"{service['name']}_checker", error_checker)
-        
+
         # Success processor
         success_processor = DataTransformer(
             id=f"{service['name']}_success",
@@ -212,7 +212,7 @@ def create_resilient_parallel_workflow():
             ]
         )
         workflow.add_node(f"{service['name']}_success", success_processor)
-        
+
         # Failure handler with fallback
         failure_handler = PythonCodeNode(
             name=f"{service['name']}_failure",
@@ -230,28 +230,28 @@ result = fallback_data
 '''
         )
         workflow.add_node(f"{service['name']}_failure", failure_handler)
-        
+
         # Connect with error isolation
         workflow.connect(f"{service['name']}_api", f"{service['name']}_checker")
         workflow.connect(f"{service['name']}_checker", f"{service['name']}_success",
                         output_key="true_output", mapping={"response": "data"})
         workflow.connect(f"{service['name']}_checker", f"{service['name']}_failure",
                         output_key="false_output", mapping={"error": "error_info"})
-    
+
     # Aggregate all results (successes and failures)
     final_aggregator = MergeNode(
         id="final_aggregator",
         merge_strategy="collect_all"
     )
     workflow.add_node("final_aggregator", final_aggregator)
-    
+
     # Connect all paths to aggregator
     for service in services:
         workflow.connect(f"{service['name']}_success", "final_aggregator",
                         mapping={"result": f"{service['name']}_result"})
         workflow.connect(f"{service['name']}_failure", "final_aggregator",
                         mapping={"result": f"{service['name']}_result"})
-    
+
     return workflow
 ```
 
@@ -262,7 +262,7 @@ result = fallback_data
 def create_mapreduce_workflow():
     """Classic map-reduce pattern with parallel execution."""
     workflow = Workflow("mapreduce", "Parallel Map-Reduce Processing")
-    
+
     # Mapper nodes - process data in parallel
     num_mappers = 4
     for i in range(num_mappers):
@@ -286,7 +286,7 @@ result = {
 '''
         )
         workflow.add_node(f"mapper_{i}", mapper)
-    
+
     # Shuffle phase - group by key
     shuffler = PythonCodeNode(
         name="shuffler",
@@ -300,7 +300,7 @@ grouped_data = defaultdict(list)
 for i in range(4):
     mapper_results = locals().get(f'mapper_{i}_results', {})
     mapped_data = mapper_results.get('mapped_data', [])
-    
+
     for item in mapped_data:
         key = item['key']
         value = item['value']
@@ -319,7 +319,7 @@ result = {
 '''
     )
     workflow.add_node("shuffler", shuffler)
-    
+
     # Reducer nodes - aggregate in parallel
     num_reducers = 2
     for i in range(num_reducers):
@@ -332,7 +332,7 @@ reduced_results = []
 for item in assigned_keys:
     key = item['key']
     values = item['values']
-    
+
     # Example: sum for word count
     total = sum(values)
     reduced_results.append({'key': key, 'count': total})
@@ -344,29 +344,29 @@ result = {
 '''
         )
         workflow.add_node(f"reducer_{i}", reducer)
-    
+
     # Connect map-reduce pipeline
     # Input -> Mappers (parallel)
     for i in range(num_mappers):
         workflow.connect("input_splitter", f"mapper_{i}",
                         mapping={f"partition_{i}": "data_partition"})
-    
+
     # Mappers -> Shuffler
     for i in range(num_mappers):
         workflow.connect(f"mapper_{i}", "shuffler",
                         mapping={"result": f"mapper_{i}_results"})
-    
+
     # Shuffler -> Reducers (parallel)
     for i in range(num_reducers):
         workflow.connect("shuffler", f"reducer_{i}",
                         mapping={f"partition_{i}": "assigned_keys"})
-    
+
     # Reducers -> Final output
     workflow.connect("reducer_0", "output_combiner",
                     mapping={"result": "reducer_0_results"})
     workflow.connect("reducer_1", "output_combiner",
                     mapping={"result": "reducer_1_results"})
-    
+
     return workflow
 ```
 
@@ -389,7 +389,7 @@ for db_name in ["users_db", "orders_db", "inventory_db"]:
 # Run multiple validation checks concurrently
 validators = [
     "schema_validator",
-    "business_rules_validator", 
+    "business_rules_validator",
     "security_validator",
     "compliance_validator"
 ]

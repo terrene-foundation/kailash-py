@@ -19,7 +19,7 @@ Key Features Demonstrated:
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from examples.utils.data_paths import get_output_data_path
 from kailash import Workflow
@@ -50,7 +50,7 @@ class OptimizationNode(Node):
             ),
         }
 
-    def run(self, context: Any = None, **inputs) -> Dict[str, Any]:
+    def run(self, context: Any = None, **inputs) -> dict[str, Any]:
         """Simulate optimization with configurable performance characteristics."""
         import random
 

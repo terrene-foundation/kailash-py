@@ -8,7 +8,7 @@ Based on actual working examples from the SDK.
 
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import JSONReaderNode
@@ -21,7 +21,7 @@ INPUT_FILE = "data/items.json"
 OUTPUT_DIR = "outputs"
 
 
-def process_high_value(data: List[Dict]) -> Dict[str, Any]:
+def process_high_value(data: list[dict]) -> dict[str, Any]:
     """Process high value items"""
     processed = []
     for item in data:
@@ -32,7 +32,7 @@ def process_high_value(data: List[Dict]) -> Dict[str, Any]:
     return {"data": processed}
 
 
-def process_low_value(data: List[Dict]) -> Dict[str, Any]:
+def process_low_value(data: list[dict]) -> dict[str, Any]:
     """Process low value items"""
     processed = []
     for item in data:

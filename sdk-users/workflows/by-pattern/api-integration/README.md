@@ -74,7 +74,7 @@ api_fetcher = HTTPRequestNode(
 
 # POST data to API
 api_poster = HTTPRequestNode(
-    name="api_poster", 
+    name="api_poster",
     method="POST",
     url="https://httpbin.org/post",
     data={"key": "value"},
@@ -87,7 +87,7 @@ api_poster = HTTPRequestNode(
 # API with authentication header
 authenticated_api = HTTPRequestNode(
     name="authenticated_api",
-    method="GET", 
+    method="GET",
     url="https://api.github.com/user/repos",
     headers={
         "Authorization": "Bearer YOUR_TOKEN_HERE",
@@ -106,7 +106,7 @@ response_processor = PythonCodeNode.from_function(
 
 # Transform and analyze data
 data_analyzer = PythonCodeNode.from_function(
-    func=analyze_api_data, 
+    func=analyze_api_data,
     name="data_analyzer"
 )
 ```
@@ -119,13 +119,13 @@ def process_user_posts(users_data):
     """Process user data and prepare for posts API call"""
     if not users_data or "data" not in users_data:
         return {"user_ids": [], "error": "No user data available"}
-    
+
     users = users_data["data"]
     if isinstance(users, list) and len(users) > 0:
         # Get first 3 users for posts lookup
         user_ids = [user.get("id") for user in users[:3] if user.get("id")]
         return {"user_ids": user_ids}
-    
+
     return {"user_ids": [], "error": "Invalid user data format"}
 ```
 
@@ -143,7 +143,7 @@ api_router = SwitchNode(
     name="api_router",
     condition_mapping={
         "success_path": "status_code == 200",
-        "retry_path": "status_code in [429, 502, 503]", 
+        "retry_path": "status_code in [429, 502, 503]",
         "error_path": "status_code >= 400"
     }
 )
@@ -177,17 +177,17 @@ headers = {
 def get_oauth_token(client_id, client_secret):
     """Implement OAuth 2.0 client credentials flow"""
     token_url = "https://oauth.example.com/token"
-    
+
     auth_data = {
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret
     }
-    
+
     # Make token request
     token_response = requests.post(token_url, data=auth_data)
     token_data = token_response.json()
-    
+
     return token_data.get("access_token")
 ```
 
@@ -198,7 +198,7 @@ def get_oauth_token(client_id, client_secret):
 def handle_rate_limiting(response_data):
     """Handle API rate limiting with exponential backoff"""
     status_code = response_data.get("status_code")
-    
+
     if status_code == 429:  # Too Many Requests
         retry_after = response_data.get("headers", {}).get("Retry-After", "60")
         return {
@@ -206,7 +206,7 @@ def handle_rate_limiting(response_data):
             "retry_delay": int(retry_after),
             "error": "Rate limit exceeded"
         }
-    
+
     return {"should_retry": False}
 ```
 
@@ -219,12 +219,12 @@ def api_call_with_retry(url, max_retries=3):
             response = make_api_call(url, timeout=10)
             if response.get("status_code") == 200:
                 return response
-                
+
         except TimeoutError:
             if attempt == max_retries - 1:
                 raise
             time.sleep(2 ** attempt)  # Exponential backoff
-    
+
     raise Exception(f"API call failed after {max_retries} attempts")
 ```
 
@@ -232,35 +232,35 @@ def api_call_with_retry(url, max_retries=3):
 ```python
 class APICircuitBreaker:
     """Circuit breaker for API calls"""
-    
+
     def __init__(self, failure_threshold=5, recovery_timeout=60):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
         self.last_failure_time = None
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
-    
+
     def call_api(self, api_function, *args, **kwargs):
         if self.state == "OPEN":
             if time.time() - self.last_failure_time > self.recovery_timeout:
                 self.state = "HALF_OPEN"
             else:
                 raise Exception("Circuit breaker is OPEN")
-        
+
         try:
             result = api_function(*args, **kwargs)
             if self.state == "HALF_OPEN":
                 self.state = "CLOSED"
                 self.failure_count = 0
             return result
-            
+
         except Exception as e:
             self.failure_count += 1
             self.last_failure_time = time.time()
-            
+
             if self.failure_count >= self.failure_threshold:
                 self.state = "OPEN"
-            
+
             raise e
 ```
 
@@ -268,7 +268,7 @@ class APICircuitBreaker:
 
 ### API Gateway Integration
 - **AWS API Gateway**: Connect to enterprise API gateway
-- **Kong**: Integrate with Kong API management platform  
+- **Kong**: Integrate with Kong API management platform
 - **Azure API Management**: Use Azure APIM for API orchestration
 
 ### Message Queue Integration
@@ -292,24 +292,24 @@ from urllib3.util.retry import Retry
 def create_session_with_pooling():
     """Create HTTP session with connection pooling"""
     session = requests.Session()
-    
+
     # Configure retry strategy
     retry_strategy = Retry(
         total=3,
         status_forcelist=[429, 500, 502, 503, 504],
         method_whitelist=["HEAD", "GET", "OPTIONS"]
     )
-    
+
     # Configure adapter with pooling
     adapter = HTTPAdapter(
         pool_connections=10,
         pool_maxsize=20,
         max_retries=retry_strategy
     )
-    
+
     session.mount("http://", adapter)
     session.mount("https://", adapter)
-    
+
     return session
 ```
 
@@ -318,19 +318,19 @@ def create_session_with_pooling():
 def cached_api_call(url, cache_duration=300):
     """API call with response caching"""
     cache_key = f"api_cache:{hash(url)}"
-    
+
     # Check cache first
     cached_response = cache.get(cache_key)
     if cached_response:
         return cached_response
-    
+
     # Make API call
     response = make_api_call(url)
-    
+
     # Cache successful responses
     if response.get("status_code") == 200:
         cache.set(cache_key, response, timeout=cache_duration)
-    
+
     return response
 ```
 
@@ -339,13 +339,13 @@ def cached_api_call(url, cache_duration=300):
 def process_api_calls_parallel(api_endpoints):
     """Process multiple API calls in parallel"""
     import concurrent.futures
-    
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         future_to_url = {
-            executor.submit(make_api_call, url): url 
+            executor.submit(make_api_call, url): url
             for url in api_endpoints
         }
-        
+
         results = {}
         for future in concurrent.futures.as_completed(future_to_url):
             url = future_to_url[future]
@@ -354,7 +354,7 @@ def process_api_calls_parallel(api_endpoints):
                 results[url] = result
             except Exception as e:
                 results[url] = {"error": str(e)}
-        
+
         return results
 ```
 
@@ -382,21 +382,21 @@ def process_api_calls_parallel(api_endpoints):
 # Combine data from multiple APIs
 def compose_user_profile(user_id):
     """Compose complete user profile from multiple APIs"""
-    
+
     # Get basic user info
     user_basic = api_call(f"/users/{user_id}")
-    
+
     # Get user's posts
     user_posts = api_call(f"/users/{user_id}/posts")
-    
+
     # Get user's activity
     user_activity = api_call(f"/users/{user_id}/activity")
-    
+
     # Compose complete profile
     return {
         "basic_info": user_basic["data"],
         "posts": user_posts["data"],
-        "activity": user_activity["data"], 
+        "activity": user_activity["data"],
         "profile_completeness": calculate_completeness(user_basic, user_posts, user_activity)
     }
 ```
@@ -418,7 +418,7 @@ event_processor = SwitchNode(
 ```python
 def handle_api_versioning(api_version="v1"):
     """Handle different API versions gracefully"""
-    
+
     version_configs = {
         "v1": {
             "base_url": "https://api.example.com/v1",
@@ -426,12 +426,12 @@ def handle_api_versioning(api_version="v1"):
             "rate_limit": 1000
         },
         "v2": {
-            "base_url": "https://api.example.com/v2", 
+            "base_url": "https://api.example.com/v2",
             "auth_method": "oauth2",
             "rate_limit": 5000
         }
     }
-    
+
     return version_configs.get(api_version, version_configs["v1"])
 ```
 
@@ -459,5 +459,5 @@ def handle_api_versioning(api_version="v1"):
 **Next Steps**:
 - Review `scripts/rest_api_workflow.py` for implementation details
 - Configure API integration for your specific external services
-- Implement authentication and security for your API endpoints  
+- Implement authentication and security for your API endpoints
 - See training examples in `# contrib (removed)/training/workflow-examples/api-integration-training/`

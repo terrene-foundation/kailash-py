@@ -10,7 +10,6 @@ This advanced example demonstrates:
 """
 
 import time
-from typing import Dict, List
 
 from kailash import Workflow
 from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
@@ -209,7 +208,7 @@ class ResearchSystem:
         # Connect synthesizer to output
         self.workflow.connect("synthesis_agent", "output_writer")
 
-    def register_agents(self) -> Dict[str, bool]:
+    def register_agents(self) -> dict[str, bool]:
         """Register all agents with the coordinator."""
         registrations = {}
 
@@ -255,7 +254,7 @@ class ResearchSystem:
 
         return registrations
 
-    def run_research_pipeline(self, research_question: str) -> Dict:
+    def run_research_pipeline(self, research_question: str) -> dict:
         """Run the complete research pipeline."""
         runtime = LocalRuntime()
         results = {"research_question": research_question, "phases": {}, "timeline": []}
@@ -474,7 +473,7 @@ class ResearchSystem:
 
         return results
 
-    def _analyze_memory_distribution(self, memories: List[Dict]) -> Dict:
+    def _analyze_memory_distribution(self, memories: list[dict]) -> dict:
         """Analyze distribution of memories by agent and importance."""
         distribution = {
             "by_agent": {},

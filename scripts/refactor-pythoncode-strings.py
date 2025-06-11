@@ -13,7 +13,6 @@ This script:
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # Try to import black
 try:
@@ -28,7 +27,7 @@ except ImportError:
 
 def extract_node_info(
     match_text: str,
-) -> Tuple[Optional[str], Optional[str], List[str]]:
+) -> tuple[str | None, str | None, list[str]]:
     """Extract node name, code, and other parameters from PythonCodeNode text."""
     # Extract name
     name_match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', match_text)
@@ -62,7 +61,7 @@ def extract_node_info(
     return name, code, other_params
 
 
-def generate_function_name(node_name: Optional[str], index: int) -> str:
+def generate_function_name(node_name: str | None, index: int) -> str:
     """Generate a function name based on node name."""
     if node_name:
         # Convert node_name to function name
@@ -192,7 +191,7 @@ def refactor_file(file_path: Path) -> bool:
 
     try:
         # Read the file
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             content = f.read()
 
         # Pattern to match PythonCodeNode with triple-quoted strings
@@ -247,10 +246,9 @@ def refactor_file(file_path: Path) -> bool:
 
         # Look for the first function definition or class definition
         for i, line in enumerate(lines):
-            if re.match(r"^(def |class )", line):
-                insert_line = i
-                break
-            elif "def create_" in line or "def test_" in line:
+            if re.match(r"^(def |class )", line) or (
+                "def create_" in line or "def test_" in line
+            ):
                 insert_line = i
                 break
 

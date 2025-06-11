@@ -4,7 +4,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -19,8 +19,8 @@ class WorkflowVisualizer:
     def __init__(
         self,
         workflow: Workflow,
-        node_colors: Optional[Dict[str, str]] = None,
-        edge_colors: Optional[Dict[str, str]] = None,
+        node_colors: dict[str, str] | None = None,
+        edge_colors: dict[str, str] | None = None,
         layout: str = "hierarchical",
     ):
         """Initialize visualizer.
@@ -36,7 +36,7 @@ class WorkflowVisualizer:
         self.edge_colors = edge_colors or self._default_edge_colors()
         self.layout = layout
 
-    def _default_node_colors(self) -> Dict[str, str]:
+    def _default_node_colors(self) -> dict[str, str]:
         """Get default node color map."""
         return {
             "data": "lightblue",
@@ -46,7 +46,7 @@ class WorkflowVisualizer:
             "default": "lightgray",
         }
 
-    def _default_edge_colors(self) -> Dict[str, str]:
+    def _default_edge_colors(self) -> dict[str, str]:
         """Get default edge color map."""
         return {"default": "gray", "error": "red", "conditional": "orange"}
 
@@ -66,7 +66,7 @@ class WorkflowVisualizer:
             return self.node_colors["ai"]
         return self.node_colors["default"]
 
-    def _get_node_colors(self) -> List[str]:
+    def _get_node_colors(self) -> list[str]:
         """Get colors for all nodes in workflow."""
         colors = []
         for node_id in self.workflow.graph.nodes():
@@ -75,7 +75,7 @@ class WorkflowVisualizer:
             colors.append(self._get_node_color(node_type))
         return colors
 
-    def _get_node_labels(self) -> Dict[str, str]:
+    def _get_node_labels(self) -> dict[str, str]:
         """Get labels for nodes in workflow."""
         labels = {}
         for node_id in self.workflow.graph.nodes():
@@ -93,7 +93,7 @@ class WorkflowVisualizer:
                     labels[node_id] = node_id
         return labels
 
-    def _get_edge_labels(self) -> Dict[Tuple[str, str], str]:
+    def _get_edge_labels(self) -> dict[tuple[str, str], str]:
         """Get labels for edges in workflow."""
         edge_labels = {}
 
@@ -119,7 +119,7 @@ class WorkflowVisualizer:
 
         return edge_labels
 
-    def _calculate_layout(self) -> Dict[str, Tuple[float, float]]:
+    def _calculate_layout(self) -> dict[str, tuple[float, float]]:
         """Calculate node positions for visualization."""
         # Try to use stored positions first
         pos = {}
@@ -148,7 +148,7 @@ class WorkflowVisualizer:
 
         return pos
 
-    def _create_layers(self) -> Dict[int, list]:
+    def _create_layers(self) -> dict[int, list]:
         """Create layers of nodes for hierarchical layout."""
         layers = {}
         remaining = set(self.workflow.graph.nodes())
@@ -173,8 +173,8 @@ class WorkflowVisualizer:
         return layers
 
     def _hierarchical_layout(
-        self, layers: Dict[int, list]
-    ) -> Dict[str, Tuple[float, float]]:
+        self, layers: dict[int, list]
+    ) -> dict[str, tuple[float, float]]:
         """Create hierarchical layout from layers."""
         pos = {}
         layer_height = 2.0
@@ -196,8 +196,8 @@ class WorkflowVisualizer:
 
     def _draw_graph(
         self,
-        pos: Dict[str, Tuple[float, float]],
-        node_colors: List[str],
+        pos: dict[str, tuple[float, float]],
+        node_colors: list[str],
         show_labels: bool,
         show_connections: bool,
     ) -> None:
@@ -235,9 +235,9 @@ class WorkflowVisualizer:
 
     def visualize(
         self,
-        output_path: Optional[str] = None,
-        figsize: Tuple[int, int] = (12, 8),
-        title: Optional[str] = None,
+        output_path: str | None = None,
+        figsize: tuple[int, int] = (12, 8),
+        title: str | None = None,
         show_labels: bool = True,
         show_connections: bool = True,
         dpi: int = 300,
@@ -303,7 +303,7 @@ class WorkflowVisualizer:
         self.visualize(output_path=output_path, **kwargs)
 
     def create_execution_graph(
-        self, run_id: str, task_manager: Any, output_path: Optional[str] = None
+        self, run_id: str, task_manager: Any, output_path: str | None = None
     ) -> str:
         """Create a Mermaid visualization showing execution status.
 
@@ -423,8 +423,8 @@ class WorkflowVisualizer:
         return str(output_path)
 
     def create_performance_dashboard(
-        self, run_id: str, task_manager: TaskManager, output_dir: Optional[Path] = None
-    ) -> Dict[str, Path]:
+        self, run_id: str, task_manager: TaskManager, output_dir: Path | None = None
+    ) -> dict[str, Path]:
         """Create integrated performance dashboard with workflow visualization.
 
         Args:
@@ -461,7 +461,7 @@ class WorkflowVisualizer:
         return outputs
 
     def _create_dashboard_html(
-        self, run_id: str, outputs: Dict[str, Path], dashboard_path: Path
+        self, run_id: str, outputs: dict[str, Path], dashboard_path: Path
     ) -> None:
         """Create HTML dashboard integrating all visualizations."""
         html_content = f"""
@@ -578,7 +578,7 @@ class WorkflowVisualizer:
 def add_visualization_to_workflow():
     """Add visualization method to Workflow class."""
 
-    def visualize(self, output_path: Optional[str] = None, **kwargs) -> None:
+    def visualize(self, output_path: str | None = None, **kwargs) -> None:
         """Visualize the workflow.
 
         Args:

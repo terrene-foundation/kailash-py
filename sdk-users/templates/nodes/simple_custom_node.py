@@ -6,7 +6,7 @@ Use Case: When you need custom processing logic
 This template shows the essential parts of a custom node.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter
 
@@ -14,7 +14,7 @@ from kailash.nodes.base import Node, NodeParameter
 class MyCustomNode(Node):
     """A simple custom node that processes data."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the node's parameters."""
         return {
             "multiplier": NodeParameter(
@@ -33,7 +33,7 @@ class MyCustomNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         # Get parameters
         data = kwargs.get("data", [])

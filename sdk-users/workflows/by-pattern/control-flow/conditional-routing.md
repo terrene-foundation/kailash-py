@@ -21,17 +21,17 @@ from kailash.runtime import LocalRuntime
 def create_basic_routing_workflow():
     """Customer segmentation based on purchase value."""
     workflow = Workflow("customer_routing", "Segment customers by value")
-    
+
     # Read customer data
     workflow.add_node("reader", CSVReaderNode())
-    
+
     # Route based on customer lifetime value
     value_router = SwitchNode(
         id="value_router",
         condition="lifetime_value > 10000"  # Premium threshold
     )
     workflow.add_node("value_router", value_router)
-    
+
     # Premium customer processing
     premium_processor = DataTransformer(
         id="premium_processor",
@@ -40,7 +40,7 @@ def create_basic_routing_workflow():
         ]
     )
     workflow.add_node("premium_processor", premium_processor)
-    
+
     # Standard customer processing
     standard_processor = DataTransformer(
         id="standard_processor",
@@ -49,14 +49,14 @@ def create_basic_routing_workflow():
         ]
     )
     workflow.add_node("standard_processor", standard_processor)
-    
+
     # Connect routing logic
     workflow.connect("reader", "value_router", mapping={"data": "data"})
-    workflow.connect("value_router", "premium_processor", 
+    workflow.connect("value_router", "premium_processor",
                     output_key="true_output", mapping={"data": "data"})
-    workflow.connect("value_router", "standard_processor", 
+    workflow.connect("value_router", "standard_processor",
                     output_key="false_output", mapping={"data": "data"})
-    
+
     return workflow
 ```
 
@@ -69,7 +69,7 @@ from kailash.nodes.code import PythonCodeNode
 def create_multi_way_routing():
     """Complex routing with multiple conditions and business rules."""
     workflow = Workflow("order_routing", "Route orders by multiple criteria")
-    
+
     # Initial order classification
     order_classifier = PythonCodeNode(
         name="order_classifier",
@@ -82,7 +82,7 @@ for order in orders:
     is_prime = order.get('prime_member', False)
     item_count = order.get('item_count', 0)
     destination = order.get('shipping_country', 'US')
-    
+
     # Multi-dimensional classification
     order_class = {
         'order_id': order['order_id'],
@@ -91,7 +91,7 @@ for order in orders:
         'shipping_method': 'ground',
         'processing_queue': 'normal'
     }
-    
+
     # Priority rules
     if amount > 500 and is_prime:
         order_class.update({
@@ -111,7 +111,7 @@ for order in orders:
             'shipping_method': 'international_standard',
             'processing_queue': 'international'
         })
-    
+
     classified_orders.append(order_class)
 
 result = {
@@ -126,14 +126,14 @@ result = {
 '''
     )
     workflow.add_node("order_classifier", order_classifier)
-    
+
     # Route to different processing pipelines
     priority_router = SwitchNode(
         id="priority_router",
         condition="priority == 'urgent'"
     )
     workflow.add_node("priority_router", priority_router)
-    
+
     # Urgent order fast-track
     urgent_processor = PythonCodeNode(
         name="urgent_processor",
@@ -157,7 +157,7 @@ result = {'processed_urgent_orders': processed_orders}
 '''
     )
     workflow.add_node("urgent_processor", urgent_processor)
-    
+
     return workflow
 ```
 
@@ -168,7 +168,7 @@ result = {'processed_urgent_orders': processed_orders}
 def create_resilient_routing():
     """Routing with error handling and fallback paths."""
     workflow = Workflow("payment_routing", "Process payments with fallbacks")
-    
+
     # Try primary payment processor
     primary_processor = RestClientNode(
         id="primary_processor",
@@ -176,14 +176,14 @@ def create_resilient_routing():
         timeout=5000
     )
     workflow.add_node("primary_processor", primary_processor)
-    
+
     # Check if primary succeeded
     primary_check = SwitchNode(
         id="primary_check",
         condition="status_code == 200"
     )
     workflow.add_node("primary_check", primary_check)
-    
+
     # Fallback to secondary processor
     secondary_processor = RestClientNode(
         id="secondary_processor",
@@ -191,14 +191,14 @@ def create_resilient_routing():
         timeout=8000
     )
     workflow.add_node("secondary_processor", secondary_processor)
-    
+
     # Check secondary result
     secondary_check = SwitchNode(
         id="secondary_check",
         condition="status_code == 200"
     )
     workflow.add_node("secondary_check", secondary_check)
-    
+
     # Manual processing queue for failures
     manual_queue = PythonCodeNode(
         name="manual_queue",
@@ -228,20 +228,20 @@ result = {
 '''
     )
     workflow.add_node("manual_queue", manual_queue)
-    
+
     # Connect with fallback logic
     workflow.connect("payment_input", "primary_processor")
     workflow.connect("primary_processor", "primary_check")
-    workflow.connect("primary_check", "payment_success", 
+    workflow.connect("primary_check", "payment_success",
                     output_key="true_output")
-    workflow.connect("primary_check", "secondary_processor", 
+    workflow.connect("primary_check", "secondary_processor",
                     output_key="false_output")
     workflow.connect("secondary_processor", "secondary_check")
-    workflow.connect("secondary_check", "payment_success", 
+    workflow.connect("secondary_check", "payment_success",
                     output_key="true_output")
-    workflow.connect("secondary_check", "manual_queue", 
+    workflow.connect("secondary_check", "manual_queue",
                     output_key="false_output")
-    
+
     return workflow
 ```
 
@@ -255,11 +255,11 @@ journey_router = SwitchNode(
 )
 
 # VIP experience
-workflow.connect(journey_router, "personalized_homepage", 
+workflow.connect(journey_router, "personalized_homepage",
                 output_key="true_output")
 
-# Standard experience  
-workflow.connect(journey_router, "default_homepage", 
+# Standard experience
+workflow.connect(journey_router, "default_homepage",
                 output_key="false_output")
 ```
 
@@ -271,11 +271,11 @@ quality_gate = SwitchNode(
 )
 
 # Good data continues
-workflow.connect(quality_gate, "ml_processing", 
+workflow.connect(quality_gate, "ml_processing",
                 output_key="true_output")
 
 # Poor data goes to cleaning
-workflow.connect(quality_gate, "data_cleaning", 
+workflow.connect(quality_gate, "data_cleaning",
                 output_key="false_output")
 ```
 
@@ -287,11 +287,11 @@ approval_router = SwitchNode(
 )
 
 # High amounts need VP approval
-workflow.connect(approval_router, "vp_approval_queue", 
+workflow.connect(approval_router, "vp_approval_queue",
                 output_key="true_output")
 
 # Standard amounts need manager approval
-workflow.connect(approval_router, "manager_approval_queue", 
+workflow.connect(approval_router, "manager_approval_queue",
                 output_key="false_output")
 ```
 
@@ -302,9 +302,9 @@ ab_test_router = SwitchNode(
     condition="hash(user_id) % 100 < 20"  # 20% to variant B
 )
 
-workflow.connect(ab_test_router, "variant_b_experience", 
+workflow.connect(ab_test_router, "variant_b_experience",
                 output_key="true_output")
-workflow.connect(ab_test_router, "variant_a_experience", 
+workflow.connect(ab_test_router, "variant_a_experience",
                 output_key="false_output")
 ```
 

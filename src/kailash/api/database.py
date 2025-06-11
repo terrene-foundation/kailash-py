@@ -9,9 +9,9 @@ This module provides:
 
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -383,7 +383,7 @@ class WorkflowRepository:
         tenant_id: str,
         name: str,
         description: str,
-        definition: Dict[str, Any],
+        definition: dict[str, Any],
         created_by: str = None,
     ) -> Workflow:
         """Create a new workflow"""
@@ -403,7 +403,7 @@ class WorkflowRepository:
         return workflow
 
     def update(
-        self, workflow_id: str, updates: Dict[str, Any], updated_by: str = None
+        self, workflow_id: str, updates: dict[str, Any], updated_by: str = None
     ) -> Workflow:
         """Update a workflow"""
         workflow = self.session.query(Workflow).filter_by(id=workflow_id).first()
@@ -433,7 +433,7 @@ class WorkflowRepository:
         self,
         workflow_id: str,
         version: int,
-        definition: Dict[str, Any],
+        definition: dict[str, Any],
         change_message: str,
         created_by: str = None,
     ):
@@ -448,11 +448,11 @@ class WorkflowRepository:
         self.session.add(version_record)
         self.session.commit()
 
-    def get(self, workflow_id: str) -> Optional[Workflow]:
+    def get(self, workflow_id: str) -> Workflow | None:
         """Get a workflow by ID"""
         return self.session.query(Workflow).filter_by(id=workflow_id).first()
 
-    def list(self, tenant_id: str, limit: int = 100, offset: int = 0) -> List[Workflow]:
+    def list(self, tenant_id: str, limit: int = 100, offset: int = 0) -> list[Workflow]:
         """List workflows for a tenant"""
         return (
             self.session.query(Workflow)
@@ -477,14 +477,14 @@ class CustomNodeRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def create(self, tenant_id: str, node_data: Dict[str, Any]) -> CustomNode:
+    def create(self, tenant_id: str, node_data: dict[str, Any]) -> CustomNode:
         """Create a custom node"""
         node = CustomNode(tenant_id=tenant_id, **node_data)
         self.session.add(node)
         self.session.commit()
         return node
 
-    def update(self, node_id: str, updates: Dict[str, Any]) -> CustomNode:
+    def update(self, node_id: str, updates: dict[str, Any]) -> CustomNode:
         """Update a custom node"""
         node = self.session.query(CustomNode).filter_by(id=node_id).first()
         if not node:
@@ -497,7 +497,7 @@ class CustomNodeRepository:
         self.session.commit()
         return node
 
-    def list(self, tenant_id: str) -> List[CustomNode]:
+    def list(self, tenant_id: str) -> list[CustomNode]:
         """List custom nodes for a tenant"""
         return (
             self.session.query(CustomNode)
@@ -506,7 +506,7 @@ class CustomNodeRepository:
             .all()
         )
 
-    def get(self, node_id: str) -> Optional[CustomNode]:
+    def get(self, node_id: str) -> CustomNode | None:
         """Get a custom node by ID"""
         return self.session.query(CustomNode).filter_by(id=node_id).first()
 
@@ -525,7 +525,7 @@ class ExecutionRepository:
         self.session = session
 
     def create(
-        self, workflow_id: str, tenant_id: str, parameters: Dict[str, Any] = None
+        self, workflow_id: str, tenant_id: str, parameters: dict[str, Any] = None
     ) -> WorkflowExecution:
         """Create an execution record"""
         execution = WorkflowExecution(
@@ -533,7 +533,7 @@ class ExecutionRepository:
             tenant_id=tenant_id,
             status="pending",
             parameters=parameters,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
         self.session.add(execution)
         self.session.commit()
@@ -543,7 +543,7 @@ class ExecutionRepository:
         self,
         execution_id: str,
         status: str,
-        result: Dict[str, Any] = None,
+        result: dict[str, Any] = None,
         error: str = None,
     ):
         """Update execution status"""
@@ -560,7 +560,7 @@ class ExecutionRepository:
             execution.error = error
 
         if status in ["completed", "failed"]:
-            execution.completed_at = datetime.now(timezone.utc)
+            execution.completed_at = datetime.now(UTC)
             if execution.started_at:
                 execution.execution_time_ms = int(
                     (execution.completed_at - execution.started_at).total_seconds()
@@ -569,13 +569,13 @@ class ExecutionRepository:
 
         self.session.commit()
 
-    def get(self, execution_id: str) -> Optional[WorkflowExecution]:
+    def get(self, execution_id: str) -> WorkflowExecution | None:
         """Get execution by ID"""
         return self.session.query(WorkflowExecution).filter_by(id=execution_id).first()
 
     def list_for_workflow(
         self, workflow_id: str, limit: int = 50
-    ) -> List[WorkflowExecution]:
+    ) -> list[WorkflowExecution]:
         """List executions for a workflow"""
         return (
             self.session.query(WorkflowExecution)

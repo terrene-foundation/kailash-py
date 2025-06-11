@@ -11,7 +11,7 @@ Customization Points:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import Node
 
@@ -31,7 +31,7 @@ class MyCustomNode(Node):
     - Logging best practices
     """
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """
         Define the parameters your node accepts.
 
@@ -103,7 +103,7 @@ class MyCustomNode(Node):
         if isinstance(data, list) and len(data) == 0:
             logger.warning("Processing empty list")
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """
         Execute the node's logic.
 
@@ -171,7 +171,7 @@ class MyCustomNode(Node):
             # }
 
     def _transform_data(
-        self, data: Any, fields: List[str], case_sensitive: bool, options: Dict
+        self, data: Any, fields: list[str], case_sensitive: bool, options: dict
     ) -> Any:
         """Transform data according to options"""
         if isinstance(data, list):
@@ -206,7 +206,7 @@ class MyCustomNode(Node):
             return data
 
     def _filter_data(
-        self, data: Any, threshold: float, fields: List[str], options: Dict
+        self, data: Any, threshold: float, fields: list[str], options: dict
     ) -> Any:
         """Filter data based on threshold"""
         if isinstance(data, list):
@@ -243,8 +243,8 @@ class MyCustomNode(Node):
             return data
 
     def _aggregate_data(
-        self, data: Any, fields: List[str], options: Dict
-    ) -> Dict[str, Any]:
+        self, data: Any, fields: list[str], options: dict
+    ) -> dict[str, Any]:
         """Aggregate data to produce summary statistics"""
         if isinstance(data, list):
             aggregated = {"count": len(data), "field_stats": {}}
@@ -273,7 +273,7 @@ class MyCustomNode(Node):
             # For non-list data, return basic info
             return {"count": 1, "data_type": type(data).__name__}
 
-    def get_output_schema(self) -> Optional[Dict[str, Any]]:
+    def get_output_schema(self) -> dict[str, Any] | None:
         """
         Define the expected output schema for validation.
 

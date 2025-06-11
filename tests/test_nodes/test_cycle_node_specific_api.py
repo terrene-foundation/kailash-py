@@ -8,7 +8,7 @@ Covers:
 - HTTPRequestNode: HTTP request cycles with backoff
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
@@ -19,7 +19,7 @@ from kailash.runtime.local import LocalRuntime
 class MockRESTClientNode(CycleAwareNode):
     """Mock REST client for testing cycles without actual HTTP calls."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "url": NodeParameter(
                 name="url", type=str, required=False, default="http://test.com"
@@ -35,7 +35,7 @@ class MockRESTClientNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         url = kwargs.get("url", "http://test.com")
         method = kwargs.get("method", "GET")
         retry_count = kwargs.get("retry_count", 0)
@@ -77,7 +77,7 @@ class MockRESTClientNode(CycleAwareNode):
 class MockHTTPRequestNode(CycleAwareNode):
     """Mock HTTP request node for testing cycles."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "url": NodeParameter(
                 name="url", type=str, required=False, default="http://api.example.com"
@@ -96,7 +96,7 @@ class MockHTTPRequestNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         url = kwargs.get("url", "http://api.example.com")
         headers = kwargs.get("headers", {})
         params = kwargs.get("params", {})
@@ -173,7 +173,7 @@ class TestRESTClientNodeCycles:
         workflow = Workflow("rest-backoff-cycle", "REST Backoff Cycle")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "base_delay": NodeParameter(
                         name="base_delay", type=int, required=False, default=1
@@ -183,14 +183,14 @@ class TestRESTClientNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "base_delay": kwargs.get("base_delay", 1),
                     "max_delay": kwargs.get("max_delay", 60),
                 }
 
         class BackoffRESTNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "base_delay": NodeParameter(
                         name="base_delay", type=int, required=False, default=1
@@ -203,7 +203,7 @@ class TestRESTClientNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 # Handle initial parameters vs cycle parameters
                 try:
                     base_delay = kwargs.get("base_delay", 1)
@@ -283,7 +283,7 @@ class TestRESTClientNodeCycles:
         workflow = Workflow("rest-conditional-retry", "REST Conditional Retry")
 
         class ConditionalRetryRESTNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "retry_on_codes": NodeParameter(
                         name="retry_on_codes",
@@ -293,7 +293,7 @@ class TestRESTClientNodeCycles:
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 retry_on_codes = kwargs.get("retry_on_codes", [429, 500, 502, 503])
                 iteration = self.get_iteration(context)
 
@@ -341,7 +341,7 @@ class TestHTTPRequestNodeCycles:
         workflow = Workflow("http-polling-cycle", "HTTP Polling Cycle")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "url": NodeParameter(name="url", type=str, required=False),
                     "params": NodeParameter(name="params", type=dict, required=False),
@@ -350,7 +350,7 @@ class TestHTTPRequestNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "url": kwargs.get("url", "https://api.example.com/jobs/status"),
                     "params": kwargs.get("params", {"job_id": "async_job_456"}),
@@ -409,7 +409,7 @@ class TestHTTPRequestNodeCycles:
         workflow = Workflow("http-progressive-fetch", "HTTP Progressive Fetch")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "base_url": NodeParameter(
                         name="base_url", type=str, required=False
@@ -420,7 +420,7 @@ class TestHTTPRequestNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "base_url": kwargs.get("base_url", "https://api.example.com/data"),
                     "page": kwargs.get("page", 1),
@@ -428,7 +428,7 @@ class TestHTTPRequestNodeCycles:
                 }
 
         class ProgressiveHTTPNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "base_url": NodeParameter(
                         name="base_url",
@@ -447,7 +447,7 @@ class TestHTTPRequestNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 page = kwargs.get("page", 1)  # Current page number
                 per_page = kwargs.get("per_page", 10)
                 iteration = self.get_iteration(context)
@@ -525,7 +525,7 @@ class TestHTTPRequestNodeCycles:
         workflow = Workflow("http-adaptive-rate-limit", "HTTP Adaptive Rate Limit")
 
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "initial_rate": NodeParameter(
                         name="initial_rate", type=float, required=False
@@ -535,14 +535,14 @@ class TestHTTPRequestNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "initial_rate": kwargs.get("initial_rate", 1.0),
                     "requests_to_make": kwargs.get("requests_to_make", 20),
                 }
 
         class AdaptiveRateLimitNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "initial_rate": NodeParameter(
                         name="initial_rate", type=float, required=False, default=1.0
@@ -561,7 +561,7 @@ class TestHTTPRequestNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 initial_rate = kwargs.get("initial_rate", 1.0)
                 requests_to_make = kwargs.get("requests_to_make", 20)
                 self.get_iteration(context)
@@ -662,7 +662,7 @@ class TestAPINodeCycleIntegration:
         workflow = Workflow("api-circuit-breaker", "API Circuit Breaker")
 
         class CircuitBreakerAPINode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "failure_threshold": NodeParameter(
                         name="failure_threshold", type=int, required=False, default=5
@@ -672,7 +672,7 @@ class TestAPINodeCycleIntegration:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 failure_threshold = kwargs.get("failure_threshold", 5)
                 recovery_timeout = kwargs.get("recovery_timeout", 10)
                 iteration = self.get_iteration(context)

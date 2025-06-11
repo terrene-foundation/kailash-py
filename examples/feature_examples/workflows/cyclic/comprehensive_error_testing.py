@@ -8,7 +8,7 @@ implemented in Phase 5.1.3 to ensure they work correctly across the
 entire cycle system.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
@@ -32,7 +32,7 @@ class TestNode(Node):
             ),
         }
 
-    def run(self, context: Any = None, **inputs) -> Dict[str, Any]:
+    def run(self, context: Any = None, **inputs) -> dict[str, Any]:
         return {
             "output": inputs.get("input", "test"),
             "result": inputs.get("value", 0.0),

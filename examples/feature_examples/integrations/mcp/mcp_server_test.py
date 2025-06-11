@@ -22,18 +22,21 @@ To run MCP servers, use the command line:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash import Workflow
 from kailash.mcp import MCPServer, SimpleMCPServer
 from kailash.nodes.ai import LLMAgentNode
 
 
-class WorkflowMCPServer(MCPServer):
+class WorkflowMCPServer:
     """Example MCP server that exposes workflow capabilities."""
 
     def __init__(self, name: str = "workflow-server", port: int = 8080):
-        super().__init__(name, port)
+        # Use enhanced MCP server with production features
+        self.server = MCPServer(name)
+        self.name = name
+        self.port = port
         self.setup_resources()
         self.setup_tools()
         self.setup_prompts()
@@ -42,7 +45,7 @@ class WorkflowMCPServer(MCPServer):
         """Set up server resources."""
 
         # Static resource
-        @self.add_resource("workflow://status")
+        @self.server.resource("workflow://status")
         def get_workflow_status():
             return {
                 "status": "running",
@@ -52,7 +55,7 @@ class WorkflowMCPServer(MCPServer):
             }
 
         # Dynamic resource with parameter
-        @self.add_resource("workflow://metrics/{metric_type}")
+        @self.server.resource("workflow://metrics/{metric_type}")
         def get_metrics(metric_type: str):
             metrics = {
                 "performance": {
@@ -67,11 +70,11 @@ class WorkflowMCPServer(MCPServer):
     def setup_tools(self):
         """Set up server tools."""
 
-        @self.add_tool()
+        @self.server.tool(cache_key="execution", cache_ttl=30)  # Cache for 30 seconds
         def execute_node(
-            node_id: str, parameters: Dict[str, Any] = None
-        ) -> Dict[str, Any]:
-            """Execute a specific workflow node.
+            node_id: str, parameters: dict[str, Any] = None
+        ) -> dict[str, Any]:
+            """Execute a specific workflow node with caching.
 
             Args:
                 node_id: ID of the node to execute
@@ -80,16 +83,22 @@ class WorkflowMCPServer(MCPServer):
             Returns:
                 Execution result
             """
+            # Simulate some processing time
+            import time
+
+            time.sleep(0.1)
+
             return {
                 "success": True,
                 "node_id": node_id,
                 "result": f"Node {node_id} executed with params: {parameters}",
                 "execution_time": 0.5,
+                "cached": False,  # Will be True on cache hits
             }
 
-        @self.add_tool()
-        def get_node_status(node_id: str) -> Dict[str, Any]:
-            """Get the status of a workflow node.
+        @self.server.tool(format_response="markdown")  # Format as markdown
+        def get_node_status(node_id: str) -> dict[str, Any]:
+            """Get the status of a workflow node with markdown formatting.
 
             Args:
                 node_id: ID of the node to check
@@ -98,14 +107,20 @@ class WorkflowMCPServer(MCPServer):
                 Node status information
             """
             return {
+                "title": f"Status for Node {node_id}",
                 "node_id": node_id,
                 "status": "active",
                 "last_run": datetime.now().isoformat(),
                 "success_rate": 0.95,
+                "metrics": {
+                    "total_runs": 1205,
+                    "avg_duration": "2.3s",
+                    "error_count": 12,
+                },
             }
 
-        @self.add_tool()
-        def pause_workflow(reason: str = "") -> Dict[str, Any]:
+        @self.server.tool()  # Regular tool with automatic metrics
+        def pause_workflow(reason: str = "") -> dict[str, Any]:
             """Pause the workflow execution.
 
             Args:
@@ -123,7 +138,7 @@ class WorkflowMCPServer(MCPServer):
     def setup_prompts(self):
         """Set up server prompts."""
 
-        @self.add_prompt("analyze_workflow")
+        @self.server.prompt("analyze_workflow")
         def analyze_workflow_prompt(workflow_id: str, time_range: str = "1h") -> str:
             """Generate a prompt for workflow analysis."""
             return f"""Analyze the workflow '{workflow_id}' performance over the last {time_range}.
@@ -135,6 +150,17 @@ Consider:
 - Bottlenecks and optimization opportunities
 
 Provide a comprehensive analysis with actionable recommendations."""
+
+    def start(self):
+        """Start the MCP server."""
+        print(f"Starting {self.name} with enhanced capabilities...")
+        print(f"Cache enabled: {self.server.cache.enabled}")
+        print(f"Metrics enabled: {self.server.metrics.enabled}")
+        self.server.run()
+
+    def get_stats(self):
+        """Get server statistics."""
+        return self.server.get_server_stats()
 
 
 def demonstrate_custom_server():
@@ -160,22 +186,23 @@ def demonstrate_simple_server():
     print("=" * 70)
     print("\nCreating a simple MCP server with inline definitions...")
 
-    # Create a simple server
-    simple_server = SimpleMCPServer("simple-workflow", port=8082)
+    # Create a simple server (minimal features enabled)
+    simple_server = SimpleMCPServer("simple-workflow", "Simple workflow management")
 
     # Add resources
-    simple_server.add_static_resource(
-        uri="workflow://config", content={"max_nodes": 10, "timeout": 300}
-    )
+    @simple_server.resource("workflow://config")
+    def get_config():
+        """Get workflow configuration."""
+        return {"max_nodes": 10, "timeout": 300}
 
     # Add tools inline
-    @simple_server.add_tool()
-    def list_nodes() -> List[str]:
+    @simple_server.tool()
+    def list_nodes() -> list[str]:
         """List all workflow nodes."""
         return ["input", "processor", "output", "validator"]
 
-    @simple_server.add_tool()
-    def get_node_config(node_name: str) -> Dict[str, Any]:
+    @simple_server.tool(format_response="json")  # Even simple server gets formatting
+    def get_node_config(node_name: str) -> dict[str, Any]:
         """Get configuration for a specific node."""
         configs = {
             "input": {"type": "file", "path": "/data/input.csv"},
@@ -189,6 +216,8 @@ def demonstrate_simple_server():
         return configs.get(node_name, {"error": "Node not found"})
 
     print(f"\n✅ Simple server created: {simple_server.name}")
+    print(f"   Cache enabled: {simple_server.cache.enabled}")
+    print(f"   Metrics enabled: {simple_server.metrics.enabled}")
     print("   This is ideal for quick prototyping and testing")
 
 
@@ -305,8 +334,17 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
-        print("Starting WorkflowMCPServer on port 8081...")
-        server = WorkflowMCPServer(port=8081)
+        print("Starting WorkflowMCPServer with enhanced capabilities...")
+        server = WorkflowMCPServer(name="workflow-mcp", port=8081)
+
+        # Show server stats before starting
+        print("\nServer Statistics:")
+        stats = server.get_stats()
+        print(f"Tools registered: {stats['tools']['registered_tools']}")
+        print(f"Cached tools: {stats['tools']['cached_tools']}")
+        print(f"Cache enabled: {stats['server']['config']['cache']['enabled']}")
+        print(f"Metrics enabled: {stats['server']['config']['metrics']['enabled']}")
+
         server.start()  # This will block
     else:
         main()

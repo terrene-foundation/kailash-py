@@ -50,7 +50,7 @@ Example:
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -69,12 +69,12 @@ class WorkflowRegistration(BaseModel):
 
     name: str
     type: str = Field(description="embedded or proxied")
-    workflow: Optional[Workflow] = None
-    proxy_url: Optional[str] = None
-    health_check: Optional[str] = None
-    description: Optional[str] = None
+    workflow: Workflow | None = None
+    proxy_url: str | None = None
+    health_check: str | None = None
+    description: str | None = None
     version: str = "1.0.0"
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 class WorkflowAPIGateway:
@@ -101,7 +101,7 @@ class WorkflowAPIGateway:
         description: str = "Unified API for Kailash workflows",
         version: str = "1.0.0",
         max_workers: int = 10,
-        cors_origins: List[str] = None,
+        cors_origins: list[str] = None,
     ):
         """Initialize the API gateway.
 
@@ -112,8 +112,8 @@ class WorkflowAPIGateway:
             max_workers: Maximum thread pool workers
             cors_origins: Allowed CORS origins
         """
-        self.workflows: Dict[str, WorkflowRegistration] = {}
-        self.mcp_servers: Dict[str, Any] = {}
+        self.workflows: dict[str, WorkflowRegistration] = {}
+        self.mcp_servers: dict[str, Any] = {}
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
         # Create FastAPI app with lifespan
@@ -213,9 +213,9 @@ class WorkflowAPIGateway:
         self,
         name: str,
         workflow: Workflow,
-        description: Optional[str] = None,
+        description: str | None = None,
         version: str = "1.0.0",
-        tags: List[str] = None,
+        tags: list[str] = None,
         **kwargs,
     ):
         """Register an embedded workflow.
@@ -259,9 +259,9 @@ class WorkflowAPIGateway:
         name: str,
         proxy_url: str,
         health_check: str = "/health",
-        description: Optional[str] = None,
+        description: str | None = None,
         version: str = "1.0.0",
-        tags: List[str] = None,
+        tags: list[str] = None,
     ):
         """Register a proxied workflow.
 
@@ -306,7 +306,7 @@ class WorkflowAPIGateway:
         # TODO: Integrate MCP tools with workflows
         logger.info(f"Registered MCP server: {name}")
 
-    def _get_workflow_endpoints(self, name: str) -> List[str]:
+    def _get_workflow_endpoints(self, name: str) -> list[str]:
         """Get endpoints for a workflow."""
         reg = self.workflows.get(name)
         if not reg:
@@ -353,10 +353,10 @@ class WorkflowOrchestrator:
     def __init__(self, gateway: WorkflowAPIGateway):
         """Initialize orchestrator with a gateway."""
         self.gateway = gateway
-        self.chains: Dict[str, List[str]] = {}
-        self.dependencies: Dict[str, List[str]] = {}
+        self.chains: dict[str, list[str]] = {}
+        self.dependencies: dict[str, list[str]] = {}
 
-    def create_chain(self, name: str, workflow_sequence: List[str]):
+    def create_chain(self, name: str, workflow_sequence: list[str]):
         """Create a workflow chain.
 
         Args:
@@ -371,8 +371,8 @@ class WorkflowOrchestrator:
         self.chains[name] = workflow_sequence
 
     async def execute_chain(
-        self, chain_name: str, initial_input: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, chain_name: str, initial_input: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute a workflow chain.
 
         Args:

@@ -7,7 +7,7 @@ This example demonstrates the visualization capabilities of Kailash SDK.
 
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,7 +39,7 @@ def create_sample_workflow():
     json_reader = JSONReaderNode(file_path=str(get_data_dir() / "transactions.json"))
 
     # Create joiner using PythonCodeNode
-    def join_data(customer_data: list, transaction_data: list) -> Dict[str, Any]:
+    def join_data(customer_data: list, transaction_data: list) -> dict[str, Any]:
         """Join customer and transaction data."""
         # Simulate join operation
         joined = []
@@ -71,7 +71,7 @@ def create_sample_workflow():
     )
 
     # Create transformer
-    def clean_data(data: list) -> Dict[str, Any]:
+    def clean_data(data: list) -> dict[str, Any]:
         """Clean and transform data."""
         cleaned = []
         for record in data:
@@ -96,7 +96,7 @@ def create_sample_workflow():
     )
 
     # Create classifier
-    def classify_customers(data: list) -> Dict[str, Any]:
+    def classify_customers(data: list) -> dict[str, Any]:
         """Classify customers into segments."""
         classified = []
         for record in data:
@@ -114,7 +114,7 @@ def create_sample_workflow():
     )
 
     # Create aggregator
-    def calculate_metrics(data: list) -> Dict[str, Any]:
+    def calculate_metrics(data: list) -> dict[str, Any]:
         """Calculate aggregate metrics."""
         segments = {}
         for record in data:
@@ -341,7 +341,7 @@ def demonstrate_workflow_comparison():
     workflow2.name = "workflow_v2"
 
     # Add an extra node to workflow2
-    def extra_processor(data: list) -> Dict[str, Any]:
+    def extra_processor(data: list) -> dict[str, Any]:
         """Additional processing step."""
         return {"data": data}
 
@@ -416,20 +416,20 @@ def demonstrate_workflow_comparison():
     plt.close()
 
     # Also create Mermaid comparison
-    comparison_content = """# Workflow Comparison
+    comparison_content = f"""# Workflow Comparison
 
 This document compares two versions of a data processing workflow.
 
 ## Workflow v1 - Original
 
 ```mermaid
-{}
+{workflow1.to_mermaid()}
 ```
 
 ## Workflow v2 - Enhanced with Extra Processor
 
 ```mermaid
-{}
+{workflow2.to_mermaid()}
 ```
 
 ## Changes Summary
@@ -437,9 +437,7 @@ This document compares two versions of a data processing workflow.
 - **Added**: `extra_processor` node between `classifier` and `csv_writer`
 - **Purpose**: Additional processing step for data enhancement
 - **Impact**: Data now goes through an extra transformation before being written to CSV
-""".format(
-        workflow1.to_mermaid(), workflow2.to_mermaid()
-    )
+"""
 
     # Save comparison
     output_path = "../data/workflow_comparison.md"

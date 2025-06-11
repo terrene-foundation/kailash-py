@@ -10,7 +10,7 @@ Key Components:
 - GraphQL query building and response handling utilities
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.nodes.api.http import AsyncHTTPRequestNode, HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -60,7 +60,7 @@ class GraphQLClientNode(Node):
         super().__init__(**kwargs)
         self.http_node = HTTPRequestNode(**kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -137,7 +137,7 @@ class GraphQLClientNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -173,9 +173,9 @@ class GraphQLClientNode(Node):
     def _build_graphql_payload(
         self,
         query: str,
-        variables: Dict[str, Any] = None,
-        operation_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        variables: dict[str, Any] = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Any]:
         """Build a GraphQL request payload.
 
         Args:
@@ -197,8 +197,8 @@ class GraphQLClientNode(Node):
         return payload
 
     def _process_graphql_response(
-        self, response: Dict[str, Any], flatten_response: bool = False
-    ) -> Dict[str, Any]:
+        self, response: dict[str, Any], flatten_response: bool = False
+    ) -> dict[str, Any]:
         """Process a GraphQL response.
 
         Args:
@@ -241,7 +241,7 @@ class GraphQLClientNode(Node):
 
         return {"data": data, "errors": errors, "success": success}
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute a GraphQL query or mutation.
 
         Args:
@@ -362,7 +362,7 @@ class AsyncGraphQLClientNode(AsyncNode):
         self.http_node = AsyncHTTPRequestNode(**kwargs)
         self.graphql_node = GraphQLClientNode(**kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -371,7 +371,7 @@ class AsyncGraphQLClientNode(AsyncNode):
         # Same parameters as the synchronous version
         return self.graphql_node.get_parameters()
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -380,7 +380,7 @@ class AsyncGraphQLClientNode(AsyncNode):
         # Same output schema as the synchronous version
         return self.graphql_node.get_output_schema()
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous version of the GraphQL request, for compatibility.
 
         This is implemented for compatibility but users should use the
@@ -399,7 +399,7 @@ class AsyncGraphQLClientNode(AsyncNode):
         # Forward to the synchronous GraphQL node
         return self.graphql_node.run(**kwargs)
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute a GraphQL query or mutation asynchronously.
 
         Args:

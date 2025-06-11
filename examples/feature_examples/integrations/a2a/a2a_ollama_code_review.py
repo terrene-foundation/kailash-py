@@ -6,7 +6,6 @@ Ollama models specialize in different aspects of code review.
 """
 
 import time
-from typing import Dict
 
 from kailash import Workflow
 from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
@@ -198,7 +197,7 @@ Consider security issues as highest priority, followed by performance, then qual
             self.coordinator.run(action="register", agent_info=reviewer)
             print(f"Registered {reviewer['id']}")
 
-    def review_code(self, code_snippet: str, context: str = "") -> Dict:
+    def review_code(self, code_snippet: str, context: str = "") -> dict:
         """Perform multi-agent code review."""
         results = {
             "code": code_snippet,
@@ -361,7 +360,7 @@ Consider security issues as highest priority, followed by performance, then qual
 
         return results
 
-    def _analyze_review_memory(self, results: Dict):
+    def _analyze_review_memory(self, results: dict):
         """Analyze the review memory pool for insights."""
         print("\n\n" + "=" * 60)
         print("REVIEW MEMORY ANALYSIS")

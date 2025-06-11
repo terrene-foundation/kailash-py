@@ -49,7 +49,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -79,18 +79,18 @@ class CycleIteration:
 
     iteration_number: int
     start_time: datetime
-    end_time: Optional[datetime] = None
-    execution_time: Optional[float] = None
-    input_data: Dict[str, Any] = field(default_factory=dict)
-    output_data: Optional[Dict[str, Any]] = None
-    memory_usage_mb: Optional[float] = None
-    cpu_usage_percent: Optional[float] = None
-    convergence_value: Optional[float] = None
-    error: Optional[str] = None
-    node_executions: List[str] = field(default_factory=list)
+    end_time: datetime | None = None
+    execution_time: float | None = None
+    input_data: dict[str, Any] = field(default_factory=dict)
+    output_data: dict[str, Any] | None = None
+    memory_usage_mb: float | None = None
+    cpu_usage_percent: float | None = None
+    convergence_value: float | None = None
+    error: str | None = None
+    node_executions: list[str] = field(default_factory=list)
 
     def complete(
-        self, output_data: Dict[str, Any], convergence_value: Optional[float] = None
+        self, output_data: dict[str, Any], convergence_value: float | None = None
     ):
         """
         Mark iteration as complete with output data.
@@ -131,7 +131,7 @@ class CycleIteration:
         """
         return self.end_time is not None and self.error is None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert iteration to dictionary for serialization.
 
         Returns:
@@ -179,17 +179,17 @@ class CycleExecutionTrace:
     cycle_id: str
     workflow_id: str
     start_time: datetime
-    end_time: Optional[datetime] = None
-    total_execution_time: Optional[float] = None
-    iterations: List[CycleIteration] = field(default_factory=list)
+    end_time: datetime | None = None
+    total_execution_time: float | None = None
+    iterations: list[CycleIteration] = field(default_factory=list)
     converged: bool = False
-    convergence_iteration: Optional[int] = None
+    convergence_iteration: int | None = None
     termination_reason: str = "unknown"
-    max_iterations_configured: Optional[int] = None
-    timeout_configured: Optional[float] = None
-    convergence_condition: Optional[str] = None
-    memory_peak_mb: Optional[float] = None
-    cpu_peak_percent: Optional[float] = None
+    max_iterations_configured: int | None = None
+    timeout_configured: float | None = None
+    convergence_condition: str | None = None
+    memory_peak_mb: float | None = None
+    cpu_peak_percent: float | None = None
 
     def add_iteration(self, iteration: CycleIteration):
         """
@@ -216,7 +216,7 @@ class CycleExecutionTrace:
         self,
         converged: bool,
         termination_reason: str,
-        convergence_iteration: Optional[int] = None,
+        convergence_iteration: int | None = None,
     ):
         """
         Mark cycle execution as complete.
@@ -232,7 +232,7 @@ class CycleExecutionTrace:
         self.termination_reason = termination_reason
         self.convergence_iteration = convergence_iteration
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get comprehensive statistics about the cycle execution.
 
@@ -316,7 +316,7 @@ class CycleExecutionTrace:
 
         return stats
 
-    def get_convergence_trend(self) -> List[Tuple[int, Optional[float]]]:
+    def get_convergence_trend(self) -> list[tuple[int, float | None]]:
         """
         Get convergence values over iterations for trend analysis.
 
@@ -335,7 +335,7 @@ class CycleExecutionTrace:
             (iter.iteration_number, iter.convergence_value) for iter in self.iterations
         ]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert trace to dictionary for serialization."""
         return {
             "cycle_id": self.cycle_id,
@@ -411,7 +411,7 @@ class CycleDebugger:
         """
         self.debug_level = debug_level
         self.enable_profiling = enable_profiling
-        self.active_traces: Dict[str, CycleExecutionTrace] = {}
+        self.active_traces: dict[str, CycleExecutionTrace] = {}
 
         # Configure logging based on debug level
         if debug_level == "verbose":
@@ -425,9 +425,9 @@ class CycleDebugger:
         self,
         cycle_id: str,
         workflow_id: str,
-        max_iterations: Optional[int] = None,
-        timeout: Optional[float] = None,
-        convergence_condition: Optional[str] = None,
+        max_iterations: int | None = None,
+        timeout: float | None = None,
+        convergence_condition: str | None = None,
     ) -> CycleExecutionTrace:
         """
         Start debugging a new cycle execution.
@@ -473,8 +473,8 @@ class CycleDebugger:
     def start_iteration(
         self,
         trace: CycleExecutionTrace,
-        input_data: Dict[str, Any],
-        iteration_number: Optional[int] = None,
+        input_data: dict[str, Any],
+        iteration_number: int | None = None,
     ) -> CycleIteration:
         """
         Start debugging a new cycle iteration.
@@ -533,9 +533,9 @@ class CycleDebugger:
         self,
         trace: CycleExecutionTrace,
         iteration: CycleIteration,
-        output_data: Dict[str, Any],
-        convergence_value: Optional[float] = None,
-        node_executions: Optional[List[str]] = None,
+        output_data: dict[str, Any],
+        convergence_value: float | None = None,
+        node_executions: list[str] | None = None,
     ):
         """
         Complete iteration tracking with output data and metrics.
@@ -598,7 +598,7 @@ class CycleDebugger:
         trace: CycleExecutionTrace,
         converged: bool,
         termination_reason: str,
-        convergence_iteration: Optional[int] = None,
+        convergence_iteration: int | None = None,
     ):
         """
         Complete cycle tracking with final results and analysis.
@@ -632,7 +632,7 @@ class CycleDebugger:
             f"converged={converged}, efficiency={stats['efficiency_score']:.2f}"
         )
 
-    def generate_report(self, trace: CycleExecutionTrace) -> Dict[str, Any]:
+    def generate_report(self, trace: CycleExecutionTrace) -> dict[str, Any]:
         """
         Generate comprehensive debugging report for a cycle execution.
 
@@ -691,8 +691,8 @@ class CycleDebugger:
         return report
 
     def _analyze_convergence(
-        self, convergence_trend: List[Tuple[int, Optional[float]]]
-    ) -> Dict[str, Any]:
+        self, convergence_trend: list[tuple[int, float | None]]
+    ) -> dict[str, Any]:
         """Analyze convergence pattern from trend data."""
         if not convergence_trend or all(
             value is None for _, value in convergence_trend
@@ -748,8 +748,8 @@ class CycleDebugger:
         }
 
     def _generate_recommendations(
-        self, trace: CycleExecutionTrace, stats: Dict[str, Any]
-    ) -> List[str]:
+        self, trace: CycleExecutionTrace, stats: dict[str, Any]
+    ) -> list[str]:
         """Generate optimization recommendations based on execution analysis."""
         recommendations = []
 

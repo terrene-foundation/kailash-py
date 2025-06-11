@@ -17,7 +17,7 @@ Key Features Demonstrated:
 - Serialization and deserialization support
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
@@ -44,7 +44,7 @@ class OptimizationNode(Node):
             ),
         }
 
-    def run(self, context: Any = None, **inputs) -> Dict[str, Any]:
+    def run(self, context: Any = None, **inputs) -> dict[str, Any]:
         """Run optimization step."""
         value = inputs.get("value", 0.0)
         target = inputs.get("target", 100.0)

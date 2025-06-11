@@ -1,9 +1,9 @@
 """Workflow manifest generation for Kailash deployment."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -17,13 +17,13 @@ class KailashManifest(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    metadata: Dict[str, Any] = Field(..., description="Manifest metadata")
-    workflow: Optional[Workflow] = Field(None, description="Associated workflow")
-    resources: Optional[Dict[str, Any]] = Field(
+    metadata: dict[str, Any] = Field(..., description="Manifest metadata")
+    workflow: Workflow | None = Field(None, description="Associated workflow")
+    resources: dict[str, Any] | None = Field(
         default_factory=dict, description="Additional deployment resources"
     )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert manifest to dictionary.
 
         Returns:
@@ -55,7 +55,7 @@ class KailashManifest(BaseModel):
         """
         return json.dumps(self.to_dict(), indent=2)
 
-    def save(self, path: Union[str, Path], format: str = "yaml") -> None:
+    def save(self, path: str | Path, format: str = "yaml") -> None:
         """Save manifest to file.
 
         Args:
@@ -95,7 +95,7 @@ class KailashManifest(BaseModel):
             "version": workflow.metadata.version,
             "author": workflow.metadata.author,
             "description": workflow.metadata.description,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         # Override defaults with provided metadata
@@ -104,7 +104,7 @@ class KailashManifest(BaseModel):
         return cls(metadata=default_metadata, workflow=workflow)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "KailashManifest":
+    def from_dict(cls, data: dict[str, Any]) -> "KailashManifest":
         """Create manifest from dictionary.
 
         Args:
@@ -132,7 +132,7 @@ class KailashManifest(BaseModel):
             raise ManifestError(f"Failed to create manifest from data: {e}") from e
 
     @classmethod
-    def load(cls, path: Union[str, Path]) -> "KailashManifest":
+    def load(cls, path: str | Path) -> "KailashManifest":
         """Load manifest from file.
 
         Args:
@@ -149,7 +149,7 @@ class KailashManifest(BaseModel):
             if not file_path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
 
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 content = f.read()
 
             # Parse based on file extension
@@ -172,21 +172,21 @@ class DeploymentConfig(BaseModel):
     namespace: str = Field("default", description="Kubernetes namespace")
     replicas: int = Field(1, description="Number of replicas")
     strategy: str = Field("RollingUpdate", description="Deployment strategy")
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         default_factory=dict, description="Kubernetes labels"
     )
-    annotations: Dict[str, str] = Field(
+    annotations: dict[str, str] = Field(
         default_factory=dict, description="Kubernetes annotations"
     )
     image_pull_policy: str = Field("IfNotPresent", description="Image pull policy")
-    service_account: Optional[str] = Field(None, description="Service account name")
-    node_selector: Dict[str, str] = Field(
+    service_account: str | None = Field(None, description="Service account name")
+    node_selector: dict[str, str] = Field(
         default_factory=dict, description="Node selector"
     )
-    tolerations: List[Dict[str, Any]] = Field(
+    tolerations: list[dict[str, Any]] = Field(
         default_factory=list, description="Pod tolerations"
     )
-    affinity: Optional[Dict[str, Any]] = Field(None, description="Pod affinity rules")
+    affinity: dict[str, Any] | None = Field(None, description="Pod affinity rules")
 
 
 class ServiceConfig(BaseModel):
@@ -194,11 +194,11 @@ class ServiceConfig(BaseModel):
 
     name: str = Field(..., description="Service name")
     type: str = Field("ClusterIP", description="Service type")
-    ports: List[Dict[str, Any]] = Field(
+    ports: list[dict[str, Any]] = Field(
         default_factory=list, description="Service ports"
     )
-    selector: Dict[str, str] = Field(default_factory=dict, description="Pod selector")
-    labels: Dict[str, str] = Field(default_factory=dict, description="Service labels")
+    selector: dict[str, str] = Field(default_factory=dict, description="Pod selector")
+    labels: dict[str, str] = Field(default_factory=dict, description="Service labels")
 
 
 class VolumeConfig(BaseModel):
@@ -209,7 +209,7 @@ class VolumeConfig(BaseModel):
     source: str = Field(..., description="Volume source")
     mount_path: str = Field(..., description="Mount path in container")
     read_only: bool = Field(True, description="Read-only mount")
-    sub_path: Optional[str] = Field(None, description="Sub-path within volume")
+    sub_path: str | None = Field(None, description="Sub-path within volume")
 
 
 class ConfigMapConfig(BaseModel):
@@ -217,9 +217,9 @@ class ConfigMapConfig(BaseModel):
 
     name: str = Field(..., description="ConfigMap name")
     namespace: str = Field("default", description="Namespace")
-    data: Dict[str, str] = Field(default_factory=dict, description="ConfigMap data")
-    binary_data: Dict[str, str] = Field(default_factory=dict, description="Binary data")
-    labels: Dict[str, str] = Field(default_factory=dict, description="Labels")
+    data: dict[str, str] = Field(default_factory=dict, description="ConfigMap data")
+    binary_data: dict[str, str] = Field(default_factory=dict, description="Binary data")
+    labels: dict[str, str] = Field(default_factory=dict, description="Labels")
 
 
 class SecretConfig(BaseModel):
@@ -228,9 +228,9 @@ class SecretConfig(BaseModel):
     name: str = Field(..., description="Secret name")
     namespace: str = Field("default", description="Namespace")
     type: str = Field("Opaque", description="Secret type")
-    data: Dict[str, str] = Field(default_factory=dict, description="Secret data")
-    string_data: Dict[str, str] = Field(default_factory=dict, description="String data")
-    labels: Dict[str, str] = Field(default_factory=dict, description="Labels")
+    data: dict[str, str] = Field(default_factory=dict, description="Secret data")
+    string_data: dict[str, str] = Field(default_factory=dict, description="String data")
+    labels: dict[str, str] = Field(default_factory=dict, description="Labels")
 
 
 class ManifestBuilder:
@@ -244,10 +244,10 @@ class ManifestBuilder:
         """
         self.workflow = workflow
         self.deployment_config = None
-        self.service_configs: List[ServiceConfig] = []
-        self.volume_configs: List[VolumeConfig] = []
-        self.configmap_configs: List[ConfigMapConfig] = []
-        self.secret_configs: List[SecretConfig] = []
+        self.service_configs: list[ServiceConfig] = []
+        self.volume_configs: list[VolumeConfig] = []
+        self.configmap_configs: list[ConfigMapConfig] = []
+        self.secret_configs: list[SecretConfig] = []
 
     def with_deployment(self, config: DeploymentConfig) -> "ManifestBuilder":
         """Add deployment configuration.
@@ -309,7 +309,7 @@ class ManifestBuilder:
         self.secret_configs.append(config)
         return self
 
-    def build(self) -> Dict[str, Any]:
+    def build(self) -> dict[str, Any]:
         """Build the complete manifest.
 
         Returns:
@@ -340,7 +340,7 @@ class ManifestBuilder:
 
         return manifest
 
-    def _build_deployment(self) -> Dict[str, Any]:
+    def _build_deployment(self) -> dict[str, Any]:
         """Build deployment manifest."""
         config = self.deployment_config
 
@@ -446,7 +446,7 @@ class ManifestBuilder:
 
         return deployment
 
-    def _build_service(self, config: ServiceConfig) -> Dict[str, Any]:
+    def _build_service(self, config: ServiceConfig) -> dict[str, Any]:
         """Build service manifest."""
         service = {
             "apiVersion": "v1",
@@ -469,7 +469,7 @@ class ManifestBuilder:
 
         return service
 
-    def _build_configmap(self, config: ConfigMapConfig) -> Dict[str, Any]:
+    def _build_configmap(self, config: ConfigMapConfig) -> dict[str, Any]:
         """Build ConfigMap manifest."""
         configmap = {
             "apiVersion": "v1",
@@ -487,7 +487,7 @@ class ManifestBuilder:
 
         return configmap
 
-    def _build_secret(self, config: SecretConfig) -> Dict[str, Any]:
+    def _build_secret(self, config: SecretConfig) -> dict[str, Any]:
         """Build Secret manifest."""
         secret = {
             "apiVersion": "v1",
@@ -506,7 +506,7 @@ class ManifestBuilder:
 
         return secret
 
-    def _build_workflow_crd(self) -> Dict[str, Any]:
+    def _build_workflow_crd(self) -> dict[str, Any]:
         """Build workflow custom resource."""
         from kailash.utils.export import ExportConfig, WorkflowExporter
 
@@ -529,7 +529,7 @@ class ManifestGenerator:
     @staticmethod
     def generate_simple_manifest(
         workflow: Workflow, name: str, namespace: str = "default"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a simple deployment manifest.
 
         Args:
@@ -586,9 +586,9 @@ class ManifestGenerator:
         name: str,
         namespace: str = "default",
         replicas: int = 1,
-        resources: Optional[Dict[str, Any]] = None,
+        resources: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate an advanced deployment manifest with custom configuration.
 
         Args:
@@ -713,7 +713,7 @@ class ManifestGenerator:
         return builder.build()
 
     @staticmethod
-    def save_manifest(manifest: Dict[str, Any], path: str, format: str = "yaml"):
+    def save_manifest(manifest: dict[str, Any], path: str, format: str = "yaml"):
         """Save manifest to file.
 
         Args:
@@ -737,7 +737,7 @@ class ManifestGenerator:
 # Convenience functions
 def create_deployment_manifest(
     workflow: Workflow, deployment_name: str, **config
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a deployment manifest for a workflow.
 
     Args:

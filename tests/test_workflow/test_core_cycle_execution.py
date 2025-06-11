@@ -8,7 +8,7 @@ Tests fundamental cyclic workflow execution patterns including:
 - State management across iterations
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -23,7 +23,7 @@ from kailash.runtime.local import LocalRuntime
 class CounterNode(CycleAwareNode):
     """Simple counter node for basic cycle testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "increment": NodeParameter(
                 name="increment", type=int, required=False, default=1
@@ -33,7 +33,7 @@ class CounterNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Count up with each iteration."""
         increment = kwargs.get("increment", 1)
         start_value = kwargs.get("start_value", 0)
@@ -52,7 +52,7 @@ class CounterNode(CycleAwareNode):
 class AccumulatorNode(CycleAwareNode):
     """Node that accumulates values across iterations."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "value": NodeParameter(
                 name="value", type=float, required=False, default=1.0
@@ -62,7 +62,7 @@ class AccumulatorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Accumulate values using specified operation."""
         value = kwargs.get("value", 1.0)
         operation = kwargs.get("operation", "add")
@@ -137,7 +137,7 @@ class TestBasicCycleExecution:
         class DataProcessorNode(CycleAwareNode):
             """Processes data and passes to next node."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -147,7 +147,7 @@ class TestBasicCycleExecution:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process data with multiplier."""
                 data = kwargs.get("data", [])
                 multiplier = kwargs.get("multiplier", 1.1)
@@ -166,7 +166,7 @@ class TestBasicCycleExecution:
         class DataValidatorNode(CycleAwareNode):
             """Validates processed data."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -176,7 +176,7 @@ class TestBasicCycleExecution:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Validate data size and values."""
                 data = kwargs.get("data", [])
                 max_size = kwargs.get("max_size", 10)
@@ -290,7 +290,7 @@ class TestCycleConvergencePatterns:
         class ThresholdNode(CycleAwareNode):
             """Node that approaches a threshold value."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "current": NodeParameter(
                         name="current", type=float, required=False, default=0.0
@@ -303,7 +303,7 @@ class TestCycleConvergencePatterns:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Move toward target value."""
                 current = kwargs.get("current", 0.0)
                 target = kwargs.get("target", 1.0)
@@ -371,7 +371,7 @@ class TestCycleConvergencePatterns:
         class NoiseReducerNode(CycleAwareNode):
             """Node that reduces noise over iterations."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "signal": NodeParameter(
                         name="signal", type=float, required=False, default=1.0
@@ -381,7 +381,7 @@ class TestCycleConvergencePatterns:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Reduce noise in signal over time."""
                 signal = kwargs.get("signal", 1.0)
                 noise_factor = kwargs.get("noise_factor", 0.1)
@@ -454,7 +454,7 @@ class TestCycleConvergencePatterns:
         class MultiObjectiveNode(CycleAwareNode):
             """Node optimizing multiple objectives."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "accuracy": NodeParameter(
                         name="accuracy", type=float, required=False, default=0.5
@@ -467,7 +467,7 @@ class TestCycleConvergencePatterns:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Optimize multiple objectives with tradeoffs."""
                 accuracy = kwargs.get("accuracy", 0.5)
                 speed = kwargs.get("speed", 0.3)
@@ -599,7 +599,7 @@ iteration_info = f"Iteration with x={x}, result={result}"
         class BranchingProcessorNode(CycleAwareNode):
             """Node that produces different outputs for branching."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "value": NodeParameter(
                         name="value", type=int, required=False, default=1
@@ -609,7 +609,7 @@ iteration_info = f"Iteration with x={x}, result={result}"
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process value and determine branching."""
                 value = kwargs.get("value", 1)
                 mode = kwargs.get("mode", "increment")
@@ -649,7 +649,7 @@ iteration_info = f"Iteration with x={x}, result={result}"
         class ProcessorNode(CycleAwareNode):
             """Simple processor for the branching path."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "value": NodeParameter(
                         name="value", type=int, required=False, default=0
@@ -659,7 +659,7 @@ iteration_info = f"Iteration with x={x}, result={result}"
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Simple processing."""
                 value = kwargs.get("value", 0)
                 mode = kwargs.get("mode", "increment")
@@ -732,7 +732,7 @@ iteration_info = f"Iteration with x={x}, result={result}"
         class ErrorProneNode(CycleAwareNode):
             """Node that occasionally produces errors."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "value": NodeParameter(
                         name="value", type=int, required=False, default=1
@@ -748,7 +748,7 @@ iteration_info = f"Iteration with x={x}, result={result}"
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process with potential errors."""
                 value = kwargs.get("value", 1)
                 kwargs.get("error_probability", 0.3)

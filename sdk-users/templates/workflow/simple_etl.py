@@ -6,7 +6,7 @@ Use Case: Simple data processing from CSV to JSON
 This is a minimal template to get started quickly.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
@@ -18,7 +18,7 @@ INPUT_FILE = "data/input.csv"
 OUTPUT_FILE = "outputs/output.json"
 
 
-def transform_data(data: List[Dict]) -> Dict[str, Any]:
+def transform_data(data: list[dict]) -> dict[str, Any]:
     """Transform your data here"""
     transformed = []
 

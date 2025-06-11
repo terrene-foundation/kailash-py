@@ -1,6 +1,6 @@
 """Document chunking nodes for splitting text into manageable pieces."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -9,7 +9,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 class HierarchicalChunkerNode(Node):
     """Splits documents into hierarchical chunks for better retrieval."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "documents": NodeParameter(
                 name="documents",
@@ -33,7 +33,7 @@ class HierarchicalChunkerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         documents = kwargs.get("documents", [])
         chunk_size = kwargs.get("chunk_size", 200)
         # overlap = kwargs.get("overlap", 50)  # Currently not used in chunking logic

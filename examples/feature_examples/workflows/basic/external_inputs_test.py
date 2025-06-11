@@ -7,7 +7,7 @@ This example shows different patterns for providing initial data to workflows:
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from examples.utils.paths import get_data_dir
 from kailash import Workflow
@@ -19,7 +19,7 @@ from kailash.runtime import LocalRuntime
 class DataProcessorNode(Node):
     """Simple node that processes input data."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -36,7 +36,7 @@ class DataProcessorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         data = kwargs["data"]
         multiplier = kwargs.get("multiplier", 2.0)
 

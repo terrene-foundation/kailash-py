@@ -9,7 +9,7 @@
 | [sdk-users/essentials/](sdk-users/essentials/) - Quick patterns | [# contrib (removed)/research/](# contrib (removed)/research/) - LLM research | [shared/prd/](shared/prd/) - Product vision |
 | | [examples/feature-tests/](examples/feature-tests/) - Feature validation | |
 
-## ⚡ Critical Validation Rules (Updated Session 061/062)
+## ⚡ Critical Validation Rules
 1. **Node Names**: ALL end with "Node" (`CSVReaderNode` ✓)
 2. **PythonCodeNode**: Input variables EXCLUDED from outputs!
    - `mapping={"result": "input_data"}` ✓
@@ -22,13 +22,26 @@
    - All outputs go to `/data/outputs/` with proper subdirectories
    - ❌ `os.makedirs("outputs")` → ✅ `ensure_output_dir_exists()`
    - ❌ `"outputs/report.json"` → ✅ `get_output_data_path("category/report.json")`
+7. **PythonCodeNode Best Practice**: ALWAYS use `.from_function()` for code > 3 lines!
+   - ❌ `PythonCodeNode(name="x", code="...100 lines...")` → Inline strings = NO IDE support
+   - ✅ `PythonCodeNode.from_function(name="x", func=my_func)` → Full IDE support
+   - String code ONLY for: one-liners, dynamic generation, user input
+8. **Enhanced MCP Server**: Production-ready features enabled by default
+   - ✅ `from kailash.mcp import MCPServer` → Gets caching, metrics, config management
+   - ✅ `@server.tool(cache_key="name", cache_ttl=600)` → Automatic caching with TTL
+   - ✅ `@server.tool(format_response="markdown")` → LLM-friendly formatting
 
-## 📂 Examples Organization (Session 063 Update!)
-**Naming Convention**: All example folders end with `_examples` for easy test runner detection.
+## 📂 Directory Navigation Convention
+**File Naming Standard**:
+- **README.md** = Directory index/navigation (what's here, where to go)
+- **QUICK_REFERENCE.md** = Hands-on implementation guide (code patterns, quick fixes)
+- **Numbered guides** = Detailed topic-specific documentation
+
+**Examples Organization**: All example folders end with `_examples` for easy test runner detection.
 
 **Feature Tests** (`examples/feature_examples/`):
 - **nodes/** - Test individual node features
-- **workflows/** - Test workflow patterns  
+- **workflows/** - Test workflow patterns
 - **integrations/** - Test external integrations
 - **runtime/** - Test runtime features
 
@@ -42,23 +55,6 @@
 - **by-enterprise/** - Business function workflows
 - **by-industry/** - Industry-specific patterns
 - **by-pattern/** - Technical implementation patterns
-
-## 🚀 Quick Code Patterns
-```python
-# Basic workflow with centralized data
-from examples.utils.data_paths import get_input_data_path, get_output_data_path
-
-workflow = Workflow("id", "name")
-# Node creation without required params (Session 061)
-reader = CSVReaderNode(name="reader", file_path=str(get_input_data_path("customers.csv")))
-workflow.add_node("reader", reader)
-workflow.connect("reader", "writer", mapping={"data": "data"})
-results, run_id = runtime.execute(workflow)
-
-# PythonCodeNode (correct pattern)
-workflow.connect("discovery", "processor", mapping={"result": "input_data"})
-processor = PythonCodeNode(name="processor", code="result = {'count': len(input_data)}")
-```
 
 ## 🔗 Quick Links by Need
 
@@ -88,7 +84,7 @@ processor = PythonCodeNode(name="processor", code="result = {'count': len(input_
 
 ### **Phase 2: Implement → Validate → Test**
 - **Implement**: Use `sdk-users/essentials/` for user patterns
-- **Custom Nodes**: `sdk-users/developer/CLAUDE.md` for usage patterns
+- **Custom Nodes**: `sdk-users/developer/QUICK_REFERENCE.md` for usage patterns
 - **Create Feature Test**: Create test in `examples/feature-tests/` appropriate subdirectory
 - **Create Business Workflow**: If applicable, add to `sdk-users/workflows/` with business context
 - **Validate**: Check `sdk-users/validation-guide.md` for user rules
@@ -111,7 +107,7 @@ Team uses Claude Code workflow system. When asked about team work, planning, or 
 
 ---
 
-**Quick Start**: 
+**Quick Start**:
 - **Building solutions?** → [sdk-users/CLAUDE.md](sdk-users/CLAUDE.md)
 - **Developing SDK?** → [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md)
 - **Need error help?** → [shared/mistakes/CLAUDE.md](shared/mistakes/CLAUDE.md)

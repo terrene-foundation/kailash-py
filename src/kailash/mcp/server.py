@@ -33,7 +33,7 @@ Examples:
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,6 @@ class MCPServer(ABC):
             Use @self.add_tool(), @self.add_resource(uri), and
             @self.add_prompt(name) decorators to register capabilities.
         """
-        pass
 
     def add_tool(self):
         """Decorator to add a tool to the server.

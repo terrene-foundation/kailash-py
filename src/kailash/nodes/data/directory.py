@@ -3,7 +3,7 @@
 import mimetypes
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.security import validate_file_path
@@ -46,7 +46,7 @@ class DirectoryReaderNode(Node):
         - Directory structure information
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for directory scanning."""
         return {
             "directory_path": NodeParameter(
@@ -85,7 +85,7 @@ class DirectoryReaderNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute directory scanning operation.
 
         Returns:
@@ -179,9 +179,9 @@ class DirectoryReaderNode(Node):
         file_path: str,
         filename: str,
         include_hidden: bool,
-        file_patterns: List[str],
-        exclude_patterns: List[str],
-    ) -> Optional[Dict[str, Any]]:
+        file_patterns: list[str],
+        exclude_patterns: list[str],
+    ) -> dict[str, Any] | None:
         """Extract metadata from a single file.
 
         Args:

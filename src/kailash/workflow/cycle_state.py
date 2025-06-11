@@ -2,8 +2,8 @@
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +19,11 @@ class CycleState:
         """
         self.cycle_id = cycle_id
         self.iteration = 0
-        self.history: List[Dict[str, Any]] = []
-        self.metadata: Dict[str, Any] = {}
+        self.history: list[dict[str, Any]] = []
+        self.metadata: dict[str, Any] = {}
         self.start_time = time.time()
         self.last_update_time = self.start_time
-        self.node_states: Dict[str, Any] = {}  # Per-node state storage
+        self.node_states: dict[str, Any] = {}  # Per-node state storage
 
     @property
     def elapsed_time(self) -> float:
@@ -35,7 +35,7 @@ class CycleState:
         """Get time since last iteration."""
         return time.time() - self.last_update_time
 
-    def update(self, results: Dict[str, Any], iteration: Optional[int] = None) -> None:
+    def update(self, results: dict[str, Any], iteration: int | None = None) -> None:
         """Update state with iteration results.
 
         Args:
@@ -51,7 +51,7 @@ class CycleState:
         history_entry = {
             "iteration": self.iteration,
             "results": results,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "elapsed_time": self.elapsed_time,
             "iteration_time": self.iteration_time,
         }
@@ -90,7 +90,7 @@ class CycleState:
         """
         self.node_states[node_id] = state
 
-    def get_convergence_context(self) -> Dict[str, Any]:
+    def get_convergence_context(self) -> dict[str, Any]:
         """Get context for convergence evaluation.
 
         Returns:
@@ -110,7 +110,7 @@ class CycleState:
 
         return context
 
-    def calculate_trend(self) -> Dict[str, Any]:
+    def calculate_trend(self) -> dict[str, Any]:
         """Calculate trends from iteration history.
 
         Returns:
@@ -159,7 +159,7 @@ class CycleState:
 
         return trends
 
-    def _extract_numeric_keys(self, obj: Any, prefix: str = "") -> List[str]:
+    def _extract_numeric_keys(self, obj: Any, prefix: str = "") -> list[str]:
         """Extract all numeric value keys from nested dict."""
         keys = []
 
@@ -186,7 +186,7 @@ class CycleState:
 
         return value
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary of cycle execution.
 
         Returns:
@@ -196,9 +196,7 @@ class CycleState:
             "cycle_id": self.cycle_id,
             "iterations": self.iteration,
             "elapsed_time": self.elapsed_time,
-            "start_time": datetime.fromtimestamp(
-                self.start_time, timezone.utc
-            ).isoformat(),
+            "start_time": datetime.fromtimestamp(self.start_time, UTC).isoformat(),
             "history_length": len(self.history),
         }
 
@@ -223,7 +221,7 @@ class CycleState:
 
         return summary
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize state to dictionary.
 
         Returns:
@@ -240,7 +238,7 @@ class CycleState:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CycleState":
+    def from_dict(cls, data: dict[str, Any]) -> "CycleState":
         """Create CycleState from dictionary.
 
         Args:
@@ -264,8 +262,8 @@ class CycleStateManager:
 
     def __init__(self):
         """Initialize cycle state manager."""
-        self.states: Dict[str, CycleState] = {}
-        self.active_cycles: List[str] = []
+        self.states: dict[str, CycleState] = {}
+        self.active_cycles: list[str] = []
 
     def get_or_create_state(self, cycle_id: str) -> CycleState:
         """Get existing state or create new one.
@@ -291,7 +289,7 @@ class CycleStateManager:
         self.active_cycles.append(cycle_id)
         logger.debug(f"Pushed cycle: {cycle_id}, stack: {self.active_cycles}")
 
-    def pop_cycle(self) -> Optional[str]:
+    def pop_cycle(self) -> str | None:
         """Pop cycle from active stack.
 
         Returns:
@@ -303,7 +301,7 @@ class CycleStateManager:
             return cycle_id
         return None
 
-    def get_active_cycle(self) -> Optional[str]:
+    def get_active_cycle(self) -> str | None:
         """Get currently active cycle ID.
 
         Returns:
@@ -311,7 +309,7 @@ class CycleStateManager:
         """
         return self.active_cycles[-1] if self.active_cycles else None
 
-    def get_all_summaries(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_summaries(self) -> dict[str, dict[str, Any]]:
         """Get summaries for all cycles.
 
         Returns:
@@ -321,7 +319,7 @@ class CycleStateManager:
             cycle_id: state.get_summary() for cycle_id, state in self.states.items()
         }
 
-    def clear(self, cycle_id: Optional[str] = None) -> None:
+    def clear(self, cycle_id: str | None = None) -> None:
         """Clear cycle state(s).
 
         Args:

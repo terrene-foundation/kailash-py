@@ -36,7 +36,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.workflow.cycle_debugger import CycleDebugger, CycleExecutionTrace
 from kailash.workflow.cycle_profiler import CycleProfiler
@@ -70,7 +70,7 @@ class CycleAnalyzer:
         analysis_level: str = "standard",
         enable_profiling: bool = True,
         enable_debugging: bool = True,
-        output_directory: Optional[str] = None,
+        output_directory: str | None = None,
     ):
         """
         Initialize cycle analyzer.
@@ -113,9 +113,9 @@ class CycleAnalyzer:
         )
 
         # Analysis session tracking
-        self.current_session: Optional[str] = None
-        self.session_traces: List[CycleExecutionTrace] = []
-        self.analysis_history: List[Dict[str, Any]] = []
+        self.current_session: str | None = None
+        self.session_traces: list[CycleExecutionTrace] = []
+        self.analysis_history: list[dict[str, Any]] = []
 
         # Create output directory if specified
         if self.output_directory:
@@ -149,10 +149,10 @@ class CycleAnalyzer:
         self,
         cycle_id: str,
         workflow_id: str,
-        max_iterations: Optional[int] = None,
-        timeout: Optional[float] = None,
-        convergence_condition: Optional[str] = None,
-    ) -> Optional[CycleExecutionTrace]:
+        max_iterations: int | None = None,
+        timeout: float | None = None,
+        convergence_condition: str | None = None,
+    ) -> CycleExecutionTrace | None:
         """
         Start analysis for a new cycle execution.
 
@@ -193,10 +193,10 @@ class CycleAnalyzer:
     def track_iteration(
         self,
         trace: CycleExecutionTrace,
-        input_data: Dict[str, Any],
-        output_data: Dict[str, Any],
-        convergence_value: Optional[float] = None,
-        node_executions: Optional[List[str]] = None,
+        input_data: dict[str, Any],
+        output_data: dict[str, Any],
+        convergence_value: float | None = None,
+        node_executions: list[str] | None = None,
     ):
         """
         Track a single cycle iteration with input/output data.
@@ -234,7 +234,7 @@ class CycleAnalyzer:
         trace: CycleExecutionTrace,
         converged: bool,
         termination_reason: str,
-        convergence_iteration: Optional[int] = None,
+        convergence_iteration: int | None = None,
     ):
         """
         Complete cycle analysis and generate insights.
@@ -276,7 +276,7 @@ class CycleAnalyzer:
         if self.analysis_level == "comprehensive":
             self._generate_immediate_insights(trace)
 
-    def generate_cycle_report(self, trace: CycleExecutionTrace) -> Dict[str, Any]:
+    def generate_cycle_report(self, trace: CycleExecutionTrace) -> dict[str, Any]:
         """
         Generate comprehensive report for a single cycle.
 
@@ -333,9 +333,7 @@ class CycleAnalyzer:
 
         return report
 
-    def generate_session_report(
-        self, session_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def generate_session_report(self, session_id: str | None = None) -> dict[str, Any]:
         """
         Generate comprehensive report for an analysis session.
 
@@ -414,7 +412,7 @@ class CycleAnalyzer:
 
         return report
 
-    def get_real_time_metrics(self, trace: CycleExecutionTrace) -> Dict[str, Any]:
+    def get_real_time_metrics(self, trace: CycleExecutionTrace) -> dict[str, Any]:
         """
         Get real-time metrics for an active cycle.
 
@@ -487,7 +485,7 @@ class CycleAnalyzer:
 
     def export_analysis_data(
         self,
-        filepath: Optional[str] = None,
+        filepath: str | None = None,
         format: str = "json",
         include_traces: bool = True,
     ):
@@ -605,7 +603,7 @@ class CycleAnalyzer:
                 f"Slow iterations detected for cycle '{trace.cycle_id}' - avg: {stats['avg_iteration_time']:.3f}s"
             )
 
-    def _generate_advanced_analysis(self, trace: CycleExecutionTrace) -> Dict[str, Any]:
+    def _generate_advanced_analysis(self, trace: CycleExecutionTrace) -> dict[str, Any]:
         """Generate advanced analysis insights for comprehensive mode."""
         convergence_trend = trace.get_convergence_trend()
 
@@ -657,8 +655,8 @@ class CycleAnalyzer:
         }
 
     def _generate_session_insights(
-        self, traces: List[CycleExecutionTrace]
-    ) -> Dict[str, Any]:
+        self, traces: list[CycleExecutionTrace]
+    ) -> dict[str, Any]:
         """Generate insights across multiple cycles in a session."""
         if not traces:
             return {}
@@ -692,7 +690,7 @@ class CycleAnalyzer:
         return insights
 
     def _calculate_real_time_health_score(
-        self, trace: CycleExecutionTrace, recent_iterations: List
+        self, trace: CycleExecutionTrace, recent_iterations: list
     ) -> float:
         """Calculate real-time health score for an active cycle."""
         score_components = []
@@ -732,8 +730,8 @@ class CycleAnalyzer:
         )
 
     def _generate_real_time_alerts(
-        self, trace: CycleExecutionTrace, recent_iterations: List
-    ) -> List[str]:
+        self, trace: CycleExecutionTrace, recent_iterations: list
+    ) -> list[str]:
         """Generate real-time alerts for potential issues."""
         alerts = []
 
@@ -771,7 +769,7 @@ class CycleAnalyzer:
 
         return alerts
 
-    def _calculate_convergence_stability(self, values: List[float]) -> float:
+    def _calculate_convergence_stability(self, values: list[float]) -> float:
         """Calculate stability score for convergence values."""
         if len(values) < 2:
             return 1.0
@@ -788,7 +786,7 @@ class CycleAnalyzer:
         # Lower CV means more stable
         return max(0.0, 1.0 - min(1.0, cv))
 
-    def _calculate_skewness(self, data: List[float]) -> float:
+    def _calculate_skewness(self, data: list[float]) -> float:
         """Calculate skewness of data distribution."""
         if len(data) < 3:
             return 0.0
@@ -805,7 +803,7 @@ class CycleAnalyzer:
         skewness = sum((x - mean_val) ** 3 for x in data) / (n * std_dev**3)
         return skewness
 
-    def _analyze_performance_trend(self, iteration_times: List[float]) -> str:
+    def _analyze_performance_trend(self, iteration_times: list[float]) -> str:
         """Analyze performance trend over iterations."""
         if len(iteration_times) < 3:
             return "insufficient_data"
@@ -830,7 +828,7 @@ class CycleAnalyzer:
 
     def _analyze_resource_efficiency(
         self, trace: CycleExecutionTrace
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze resource usage efficiency."""
         memory_values = [
             iter.memory_usage_mb for iter in trace.iterations if iter.memory_usage_mb
@@ -867,7 +865,7 @@ class CycleAnalyzer:
 
         return efficiency
 
-    def _export_cycle_report(self, report: Dict[str, Any], cycle_id: str):
+    def _export_cycle_report(self, report: dict[str, Any], cycle_id: str):
         """Export cycle report to file."""
         if not self.output_directory:
             return
@@ -882,7 +880,7 @@ class CycleAnalyzer:
 
         logger.debug(f"Exported cycle report to {filepath}")
 
-    def _export_session_report(self, report: Dict[str, Any], session_id: str):
+    def _export_session_report(self, report: dict[str, Any], session_id: str):
         """Export session report to file."""
         if not self.output_directory:
             return

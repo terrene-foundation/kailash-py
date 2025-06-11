@@ -1,5 +1,10 @@
 # Error Lookup Hub
 
+## 🚨 #1 Most Common Mistake (Every Session!)
+| Issue | File | Impact |
+|-------|------|--------|
+| **Not using PythonCodeNode.from_function for code >3 lines** | [078](078-pythoncode-from-function-pattern.md) | No IDE support, untestable |
+
 ## 🔍 Quick Error Lookup
 | Error Message | File | Quick Fix |
 |---------------|------|-----------|

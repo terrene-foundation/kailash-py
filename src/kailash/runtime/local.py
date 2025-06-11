@@ -40,8 +40,8 @@ Examples:
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import networkx as nx
 
@@ -90,9 +90,9 @@ class LocalRuntime:
     def execute(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager] = None,
-        parameters: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow locally.
 
         Args:
@@ -197,10 +197,10 @@ class LocalRuntime:
     def _execute_workflow(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager],
-        run_id: Optional[str],
-        parameters: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        task_manager: TaskManager | None,
+        run_id: str | None,
+        parameters: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
         """Execute the workflow nodes in topological order.
 
         Args:
@@ -273,7 +273,7 @@ class LocalRuntime:
                         run_id=run_id,
                         node_id=node_id,
                         node_type=node_instance.__class__.__name__,
-                        started_at=datetime.now(timezone.utc),
+                        started_at=datetime.now(UTC),
                         metadata=node_metadata,
                     )
                     # Start the task
@@ -329,7 +329,7 @@ class LocalRuntime:
                         task.task_id,
                         TaskStatus.COMPLETED,
                         result=outputs,
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                         metadata={"execution_time": performance_metrics.duration},
                     )
 
@@ -350,7 +350,7 @@ class LocalRuntime:
                         task.task_id,
                         TaskStatus.FAILED,
                         error=str(e),
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                     )
 
                 # Determine if we should continue
@@ -375,9 +375,9 @@ class LocalRuntime:
         workflow: Workflow,
         node_id: str,
         node_instance: Node,
-        node_outputs: Dict[str, Dict[str, Any]],
-        parameters: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        node_outputs: dict[str, dict[str, Any]],
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
         """Prepare inputs for a node execution.
 
         Args:
@@ -476,7 +476,7 @@ class LocalRuntime:
         # Future: implement configurable error handling policies
         return has_dependents
 
-    def validate_workflow(self, workflow: Workflow) -> List[str]:
+    def validate_workflow(self, workflow: Workflow) -> list[str]:
         """Validate a workflow before execution.
 
         Args:

@@ -16,7 +16,7 @@ import os
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import yaml
 from sqlalchemy import create_engine, text
@@ -38,7 +38,7 @@ class SQLDatabaseNode(Node):
             self.config_path = project_config_path
             self.config = self._load_project_config()
 
-        def _load_project_config(self) -> Dict[str, Any]:
+        def _load_project_config(self) -> dict[str, Any]:
             """Load project configuration from YAML file."""
             if not os.path.exists(self.config_path):
                 raise NodeExecutionError(
@@ -46,7 +46,7 @@ class SQLDatabaseNode(Node):
                 )
 
             try:
-                with open(self.config_path, "r") as f:
+                with open(self.config_path) as f:
                     config = yaml.safe_load(f)
                     return config or {}
             except yaml.YAMLError as e:
@@ -56,7 +56,7 @@ class SQLDatabaseNode(Node):
 
         def get_database_config(
             self, connection_name: str
-        ) -> Tuple[str, Dict[str, Any]]:
+        ) -> tuple[str, dict[str, Any]]:
             """Get database configuration by connection name.
 
             Args:
@@ -185,8 +185,8 @@ class SQLDatabaseNode(Node):
     """
 
     # Class-level shared resources for connection pooling
-    _shared_pools: Dict[Tuple[str, frozenset], Any] = {}
-    _pool_metrics: Dict[Tuple[str, frozenset], Dict[str, Any]] = {}
+    _shared_pools: dict[tuple[str, frozenset], Any] = {}
+    _pool_metrics: dict[tuple[str, frozenset], dict[str, Any]] = {}
     _pool_lock = threading.Lock()
     _config_manager: Optional["SQLDatabaseNode._DatabaseConfigManager"] = None
 
@@ -252,7 +252,7 @@ class SQLDatabaseNode(Node):
         # Call parent constructor
         super().__init__(**kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for SQL execution.
 
         Configuration parameters (provided to constructor):
@@ -334,7 +334,7 @@ class SQLDatabaseNode(Node):
 
             return self._shared_pools[cache_key]
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute SQL query using shared connection pool.
 
         Args:
@@ -458,7 +458,7 @@ class SQLDatabaseNode(Node):
         }
 
     @classmethod
-    def get_pool_status(cls) -> Dict[str, Any]:
+    def get_pool_status(cls) -> dict[str, Any]:
         """Get status of all shared connection pools."""
         with cls._pool_lock:
             status = {}
@@ -736,7 +736,7 @@ class SQLDatabaseNode(Node):
 
         return sanitized
 
-    def _convert_to_named_parameters(self, query: str, parameters: List) -> tuple:
+    def _convert_to_named_parameters(self, query: str, parameters: list) -> tuple:
         """Convert positional parameters to named parameters for SQLAlchemy 2.0.
 
         Args:
@@ -790,8 +790,8 @@ class SQLDatabaseNode(Node):
         return modified_query, param_dict
 
     def _format_results(
-        self, rows: List, columns: List[str], result_format: str
-    ) -> List[Any]:
+        self, rows: list, columns: list[str], result_format: str
+    ) -> list[Any]:
         """Format query results according to specified format.
 
         Args:
@@ -820,4 +820,4 @@ class SQLDatabaseNode(Node):
             self.logger.warning(
                 f"Unknown result_format '{result_format}', defaulting to 'dict'"
             )
-            return [dict(zip(columns, row)) for row in rows]
+            return [dict(zip(columns, row, strict=False)) for row in rows]

@@ -529,7 +529,7 @@ async def api_client_examples():
                             print(f"📡 Status: {status['status']}")
                             if status["status"] in ["completed", "failed"]:
                                 break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     print("⏱️  WebSocket monitoring timed out")
 
 

@@ -1,7 +1,7 @@
 """Test data passing between nodes in workflows."""
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -94,10 +94,10 @@ class TestNodeCommunication:
         from kailash.nodes.base import NodeParameter
 
         class TestNode(Node):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {"input": NodeParameter(name="input", type=str, required=True)}
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 return {"output": "test"}
 
         node = TestNode(name="test", input="test_value")

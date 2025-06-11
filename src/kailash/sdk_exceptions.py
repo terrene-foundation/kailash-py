@@ -77,14 +77,10 @@ See Also:
 class KailashException(Exception):
     """Base exception for all Kailash SDK errors."""
 
-    pass
-
 
 # Node-related exceptions
 class NodeException(KailashException):
     """Base exception for node-related errors."""
-
-    pass
 
 
 class NodeValidationError(NodeException):
@@ -96,8 +92,6 @@ class NodeValidationError(NodeException):
     - Configuration is invalid
     """
 
-    pass
-
 
 class NodeExecutionError(NodeException):
     """Raised when node execution fails.
@@ -107,8 +101,6 @@ class NodeExecutionError(NodeException):
     - External resources are unavailable
     - Data transformation fails
     """
-
-    pass
 
 
 class NodeConfigurationError(NodeException):
@@ -120,8 +112,6 @@ class NodeConfigurationError(NodeException):
     - Required environment variables are missing
     """
 
-    pass
-
 
 class SafetyViolationError(NodeException):
     """Raised when code safety validation fails.
@@ -132,14 +122,10 @@ class SafetyViolationError(NodeException):
     - Malicious code patterns are detected
     """
 
-    pass
-
 
 # Workflow-related exceptions
 class WorkflowException(KailashException):
     """Base exception for workflow-related errors."""
-
-    pass
 
 
 class WorkflowValidationError(WorkflowException):
@@ -151,8 +137,6 @@ class WorkflowValidationError(WorkflowException):
     - Workflow structure is invalid
     """
 
-    pass
-
 
 class WorkflowExecutionError(WorkflowException):
     """Raised when workflow execution fails.
@@ -163,8 +147,6 @@ class WorkflowExecutionError(WorkflowException):
     - Runtime resources are exhausted
     """
 
-    pass
-
 
 class CyclicDependencyError(WorkflowException):
     """Raised when a cyclic dependency is detected in the workflow graph.
@@ -172,8 +154,6 @@ class CyclicDependencyError(WorkflowException):
     This occurs when nodes form a circular dependency chain,
     making it impossible to determine execution order.
     """
-
-    pass
 
 
 class ConnectionError(WorkflowException):
@@ -184,8 +164,6 @@ class ConnectionError(WorkflowException):
     - Connection already exists
     - Node not found in workflow
     """
-
-    pass
 
 
 class CycleConfigurationError(WorkflowException):
@@ -202,14 +180,10 @@ class CycleConfigurationError(WorkflowException):
     - Missing source/target nodes before build()
     """
 
-    pass
-
 
 # Runtime-related exceptions
 class RuntimeException(KailashException):
     """Base exception for runtime-related errors."""
-
-    pass
 
 
 class RuntimeExecutionError(RuntimeException):
@@ -221,14 +195,10 @@ class RuntimeExecutionError(RuntimeException):
     - Execution is interrupted
     """
 
-    pass
-
 
 # Task tracking exceptions
 class TaskException(KailashException):
     """Base exception for task tracking errors."""
-
-    pass
 
 
 class TaskStateError(TaskException):
@@ -240,14 +210,10 @@ class TaskStateError(TaskException):
     - Concurrent modification conflicts occur
     """
 
-    pass
-
 
 # Storage exceptions
 class StorageException(KailashException):
     """Base exception for storage-related errors."""
-
-    pass
 
 
 class KailashStorageError(StorageException):
@@ -260,8 +226,6 @@ class KailashStorageError(StorageException):
     - Data formatting is incorrect
     """
 
-    pass
-
 
 # Import/Export exceptions
 class ExportException(KailashException):
@@ -273,8 +237,6 @@ class ExportException(KailashException):
     - Serialization fails
     """
 
-    pass
-
 
 class ImportException(KailashException):
     """Raised when import operations fail.
@@ -284,8 +246,6 @@ class ImportException(KailashException):
     - File is corrupted or invalid
     - Deserialization fails
     """
-
-    pass
 
 
 # Configuration exceptions
@@ -298,16 +258,12 @@ class ConfigurationException(KailashException):
     - Configuration schema is invalid
     """
 
-    pass
-
 
 class KailashConfigError(ConfigurationException):
     """Raised when configuration is invalid (legacy name).
 
     This is an alias for ConfigurationException for backward compatibility.
     """
-
-    pass
 
 
 # Manifest exceptions
@@ -320,8 +276,6 @@ class ManifestError(KailashException):
     - Version incompatibility
     """
 
-    pass
-
 
 # CLI exceptions
 class CLIException(KailashException):
@@ -332,8 +286,6 @@ class CLIException(KailashException):
     - Required arguments are missing
     - Command execution fails
     """
-
-    pass
 
 
 # Visualization exceptions
@@ -346,8 +298,6 @@ class VisualizationError(KailashException):
     - Output format is unsupported
     """
 
-    pass
-
 
 # Template exceptions
 class TemplateError(KailashException):
@@ -358,8 +308,6 @@ class TemplateError(KailashException):
     - Template syntax is invalid
     - Variable substitution fails
     """
-
-    pass
 
 
 # Code execution exceptions
@@ -375,8 +323,6 @@ class CodeExecutionError(NodeException):
     - Import or dependency issues
     """
 
-    pass
-
 
 # Resource exceptions
 class KailashNotFoundException(KailashException):
@@ -388,8 +334,6 @@ class KailashNotFoundException(KailashException):
     - A file or resource is missing
     """
 
-    pass
-
 
 # Workflow-specific exceptions
 class KailashWorkflowException(WorkflowException):
@@ -397,8 +341,6 @@ class KailashWorkflowException(WorkflowException):
 
     This is an alias for WorkflowException for consistency.
     """
-
-    pass
 
 
 # Legacy exception name compatibility for tests and backwards compatibility

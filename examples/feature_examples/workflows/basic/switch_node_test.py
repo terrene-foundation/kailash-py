@@ -147,7 +147,7 @@ def run_example():
 
         for file_path in output_files:
             try:
-                with open(file_path, "r") as f:
+                with open(file_path) as f:
                     output = json.load(f)
                     print(f"{file_path} contents: {output}")
             except Exception as e:

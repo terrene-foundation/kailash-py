@@ -11,7 +11,7 @@ Tests practical use cases including:
 import json
 import time
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -24,7 +24,7 @@ from kailash.runtime.local import LocalRuntime
 class ETLRetryNode(CycleAwareNode):
     """ETL processor with retry capabilities."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data_source": NodeParameter(
                 name="data_source", type=str, required=False, default=""
@@ -37,7 +37,7 @@ class ETLRetryNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Process data with retry logic."""
         kwargs.get("data_source", "")
         max_retries = kwargs.get("max_retries", 3)
@@ -110,7 +110,7 @@ class ETLRetryNode(CycleAwareNode):
 class APIPollerNode(CycleAwareNode):
     """Polls external API with smart retry and rate limiting."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "endpoint": NodeParameter(
                 name="endpoint", type=str, required=False, default=""
@@ -123,7 +123,7 @@ class APIPollerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Poll API with rate limiting and backoff."""
         kwargs.get("endpoint", "mock_api")
         poll_interval = kwargs.get("poll_interval", 5.0)
@@ -183,7 +183,7 @@ class APIPollerNode(CycleAwareNode):
             ),
         }
 
-    def _simulate_api_call(self, iteration: int, rate_limit: int) -> Dict[str, Any]:
+    def _simulate_api_call(self, iteration: int, rate_limit: int) -> dict[str, Any]:
         """Simulate API response with various scenarios."""
         # Simulate different API responses
         if rate_limit <= 0:
@@ -216,7 +216,7 @@ class APIPollerNode(CycleAwareNode):
 class DataQualityOptimizerNode(CycleAwareNode):
     """Iteratively improves data quality."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "raw_data": NodeParameter(
                 name="raw_data", type=list, required=False, default=[]
@@ -229,7 +229,7 @@ class DataQualityOptimizerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Apply quality improvements iteratively."""
         raw_data = kwargs.get("raw_data", [])
         quality_rules = kwargs.get("quality_rules", {})
@@ -376,7 +376,7 @@ class DataQualityOptimizerNode(CycleAwareNode):
 class ResourceOptimizerNode(CycleAwareNode):
     """Optimizes resource allocation iteratively."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "resources": NodeParameter(
                 name="resources", type=dict, required=False, default={}
@@ -389,7 +389,7 @@ class ResourceOptimizerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Optimize resource allocation."""
         resources = kwargs.get("resources", {})
         constraints = kwargs.get("constraints", {})
@@ -452,7 +452,7 @@ class ResourceOptimizerNode(CycleAwareNode):
             ),
         }
 
-    def _initialize_allocation(self, resources: Dict) -> Dict:
+    def _initialize_allocation(self, resources: dict) -> dict:
         """Initialize resource allocation."""
         resources.get("budget", 1000)
         resource_types = resources.get("types", ["compute", "storage", "network"])
@@ -470,7 +470,7 @@ class ResourceOptimizerNode(CycleAwareNode):
 
         return allocation
 
-    def _calculate_metrics(self, allocation: Dict, resources: Dict) -> Dict:
+    def _calculate_metrics(self, allocation: dict, resources: dict) -> dict:
         """Calculate allocation metrics."""
         total_cost = 0
         total_performance = 0
@@ -493,8 +493,8 @@ class ResourceOptimizerNode(CycleAwareNode):
         }
 
     def _optimize_for_cost(
-        self, allocation: Dict, resources: Dict, constraints: Dict
-    ) -> Dict:
+        self, allocation: dict, resources: dict, constraints: dict
+    ) -> dict:
         """Optimize for minimum cost."""
         new_allocation = {}
         constraints.get("max_budget", 1000)
@@ -512,8 +512,8 @@ class ResourceOptimizerNode(CycleAwareNode):
         return new_allocation
 
     def _optimize_for_performance(
-        self, allocation: Dict, resources: Dict, constraints: Dict
-    ) -> Dict:
+        self, allocation: dict, resources: dict, constraints: dict
+    ) -> dict:
         """Optimize for maximum performance."""
         new_allocation = {}
         constraints.get("max_budget", 1000)
@@ -530,8 +530,8 @@ class ResourceOptimizerNode(CycleAwareNode):
         return new_allocation
 
     def _optimize_balanced(
-        self, allocation: Dict, resources: Dict, constraints: Dict
-    ) -> Dict:
+        self, allocation: dict, resources: dict, constraints: dict
+    ) -> dict:
         """Optimize for balanced cost/performance."""
         new_allocation = {}
 
@@ -552,7 +552,7 @@ class ResourceOptimizerNode(CycleAwareNode):
 class BatchProcessorNode(CycleAwareNode):
     """Processes data in batches with checkpointing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "total_records": NodeParameter(
                 name="total_records", type=int, required=False, default=1000
@@ -565,7 +565,7 @@ class BatchProcessorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Process batch with checkpointing."""
         total_records = kwargs.get("total_records", 1000)
         batch_size = kwargs.get("batch_size", 100)
@@ -654,7 +654,7 @@ class TestETLRetryPipeline:
         class ETLWithConditionalRetryNode(CycleAwareNode):
             """ETL processor with built-in retry decision logic."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data_source": NodeParameter(
                         name="data_source", type=str, required=False, default=""
@@ -670,7 +670,7 @@ class TestETLRetryPipeline:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process data with retry logic and save on success."""
                 data_source = kwargs.get("data_source", "")
                 max_retries = kwargs.get("max_retries", 3)
@@ -815,7 +815,7 @@ class TestAPIPollingScenario:
         class APIPollerWithConditionalContinueNode(CycleAwareNode):
             """API poller with built-in continuation logic."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "endpoint": NodeParameter(
                         name="endpoint", type=str, required=False, default=""
@@ -828,7 +828,7 @@ class TestAPIPollingScenario:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Poll API with rate limiting and process when ready."""
                 endpoint = kwargs.get("endpoint", "mock_api")
                 poll_interval = kwargs.get("poll_interval", 5.0)
@@ -984,7 +984,7 @@ class TestDataQualityImprovement:
         class DataQualityWithConvergenceNode(CycleAwareNode):
             """Improve data quality with built-in convergence."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "raw_data": NodeParameter(
                         name="raw_data", type=list, required=False, default=[]
@@ -1000,7 +1000,7 @@ class TestDataQualityImprovement:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Apply quality improvements and save when converged."""
                 raw_data = kwargs.get("raw_data", [])
                 quality_rules = kwargs.get("quality_rules", {})
@@ -1232,7 +1232,7 @@ class TestDataQualityImprovement:
 
         # Check improved data
         assert (tmp_path / "quality_improved.json").exists()
-        with open(tmp_path / "quality_improved.json", "r") as f:
+        with open(tmp_path / "quality_improved.json") as f:
             improved_data = json.load(f)
 
             # All records should have required fields
@@ -1318,7 +1318,7 @@ class TestBatchProcessingCheckpoints:
         class BatchProcessorWithCheckpointsNode(CycleAwareNode):
             """Process batches with checkpointing and aggregation."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "total_records": NodeParameter(
                         name="total_records", type=int, required=False, default=1000
@@ -1334,7 +1334,7 @@ class TestBatchProcessingCheckpoints:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process batch with checkpointing and aggregation."""
                 total_records = kwargs.get("total_records", 1000)
                 batch_size = kwargs.get("batch_size", 100)

@@ -10,7 +10,7 @@ Key Components:
     * Resource path builders and response handlers
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.api.http import AsyncHTTPRequestNode, HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -157,7 +157,7 @@ class RESTClientNode(Node):
         super().__init__(**kwargs)
         self.http_node = HTTPRequestNode(url="")
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -297,7 +297,7 @@ class RESTClientNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -334,8 +334,8 @@ class RESTClientNode(Node):
         self,
         base_url: str,
         resource: str,
-        path_params: Dict[str, Any],
-        version: Optional[str] = None,
+        path_params: dict[str, Any],
+        version: str | None = None,
     ) -> str:
         """Build the full URL for a REST API request.
 
@@ -394,10 +394,10 @@ class RESTClientNode(Node):
 
     def _handle_pagination(
         self,
-        initial_response: Dict[str, Any],
-        query_params: Dict[str, Any],
-        pagination_params: Dict[str, Any],
-    ) -> List[Any]:
+        initial_response: dict[str, Any],
+        query_params: dict[str, Any],
+        pagination_params: dict[str, Any],
+    ) -> list[Any]:
         """Handle pagination for REST API responses.
 
         This method supports common pagination patterns:
@@ -469,7 +469,7 @@ class RESTClientNode(Node):
         return all_items
 
     def _get_nested_value(
-        self, obj: Dict[str, Any], path: str, default: Any = None
+        self, obj: dict[str, Any], path: str, default: Any = None
     ) -> Any:
         """Get a nested value from a dictionary using a dot-separated path.
 
@@ -495,7 +495,7 @@ class RESTClientNode(Node):
 
         return current
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute a REST API request.
 
         Args:
@@ -671,8 +671,8 @@ class RESTClientNode(Node):
 
     # Convenience methods for CRUD operations
     def get(
-        self, base_url: str, resource: str, resource_id: Optional[str] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, base_url: str, resource: str, resource_id: str | None = None, **kwargs
+    ) -> dict[str, Any]:
         """GET a resource or list of resources.
 
         Args:
@@ -703,8 +703,8 @@ class RESTClientNode(Node):
         )
 
     def create(
-        self, base_url: str, resource: str, data: Dict[str, Any], **kwargs
-    ) -> Dict[str, Any]:
+        self, base_url: str, resource: str, data: dict[str, Any], **kwargs
+    ) -> dict[str, Any]:
         """CREATE (POST) a new resource.
 
         Args:
@@ -725,10 +725,10 @@ class RESTClientNode(Node):
         base_url: str,
         resource: str,
         resource_id: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         partial: bool = False,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """UPDATE (PUT/PATCH) an existing resource.
 
         Args:
@@ -756,7 +756,7 @@ class RESTClientNode(Node):
 
     def delete(
         self, base_url: str, resource: str, resource_id: str, **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """DELETE a resource.
 
         Args:
@@ -779,7 +779,7 @@ class RESTClientNode(Node):
             **kwargs,
         )
 
-    def _extract_metadata(self, response: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
         """Extract additional metadata from response.
 
         Args:
@@ -811,8 +811,8 @@ class RESTClientNode(Node):
         return metadata
 
     def _extract_rate_limit_metadata(
-        self, headers: Dict[str, str]
-    ) -> Optional[Dict[str, Any]]:
+        self, headers: dict[str, str]
+    ) -> dict[str, Any] | None:
         """Extract rate limiting information from response headers.
 
         Args:
@@ -847,8 +847,8 @@ class RESTClientNode(Node):
         return rate_limit if rate_limit else None
 
     def _extract_pagination_metadata(
-        self, headers: Dict[str, str], content: Any
-    ) -> Optional[Dict[str, Any]]:
+        self, headers: dict[str, str], content: Any
+    ) -> dict[str, Any] | None:
         """Extract pagination information from headers and response body.
 
         Args:
@@ -892,7 +892,7 @@ class RESTClientNode(Node):
 
         return pagination if pagination else None
 
-    def _parse_link_header(self, link_header: str) -> Dict[str, str]:
+    def _parse_link_header(self, link_header: str) -> dict[str, str]:
         """Parse Link header for pagination URLs.
 
         Args:
@@ -916,7 +916,7 @@ class RESTClientNode(Node):
 
         return links
 
-    def _extract_links(self, content: Any) -> Optional[Dict[str, Any]]:
+    def _extract_links(self, content: Any) -> dict[str, Any] | None:
         """Extract HATEOAS links from response content.
 
         Args:
@@ -986,7 +986,7 @@ class AsyncRESTClientNode(AsyncNode):
         self.http_node = AsyncHTTPRequestNode(**kwargs)
         self.rest_node = RESTClientNode(**kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -995,7 +995,7 @@ class AsyncRESTClientNode(AsyncNode):
         # Same parameters as the synchronous version
         return self.rest_node.get_parameters()
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -1004,7 +1004,7 @@ class AsyncRESTClientNode(AsyncNode):
         # Same output schema as the synchronous version
         return self.rest_node.get_output_schema()
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous version of the REST request, for compatibility.
 
         This is implemented for compatibility but users should use the
@@ -1022,7 +1022,7 @@ class AsyncRESTClientNode(AsyncNode):
         # Forward to the synchronous REST node
         return self.rest_node.run(**kwargs)
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute a REST API request asynchronously.
 
         Args:

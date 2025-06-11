@@ -15,7 +15,7 @@ import json
 import random
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -38,7 +38,7 @@ class EmergentSpecializationNode(Node):
             "expert": 0.9,
         }
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "agent_id": NodeParameter(
                 name="agent_id", type=str, required=True, description="ID of the agent"
@@ -64,7 +64,7 @@ class EmergentSpecializationNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Track performance and identify emerging specializations."""
         agent_id = kwargs["agent_id"]
         task_type = kwargs["task_type"]
@@ -150,7 +150,7 @@ class DynamicCoalitionNode(Node):
         self.active_coalitions = {}
         self.coalition_history = deque(maxlen=50)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "action": NodeParameter(
                 name="action",
@@ -186,7 +186,7 @@ class DynamicCoalitionNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Manage dynamic coalition formation."""
         action = kwargs.get("action", "form")
 
@@ -201,7 +201,7 @@ class DynamicCoalitionNode(Node):
         else:
             return {"success": False, "error": f"Unknown action: {action}"}
 
-    def _form_coalition(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _form_coalition(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Form new coalitions based on objectives."""
         objective = kwargs.get("objective", {})
         available_agents = kwargs.get("available_agents", [])
@@ -261,7 +261,7 @@ class DynamicCoalitionNode(Node):
             "total_active": len(self.active_coalitions),
         }
 
-    def _join_coalition(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _join_coalition(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Handle agent requests to join coalitions."""
         coalition_id = kwargs.get("coalition_id")
         agent_proposal = kwargs.get("agent_proposal", {})
@@ -291,7 +291,7 @@ class DynamicCoalitionNode(Node):
         else:
             return {"success": False, "error": "Capability mismatch"}
 
-    def _evaluate_coalitions(self) -> Dict[str, Any]:
+    def _evaluate_coalitions(self) -> dict[str, Any]:
         """Evaluate performance of active coalitions."""
         evaluations = {}
 
@@ -319,7 +319,7 @@ class DynamicCoalitionNode(Node):
             "active_coalitions": len(self.active_coalitions),
         }
 
-    def _dissolve_coalition(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _dissolve_coalition(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Dissolve a coalition."""
         coalition_id = kwargs.get("coalition_id")
 
@@ -372,7 +372,7 @@ class AdaptiveTopologyNode(Node):
             },
         }
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "problem_type": NodeParameter(
                 name="problem_type",
@@ -402,7 +402,7 @@ class AdaptiveTopologyNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Design adaptive topology for team."""
         problem_type = kwargs["problem_type"]
         team_members = kwargs["team_members"]
@@ -464,7 +464,7 @@ class AdaptiveTopologyNode(Node):
             "reasoning": f"Selected {best_topology} topology for {problem_type} with {len(team_members)} members",
         }
 
-    def _create_star_topology(self, members: List[Dict]) -> Dict[str, Any]:
+    def _create_star_topology(self, members: list[dict]) -> dict[str, Any]:
         """Create star topology with central coordinator."""
         # Select coordinator (highest performance or coordination capability)
         coordinator = max(
@@ -487,7 +487,7 @@ class AdaptiveTopologyNode(Node):
             },
         }
 
-    def _create_mesh_topology(self, members: List[Dict]) -> Dict[str, Any]:
+    def _create_mesh_topology(self, members: list[dict]) -> dict[str, Any]:
         """Create mesh topology with full connectivity."""
         return {
             "type": "mesh",
@@ -495,7 +495,7 @@ class AdaptiveTopologyNode(Node):
             "roles": {member["id"]: "collaborator" for member in members},
         }
 
-    def _create_hierarchy_topology(self, members: List[Dict]) -> Dict[str, Any]:
+    def _create_hierarchy_topology(self, members: list[dict]) -> dict[str, Any]:
         """Create hierarchical topology."""
         # Sort by performance for hierarchy levels
         sorted_members = sorted(
@@ -528,7 +528,7 @@ class AdaptiveTopologyNode(Node):
             ),
         }
 
-    def _create_pipeline_topology(self, members: List[Dict]) -> Dict[str, Any]:
+    def _create_pipeline_topology(self, members: list[dict]) -> dict[str, Any]:
         """Create pipeline topology for sequential processing."""
         # Order members by capabilities that suggest sequence
         capability_order = [
@@ -563,8 +563,8 @@ class AdaptiveTopologyNode(Node):
         }
 
     def _derive_communication_channels(
-        self, structure: Dict, topology: str
-    ) -> List[Dict]:
+        self, structure: dict, topology: str
+    ) -> list[dict]:
         """Generate communication channels based on topology."""
         channels = []
 

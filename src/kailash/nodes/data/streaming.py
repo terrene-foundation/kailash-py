@@ -44,7 +44,7 @@ Example:
 """
 
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
@@ -148,7 +148,7 @@ class KafkaConsumerNode(Node):
         self._consumer = None
         self._topic = None
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the Kafka consumer node."""
         return {
             "bootstrap_servers": NodeParameter(
@@ -206,7 +206,7 @@ class KafkaConsumerNode(Node):
             ),
         }
 
-    def configure(self, config: Dict[str, Any]) -> None:
+    def configure(self, config: dict[str, Any]) -> None:
         """Configure the Kafka consumer.
 
         Creates and configures the Kafka consumer with the specified
@@ -241,7 +241,7 @@ class KafkaConsumerNode(Node):
         self._consumer = f"kafka_consumer_{self.config['group_id']}"
         self._topic = self.config["topic"]
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Consume messages from Kafka.
 
         Implementation of the abstract run method from the base Node class.
@@ -254,7 +254,7 @@ class KafkaConsumerNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Consume messages from Kafka.
 
         Polls for messages up to the specified limit or timeout.
@@ -286,7 +286,7 @@ class KafkaConsumerNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"Failed to consume messages: {str(e)}")
 
-    def _consume_messages(self, max_messages: int, timeout_ms: int) -> List[Dict]:
+    def _consume_messages(self, max_messages: int, timeout_ms: int) -> list[dict]:
         """Consume messages from Kafka.
 
         This is a placeholder for actual message consumption logic.
@@ -420,7 +420,7 @@ class StreamPublisherNode(Node):
         self._publisher = None
         self._protocol = None
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the stream publisher node."""
         return {
             "protocol": NodeParameter(
@@ -465,7 +465,7 @@ class StreamPublisherNode(Node):
             ),
         }
 
-    def configure(self, config: Dict[str, Any]) -> None:
+    def configure(self, config: dict[str, Any]) -> None:
         """Configure the stream publisher.
 
         Creates the appropriate publisher based on the protocol.
@@ -499,7 +499,7 @@ class StreamPublisherNode(Node):
         # Placeholder for actual publisher creation
         self._publisher = f"{self._protocol}_publisher"
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Publish messages to the streaming platform.
 
         Implementation of the abstract run method from the base Node class.
@@ -512,7 +512,7 @@ class StreamPublisherNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Publish messages to the streaming platform.
 
         Args:
@@ -541,7 +541,7 @@ class StreamPublisherNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"Failed to publish messages: {str(e)}")
 
-    def _publish_messages(self, messages: List[Dict], headers: Dict) -> Dict[str, Any]:
+    def _publish_messages(self, messages: list[dict], headers: dict) -> dict[str, Any]:
         """Publish messages to the stream.
 
         This is a placeholder for actual publishing logic.
@@ -683,7 +683,7 @@ class WebSocketNode(Node):
         self._connected = False
         self._message_queue = []
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Get the parameters for this node.
 
         Returns:
@@ -750,7 +750,7 @@ class WebSocketNode(Node):
             ),
         }
 
-    def configure(self, config: Dict[str, Any]) -> None:
+    def configure(self, config: dict[str, Any]) -> None:
         """Configure the WebSocket connection.
 
         Validates the URL and prepares connection parameters.
@@ -770,7 +770,7 @@ class WebSocketNode(Node):
         if not url.startswith(("ws://", "wss://")):
             raise NodeConfigurationError("URL must start with ws:// or wss://")
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Run the WebSocket node.
 
         This method fulfills the abstract run method requirement from the base Node class.
@@ -786,7 +786,7 @@ class WebSocketNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute WebSocket operations.
 
         Performs the requested action (connect, send, receive, disconnect).
@@ -816,7 +816,7 @@ class WebSocketNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"WebSocket operation failed: {str(e)}")
 
-    def _connect(self) -> Dict[str, Any]:
+    def _connect(self) -> dict[str, Any]:
         """Connect to the WebSocket server.
 
         Returns:
@@ -832,7 +832,7 @@ class WebSocketNode(Node):
             "metadata": {"timestamp": time.time()},
         }
 
-    def _send_message(self, message: Any) -> Dict[str, Any]:
+    def _send_message(self, message: Any) -> dict[str, Any]:
         """Send a message through the WebSocket.
 
         Args:
@@ -851,7 +851,7 @@ class WebSocketNode(Node):
             "metadata": {"timestamp": time.time()},
         }
 
-    def _receive_messages(self, timeout: float) -> Dict[str, Any]:
+    def _receive_messages(self, timeout: float) -> dict[str, Any]:
         """Receive messages from the WebSocket.
 
         Args:
@@ -877,7 +877,7 @@ class WebSocketNode(Node):
             "metadata": {"count": len(messages), "timeout": timeout},
         }
 
-    def _disconnect(self) -> Dict[str, Any]:
+    def _disconnect(self) -> dict[str, Any]:
         """Disconnect from the WebSocket server.
 
         Returns:
@@ -994,7 +994,7 @@ class EventStreamNode(Node):
         self._connected = False
         self._last_event_id = None
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Get the parameters for this node.
 
         Returns:
@@ -1048,7 +1048,7 @@ class EventStreamNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Run the EventStream node.
 
         This method fulfills the abstract run method requirement from the base Node class.
@@ -1064,7 +1064,7 @@ class EventStreamNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute EventStream operations.
 
         Args:
@@ -1090,7 +1090,7 @@ class EventStreamNode(Node):
         except Exception as e:
             raise NodeExecutionError(f"EventStream operation failed: {str(e)}")
 
-    def _start_stream(self) -> Dict[str, Any]:
+    def _start_stream(self) -> dict[str, Any]:
         """Start the event stream connection.
 
         Returns:
@@ -1106,7 +1106,7 @@ class EventStreamNode(Node):
             "metadata": {"timestamp": time.time()},
         }
 
-    def _stop_stream(self) -> Dict[str, Any]:
+    def _stop_stream(self) -> dict[str, Any]:
         """Stop the event stream connection.
 
         Returns:
@@ -1124,7 +1124,7 @@ class EventStreamNode(Node):
             },
         }
 
-    def _receive_events(self, max_events: int) -> Dict[str, Any]:
+    def _receive_events(self, max_events: int) -> dict[str, Any]:
         """Receive events from the stream.
 
         Args:

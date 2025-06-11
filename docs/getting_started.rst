@@ -4,8 +4,8 @@ Getting Started
 
 Welcome to the Kailash Python SDK v0.3.0! This guide will help you get up and running quickly.
 
-**New in v0.3.0**: Parameter Lifecycle Architecture with flexible node construction, 
-Centralized Data Management, enhanced PythonCodeNode capabilities, and comprehensive 
+**New in v0.3.0**: Parameter Lifecycle Architecture with flexible node construction,
+Centralized Data Management, enhanced PythonCodeNode capabilities, and comprehensive
 Enterprise Workflow Library for production-ready patterns.
 
 Prerequisites
@@ -87,7 +87,7 @@ Nodes can now be created without required parameters, making workflow constructi
    # v0.3.0: Create nodes without parameters
    reader = CSVReaderNode(name="reader")
    workflow.add_node("reader", reader)
-   
+
    # Parameters provided at execution
    results = runtime.execute(workflow, parameters={"reader": {"file_path": "data.csv"}})
 
@@ -99,7 +99,7 @@ Access data files using the new centralized utilities:
 .. code-block:: python
 
    from examples.utils.data_paths import get_input_data_path, get_output_data_path
-   
+
    input_file = get_input_data_path("customers.csv")
    output_file = get_output_data_path("results.csv")
 
@@ -113,7 +113,7 @@ Better support for data science and function-based development:
    # Create from function with IDE support
    def process_data(input_data: list) -> dict:
        return {"count": len(input_data), "processed": True}
-   
+
    processor = PythonCodeNode.from_function(process_data, name="processor")
 
 Your First Workflow

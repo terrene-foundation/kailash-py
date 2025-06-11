@@ -51,7 +51,7 @@ Added comprehensive documentation in validation-guide.md explaining:
 
 **Core SDK Changes Made:**
 1. **Node Construction**: Removed validation of required parameters during construction
-2. **LocalRuntime**: Added proper `node.configure()` call before execution  
+2. **LocalRuntime**: Added proper `node.configure()` call before execution
 3. **Execution Method**: Fixed runtime to call `node.run(**inputs)` instead of `node.execute(inputs)`
 4. **Parameter Separation**: Clear separation between configuration and runtime data
 

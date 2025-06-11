@@ -1,7 +1,7 @@
 """Tests for cycle-aware node base class and enhancements."""
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -18,7 +18,7 @@ from kailash.nodes.logic import (
 class CycleAwareTestNode(CycleAwareNode):
     """Simple cycle-aware node for testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "value": NodeParameter(
@@ -26,7 +26,7 @@ class CycleAwareTestNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Test implementation that uses cycle helpers."""
         # Use all the cycle helpers
         iteration = self.get_iteration(context)
@@ -61,7 +61,7 @@ class CycleAwareTestNode(CycleAwareNode):
 class ConvergenceTestNode(CycleAwareNode):
     """Node for testing convergence detection."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "target": NodeParameter(
                 name="target", type=float, required=False, default=1.0
@@ -71,7 +71,7 @@ class ConvergenceTestNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Simulate approaching a target value."""
         target = kwargs.get("target", 1.0)
         current = kwargs.get("current", 0.0)
@@ -531,14 +531,14 @@ class TestSwitchNodeWithCycleAware:
         class ConditionalTestNode(CycleAwareNode):
             """Node that produces different outputs based on iteration."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "threshold": NodeParameter(
                         name="threshold", type=int, required=False, default=3
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
                 threshold = kwargs.get("threshold", 3)
 
@@ -592,7 +592,7 @@ class TestSwitchNodeWithCycleAware:
         class ConvergenceDataNode(CycleAwareNode):
             """Node that packages convergence data for SwitchNode."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "converged": NodeParameter(
                         name="converged", type=bool, required=False, default=False
@@ -605,7 +605,7 @@ class TestSwitchNodeWithCycleAware:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "input_data": {
                         "converged": kwargs.get("converged", False),
@@ -651,7 +651,7 @@ class TestSwitchNodeWithCycleAware:
         class MultiConditionNode(CycleAwareNode):
             """Node with multiple condition types."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "quality": NodeParameter(
                         name="quality", type=float, required=False, default=0.0
@@ -661,7 +661,7 @@ class TestSwitchNodeWithCycleAware:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
                 quality = kwargs.get("quality", 0.0)
                 max_quality = kwargs.get("max_quality", 0.9)

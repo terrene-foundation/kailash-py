@@ -75,7 +75,7 @@ def add_transaction_sources(workflow: Workflow):
         id="batch_transactions",
         connection_string="${TRANSACTION_DB}",
         query="""
-        SELECT 
+        SELECT
             transaction_id,
             account_id,
             amount,
@@ -165,7 +165,7 @@ def add_validation_pipeline(workflow: Workflow):
     # Transaction validator
     validator = PythonCodeNode(
         name="transaction_validator",
-        code="""
+        code=r"""
 from datetime import datetime
 import re
 
@@ -180,39 +180,39 @@ validation_errors = []
 for transaction in all_transactions:
     # Validation checks
     errors = []
-    
+
     # Required fields
     required_fields = ['transaction_id', 'account_id', 'amount', 'currency', 'timestamp']
     for field in required_fields:
         if not transaction.get(field):
             errors.append(f'Missing required field: {field}')
-    
+
     # Amount validation
     amount = transaction.get('amount', 0)
     if amount <= 0:
         errors.append(f'Invalid amount: {amount}')
     elif amount > 1000000:  # $1M limit
         errors.append(f'Amount exceeds maximum limit: {amount}')
-    
+
     # Currency validation
     valid_currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD']
     currency = transaction.get('currency', '')
     if currency not in valid_currencies:
         errors.append(f'Invalid currency: {currency}')
-    
+
     # Account format validation
     account_id = transaction.get('account_id', '')
     if not re.match(r'^ACC-\d{4,}$', account_id):
         errors.append(f'Invalid account ID format: {account_id}')
-    
+
     # Enrich transaction
     enriched_transaction = transaction.copy()
-    
+
     # Add validation status
     enriched_transaction['validation_status'] = 'valid' if not errors else 'invalid'
     enriched_transaction['validation_errors'] = errors
     enriched_transaction['validated_at'] = datetime.now().isoformat()
-    
+
     # Add risk score (initial)
     risk_score = 0
     if amount > 10000:
@@ -223,14 +223,14 @@ for transaction in all_transactions:
         risk_score += 25
     if transaction.get('risk_factors', {}).get('new_merchant'):
         risk_score += 15
-    
+
     enriched_transaction['risk_score'] = min(risk_score, 100)
     enriched_transaction['risk_level'] = 'high' if risk_score > 70 else 'medium' if risk_score > 40 else 'low'
-    
+
     # Add processing metadata
     enriched_transaction['processing_stage'] = 'validated'
     enriched_transaction['processor_version'] = '2.1.0'
-    
+
     if not errors:
         validated_transactions.append(enriched_transaction)
     else:
@@ -297,52 +297,52 @@ def get_account_history(account_id):
 for transaction in valid_transactions:
     fraud_indicators = []
     fraud_score = transaction.get('risk_score', 0)
-    
+
     account_id = transaction['account_id']
     amount = transaction['amount']
-    
+
     # Get account profile
     account_history = get_account_history(account_id)
-    
+
     # Rule 1: Unusual amount
     avg_amount = account_history['avg_transaction_amount']
     if amount > avg_amount * 10:
         fraud_indicators.append('unusual_high_amount')
         fraud_score += 30
-    
+
     # Rule 2: New merchant
     merchant_id = transaction.get('merchant_id')
     if merchant_id and merchant_id not in account_history['typical_merchants']:
         fraud_indicators.append('new_merchant')
         fraud_score += 15
-    
+
     # Rule 3: Unusual location
     location = transaction.get('location', {})
     country = location.get('country', 'US')
     if country not in account_history['usual_countries']:
         fraud_indicators.append('unusual_location')
         fraud_score += 25
-    
+
     # Rule 4: Velocity check
     recent_amount_today = np.random.uniform(0, 3000)  # Simulated
     if recent_amount_today + amount > account_history['daily_limit']:
         fraud_indicators.append('daily_limit_exceeded')
         fraud_score += 40
-    
+
     # Rule 5: Device anomaly
     device_type = transaction.get('device_info', {}).get('type', 'web')
     if device_type == 'atm' and country not in ['US', 'CA']:
         fraud_indicators.append('foreign_atm_usage')
         fraud_score += 20
-    
+
     # ML model scoring (simulated with rules)
     ml_score = min(100, fraud_score * 1.2)  # Simulated ML boost
-    
+
     # Classify transaction
     transaction['fraud_score'] = ml_score
     transaction['fraud_indicators'] = fraud_indicators
     transaction['fraud_detection_timestamp'] = datetime.now().isoformat()
-    
+
     if ml_score >= 80:
         transaction['fraud_status'] = 'high_risk'
         transaction['action_required'] = 'block_and_review'
@@ -401,7 +401,7 @@ import re
 
 # Compliance checks for various regulations
 fraud_detection_result = fraud_data
-all_transactions = (fraud_detection_result.get('clean_transactions', []) + 
+all_transactions = (fraud_detection_result.get('clean_transactions', []) +
                    fraud_detection_result.get('suspicious_transactions', []))
 
 compliant_transactions = []
@@ -414,7 +414,7 @@ def check_aml_compliance(transaction):
     violations = []
     amount = transaction['amount']
     currency = transaction['currency']
-    
+
     # CTR (Currency Transaction Report) threshold
     usd_equivalent = convert_to_usd(amount, currency)
     if usd_equivalent >= 10000:
@@ -424,7 +424,7 @@ def check_aml_compliance(transaction):
             'report_required': 'CTR',
             'severity': 'mandatory_report'
         })
-    
+
     # Suspicious activity patterns
     if transaction.get('fraud_score', 0) > 60:
         violations.append({
@@ -433,30 +433,30 @@ def check_aml_compliance(transaction):
             'report_required': 'SAR',
             'severity': 'investigation_required'
         })
-    
+
     return violations
 
 def check_pci_compliance(transaction):
     """Payment Card Industry compliance."""
     violations = []
-    
+
     # Check for exposed card data (should never happen)
     transaction_str = str(transaction)
-    if re.search(r'\b\d{16}\b', transaction_str):
+    if re.search(r'\b\\d{16}\b', transaction_str):
         violations.append({
             'rule': 'PCI_CARD_EXPOSURE',
             'description': 'Potential card number exposed',
             'severity': 'critical',
             'action': 'immediate_remediation'
         })
-    
+
     return violations
 
 def check_gdpr_compliance(transaction):
     """GDPR compliance for EU transactions."""
     violations = []
     location = transaction.get('location', {})
-    
+
     eu_countries = ['FR', 'DE', 'IT', 'ES', 'NL', 'BE', 'PL']
     if location.get('country') in eu_countries:
         # Check data minimization
@@ -467,7 +467,7 @@ def check_gdpr_compliance(transaction):
                 'severity': 'medium',
                 'action': 'remove_excess_data'
             })
-    
+
     return violations
 
 def convert_to_usd(amount, currency):
@@ -478,25 +478,25 @@ def convert_to_usd(amount, currency):
 # Check each transaction
 for transaction in all_transactions:
     compliance_issues = []
-    
+
     # Run compliance checks
     aml_violations = check_aml_compliance(transaction)
     pci_violations = check_pci_compliance(transaction)
     gdpr_violations = check_gdpr_compliance(transaction)
-    
+
     compliance_issues.extend(aml_violations)
     compliance_issues.extend(pci_violations)
     compliance_issues.extend(gdpr_violations)
-    
+
     # Add compliance status
     transaction['compliance_checked'] = True
     transaction['compliance_timestamp'] = datetime.now().isoformat()
     transaction['compliance_violations'] = compliance_issues
     transaction['compliance_status'] = 'compliant' if not compliance_issues else 'non_compliant'
-    
+
     if compliance_issues:
         compliance_violations.append(transaction)
-        
+
         # Generate compliance reports
         for violation in compliance_issues:
             if violation.get('report_required'):

@@ -19,7 +19,7 @@ Run: python workflow_cycle_aware_nodes.py
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes import CycleAwareNode, NodeParameter
@@ -44,7 +44,7 @@ class QualityImproverNode(CycleAwareNode):
     track quality improvement across iterations without boilerplate.
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "quality": NodeParameter(
@@ -55,7 +55,7 @@ class QualityImproverNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """
         Process data with cycle awareness.
 
@@ -182,7 +182,7 @@ def example1_basic_cycle_aware():
 class DataOptimizerNode(CycleAwareNode):
     """Optimizes data with multiple convergence criteria."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "optimization_target": NodeParameter(
@@ -190,7 +190,7 @@ class DataOptimizerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Optimize data towards target."""
         self.get_iteration(context)
         prev_state = self.get_previous_state(context)
@@ -362,7 +362,7 @@ def example2_advanced_convergence():
 class AgentSimulatorNode(CycleAwareNode):
     """Simulates agent responses for A2A coordination."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "task": NodeParameter(name="task", type=dict, required=False, default={}),
             "agent_id": NodeParameter(
@@ -370,7 +370,7 @@ class AgentSimulatorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Simulate agent processing a task."""
         task = kwargs.get("task", {})
         agent_id = kwargs.get("agent_id", "unknown")
@@ -518,12 +518,12 @@ def example3_cycle_aware_coordination():
 class DataQualityAnalyzerNode(CycleAwareNode):
     """Analyzes data quality with cycle awareness."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[])
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Analyze data quality metrics."""
         data = kwargs.get("data", [])
 
@@ -577,7 +577,7 @@ class DataQualityAnalyzerNode(CycleAwareNode):
 class DataEnhancerNode(CycleAwareNode):
     """Enhances data quality iteratively."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "quality_metrics": NodeParameter(
@@ -585,7 +585,7 @@ class DataEnhancerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Enhance data based on quality metrics."""
         data = kwargs.get("data", [])
 
@@ -663,7 +663,7 @@ def example4_complete_pattern():
 
     # Create a wrapper to package convergence output for SwitchNode
     class ConvergencePackagerNode(CycleAwareNode):
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {
                 "input": NodeParameter(name="input", type=dict, required=False),
                 "converged": NodeParameter(name="converged", type=bool, required=False),
@@ -678,7 +678,7 @@ def example4_complete_pattern():
                 ),
             }
 
-        def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
             # Package all convergence output as input_data for SwitchNode
             self.log_cycle_info(context, f"Packager received: {list(kwargs.keys())}")
 
@@ -703,13 +703,13 @@ def example4_complete_pattern():
 
     # Create a simple output node
     class OutputNode(CycleAwareNode):
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {
                 "data1": NodeParameter(name="data1", type=Any, required=False),
                 "data2": NodeParameter(name="data2", type=Any, required=False),
             }
 
-        def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
             return {"merged_data": [kwargs.get("data1"), kwargs.get("data2")]}
 
     workflow.add_node("output", OutputNode())  # E - Final output
@@ -788,12 +788,12 @@ def example4_complete_pattern():
 class MultiMetricOptimizerNode(CycleAwareNode):
     """Optimizes multiple metrics simultaneously."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=dict, required=False, default={})
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Optimize multiple metrics."""
         data = kwargs.get("data", {})
 

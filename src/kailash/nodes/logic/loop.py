@@ -1,6 +1,6 @@
 """Loop control node for creating cycles in workflows."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter
 
@@ -29,7 +29,7 @@ class LoopNode(Node):
         >>> workflow.connect("loop_control", "final_output", condition="exit")
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define loop control parameters."""
         return {
             "input_data": NodeParameter(
@@ -75,7 +75,7 @@ class LoopNode(Node):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Execute loop control logic."""
         input_data = kwargs.get("input_data")
         condition_type = kwargs.get("condition", "counter")
@@ -129,7 +129,7 @@ class LoopNode(Node):
             },
         }
 
-    def get_output_schema(self) -> Optional[Dict[str, Any]]:
+    def get_output_schema(self) -> dict[str, Any] | None:
         """Define output schema for loop control."""
         return {
             "type": "object",

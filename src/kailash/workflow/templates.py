@@ -113,7 +113,7 @@ See Also:
 import math
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..nodes.code import PythonCodeNode
 from . import Workflow
@@ -125,11 +125,11 @@ class CycleTemplate:
 
     name: str
     description: str
-    nodes: List[str]
-    convergence_condition: Optional[str] = None
+    nodes: list[str]
+    convergence_condition: str | None = None
     max_iterations: int = 100
-    timeout: Optional[float] = None
-    parameters: Optional[Dict[str, Any]] = None
+    timeout: float | None = None
+    parameters: dict[str, Any] | None = None
 
 
 class CycleTemplates:
@@ -142,7 +142,7 @@ class CycleTemplates:
         evaluator_node: str,
         convergence: str = "quality > 0.9",
         max_iterations: int = 50,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> str:
         """
         Add an optimization cycle pattern to workflow.
@@ -195,7 +195,7 @@ class CycleTemplates:
         max_retries: int = 3,
         backoff_strategy: str = "exponential",
         success_condition: str = "success == True",
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> str:
         """
         Add a retry cycle pattern to workflow.
@@ -300,7 +300,7 @@ result = {{
         validator_node: str,
         quality_threshold: float = 0.95,
         max_iterations: int = 10,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> str:
         """
         Add a data quality improvement cycle to workflow.
@@ -353,7 +353,7 @@ result = {{
         target_accuracy: float = 0.95,
         max_epochs: int = 100,
         early_stopping_patience: int = 10,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> str:
         """
         Add a machine learning training cycle to workflow.
@@ -462,7 +462,7 @@ result = {{
         processor_node: str,
         tolerance: float = 0.001,
         max_iterations: int = 1000,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> str:
         """
         Add a numerical convergence cycle to workflow.
@@ -560,8 +560,8 @@ previous_value = current_value
         workflow: Workflow,
         processor_node: str,
         batch_size: int = 100,
-        total_items: Optional[int] = None,
-        cycle_id: Optional[str] = None,
+        total_items: int | None = None,
+        cycle_id: str | None = None,
     ) -> str:
         """
         Add a batch processing cycle to workflow.
@@ -671,7 +671,7 @@ def add_optimization_cycle(
     evaluator_node: str,
     convergence: str = "quality > 0.9",
     max_iterations: int = 50,
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
 ) -> str:
     """Add an optimization cycle pattern to this workflow."""
     return CycleTemplates.optimization_cycle(
@@ -685,7 +685,7 @@ def add_retry_cycle(
     max_retries: int = 3,
     backoff_strategy: str = "exponential",
     success_condition: str = "success == True",
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
 ) -> str:
     """Add a retry cycle pattern to this workflow."""
     return CycleTemplates.retry_cycle(
@@ -699,7 +699,7 @@ def add_data_quality_cycle(
     validator_node: str,
     quality_threshold: float = 0.95,
     max_iterations: int = 10,
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
 ) -> str:
     """Add a data quality improvement cycle to this workflow."""
     return CycleTemplates.data_quality_cycle(
@@ -714,7 +714,7 @@ def add_learning_cycle(
     target_accuracy: float = 0.95,
     max_epochs: int = 100,
     early_stopping_patience: int = 10,
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
 ) -> str:
     """Add a machine learning training cycle to this workflow."""
     return CycleTemplates.learning_cycle(
@@ -733,7 +733,7 @@ def add_convergence_cycle(
     processor_node: str,
     tolerance: float = 0.001,
     max_iterations: int = 1000,
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
 ) -> str:
     """Add a numerical convergence cycle to this workflow."""
     return CycleTemplates.convergence_cycle(
@@ -745,8 +745,8 @@ def add_batch_processing_cycle(
     self,
     processor_node: str,
     batch_size: int = 100,
-    total_items: Optional[int] = None,
-    cycle_id: Optional[str] = None,
+    total_items: int | None = None,
+    cycle_id: str | None = None,
 ) -> str:
     """Add a batch processing cycle to this workflow."""
     return CycleTemplates.batch_processing_cycle(

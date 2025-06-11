@@ -40,7 +40,7 @@ class TestExportIntegration:
 
         # Verify export file exists (basic test)
         if export_path.exists():
-            with open(export_path, "r") as f:
+            with open(export_path) as f:
                 loaded_data = json.load(f)
             assert "workflow" in loaded_data or "nodes" in loaded_data
 
@@ -120,7 +120,7 @@ class TestExportIntegration:
         manifest.save(export_path, format="json")
 
         # Verify templates in export
-        with open(export_path, "r") as f:
+        with open(export_path) as f:
             data = json.load(f)
 
         assert "template_variables" in data["metadata"]
@@ -151,7 +151,7 @@ class TestExportIntegration:
 
         # Basic validation - file exists and is valid JSON
         assert export_path.exists()
-        with open(export_path, "r") as f:
+        with open(export_path) as f:
             loaded_data = json.load(f)
         assert "workflow" in loaded_data
 
@@ -181,7 +181,7 @@ class TestExportIntegration:
             json.dump(test_data, f)
 
         # Verify results are included
-        with open(export_path, "r") as f:
+        with open(export_path) as f:
             data = json.load(f)
 
         assert "execution_result" in data
@@ -251,7 +251,7 @@ Workflow bundle
         assert metadata_file.exists()
 
         # Verify bundle structure
-        with open(workflow_file, "r") as f:
+        with open(workflow_file) as f:
             workflow_data = json.load(f)
         assert workflow_data["metadata"]["id"] == "bundle-export"
 
@@ -306,7 +306,7 @@ Workflow bundle
         assert version_file.exists()
 
         # Verify incremental changes
-        with open(incremental_path, "r") as f:
+        with open(incremental_path) as f:
             incremental_data = json.load(f)
 
         assert incremental_data["metadata"]["version"] == "1.1.0"
@@ -324,7 +324,7 @@ Workflow bundle
             json.dump(custom_data, f)
 
         # Verify serialization
-        with open(export_path, "r") as f:
+        with open(export_path) as f:
             loaded_data = json.load(f)
 
         assert loaded_data["type"] == "custom"

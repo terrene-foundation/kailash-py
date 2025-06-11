@@ -326,7 +326,7 @@ def add_compliance_pipeline(workflow: Workflow):
         transformations=[
             # Remove unnecessary personal data for EU transactions
             """lambda transactions: [{
-                k: v for k, v in t.items() 
+                k: v for k, v in t.items()
                 if k not in ['device_info.ip', 'unnecessary_field']
             } for t in transactions]"""
         ],

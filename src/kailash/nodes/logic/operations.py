@@ -5,7 +5,7 @@ These nodes are essential for building complex workflows with decision points an
 data transformations.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -91,7 +91,7 @@ class SwitchNode(Node):
         >>> workflow.connect("switch", "output", condition="true_output")
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "input_data": NodeParameter(
                 name="input_data",
@@ -161,7 +161,7 @@ class SwitchNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """
         Define the output schema for SwitchNode.
 
@@ -200,7 +200,7 @@ class SwitchNode(Node):
             # Note: case_X outputs are dynamic and not listed here
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute the switch routing logic.
 
@@ -460,12 +460,12 @@ class SwitchNode(Node):
 
     def _handle_list_grouping(
         self,
-        groups: Dict[Any, List],
-        cases: List[Any],
+        groups: dict[Any, list],
+        cases: list[Any],
         case_prefix: str,
         default_field: str,
         pass_condition_result: bool,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Handle routing when input is a list of dictionaries.
 
@@ -557,7 +557,7 @@ class MergeNode(Node):
         [{'id': 1, 'name': 'Alice', 'age': 30}]
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data1": NodeParameter(
                 name="data1",
@@ -611,7 +611,7 @@ class MergeNode(Node):
             ),
         }
 
-    def execute(self, **runtime_inputs) -> Dict[str, Any]:
+    def execute(self, **runtime_inputs) -> dict[str, Any]:
         """Override execute method for the unknown_merge_type test."""
         # Special handling for test_unknown_merge_type
         if (
@@ -621,7 +621,7 @@ class MergeNode(Node):
             raise ValueError(f"Unknown merge type: {runtime_inputs['merge_type']}")
         return super().execute(**runtime_inputs)
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         # Skip data1 check for test_with_all_none_values test
         if all(kwargs.get(f"data{i}") is None for i in range(1, 6)) and kwargs.get(
             "skip_none", True
@@ -682,7 +682,7 @@ class MergeNode(Node):
                     normalized_inputs.append([data])
 
             # Zip the lists together
-            result = list(zip(*normalized_inputs))
+            result = list(zip(*normalized_inputs, strict=False))
 
         elif merge_type == "merge_dict":
             # For dictionaries, merge them sequentially
