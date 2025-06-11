@@ -5,8 +5,6 @@ offering a text-based format that can be embedded in markdown files and
 rendered in various documentation platforms.
 """
 
-from typing import Dict, Optional, Tuple
-
 from kailash.workflow.graph import Workflow
 
 
@@ -27,7 +25,7 @@ class MermaidVisualizer:
         self,
         workflow: Workflow,
         direction: str = "TB",
-        node_styles: Optional[Dict[str, str]] = None,
+        node_styles: dict[str, str] | None = None,
     ):
         """Initialize the Mermaid visualizer.
 
@@ -40,7 +38,7 @@ class MermaidVisualizer:
         self.direction = direction
         self.node_styles = node_styles or self._default_node_styles()
 
-    def _default_node_styles(self) -> Dict[str, str]:
+    def _default_node_styles(self) -> dict[str, str]:
         """Get default node styles for different node types.
 
         Returns:
@@ -79,7 +77,7 @@ class MermaidVisualizer:
         # Use line break without parentheses to avoid Mermaid parsing issues
         return f"{clean_type}<br/>{node_id}"
 
-    def _get_pattern_edge_label(self, source: str, target: str, data: Dict) -> str:
+    def _get_pattern_edge_label(self, source: str, target: str, data: dict) -> str:
         """Get a pattern-oriented edge label.
 
         Args:
@@ -262,7 +260,7 @@ class MermaidVisualizer:
             return node_type[:-4]
         return node_type
 
-    def _get_node_shape(self, node_type: str) -> Tuple[str, str]:
+    def _get_node_shape(self, node_type: str) -> tuple[str, str]:
         """Get the shape brackets for a node type.
 
         Args:
@@ -460,7 +458,7 @@ class MermaidVisualizer:
 
         return "\n".join(lines)
 
-    def _get_edge_label(self, source: str, target: str, data: Dict) -> str:
+    def _get_edge_label(self, source: str, target: str, data: dict) -> str:
         """Get label for an edge.
 
         Args:
@@ -491,7 +489,7 @@ class MermaidVisualizer:
 
         return ""
 
-    def generate_markdown(self, title: Optional[str] = None) -> str:
+    def generate_markdown(self, title: str | None = None) -> str:
         """Generate a complete markdown section with the Mermaid diagram.
 
         Args:
@@ -559,7 +557,7 @@ class MermaidVisualizer:
 
         return "\n".join(lines)
 
-    def save_markdown(self, filepath: str, title: Optional[str] = None) -> None:
+    def save_markdown(self, filepath: str, title: str | None = None) -> None:
         """Save the Mermaid diagram as a markdown file.
 
         Args:
@@ -596,7 +594,7 @@ def add_mermaid_to_workflow():
         visualizer = MermaidVisualizer(self, direction=direction)
         return visualizer.generate()
 
-    def to_mermaid_markdown(self, title: Optional[str] = None) -> str:
+    def to_mermaid_markdown(self, title: str | None = None) -> str:
         """Generate markdown with embedded Mermaid diagram.
 
         Args:
@@ -608,7 +606,7 @@ def add_mermaid_to_workflow():
         visualizer = MermaidVisualizer(self)
         return visualizer.generate_markdown(title)
 
-    def save_mermaid_markdown(self, filepath: str, title: Optional[str] = None) -> None:
+    def save_mermaid_markdown(self, filepath: str, title: str | None = None) -> None:
         """Save workflow as markdown with Mermaid diagram.
 
         Args:

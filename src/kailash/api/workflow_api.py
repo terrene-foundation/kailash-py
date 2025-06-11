@@ -8,7 +8,7 @@ workflow as a REST API with minimal configuration.
 import asyncio
 from contextlib import asynccontextmanager
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import uvicorn
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -31,8 +31,8 @@ class ExecutionMode(str, Enum):
 class WorkflowRequest(BaseModel):
     """Base request model for workflow execution."""
 
-    inputs: Dict[str, Any] = Field(..., description="Input data for workflow nodes")
-    config: Optional[Dict[str, Any]] = Field(
+    inputs: dict[str, Any] = Field(..., description="Input data for workflow nodes")
+    config: dict[str, Any] | None = Field(
         None, description="Node configuration overrides"
     )
     mode: ExecutionMode = Field(ExecutionMode.SYNC, description="Execution mode")
@@ -41,7 +41,7 @@ class WorkflowRequest(BaseModel):
 class WorkflowResponse(BaseModel):
     """Base response model for workflow execution."""
 
-    outputs: Dict[str, Any] = Field(..., description="Output data from workflow nodes")
+    outputs: dict[str, Any] = Field(..., description="Output data from workflow nodes")
     execution_time: float = Field(..., description="Execution time in seconds")
     workflow_id: str = Field(..., description="Workflow identifier")
     version: str = Field(..., description="Workflow version")
@@ -63,7 +63,7 @@ class WorkflowAPI:
 
     def __init__(
         self,
-        workflow: Union[WorkflowBuilder, Workflow],
+        workflow: WorkflowBuilder | Workflow,
         app_name: str = "Kailash Workflow API",
         version: str = "1.0.0",
         description: str = "API wrapper for Kailash workflow execution",
@@ -102,7 +102,7 @@ class WorkflowAPI:
         self._setup_routes()
 
         # Cache for async executions
-        self._execution_cache: Dict[str, Dict[str, Any]] = {}
+        self._execution_cache: dict[str, dict[str, Any]] = {}
 
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):
@@ -317,12 +317,12 @@ class HierarchicalRAGAPI(WorkflowAPI):
 
         class RAGResponse(BaseModel):
             answer: str
-            sources: List[Dict[str, Any]]
+            sources: list[dict[str, Any]]
             query: str
             execution_time: float
 
         @self.app.post("/documents")
-        async def add_documents(documents: List[Document]):
+        async def add_documents(documents: list[Document]):
             """Add documents to the knowledge base."""
             # This would integrate with document storage
             return {"message": f"Added {len(documents)} documents"}

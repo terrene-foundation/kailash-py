@@ -22,7 +22,7 @@ Features:
 
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
@@ -31,7 +31,7 @@ from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
-def get_health_endpoints() -> List[Dict[str, Any]]:
+def get_health_endpoints() -> list[dict[str, Any]]:
     """Get list of real health endpoints to monitor.
 
     These correspond to the Docker services defined in docker-compose.sdk-dev.yml.
@@ -131,7 +131,7 @@ endpoints = [
         "name": "ollama",
         "url": "http://localhost:11434/api/version",
         "critical": False,
-        "service_type": "ai_service", 
+        "service_type": "ai_service",
         "check_type": "http",
         "timeout": 15
     },
@@ -160,7 +160,7 @@ endpoints = [
         "timeout": 10
     },
     {
-        "name": "kafka-ui", 
+        "name": "kafka-ui",
         "url": "http://localhost:8082",
         "critical": False,
         "service_type": "web_ui",
@@ -207,11 +207,11 @@ for endpoint in endpoints:
     is_critical = endpoint["critical"]
     service_type = endpoint["service_type"]
     timeout = endpoint.get("timeout", 10)
-    
+
     try:
         # Create HTTPRequestNode for this endpoint
         http_node = HTTPRequestNode(name=f"health_check_{endpoint_name}")
-        
+
         # Perform the health check
         start_time = time.time()
         response = http_node.run(
@@ -223,15 +223,15 @@ for endpoint in endpoints:
             retry_backoff=0.5
         )
         response_time = (time.time() - start_time) * 1000  # Convert to ms
-        
+
         # Determine health status based on response
         is_healthy = response.get("success", False)
         status_code = response.get("status_code")
-        
+
         # Extract additional info from response if available
         response_data = response.get("response", {})
         content = response_data.get("content", {}) if response_data else {}
-        
+
         # Determine status details
         if is_healthy:
             status = "healthy"
@@ -241,7 +241,7 @@ for endpoint in endpoints:
             status = "unhealthy"
             error_info = response.get("error", "Unknown error")
             error_type = response.get("error_type", "Unknown")
-            
+
             # Categorize the issue
             if status_code is None:
                 issue_type = "connection_refused"
@@ -261,7 +261,7 @@ for endpoint in endpoints:
             else:
                 issue_type = "unknown_error"
                 error_message = f"Unknown error from {endpoint_name}: {error_info}"
-        
+
         health_result = {
             "service_name": endpoint_name,
             "service_type": service_type,
@@ -286,9 +286,9 @@ for endpoint in endpoints:
                 "retry_attempted": not is_healthy
             }
         }
-        
+
         health_results.append(health_result)
-        
+
     except Exception as e:
         # Handle unexpected errors during health check
         error_result = {
@@ -372,21 +372,21 @@ alert_conditions = [
         "condition": lambda check: check.get("is_critical") and not check.get("is_healthy")
     },
     {
-        "name": "service_connection_failed", 
+        "name": "service_connection_failed",
         "description": "Service connection refused or failed",
         "severity": "major",
         "condition": lambda check: check.get("issue_type") == "connection_refused"
     },
     {
         "name": "high_response_time",
-        "description": "Service response time above threshold", 
+        "description": "Service response time above threshold",
         "severity": "warning",
         "condition": lambda check: check.get("response_time_ms", 0) > 5000  # 5 seconds
     },
     {
         "name": "service_error",
         "description": "Service returned error status",
-        "severity": "major", 
+        "severity": "major",
         "condition": lambda check: check.get("status_code") and check.get("status_code") >= 500
     },
     {
@@ -432,7 +432,7 @@ if summary.get("overall_health_percentage", 100) < 80:
         "alert_id": f"ALERT-{current_time.strftime('%Y%m%d%H%M%S')}-{alert_id_counter:03d}",
         "alert_type": "overall_health_low",
         "severity": "major",
-        "description": "Overall system health below threshold", 
+        "description": "Overall system health below threshold",
         "service_name": "system_overall",
         "current_value": summary.get("overall_health_percentage"),
         "threshold": 80,
@@ -508,13 +508,13 @@ else:
     response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("response_time_ms") is not None]
     healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_healthy") and check.get("response_time_ms") is not None]
     critical_response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("is_critical") and check.get("response_time_ms") is not None]
-    
+
     # Service availability metrics from real checks
     total_services = len(health_checks)
     healthy_services = sum(1 for check in health_checks if check.get("is_healthy"))
     critical_services = [check for check in health_checks if check.get("is_critical")]
     critical_healthy = sum(1 for check in critical_services if check.get("is_healthy"))
-    
+
     # Performance thresholds for categorization
     response_time_thresholds = {
         "excellent": 100,    # < 100ms
@@ -523,15 +523,15 @@ else:
         "poor": 5000         # 2s-5s
         # > 5s = unacceptable
     }
-    
+
     # Categorize services by actual performance
     performance_categories = {"excellent": 0, "good": 0, "acceptable": 0, "poor": 0, "unacceptable": 0}
-    
+
     for check in health_checks:
         rt = check.get("response_time_ms", 0)
         if rt is None:
             continue  # Skip services that didn't respond
-            
+
         if rt <= response_time_thresholds["excellent"]:
             performance_categories["excellent"] += 1
         elif rt <= response_time_thresholds["good"]:
@@ -542,7 +542,7 @@ else:
             performance_categories["poor"] += 1
         else:
             performance_categories["unacceptable"] += 1
-    
+
     # Calculate statistics from actual measurements
     metrics = {
         "response_time_metrics": {
@@ -568,14 +568,14 @@ else:
         "performance_distribution": performance_categories,
         "service_grades": {
             "A": performance_categories["excellent"],
-            "B": performance_categories["good"], 
+            "B": performance_categories["good"],
             "C": performance_categories["acceptable"],
             "D": performance_categories["poor"],
             "F": performance_categories["unacceptable"]
         },
         "service_types": {}
     }
-    
+
     # Analyze by service type
     for check in health_checks:
         service_type = check.get("service_type", "unknown")
@@ -586,20 +586,20 @@ else:
                 "avg_response_time": 0,
                 "response_times": []
             }
-        
+
         metrics["service_types"][service_type]["count"] += 1
         if check.get("is_healthy"):
             metrics["service_types"][service_type]["healthy"] += 1
         if check.get("response_time_ms") is not None:
             metrics["service_types"][service_type]["response_times"].append(check.get("response_time_ms"))
-    
+
     # Calculate averages for service types
     for service_type, data in metrics["service_types"].items():
         if data["response_times"]:
             data["avg_response_time"] = round(statistics.mean(data["response_times"]), 2)
         data["health_percentage"] = round((data["healthy"] / data["count"]) * 100, 2)
         del data["response_times"]  # Remove raw data from output
-    
+
     # Generate performance score
     total_possible_score = total_services * 100
     actual_score = (
@@ -610,13 +610,13 @@ else:
         performance_categories["unacceptable"] * 0
     )
     performance_score = round((actual_score / total_possible_score) * 100, 2) if total_possible_score > 0 else 0
-    
+
     metrics["trends"] = {
         "overall_performance_score": performance_score,
         "health_trend": "stable",  # Would calculate from historical data
         "performance_trend": "stable"  # Would calculate from historical data
     }
-    
+
     # Generate recommendations based on actual metrics
     recommendations = []
     if metrics["availability_metrics"]["overall_availability_percentage"] < 95:
@@ -630,7 +630,7 @@ else:
     if len(response_times) < total_services:
         missing_responses = total_services - len(response_times)
         recommendations.append(f"{missing_responses} services are not responding to health checks")
-    
+
     result = {
         "performance_metrics": metrics,
         "recommendations": recommendations,
@@ -901,7 +901,7 @@ def main():
     # Display generated reports
     print("\\n=== Monitoring Report Preview ===")
     try:
-        with open("data/outputs/real_monitoring_report.json", "r") as f:
+        with open("data/outputs/real_monitoring_report.json") as f:
             report = json.load(f)
             executive_summary = report["monitoring_report"]["executive_summary"]
             print(json.dumps(executive_summary, indent=2))
@@ -915,7 +915,7 @@ def main():
             )
 
         print("\\n=== Active Alerts Preview ===")
-        with open("data/outputs/active_alerts.json", "r") as f:
+        with open("data/outputs/active_alerts.json") as f:
             alerts = json.load(f)
             print(f"Alert Count: {alerts['alert_count']}")
             if alerts["alerts"]:

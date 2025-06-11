@@ -1,20 +1,17 @@
 """Tests for the base node class."""
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
-from kailash.sdk_exceptions import (
-    NodeExecutionError,
-    NodeValidationError,
-)
+from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
 class SimpleNode(Node):
     """Simple node for testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters."""
         return {
             "x": NodeParameter(
@@ -22,7 +19,7 @@ class SimpleNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         x = kwargs.get("x", 0)
         return {"y": x * 2}
@@ -31,7 +28,7 @@ class SimpleNode(Node):
 class NodeWithOptionalParams(Node):
     """Node with optional parameters for testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters."""
         return {
             "x": NodeParameter(
@@ -46,7 +43,7 @@ class NodeWithOptionalParams(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         x = kwargs.get("x")
         y = kwargs.get("y", 1.0)
@@ -56,11 +53,11 @@ class NodeWithOptionalParams(Node):
 class NodeWithoutParams(Node):
     """Node without parameters for testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters."""
         return {}
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         return {"message": "Hello, World!"}
 
@@ -68,11 +65,11 @@ class NodeWithoutParams(Node):
 class NodeWithError(Node):
     """Node that raises errors for testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters."""
         return {}
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         raise ValueError("Processing error")
 
@@ -80,7 +77,7 @@ class NodeWithError(Node):
 class NodeWithOutputSchema(Node):
     """Node with output schema validation."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters."""
         return {
             "value": NodeParameter(
@@ -88,7 +85,7 @@ class NodeWithOutputSchema(Node):
             )
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define output schema."""
         return {
             "double": NodeParameter(
@@ -105,7 +102,7 @@ class NodeWithOutputSchema(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic."""
         value = kwargs.get("value", 0)
         return {"double": value * 2, "square": value * value}
@@ -293,7 +290,7 @@ class TestNodeIntegration:
         class DataProcessor(Node):
             """Process data with multiple steps."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data",
@@ -310,7 +307,7 @@ class TestNodeIntegration:
                     ),
                 }
 
-            def get_output_schema(self) -> Dict[str, NodeParameter]:
+            def get_output_schema(self) -> dict[str, NodeParameter]:
                 return {
                     "result": NodeParameter(
                         name="result",
@@ -326,7 +323,7 @@ class TestNodeIntegration:
                     ),
                 }
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 data = kwargs.get("data", [])
                 operation = kwargs.get("operation", "sum")
 
@@ -364,7 +361,7 @@ class TestNodeIntegration:
         class BaseProcessor(Node):
             """Base processor with common functionality."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 params = {
                     "input_data": NodeParameter(
                         name="input_data",
@@ -377,11 +374,11 @@ class TestNodeIntegration:
                 params.update(self._get_additional_parameters())
                 return params
 
-            def _get_additional_parameters(self) -> Dict[str, NodeParameter]:
+            def _get_additional_parameters(self) -> dict[str, NodeParameter]:
                 """Override in subclasses to add parameters."""
                 return {}
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 input_data = kwargs.get("input_data")
                 processed = self._process(input_data, **kwargs)
                 return {"output": processed}
@@ -393,7 +390,7 @@ class TestNodeIntegration:
         class StringProcessor(BaseProcessor):
             """Process string data."""
 
-            def _get_additional_parameters(self) -> Dict[str, NodeParameter]:
+            def _get_additional_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "uppercase": NodeParameter(
                         name="uppercase",

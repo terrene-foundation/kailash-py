@@ -152,15 +152,18 @@ def validate_text(data=None, iteration=None, quality_score=None, **kwargs):
 def calculator(iteration=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
     # Newton's method for calculating square root
-    try:
-        x = value
-        target = target_value
-        iteration = iteration
-    except:
+    value = kwargs.get("value")
+    target_value = kwargs.get("target_value")
+
+    if value is None or target_value is None:
         # First iteration - calculate sqrt(10)
         x = 5.0  # Initial guess
         target = 10.0
         iteration = 0
+    else:
+        x = value
+        target = target_value
+        iteration = iteration if iteration is not None else 0
 
     iteration += 1
 
@@ -196,14 +199,9 @@ def calculator(iteration=None, **kwargs):
 def process_batch(**kwargs):
     """Auto-converted from PythonCodeNode string code."""
     # Batch processing logic
-    try:
-        batch_number = batch_number
-        start_index = start_index
-        items_processed = items_processed
-    except:
-        batch_number = 0
-        start_index = 0
-        items_processed = 0
+    batch_number = kwargs.get("batch_number", 0)
+    start_index = kwargs.get("start_index", 0)
+    items_processed = kwargs.get("items_processed", 0)
 
     batch_number += 1
     batch_size = 10

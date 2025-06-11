@@ -785,7 +785,7 @@ runtime.execute(workflow, parameters={
 
 **RESOLVED ISSUES:**
 - **Mistake #053**: Configuration vs Runtime Parameters confusion - RESOLVED
-- **Mistake #058**: Node configuration vs runtime parameters confusion - RESOLVED  
+- **Mistake #058**: Node configuration vs runtime parameters confusion - RESOLVED
 - **Mistake #020**: Configuration parameter validation timing - RESOLVED
 
 **NO BREAKING CHANGES** for end users - all existing workflow patterns continue to work.

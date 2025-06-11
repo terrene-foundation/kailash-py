@@ -210,7 +210,7 @@ def run_customer_360_integration():
     parameters = {
         "crm_validator": {
             "transformations": [
-                """
+                r"""
 # CRM data validation and standardization
 import re
 from datetime import datetime

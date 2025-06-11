@@ -16,7 +16,7 @@ Shows best practices for extending the Kailash SDK.
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 
@@ -59,7 +59,7 @@ class SentimentAnalyzerNode(Node):
         # Initialize model (mock for example)
         self.model = None
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts."""
         return {
             "data": NodeParameter(
@@ -92,7 +92,7 @@ class SentimentAnalyzerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute sentiment analysis."""
         data = kwargs["data"]
         kwargs.get("model", "vader")
@@ -126,7 +126,7 @@ class SentimentAnalyzerNode(Node):
 
         return {"data": df.to_dict(orient="records")}
 
-    def _analyze_batch(self, texts: List[str]) -> List[Dict]:
+    def _analyze_batch(self, texts: list[str]) -> list[dict]:
         """Analyze a batch of texts (mock implementation)."""
         # In a real implementation, this would call an actual ML model
         import random
@@ -174,7 +174,7 @@ class DataValidatorNode(Node):
         )
         super().__init__(metadata=metadata, **kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts."""
         return {
             "data": NodeParameter(
@@ -207,7 +207,7 @@ class DataValidatorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute data validation."""
         data = kwargs["data"]
         rules = kwargs["rules"]
@@ -250,7 +250,7 @@ class DataValidatorNode(Node):
         else:
             return {"data": df.to_dict(orient="records")}
 
-    def _apply_rule(self, df: pd.DataFrame, rule: Dict, report: Dict):
+    def _apply_rule(self, df: pd.DataFrame, rule: dict, report: dict):
         """Apply a single validation rule."""
         rule_type = rule.get("type")
 
@@ -263,7 +263,7 @@ class DataValidatorNode(Node):
         elif rule_type == "pattern":
             self._check_pattern(df, rule, report)
 
-    def _check_required(self, df: pd.DataFrame, rule: Dict, report: Dict):
+    def _check_required(self, df: pd.DataFrame, rule: dict, report: dict):
         """Check if required fields are present."""
         required_columns = rule.get("columns", [])
         missing = [col for col in required_columns if col not in df.columns]
@@ -271,7 +271,7 @@ class DataValidatorNode(Node):
             report["valid"] = False
             report["errors"].append(f"Missing required columns: {missing}")
 
-    def _check_type(self, df: pd.DataFrame, rule: Dict, report: Dict):
+    def _check_type(self, df: pd.DataFrame, rule: dict, report: dict):
         """Check data types."""
         for column, expected_type in rule.get("columns", {}).items():
             if column in df.columns:
@@ -281,7 +281,7 @@ class DataValidatorNode(Node):
                         f"Column '{column}' has type '{actual_type}', expected '{expected_type}'"
                     )
 
-    def _check_range(self, df: pd.DataFrame, rule: Dict, report: Dict):
+    def _check_range(self, df: pd.DataFrame, rule: dict, report: dict):
         """Check numeric ranges."""
         for column, range_spec in rule.get("columns", {}).items():
             if column in df.columns:
@@ -308,7 +308,7 @@ class DataValidatorNode(Node):
                             f"Column '{column}' has {len(violations)} values above maximum {max_val}"
                         )
 
-    def _check_pattern(self, df: pd.DataFrame, rule: Dict, report: Dict):
+    def _check_pattern(self, df: pd.DataFrame, rule: dict, report: dict):
         """Check regex patterns."""
         import re
 
@@ -357,7 +357,7 @@ class CustomAggregatorNode(Node):
         )
         super().__init__(metadata=metadata, **kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts."""
         return {
             "data": NodeParameter(
@@ -383,7 +383,7 @@ class CustomAggregatorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute aggregation."""
         data = kwargs["data"]
         group_by = kwargs.get("group_by", [])

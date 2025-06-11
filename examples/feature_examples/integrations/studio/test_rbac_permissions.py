@@ -21,7 +21,7 @@ Usage:
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 from colorama import Fore, Style, init
@@ -60,11 +60,11 @@ class PermissionTestClient:
 
     def __init__(self, base_url: str = BASE_URL):
         self.base_url = base_url
-        self.users: Dict[str, Dict[str, Any]] = {}
+        self.users: dict[str, dict[str, Any]] = {}
 
     def create_user_with_role(
-        self, role: str, tenant_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, role: str, tenant_id: str | None = None
+    ) -> dict[str, Any]:
         """Create a user with specific role"""
         import uuid
 
@@ -108,7 +108,6 @@ class PermissionTestClient:
     def _simulate_role_assignment(self, role: str, token: str):
         """Simulate role assignment (in production, this would be done by admin)"""
         # This is just for demonstration - actual role assignment would be done differently
-        pass
 
     def test_permission(
         self, role: str, action: str, resource: str, expected_success: bool = True

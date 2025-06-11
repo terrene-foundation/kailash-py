@@ -11,12 +11,12 @@ echo
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Resetting SDK Development Environment..."
-    
+
     cd "$PROJECT_ROOT/docker"
-    
+
     # Stop services and remove volumes
     docker compose -f docker-compose.sdk-dev.yml down -v
-    
+
     echo "✓ Environment reset complete"
     echo
     echo "To start fresh, run:"

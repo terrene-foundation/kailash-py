@@ -2,8 +2,8 @@
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import networkx as nx
 
@@ -56,10 +56,10 @@ class ParallelCyclicRuntime:
     def execute(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager] = None,
-        parameters: Optional[Dict[str, Dict[str, Any]]] = None,
-        parallel_nodes: Optional[Set[str]] = None,
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+        parallel_nodes: set[str] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow with parallel and cyclic support.
 
         Args:
@@ -108,9 +108,9 @@ class ParallelCyclicRuntime:
     def _execute_cyclic_workflow(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager],
-        parameters: Optional[Dict[str, Dict[str, Any]]],
-    ) -> Tuple[Dict[str, Any], str]:
+        task_manager: TaskManager | None,
+        parameters: dict[str, dict[str, Any]] | None,
+    ) -> tuple[dict[str, Any], str]:
         """Execute a cyclic workflow with potential parallel optimizations.
 
         Args:
@@ -141,10 +141,10 @@ class ParallelCyclicRuntime:
     def _execute_parallel_dag(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager],
-        parameters: Optional[Dict[str, Dict[str, Any]]],
-        parallel_nodes: Optional[Set[str]],
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        task_manager: TaskManager | None,
+        parameters: dict[str, dict[str, Any]] | None,
+        parallel_nodes: set[str] | None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute a DAG workflow with parallel node execution.
 
         Args:
@@ -252,8 +252,8 @@ class ParallelCyclicRuntime:
             raise
 
     def _analyze_parallel_groups(
-        self, workflow: Workflow, parallel_nodes: Optional[Set[str]]
-    ) -> List[List[str]]:
+        self, workflow: Workflow, parallel_nodes: set[str] | None
+    ) -> list[list[str]]:
         """Analyze workflow to identify groups of nodes that can be executed in parallel.
 
         Args:
@@ -320,11 +320,11 @@ class ParallelCyclicRuntime:
         self,
         workflow: Workflow,
         node_id: str,
-        previous_results: Dict[str, Any],
-        parameters: Optional[Dict[str, Dict[str, Any]]],
-        task_manager: Optional[TaskManager],
-        run_id: Optional[str],
-    ) -> Dict[str, Any]:
+        previous_results: dict[str, Any],
+        parameters: dict[str, dict[str, Any]] | None,
+        task_manager: TaskManager | None,
+        run_id: str | None,
+    ) -> dict[str, Any]:
         """Execute a single node in isolation.
 
         Args:
@@ -356,7 +356,7 @@ class ParallelCyclicRuntime:
                     run_id=run_id,
                     node_id=node_id,
                     node_type=node_instance.__class__.__name__,
-                    started_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
                     metadata={},
                 )
                 if task:
@@ -397,7 +397,7 @@ class ParallelCyclicRuntime:
                     task.task_id,
                     TaskStatus.COMPLETED,
                     result=outputs,
-                    ended_at=datetime.now(timezone.utc),
+                    ended_at=datetime.now(UTC),
                     metadata={"execution_time": performance_metrics.duration},
                 )
                 task_manager.update_task_metrics(task.task_id, task_metrics)
@@ -415,7 +415,7 @@ class ParallelCyclicRuntime:
                     task.task_id,
                     TaskStatus.FAILED,
                     error=str(e),
-                    ended_at=datetime.now(timezone.utc),
+                    ended_at=datetime.now(UTC),
                 )
 
             self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
@@ -428,9 +428,9 @@ class ParallelCyclicRuntime:
         workflow: Workflow,
         node_id: str,
         node_instance: Node,
-        previous_results: Dict[str, Any],
-        parameters: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        previous_results: dict[str, Any],
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
         """Prepare inputs for a node execution in parallel context.
 
         Args:
@@ -509,7 +509,7 @@ class ParallelCyclicRuntime:
             return False
 
     def _should_stop_on_group_error(
-        self, workflow: Workflow, failed_node: str, node_group: List[str]
+        self, workflow: Workflow, failed_node: str, node_group: list[str]
     ) -> bool:
         """Determine if execution should stop when a node in a parallel group fails.
 

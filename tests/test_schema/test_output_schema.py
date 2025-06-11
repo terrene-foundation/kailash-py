@@ -1,6 +1,6 @@
 """Test output schema validation functionality."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import NodeValidationError
@@ -19,7 +19,7 @@ class TestNodeWithSchema(Node):
             kwargs["input_value"] = 42
         super().configure(**kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "input_value": NodeParameter(
                 name="input_value",
@@ -29,7 +29,7 @@ class TestNodeWithSchema(Node):
             )
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "result": NodeParameter(
                 name="result", type=int, required=True, description="Processed result"
@@ -45,7 +45,7 @@ class TestNodeWithSchema(Node):
             ),
         }
 
-    def run(self, input_value: int) -> Dict[str, Any]:
+    def run(self, input_value: int) -> dict[str, Any]:
         return {"result": input_value * 2, "status": "success"}
 
 
@@ -62,7 +62,7 @@ class TestNodeWithoutSchema(Node):
             kwargs["input_value"] = 42
         super().configure(**kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "input_value": NodeParameter(
                 name="input_value",
@@ -72,7 +72,7 @@ class TestNodeWithoutSchema(Node):
             )
         }
 
-    def run(self, input_value: int) -> Dict[str, Any]:
+    def run(self, input_value: int) -> dict[str, Any]:
         return {
             "result": input_value * 2,
             "status": "success",
@@ -208,16 +208,16 @@ def test_node_execution_with_output_validation():
                 kwargs["value"] = 5
             super().configure(**kwargs)
 
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {"value": NodeParameter(name="value", type=int, required=True)}
 
-        def get_output_schema(self) -> Dict[str, NodeParameter]:
+        def get_output_schema(self) -> dict[str, NodeParameter]:
             return {
                 "doubled": NodeParameter(name="doubled", type=int, required=True),
                 "squared": NodeParameter(name="squared", type=int, required=True),
             }
 
-        def run(self, value: int) -> Dict[str, Any]:
+        def run(self, value: int) -> dict[str, Any]:
             return {"doubled": value * 2, "squared": value**2}
 
     try:
@@ -258,16 +258,16 @@ def test_schema_violation_during_execution():
                 kwargs["value"] = 5
             super().configure(**kwargs)
 
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {"value": NodeParameter(name="value", type=int, required=True)}
 
-        def get_output_schema(self) -> Dict[str, NodeParameter]:
+        def get_output_schema(self) -> dict[str, NodeParameter]:
             return {
                 "number": NodeParameter(name="number", type=int, required=True),
                 "text": NodeParameter(name="text", type=str, required=True),
             }
 
-        def run(self, value: int) -> Dict[str, Any]:
+        def run(self, value: int) -> dict[str, Any]:
             # This violates the schema - missing required 'text' field
             return {"number": value}
 

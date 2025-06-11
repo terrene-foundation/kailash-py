@@ -46,6 +46,11 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | **Enhanced v0.2.1** | | |
 | [030-directoryreader-file-discovery](030-directoryreader-file-discovery.md) | DirectoryReaderNode File Discovery | Dynamic file discovery and metadata extraction |
 | [031-datatransformer-bug-workarounds](031-datatransformer-bug-workarounds.md) | DataTransformer Bug Workarounds | Bug detection and mitigation patterns |
+| [032-pythoncode-best-practices](032-pythoncode-best-practices.md) | PythonCodeNode Best Practices | Advanced patterns and optimization |
+| **Session 064 Learnings** | | |
+| [033-workflow-design-process](033-workflow-design-process.md) | Workflow Design Process | Systematic approach to workflow architecture |
+| [034-data-integration-patterns](034-data-integration-patterns.md) | Data Integration Patterns | Multi-source data normalization and merging |
+| [035-production-readiness](035-production-readiness.md) | Production Readiness | Deployment checklist and monitoring patterns |
 
 ## 🔗 Related Resources
 

@@ -7,7 +7,7 @@ This example demonstrates:
 - Proper return types
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter
 
@@ -15,7 +15,7 @@ from kailash.nodes.base import Node, NodeParameter
 class BasicTransformNode(Node):
     """A simple node that transforms text."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define node parameters using basic types only."""
         return {
             "text": NodeParameter(
@@ -33,7 +33,7 @@ class BasicTransformNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the transformation."""
         text = kwargs["text"]
         operation = kwargs.get("operation", "uppercase")

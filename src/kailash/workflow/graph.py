@@ -4,8 +4,8 @@ import json
 import logging
 import uuid
 import warnings
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import networkx as nx
 import yaml
@@ -38,10 +38,10 @@ class NodeInstance(BaseModel):
 
     node_id: str = Field(..., description="Unique identifier for this instance")
     node_type: str = Field(..., description="Type of node")
-    config: Dict[str, Any] = Field(
+    config: dict[str, Any] = Field(
         default_factory=dict, description="Node configuration"
     )
-    position: Tuple[float, float] = Field(default=(0, 0), description="Visual position")
+    position: tuple[float, float] = Field(default=(0, 0), description="Visual position")
 
 
 class Connection(BaseModel):
@@ -59,23 +59,21 @@ class CyclicConnection(Connection):
     cycle: bool = Field(
         default=False, description="Whether this connection creates a cycle"
     )
-    max_iterations: Optional[int] = Field(
+    max_iterations: int | None = Field(
         default=None, description="Maximum cycle iterations"
     )
-    convergence_check: Optional[str] = Field(
+    convergence_check: str | None = Field(
         default=None, description="Convergence condition expression"
     )
-    cycle_id: Optional[str] = Field(
+    cycle_id: str | None = Field(
         default=None, description="Logical cycle group identifier"
     )
-    timeout: Optional[float] = Field(
-        default=None, description="Cycle timeout in seconds"
-    )
-    memory_limit: Optional[int] = Field(default=None, description="Memory limit in MB")
-    condition: Optional[str] = Field(
+    timeout: float | None = Field(default=None, description="Cycle timeout in seconds")
+    memory_limit: int | None = Field(default=None, description="Memory limit in MB")
+    condition: str | None = Field(
         default=None, description="Conditional cycle routing expression"
     )
-    parent_cycle: Optional[str] = Field(
+    parent_cycle: str | None = Field(
         default=None, description="Parent cycle for nested cycles"
     )
 
@@ -90,7 +88,7 @@ class Workflow:
         description: str = "",
         version: str = "1.0.0",
         author: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """Initialize a workflow.
 
@@ -118,7 +116,7 @@ class Workflow:
         if "version" not in self.metadata and version:
             self.metadata["version"] = version
         if "created_at" not in self.metadata:
-            self.metadata["created_at"] = datetime.now(timezone.utc).isoformat()
+            self.metadata["created_at"] = datetime.now(UTC).isoformat()
 
         # Create directed graph for the workflow
         self.graph = nx.DiGraph()
@@ -212,7 +210,7 @@ class Workflow:
         logger.info(f"Added node '{node_id}' of type '{node_type}'")
 
     def _add_node_internal(
-        self, node_id: str, node_type: str, config: Optional[Dict[str, Any]] = None
+        self, node_id: str, node_type: str, config: dict[str, Any] | None = None
     ) -> None:
         """Add a node to the workflow (internal method).
 
@@ -229,15 +227,15 @@ class Workflow:
         self,
         source_node: str,
         target_node: str,
-        mapping: Optional[Dict[str, str]] = None,
+        mapping: dict[str, str] | None = None,
         cycle: bool = False,
-        max_iterations: Optional[int] = None,
-        convergence_check: Optional[str] = None,
-        cycle_id: Optional[str] = None,
-        timeout: Optional[float] = None,
-        memory_limit: Optional[int] = None,
-        condition: Optional[str] = None,
-        parent_cycle: Optional[str] = None,
+        max_iterations: int | None = None,
+        convergence_check: str | None = None,
+        cycle_id: str | None = None,
+        timeout: float | None = None,
+        memory_limit: int | None = None,
+        condition: str | None = None,
+        parent_cycle: str | None = None,
     ) -> None:
         """Connect two nodes in the workflow.
 
@@ -443,7 +441,7 @@ class Workflow:
                 f"Connected '{source_node}' to '{target_node}' with mapping: {mapping}"
             )
 
-    def create_cycle(self, cycle_id: Optional[str] = None):
+    def create_cycle(self, cycle_id: str | None = None):
         """
         Create a new CycleBuilder for intuitive cycle configuration.
 
@@ -541,7 +539,7 @@ class Workflow:
             source_node=from_node, target_node=to_node, mapping={from_output: to_input}
         )
 
-    def get_node(self, node_id: str) -> Optional[Node]:
+    def get_node(self, node_id: str) -> Node | None:
         """Get node instance by ID.
 
         Args:
@@ -561,7 +559,7 @@ class Workflow:
         # Fallback to _node_instances
         return self._node_instances.get(node_id)
 
-    def separate_dag_and_cycle_edges(self) -> Tuple[List[Tuple], List[Tuple]]:
+    def separate_dag_and_cycle_edges(self) -> tuple[list[tuple], list[tuple]]:
         """Separate DAG edges from cycle edges.
 
         Returns:
@@ -578,7 +576,7 @@ class Workflow:
 
         return dag_edges, cycle_edges
 
-    def get_cycle_groups(self) -> Dict[str, List[Tuple]]:
+    def get_cycle_groups(self) -> dict[str, list[tuple]]:
         """Get cycle edges grouped by cycle_id with enhanced multi-node cycle detection.
 
         For multi-node cycles like A → B → C → A where only C → A is marked as cycle,
@@ -678,7 +676,7 @@ class Workflow:
         _, cycle_edges = self.separate_dag_and_cycle_edges()
         return len(cycle_edges) > 0
 
-    def get_execution_order(self) -> List[str]:
+    def get_execution_order(self) -> list[str]:
         """Get topological execution order for nodes, handling cycles gracefully.
 
         Returns:
@@ -711,7 +709,7 @@ class Workflow:
                 # This shouldn't happen, but handle gracefully
                 raise WorkflowValidationError("Unable to determine execution order")
 
-    def validate(self, runtime_parameters: Optional[Dict[str, Any]] = None) -> None:
+    def validate(self, runtime_parameters: dict[str, Any] | None = None) -> None:
         """Validate the workflow structure.
 
         Args:
@@ -843,8 +841,8 @@ class Workflow:
                 )
 
     def run(
-        self, task_manager: Optional[TaskManager] = None, **overrides
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        self, task_manager: TaskManager | None = None, **overrides
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute the workflow.
 
         Args:
@@ -863,9 +861,9 @@ class Workflow:
 
     def execute(
         self,
-        inputs: Optional[Dict[str, Any]] = None,
-        task_manager: Optional[TaskManager] = None,
-    ) -> Dict[str, Any]:
+        inputs: dict[str, Any] | None = None,
+        task_manager: TaskManager | None = None,
+    ) -> dict[str, Any]:
         """Execute the workflow.
 
         Args:
@@ -963,7 +961,9 @@ class Workflow:
                         )
 
                         # Process each mapping pair
-                        for i, (src, dst) in enumerate(zip(from_outputs, to_inputs)):
+                        for i, (src, dst) in enumerate(
+                            zip(from_outputs, to_inputs, strict=False)
+                        ):
                             if src in source_results:
                                 node_inputs[dst] = source_results[src]
 
@@ -1045,7 +1045,7 @@ class Workflow:
                 f"Failed to export workflow to '{output_path}': {e}"
             ) from e
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert workflow to dictionary.
 
         Returns:
@@ -1107,7 +1107,7 @@ class Workflow:
             raise ValueError(f"Unsupported format: {format}")
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Workflow":
+    def from_dict(cls, data: dict[str, Any]) -> "Workflow":
         """Create workflow from dictionary.
 
         Args:
@@ -1228,9 +1228,9 @@ class Workflow:
         self,
         state_model: BaseModel,
         wrap_state: bool = True,
-        task_manager: Optional[TaskManager] = None,
+        task_manager: TaskManager | None = None,
         **overrides,
-    ) -> Tuple[BaseModel, Dict[str, Any]]:
+    ) -> tuple[BaseModel, dict[str, Any]]:
         """Execute the workflow with state management.
 
         This method provides a simplified interface for executing workflows

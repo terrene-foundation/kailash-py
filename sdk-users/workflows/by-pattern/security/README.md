@@ -52,7 +52,7 @@ python sdk-users/workflows/by-pattern/security/scripts/security_audit_workflow.p
 
 **Scanned Components**:
 - PostgreSQL database security (via Docker container)
-- MongoDB security configuration (via Docker container) 
+- MongoDB security configuration (via Docker container)
 - Web endpoint security headers and SSL
 - API security best practices
 
@@ -71,10 +71,10 @@ postgres_security_scan = SQLDatabaseNode(
     name="postgres_security_scan",
     connection_string="postgresql://kailash:kailash123@localhost:5432/postgres",
     query="""
-    SELECT 
+    SELECT
         setting as ssl_enabled,
         'SSL Configuration' as check_type
-    FROM pg_settings 
+    FROM pg_settings
     WHERE name = 'ssl'
     """,
     return_type="dataframe"
@@ -82,10 +82,10 @@ postgres_security_scan = SQLDatabaseNode(
 
 # Check database user permissions
 user_permissions_check = SQLDatabaseNode(
-    name="user_permissions_check", 
+    name="user_permissions_check",
     connection_string="postgresql://kailash:kailash123@localhost:5432/postgres",
     query="""
-    SELECT 
+    SELECT
         rolname as username,
         rolsuper as is_superuser,
         rolcreatedb as can_create_db,
@@ -102,7 +102,7 @@ user_permissions_check = SQLDatabaseNode(
 # Check security headers
 security_headers_check = HTTPRequestNode(
     name="security_headers_check",
-    method="GET", 
+    method="GET",
     url="https://api.github.com",
     headers={"User-Agent": "Kailash-Security-Scanner/1.0"}
 )
@@ -139,17 +139,17 @@ compliance_reporter = PythonCodeNode.from_function(
 def assess_database_security(db_results):
     """Analyze database configuration for security issues"""
     vulnerabilities = []
-    
+
     # Check SSL configuration
     ssl_config = db_results.get("ssl_enabled", "off")
     if ssl_config != "on":
         vulnerabilities.append({
             "type": "SSL_DISABLED",
-            "severity": "HIGH", 
+            "severity": "HIGH",
             "description": "Database SSL/TLS not enabled",
             "remediation": "Enable SSL in postgresql.conf"
         })
-    
+
     # Check user privileges
     users = db_results.get("user_permissions", [])
     for user in users:
@@ -160,7 +160,7 @@ def assess_database_security(db_results):
                 "description": f"User {user['username']} has superuser privileges",
                 "remediation": "Remove unnecessary superuser privileges"
             })
-    
+
     return vulnerabilities
 ```
 
@@ -170,15 +170,15 @@ def assess_web_security(http_response):
     """Analyze HTTP response for security issues"""
     security_findings = []
     headers = http_response.get("headers", {})
-    
+
     # Check security headers
     security_headers = [
         "X-Content-Type-Options",
-        "X-Frame-Options", 
+        "X-Frame-Options",
         "X-XSS-Protection",
         "Strict-Transport-Security"
     ]
-    
+
     for header in security_headers:
         if header not in headers:
             security_findings.append({
@@ -187,7 +187,7 @@ def assess_web_security(http_response):
                 "header": header,
                 "description": f"Missing {header} security header"
             })
-    
+
     return security_findings
 ```
 
@@ -198,7 +198,7 @@ def assess_web_security(http_response):
 OWASP_MAPPING = {
     "A01_BROKEN_ACCESS_CONTROL": [
         "EXCESSIVE_PRIVILEGES",
-        "MISSING_AUTHENTICATION", 
+        "MISSING_AUTHENTICATION",
         "WEAK_AUTHORIZATION"
     ],
     "A02_CRYPTOGRAPHIC_FAILURES": [
@@ -208,7 +208,7 @@ OWASP_MAPPING = {
     ],
     "A03_INJECTION": [
         "SQL_INJECTION_RISK",
-        "COMMAND_INJECTION", 
+        "COMMAND_INJECTION",
         "LDAP_INJECTION"
     ]
 }
@@ -222,7 +222,7 @@ CIS_CONTROLS = {
         "checks": ["SSL_DISABLED", "UNENCRYPTED_DATA"]
     },
     "CIS_CONTROL_5": {
-        "name": "Account Management", 
+        "name": "Account Management",
         "checks": ["EXCESSIVE_PRIVILEGES", "WEAK_PASSWORDS"]
     },
     "CIS_CONTROL_14": {
@@ -270,7 +270,7 @@ DATABASE_SECURITY_CHECKS = {
 ```python
 SECURITY_HEADERS_CHECKLIST = {
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY", 
+    "X-Frame-Options": "DENY",
     "X-XSS-Protection": "1; mode=block",
     "Strict-Transport-Security": "max-age=31536000",
     "Content-Security-Policy": "default-src 'self'",
@@ -285,16 +285,16 @@ SECURITY_HEADERS_CHECKLIST = {
 def calculate_cvss_score(vulnerability):
     """Calculate CVSS v3.1 score for vulnerability"""
     base_metrics = {
-        "attack_vector": vulnerability.get("attack_vector", "network"), 
+        "attack_vector": vulnerability.get("attack_vector", "network"),
         "attack_complexity": vulnerability.get("complexity", "low"),
         "privileges_required": vulnerability.get("privileges", "none"),
         "user_interaction": vulnerability.get("interaction", "none"),
         "scope": vulnerability.get("scope", "unchanged"),
         "confidentiality_impact": vulnerability.get("confidentiality", "high"),
-        "integrity_impact": vulnerability.get("integrity", "high"), 
+        "integrity_impact": vulnerability.get("integrity", "high"),
         "availability_impact": vulnerability.get("availability", "high")
     }
-    
+
     # CVSS calculation logic here
     return calculate_cvss_base_score(base_metrics)
 ```
@@ -311,7 +311,7 @@ def prioritize_vulnerabilities(vulnerabilities):
         )
         vuln["risk_score"] = risk_score
         vuln["priority"] = get_priority_level(risk_score)
-    
+
     return sorted(vulnerabilities, key=lambda x: x["risk_score"], reverse=True)
 ```
 

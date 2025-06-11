@@ -1,7 +1,7 @@
 """Transform nodes for data processing."""
 
 import traceback
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -119,7 +119,7 @@ class FilterNode(Node):
         >>> assert len(result["filtered_data"]) == 2
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -148,7 +148,7 @@ class FilterNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         data = kwargs["data"]
         field = kwargs.get("field")
         operator = kwargs.get("operator", "==")
@@ -220,7 +220,7 @@ class FilterNode(Node):
 class Map(Node):
     """Maps data using a transformation."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -255,7 +255,7 @@ class Map(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         data = kwargs["data"]
         field = kwargs.get("field")
         new_field = kwargs.get("new_field")
@@ -307,7 +307,7 @@ class DataTransformer(Node):
     or other Python code as strings. These are compiled and executed against the input data.
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -332,7 +332,7 @@ class DataTransformer(Node):
             },  # Support for up to 5 additional arguments
         }
 
-    def validate_inputs(self, **kwargs) -> Dict[str, Any]:
+    def validate_inputs(self, **kwargs) -> dict[str, Any]:
         """Override validate_inputs to accept arbitrary parameters for transformations.
 
         DataTransformer needs to accept any input parameters that might be mapped
@@ -351,7 +351,7 @@ class DataTransformer(Node):
 
         return validated
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         # Extract the transformation functions
         transformations = kwargs.get("transformations", [])
         if not transformations:
@@ -484,7 +484,7 @@ class DataTransformer(Node):
 class Sort(Node):
     """Sorts data."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -507,7 +507,7 @@ class Sort(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         data = kwargs["data"]
         field = kwargs.get("field")
         reverse = kwargs.get("reverse", False)

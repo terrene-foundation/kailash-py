@@ -7,7 +7,7 @@ exposing tools for searching, analyzing, and exploring AI implementations.
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from kailash.mcp.server import MCPServer
 
@@ -51,7 +51,7 @@ class AIRegistryServer(MCPServer):
         try:
             registry_path = Path(self.registry_file)
             if registry_path.exists():
-                with open(registry_path, "r", encoding="utf-8") as f:
+                with open(registry_path, encoding="utf-8") as f:
                     self._registry_data = json.load(f)
             else:
                 # Provide sample data if file not found
@@ -83,7 +83,7 @@ class AIRegistryServer(MCPServer):
         """Setup server tools and resources."""
 
         @self.add_tool()
-        def search_use_cases(query: str, limit: int = 10) -> Dict[str, Any]:
+        def search_use_cases(query: str, limit: int = 10) -> dict[str, Any]:
             """Search for AI use cases matching the query.
 
             Args:
@@ -119,7 +119,7 @@ class AIRegistryServer(MCPServer):
             return {"results": results, "count": len(results), "query": query}
 
         @self.add_tool()
-        def filter_by_domain(domain: str) -> Dict[str, Any]:
+        def filter_by_domain(domain: str) -> dict[str, Any]:
             """Filter use cases by application domain.
 
             Args:
@@ -141,7 +141,7 @@ class AIRegistryServer(MCPServer):
             return {"domain": domain, "use_cases": filtered, "count": len(filtered)}
 
         @self.add_tool()
-        def get_use_case_details(use_case_id: int) -> Dict[str, Any]:
+        def get_use_case_details(use_case_id: int) -> dict[str, Any]:
             """Get detailed information about a specific use case.
 
             Args:
@@ -161,7 +161,7 @@ class AIRegistryServer(MCPServer):
             return {"error": f"Use case {use_case_id} not found"}
 
         @self.add_tool()
-        def list_domains() -> Dict[str, Any]:
+        def list_domains() -> dict[str, Any]:
             """List all available application domains.
 
             Returns:

@@ -1,6 +1,6 @@
 """Text formatting nodes for transforming and preparing text data."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -9,7 +9,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 class ChunkTextExtractorNode(Node):
     """Extracts text content from chunks for embedding generation."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "chunks": NodeParameter(
                 name="chunks",
@@ -19,7 +19,7 @@ class ChunkTextExtractorNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         chunks = kwargs.get("chunks", [])
         # Extract just the content text from chunks
         texts = [chunk["content"] for chunk in chunks]
@@ -30,7 +30,7 @@ class ChunkTextExtractorNode(Node):
 class QueryTextWrapperNode(Node):
     """Wraps query string in list for embedding generation."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "query": NodeParameter(
                 name="query",
@@ -40,7 +40,7 @@ class QueryTextWrapperNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         query = kwargs.get("query", "")
         print(f"Debug QueryTextWrapper: received query='{query}'")
         # Use input_texts for batch embedding (single item list)
@@ -53,7 +53,7 @@ class QueryTextWrapperNode(Node):
 class ContextFormatterNode(Node):
     """Formats relevant chunks into context for LLM."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "relevant_chunks": NodeParameter(
                 name="relevant_chunks",
@@ -69,7 +69,7 @@ class ContextFormatterNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         relevant_chunks = kwargs.get("relevant_chunks", [])
         query = kwargs.get("query", "")
         # Format context from relevant chunks

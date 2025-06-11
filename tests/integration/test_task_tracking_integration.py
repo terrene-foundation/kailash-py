@@ -1,6 +1,6 @@
 """Integration tests for task tracking during workflow execution."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -179,9 +179,9 @@ class TestTaskTrackingIntegration:
         runner = LocalRuntime()
 
         # Execute workflow
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         result, run_id = runner.execute(simple_workflow, task_manager=task_manager)
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
 
         # Get tracked tasks
         tasks = task_manager.get_workflow_tasks(simple_workflow.workflow_id)
@@ -252,7 +252,7 @@ class TestTaskTrackingIntegration:
         assert len(completed_tasks) == len(complex_workflow.graph.nodes())
 
         # Filter by time range
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         recent_tasks = [
             t
             for t in all_tasks
@@ -307,7 +307,7 @@ class TestTaskTrackingIntegration:
                     "task_id": task.task_id,
                     "node_id": task.node_id,
                     "status": task.status,
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
             )
             return task
@@ -319,7 +319,7 @@ class TestTaskTrackingIntegration:
                     "type": status.value,
                     "task_id": task_id,
                     "status": status,
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
             )
 
@@ -392,7 +392,5 @@ result = df.groupby('category').agg({'value': 'mean'}).reset_index().to_dict('re
             if task.node_id == "reader":
                 # Check that some metrics exist
                 assert len(metrics) >= 0  # May or may not have specific metrics
-            elif task.node_id == "aggregator":
-                assert len(metrics) >= 0
-            elif task.node_id == "writer":
+            elif task.node_id == "aggregator" or task.node_id == "writer":
                 assert len(metrics) >= 0

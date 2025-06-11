@@ -2,8 +2,8 @@
 
 This directory contains comprehensive guides and resources for developing with the Kailash SDK.
 
-## 🚨 Start Here: [CLAUDE.md](CLAUDE.md)
-Quick reference with critical rules, common patterns, and node selection guide.
+## 🚨 Start Here: [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
+Critical rules, common patterns, and quick-fix templates for immediate use.
 
 ## 📁 Contents
 
@@ -13,8 +13,9 @@ Quick reference with critical rules, common patterns, and node selection guide.
 - **[03-common-patterns.md](03-common-patterns.md)** - Data processing, API integration, transforms
 - **[04-pythoncode-node.md](04-pythoncode-node.md)** - ⚠️ Input variable exclusion, serialization
 - **[05-directory-reader.md](05-directory-reader.md)** - File discovery best practices
-- **[06-document-processing.md](06-document-processing.md)** - Multi-file workflow patterns
+- **[06-enhanced-mcp-server.md](06-enhanced-mcp-server.md)** - 🆕 Production-ready MCP servers with caching & metrics
 - **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and solutions
+- **[08-why-enhanced-mcp-server.md](08-why-enhanced-mcp-server.md)** - Why enhanced vs raw Anthropic SDK
 
 ### Other Resources
 - **[pre-commit-hooks.md](pre-commit-hooks.md)** - Git hooks for code quality
@@ -23,7 +24,7 @@ Quick reference with critical rules, common patterns, and node selection guide.
 ## 🚀 Quick Start Paths
 
 ### Creating a Custom Node
-1. Read [CLAUDE.md](CLAUDE.md) for critical rules
+1. Read [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for critical rules
 2. Follow [01-node-basics.md](01-node-basics.md)
 3. Check [02-parameter-types.md](02-parameter-types.md) for type constraints
 4. See [examples/basic_node.py](examples/basic_node.py)
@@ -40,7 +41,7 @@ Quick reference with critical rules, common patterns, and node selection guide.
 
 ### Debugging Issues
 1. Check [07-troubleshooting.md](07-troubleshooting.md)
-2. Review [CLAUDE.md](CLAUDE.md) for common mistakes
+2. Review [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for common mistakes
 3. Look for your error in the troubleshooting guide
 
 ## ⚠️ Critical Knowledge

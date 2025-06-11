@@ -7,7 +7,7 @@ replace generic errors with detailed diagnostics to improve developer experience
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.sdk_exceptions import WorkflowException
 
@@ -55,9 +55,9 @@ class CycleException(WorkflowException):
         self,
         message: str,
         error_code: str = "CYCLE_ERROR",
-        context: Optional[Dict[str, Any]] = None,
-        suggestions: Optional[List[str]] = None,
-        documentation_url: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        suggestions: list[str] | None = None,
+        documentation_url: str | None = None,
     ):
         """
         Initialize cycle exception with enhanced error information.
@@ -148,8 +148,8 @@ class CycleConfigurationError(CycleException):
     def __init__(
         self,
         message: str,
-        cycle_id: Optional[str] = None,
-        invalid_params: Optional[Dict[str, Any]] = None,
+        cycle_id: str | None = None,
+        invalid_params: dict[str, Any] | None = None,
         **kwargs,
     ):
         """
@@ -216,10 +216,10 @@ class CycleConnectionError(CycleException):
     def __init__(
         self,
         message: str,
-        source_node: Optional[str] = None,
-        target_node: Optional[str] = None,
-        available_nodes: Optional[List[str]] = None,
-        mapping_errors: Optional[Dict[str, str]] = None,
+        source_node: str | None = None,
+        target_node: str | None = None,
+        available_nodes: list[str] | None = None,
+        mapping_errors: dict[str, str] | None = None,
         **kwargs,
     ):
         """
@@ -294,9 +294,9 @@ class CycleValidationError(CycleException):
     def __init__(
         self,
         message: str,
-        cycle_group: Optional[str] = None,
-        validation_failures: Optional[List[str]] = None,
-        conflicting_values: Optional[List[Any]] = None,
+        cycle_group: str | None = None,
+        validation_failures: list[str] | None = None,
+        conflicting_values: list[Any] | None = None,
         **kwargs,
     ):
         """
@@ -365,11 +365,11 @@ class CycleExecutionError(CycleException):
     def __init__(
         self,
         message: str,
-        cycle_id: Optional[str] = None,
-        current_iteration: Optional[int] = None,
-        max_iterations: Optional[int] = None,
-        timeout_seconds: Optional[float] = None,
-        memory_usage_mb: Optional[int] = None,
+        cycle_id: str | None = None,
+        current_iteration: int | None = None,
+        max_iterations: int | None = None,
+        timeout_seconds: float | None = None,
+        memory_usage_mb: int | None = None,
         **kwargs,
     ):
         """
@@ -465,10 +465,10 @@ class CycleConvergenceError(CycleException):
     def __init__(
         self,
         message: str,
-        convergence_expression: Optional[str] = None,
-        evaluation_error: Optional[str] = None,
-        available_variables: Optional[List[str]] = None,
-        cycle_data: Optional[Dict[str, Any]] = None,
+        convergence_expression: str | None = None,
+        evaluation_error: str | None = None,
+        available_variables: list[str] | None = None,
+        cycle_data: dict[str, Any] | None = None,
         **kwargs,
     ):
         """
@@ -523,7 +523,7 @@ class CycleConvergenceError(CycleException):
 
 # Utility functions for enhanced error reporting
 def create_configuration_error(
-    issue: str, cycle_id: Optional[str] = None, **invalid_params
+    issue: str, cycle_id: str | None = None, **invalid_params
 ) -> CycleConfigurationError:
     """
     Create a standardized configuration error with common suggestions.
@@ -550,9 +550,9 @@ def create_configuration_error(
 
 def create_connection_error(
     issue: str,
-    source_node: Optional[str] = None,
-    target_node: Optional[str] = None,
-    available_nodes: Optional[List[str]] = None,
+    source_node: str | None = None,
+    target_node: str | None = None,
+    available_nodes: list[str] | None = None,
 ) -> CycleConnectionError:
     """
     Create a standardized connection error with node context.
@@ -583,9 +583,9 @@ def create_connection_error(
 
 def create_execution_error(
     issue: str,
-    cycle_id: Optional[str] = None,
-    current_iteration: Optional[int] = None,
-    max_iterations: Optional[int] = None,
+    cycle_id: str | None = None,
+    current_iteration: int | None = None,
+    max_iterations: int | None = None,
 ) -> CycleExecutionError:
     """
     Create a standardized execution error with runtime context.

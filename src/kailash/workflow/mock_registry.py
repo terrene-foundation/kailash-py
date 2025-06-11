@@ -1,6 +1,6 @@
 """Mock node registry for tests."""
 
-from typing import Any, Dict, Type
+from typing import Any
 
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import NodeConfigurationError
@@ -15,15 +15,15 @@ class MockNode(Node):
         self.name = name or node_id
         self.config = kwargs.copy()
 
-    def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, data: dict[str, Any]) -> dict[str, Any]:
         """Process data."""
         return {"value": data.get("value", 0) * 2}
 
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         """Execute node with keyword arguments."""
         return self.process(kwargs)
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Get node parameters."""
         return {}
 
@@ -50,10 +50,10 @@ for node_type in NODE_TYPES:
 class MockRegistry:
     """Mock node registry for testing."""
 
-    _registry: Dict[str, Type[Node]] = {node_type: MockNode for node_type in NODE_TYPES}
+    _registry: dict[str, type[Node]] = {node_type: MockNode for node_type in NODE_TYPES}
 
     @classmethod
-    def get(cls, node_type: str) -> Type[Node]:
+    def get(cls, node_type: str) -> type[Node]:
         """Get node class by type name."""
         if node_type not in cls._registry:
             raise NodeConfigurationError(

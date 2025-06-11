@@ -27,7 +27,7 @@ Example usage:
     ... ))
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import NodeParameter, register_node
 from ..base_cycle_aware import CycleAwareNode
@@ -102,7 +102,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
         ...     mode="combined", threshold=0.9, stability_window=3)
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for convergence checking."""
         return {
             "value": NodeParameter(
@@ -181,7 +181,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define output schema for convergence results."""
         return {
             "converged": NodeParameter(
@@ -216,7 +216,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Execute convergence checking logic."""
         # Get parameters
         value = kwargs["value"]
@@ -355,7 +355,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
 
     def _check_stability_convergence(
         self,
-        value_history: List[float],
+        value_history: list[float],
         window: int,
         min_variance: float,
         iteration: int,
@@ -382,7 +382,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
 
     def _check_improvement_convergence(
         self,
-        value_history: List[float],
+        value_history: list[float],
         window: int,
         min_improvement: float,
         iteration: int,
@@ -413,7 +413,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
     def _check_combined_convergence(
         self,
         value: float,
-        value_history: List[float],
+        value_history: list[float],
         threshold: float,
         stability_window: int,
         min_variance: float,
@@ -454,8 +454,8 @@ class ConvergenceCheckerNode(CycleAwareNode):
     def _check_custom_convergence(
         self,
         value: float,
-        value_history: List[float],
-        expression: Optional[str],
+        value_history: list[float],
+        expression: str | None,
         iteration: int,
         **kwargs,
     ) -> tuple[bool, str, dict]:
@@ -511,7 +511,7 @@ class MultiCriteriaConvergenceNode(CycleAwareNode):
         ... )
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for multi-criteria convergence."""
         return {
             "metrics": NodeParameter(
@@ -537,7 +537,7 @@ class MultiCriteriaConvergenceNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Execute multi-criteria convergence checking."""
         metrics = kwargs.get("metrics", {})
 

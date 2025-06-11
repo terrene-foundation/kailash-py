@@ -19,7 +19,7 @@ Key Features:
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -96,7 +96,7 @@ class WorkflowNode(Node):
     - Logs execution progress
     """
 
-    def __init__(self, workflow: Optional[Workflow] = None, **kwargs):
+    def __init__(self, workflow: Workflow | None = None, **kwargs):
         """Initialize the WorkflowNode.
 
         Args:
@@ -138,7 +138,6 @@ class WorkflowNode(Node):
         """
         # Skip parameter validation for WorkflowNode since parameters
         # are dynamically determined from the wrapped workflow
-        pass
 
     def _load_workflow(self):
         """Load workflow from path or dictionary.
@@ -159,11 +158,11 @@ class WorkflowNode(Node):
 
             try:
                 if path.suffix == ".json":
-                    with open(path, "r") as f:
+                    with open(path) as f:
                         data = json.load(f)
                     self._workflow = Workflow.from_dict(data)
                 elif path.suffix in [".yaml", ".yml"]:
-                    with open(path, "r") as f:
+                    with open(path) as f:
                         data = yaml.safe_load(f)
                     self._workflow = Workflow.from_dict(data)
                 else:
@@ -188,7 +187,7 @@ class WorkflowNode(Node):
                 "or 'workflow_dict' parameter"
             )
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters based on workflow entry nodes.
 
         Analyzes the wrapped workflow to determine required inputs:
@@ -257,7 +256,7 @@ class WorkflowNode(Node):
 
         return params
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define output schema based on workflow exit nodes.
 
         Analyzes the wrapped workflow to determine outputs:
@@ -322,7 +321,7 @@ class WorkflowNode(Node):
 
         return output_schema
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the wrapped workflow.
 
         Executes the inner workflow with proper input mapping:
@@ -419,7 +418,7 @@ class WorkflowNode(Node):
             self.logger.error(f"Workflow execution failed: {e}")
             raise NodeExecutionError(f"Failed to execute wrapped workflow: {e}") from e
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert node to dictionary representation.
 
         Serializes the WorkflowNode including its wrapped workflow

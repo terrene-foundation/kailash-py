@@ -1,6 +1,6 @@
 """Test Python code node with explicit input and output schemas."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
@@ -12,7 +12,7 @@ def test_function_with_schemas():
     print("=== Testing Function with Schemas ===\n")
 
     # Define a simple function
-    def process_data(x: int, y: int) -> Dict[str, Any]:
+    def process_data(x: int, y: int) -> dict[str, Any]:
         return {"sum": x + y, "product": x * y, "difference": x - y}
 
     # Define explicit input schema
@@ -81,7 +81,7 @@ def test_class_with_schemas():
         def __init__(self):
             self.count = 0
 
-        def process(self, data: list) -> Dict[str, Any]:
+        def process(self, data: list) -> dict[str, Any]:
             self.count += 1
             return {
                 "length": len(data),
@@ -210,7 +210,7 @@ def test_output_schema_violations():
     """Test output schema validation failures."""
     print("=== Testing Output Schema Violations ===\n")
 
-    def bad_function(x: int) -> Dict[str, Any]:
+    def bad_function(x: int) -> dict[str, Any]:
         # This violates the schema - returns string instead of int
         return {"value": str(x), "doubled": x * 2}  # Wrong type!
 
@@ -236,7 +236,7 @@ def test_output_schema_violations():
         print(f"✓ Correctly caught output type violation: {e}")
 
     # Test missing required output
-    def missing_output(x: int) -> Dict[str, Any]:
+    def missing_output(x: int) -> dict[str, Any]:
         # Missing 'doubled' field
         return {"value": x}
 
@@ -251,7 +251,7 @@ def test_output_schema_violations():
         print(f"✓ Correctly caught missing output: {e}")
 
     # Test invalid type conversion
-    def really_bad_function(x: int) -> Dict[str, Any]:
+    def really_bad_function(x: int) -> dict[str, Any]:
         return {
             "value": [1, 2, 3],  # List instead of int - can't convert
             "doubled": x * 2,
@@ -274,7 +274,7 @@ def test_mixed_schemas():
     """Test node with explicit input schema but automatic output."""
     print("=== Testing Mixed Schema Definitions ===\n")
 
-    def flexible_function(data: list, threshold: float = 0.5) -> Dict[str, Any]:
+    def flexible_function(data: list, threshold: float = 0.5) -> dict[str, Any]:
         filtered = [x for x in data if x > threshold]
         return {
             "filtered": filtered,
@@ -323,7 +323,7 @@ def test_schema_flexibility():
     print("=== Testing Schema Flexibility ===\n")
 
     # Test with None as parameter type (allows any type)
-    def any_type_function(value) -> Dict[str, Any]:
+    def any_type_function(value) -> dict[str, Any]:
         return {"type": type(value).__name__, "value": value}
 
     input_schema = {

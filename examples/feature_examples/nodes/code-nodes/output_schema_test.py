@@ -1,6 +1,6 @@
 """Example demonstrating output schema validation in Kailash nodes."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import NodeValidationError
@@ -16,7 +16,7 @@ class DataProcessorNode(Node):
         tags={"data", "processing", "validation"},
     )
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters."""
         return {
             "data": NodeParameter(
@@ -33,7 +33,7 @@ class DataProcessorNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define output schema for validation."""
         return {
             "result": NodeParameter(
@@ -62,7 +62,7 @@ class DataProcessorNode(Node):
             ),
         }
 
-    def run(self, data: list, operation: str) -> Dict[str, Any]:
+    def run(self, data: list, operation: str) -> dict[str, Any]:
         """Process the data according to the specified operation."""
         if not data:
             raise ValueError("Data list cannot be empty")
@@ -125,10 +125,10 @@ def main():
             name="SimpleNode", description="Simple node without output schema"
         )
 
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {"value": NodeParameter(name="value", type=int, required=True)}
 
-        def run(self, value: int) -> Dict[str, Any]:
+        def run(self, value: int) -> dict[str, Any]:
             return {
                 "result": value * 2,
                 "any_field": "works",
@@ -151,17 +151,17 @@ def main():
             name="TypeConversionNode", description="Demonstrates output type conversion"
         )
 
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {}
 
-        def get_output_schema(self) -> Dict[str, NodeParameter]:
+        def get_output_schema(self) -> dict[str, NodeParameter]:
             return {
                 "integer": NodeParameter(name="integer", type=int, required=True),
                 "string": NodeParameter(name="string", type=str, required=True),
                 "float": NodeParameter(name="float", type=float, required=True),
             }
 
-        def run(self) -> Dict[str, Any]:
+        def run(self) -> dict[str, Any]:
             # Return wrong types that can be converted
             return {
                 "integer": "42",  # String to int

@@ -26,7 +26,7 @@ def create_retry_workflow():
         "api_retry_workflow",
         "Retry API calls with exponential backoff"
     )
-    
+
     # Track retry state
     retry_tracker = PythonCodeNode(
         name="retry_tracker",
@@ -52,7 +52,7 @@ result = retry_state
 '''
     )
     cycle_builder.add_cycle_node("retry_tracker", retry_tracker)
-    
+
     # API call attempt
     api_caller = RestClientNode(
         id="api_caller",
@@ -60,14 +60,14 @@ result = retry_state
         timeout=5000
     )
     cycle_builder.add_cycle_node("api_caller", api_caller)
-    
+
     # Check if successful or should retry
     retry_decider = SwitchNode(
         id="retry_decider",
         condition="status_code == 200 or attempt >= max_retries"
     )
     cycle_builder.add_cycle_node("retry_decider", retry_decider)
-    
+
     # Wait before retry
     wait_handler = PythonCodeNode(
         name="wait_handler",
@@ -83,23 +83,23 @@ result = {'waited': wait_time, 'ready_to_retry': True}
 '''
     )
     cycle_builder.add_cycle_node("wait_handler", wait_handler)
-    
+
     # Connect the retry cycle
     cycle_builder.connect_cycle_nodes("retry_tracker", "api_caller",
                                      mapping={"result": "retry_state"})
     cycle_builder.connect_cycle_nodes("api_caller", "retry_decider",
                                      mapping={"response": "api_response"})
-    
+
     # Exit on success or max retries
     cycle_builder.set_cycle_exit_condition("retry_decider", exit_on="true_output")
-    
+
     # Continue cycle on failure
     cycle_builder.connect_cycle_nodes("retry_decider", "wait_handler",
                                      output_key="false_output",
                                      mapping={"retry_state": "retry_state"})
     cycle_builder.connect_cycle_nodes("wait_handler", "retry_tracker",
                                      mapping={"result": "wait_result"})
-    
+
     return workflow
 ```
 
@@ -114,7 +114,7 @@ def create_optimization_workflow():
         "optimization_workflow",
         "Gradient descent optimization"
     )
-    
+
     # Initialize optimization state
     initializer = PythonCodeNode(
         name="initializer",
@@ -144,7 +144,7 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("initializer", initializer)
-    
+
     # Compute gradient and loss
     gradient_computer = PythonCodeNode(
         name="gradient_computer",
@@ -170,7 +170,7 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("gradient_computer", gradient_computer)
-    
+
     # Update parameters
     parameter_updater = PythonCodeNode(
         name="parameter_updater",
@@ -208,14 +208,14 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("parameter_updater", parameter_updater)
-    
+
     # Check convergence
     convergence_checker = SwitchNode(
         id="convergence_checker",
         condition="abs(loss - best_loss) < 0.001 or iteration >= 1000"
     )
     cycle_builder.add_cycle_node("convergence_checker", convergence_checker)
-    
+
     # Connect optimization cycle
     cycle_builder.connect_cycle_nodes("initializer", "gradient_computer",
                                      mapping={"result": "current_state"})
@@ -223,18 +223,18 @@ result = {
                                      mapping={"result": "gradient_result"})
     cycle_builder.connect_cycle_nodes("parameter_updater", "convergence_checker",
                                      mapping={"result": "updated_state"})
-    
+
     # Exit when converged
     cycle_builder.set_cycle_exit_condition("convergence_checker", exit_on="true_output")
-    
+
     # Continue optimization if not converged
     cycle_builder.connect_cycle_nodes("convergence_checker", "initializer",
                                      output_key="false_output",
                                      mapping={"updated_state": "cycle_state"})
-    
+
     # Set maximum iterations
     cycle_builder.set_max_iterations(1000)
-    
+
     return workflow
 ```
 
@@ -249,7 +249,7 @@ def create_state_machine_workflow():
         "order_state_machine",
         "Order processing with state transitions"
     )
-    
+
     # State manager
     state_manager = PythonCodeNode(
         name="state_manager",
@@ -289,7 +289,7 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("state_manager", state_manager)
-    
+
     # State processor - handles business logic for each state
     state_processor = PythonCodeNode(
         name="state_processor",
@@ -319,7 +319,7 @@ elif current_state == 'payment_pending':
     payment_success = random.random() > 0.1  # 90% success rate
     new_state = 'paid' if payment_success else 'payment_failed'
     state_metadata['payment_attempt'] = datetime.now().isoformat()
-    
+
     if payment_success:
         state_metadata['payment_id'] = f"PAY-{random.randint(1000, 9999)}"
 
@@ -333,7 +333,7 @@ elif current_state == 'processing':
     processing_success = random.random() > 0.05  # 95% success rate
     new_state = 'shipped' if processing_success else 'failed'
     state_metadata['processed_at'] = datetime.now().isoformat()
-    
+
     if processing_success:
         state_metadata['tracking_number'] = f"TRACK-{random.randint(100000, 999999)}"
 
@@ -369,31 +369,31 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("state_processor", state_processor)
-    
+
     # Terminal state checker
     terminal_checker = SwitchNode(
         id="terminal_checker",
         condition="new_state == 'completed'"
     )
     cycle_builder.add_cycle_node("terminal_checker", terminal_checker)
-    
+
     # Connect state machine cycle
     cycle_builder.connect_cycle_nodes("state_manager", "state_processor",
                                      mapping={"result": "state_info"})
     cycle_builder.connect_cycle_nodes("state_processor", "terminal_checker",
                                      mapping={"result": "process_result"})
-    
+
     # Exit when terminal state reached
     cycle_builder.set_cycle_exit_condition("terminal_checker", exit_on="true_output")
-    
+
     # Continue cycle if not terminal
     cycle_builder.connect_cycle_nodes("terminal_checker", "state_manager",
                                      output_key="false_output",
                                      mapping={"updated_order": "order"})
-    
+
     # Safety limit
     cycle_builder.set_max_iterations(20)
-    
+
     return workflow
 ```
 
@@ -408,7 +408,7 @@ def create_feedback_learning_workflow():
         "feedback_learning",
         "Adaptive recommendation system"
     )
-    
+
     # Recommendation generator
     recommender = PythonCodeNode(
         name="recommender",
@@ -442,7 +442,7 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("recommender", recommender)
-    
+
     # Simulate user interaction and feedback
     feedback_collector = PythonCodeNode(
         name="feedback_collector",
@@ -459,7 +459,7 @@ for item_id in recommendations:
     score = recommendation_data['scores'][item_id]
     click_probability = 1 / (1 + np.exp(-score))  # Sigmoid
     clicked = random.random() < click_probability
-    
+
     feedback.append({
         'item_id': item_id,
         'clicked': clicked,
@@ -475,7 +475,7 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("feedback_collector", feedback_collector)
-    
+
     # Update model based on feedback
     model_updater = PythonCodeNode(
         name="model_updater",
@@ -493,11 +493,11 @@ for fb in feedback:
     item_id = fb['item_id']
     clicked = fb['clicked']
     predicted = fb['probability']
-    
+
     # Gradient of log loss
     error = clicked - predicted
     gradient = np.outer(user_features, np.eye(5)[item_id]) * error
-    
+
     # Update weights
     model_weights += learning_rate * gradient
 
@@ -524,14 +524,14 @@ result = {
 '''
     )
     cycle_builder.add_cycle_node("model_updater", model_updater)
-    
+
     # Convergence checker
     convergence_checker = SwitchNode(
         id="convergence_checker",
         condition="recent_performance > 0.7 or iteration >= 100"
     )
     cycle_builder.add_cycle_node("convergence_checker", convergence_checker)
-    
+
     # Connect feedback loop
     cycle_builder.connect_cycle_nodes("recommender", "feedback_collector",
                                      mapping={"result": "recommendation_data"})
@@ -539,15 +539,15 @@ result = {
                                      mapping={"result": "feedback_data"})
     cycle_builder.connect_cycle_nodes("model_updater", "convergence_checker",
                                      mapping={"result": "updated_model"})
-    
+
     # Exit when performance is good enough
     cycle_builder.set_cycle_exit_condition("convergence_checker", exit_on="true_output")
-    
+
     # Continue learning
     cycle_builder.connect_cycle_nodes("convergence_checker", "recommender",
                                      output_key="false_output",
                                      mapping={"updated_model": "learning_state"})
-    
+
     return workflow
 ```
 
@@ -614,8 +614,8 @@ print(f"Avg iteration time: {profiler_data['avg_iteration_time']}")
 ```python
 # GOOD: Multiple termination conditions
 condition = """
-converged or 
-iteration >= max_iterations or 
+converged or
+iteration >= max_iterations or
 time_elapsed > max_time or
 no_improvement_count > patience
 """

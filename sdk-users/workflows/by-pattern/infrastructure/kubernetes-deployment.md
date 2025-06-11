@@ -386,7 +386,7 @@ resources:
 
 commonLabels:
   app: kailash-workflow
-  
+
 configMapGenerator:
   - name: workflow-config
     files:
@@ -416,7 +416,7 @@ secretGenerator:
   - name: workflow-secrets
     envs:
       - secrets.env
-      
+
 namespace: production
 """
 

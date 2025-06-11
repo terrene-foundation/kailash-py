@@ -197,7 +197,7 @@ class TestCSVWriterNode:
         assert result["rows_written"] == 2
 
         # Verify file contents
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             assert len(rows) == 2
@@ -213,7 +213,7 @@ class TestCSVWriterNode:
         node.execute()
 
         # Should auto-detect fieldnames from first row
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             assert len(rows) == 2
@@ -226,7 +226,7 @@ class TestCSVWriterNode:
         node = CSVWriterNode(file_path=str(csv_path), data=data, delimiter="\t")
         node.execute()
 
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             content = f.read()
             assert "\t" in content
 
@@ -240,7 +240,6 @@ class TestCSVWriterNode:
         try:
             node.execute()
             # Successfully handled empty data - that's acceptable
-            pass
         except NodeValidationError:
             # This is also acceptable behavior for empty data
             pass
@@ -267,7 +266,7 @@ class TestJSONWriterNode:
         assert result["file_path"] == str(json_path)
 
         # Verify file contents
-        with open(json_path, "r") as f:
+        with open(json_path) as f:
             saved_data = json.load(f)
             assert saved_data == data
 
@@ -279,7 +278,7 @@ class TestJSONWriterNode:
         node = JSONWriterNode(file_path=str(json_path), data=data)
         node.execute()
 
-        with open(json_path, "r") as f:
+        with open(json_path) as f:
             saved_data = json.load(f)
             assert saved_data == data
 
@@ -291,7 +290,7 @@ class TestJSONWriterNode:
         node = JSONWriterNode(file_path=str(json_path), data=data, indent=2)
         node.execute()
 
-        with open(json_path, "r") as f:
+        with open(json_path) as f:
             content = f.read()
             # Pretty printed JSON should have newlines and indentation
             assert "\n" in content
@@ -307,7 +306,7 @@ class TestJSONWriterNode:
         )
         node.execute()
 
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             saved_data = json.load(f)
             assert saved_data == data
 
@@ -326,7 +325,7 @@ class TestTextWriterNode:
         assert result["file_path"] == str(text_path)
         assert result["bytes_written"] == len(content.encode())
 
-        with open(text_path, "r") as f:
+        with open(text_path) as f:
             saved_content = f.read()
             assert saved_content == content
 
@@ -338,7 +337,7 @@ class TestTextWriterNode:
         node = TextWriterNode(file_path=str(text_path), text=content, encoding="utf-8")
         node.execute()
 
-        with open(text_path, "r", encoding="utf-8") as f:
+        with open(text_path, encoding="utf-8") as f:
             saved_content = f.read()
             assert saved_content == content
 
@@ -364,6 +363,6 @@ class TestTextWriterNode:
         node = TextWriterNode(file_path=str(text_path), text="New content")
         node.execute()
 
-        with open(text_path, "r") as f:
+        with open(text_path) as f:
             content = f.read()
             assert content == "New content"

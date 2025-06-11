@@ -15,7 +15,7 @@ Key Features Demonstrated:
 - Backward compatibility with existing connect() API (with deprecation warning)
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
@@ -50,13 +50,13 @@ class ProcessorNode(Node):
             ),
         }
 
-    def run(self, context: Any = None, **inputs) -> Dict[str, Any]:
+    def run(self, context: Any = None, **inputs) -> dict[str, Any]:
         """Run method required by Node base class."""
         return self.execute(**inputs)
 
     def execute(
         self, value: float = 0.0, target: float = 10.0, iteration: int = 0
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Process value towards target."""
         # Simple improvement logic
         if value < target:

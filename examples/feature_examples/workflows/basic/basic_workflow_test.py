@@ -13,7 +13,7 @@ This is a typical ETL (Extract, Transform, Load) pattern.
 
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -34,7 +34,7 @@ from kailash.workflow.visualization import WorkflowVisualizer
 def create_data_transformer():
     """Create a Python node for data transformation."""
 
-    def transform_data(data: list) -> Dict[str, Any]:
+    def transform_data(data: list) -> dict[str, Any]:
         """Transform customer data by adding a tier field."""
         df = pd.DataFrame(data)
 

@@ -1,6 +1,6 @@
 """Tests for workflow graph module."""
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -19,15 +19,15 @@ class MockNode(Node):
         self.name = name or node_id
         self.config = kwargs
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Get node parameters."""
         return {}
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Run node."""
         return {"output": "test"}
 
-    def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, data: dict[str, Any]) -> dict[str, Any]:
         """Process data."""
         return {"value": data.get("value", 0) * 2}
 
@@ -38,9 +38,12 @@ original_get = NodeRegistry.get
 
 def mock_get(node_type: str):
     """Mock node registry getter."""
-    if node_type == "MockNode":
-        return MockNode
-    elif node_type in ["DataReader", "DataWriter", "Processor", "Merger"]:
+    if node_type == "MockNode" or node_type in [
+        "DataReader",
+        "DataWriter",
+        "Processor",
+        "Merger",
+    ]:
         return MockNode
     return original_get(node_type)
 

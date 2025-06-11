@@ -53,15 +53,15 @@ result = {'mean': mean_value, 'count': len(df)}
 def process_data(input_data: dict, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
     import pandas as pd
-    
+
     # Process the input data
     data = input_data.get('data', [])
     df = pd.DataFrame(data)
-    
+
     # Calculate statistics
     mean_value = df['value'].mean()
     result = {'mean': mean_value, 'count': len(df)}
-    
+
     return result
 
 processor = PythonCodeNode.from_function(

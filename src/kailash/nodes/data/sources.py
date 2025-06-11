@@ -1,6 +1,6 @@
 """Data source nodes for providing input data to workflows."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -9,7 +9,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 class DocumentSourceNode(Node):
     """Provides sample documents for hierarchical RAG processing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "sample_documents": NodeParameter(
                 name="sample_documents",
@@ -20,7 +20,7 @@ class DocumentSourceNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         # Sample documents for demonstration
         documents = [
             {
@@ -48,7 +48,7 @@ class DocumentSourceNode(Node):
 class QuerySourceNode(Node):
     """Provides sample queries for RAG processing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "query": NodeParameter(
                 name="query",
@@ -59,7 +59,7 @@ class QuerySourceNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         query = kwargs.get("query", "What are the main types of machine learning?")
         print(f"Debug QuerySource: providing query='{query}'")
         return {"query": query}

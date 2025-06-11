@@ -51,10 +51,11 @@ Future Enhancements:
 
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -136,11 +137,11 @@ class UserContext:
     user_id: str
     tenant_id: str
     email: str
-    roles: List[str] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
-    attributes: Dict[str, Any] = field(default_factory=dict)  # Custom attributes
-    session_id: Optional[str] = None
-    ip_address: Optional[str] = None
+    roles: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+    attributes: dict[str, Any] = field(default_factory=dict)  # Custom attributes
+    session_id: str | None = None
+    ip_address: str | None = None
 
 
 @dataclass
@@ -195,21 +196,21 @@ class PermissionRule:
     id: str
     resource_type: str  # "workflow" or "node"
     resource_id: str  # workflow_id or node_id
-    permission: Union[WorkflowPermission, NodePermission]
+    permission: WorkflowPermission | NodePermission
     effect: PermissionEffect
 
     # Who does this apply to?
-    user_id: Optional[str] = None  # Specific user
-    role: Optional[str] = None  # Any user with role
-    tenant_id: Optional[str] = None  # All users in tenant
+    user_id: str | None = None  # Specific user
+    role: str | None = None  # Any user with role
+    tenant_id: str | None = None  # All users in tenant
 
     # Conditions
-    conditions: Dict[str, Any] = field(default_factory=dict)
+    conditions: dict[str, Any] = field(default_factory=dict)
 
     # Metadata
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    created_by: Optional[str] = None
-    expires_at: Optional[datetime] = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_by: str | None = None
+    expires_at: datetime | None = None
     priority: int = 0  # Higher priority rules evaluated first
 
 
@@ -262,17 +263,17 @@ class AccessDecision:
 
     allowed: bool
     reason: str
-    applied_rules: List[PermissionRule] = field(default_factory=list)
-    conditions_met: Dict[str, bool] = field(default_factory=dict)
-    masked_fields: List[str] = field(default_factory=list)  # Fields to mask in output
-    redirect_node: Optional[str] = None  # Alternative node to execute
+    applied_rules: list[PermissionRule] = field(default_factory=list)
+    conditions_met: dict[str, bool] = field(default_factory=dict)
+    masked_fields: list[str] = field(default_factory=list)  # Fields to mask in output
+    redirect_node: str | None = None  # Alternative node to execute
 
 
 class ConditionEvaluator:
     """Evaluates conditions for conditional permissions"""
 
     def __init__(self):
-        self.evaluators: Dict[str, Callable] = {
+        self.evaluators: dict[str, Callable] = {
             "time_range": self._eval_time_range,
             "data_contains": self._eval_data_contains,
             "user_attribute": self._eval_user_attribute,
@@ -281,7 +282,7 @@ class ConditionEvaluator:
         }
 
     def evaluate(
-        self, condition_type: str, condition_value: Any, context: Dict[str, Any]
+        self, condition_type: str, condition_value: Any, context: dict[str, Any]
     ) -> bool:
         """Evaluate a condition"""
         evaluator = self.evaluators.get(condition_type)
@@ -295,7 +296,7 @@ class ConditionEvaluator:
             logger.error(f"Error evaluating condition {condition_type}: {e}")
             return False
 
-    def _eval_time_range(self, value: Dict[str, str], context: Dict[str, Any]) -> bool:
+    def _eval_time_range(self, value: dict[str, str], context: dict[str, Any]) -> bool:
         """Check if current time is within range"""
         from datetime import datetime, time
 
@@ -305,7 +306,7 @@ class ConditionEvaluator:
         return start <= now <= end
 
     def _eval_data_contains(
-        self, value: Dict[str, Any], context: Dict[str, Any]
+        self, value: dict[str, Any], context: dict[str, Any]
     ) -> bool:
         """Check if data contains specific values"""
         data = context.get("data", {})
@@ -317,7 +318,7 @@ class ConditionEvaluator:
         return False
 
     def _eval_user_attribute(
-        self, value: Dict[str, Any], context: Dict[str, Any]
+        self, value: dict[str, Any], context: dict[str, Any]
     ) -> bool:
         """Check user attributes"""
         user = context.get("user")
@@ -329,7 +330,7 @@ class ConditionEvaluator:
 
         return user.attributes.get(attr_name) == expected
 
-    def _eval_ip_range(self, value: Dict[str, Any], context: Dict[str, Any]) -> bool:
+    def _eval_ip_range(self, value: dict[str, Any], context: dict[str, Any]) -> bool:
         """Check if IP is in allowed range"""
         # Simplified IP check - in production use ipaddress module
         allowed_ips = value.get("allowed", [])
@@ -337,7 +338,7 @@ class ConditionEvaluator:
 
         return user_ip in allowed_ips
 
-    def _eval_custom(self, value: Dict[str, Any], context: Dict[str, Any]) -> bool:
+    def _eval_custom(self, value: dict[str, Any], context: dict[str, Any]) -> bool:
         """Evaluate custom condition"""
         # This would call a custom function registered by the user
         return True
@@ -409,7 +410,7 @@ class AccessControlManager:
 
     def __init__(self, enabled: bool = False):
         self.enabled = enabled  # Disabled by default
-        self.rules: List[PermissionRule] = []
+        self.rules: list[PermissionRule] = []
         self.condition_evaluator = ConditionEvaluator()
         self._cache = {}  # Cache access decisions
         self._cache_lock = threading.Lock()
@@ -458,7 +459,7 @@ class AccessControlManager:
         user: UserContext,
         node_id: str,
         permission: NodePermission,
-        runtime_context: Dict[str, Any] = None,
+        runtime_context: dict[str, Any] = None,
     ) -> AccessDecision:
         """Check if user has permission on node"""
         cache_key = f"node:{node_id}:{user.user_id}:{permission.value}"
@@ -494,7 +495,7 @@ class AccessControlManager:
 
     def get_accessible_nodes(
         self, user: UserContext, workflow_id: str, permission: NodePermission
-    ) -> Set[str]:
+    ) -> set[str]:
         """Get all nodes user can access in a workflow"""
         accessible = set()
 
@@ -518,9 +519,9 @@ class AccessControlManager:
         self,
         user: UserContext,
         conditional_node_id: str,
-        true_path_nodes: List[str],
-        false_path_nodes: List[str],
-    ) -> List[str]:
+        true_path_nodes: list[str],
+        false_path_nodes: list[str],
+    ) -> list[str]:
         """Determine which path user should take based on permissions"""
         # Check if user has access to nodes in true path
         true_path_accessible = all(
@@ -544,8 +545,8 @@ class AccessControlManager:
                 return []
 
     def mask_node_output(
-        self, user: UserContext, node_id: str, output: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, user: UserContext, node_id: str, output: dict[str, Any]
+    ) -> dict[str, Any]:
         """Mask sensitive fields in node output"""
         decision = self.check_node_access(user, node_id, NodePermission.READ_OUTPUT)
 
@@ -568,8 +569,8 @@ class AccessControlManager:
         user: UserContext,
         resource_type: str,
         resource_id: str,
-        permission: Union[WorkflowPermission, NodePermission],
-        runtime_context: Dict[str, Any],
+        permission: WorkflowPermission | NodePermission,
+        runtime_context: dict[str, Any],
     ) -> AccessDecision:
         """Evaluate all applicable rules"""
         applicable_rules = []
@@ -584,7 +585,7 @@ class AccessControlManager:
             ):
 
                 # Check expiration
-                if rule.expires_at and rule.expires_at < datetime.now(timezone.utc):
+                if rule.expires_at and rule.expires_at < datetime.now(UTC):
                     continue
 
                 applicable_rules.append(rule)
@@ -593,7 +594,7 @@ class AccessControlManager:
         context = {
             "user": user,
             "runtime": runtime_context,
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
         }
 
         final_effect = PermissionEffect.DENY  # Default deny
@@ -660,7 +661,7 @@ class AccessControlManager:
         user: UserContext,
         resource_type: str,
         resource_id: str,
-        permission: Union[WorkflowPermission, NodePermission],
+        permission: WorkflowPermission | NodePermission,
         decision: AccessDecision,
     ):
         """Log access attempt for audit"""

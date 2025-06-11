@@ -47,20 +47,25 @@ class YourNode(Node):
                 description='Description'
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         return {'result': kwargs['param']}
 ```
 
 ### PythonCodeNode (Best Practices)
 
-**🚀 DEFAULT: Use `.from_function()` for code > 3 lines**
+**⚠️ MOST COMMON MISTAKE: Not using from_function for complex code**
+*"This mistake keeps occurring every new run" - Session 064*
+
+**🚀 MANDATORY: Use `.from_function()` for code > 3 lines**
 ```python
-# BEST: Function-based for IDE support
+# ✅ ALWAYS use from_function for complex logic:
 def process_files(input_data: dict) -> dict:
     """Full IDE support: highlighting, completion, debugging!"""
     files = input_data.get("files", [])
-    return {"processed": len(files), "status": "complete"}
+    # Complex processing with IDE support
+    processed = [transform(f) for f in files]
+    return {"result": processed, "count": len(processed)}
 
 processor = PythonCodeNode.from_function(
     func=process_files,

@@ -13,7 +13,7 @@ These templates can be used:
 """
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 # ============================================================================
 # PYTHON-BASED CUSTOM NODES
@@ -408,7 +408,7 @@ def create_custom_node_examples():
     return examples
 
 
-def print_node_summary(node_template: Dict[str, Any]):
+def print_node_summary(node_template: dict[str, Any]):
     """Print a summary of a node template"""
     print(f"\nNode: {node_template['name']}")
     print(f"Type: {node_template['implementation_type']}")

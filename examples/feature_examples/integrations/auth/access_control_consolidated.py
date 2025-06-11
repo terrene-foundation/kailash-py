@@ -56,7 +56,7 @@ import hashlib
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from examples.utils.data_paths import (
     ensure_output_dir_exists,
@@ -189,10 +189,7 @@ def hr_exporter(data=None):
     import json
 
     # Ensure outputs directory exists
-    from examples.utils.data_paths import (
-        ensure_output_dir_exists,
-        get_output_data_path,
-    )
+    from examples.utils.data_paths import ensure_output_dir_exists, get_output_data_path
 
     ensure_output_dir_exists()
 
@@ -353,8 +350,8 @@ class SimpleJWTAuth:
         self.tokens = {}
 
     def register_user(
-        self, email: str, password: str, roles: List[str], tenant_id: str
-    ) -> Dict[str, Any]:
+        self, email: str, password: str, roles: list[str], tenant_id: str
+    ) -> dict[str, Any]:
         """Register a new user"""
         user_id = f"user_{len(self.users_db) + 1}"
         password_hash = hashlib.sha256(
@@ -373,7 +370,7 @@ class SimpleJWTAuth:
         self.users_db[email] = user
         return {"user_id": user_id, "email": email, "tenant_id": tenant_id}
 
-    def login(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+    def login(self, email: str, password: str) -> dict[str, Any] | None:
         """Authenticate user and generate token"""
         user = self.users_db.get(email)
         if not user:
@@ -402,7 +399,7 @@ class SimpleJWTAuth:
         self.tokens[token] = token_data
         return token_data
 
-    def verify_token(self, token: str) -> Optional[UserContext]:
+    def verify_token(self, token: str) -> UserContext | None:
         """Verify token and return user context"""
         token_data = self.tokens.get(token)
         if not token_data:

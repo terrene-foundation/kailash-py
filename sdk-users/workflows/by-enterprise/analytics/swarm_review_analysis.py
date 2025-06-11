@@ -28,7 +28,6 @@ Prerequisites:
 import os
 import time
 from pathlib import Path
-from typing import Dict, List
 
 from kailash import Workflow
 from kailash.nodes.ai.self_organizing import (
@@ -42,7 +41,7 @@ from kailash.nodes.mcp import MCPClient
 from kailash.runtime import LocalRuntime
 
 
-def create_specialist_agents() -> List[Dict]:
+def create_specialist_agents() -> list[dict]:
     """Define the pool of specialist agents with diverse capabilities."""
     return [
         # Research specialists

@@ -23,7 +23,7 @@ Downstream Consumers:
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,8 +51,8 @@ class PerformanceVisualizer:
         self.logger = logger
 
     def create_run_performance_summary(
-        self, run_id: str, output_dir: Optional[Path] = None
-    ) -> Dict[str, Path]:
+        self, run_id: str, output_dir: Path | None = None
+    ) -> dict[str, Path]:
         """Create comprehensive performance summary for a workflow run.
 
         Args:
@@ -112,7 +112,7 @@ class PerformanceVisualizer:
         return outputs
 
     def _create_execution_timeline(
-        self, tasks: List[TaskRun], output_path: Path
+        self, tasks: list[TaskRun], output_path: Path
     ) -> Path:
         """Create Gantt-style execution timeline."""
         fig, ax = plt.subplots(figsize=(12, max(6, len(tasks) * 0.5)))
@@ -210,7 +210,7 @@ class PerformanceVisualizer:
         return output_path
 
     def _create_resource_usage_chart(
-        self, tasks: List[TaskRun], output_path: Path
+        self, tasks: list[TaskRun], output_path: Path
     ) -> Path:
         """Create resource usage comparison chart."""
         fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12))
@@ -258,7 +258,7 @@ class PerformanceVisualizer:
         ax1.grid(True, axis="y", alpha=0.3)
 
         # Add value labels
-        for bar, value in zip(bars1, cpu_usage):
+        for bar, value in zip(bars1, cpu_usage, strict=False):
             if value > 0:
                 ax1.text(
                     bar.get_x() + bar.get_width() / 2,
@@ -295,7 +295,7 @@ class PerformanceVisualizer:
         ax3.grid(True, axis="y", alpha=0.3)
 
         # Add value labels
-        for bar, value in zip(bars3, durations):
+        for bar, value in zip(bars3, durations, strict=False):
             if value > 0:
                 ax3.text(
                     bar.get_x() + bar.get_width() / 2,
@@ -314,7 +314,7 @@ class PerformanceVisualizer:
         return output_path
 
     def _create_node_performance_comparison(
-        self, tasks: List[TaskRun], output_path: Path
+        self, tasks: list[TaskRun], output_path: Path
     ) -> Path:
         """Create performance comparison radar chart."""
         # Group tasks by node type
@@ -385,7 +385,9 @@ class PerformanceVisualizer:
 
         colors = plt.cm.tab10(np.linspace(0, 1, len(avg_metrics)))
 
-        for (node_type, metrics), color in zip(avg_metrics.items(), colors):
+        for (node_type, metrics), color in zip(
+            avg_metrics.items(), colors, strict=False
+        ):
             values = list(metrics.values())
 
             # Normalize values to 0-100 scale for better visualization
@@ -404,7 +406,7 @@ class PerformanceVisualizer:
             }
 
             normalized_values = []
-            for cat, val in zip(categories, values):
+            for cat, val in zip(categories, values, strict=False):
                 normalized_values.append((val / max_vals[cat]) * 100)
 
             normalized_values += normalized_values[:1]
@@ -435,7 +437,7 @@ class PerformanceVisualizer:
 
         return output_path
 
-    def _create_io_analysis(self, tasks: List[TaskRun], output_path: Path) -> Path:
+    def _create_io_analysis(self, tasks: list[TaskRun], output_path: Path) -> Path:
         """Create I/O operations analysis chart."""
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
@@ -543,7 +545,7 @@ class PerformanceVisualizer:
         return output_path
 
     def _create_performance_heatmap(
-        self, tasks: List[TaskRun], output_path: Path
+        self, tasks: list[TaskRun], output_path: Path
     ) -> Path:
         """Create performance metrics heatmap."""
         # Prepare data matrix
@@ -636,7 +638,7 @@ class PerformanceVisualizer:
         return output_path
 
     def _create_performance_report(
-        self, run: Any, tasks: List[TaskRun], output_path: Path
+        self, run: Any, tasks: list[TaskRun], output_path: Path
     ) -> Path:
         """Create markdown performance report."""
         lines = []
@@ -718,9 +720,7 @@ class PerformanceVisualizer:
 
         return output_path
 
-    def compare_runs(
-        self, run_ids: List[str], output_path: Optional[Path] = None
-    ) -> Path:
+    def compare_runs(self, run_ids: list[str], output_path: Path | None = None) -> Path:
         """Compare performance across multiple runs."""
         if output_path is None:
             # Use centralized output directory

@@ -55,7 +55,6 @@ class TestWorkflowExporter:
         except Exception as e:
             # For now, just log the error - export may not be fully implemented
             print(f"Export error (expected): {e}")
-            pass
 
     def test_exporter_error_handling(self):
         """Test error handling in exporter."""

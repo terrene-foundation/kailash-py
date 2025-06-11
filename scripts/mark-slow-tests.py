@@ -109,7 +109,7 @@ def find_slow_tests():
 def mark_file_slow_tests(filepath, slow_methods):
     """Mark slow tests in a single file."""
     try:
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             source = f.read()
 
         tree = ast.parse(source)

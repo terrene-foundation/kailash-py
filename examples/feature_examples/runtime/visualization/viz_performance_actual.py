@@ -8,7 +8,7 @@ This example runs workflows and visualizes the actual collected performance metr
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from examples.utils.paths import get_output_dir
 
@@ -30,7 +30,7 @@ def create_test_workflow():
     workflow = Workflow(workflow_id="test_workflow", name="Test Performance Workflow")
 
     # Node 1: Fast I/O operation
-    def read_data(size: int = 50) -> Dict[str, Any]:
+    def read_data(size: int = 50) -> dict[str, Any]:
         """Simulate data reading."""
         data = [{"id": i, "value": i * 10} for i in range(size)]
         time.sleep(0.1)  # I/O delay
@@ -51,7 +51,7 @@ def create_test_workflow():
     )
 
     # Node 2: CPU intensive
-    def process_data(data: list) -> Dict[str, Any]:
+    def process_data(data: list) -> dict[str, Any]:
         """CPU intensive processing."""
         result = []
         for item in data:
@@ -77,7 +77,7 @@ def create_test_workflow():
     )
 
     # Node 3: Memory intensive
-    def transform_data(data: list) -> Dict[str, Any]:
+    def transform_data(data: list) -> dict[str, Any]:
         """Memory intensive transformation."""
         # Create copies
         copies = [data.copy() for _ in range(50)]
@@ -104,7 +104,7 @@ def create_test_workflow():
     )
 
     # Node 4: Aggregator
-    def aggregate_data(data: list) -> Dict[str, Any]:
+    def aggregate_data(data: list) -> dict[str, Any]:
         """Aggregate results."""
         total = sum(item["value"] for item in data)
         count = len(data)

@@ -1,7 +1,7 @@
 """Tests for local runtime execution module."""
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -22,7 +22,7 @@ class MockNode(Node):
             "value": NodeParameter(name="value", type=int, required=False, default=0)
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Process data."""
         value = kwargs.get("value", 0)
         multiplier = self.config.get("multiplier", 2)
@@ -40,7 +40,7 @@ class ErrorNode(Node):
             "value": NodeParameter(name="value", type=int, required=False, default=0)
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Process data."""
         raise ValueError("Processing error")
 
@@ -56,7 +56,7 @@ class SlowNode(Node):
             "value": NodeParameter(name="value", type=int, required=False, default=0)
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Process data slowly."""
         time.sleep(0.1)  # Simulate slow processing
         value = kwargs.get("value", 0)

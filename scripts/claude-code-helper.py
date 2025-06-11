@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -36,7 +36,7 @@ class ClaudeCodeHelper:
             "status_change": r"status:\s*(pending|in.?progress|completed|blocked)",
         }
 
-    def parse_response(self, response: str) -> Dict[str, Any]:
+    def parse_response(self, response: str) -> dict[str, Any]:
         """Parse Claude Code response to extract actionable items."""
         actions = {
             "branches": [],
@@ -109,7 +109,7 @@ class ClaudeCodeHelper:
 
         return "Auto-generated from Claude Code response"
 
-    def execute_actions(self, actions: Dict[str, Any], dry_run: bool = False):
+    def execute_actions(self, actions: dict[str, Any], dry_run: bool = False):
         """Execute parsed actions."""
         results = []
 
@@ -159,7 +159,7 @@ class ClaudeCodeHelper:
 
         return results
 
-    def format_for_terminal(self, actions: Dict[str, Any]) -> str:
+    def format_for_terminal(self, actions: dict[str, Any]) -> str:
         """Format actions for terminal display."""
         output = []
 
@@ -196,13 +196,13 @@ def main():
 Examples:
   # Parse Claude response from stdin
   echo "Create branch feat/new-feature" | claude-code-helper.py
-  
+
   # Parse from file
   claude-code-helper.py response.txt
-  
+
   # Execute parsed commands
   claude-code-helper.py --execute response.txt
-  
+
   # Dry run to see what would happen
   claude-code-helper.py --dry-run --execute response.txt
         """,
@@ -233,7 +233,7 @@ Examples:
 
     # Read input
     if args.input and Path(args.input).exists():
-        with open(args.input, "r") as f:
+        with open(args.input) as f:
             response = f.read()
     elif args.input:
         response = args.input

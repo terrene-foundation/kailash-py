@@ -39,7 +39,8 @@
 - 🔁 **Cyclic Workflows (v0.2.0)**: Universal Hybrid Cyclic Graph Architecture with 30,000+ iterations/second performance
 - 🛠️ **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler for production-ready cyclic workflows
 - 📈 **High Performance**: Optimized execution engine supporting 100,000+ iteration workflows
-- 📁 **Enhanced Documentation (v0.2.2)**: Reorganized structure with production-ready workflow library
+- 📁 **Complete Finance Workflow Library (v0.3.1)**: Production-ready financial workflows with AI analysis
+- 💼 **Enterprise Workflow Patterns**: Credit risk, portfolio optimization, trading signals, fraud detection
 
 ## 🎯 Who Is This For?
 
@@ -127,6 +128,52 @@ from kailash.utils.export import export_workflow
 export_workflow(workflow, "customer_analysis.yaml")
 ```
 
+## 💼 Finance Workflow Library (New in v0.3.1)
+
+Complete production-ready financial workflows using AI and modern quantitative methods:
+
+### Credit Risk Assessment
+
+```python
+from kailash.workflow import Workflow
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.ai import LLMAgentNode
+
+def calculate_risk_metrics(customers, transactions):
+    """Calculate comprehensive risk metrics."""
+    # Modern risk scoring with AI analysis
+    # 100+ lines of production risk calculation
+    return {"result": risk_scores}
+
+workflow = Workflow("credit-risk", "Credit Risk Assessment")
+workflow.add_node("customer_reader", CSVReaderNode())
+workflow.add_node("risk_calculator", PythonCodeNode.from_function(func=calculate_risk_metrics))
+workflow.add_node("ai_analyzer", LLMAgentNode(model="gpt-4",
+    system_prompt="You are a financial risk expert..."))
+```
+
+### Portfolio Optimization
+
+```python
+def optimize_portfolio(holdings, market_data, risk_profile="moderate"):
+    """Modern Portfolio Theory optimization with rebalancing."""
+    # Sharpe ratio optimization, correlation analysis
+    # Risk-adjusted returns with AI market insights
+    return {"result": optimization_plan}
+
+workflow = Workflow("portfolio-opt", "Portfolio Optimization")
+workflow.add_node("optimizer", PythonCodeNode.from_function(func=optimize_portfolio))
+# Generates rebalancing trades, risk metrics, AI market analysis
+```
+
+### Trading Signals & Fraud Detection
+
+- **Trading Signals**: Technical indicators (RSI, MACD, Bollinger Bands) + AI sentiment
+- **Fraud Detection**: Real-time transaction monitoring with velocity analysis
+
+**See complete examples**: `sdk-users/workflows/by-industry/finance/`
+
 ## 📚 Documentation
 
 ### For SDK Users
@@ -134,9 +181,10 @@ export_workflow(workflow, "customer_analysis.yaml")
 **Build solutions with the SDK:**
 - `sdk-users/` - Everything you need to build with Kailash
   - `developer/` - Node creation patterns and troubleshooting
-  - `workflows/` - Production-ready workflow library (NEW in v0.2.2)
+  - `workflows/` - Complete production workflow library (v0.3.1)
+    - Finance workflows: Credit risk, portfolio optimization, trading signals, fraud detection
     - Quick-start patterns (30-second workflows)
-    - Industry-specific solutions (healthcare, finance)
+    - Industry-specific solutions by vertical
     - Enterprise integration patterns
   - `essentials/` - Quick reference and cheatsheets
   - `nodes/` - Comprehensive node catalog (66+ nodes)
@@ -277,7 +325,7 @@ assert results["analyze"]["result"]["total_customers"] == len(test_data)
 3. **Monitor in real-time**:
    ```python
    from kailash.visualization import DashboardServer
-   
+
    server = DashboardServer(port=8080)
    server.start()
    # Open http://localhost:8080 for live monitoring

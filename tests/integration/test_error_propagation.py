@@ -1,7 +1,7 @@
 """Test error handling and propagation across workflows."""
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -19,7 +19,7 @@ from kailash.workflow.graph import Workflow
 class ErrorNode(Node):
     """Node that always fails for testing."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "error_message": NodeParameter(
                 name="error_message",
@@ -30,7 +30,7 @@ class ErrorNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         error_message = kwargs.get("error_message", "Test error")
         raise NodeExecutionError(error_message)
 
@@ -38,7 +38,7 @@ class ErrorNode(Node):
 class ConditionalErrorNode(Node):
     """Node that fails based on input condition."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "should_fail": NodeParameter(
                 name="should_fail",
@@ -56,7 +56,7 @@ class ConditionalErrorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         should_fail = kwargs.get("should_fail", False)
         data = kwargs.get("data")
 
@@ -211,7 +211,7 @@ class TestErrorPropagation:
         """Test that validation errors occur during workflow validation (Session 061 behavior)."""
 
         class ValidationNode(Node):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "required_param": NodeParameter(
                         name="required_param",
@@ -221,7 +221,7 @@ class TestErrorPropagation:
                     )
                 }
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 return {"result": kwargs.get("required_param")}
 
         workflow = Workflow(workflow_id="validation_error", name="Validation Error")
@@ -263,10 +263,10 @@ class TestErrorPropagation:
         """Test error handling with nested exceptions."""
 
         class NestedErrorNode(Node):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {}
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 try:
                     # Simulate nested operation that fails
                     raise ValueError("Inner error")

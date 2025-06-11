@@ -146,16 +146,16 @@ Since we use `Any` for complex types, add runtime validation:
 def run(self, **kwargs) -> Dict[str, Any]:
     # Get parameter
     items = kwargs.get('items', [])
-    
+
     # Validate at runtime
     if not isinstance(items, list):
         raise ValueError(f"Expected list, got {type(items)}")
-    
+
     # Validate list contents if needed
     for item in items:
         if not isinstance(item, str):
             raise ValueError(f"Expected string items, got {type(item)}")
-    
+
     # Process validated data
     return {'count': len(items)}
 ```
@@ -190,7 +190,7 @@ from kailash.nodes.base import Node, NodeParameter
 
 class DataProcessorNode(Node):
     """Process various data types with proper parameter handling."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
             # String parameter
@@ -232,18 +232,18 @@ class DataProcessorNode(Node):
                 description='Enable verbose output'
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         operation = kwargs['operation']
         data = kwargs['data']
         config = kwargs.get('config', {})
         filters = kwargs.get('filters')
         verbose = kwargs.get('verbose', False)
-        
+
         # Validate data is actually a list
         if not isinstance(data, list):
             raise ValueError(f"Data must be a list, got {type(data)}")
-        
+
         # Process based on operation
         if operation == 'filter' and filters:
             # Runtime validation of filters
@@ -257,23 +257,23 @@ class DataProcessorNode(Node):
                 raise ValueError(f"Filters must be dict or list, got {type(filters)}")
         else:
             result = data
-        
+
         output = {
             'result': result,
             'count': len(result)
         }
-        
+
         if verbose:
             output['operation'] = operation
             output['config'] = config
-            
+
         return output
-    
+
     def _matches_filter(self, item: Any, filter_dict: dict) -> bool:
         """Check if item matches filter conditions."""
         if not isinstance(item, dict):
             return False
-        
+
         for key, value in filter_dict.items():
             if key not in item or item[key] != value:
                 return False

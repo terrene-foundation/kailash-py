@@ -17,7 +17,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -34,7 +34,7 @@ class RateLimitConfig:
     max_requests: int = 100  # Maximum requests allowed
     time_window: float = 60.0  # Time window in seconds
     strategy: str = "token_bucket"  # Rate limiting strategy
-    burst_limit: Optional[int] = None  # Maximum burst requests (for token bucket)
+    burst_limit: int | None = None  # Maximum burst requests (for token bucket)
     backoff_factor: float = 1.0  # Backoff factor when rate limited
     max_backoff: float = 300.0  # Maximum backoff time in seconds
 
@@ -61,7 +61,6 @@ class RateLimiter(ABC):
         Returns:
             True if request can proceed, False if rate limited
         """
-        pass
 
     @abstractmethod
     def wait_time(self) -> float:
@@ -70,7 +69,6 @@ class RateLimiter(ABC):
         Returns:
             Wait time in seconds (0 if can proceed immediately)
         """
-        pass
 
     @abstractmethod
     def consume(self) -> bool:
@@ -79,12 +77,10 @@ class RateLimiter(ABC):
         Returns:
             True if token was consumed, False if rate limited
         """
-        pass
 
     @abstractmethod
     def reset(self) -> None:
         """Reset the rate limiter state."""
-        pass
 
 
 class TokenBucketRateLimiter(RateLimiter):
@@ -295,7 +291,7 @@ class RateLimitedAPINode(Node):
         self.rate_limiter = create_rate_limiter(rate_limit_config)
         self.config = rate_limit_config
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -326,7 +322,7 @@ class RateLimitedAPINode(Node):
 
         return params
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -345,7 +341,7 @@ class RateLimitedAPINode(Node):
 
         return schema
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute the wrapped node with rate limiting.
 
         Args:
@@ -463,7 +459,7 @@ class AsyncRateLimitedAPINode(AsyncNode):
         self.config = rate_limit_config
         self.sync_node = RateLimitedAPINode(wrapped_node, rate_limit_config, **kwargs)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -471,7 +467,7 @@ class AsyncRateLimitedAPINode(AsyncNode):
         """
         return self.sync_node.get_parameters()
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -479,7 +475,7 @@ class AsyncRateLimitedAPINode(AsyncNode):
         """
         return self.sync_node.get_output_schema()
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous version for compatibility.
 
         Args:
@@ -490,7 +486,7 @@ class AsyncRateLimitedAPINode(AsyncNode):
         """
         return self.sync_node.run(**kwargs)
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute the wrapped async node with rate limiting.
 
         Args:

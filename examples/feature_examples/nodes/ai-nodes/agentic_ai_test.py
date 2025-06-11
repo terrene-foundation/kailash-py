@@ -424,7 +424,7 @@ def demonstrate_embedding_generator():
         except ImportError:
             # Fallback implementation if numpy not available
             def dot(a, b):
-                return sum(x * y for x, y in zip(a, b))
+                return sum(x * y for x, y in zip(a, b, strict=False))
 
             def norm(a):
                 return sum(x * x for x in a) ** 0.5

@@ -6,7 +6,7 @@ This is NOT a node - it's a utility class used by LLM agents to interact with MC
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 # Will use official MCP SDK when available
 try:
@@ -47,7 +47,7 @@ class MCPClient:
         self.logger = logging.getLogger(__name__)
 
     async def connect_stdio(
-        self, command: str, args: List[str], env: Optional[Dict[str, str]] = None
+        self, command: str, args: list[str], env: dict[str, str] | None = None
     ):
         """
         Connect to an MCP server via stdio transport.
@@ -88,7 +88,7 @@ class MCPClient:
             self.logger.error(f"Failed to connect to MCP server: {e}")
             raise RuntimeError(f"MCP connection failed: {e}")
 
-    async def discover_tools(self, session: "ClientSession") -> List[Dict[str, Any]]:
+    async def discover_tools(self, session: "ClientSession") -> list[dict[str, Any]]:
         """
         Discover available tools from an MCP server.
 
@@ -118,7 +118,7 @@ class MCPClient:
             return []
 
     async def call_tool(
-        self, session: "ClientSession", name: str, arguments: Dict[str, Any]
+        self, session: "ClientSession", name: str, arguments: dict[str, Any]
     ) -> Any:
         """
         Call a tool on the MCP server.
@@ -150,7 +150,7 @@ class MCPClient:
             self.logger.error(f"Failed to call tool '{name}': {e}")
             raise
 
-    async def list_resources(self, session: "ClientSession") -> List[Dict[str, Any]]:
+    async def list_resources(self, session: "ClientSession") -> list[dict[str, Any]]:
         """
         List available resources from an MCP server.
 
@@ -212,7 +212,7 @@ class MCPClient:
             self.logger.error(f"Failed to read resource '{uri}': {e}")
             raise
 
-    async def list_prompts(self, session: "ClientSession") -> List[Dict[str, Any]]:
+    async def list_prompts(self, session: "ClientSession") -> list[dict[str, Any]]:
         """
         List available prompts from an MCP server.
 
@@ -252,8 +252,8 @@ class MCPClient:
             return []
 
     async def get_prompt(
-        self, session: "ClientSession", name: str, arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, session: "ClientSession", name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Get a prompt from an MCP server.
 
@@ -292,8 +292,8 @@ class MCPClient:
 
 # Convenience functions for LLM agents
 async def discover_and_prepare_tools(
-    mcp_servers: List[Union[str, Dict[str, Any]]],
-) -> List[Dict[str, Any]]:
+    mcp_servers: list[str | dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Discover tools from multiple MCP servers and prepare them for LLM use.
 

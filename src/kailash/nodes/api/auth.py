@@ -12,7 +12,7 @@ Key Components:
 
 import base64
 import time
-from typing import Any, Dict
+from typing import Any
 
 import requests
 
@@ -42,7 +42,7 @@ class BasicAuthNode(Node):
     - RESTClientNode: Uses auth headers for API calls
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -63,7 +63,7 @@ class BasicAuthNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -84,7 +84,7 @@ class BasicAuthNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Generate Basic Authentication headers.
 
         Args:
@@ -162,7 +162,7 @@ class OAuth2Node(Node):
         self.token_data = None  # Will store token information
         self.token_expires_at = 0  # Timestamp when token expires
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -236,7 +236,7 @@ class OAuth2Node(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -269,7 +269,7 @@ class OAuth2Node(Node):
             ),
         }
 
-    def _get_token(self, **kwargs) -> Dict[str, Any]:
+    def _get_token(self, **kwargs) -> dict[str, Any]:
         """Get an OAuth token using the configured grant type.
 
         This method handles different grant types with appropriate parameters.
@@ -359,7 +359,7 @@ class OAuth2Node(Node):
                 f"Failed to parse OAuth token response: {str(e)}"
             ) from e
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Get OAuth authentication headers.
 
         This method handles token acquisition, caching, and renewal based on
@@ -444,7 +444,7 @@ class APIKeyNode(Node):
     - RESTClientNode: Uses auth data for API calls
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -477,7 +477,7 @@ class APIKeyNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -510,7 +510,7 @@ class APIKeyNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Generate API key authentication data.
 
         Args:

@@ -9,7 +9,7 @@ This module provides secure endpoints for users to:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -24,40 +24,40 @@ class CustomNodeCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     category: str = Field(default="custom", max_length=100)
-    description: Optional[str] = None
-    icon: Optional[str] = Field(None, max_length=50)
-    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
+    description: str | None = None
+    icon: str | None = Field(None, max_length=50)
+    color: str | None = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
 
     # Node configuration
-    parameters: List[Dict[str, Any]] = Field(default_factory=list)
-    inputs: List[Dict[str, Any]] = Field(default_factory=list)
-    outputs: List[Dict[str, Any]] = Field(default_factory=list)
+    parameters: list[dict[str, Any]] = Field(default_factory=list)
+    inputs: list[dict[str, Any]] = Field(default_factory=list)
+    outputs: list[dict[str, Any]] = Field(default_factory=list)
 
     # Implementation
     implementation_type: str = Field(..., pattern="^(python|workflow|api)$")
-    implementation: Dict[str, Any]
+    implementation: dict[str, Any]
 
 
 class CustomNodeUpdate(BaseModel):
     """Request model for updating a custom node"""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    category: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
-    icon: Optional[str] = Field(None, max_length=50)
-    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
+    name: str | None = Field(None, min_length=1, max_length=255)
+    category: str | None = Field(None, max_length=100)
+    description: str | None = None
+    icon: str | None = Field(None, max_length=50)
+    color: str | None = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
 
     # Node configuration
-    parameters: Optional[List[Dict[str, Any]]] = None
-    inputs: Optional[List[Dict[str, Any]]] = None
-    outputs: Optional[List[Dict[str, Any]]] = None
+    parameters: list[dict[str, Any]] | None = None
+    inputs: list[dict[str, Any]] | None = None
+    outputs: list[dict[str, Any]] | None = None
 
     # Implementation
-    implementation_type: Optional[str] = Field(None, pattern="^(python|workflow|api)$")
-    implementation: Optional[Dict[str, Any]] = None
+    implementation_type: str | None = Field(None, pattern="^(python|workflow|api)$")
+    implementation: dict[str, Any] | None = None
 
     # Publishing
-    is_published: Optional[bool] = None
+    is_published: bool | None = None
 
 
 class CustomNodeResponse(BaseModel):
@@ -67,22 +67,22 @@ class CustomNodeResponse(BaseModel):
     tenant_id: str
     name: str
     category: str
-    description: Optional[str]
-    icon: Optional[str]
-    color: Optional[str]
+    description: str | None
+    icon: str | None
+    color: str | None
 
     # Node configuration
-    parameters: List[Dict[str, Any]]
-    inputs: List[Dict[str, Any]]
-    outputs: List[Dict[str, Any]]
+    parameters: list[dict[str, Any]]
+    inputs: list[dict[str, Any]]
+    outputs: list[dict[str, Any]]
 
     # Implementation
     implementation_type: str
-    implementation: Dict[str, Any]
+    implementation: dict[str, Any]
 
     # Metadata
     is_published: bool
-    created_by: Optional[str]
+    created_by: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -90,7 +90,7 @@ class CustomNodeResponse(BaseModel):
 def setup_custom_node_routes(app, SessionLocal):
     """Setup custom node API routes with authentication"""
 
-    @app.get("/api/custom-nodes", response_model=List[CustomNodeResponse])
+    @app.get("/api/custom-nodes", response_model=list[CustomNodeResponse])
     async def list_custom_nodes(
         user: User = Depends(require_permission("read:nodes")),
         tenant: Tenant = Depends(get_current_tenant),
@@ -255,7 +255,7 @@ def setup_custom_node_routes(app, SessionLocal):
     @app.post("/api/custom-nodes/{node_id}/test")
     async def test_custom_node(
         node_id: str,
-        test_data: Dict[str, Any],
+        test_data: dict[str, Any],
         user: User = Depends(require_permission("execute:nodes")),
         tenant: Tenant = Depends(get_current_tenant),
         session: Session = Depends(get_db_session),
@@ -293,8 +293,8 @@ def setup_custom_node_routes(app, SessionLocal):
 
 
 async def _execute_python_node(
-    node: CustomNode, test_data: Dict[str, Any], tenant_id: str
-) -> Dict[str, Any]:
+    node: CustomNode, test_data: dict[str, Any], tenant_id: str
+) -> dict[str, Any]:
     """Execute a Python-based custom node with security sandboxing"""
     from kailash.nodes.code.python import PythonCodeNode
     from kailash.security import SecurityConfig, TenantContext
@@ -323,8 +323,8 @@ async def _execute_python_node(
 
 
 async def _execute_workflow_node(
-    node: CustomNode, test_data: Dict[str, Any], tenant_id: str
-) -> Dict[str, Any]:
+    node: CustomNode, test_data: dict[str, Any], tenant_id: str
+) -> dict[str, Any]:
     """Execute a workflow-based custom node"""
     from kailash.runtime.local import LocalRuntime
     from kailash.security import TenantContext
@@ -346,8 +346,8 @@ async def _execute_workflow_node(
 
 
 async def _execute_api_node(
-    node: CustomNode, test_data: Dict[str, Any], tenant_id: str
-) -> Dict[str, Any]:
+    node: CustomNode, test_data: dict[str, Any], tenant_id: str
+) -> dict[str, Any]:
     """Execute an API-based custom node"""
 
     from kailash.nodes.api.http import HTTPRequestNode

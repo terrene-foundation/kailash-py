@@ -10,7 +10,7 @@
   - Using existing nodes and patterns
   - Building on top of Kailash SDK
 
-- [ ] **Develop the SDK itself** → You're an **SDK Contributor**  
+- [ ] **Develop the SDK itself** → You're an **SDK Contributor**
   - Adding new features to the SDK
   - Fixing bugs in core functionality
   - Improving SDK architecture
@@ -97,15 +97,15 @@
 
 ## Remember
 
-✅ **DO**: Use Claude Code for all task management  
-✅ **DO**: Provide context in your requests  
-✅ **DO**: Update progress regularly  
-✅ **DO**: Follow branch naming conventions  
+✅ **DO**: Use Claude Code for all task management
+✅ **DO**: Provide context in your requests
+✅ **DO**: Update progress regularly
+✅ **DO**: Follow branch naming conventions
 
-❌ **DON'T**: Edit TODO files manually  
-❌ **DON'T**: Create GitHub issues directly  
-❌ **DON'T**: Merge to main branch  
-❌ **DON'T**: Skip the onboarding process  
+❌ **DON'T**: Edit TODO files manually
+❌ **DON'T**: Create GitHub issues directly
+❌ **DON'T**: Merge to main branch
+❌ **DON'T**: Skip the onboarding process
 
 ---
 

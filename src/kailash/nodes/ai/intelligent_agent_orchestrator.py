@@ -21,7 +21,7 @@ import time
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.ai.a2a import SharedMemoryPoolNode
 from kailash.nodes.ai.self_organizing import (
@@ -140,7 +140,7 @@ class IntelligentCacheNode(Node):
         self.cost_metrics = {}
         self.query_abstractions = {}
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "action": NodeParameter(
                 name="action",
@@ -197,7 +197,7 @@ class IntelligentCacheNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute cache operations."""
         action = kwargs.get("action", "get")
 
@@ -214,7 +214,7 @@ class IntelligentCacheNode(Node):
         else:
             return {"success": False, "error": f"Unknown action: {action}"}
 
-    def _cache_data(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _cache_data(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Cache data with intelligent indexing."""
         cache_key = kwargs.get("cache_key")
         if not cache_key:
@@ -262,7 +262,7 @@ class IntelligentCacheNode(Node):
             "semantic_tags": semantic_tags,
         }
 
-    def _get_cached(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_cached(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Retrieve cached data with intelligent matching."""
         cache_key = kwargs.get("cache_key")
         query = kwargs.get("query")
@@ -307,7 +307,7 @@ class IntelligentCacheNode(Node):
 
         return {"success": True, "hit": False, "cache_key": cache_key, "query": query}
 
-    def _find_semantic_matches(self, query: str, threshold: float) -> List[Dict]:
+    def _find_semantic_matches(self, query: str, threshold: float) -> list[dict]:
         """Find semantically similar cached entries."""
         matches = []
         query_words = set(query.lower().split())
@@ -333,14 +333,14 @@ class IntelligentCacheNode(Node):
         matches.sort(key=lambda x: x["similarity"], reverse=True)
         return matches
 
-    def _generate_cache_key(self, kwargs: Dict[str, Any]) -> str:
+    def _generate_cache_key(self, kwargs: dict[str, Any]) -> str:
         """Generate cache key from request parameters."""
         data_str = json.dumps(kwargs.get("data", {}), sort_keys=True)
         metadata_str = json.dumps(kwargs.get("metadata", {}), sort_keys=True)
         combined = f"{data_str}_{metadata_str}_{time.time()}"
         return hashlib.md5(combined.encode()).hexdigest()[:16]
 
-    def _invalidate(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _invalidate(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Invalidate cache entries."""
         cache_key = kwargs.get("cache_key")
         pattern = kwargs.get("pattern")
@@ -363,7 +363,7 @@ class IntelligentCacheNode(Node):
             "count": len(invalidated_keys),
         }
 
-    def _cleanup_expired(self) -> Dict[str, Any]:
+    def _cleanup_expired(self) -> dict[str, Any]:
         """Remove expired cache entries."""
         current_time = time.time()
         expired_keys = []
@@ -384,7 +384,7 @@ class IntelligentCacheNode(Node):
             "remaining_entries": len(self.cache),
         }
 
-    def _get_stats(self) -> Dict[str, Any]:
+    def _get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         current_time = time.time()
         active_entries = sum(
@@ -488,7 +488,7 @@ class MCPAgentNode(SelfOrganizingAgentNode):
         self.tool_registry = {}
         self.call_history = deque(maxlen=100)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         params = super().get_parameters()
 
         params.update(
@@ -525,7 +525,7 @@ class MCPAgentNode(SelfOrganizingAgentNode):
 
         return params
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute MCP-enhanced self-organizing agent."""
         # Set up MCP servers
         mcp_servers = kwargs.get("mcp_servers", [])
@@ -556,7 +556,7 @@ class MCPAgentNode(SelfOrganizingAgentNode):
 
         return result
 
-    def _setup_mcp_clients(self, servers: List[Dict]):
+    def _setup_mcp_clients(self, servers: list[dict]):
         """Set up MCP clients for configured servers.
 
         NOTE: MCP is now a built-in capability of LLM agents. This method
@@ -581,7 +581,7 @@ class MCPAgentNode(SelfOrganizingAgentNode):
             except Exception as e:
                 print(f"Failed to register MCP server {server_name}: {e}")
 
-    def _enhance_task_with_tools(self, task: str, kwargs: Dict) -> str:
+    def _enhance_task_with_tools(self, task: str, kwargs: dict) -> str:
         """Enhance task description with available tools."""
         list(self.tool_registry.keys())
 
@@ -613,8 +613,8 @@ class MCPAgentNode(SelfOrganizingAgentNode):
         return context
 
     def _process_tool_calls(
-        self, content: str, cache_node_id: Optional[str]
-    ) -> List[Dict]:
+        self, content: str, cache_node_id: str | None
+    ) -> list[dict]:
         """Process any tool calls mentioned in the agent's response."""
         tool_results = []
 
@@ -655,15 +655,13 @@ class MCPAgentNode(SelfOrganizingAgentNode):
 
         return tool_results
 
-    def _check_cache_for_tool(
-        self, tool_name: str, cache_node_id: str
-    ) -> Optional[Dict]:
+    def _check_cache_for_tool(self, tool_name: str, cache_node_id: str) -> dict | None:
         """Check cache for tool call results."""
         # This would interact with the cache node in a real workflow
         # For now, return None to indicate no cache
         return None
 
-    def _execute_tool_call(self, tool_name: str, arguments: Dict) -> Dict[str, Any]:
+    def _execute_tool_call(self, tool_name: str, arguments: dict) -> dict[str, Any]:
         """Execute a tool call through MCP."""
         tool_info = self.tool_registry.get(tool_name)
         if not tool_info:
@@ -698,10 +696,9 @@ class MCPAgentNode(SelfOrganizingAgentNode):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _cache_tool_result(self, tool_name: str, result: Dict, cache_node_id: str):
+    def _cache_tool_result(self, tool_name: str, result: dict, cache_node_id: str):
         """Cache tool call result."""
         # This would interact with the cache node in a real workflow
-        pass
 
 
 @register_node()
@@ -827,7 +824,7 @@ class QueryAnalysisNode(Node):
             },
         }
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "query": NodeParameter(
                 name="query",
@@ -858,7 +855,7 @@ class QueryAnalysisNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Analyze query and determine optimal solving approach."""
         query = kwargs.get("query")
         if not query:
@@ -907,7 +904,7 @@ class QueryAnalysisNode(Node):
             },
         }
 
-    def _analyze_patterns(self, query: str) -> Dict[str, Any]:
+    def _analyze_patterns(self, query: str) -> dict[str, Any]:
         """Analyze query against known patterns."""
         query_lower = query.lower()
         matches = {}
@@ -930,15 +927,14 @@ class QueryAnalysisNode(Node):
 
         return matches
 
-    def _assess_complexity(self, query: str, context: Dict, patterns: Dict) -> float:
+    def _assess_complexity(self, query: str, context: dict, patterns: dict) -> float:
         """Assess query complexity."""
         base_complexity = 0.5
 
         # Pattern-based complexity
         if patterns:
             max_pattern_complexity = max(
-                self.query_patterns[pattern]["complexity"]
-                for pattern in patterns.keys()
+                self.query_patterns[pattern]["complexity"] for pattern in patterns
             )
             base_complexity = max(base_complexity, max_pattern_complexity)
 
@@ -961,12 +957,12 @@ class QueryAnalysisNode(Node):
 
         return max(0.1, min(1.0, base_complexity))
 
-    def _determine_capabilities(self, patterns: Dict, context: Dict) -> List[str]:
+    def _determine_capabilities(self, patterns: dict, context: dict) -> list[str]:
         """Determine required capabilities."""
         capabilities = set()
 
         # Pattern-based capabilities
-        for pattern_name in patterns.keys():
+        for pattern_name in patterns:
             pattern_info = self.query_patterns[pattern_name]
             capabilities.update(pattern_info["required_capabilities"])
 
@@ -980,10 +976,10 @@ class QueryAnalysisNode(Node):
 
         return list(capabilities)
 
-    def _analyze_mcp_needs(self, query: str, patterns: Dict, mcp_servers: List) -> Dict:
+    def _analyze_mcp_needs(self, query: str, patterns: dict, mcp_servers: list) -> dict:
         """Analyze MCP tool requirements."""
         mcp_needed = any(
-            self.query_patterns[pattern]["mcp_likely"] for pattern in patterns.keys()
+            self.query_patterns[pattern]["mcp_likely"] for pattern in patterns
         )
 
         # Check for specific tool indicators
@@ -1009,8 +1005,8 @@ class QueryAnalysisNode(Node):
         }
 
     def _suggest_team_composition(
-        self, capabilities: List[str], complexity: float, agents: List
-    ) -> Dict:
+        self, capabilities: list[str], complexity: float, agents: list
+    ) -> dict:
         """Suggest optimal team composition."""
         # Basic team size estimation
         base_size = max(2, len(capabilities) // 2)
@@ -1027,8 +1023,8 @@ class QueryAnalysisNode(Node):
         }
 
     def _determine_strategy(
-        self, patterns: Dict, complexity: float, context: Dict
-    ) -> Dict:
+        self, patterns: dict, complexity: float, context: dict
+    ) -> dict:
         """Determine solution strategy."""
         if complexity < 0.4:
             approach = "single_agent"
@@ -1053,7 +1049,7 @@ class QueryAnalysisNode(Node):
             "iterative_refinement": complexity > 0.5,
         }
 
-    def _estimate_solution_requirements(self, complexity: float, context: Dict) -> Dict:
+    def _estimate_solution_requirements(self, complexity: float, context: dict) -> dict:
         """Estimate solution requirements."""
         # Base estimates
         estimated_time = 30 + int(complexity * 120)  # 30-150 minutes
@@ -1157,7 +1153,7 @@ class OrchestrationManagerNode(Node):
         self.session_id = str(uuid.uuid4())
         self.orchestration_history = deque(maxlen=50)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "query": NodeParameter(
                 name="query",
@@ -1216,7 +1212,7 @@ class OrchestrationManagerNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute complete orchestrated solution workflow."""
         start_time = time.time()
 
@@ -1330,14 +1326,14 @@ class OrchestrationManagerNode(Node):
 
         return final_result
 
-    def _analyze_query(self, query: str, context: Dict, mcp_servers: List) -> Dict:
+    def _analyze_query(self, query: str, context: dict, mcp_servers: list) -> dict:
         """Analyze the incoming query."""
         analyzer = QueryAnalysisNode()
         return analyzer.run(query=query, context=context, mcp_servers=mcp_servers)
 
     def _setup_infrastructure(
-        self, pool_size: int, mcp_servers: List, enable_caching: bool
-    ) -> Dict:
+        self, pool_size: int, mcp_servers: list, enable_caching: bool
+    ) -> dict:
         """Set up core infrastructure components."""
         infrastructure = {}
 
@@ -1362,8 +1358,8 @@ class OrchestrationManagerNode(Node):
         return infrastructure
 
     def _create_agent_pool(
-        self, query_analysis: Dict, infrastructure: Dict, mcp_servers: List
-    ) -> List[Dict]:
+        self, query_analysis: dict, infrastructure: dict, mcp_servers: list
+    ) -> list[dict]:
         """Create specialized agent pool based on query analysis."""
         analysis = query_analysis["analysis"]
         analysis["required_capabilities"]
@@ -1458,8 +1454,8 @@ class OrchestrationManagerNode(Node):
         return agent_pool
 
     def _form_team(
-        self, query_analysis: Dict, agent_pool: List, iteration: int
-    ) -> Dict:
+        self, query_analysis: dict, agent_pool: list, iteration: int
+    ) -> dict:
         """Form optimal team for current iteration."""
         analysis = query_analysis["analysis"]
 
@@ -1484,11 +1480,11 @@ class OrchestrationManagerNode(Node):
     def _collaborative_solve(
         self,
         query: str,
-        context: Dict,
-        team_result: Dict,
-        infrastructure: Dict,
+        context: dict,
+        team_result: dict,
+        infrastructure: dict,
         iteration: int,
-    ) -> Dict:
+    ) -> dict:
         """Execute collaborative problem solving."""
         team = team_result["team"]
         solution_memory = infrastructure["solution_memory"]
@@ -1579,11 +1575,11 @@ class OrchestrationManagerNode(Node):
 
     def _simulate_agent_work(
         self,
-        agent: Dict,
+        agent: dict,
         task: str,
-        cache: Optional[IntelligentCacheNode],
-        context_info: List = None,
-    ) -> Dict:
+        cache: IntelligentCacheNode | None,
+        context_info: list = None,
+    ) -> dict:
         """Simulate agent performing work (with caching)."""
         agent_id = agent["id"]
         capabilities = agent["capabilities"]
@@ -1640,7 +1636,7 @@ class OrchestrationManagerNode(Node):
         return result
 
     def _calculate_solution_confidence(
-        self, info_results: List, analysis_results: List, synthesis_results: List
+        self, info_results: list, analysis_results: list, synthesis_results: list
     ) -> float:
         """Calculate overall solution confidence."""
         all_results = info_results + analysis_results + synthesis_results
@@ -1652,11 +1648,11 @@ class OrchestrationManagerNode(Node):
 
     def _evaluate_solution(
         self,
-        solution: Dict,
-        query_analysis: Dict,
+        solution: dict,
+        query_analysis: dict,
         quality_threshold: float,
         iteration: int,
-    ) -> Dict:
+    ) -> dict:
         """Evaluate solution quality."""
         evaluator = SolutionEvaluatorNode()
 
@@ -1674,11 +1670,11 @@ class OrchestrationManagerNode(Node):
     def _finalize_results(
         self,
         query: str,
-        final_solution: Dict,
-        history: List,
+        final_solution: dict,
+        history: list,
         total_time: float,
-        infrastructure: Dict,
-    ) -> Dict:
+        infrastructure: dict,
+    ) -> dict:
         """Finalize and format results."""
         # Get cache statistics
         cache_stats = {}
@@ -1833,7 +1829,7 @@ class ConvergenceDetectorNode(Node):
         super().__init__()
         self.convergence_history = deque(maxlen=100)
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "solution_history": NodeParameter(
                 name="solution_history",
@@ -1886,7 +1882,7 @@ class ConvergenceDetectorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Determine if solution has converged and iteration should stop."""
         solution_history = kwargs.get("solution_history", [])
         quality_threshold = kwargs.get("quality_threshold", 0.8)
@@ -2029,7 +2025,7 @@ class ConvergenceDetectorNode(Node):
             ),
         }
 
-    def _calculate_improvement_trend(self, history: List[Dict]) -> Dict:
+    def _calculate_improvement_trend(self, history: list[dict]) -> dict:
         """Calculate the trend in solution improvement."""
         if len(history) < 2:
             return {"trend": "insufficient_data", "rate": 0.0}
@@ -2075,7 +2071,7 @@ class ConvergenceDetectorNode(Node):
             "consistency": 1.0 - (max(scores) - min(scores)) / max(max(scores), 0.1),
         }
 
-    def _generate_recommendations(self, signals: Dict, iteration: int) -> List[str]:
+    def _generate_recommendations(self, signals: dict, iteration: int) -> list[str]:
         """Generate recommendations based on convergence signals."""
         recommendations = []
 

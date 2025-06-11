@@ -10,7 +10,7 @@ Tests complete workflows that combine multiple cycle patterns in real-world scen
 
 import json
 import time
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -32,7 +32,7 @@ from kailash.runtime.local import LocalRuntime
 class DataQualityImproverNode(CycleAwareNode):
     """Improves data quality iteratively."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "quality_threshold": NodeParameter(
@@ -40,7 +40,7 @@ class DataQualityImproverNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Improve data quality through iterative cleaning."""
         data = kwargs.get("data", [])
         quality_threshold = kwargs.get("quality_threshold", 0.8)
@@ -107,7 +107,7 @@ class DataQualityImproverNode(CycleAwareNode):
 class MLModelTrainerNode(CycleAwareNode):
     """Simulates ML model training with convergence."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "training_data": NodeParameter(
                 name="training_data", type=list, required=False, default=[]
@@ -120,7 +120,7 @@ class MLModelTrainerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Simulate model training iteration."""
         training_data = kwargs.get("training_data", [])
         model_params = kwargs.get("model_params", {})
@@ -200,7 +200,7 @@ class MLModelTrainerNode(CycleAwareNode):
 class StreamProcessorNode(CycleAwareNode):
     """Processes streaming data in windows."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "stream_data": NodeParameter(
                 name="stream_data", type=list, required=False, default=[]
@@ -213,7 +213,7 @@ class StreamProcessorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Process streaming data window."""
         stream_data = kwargs.get("stream_data", [])
         window_size = kwargs.get("window_size", 10)
@@ -449,7 +449,7 @@ class TestDistributedTaskProcessing:
         class TaskGeneratorNode(CycleAwareNode):
             """Generates tasks for distributed processing."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "total_tasks": NodeParameter(
                         name="total_tasks", type=int, required=False, default=20
@@ -459,7 +459,7 @@ class TestDistributedTaskProcessing:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Generate batch of tasks."""
                 total_tasks = kwargs.get("total_tasks", 20)
                 batch_size = kwargs.get("batch_size", 5)
@@ -610,7 +610,7 @@ class TestStreamProcessingCycles:
         class StreamAnomalyProcessorNode(CycleAwareNode):
             """Processes streaming data with anomaly detection."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "stream_data": NodeParameter(
                         name="stream_data", type=list, required=False, default=[]
@@ -629,7 +629,7 @@ class TestStreamProcessingCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process stream window with anomaly detection."""
                 stream_data = kwargs.get("stream_data", [])
                 window_size = kwargs.get("window_size", 10)
@@ -704,7 +704,7 @@ class TestStreamProcessingCycles:
         class StreamDataSourceNode(Node):
             """Provides initial stream data."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "stream_data": NodeParameter(
                         name="stream_data", type=list, required=False, default=[]
@@ -723,7 +723,7 @@ class TestStreamProcessingCycles:
                     ),
                 }
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 return {
                     "stream_data": kwargs.get("stream_data", []),
                     "window_size": kwargs.get("window_size", 10),
@@ -819,7 +819,7 @@ class TestNestedWorkflowComposition:
         class DataValidatorNode(CycleAwareNode):
             """Validates and corrects data iteratively."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -829,7 +829,7 @@ class TestNestedWorkflowComposition:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Apply validation rules iteratively."""
                 data = kwargs.get("data", [])
                 rules = kwargs.get("rules", {})
@@ -1024,7 +1024,7 @@ result = sorted_data
             assert validator_data.get("iteration", 0) >= 0
 
         # Verify final data
-        with open(tmp_path / "validated_data.json", "r") as f:
+        with open(tmp_path / "validated_data.json") as f:
             final_data = json.load(f)
 
             # Debug: print what was saved

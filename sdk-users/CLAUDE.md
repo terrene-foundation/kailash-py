@@ -1,26 +1,16 @@
-# SDK Users - Quick Reference
+# SDK Users - Navigation Hub
 
 *Building solutions WITH the Kailash SDK*
 
 ## 🎯 Quick Decision Guide
-- **"Build from scratch"** → [developer/CLAUDE.md](developer/CLAUDE.md) - Node patterns, troubleshooting
-- **"Lift working example"** → [workflows/README.md](workflows/README.md) - End-to-end use cases
-- **"Quick pattern"** → [essentials/README.md](essentials/README.md) - Copy-paste snippets
-- **"Which node?"** → [nodes/comprehensive-node-catalog.md](nodes/comprehensive-node-catalog.md) - Node selection guide
-
-## 🚨 Critical Rules (Must Know)
-1. **Node names**: ALL end with "Node" (`CSVReaderNode` ✓, `CSVReader` ✗)
-2. **PythonCodeNode**: Input variables EXCLUDED from outputs!
-   - `mapping={"result": "input_data"}` ✓
-   - `mapping={"result": "result"}` ✗
-3. **Always include name**: `PythonCodeNode(name="processor", code="...")`
-4. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
-5. **Node Creation**: Can create without required params (validated at execution)
-6. **Data Files**: Use centralized `/data/` with `examples/utils/data_paths.py`
-7. **Output Files**: NEVER create `outputs/` directories!
-   - ❌ `os.makedirs("outputs")` → ✅ `ensure_output_dir_exists()`
-   - ❌ `"outputs/report.json"` → ✅ `get_output_data_path("category/report.json")`
-   - All outputs → `/data/outputs/{category}/`
+| I need to... | Go to | Purpose |
+|--------------|-------|---------|
+| Build from scratch | [developer/](developer/) | Technical guides, patterns |
+| Lift working example | [workflows/](workflows/) | Industry & enterprise solutions |
+| Quick code snippet | [essentials/cheatsheet/](essentials/cheatsheet/) | Copy-paste patterns |
+| Choose right node | [nodes/](nodes/comprehensive-node-catalog.md) | Node selection guide |
+| Fix an error | [developer/07-troubleshooting.md](developer/07-troubleshooting.md) | Error resolution |
+| Learn features | [features/](features/) | Feature documentation |
 
 ## 📁 Navigation Guide
 
@@ -49,69 +39,55 @@
 - **[features/](features/)** - Feature guides and when to use them
 - **[validation-guide.md](validation-guide.md)** - Critical rules to prevent errors
 
-## ⚡ Quick Fix Templates
+## 📚 Resource Categories
 
-### Basic Workflow
-```python
-from kailash import Workflow
-from kailash.nodes.data import CSVReaderNode
-from kailash.runtime import LocalRuntime
+### **Development Guides**
+- **[developer/](developer/)** - In-depth technical documentation
+  - Node creation and patterns
+  - Parameter types and validation
+  - Common patterns and anti-patterns
+  - Workflow design process (Session 064)
+  - Data integration patterns (Session 064)
+  - Production readiness checklist (Session 064)
+  - Troubleshooting guide
 
-workflow = Workflow("example", "Basic Example")
-reader = CSVReaderNode(name="reader")
-workflow.add_node("reader", reader)
+### **Working Examples**
+- **[workflows/](workflows/)** - Complete production workflows
+  - **by-industry/** - Finance, healthcare, manufacturing, retail
+  - **by-enterprise/** - HR, marketing, operations, analytics
+  - **by-pattern/** - ETL, real-time, batch, event-driven
 
-runtime = LocalRuntime()
-result = runtime.execute(workflow, parameters={
-    "reader": {"file_path": "data.csv"}
-})
-```
+### **Quick Reference**
+- **[essentials/cheatsheet/](essentials/cheatsheet/)** - Copy-paste code snippets
+  - Installation and setup
+  - Common node patterns
+  - Connection patterns
+  - Workflow design process (Session 064)
+  - Data integration patterns (Session 064)
+  - Production readiness checklist (Session 064)
+  - Best practices summary
 
-### PythonCodeNode (Best Practices)
-```python
-# 🚀 BEST: Use .from_function() for code > 3 lines
-def process_data(input_data: dict) -> dict:
-    """Full IDE support!"""
-    files = input_data.get("files", [])
-    return {"processed": len(files)}
+### **Node Catalog**
+- **[nodes/](nodes/)** - Complete node reference
+  - Comprehensive catalog with examples
+  - Node selection guide
+  - Input/output specifications
 
-processor = PythonCodeNode.from_function(
-    func=process_data,
-    name="processor"
-)
+### **Features**
+- **[features/](features/)** - Advanced SDK capabilities
+  - Access control and security
+  - API integration patterns
+  - Performance optimization
+  - Cyclic workflows
 
-# ✅ String code only for: dynamic code, user input, simple one-liners
-node = PythonCodeNode(name="calc", code="result = value * 1.1")  # OK
-
-# ⚠️ Remember: Input variables EXCLUDED from outputs
-workflow.connect("discovery", "processor", mapping={"result": "input_data"})
-```
-
-## 🔗 Quick Links by Task
-| I need to... | Go to | Best for |
-|--------------|-------|----------|
-| **Fix an error** | [developer/07-troubleshooting.md](developer/07-troubleshooting.md) | Error lookup |
-| **Copy working example** | [workflows/](workflows/) | Production patterns |
-| **Quick code snippet** | [essentials/](essentials/) | Fast implementation |
-| **Choose right node** | [nodes/comprehensive-node-catalog.md](nodes/comprehensive-node-catalog.md) | Node selection |
-| **Learn architecture** | [patterns/](patterns/) | Design patterns |
-| **API signature** | [api/](api/) | Method documentation |
-
-## 🔴 Common Mistakes
-1. **Forgetting node suffix**: `CSVReader` → `CSVReaderNode`
-2. **Using generic types**: `List[str]` → `list`
-3. **Mapping to same variable**: `{"result": "result"}` → `{"result": "input_data"}`
-4. **Missing PythonCodeNode name**: `PythonCodeNode(code=...)` → `PythonCodeNode(name="x", code=...)`
-5. **Manual file operations**: Use `DirectoryReaderNode` not `os.listdir`
-6. **Hardcoded data paths**: `"examples/data/file.csv"` → Use `get_input_data_path("file.csv")`
-7. **Old execution pattern**: `node.run()` → Use `node.execute()` for complete lifecycle
-
-## 🤝 Team Assignments
-If user asks about getting work or tasks, they should use Claude Code workflow system.
-Guide them to `NEW_TEAM_MEMBER.md` at root level for onboarding.
+## ⚠️ Critical Rules Reference
+For validation rules and common mistakes, see:
+- **Root CLAUDE.md** - Critical validation rules
+- **[developer/07-troubleshooting.md](developer/07-troubleshooting.md)** - Error fixes
+- **[shared/mistakes/](../shared/mistakes/)** - Comprehensive mistake database
 
 ---
 
+**Building workflows?** Start with [developer/](developer/) or [workflows/](workflows/)
+**Need help?** Check [developer/07-troubleshooting.md](developer/07-troubleshooting.md)
 **For SDK development**: See [../# contrib (removed)/CLAUDE.md](../# contrib (removed)/CLAUDE.md)
-**New to team**: See [../NEW_TEAM_MEMBER.md](../NEW_TEAM_MEMBER.md)  
-**For shared resources**: See [../shared/](../shared/)

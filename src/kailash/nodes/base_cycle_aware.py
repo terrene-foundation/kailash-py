@@ -37,7 +37,7 @@ Example usage:
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from .base import Node
 
@@ -103,7 +103,7 @@ class CycleAwareNode(Node):
         ...         }
     """
 
-    def get_cycle_info(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def get_cycle_info(self, context: dict[str, Any]) -> dict[str, Any]:
         """
         Get cycle information with sensible defaults.
 
@@ -138,7 +138,7 @@ class CycleAwareNode(Node):
             **cycle_info,  # Include any additional cycle information
         }
 
-    def get_iteration(self, context: Dict[str, Any]) -> int:
+    def get_iteration(self, context: dict[str, Any]) -> int:
         """
         Get current iteration number.
 
@@ -155,7 +155,7 @@ class CycleAwareNode(Node):
         """
         return self.get_cycle_info(context)["iteration"]
 
-    def is_first_iteration(self, context: Dict[str, Any]) -> bool:
+    def is_first_iteration(self, context: dict[str, Any]) -> bool:
         """
         Check if this is the first iteration of the cycle.
 
@@ -172,7 +172,7 @@ class CycleAwareNode(Node):
         """
         return self.get_iteration(context) == 0
 
-    def is_last_iteration(self, context: Dict[str, Any]) -> bool:
+    def is_last_iteration(self, context: dict[str, Any]) -> bool:
         """
         Check if this is the last iteration of the cycle.
 
@@ -189,7 +189,7 @@ class CycleAwareNode(Node):
         cycle_info = self.get_cycle_info(context)
         return cycle_info["iteration"] >= cycle_info["max_iterations"] - 1
 
-    def get_previous_state(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def get_previous_state(self, context: dict[str, Any]) -> dict[str, Any]:
         """
         Get previous iteration state safely.
 
@@ -209,7 +209,7 @@ class CycleAwareNode(Node):
         """
         return self.get_cycle_info(context).get("node_state", {})
 
-    def set_cycle_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def set_cycle_state(self, state: dict[str, Any]) -> dict[str, Any]:
         """
         Set state to persist to next iteration.
 
@@ -233,7 +233,7 @@ class CycleAwareNode(Node):
         """
         return {"_cycle_state": state}
 
-    def get_cycle_progress(self, context: Dict[str, Any]) -> float:
+    def get_cycle_progress(self, context: dict[str, Any]) -> float:
         """
         Get cycle progress as a percentage.
 
@@ -256,7 +256,7 @@ class CycleAwareNode(Node):
 
         return min(iteration / max_iterations, 1.0)
 
-    def log_cycle_info(self, context: Dict[str, Any], message: str = "") -> None:
+    def log_cycle_info(self, context: dict[str, Any], message: str = "") -> None:
         """
         Log cycle information for debugging.
 
@@ -284,7 +284,7 @@ class CycleAwareNode(Node):
 
         print(log_msg)
 
-    def should_continue_cycle(self, context: Dict[str, Any], **kwargs) -> bool:
+    def should_continue_cycle(self, context: dict[str, Any], **kwargs) -> bool:
         """
         Helper method to determine if cycle should continue.
 
@@ -307,7 +307,7 @@ class CycleAwareNode(Node):
         return not self.is_last_iteration(context)
 
     def accumulate_values(
-        self, context: Dict[str, Any], key: str, value: Any, max_history: int = 100
+        self, context: dict[str, Any], key: str, value: Any, max_history: int = 100
     ) -> list:
         """
         Accumulate values across iterations with automatic history management.
@@ -340,7 +340,7 @@ class CycleAwareNode(Node):
 
     def detect_convergence_trend(
         self,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         key: str,
         threshold: float = 0.01,
         window: int = 3,

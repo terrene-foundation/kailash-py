@@ -240,7 +240,7 @@ DirectoryReaderNode (New in v0.2.1)
 **Key Features:**
 
 - Dynamic file discovery with pattern matching
-- MIME type detection and metadata extraction  
+- MIME type detection and metadata extraction
 - Organized output by file type for typed processing
 - Performance optimization for large directories
 - Recursive scanning with configurable depth
@@ -593,7 +593,7 @@ DataTransformer (Enhanced in v0.2.1)
 
 **Enhanced Parameter Mapping (v0.2.1):**
 
-DataTransformer now accepts arbitrary mapped parameters from other nodes, enabling 
+DataTransformer now accepts arbitrary mapped parameters from other nodes, enabling
 more flexible data flow patterns:
 
 .. code-block:: python
@@ -613,7 +613,7 @@ more flexible data flow patterns:
    files_by_type = locals().get("files_by_type", {})
    stats = locals().get("stats", {})
    metadata = locals().get("file_metadata", {})
-   
+
    # Process the data
    csv_files = files_by_type.get("csv", [])
    result = {"processed_files": len(csv_files), "total_size": stats.get("total_size", 0)}
@@ -1328,15 +1328,15 @@ PythonCodeNode now supports additional modules for real-world file processing:
    import mimetypes
    import glob
    import xml.etree.ElementTree as ET
-   
+
    # Process CSV files
    with open(file_path, 'r') as f:
        reader = csv.DictReader(f)
        data = list(reader)
-   
+
    # Detect MIME types
    mime_type = mimetypes.guess_type(file_path)[0]
-   
+
    # Modern path operations
    path = pathlib.Path(file_path)
    file_info = {
@@ -1344,10 +1344,10 @@ PythonCodeNode now supports additional modules for real-world file processing:
        "size": path.stat().st_size,
        "suffix": path.suffix
    }
-   
+
    # Pattern matching
    related_files = glob.glob(f"{path.parent}/*.{path.suffix[1:]}")
-   
+
    result = {
        "data": data,
        "mime_type": mime_type,
@@ -1359,7 +1359,7 @@ PythonCodeNode now supports additional modules for real-world file processing:
 **New Allowed Modules (v0.2.1):**
 
 - ``csv`` - CSV file processing
-- ``mimetypes`` - MIME type detection  
+- ``mimetypes`` - MIME type detection
 - ``pathlib`` - Modern path operations
 - ``glob`` - File pattern matching
 - ``xml`` - XML processing

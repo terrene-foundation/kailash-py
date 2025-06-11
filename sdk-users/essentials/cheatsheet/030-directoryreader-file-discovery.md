@@ -36,7 +36,7 @@ DirectoryReaderNode(directory_path="./data", pattern="reports/*.pdf")
 ```python
 # Full metadata (default)
 DirectoryReaderNode(include_metadata=True)
-# Outputs: file_path, file_name, file_type, file_extension, 
+# Outputs: file_path, file_name, file_type, file_extension,
 #          file_size, mime_type, created_time, modified_time
 
 # Minimal metadata (faster for large directories)
@@ -51,7 +51,7 @@ DirectoryReaderNode(include_metadata=False)
     "discovered_files": [        # All files as flat list
         {
             "file_path": "/path/to/file.csv",
-            "file_name": "file.csv", 
+            "file_name": "file.csv",
             "file_type": "csv",
             "file_extension": ".csv",
             "file_size": 1234,
@@ -81,7 +81,7 @@ DirectoryReaderNode(include_metadata=False)
 ```python
 # Use files_by_type for typed processing
 workflow.connect(
-    "file_discoverer", "csv_processor", 
+    "file_discoverer", "csv_processor",
     mapping={"files_by_type": "files_by_type"}
 )
 
@@ -181,7 +181,7 @@ big_dir_reader = DirectoryReaderNode(
 - Use `files_by_type` output for typed processing
 - Check file existence in downstream nodes
 
-### ❌ Don't  
+### ❌ Don't
 - Use overly broad patterns in large directories
 - Assume all discovered files are readable
 - Rely on MIME type detection for security decisions
