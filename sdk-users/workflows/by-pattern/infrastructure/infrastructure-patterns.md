@@ -68,7 +68,7 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: kailash-workflows
-      
+
   WorkflowTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -94,7 +94,7 @@ Resources:
               awslogs-group: !Ref LogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: workflow
-              
+
   WorkflowService:
     Type: AWS::ECS::Service
     Properties:
@@ -147,14 +147,14 @@ resource "google_cloud_run_service" "workflow" {
     spec {
       containers {
         image = "gcr.io/${var.project_id}/kailash-workflow:latest"
-        
+
         resources {
           limits = {
             cpu    = "2"
             memory = "2Gi"
           }
         }
-        
+
         env {
           name = "DATABASE_URL"
           value_from {
@@ -165,10 +165,10 @@ resource "google_cloud_run_service" "workflow" {
           }
         }
       }
-      
+
       service_account_name = google_service_account.workflow.email
     }
-    
+
     metadata {
       annotations = {
         "autoscaling.knative.dev/minScale" = "2"
@@ -192,7 +192,7 @@ resource "google_cloud_scheduler_job" "workflow_batch" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_service.workflow.status[0].url}/batch"
-    
+
     oidc_token {
       service_account_email = google_service_account.scheduler.email
     }

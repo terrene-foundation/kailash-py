@@ -18,7 +18,6 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import pandas as pd
@@ -499,7 +498,7 @@ def demonstrate_error_handling_workflow(data_dir: Path, output_dir: Path):
     return workflow, task_manager, run_id
 
 
-def visualize_workflows(workflows: List[Workflow], output_dir: Path):
+def visualize_workflows(workflows: list[Workflow], output_dir: Path):
     """Visualize the example workflows."""
     logger.info("\n=== Visualizing Workflows ===")
 
@@ -539,7 +538,7 @@ def export_workflow_example(workflow: Workflow, output_dir: Path):
         logger.info(f"Workflow exported to {output_path}")
 
         # Print first few lines of the exported file
-        with open(output_path, "r") as f:
+        with open(output_path) as f:
             content = f.read()
             preview = "\n".join(content.split("\n")[:10]) + "\n..."
             logger.info(f"Export preview:\n{preview}")

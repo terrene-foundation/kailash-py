@@ -48,11 +48,11 @@ command_exists() {
 # Function to check Docker installation
 check_docker() {
     echo -e "${YELLOW}Checking Docker installation...${NC}"
-    
+
     if command_exists docker; then
         echo -e "${GREEN}✓ Docker is installed${NC}"
         docker --version
-        
+
         # Check if Docker daemon is running
         if docker info >/dev/null 2>&1; then
             echo -e "${GREEN}✓ Docker daemon is running${NC}"
@@ -61,7 +61,7 @@ check_docker() {
             echo -e "${YELLOW}Please start Docker and run this script again${NC}"
             exit 1
         fi
-        
+
         # Check Docker Compose
         if docker compose version >/dev/null 2>&1; then
             echo -e "${GREEN}✓ Docker Compose v2 is installed${NC}"
@@ -71,7 +71,7 @@ check_docker() {
             echo -e "${RED}✗ Docker Compose is not installed${NC}"
             return 1
         fi
-        
+
         return 0
     else
         echo -e "${RED}✗ Docker is not installed${NC}"
@@ -82,7 +82,7 @@ check_docker() {
 # Function to install Docker on macOS
 install_docker_macos() {
     echo -e "${YELLOW}Installing Docker on macOS...${NC}"
-    
+
     if command_exists brew; then
         echo "Using Homebrew to install Docker Desktop..."
         brew install --cask docker
@@ -96,7 +96,7 @@ install_docker_macos() {
         else
             DMG_URL="https://desktop.docker.com/mac/main/amd64/Docker.dmg"
         fi
-        
+
         curl -o ~/Downloads/Docker.dmg "$DMG_URL"
         echo -e "${GREEN}✓ Docker Desktop downloaded to ~/Downloads/Docker.dmg${NC}"
         echo -e "${YELLOW}Please install Docker.dmg and start Docker Desktop${NC}"
@@ -107,20 +107,20 @@ install_docker_macos() {
 # Function to install Docker on Linux
 install_docker_linux() {
     echo -e "${YELLOW}Installing Docker on Linux...${NC}"
-    
+
     # Use official Docker installation script
     curl -fsSL https://get.docker.com -o get-docker.sh
     sudo sh get-docker.sh
-    
+
     # Add user to docker group
     sudo usermod -aG docker $USER
-    
+
     # Install Docker Compose plugin
     sudo apt-get update
     sudo apt-get install docker-compose-plugin
-    
+
     rm get-docker.sh
-    
+
     echo -e "${GREEN}✓ Docker installed successfully${NC}"
     echo -e "${YELLOW}Please log out and back in for group changes to take effect${NC}"
 }
@@ -139,9 +139,9 @@ install_docker_windows() {
 # Function to setup SDK environment
 setup_sdk_environment() {
     echo -e "${YELLOW}Setting up SDK development environment...${NC}"
-    
+
     cd "$PROJECT_ROOT/docker"
-    
+
     # Create .env file if it doesn't exist
     if [ ! -f "$PROJECT_ROOT/sdk-users/.env.sdk-dev" ]; then
         echo "Creating environment configuration..."
@@ -180,22 +180,22 @@ MCP_SERVER_URL=http://localhost:8765
 EOF
         echo -e "${GREEN}✓ Environment configuration created${NC}"
     fi
-    
+
     # Start services
     echo -e "${YELLOW}Starting SDK development services...${NC}"
     docker compose -f docker-compose.sdk-dev.yml up -d
-    
+
     # Wait for services to be healthy
     echo -e "${YELLOW}Waiting for services to be ready...${NC}"
     sleep 10
-    
+
     # Check service health
     if curl -s http://localhost:8889/health >/dev/null 2>&1; then
         echo -e "${GREEN}✓ All services are healthy${NC}"
     else
         echo -e "${YELLOW}⚠ Some services may still be starting up${NC}"
     fi
-    
+
     echo
     echo -e "${GREEN}SDK Development Environment is ready!${NC}"
     echo
@@ -231,10 +231,10 @@ main() {
     OS=$(detect_os)
     echo "Detected OS: $OS"
     echo
-    
+
     while true; do
         show_menu
-        
+
         case $choice in
             1)
                 if check_docker; then
@@ -257,7 +257,7 @@ main() {
                             ;;
                     esac
                 fi
-                
+
                 if check_docker; then
                     setup_sdk_environment
                 fi
@@ -296,7 +296,7 @@ main() {
                 echo -e "${RED}Invalid choice. Please try again.${NC}"
                 ;;
         esac
-        
+
         echo
         read -p "Press Enter to continue..."
         echo

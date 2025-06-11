@@ -187,7 +187,7 @@ workflow = builder.build("export_test")
         assert "Workflow created" in result.stdout
 
         # Verify created workflow
-        with open(workflow_file, "r") as f:
+        with open(workflow_file) as f:
             data = json.load(f)
 
         assert data["metadata"]["id"] == "new-workflow"
@@ -488,7 +488,7 @@ class CustomPlugin(Node):
 
         if result.returncode == 0 and profile_output.exists():
             # Verify profile data
-            with open(profile_output, "r") as f:
+            with open(profile_output) as f:
                 profile_data = json.load(f)
 
             assert "execution_time" in profile_data

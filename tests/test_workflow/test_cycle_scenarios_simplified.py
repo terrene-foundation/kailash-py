@@ -5,7 +5,7 @@ simplified implementations that work with the current architecture.
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
@@ -16,7 +16,7 @@ from kailash.runtime.local import LocalRuntime
 class SimpleETLWithRetryNode(CycleAwareNode):
     """Simple ETL processor that demonstrates retry patterns."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data_source": NodeParameter(
                 name="data_source", type=str, required=False, default=""
@@ -29,7 +29,7 @@ class SimpleETLWithRetryNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Process data with simulated retry logic."""
         data_source = kwargs.get("data_source", "test_db")
         max_retries = kwargs.get("max_retries", 3)
@@ -78,7 +78,7 @@ class SimpleETLWithRetryNode(CycleAwareNode):
 class SimpleAPIPollerNode(CycleAwareNode):
     """Simple API poller that demonstrates polling patterns."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "endpoint": NodeParameter(
                 name="endpoint", type=str, required=False, default=""
@@ -91,7 +91,7 @@ class SimpleAPIPollerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Poll API with simulated responses."""
         endpoint = kwargs.get("endpoint", "/api/status")
         max_polls = kwargs.get("max_polls", 10)
@@ -134,7 +134,7 @@ class SimpleAPIPollerNode(CycleAwareNode):
 class SimpleDataQualityNode(CycleAwareNode):
     """Simple data quality improver that demonstrates iterative refinement."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "target_quality": NodeParameter(
@@ -145,7 +145,7 @@ class SimpleDataQualityNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Improve data quality iteratively."""
         data = kwargs.get("data", [])
         target_quality = kwargs.get("target_quality", 0.9)
@@ -335,7 +335,7 @@ class TestSimplifiedScenarios:
         class BatchProcessorNode(CycleAwareNode):
             """Process data in batches with checkpoints."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "total_items": NodeParameter(
                         name="total_items", type=int, required=False, default=1000
@@ -348,7 +348,7 @@ class TestSimplifiedScenarios:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 total_items = kwargs.get("total_items", 1000)
                 batch_size = kwargs.get("batch_size", 100)
 
@@ -421,7 +421,7 @@ class TestSimplifiedScenarios:
         class ResourceOptimizerNode(CycleAwareNode):
             """Optimize resource allocation iteratively."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "resources": NodeParameter(
                         name="resources", type=dict, required=False, default={}
@@ -434,7 +434,7 @@ class TestSimplifiedScenarios:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 resources = kwargs.get("resources", {"cpu": 100, "memory": 1000})
                 target_efficiency = kwargs.get("target_efficiency", 0.9)
 

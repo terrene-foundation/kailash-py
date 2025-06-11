@@ -8,7 +8,7 @@ import asyncio
 import logging
 import random
 import time
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.logic.async_operations import AsyncMergeNode, AsyncSwitchNode
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class DataSourceNode(AsyncNode):
     """Simulates an async data source like an API or database."""
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define parameters for the node."""
         from kailash.nodes.base import NodeParameter
 
@@ -44,7 +44,7 @@ class DataSourceNode(AsyncNode):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous implementation for compatibility."""
         # Generate sample data without delay
         data_size = kwargs.get("data_size", 100)
@@ -62,7 +62,7 @@ class DataSourceNode(AsyncNode):
         logger.info(f"DataSourceNode {source_id} produced {len(data)} records (sync)")
         return {"output": data}
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Simulate fetching data with network delay."""
         # Simulate API or DB delay
         await asyncio.sleep(0.5)
@@ -87,7 +87,7 @@ class DataSourceNode(AsyncNode):
 class ProcessingNode(AsyncNode):
     """Simulates data processing with async operations."""
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define parameters for the node."""
         from kailash.nodes.base import NodeParameter
 
@@ -100,7 +100,7 @@ class ProcessingNode(AsyncNode):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous implementation for compatibility."""
         input_data = kwargs.get("input", [])
 
@@ -118,7 +118,7 @@ class ProcessingNode(AsyncNode):
         logger.info(f"ProcessingNode processed {len(processed_data)} records (sync)")
         return {"output": processed_data}
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Process input data with simulated computation time."""
         input_data = kwargs.get("input", [])
 
@@ -146,7 +146,7 @@ class ProcessingNode(AsyncNode):
 class FilterNode(AsyncNode):
     """Filters data based on criteria."""
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define parameters for the node."""
         from kailash.nodes.base import NodeParameter
 
@@ -166,7 +166,7 @@ class FilterNode(AsyncNode):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous implementation for compatibility."""
         input_data = kwargs.get("input", [])
         threshold = kwargs.get("threshold", 50)
@@ -185,7 +185,7 @@ class FilterNode(AsyncNode):
         )
         return {"output": filtered_data}
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Filter data asynchronously."""
         input_data = kwargs.get("input", [])
         threshold = kwargs.get("threshold", 50)
@@ -211,7 +211,7 @@ class FilterNode(AsyncNode):
 class EnrichmentNode(AsyncNode):
     """Enriches data with additional information."""
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define parameters for the node."""
         from kailash.nodes.base import NodeParameter
 
@@ -224,7 +224,7 @@ class EnrichmentNode(AsyncNode):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous implementation for compatibility."""
         input_data = kwargs.get("input", [])
 
@@ -240,7 +240,7 @@ class EnrichmentNode(AsyncNode):
         logger.info(f"EnrichmentNode enriched {len(enriched_data)} records (sync)")
         return {"output": enriched_data}
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Enrich data with additional fields."""
         input_data = kwargs.get("input", [])
 
@@ -263,7 +263,7 @@ class EnrichmentNode(AsyncNode):
 class SummaryNode(AsyncNode):
     """Generates summary statistics from data."""
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Define parameters for the node."""
         from kailash.nodes.base import NodeParameter
 
@@ -276,7 +276,7 @@ class SummaryNode(AsyncNode):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous implementation for compatibility."""
         input_data = kwargs.get("input", [])
 
@@ -299,7 +299,7 @@ class SummaryNode(AsyncNode):
         )
         return summary
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Calculate summary statistics."""
         input_data = kwargs.get("input", [])
 

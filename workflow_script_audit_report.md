@@ -58,7 +58,7 @@ I've audited all 7 workflow scripts in the by-pattern directory against the requ
 - ❌ **Mock Data Issue**: Generates all event data through code instead of reading from real sources
 - ⚠️ Contains workarounds for DataTransformer dict output bug
 
-**Issues**: 
+**Issues**:
 - Relies entirely on DataTransformer nodes with embedded Python code
 - All data is generated/mocked rather than from real sources
 - Should use dedicated event processing nodes

@@ -1,6 +1,6 @@
 """Simple tests for basic runtime functionality."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
@@ -33,7 +33,7 @@ class TestBasicRuntime:
         """Test adding a node to workflow."""
         workflow = Workflow(workflow_id="test_workflow", name="Test Workflow")
 
-        def test_func(x: int, y: int) -> Dict[str, Any]:
+        def test_func(x: int, y: int) -> dict[str, Any]:
             return {"result": x + y}
 
         node = PythonCodeNode.from_function(test_func, name="adder")
@@ -46,7 +46,7 @@ class TestBasicRuntime:
         """Test simple workflow execution."""
         workflow = Workflow(workflow_id="test_workflow", name="Test Workflow")
 
-        def double(x: int) -> Dict[str, Any]:
+        def double(x: int) -> dict[str, Any]:
             return {"result": x * 2}
 
         node = PythonCodeNode.from_function(double, name="doubler")

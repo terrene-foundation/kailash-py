@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 
@@ -100,7 +100,7 @@ class RealTimeDashboard:
     """
 
     def __init__(
-        self, task_manager: TaskManager, config: Optional[DashboardConfig] = None
+        self, task_manager: TaskManager, config: DashboardConfig | None = None
     ):
         """Initialize real-time dashboard.
 
@@ -114,17 +114,17 @@ class RealTimeDashboard:
 
         # Live monitoring state
         self._monitoring = False
-        self._monitor_thread: Optional[threading.Thread] = None
-        self._metrics_history: List[LiveMetrics] = []
-        self._current_run_id: Optional[str] = None
+        self._monitor_thread: threading.Thread | None = None
+        self._metrics_history: list[LiveMetrics] = []
+        self._current_run_id: str | None = None
 
         # Event callbacks
-        self._status_callbacks: List[callable] = []
-        self._metrics_callbacks: List[callable] = []
+        self._status_callbacks: list[callable] = []
+        self._metrics_callbacks: list[callable] = []
 
         self.logger = logger
 
-    def start_monitoring(self, run_id: Optional[str] = None):
+    def start_monitoring(self, run_id: str | None = None):
         """Start real-time monitoring for a workflow run.
 
         Args:
@@ -297,11 +297,11 @@ class RealTimeDashboard:
         """
         self._status_callbacks.append(callback)
 
-    def get_current_metrics(self) -> Optional[LiveMetrics]:
+    def get_current_metrics(self) -> LiveMetrics | None:
         """Get the most recent metrics."""
         return self._metrics_history[-1] if self._metrics_history else None
 
-    def get_metrics_history(self, minutes: Optional[int] = None) -> List[LiveMetrics]:
+    def get_metrics_history(self, minutes: int | None = None) -> list[LiveMetrics]:
         """Get metrics history for specified time period.
 
         Args:
@@ -317,7 +317,7 @@ class RealTimeDashboard:
         return [m for m in self._metrics_history if m.timestamp >= cutoff]
 
     def generate_live_report(
-        self, output_path: Union[str, Path], include_charts: bool = True
+        self, output_path: str | Path, include_charts: bool = True
     ) -> Path:
         """Generate comprehensive live dashboard report.
 
@@ -396,7 +396,7 @@ class RealTimeDashboard:
 
         return html_template
 
-    def _generate_status_section(self, metrics: Optional[LiveMetrics]) -> str:
+    def _generate_status_section(self, metrics: LiveMetrics | None) -> str:
         """Generate status overview section."""
         if not metrics:
             return """
@@ -442,7 +442,7 @@ class RealTimeDashboard:
         </section>
         """
 
-    def _generate_live_metrics_section(self, history: List[LiveMetrics]) -> str:
+    def _generate_live_metrics_section(self, history: list[LiveMetrics]) -> str:
         """Generate live metrics charts section."""
         if not history:
             return """
@@ -860,7 +860,7 @@ class DashboardExporter:
         self.dashboard = dashboard
         self.logger = logger
 
-    def export_metrics_json(self, output_path: Union[str, Path]) -> Path:
+    def export_metrics_json(self, output_path: str | Path) -> Path:
         """Export current metrics as JSON.
 
         Args:
@@ -895,7 +895,7 @@ class DashboardExporter:
         self.logger.info(f"Exported metrics to: {output_path}")
         return output_path
 
-    def _metrics_to_dict(self, metrics: LiveMetrics) -> Dict[str, Any]:
+    def _metrics_to_dict(self, metrics: LiveMetrics) -> dict[str, Any]:
         """Convert LiveMetrics to dictionary."""
         return {
             "timestamp": metrics.timestamp.isoformat(),
@@ -909,8 +909,8 @@ class DashboardExporter:
         }
 
     def create_dashboard_snapshot(
-        self, output_dir: Union[str, Path], include_static_charts: bool = True
-    ) -> Dict[str, Path]:
+        self, output_dir: str | Path, include_static_charts: bool = True
+    ) -> dict[str, Path]:
         """Create complete dashboard snapshot with all assets.
 
         Args:

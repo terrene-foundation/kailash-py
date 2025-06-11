@@ -1,13 +1,11 @@
 """Visual workflow example with data nodes and Python nodes."""
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
-from examples.utils.data_paths import (
-    get_test_data_path,
-)
+from examples.utils.data_paths import get_test_data_path
 from examples.utils.paths import get_output_dir
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
@@ -36,7 +34,7 @@ def create_data_pipeline():
     csv_reader.id = "csv_input"  # Set custom ID for clarity
 
     # 2. Filter: High-value customers
-    def filter_high_value(data: list, threshold: float = 1000.0) -> Dict[str, Any]:
+    def filter_high_value(data: list, threshold: float = 1000.0) -> dict[str, Any]:
         """Filter customers with claims above threshold."""
         df = pd.DataFrame(data)
         filtered = df[df["Total Claim Amount"] > threshold]
@@ -61,7 +59,7 @@ def create_data_pipeline():
     high_value_filter.id = "high_value_filter"
 
     # 3. Transform: Add risk score
-    def add_risk_score(data: list) -> Dict[str, Any]:
+    def add_risk_score(data: list) -> dict[str, Any]:
         """Add risk score based on claim amount."""
         df = pd.DataFrame(data)
 
@@ -86,7 +84,7 @@ def create_data_pipeline():
     risk_scorer.id = "risk_scorer"
 
     # 4. Aggregate: Summary statistics
-    def create_summary(data: list) -> Dict[str, Any]:
+    def create_summary(data: list) -> dict[str, Any]:
         """Create summary statistics by customer."""
         df = pd.DataFrame(data)
 

@@ -1,7 +1,7 @@
 """Simple example demonstrating CSV reader connected to custom Python node."""
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -34,7 +34,7 @@ def main():
     # 3. Create custom Python node for filtering
     def filter_high_value_customers(
         data: list, column_name: str, threshold: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Filter customers based on a threshold value."""
         df = pd.DataFrame(data)
 
@@ -126,7 +126,7 @@ def main():
     print(f"Direct execution: {filter_result['count']} customers with claims > $1500")
 
     # Create another Python node on the fly
-    def calculate_statistics(data: list, value_column: str) -> Dict[str, Any]:
+    def calculate_statistics(data: list, value_column: str) -> dict[str, Any]:
         """Calculate basic statistics."""
         df = pd.DataFrame(data)
         # Convert column to numeric

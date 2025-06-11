@@ -52,5 +52,5 @@
 
 ---
 
-**For SDK usage**: See [../sdk-users/CLAUDE.md](../sdk-users/CLAUDE.md)  
+**For SDK usage**: See [../sdk-users/CLAUDE.md](../sdk-users/CLAUDE.md)
 **For SDK development**: See [../# contrib (removed)/CLAUDE.md](../# contrib (removed)/CLAUDE.md)

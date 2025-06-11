@@ -30,7 +30,7 @@ Downstream Consumers:
 
 import csv
 import json
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.security import safe_open, validate_file_path
@@ -146,7 +146,7 @@ class CSVReaderNode(Node):
         ... )
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for CSV reading.
 
         This method specifies the configuration options for reading CSV files,
@@ -197,7 +197,7 @@ class CSVReaderNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute CSV reading operation.
 
         This method performs the actual file reading, handling both headerless
@@ -272,7 +272,7 @@ class CSVReaderNode(Node):
                 index_pos = header_row.index(index_column) if index_column else None
 
                 for row in reader:
-                    row_dict = dict(zip(header_row, row))
+                    row_dict = dict(zip(header_row, row, strict=False))
                     data.append(row_dict)
 
                     # If index column specified, add to indexed dictionary
@@ -345,7 +345,7 @@ class JSONReaderNode(Node):
         # }
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for JSON reading.
 
         Simple parameter definition reflecting JSON's self-describing nature.
@@ -368,7 +368,7 @@ class JSONReaderNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute JSON reading operation.
 
         Reads and parses JSON file, preserving the original structure
@@ -472,7 +472,7 @@ class TextReaderNode(Node):
         >>> # result['text'] = "2024-01-01 INFO: Application started\\n..."
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define input parameters for text reading.
 
         Provides essential parameters for text file reading with
@@ -507,7 +507,7 @@ class TextReaderNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute text reading operation.
 
         Reads entire text file into memory as a single string,

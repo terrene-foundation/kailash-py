@@ -50,8 +50,8 @@ Future Enhancements:
 import os
 import secrets
 import threading
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -101,14 +101,14 @@ class User(Base):
 
     # User roles and permissions
     roles = Column(JSON, default=lambda: ["user"])
-    permissions = Column(JSON, default=lambda: [])
+    permissions = Column(JSON, default=list)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
     last_login = Column(DateTime)
 
@@ -150,11 +150,11 @@ class Tenant(Base):
     subscription_tier = Column(String(50), default="free")
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
@@ -187,7 +187,7 @@ class APIKey(Base):
     usage_count = Column(JSON, default=lambda: {"total": 0, "monthly": 0})
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relationships
     user = relationship("User", back_populates="api_keys")
@@ -203,7 +203,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
     password: str = Field(..., min_length=8)
-    tenant_id: Optional[str] = None  # If None, create new tenant
+    tenant_id: str | None = None  # If None, create new tenant
 
 
 class UserLogin(BaseModel):
@@ -227,9 +227,9 @@ class TokenData(BaseModel):
 
     sub: str
     tenant_id: str
-    roles: List[str] = ["user"]
-    permissions: List[str] = []
-    exp: Optional[datetime] = None
+    roles: list[str] = ["user"]
+    permissions: list[str] = []
+    exp: datetime | None = None
 
 
 class JWTAuth:
@@ -240,33 +240,27 @@ class JWTAuth:
         self.algorithm = ALGORITHM
 
     def create_access_token(
-        self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+        self, data: dict[str, Any], expires_delta: timedelta | None = None
     ) -> str:
         """Create a JWT access token"""
         to_encode = data.copy()
 
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(
-                hours=ACCESS_TOKEN_EXPIRE_HOURS
-            )
+            expire = datetime.now(UTC) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
 
-        to_encode.update(
-            {"exp": expire, "iat": datetime.now(timezone.utc), "type": "access"}
-        )
+        to_encode.update({"exp": expire, "iat": datetime.now(UTC), "type": "access"})
 
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
-    def create_refresh_token(self, data: Dict[str, Any]) -> str:
+    def create_refresh_token(self, data: dict[str, Any]) -> str:
         """Create a JWT refresh token"""
         to_encode = data.copy()
-        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-        to_encode.update(
-            {"exp": expire, "iat": datetime.now(timezone.utc), "type": "refresh"}
-        )
+        to_encode.update({"exp": expire, "iat": datetime.now(UTC), "type": "refresh"})
 
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
@@ -421,13 +415,13 @@ async def verify_api_key(
         )
 
     # Check expiration
-    if valid_key.expires_at and valid_key.expires_at < datetime.now(timezone.utc):
+    if valid_key.expires_at and valid_key.expires_at < datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="API key expired"
         )
 
     # Update usage
-    valid_key.last_used_at = datetime.now(timezone.utc)
+    valid_key.last_used_at = datetime.now(UTC)
     valid_key.usage_count["total"] += 1
     valid_key.usage_count["monthly"] += 1
     session.commit()
@@ -514,7 +508,7 @@ class TenantContext:
 _tenant_context = threading.local()
 
 
-def get_current_tenant_id() -> Optional[str]:
+def get_current_tenant_id() -> str | None:
     """Get current tenant ID from context"""
     return getattr(_tenant_context, "tenant_id", None)
 
@@ -615,7 +609,7 @@ class AuthService:
             )
 
         # Update last login
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now(UTC)
         self.session.commit()
 
         # Generate tokens
@@ -646,7 +640,7 @@ class AuthService:
         return self.auth.create_tokens(user)
 
     def create_api_key(
-        self, name: str, user: User, scopes: List[str] = None
+        self, name: str, user: User, scopes: list[str] = None
     ) -> tuple[str, APIKey]:
         """Create an API key for a user"""
         key, key_hash = create_api_key()

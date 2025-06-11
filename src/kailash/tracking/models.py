@@ -1,8 +1,8 @@
 """Data models for task tracking."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,11 +14,11 @@ from kailash.sdk_exceptions import KailashValidationError, TaskException, TaskSt
 class TaskMetrics(BaseModel):
     """Metrics for task execution."""
 
-    duration: Optional[float] = 0.0
-    memory_usage: Optional[float] = 0.0  # Legacy field name
-    memory_usage_mb: Optional[float] = 0.0  # New field name
-    cpu_usage: Optional[float] = 0.0
-    custom_metrics: Dict[str, Any] = Field(default_factory=dict)
+    duration: float | None = 0.0
+    memory_usage: float | None = 0.0  # Legacy field name
+    memory_usage_mb: float | None = 0.0  # New field name
+    cpu_usage: float | None = 0.0
+    custom_metrics: dict[str, Any] = Field(default_factory=dict)
 
     def __init__(self, **data):
         """Initialize metrics with unified memory field handling."""
@@ -37,12 +37,12 @@ class TaskMetrics(BaseModel):
             raise ValueError("Metric values must be non-negative")
         return v
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert metrics to dictionary representation."""
         return self.model_dump()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TaskMetrics":
+    def from_dict(cls, data: dict[str, Any]) -> "TaskMetrics":
         """Create metrics from dictionary representation."""
         return cls.model_validate(data)
 
@@ -86,20 +86,20 @@ class TaskRun(BaseModel):
         default="default-node-type", description="Type of node"
     )  # Default for backward compatibility
     status: TaskStatus = Field(default=TaskStatus.PENDING)
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = (
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    completed_at: datetime | None = (
         None  # Alias for ended_at for backward compatibility
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    input_data: Optional[Dict[str, Any]] = None
-    output_data: Optional[Dict[str, Any]] = None
-    metrics: Optional[TaskMetrics] = None  # For storing task metrics
-    dependencies: List[str] = Field(default_factory=list)
-    parent_task_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    input_data: dict[str, Any] | None = None
+    output_data: dict[str, Any] | None = None
+    metrics: TaskMetrics | None = None  # For storing task metrics
+    dependencies: list[str] = Field(default_factory=list)
+    parent_task_id: str | None = None
     retry_count: int = 0
 
     @field_validator("run_id", "node_id", "node_type")
@@ -134,26 +134,26 @@ class TaskRun(BaseModel):
     def start(self) -> None:
         """Start the task."""
         self.update_status(TaskStatus.RUNNING)
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
 
-    def complete(self, output_data: Optional[Dict[str, Any]] = None) -> None:
+    def complete(self, output_data: dict[str, Any] | None = None) -> None:
         """Complete the task successfully."""
         if output_data is not None:
             self.output_data = output_data
         self.update_status(TaskStatus.COMPLETED)
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
 
     def fail(self, error_message: str) -> None:
         """Mark the task as failed."""
         self.error = error_message
         self.update_status(TaskStatus.FAILED)
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
 
     def cancel(self, reason: str) -> None:
         """Cancel the task."""
         self.error = reason
         self.update_status(TaskStatus.CANCELLED)
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
 
     def create_retry(self) -> "TaskRun":
         """Create a new task as a retry of this task."""
@@ -171,7 +171,7 @@ class TaskRun(BaseModel):
         return retry_task
 
     @property
-    def duration(self) -> Optional[float]:
+    def duration(self) -> float | None:
         """Get task duration in seconds."""
         if self.started_at and self.ended_at:
             return (self.ended_at - self.started_at).total_seconds()
@@ -204,7 +204,7 @@ class TaskRun(BaseModel):
         # Check other validation rules as needed
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TaskRun":
+    def from_dict(cls, data: dict[str, Any]) -> "TaskRun":
         """Create from dictionary representation."""
         # Make a copy to avoid modifying the original
         data_copy = data.copy()
@@ -234,10 +234,10 @@ class TaskRun(BaseModel):
     def update_status(
         self,
         status: TaskStatus,
-        result: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        ended_at: Optional[datetime] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        ended_at: datetime | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Update task status.
 
@@ -275,15 +275,15 @@ class TaskRun(BaseModel):
         if ended_at is not None:
             self.ended_at = ended_at
         elif status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED]:
-            self.ended_at = datetime.now(timezone.utc)
+            self.ended_at = datetime.now(UTC)
 
         if status == TaskStatus.RUNNING and self.started_at is None:
-            self.started_at = datetime.now(timezone.utc)
+            self.started_at = datetime.now(UTC)
 
         if metadata is not None:
             self.metadata.update(metadata)
 
-    def get_duration(self) -> Optional[float]:
+    def get_duration(self) -> float | None:
         """Get task duration in seconds.
 
         Returns:
@@ -293,7 +293,7 @@ class TaskRun(BaseModel):
             return (self.ended_at - self.started_at).total_seconds()
         return None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         try:
             data = self.model_dump()
@@ -335,11 +335,11 @@ class WorkflowRun(BaseModel):
     run_id: str = Field(default_factory=lambda: str(uuid4()))
     workflow_name: str = Field(..., description="Name of the workflow")
     status: str = Field(default="running", description="Run status")
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    ended_at: Optional[datetime] = None
-    tasks: List[str] = Field(default_factory=list, description="Task IDs")
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    error: Optional[str] = None
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    ended_at: datetime | None = None
+    tasks: list[str] = Field(default_factory=list, description="Task IDs")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
 
     @field_validator("workflow_name")
     @classmethod
@@ -360,7 +360,7 @@ class WorkflowRun(BaseModel):
             )
         return v
 
-    def update_status(self, status: str, error: Optional[str] = None) -> None:
+    def update_status(self, status: str, error: str | None = None) -> None:
         """Update run status.
 
         Args:
@@ -387,7 +387,7 @@ class WorkflowRun(BaseModel):
             self.error = error
 
         if status in ["completed", "failed"] and self.ended_at is None:
-            self.ended_at = datetime.now(timezone.utc)
+            self.ended_at = datetime.now(UTC)
 
     def add_task(self, task_id: str) -> None:
         """Add a task to this run.
@@ -404,7 +404,7 @@ class WorkflowRun(BaseModel):
         if task_id not in self.tasks:
             self.tasks.append(task_id)
 
-    def get_duration(self) -> Optional[float]:
+    def get_duration(self) -> float | None:
         """Get run duration in seconds.
 
         Returns:
@@ -414,7 +414,7 @@ class WorkflowRun(BaseModel):
             return (self.ended_at - self.started_at).total_seconds()
         return None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         try:
             data = self.model_dump()
@@ -434,10 +434,10 @@ class TaskSummary(BaseModel):
     node_id: str
     node_type: str
     status: TaskStatus
-    duration: Optional[float] = None
-    started_at: Optional[str] = None
-    ended_at: Optional[str] = None
-    error: Optional[str] = None
+    duration: float | None = None
+    started_at: str | None = None
+    ended_at: str | None = None
+    error: str | None = None
 
     @classmethod
     def from_task_run(cls, task: TaskRun) -> "TaskSummary":
@@ -473,16 +473,16 @@ class RunSummary(BaseModel):
     run_id: str
     workflow_name: str
     status: str
-    duration: Optional[float] = None
+    duration: float | None = None
     started_at: str
-    ended_at: Optional[str] = None
+    ended_at: str | None = None
     task_count: int = 0
     completed_tasks: int = 0
     failed_tasks: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
     @classmethod
-    def from_workflow_run(cls, run: WorkflowRun, tasks: List[TaskRun]) -> "RunSummary":
+    def from_workflow_run(cls, run: WorkflowRun, tasks: list[TaskRun]) -> "RunSummary":
         """Create summary from a WorkflowRun and its tasks.
 
         Args:

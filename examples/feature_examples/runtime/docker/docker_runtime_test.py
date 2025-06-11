@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from examples.utils.paths import get_data_dir, get_output_dir
 
@@ -48,7 +48,7 @@ class DockerNodeTester:
 
     def __init__(
         self,
-        test_dir: Optional[str] = None,
+        test_dir: str | None = None,
         base_image: str = "python:3.11-slim",
         network_name: str = "kailash-test-network",
         cleanup: bool = True,
@@ -104,7 +104,7 @@ class DockerNodeTester:
                 raise RuntimeError(f"Failed to create Docker network: {e}")
 
     def create_dockerfile_for_node(
-        self, node: Node, requirements: List[str] = None
+        self, node: Node, requirements: list[str] = None
     ) -> Path:
         """
         Generate a Dockerfile for a specific node.
@@ -132,9 +132,7 @@ class DockerNodeTester:
                 "name": getattr(node, "name", node.__class__.__name__),
                 "parameters": {
                     name: str(param)
-                    for name, param in (
-                        getattr(node, "get_parameters", lambda: {})().items()
-                    )
+                    for name, param in (getattr(node, "get_parameters", dict)().items())
                 },
             }
             json.dump(node_data, f, indent=2)
@@ -288,7 +286,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
             raise
 
     def run_node_container(
-        self, node: Node, image_name: str, inputs: Dict[str, Any]
+        self, node: Node, image_name: str, inputs: dict[str, Any]
     ) -> str:
         """
         Run a node in a Docker container.
@@ -387,7 +385,7 @@ ENTRYPOINT ["/app/entrypoint.py"]
             print(f"Error getting container logs: {e}")
             return f"Error: {e}"
 
-    def get_node_result(self, node: Node) -> Dict[str, Any]:
+    def get_node_result(self, node: Node) -> dict[str, Any]:
         """
         Get the result of a node execution.
 
@@ -402,14 +400,14 @@ ENTRYPOINT ["/app/entrypoint.py"]
 
         result_file = node_data_dir / "output" / "result.json"
         if result_file.exists():
-            with open(result_file, "r") as f:
+            with open(result_file) as f:
                 return json.load(f)
         else:
             return {"error": "No result file found"}
 
     def test_workflow(
-        self, workflow: Workflow, inputs: Dict[str, Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, workflow: Workflow, inputs: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Test a workflow by running each node in a separate container.
 
@@ -465,8 +463,8 @@ ENTRYPOINT ["/app/entrypoint.py"]
         return node_results
 
     def compare_with_local_execution(
-        self, workflow: Workflow, inputs: Dict[str, Dict[str, Any]]
-    ) -> Tuple[bool, Dict[str, Any]]:
+        self, workflow: Workflow, inputs: dict[str, dict[str, Any]]
+    ) -> tuple[bool, dict[str, Any]]:
         """
         Compare Docker-based execution with local execution.
 

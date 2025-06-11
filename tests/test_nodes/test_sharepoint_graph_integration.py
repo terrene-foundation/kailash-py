@@ -80,7 +80,7 @@ class TestSharePointGraphIntegration:
             assert os.path.exists("test_downloads/dummy_1_test.txt")
 
             # Check file content
-            with open("test_downloads/dummy_1_test.txt", "r") as f:
+            with open("test_downloads/dummy_1_test.txt") as f:
                 content = f.read()
                 assert "Dummy Data" in content
 
@@ -158,7 +158,7 @@ class TestSharePointGraphIntegration:
             assert download_result["downloaded"] is True
 
             # Verify content
-            with open(f"downloaded_{test_filename}", "r") as f:
+            with open(f"downloaded_{test_filename}") as f:
                 downloaded_content = f.read()
                 assert downloaded_content == test_content
 

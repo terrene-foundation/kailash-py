@@ -1,7 +1,7 @@
 """Integration tests for cycle-aware node patterns in complete workflows."""
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -16,7 +16,7 @@ from kailash.runtime.local import LocalRuntime
 class QualityImproverNode(CycleAwareNode):
     """Test node that improves quality iteratively."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "quality": NodeParameter(
@@ -27,7 +27,7 @@ class QualityImproverNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Improve quality with cycle awareness."""
         iteration = self.get_iteration(context)
         is_first = self.is_first_iteration(context)
@@ -66,7 +66,7 @@ class QualityImproverNode(CycleAwareNode):
 class DataValidatorNode(CycleAwareNode):
     """Validates data quality in cycles."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "min_quality": NodeParameter(
@@ -74,7 +74,7 @@ class DataValidatorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Validate data quality."""
         data = kwargs.get("data", [])
         min_quality = kwargs.get("min_quality", 0.8)
@@ -110,7 +110,7 @@ class TestCycleAwareWorkflowIntegration:
         class SimpleQualityImprover(CycleAwareNode):
             """Improver that checks its own convergence."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -126,7 +126,7 @@ class TestCycleAwareWorkflowIntegration:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Improve quality with built-in convergence check."""
                 iteration = self.get_iteration(context)
                 is_first = self.is_first_iteration(context)
@@ -216,7 +216,7 @@ class TestCycleAwareWorkflowIntegration:
         class ConditionalProcessorNode(CycleAwareNode):
             """Processor that can trigger early exit."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -226,7 +226,7 @@ class TestCycleAwareWorkflowIntegration:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process data toward target."""
                 data = kwargs.get("data", [])
                 target_sum = kwargs.get("target_sum", 100.0)
@@ -320,7 +320,7 @@ class TestCycleAwareWorkflowIntegration:
         class MultiMetricNode(CycleAwareNode):
             """Node that optimizes multiple metrics."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "accuracy": NodeParameter(
                         name="accuracy", type=float, required=False, default=0.5
@@ -330,7 +330,7 @@ class TestCycleAwareWorkflowIntegration:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Optimize multiple metrics."""
                 accuracy = kwargs.get("accuracy", 0.5)
                 speed = kwargs.get("speed", 0.3)
@@ -406,14 +406,14 @@ class TestCycleAwareWorkflowIntegration:
         class TaskGeneratorNode(CycleAwareNode):
             """Generates tasks for agents."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "task_count": NodeParameter(
                         name="task_count", type=int, required=False, default=3
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Generate tasks based on iteration."""
                 iteration = self.get_iteration(context)
                 task_count = kwargs.get("task_count", 3)
@@ -480,7 +480,7 @@ class TestCycleAwareWorkflowIntegration:
         class UnreliableNode(CycleAwareNode):
             """Node that fails occasionally."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "fail_on_iteration": NodeParameter(
                         name="fail_on_iteration", type=int, required=False, default=3
@@ -490,7 +490,7 @@ class TestCycleAwareWorkflowIntegration:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Process data, failing on specific iteration."""
                 iteration = self.get_iteration(context)
                 fail_on_iteration = kwargs.get("fail_on_iteration", 3)
@@ -520,7 +520,7 @@ class TestCycleAwareWorkflowIntegration:
         class ErrorHandlerNode(CycleAwareNode):
             """Handles errors and decides on retry."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "error": NodeParameter(
                         name="error", type=bool, required=False, default=False
@@ -533,7 +533,7 @@ class TestCycleAwareWorkflowIntegration:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Handle errors and count retries."""
                 error = kwargs.get("error", False)
                 should_retry = kwargs.get("should_retry", False)
@@ -625,14 +625,14 @@ class TestCycleAwarePerformance:
         class StateAccumulatorNode(CycleAwareNode):
             """Node that accumulates large amounts of state."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data_size": NodeParameter(
                         name="data_size", type=int, required=False, default=100
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 """Accumulate state with memory management."""
                 data_size = kwargs.get("data_size", 100)
                 iteration = self.get_iteration(context)

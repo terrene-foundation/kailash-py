@@ -9,7 +9,7 @@ This example demonstrates a production-ready multi-workflow gateway setup with:
 
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from kailash.api.gateway import WorkflowAPIGateway
 from kailash.api.mcp_integration import MCPIntegration
@@ -376,7 +376,7 @@ def create_mcp_tools() -> MCPIntegration:
     mcp = MCPIntegration("ai_analyst", "AI-powered data analysis tools")
 
     # Anomaly detection tool
-    def detect_anomalies(data: list, sensitivity: float = 0.8) -> Dict[str, Any]:
+    def detect_anomalies(data: list, sensitivity: float = 0.8) -> dict[str, Any]:
         """Detect anomalies in data (simplified simulation)."""
         anomalies = []
 
@@ -422,7 +422,7 @@ def create_mcp_tools() -> MCPIntegration:
     )
 
     # Pattern recognition tool
-    def recognize_patterns(data: list, pattern_type: str = "trend") -> Dict[str, Any]:
+    def recognize_patterns(data: list, pattern_type: str = "trend") -> dict[str, Any]:
         """Recognize patterns in data (simplified)."""
         patterns = []
 

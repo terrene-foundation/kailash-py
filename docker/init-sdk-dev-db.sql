@@ -30,7 +30,7 @@ CREATE INDEX idx_transactions_processed ON transactions(processed);
 
 -- Insert sample transactions
 INSERT INTO transactions (transaction_id, account_id, amount, currency, transaction_type, merchant_id, location, risk_factors)
-VALUES 
+VALUES
     ('TX001', 'ACC-12345', 2500.00, 'USD', 'purchase', 'MERCH-001', '{"country": "US", "city": "New York"}', '{"is_first_transaction": false}'),
     ('TX002', 'ACC-67890', 15000.00, 'USD', 'transfer', NULL, '{"country": "UK", "city": "London"}', '{"unusual_amount": true}'),
     ('TX003', 'ACC-11111', 750.50, 'EUR', 'purchase', 'MERCH-002', '{"country": "FR", "city": "Paris"}', '{}'),
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS leads (
 
 -- Insert sample leads
 INSERT INTO leads (lead_id, company, contact_name, email, industry, company_size, score, source)
-VALUES 
+VALUES
     ('LEAD001', 'TechCorp Inc', 'John Smith', 'john@techcorp.com', 'Software', '100-500', 85, 'website'),
     ('LEAD002', 'Global Finance Ltd', 'Sarah Johnson', 'sarah@globalfinance.com', 'Finance', '1000+', 92, 'referral'),
     ('LEAD003', 'StartupXYZ', 'Mike Chen', 'mike@startupxyz.com', 'SaaS', '10-50', 65, 'marketing'),
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS engagement (
 
 -- Insert sample campaigns
 INSERT INTO campaigns (campaign_name, campaign_type, start_date, end_date, budget, status)
-VALUES 
+VALUES
     ('Q1 Email Campaign', 'email', '2024-01-01', '2024-03-31', 10000.00, 'completed'),
     ('Product Launch', 'multi-channel', '2024-02-15', '2024-04-15', 25000.00, 'active'),
     ('Summer Promotion', 'social', '2024-06-01', '2024-08-31', 15000.00, 'planned');

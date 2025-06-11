@@ -84,15 +84,15 @@ services:
       - db
       - redis
       - kafka
-      
+
   db:
     image: postgres:15
     environment:
       POSTGRES_PASSWORD: pass
-      
+
   redis:
     image: redis:7-alpine
-    
+
   kafka:
     image: confluentinc/cp-kafka:latest
     environment:

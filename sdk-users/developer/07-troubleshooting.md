@@ -112,7 +112,7 @@ class MyNode(Node):
 class MyNode(Node):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {}
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         return {}
 ```
@@ -165,11 +165,11 @@ from typing import Any, Dict, List, Tuple, Optional
 # When using Any type, validate at runtime
 def run(self, **kwargs):
     data = kwargs['data']  # type: Any
-    
+
     # ✅ Add runtime validation
     if not isinstance(data, list):
         raise ValueError(f"Expected list, got {type(data)}")
-    
+
     # Safe to use as list now
     for item in data:
         process(item)
@@ -360,6 +360,81 @@ csv_reader = CSVReaderNode(name="csv_reader")
 # Connect them properly...
 ```
 
+## Issue: SwitchNode with List Data
+
+### Error: "Required parameter 'input_data' not provided"
+```python
+# ❌ WRONG: SwitchNode expects single item, not list
+risk_assessments = [{'decision': 'approved'}, {'decision': 'declined'}]
+workflow.connect("scorer", "router", mapping={"result": "input_data"})
+# SwitchNode can't route a list!
+
+# ✅ SOLUTION: Process all items in one node
+def process_all_decisions(risk_assessments: list) -> dict:
+    approved = [a for a in risk_assessments if a['decision'] == 'approved']
+    declined = [a for a in risk_assessments if a['decision'] == 'declined']
+    return {
+        'approved': {'count': len(approved), 'items': approved},
+        'declined': {'count': len(declined), 'items': declined}
+    }
+
+workflow.add_node("decision_processor", PythonCodeNode.from_function(
+    func=process_all_decisions,
+    name="decision_processor"
+))
+```
+
+## Issue: JSON Parsing in CSV Data
+
+### Error: "SyntaxError: '{' was never closed" with eval()
+```python
+# CSV files often contain JSON strings in columns
+# Example: location,"{""city"":""New York"",""state"":""NY""}"
+
+# ❌ WRONG: Using eval() for JSON parsing
+location = eval(txn.get('location', '{}'))  # DANGEROUS and can fail!
+
+# ✅ CORRECT: Safe JSON parsing with error handling
+def parse_json_field(field_value: str, default: dict = None) -> dict:
+    """Safely parse JSON string from CSV field."""
+    if default is None:
+        default = {}
+
+    try:
+        import json
+        return json.loads(field_value)
+    except (json.JSONDecodeError, TypeError):
+        return default
+
+# Usage in node
+location_str = txn.get('location', '{}')
+location = parse_json_field(location_str)
+```
+
+## Issue: Type Conversion from CSV
+
+### Error: "'>' not supported between instances of 'str' and 'int'"
+```python
+# ❌ WRONG: CSV data is always strings
+if transaction['amount'] > 5000:  # Will fail!
+    process_high_value(transaction)
+
+# ✅ CORRECT: Convert types appropriately
+amount = float(transaction.get('amount', 0))
+if amount > 5000:
+    process_high_value(transaction)
+
+# ✅ BEST: Robust conversion function
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """Safely convert value to float."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+amount = safe_float(transaction.get('amount'))
+```
+
 ## Common Mistakes Checklist
 
 - [ ] Using `List[T]`, `Dict[K,V]` instead of `list`, `dict`
@@ -375,6 +450,9 @@ csv_reader = CSVReaderNode(name="csv_reader")
 - [ ] **Not serializing DataFrames and NumPy arrays**
 - [ ] **Using manual file operations instead of DirectoryReaderNode**
 - [ ] **Not handling DataTransformer dict output bug**
+- [ ] **Using SwitchNode for list processing**
+- [ ] **Using eval() for JSON parsing**
+- [ ] **Not converting CSV string data to appropriate types**
 
 ---
 

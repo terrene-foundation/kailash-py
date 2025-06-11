@@ -5,7 +5,7 @@ This module tests the integration between Workflow and the state management syst
 ensuring that workflows correctly handle state throughout execution.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -28,7 +28,7 @@ class TestWorkflowState(BaseModel):
 class TestIncrementNode(Node):
     """Test node that increments a value in state."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
@@ -45,7 +45,7 @@ class TestIncrementNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
@@ -61,7 +61,7 @@ class TestIncrementNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         state_wrapper = kwargs["state_wrapper"]
         amount = kwargs.get("amount", 1)
 
@@ -79,7 +79,7 @@ class TestIncrementNode(Node):
 class TestTextNode(Node):
     """Test node that updates text in state."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
@@ -92,7 +92,7 @@ class TestTextNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
@@ -102,7 +102,7 @@ class TestTextNode(Node):
             )
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         state_wrapper = kwargs["state_wrapper"]
         text = kwargs["text"]
 
@@ -116,7 +116,7 @@ class TestTextNode(Node):
 class TestMarkProcessedNode(Node):
     """Test node that marks state as processed."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
@@ -126,7 +126,7 @@ class TestMarkProcessedNode(Node):
             )
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "state_wrapper": NodeParameter(
                 name="state_wrapper",
@@ -142,7 +142,7 @@ class TestMarkProcessedNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         state_wrapper = kwargs["state_wrapper"]
 
         # Batch update to set processed flag and prefix the text
@@ -241,7 +241,7 @@ class TestWorkflowStateIntegration:
         # Create a node that works with unwrapped state
         @register_node(alias="test_unwrapped_node")
         class TestUnwrappedNode(Node):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "state": NodeParameter(
                         name="state",
@@ -251,7 +251,7 @@ class TestWorkflowStateIntegration:
                     )
                 }
 
-            def get_output_schema(self) -> Dict[str, NodeParameter]:
+            def get_output_schema(self) -> dict[str, NodeParameter]:
                 return {
                     "state": NodeParameter(
                         name="state",
@@ -261,7 +261,7 @@ class TestWorkflowStateIntegration:
                     )
                 }
 
-            def run(self, **kwargs) -> Dict[str, Any]:
+            def run(self, **kwargs) -> dict[str, Any]:
                 state = kwargs["state"]
                 # Create a new state object with updates
                 new_state = TestWorkflowState(

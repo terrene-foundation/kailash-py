@@ -1,6 +1,6 @@
 """AI/ML model nodes for the Kailash SDK."""
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -9,7 +9,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 class TextClassifier(Node):
     """Generic text classification node."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "texts": NodeParameter(
                 name="texts",
@@ -40,7 +40,7 @@ class TextClassifier(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         texts = kwargs["texts"]
         model_name = kwargs.get("model_name", "simple")
         categories = kwargs.get("categories", ["positive", "negative", "neutral"])
@@ -82,7 +82,7 @@ class TextClassifier(Node):
 class TextEmbedder(Node):
     """Generate text embeddings."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "texts": NodeParameter(
                 name="texts",
@@ -106,7 +106,7 @@ class TextEmbedder(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         texts = kwargs["texts"]
         model_name = kwargs.get("model_name", "simple")
         dimensions = kwargs.get("dimensions", 384)
@@ -140,7 +140,7 @@ class TextEmbedder(Node):
 class SentimentAnalyzer(Node):
     """Analyze sentiment of text."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "texts": NodeParameter(
                 name="texts",
@@ -164,7 +164,7 @@ class SentimentAnalyzer(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         texts = kwargs["texts"]
         language = kwargs.get("language", "en")
         granularity = kwargs.get("granularity", "document")
@@ -225,7 +225,7 @@ class SentimentAnalyzer(Node):
 class NamedEntityRecognizer(Node):
     """Extract named entities from text."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "texts": NodeParameter(
                 name="texts",
@@ -249,7 +249,7 @@ class NamedEntityRecognizer(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         texts = kwargs["texts"]
         entity_types = kwargs.get(
             "entity_types", ["PERSON", "ORGANIZATION", "LOCATION"]
@@ -318,7 +318,7 @@ class NamedEntityRecognizer(Node):
 class ModelPredictor(Node):
     """Generic model prediction node."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -349,7 +349,7 @@ class ModelPredictor(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         data = kwargs["data"]
         model_path = kwargs.get("model_path", "default_model")
         prediction_type = kwargs.get("prediction_type", "classification")
@@ -401,7 +401,7 @@ class ModelPredictor(Node):
 class TextSummarizer(Node):
     """Summarize text content."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "texts": NodeParameter(
                 name="texts",
@@ -432,7 +432,7 @@ class TextSummarizer(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         texts = kwargs["texts"]
         max_length = kwargs.get("max_length", 150)
         min_length = kwargs.get("min_length", 50)

@@ -1,7 +1,6 @@
 """Abstract base class for storage backends."""
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 from ..models import TaskRun, TaskStatus, WorkflowRun
 
@@ -16,10 +15,9 @@ class StorageBackend(ABC):
         Args:
             run: WorkflowRun to save
         """
-        pass
 
     @abstractmethod
-    def load_run(self, run_id: str) -> Optional[WorkflowRun]:
+    def load_run(self, run_id: str) -> WorkflowRun | None:
         """Load a workflow run by ID.
 
         Args:
@@ -28,12 +26,11 @@ class StorageBackend(ABC):
         Returns:
             WorkflowRun or None if not found
         """
-        pass
 
     @abstractmethod
     def list_runs(
-        self, workflow_name: Optional[str] = None, status: Optional[str] = None
-    ) -> List[WorkflowRun]:
+        self, workflow_name: str | None = None, status: str | None = None
+    ) -> list[WorkflowRun]:
         """List workflow runs.
 
         Args:
@@ -43,7 +40,6 @@ class StorageBackend(ABC):
         Returns:
             List of WorkflowRun instances
         """
-        pass
 
     @abstractmethod
     def save_task(self, task: TaskRun) -> None:
@@ -52,10 +48,9 @@ class StorageBackend(ABC):
         Args:
             task: TaskRun to save
         """
-        pass
 
     @abstractmethod
-    def load_task(self, task_id: str) -> Optional[TaskRun]:
+    def load_task(self, task_id: str) -> TaskRun | None:
         """Load a task by ID.
 
         Args:
@@ -64,15 +59,14 @@ class StorageBackend(ABC):
         Returns:
             TaskRun or None if not found
         """
-        pass
 
     @abstractmethod
     def list_tasks(
         self,
         run_id: str,
-        node_id: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-    ) -> List[TaskRun]:
+        node_id: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> list[TaskRun]:
         """List tasks for a run.
 
         Args:
@@ -83,12 +77,10 @@ class StorageBackend(ABC):
         Returns:
             List of TaskRun instances
         """
-        pass
 
     @abstractmethod
     def clear(self) -> None:
         """Clear all stored data."""
-        pass
 
     @abstractmethod
     def export_run(self, run_id: str, output_path: str) -> None:
@@ -98,7 +90,6 @@ class StorageBackend(ABC):
             run_id: Run ID to export
             output_path: Path to write export
         """
-        pass
 
     @abstractmethod
     def import_run(self, input_path: str) -> str:
@@ -110,4 +101,3 @@ class StorageBackend(ABC):
         Returns:
             Imported run ID
         """
-        pass

@@ -93,7 +93,7 @@ class TestWorkflowExecution:
             json.dump(state, f)
 
         # Load state and verify
-        with open(state_file, "r") as f:
+        with open(state_file) as f:
             loaded_state = json.load(f)
 
         assert loaded_state["status"] is not None

@@ -85,7 +85,7 @@ TX005,100000,USD,pending"""
         print("- No PythonCodeNode needed!")
 
         # Show results
-        with open("/tmp/high_value.csv", "r") as f:
+        with open("/tmp/high_value.csv") as f:
             print("\nHigh-value transactions:")
             print(f.read())
 

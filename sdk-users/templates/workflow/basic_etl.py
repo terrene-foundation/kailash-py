@@ -11,7 +11,7 @@ Customization Points:
 """
 
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
@@ -29,7 +29,7 @@ VALIDATION_RULES = {
 }
 
 
-def validate_data(data: List[Dict], rules: Dict) -> Dict[str, Any]:
+def validate_data(data: list[dict], rules: dict) -> dict[str, Any]:
     """Validate input data according to rules"""
     errors = []
     valid_records = []
@@ -63,7 +63,7 @@ def validate_data(data: List[Dict], rules: Dict) -> Dict[str, Any]:
     }
 
 
-def transform_data(data: List[Dict]) -> Dict[str, Any]:
+def transform_data(data: list[dict]) -> dict[str, Any]:
     """Transform the validated data (customize this function)"""
     transformed = []
 

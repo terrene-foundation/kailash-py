@@ -66,7 +66,7 @@ def add_lead_sources(workflow: Workflow):
         id="crm_leads",
         connection_string="${CRM_DATABASE}",
         query="""
-        SELECT 
+        SELECT
             l.lead_id,
             l.email,
             l.first_name,
@@ -117,7 +117,7 @@ for email in lead_emails[:100]:  # Limit for demo
     # Generate behavior metrics
     sessions = random.randint(1, 20)
     page_views = sessions * random.randint(3, 15)
-    
+
     behaviors = {
         'email': email,
         'total_sessions': sessions,
@@ -136,7 +136,7 @@ for email in lead_emails[:100]:  # Limit for demo
         'device_types': ['desktop', 'mobile'] if random.random() > 0.5 else ['desktop'],
         'referral_source': random.choice(['organic', 'paid_search', 'social', 'email', 'direct'])
     }
-    
+
     behavior_data.append(behaviors)
 
 result = {
@@ -169,7 +169,7 @@ for email in lead_emails[:100]:
         'unsubscribed': random.random() > 0.95,
         'email_preferences': {
             'frequency': random.choice(['daily', 'weekly', 'monthly']),
-            'topics': random.sample(['product_updates', 'industry_news', 'tips', 'webinars'], 
+            'topics': random.sample(['product_updates', 'industry_news', 'tips', 'webinars'],
                                   k=random.randint(1, 4))
         }
     }
@@ -212,10 +212,10 @@ enriched_leads = []
 
 for lead in crm_leads:
     email = lead.get('email', '')
-    
+
     # Create enriched lead record
     enriched_lead = lead.copy()
-    
+
     # Add behavioral data
     if email in behaviors:
         enriched_lead['behavior'] = behaviors[email]
@@ -225,7 +225,7 @@ for lead in crm_leads:
             'total_page_views': 0,
             'engagement_level': 'none'
         }
-    
+
     # Add email engagement
     if email in email_metrics:
         enriched_lead['email_engagement'] = email_metrics[email]
@@ -235,7 +235,7 @@ for lead in crm_leads:
             'click_rate': 0,
             'engagement_level': 'none'
         }
-    
+
     # Add firmographic enrichment (simulated)
     if enriched_lead.get('company'):
         enriched_lead['firmographics'] = {
@@ -246,7 +246,7 @@ for lead in crm_leads:
             'growth_stage': random.choice(['startup', 'growth', 'enterprise']),
             'market_segment': random.choice(['smb', 'mid_market', 'enterprise'])
         }
-    
+
     # Calculate days since last activity
     last_activity = enriched_lead.get('last_activity_date')
     if last_activity:
@@ -255,11 +255,11 @@ for lead in crm_leads:
         enriched_lead['days_since_activity'] = days_inactive
     else:
         enriched_lead['days_since_activity'] = 999
-    
+
     # Add enrichment metadata
     enriched_lead['enrichment_timestamp'] = datetime.now().isoformat()
     enriched_lead['data_completeness'] = calculate_completeness(enriched_lead)
-    
+
     enriched_leads.append(enriched_lead)
 
 def simulate_tech_stack():
@@ -313,10 +313,10 @@ for lead in enriched_leads:
     demographic_score = 0
     firmographic_score = 0
     engagement_score = 0
-    
+
     # 1. Behavioral Scoring
     behavior = lead.get('behavior', {})
-    
+
     # Page visits scoring
     if behavior.get('pages_visited', {}).get('pricing'):
         behavioral_score += 20
@@ -324,7 +324,7 @@ for lead in enriched_leads:
         behavioral_score += 30
     if behavior.get('pages_visited', {}).get('case_studies'):
         behavioral_score += 15
-    
+
     # Session engagement
     sessions = behavior.get('total_sessions', 0)
     if sessions > 10:
@@ -333,18 +333,18 @@ for lead in enriched_leads:
         behavioral_score += 15
     elif sessions > 2:
         behavioral_score += 10
-    
+
     # Content engagement
     downloads = behavior.get('content_downloads', 0)
     behavioral_score += min(downloads * 5, 20)
-    
+
     # Webinar attendance
     webinars = behavior.get('webinar_attendance', 0)
     behavioral_score += min(webinars * 10, 30)
-    
+
     # 2. Demographic Scoring
     job_title = lead.get('job_title', '').lower()
-    
+
     # Decision maker titles
     if any(title in job_title for title in ['ceo', 'cto', 'vp', 'director', 'head of']):
         demographic_score += 40
@@ -352,7 +352,7 @@ for lead in enriched_leads:
         demographic_score += 25
     else:
         demographic_score += 10
-    
+
     # Lead source quality
     source_scores = {
         'website': 20,
@@ -365,10 +365,10 @@ for lead in enriched_leads:
     }
     lead_source = lead.get('lead_source', 'other').lower()
     demographic_score += source_scores.get(lead_source, 10)
-    
+
     # 3. Firmographic Scoring
     firmographics = lead.get('firmographics', {})
-    
+
     # Company size scoring
     company_size = firmographics.get('company_size', 'Unknown')
     size_scores = {
@@ -380,7 +380,7 @@ for lead in enriched_leads:
         'Unknown': 5
     }
     firmographic_score += size_scores.get(company_size, 5)
-    
+
     # Industry fit (customize based on ICP)
     target_industries = ['technology', 'finance', 'healthcare', 'retail']
     industry = firmographics.get('industry', '').lower()
@@ -388,7 +388,7 @@ for lead in enriched_leads:
         firmographic_score += 30
     else:
         firmographic_score += 10
-    
+
     # Growth stage
     growth_scores = {
         'enterprise': 30,
@@ -397,28 +397,28 @@ for lead in enriched_leads:
     }
     growth_stage = firmographics.get('growth_stage', 'unknown')
     firmographic_score += growth_scores.get(growth_stage, 10)
-    
+
     # 4. Engagement Scoring
     email_eng = lead.get('email_engagement', {})
-    
+
     # Email engagement rates
     open_rate = email_eng.get('open_rate', 0)
     click_rate = email_eng.get('click_rate', 0)
-    
+
     if open_rate > 0.4:
         engagement_score += 30
     elif open_rate > 0.2:
         engagement_score += 20
     elif open_rate > 0.1:
         engagement_score += 10
-    
+
     if click_rate > 0.2:
         engagement_score += 35
     elif click_rate > 0.1:
         engagement_score += 25
     elif click_rate > 0.05:
         engagement_score += 15
-    
+
     # Recency scoring
     days_inactive = lead.get('days_since_activity', 999)
     if days_inactive <= 7:
@@ -429,7 +429,7 @@ for lead in enriched_leads:
         engagement_score += 15
     else:
         engagement_score += 0
-    
+
     # Calculate weighted total score
     total_score = (
         behavioral_score * weights['behavioral'] +
@@ -437,10 +437,10 @@ for lead in enriched_leads:
         firmographic_score * weights['firmographic'] +
         engagement_score * weights['engagement']
     )
-    
+
     # Normalize to 0-100
     total_score = min(100, max(0, total_score))
-    
+
     # Determine lead grade
     if total_score >= 80:
         grade = 'A'
@@ -454,7 +454,7 @@ for lead in enriched_leads:
     else:
         grade = 'D'
         priority = 'cold'
-    
+
     # Add scoring to lead
     lead['lead_score'] = {
         'total_score': round(total_score, 2),
@@ -467,7 +467,7 @@ for lead in enriched_leads:
         'scoring_timestamp': datetime.now().isoformat(),
         'scoring_version': '2.1.0'
     }
-    
+
     # Add sales readiness indicators
     lead['sales_indicators'] = {
         'ready_for_contact': total_score >= 60,
@@ -476,7 +476,7 @@ for lead in enriched_leads:
         'fast_mover': days_inactive <= 7 and behavioral_score >= 50,
         'at_risk': days_inactive > 30 and total_score >= 40
     }
-    
+
     scored_leads.append(lead)
 
 # Calculate scoring statistics
@@ -546,7 +546,7 @@ for lead in scored_leads:
         market_segment = firmographics.get('market_segment', 'smb')
         lead_score = lead.get('lead_score', {})
         priority = lead_score.get('priority', 'cold')
-        
+
         # Route hot leads to best available rep
         if priority == 'hot':
             # Find rep with lowest workload in appropriate team
@@ -556,22 +556,22 @@ for lead in scored_leads:
                 team = 'mid_market'
             else:
                 team = 'smb'
-            
+
             # Get team reps sorted by workload
             team_reps = sales_teams[team]['reps']
             available_reps = [(rep, rep_workload[rep]) for rep in team_reps]
             available_reps.sort(key=lambda x: x[1])
-            
+
             assigned_rep = available_reps[0][0]
             rep_workload[assigned_rep] += 1
-            
+
         else:
             # Route based on round-robin or rules
             team = market_segment if market_segment in sales_teams else 'smb'
             team_reps = sales_teams[team]['reps']
             # Simple round-robin
             assigned_rep = team_reps[len(assignments) % len(team_reps)]
-        
+
         # Create assignment
         assignment = {
             'lead_id': lead.get('lead_id'),
@@ -589,12 +589,12 @@ for lead in scored_leads:
                 f'Priority: {priority}'
             ]
         }
-        
+
         assignments.append(assignment)
-        
+
         # Add assignment to lead
         lead['assignment'] = assignment
-        
+
     except Exception as e:
         routing_errors.append({
             'lead_id': lead.get('lead_id'),
@@ -614,7 +614,7 @@ routing_summary = {
 for assignment in assignments:
     team = assignment['assigned_team']
     priority = assignment['priority']
-    
+
     routing_summary['assignments_by_team'][team] = routing_summary['assignments_by_team'].get(team, 0) + 1
     routing_summary['assignments_by_priority'][priority] = routing_summary['assignments_by_priority'].get(priority, 0) + 1
 
@@ -663,7 +663,7 @@ for rep, rep_assignments in assignments_by_rep.items():
             'leads': hot_leads,
             'sent_at': datetime.now().isoformat()
         })
-    
+
     # Daily summary
     notifications.append({
         'type': 'summary',
@@ -725,14 +725,14 @@ source_performance = {}
 for lead in scored_leads:
     source = lead.get('lead_source', 'unknown')
     score = lead.get('lead_score', {}).get('total_score', 0)
-    
+
     if source not in source_performance:
         source_performance[source] = {
             'count': 0,
             'total_score': 0,
             'grades': {'A': 0, 'B': 0, 'C': 0, 'D': 0}
         }
-    
+
     source_performance[source]['count'] += 1
     source_performance[source]['total_score'] += score
     grade = lead.get('lead_score', {}).get('grade', 'D')
@@ -752,9 +752,9 @@ routing_metrics = {
 
 # Predictive metrics (simulated)
 conversion_predictions = {
-    'predicted_conversions': int(scoring_summary.get('hot_leads', 0) * 0.3 + 
+    'predicted_conversions': int(scoring_summary.get('hot_leads', 0) * 0.3 +
                                 scoring_summary.get('sales_ready', 0) * 0.15),
-    'predicted_revenue': scoring_summary.get('hot_leads', 0) * 50000 + 
+    'predicted_revenue': scoring_summary.get('hot_leads', 0) * 50000 +
                         scoring_summary.get('sales_ready', 0) * 25000,
     'confidence_level': 0.75
 }
@@ -772,7 +772,7 @@ dashboard_data = {
 
 def generate_insights(quality, engagement, sources):
     insights = []
-    
+
     # Quality insights
     if quality['sales_ready_percentage'] > 30:
         insights.append({
@@ -780,7 +780,7 @@ def generate_insights(quality, engagement, sources):
             'message': f"{quality['sales_ready_percentage']:.1f}% of leads are sales-ready",
             'impact': 'high'
         })
-    
+
     # Engagement insights
     high_eng_rate = engagement['high_engagement'] / quality['total_leads'] * 100 if quality['total_leads'] > 0 else 0
     if high_eng_rate > 25:
@@ -789,7 +789,7 @@ def generate_insights(quality, engagement, sources):
             'message': f"{high_eng_rate:.1f}% of leads show high engagement",
             'impact': 'medium'
         })
-    
+
     # Source insights
     best_source = max(sources.items(), key=lambda x: x[1]['avg_score'] if x[1]['count'] > 5 else 0)
     if best_source[1]['avg_score'] > 60:
@@ -798,7 +798,7 @@ def generate_insights(quality, engagement, sources):
             'message': f"Increase investment in {best_source[0]} - highest quality leads",
             'impact': 'high'
         })
-    
+
     return insights
 
 result = {

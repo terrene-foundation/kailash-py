@@ -12,7 +12,7 @@ Design Philosophy:
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.security import (
     SecurityConfig,
@@ -43,9 +43,7 @@ class SecurityMixin:
                 return self.process_safely(safe_params)
     """
 
-    def __init__(
-        self, *args, security_config: Optional[SecurityConfig] = None, **kwargs
-    ):
+    def __init__(self, *args, security_config: SecurityConfig | None = None, **kwargs):
         """
         Initialize security mixin.
 
@@ -60,7 +58,7 @@ class SecurityMixin:
         if self.security_config.enable_audit_logging:
             logger.info(f"Security mixin initialized for {self.__class__.__name__}")
 
-    def validate_and_sanitize_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_and_sanitize_inputs(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """
         Validate and sanitize input parameters.
 
@@ -151,7 +149,7 @@ class ValidationMixin:
     """
 
     def validate_required_params(
-        self, inputs: Dict[str, Any], required_params: list
+        self, inputs: dict[str, Any], required_params: list
     ) -> None:
         """
         Validate that all required parameters are present.
@@ -168,8 +166,8 @@ class ValidationMixin:
             raise ValueError(f"Missing required parameters: {missing_params}")
 
     def validate_param_types(
-        self, inputs: Dict[str, Any], type_mapping: Dict[str, type]
-    ) -> Dict[str, Any]:
+        self, inputs: dict[str, Any], type_mapping: dict[str, type]
+    ) -> dict[str, Any]:
         """
         Validate and convert parameter types.
 
@@ -203,7 +201,7 @@ class ValidationMixin:
         return converted
 
     def validate_param_ranges(
-        self, inputs: Dict[str, Any], range_mapping: Dict[str, tuple]
+        self, inputs: dict[str, Any], range_mapping: dict[str, tuple]
     ) -> None:
         """
         Validate that numeric parameters are within acceptable ranges.
@@ -284,7 +282,7 @@ class PerformanceMixin:
 
         return wrapper
 
-    def get_performance_stats(self) -> Dict[str, Any]:
+    def get_performance_stats(self) -> dict[str, Any]:
         """
         Get performance statistics for this node.
 

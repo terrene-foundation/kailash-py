@@ -28,7 +28,8 @@ Example:
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -42,10 +43,10 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    function: Optional[Callable] = None
-    async_function: Optional[Callable] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    function: Callable | None = None
+    async_function: Callable | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPResource(BaseModel):
@@ -55,7 +56,7 @@ class MCPResource(BaseModel):
     uri: str
     description: str
     mime_type: str = "text/plain"
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPIntegration:
@@ -74,7 +75,7 @@ class MCPIntegration:
     """
 
     def __init__(
-        self, name: str, description: str = "", capabilities: List[str] = None
+        self, name: str, description: str = "", capabilities: list[str] = None
     ):
         """Initialize MCP integration.
 
@@ -86,16 +87,16 @@ class MCPIntegration:
         self.name = name
         self.description = description
         self.capabilities = capabilities or ["tools", "resources"]
-        self.tools: Dict[str, MCPTool] = {}
-        self.resources: Dict[str, MCPResource] = {}
-        self._context: Dict[str, Any] = {}
+        self.tools: dict[str, MCPTool] = {}
+        self.resources: dict[str, MCPResource] = {}
+        self._context: dict[str, Any] = {}
 
     def add_tool(
         self,
         name: str,
-        function: Union[Callable, Callable[..., asyncio.Future]],
+        function: Callable | Callable[..., asyncio.Future],
         description: str = "",
-        parameters: Dict[str, Any] = None,
+        parameters: dict[str, Any] = None,
     ):
         """Add a tool to the MCP server.
 
@@ -134,7 +135,7 @@ class MCPIntegration:
         self.resources[name] = resource
         logger.info(f"Added resource '{name}' to MCP server '{self.name}'")
 
-    async def execute_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
+    async def execute_tool(self, tool_name: str, parameters: dict[str, Any]) -> Any:
         """Execute a tool asynchronously.
 
         Args:
@@ -173,7 +174,7 @@ class MCPIntegration:
         else:
             raise ValueError(f"Tool '{tool_name}' has no implementation")
 
-    def execute_tool_sync(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
+    def execute_tool_sync(self, tool_name: str, parameters: dict[str, Any]) -> Any:
         """Execute a tool synchronously.
 
         Args:
@@ -200,7 +201,7 @@ class MCPIntegration:
         else:
             raise ValueError(f"Tool '{tool_name}' requires async execution")
 
-    def get_resource(self, resource_name: str) -> Optional[MCPResource]:
+    def get_resource(self, resource_name: str) -> MCPResource | None:
         """Get a resource by name.
 
         Args:
@@ -231,7 +232,7 @@ class MCPIntegration:
         """
         return self._context.get(key)
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """List all available tools.
 
         Returns:
@@ -246,7 +247,7 @@ class MCPIntegration:
             for tool in self.tools.values()
         ]
 
-    def list_resources(self) -> List[Dict[str, Any]]:
+    def list_resources(self) -> list[dict[str, Any]]:
         """List all available resources.
 
         Returns:
@@ -262,7 +263,7 @@ class MCPIntegration:
             for resource in self.resources.values()
         ]
 
-    def to_mcp_protocol(self) -> Dict[str, Any]:
+    def to_mcp_protocol(self) -> dict[str, Any]:
         """Convert to MCP protocol format.
 
         Returns:
@@ -298,7 +299,7 @@ class MCPToolNode(AsyncNode):
     """
 
     def __init__(
-        self, mcp_server: str, tool_name: str, parameter_mapping: Dict[str, str] = None
+        self, mcp_server: str, tool_name: str, parameter_mapping: dict[str, str] = None
     ):
         """Initialize MCP tool node.
 
@@ -311,13 +312,13 @@ class MCPToolNode(AsyncNode):
         self.mcp_server = mcp_server
         self.tool_name = tool_name
         self.parameter_mapping = parameter_mapping or {}
-        self._mcp_integration: Optional[MCPIntegration] = None
+        self._mcp_integration: MCPIntegration | None = None
 
     def set_mcp_integration(self, mcp: MCPIntegration):
         """Set the MCP integration instance."""
         self._mcp_integration = mcp
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Get node parameters.
 
         Returns:
@@ -326,7 +327,7 @@ class MCPToolNode(AsyncNode):
         # For MCP tools, parameters are dynamic based on the tool
         return {}
 
-    def validate_inputs(self, **kwargs) -> Dict[str, Any]:
+    def validate_inputs(self, **kwargs) -> dict[str, Any]:
         """Validate runtime inputs.
 
         For MCPToolNode, we accept any inputs since the parameters
@@ -373,7 +374,7 @@ class MCPToolNode(AsyncNode):
             return {"result": result}
         return result
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Run the node asynchronously.
 
         Args:

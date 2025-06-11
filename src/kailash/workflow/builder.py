@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.graph import Workflow
@@ -15,15 +15,15 @@ class WorkflowBuilder:
 
     def __init__(self):
         """Initialize an empty workflow builder."""
-        self.nodes: Dict[str, Dict[str, Any]] = {}
-        self.connections: List[Dict[str, str]] = []
-        self._metadata: Dict[str, Any] = {}
+        self.nodes: dict[str, dict[str, Any]] = {}
+        self.connections: list[dict[str, str]] = []
+        self._metadata: dict[str, Any] = {}
 
     def add_node(
         self,
         node_type: str,
-        node_id: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
+        node_id: str | None = None,
+        config: dict[str, Any] | None = None,
     ) -> str:
         """
         Add a node to the workflow.
@@ -106,7 +106,7 @@ class WorkflowBuilder:
         self._metadata.update(kwargs)
         return self
 
-    def build(self, workflow_id: Optional[str] = None, **kwargs) -> Workflow:
+    def build(self, workflow_id: str | None = None, **kwargs) -> Workflow:
         """
         Build and return a Workflow instance.
 
@@ -193,7 +193,7 @@ class WorkflowBuilder:
         return self
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any]) -> "WorkflowBuilder":
+    def from_dict(cls, config: dict[str, Any]) -> "WorkflowBuilder":
         """
         Create builder from dictionary configuration.
 

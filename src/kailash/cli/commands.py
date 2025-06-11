@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -77,7 +76,7 @@ def init(name: str, template: str):
 @click.option("--params", "-p", help="JSON file with parameter overrides")
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--no-tracking", is_flag=True, help="Disable task tracking")
-def run(workflow_file: str, params: Optional[str], debug: bool, no_tracking: bool):
+def run(workflow_file: str, params: str | None, debug: bool, no_tracking: bool):
     """Run a workflow locally."""
     try:
         # Validate workflow file exists
@@ -97,7 +96,7 @@ def run(workflow_file: str, params: Optional[str], debug: bool, no_tracking: boo
         parameters = {}
         if params:
             try:
-                with open(params, "r") as f:
+                with open(params) as f:
                     parameters = json.load(f)
             except FileNotFoundError:
                 raise CLIException(f"Parameters file not found: {params}")
@@ -190,7 +189,7 @@ def validate(workflow_file: str):
     "--format", default="yaml", type=click.Choice(["yaml", "json", "manifest"])
 )
 @click.option("--registry", help="Container registry URL")
-def export(workflow_file: str, output_file: str, format: str, registry: Optional[str]):
+def export(workflow_file: str, output_file: str, format: str, registry: str | None):
     """Export workflow to Kailash format."""
     try:
         # Validate workflow file exists
@@ -233,14 +232,13 @@ def export(workflow_file: str, output_file: str, format: str, registry: Optional
 @cli.group()
 def tasks():
     """Task tracking commands."""
-    pass
 
 
 @tasks.command("list")
 @click.option("--workflow", help="Filter by workflow name")
 @click.option("--status", help="Filter by status")
 @click.option("--limit", default=10, help="Number of runs to show")
-def list_tasks(workflow: Optional[str], status: Optional[str], limit: int):
+def list_tasks(workflow: str | None, status: str | None, limit: int):
     """List workflow runs."""
     try:
         task_manager = TaskManager()
@@ -380,7 +378,6 @@ def clear_tasks():
 @cli.group()
 def nodes():
     """Node management commands."""
-    pass
 
 
 @nodes.command("list")
@@ -497,7 +494,7 @@ def _load_python_workflow(workflow_file: str) -> Workflow:
     try:
         # Read and execute Python file
         global_scope = {}
-        with open(workflow_file, "r") as f:
+        with open(workflow_file) as f:
             code = f.read()
 
         exec(code, global_scope)

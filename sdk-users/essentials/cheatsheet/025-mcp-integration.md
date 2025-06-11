@@ -1,5 +1,52 @@
 # MCP Integration
 
+## Enhanced MCP Server (New!)
+
+Create production-ready MCP servers with caching, metrics, and configuration out of the box:
+
+```python
+from kailash.mcp import MCPServer
+
+# Production-ready server with all enhancements
+server = MCPServer("my-server")
+
+@server.tool(cache_key="expensive", cache_ttl=600)  # Cache for 10 minutes
+async def expensive_operation(data: str) -> dict:
+    """Expensive operation with automatic caching and metrics."""
+    # First call: executes and caches
+    # Subsequent calls: returns cached result
+    return {"processed": data, "result": "..."}
+
+@server.tool(format_response="markdown")  # Format for LLMs
+async def get_status(service: str) -> dict:
+    """Service status with markdown formatting."""
+    return {"title": f"{service} Status", "status": "healthy"}
+
+if __name__ == "__main__":
+    server.run()  # Includes caching, metrics, config management
+```
+
+### Enhanced Features
+- **Automatic caching** with TTL
+- **Metrics collection** (latency, error rates)
+- **Configuration management** (YAML, env vars)
+- **Response formatting** (JSON, Markdown, tables)
+- **Production monitoring** built-in
+
+### Simple Server for Prototyping
+```python
+from kailash.mcp import SimpleMCPServer
+
+# Minimal features for quick development
+server = SimpleMCPServer("prototype", "Quick prototype")
+
+@server.tool()
+def calculate(a: float, b: float) -> float:
+    return a + b
+
+server.run()
+```
+
 ## LLMAgentNode with Built-in MCP
 
 The **new pattern** integrates MCP directly into LLMAgentNode, eliminating the need for separate MCPClient nodes.

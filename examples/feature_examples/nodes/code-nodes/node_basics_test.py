@@ -12,7 +12,7 @@ Prerequisites:
 - Docker infrastructure running: docker-compose -f docker/docker-compose.sdk-dev.yml up -d
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -44,7 +44,7 @@ print("\n📝 Node Creation Patterns:")
 
 class CustomCSVNode(Node):
     # Input parameters (for automatic validation)
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "file_path": NodeParameter(
                 name="file_path",
@@ -69,7 +69,7 @@ class CustomCSVNode(Node):
         }
 
     # Output parameters (for automatic validation)
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -82,7 +82,7 @@ class CustomCSVNode(Node):
     # Code to run when the node is executed
     def run(
         self, file_path: str, headers: bool = True, delimiter: str = ","
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
 
         # Read the CSV file
         data = pd.read_csv(
@@ -187,7 +187,7 @@ node.execute_code(
 class FilterNode(Node):
     """Node to filter data based on a threshold."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -209,7 +209,7 @@ class FilterNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "filtered_data": NodeParameter(
                 name="filtered_data",
@@ -219,7 +219,7 @@ class FilterNode(Node):
             )
         }
 
-    def run(self, data: list, column_name: str, threshold: float) -> Dict[str, Any]:
+    def run(self, data: list, column_name: str, threshold: float) -> dict[str, Any]:
         """Filter data based on threshold and return filtered data."""
         df = pd.DataFrame(data)
         filtered_df = df[df[column_name] > threshold]

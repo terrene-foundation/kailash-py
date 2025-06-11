@@ -11,7 +11,7 @@ Usage:
     result = node.run(input_data=[1, 2, 3])
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import SecurityMixin
@@ -29,7 +29,7 @@ class SecureDataProcessorNode(SecurityMixin, Node):
     - Safe data processing patterns
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define node parameters with security considerations."""
         return {
             "input_data": NodeParameter(
@@ -49,7 +49,7 @@ class SecureDataProcessorNode(SecurityMixin, Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Securely process input data.
 
@@ -92,7 +92,7 @@ class SecureDataProcessorNode(SecurityMixin, Node):
             },
         }
 
-    def _validate_data_size(self, data: List[Any], max_items: int) -> None:
+    def _validate_data_size(self, data: list[Any], max_items: int) -> None:
         """
         Validate data size against security limits.
 
@@ -111,7 +111,7 @@ class SecureDataProcessorNode(SecurityMixin, Node):
                 f"Data too large: {len(data)} items > {max_items} limit"
             )
 
-    def _secure_process(self, data: List[Any], filter_dangerous: bool) -> List[Any]:
+    def _secure_process(self, data: list[Any], filter_dangerous: bool) -> list[Any]:
         """
         Process data with security filtering.
 

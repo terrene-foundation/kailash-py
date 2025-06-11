@@ -9,7 +9,7 @@ Covers:
 - ConvergenceCheckerNode: Cycle termination logic
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
@@ -22,7 +22,7 @@ from kailash.runtime.local import LocalRuntime
 class MockDataProcessorNode(CycleAwareNode):
     """Mock data processor for testing logic cycles."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=list, required=False, default=[]),
             "process_type": NodeParameter(
@@ -30,7 +30,7 @@ class MockDataProcessorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         data = kwargs.get("data", [])
         process_type = kwargs.get("process_type", "filter")
         iteration = self.get_iteration(context)
@@ -64,14 +64,14 @@ class TestSwitchNodeCycles:
 
         # Data processor that improves quality
         class QualityImproverNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 data = kwargs.get("data", [])
                 iteration = self.get_iteration(context)
 
@@ -93,14 +93,14 @@ class TestSwitchNodeCycles:
 
         # Add a simple source node to provide initial data
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {"data": kwargs.get("data", [])}
 
         workflow.add_node("data_source", DataSourceNode())
@@ -154,14 +154,14 @@ class TestSwitchNodeCycles:
         workflow = Workflow("switch-multi-path", "Switch Multi Path")
 
         class DataClassifierNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "numbers": NodeParameter(
                         name="numbers", type=list, required=False, default=[]
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 numbers = kwargs.get("numbers", [])
                 iteration = self.get_iteration(context)
 
@@ -193,14 +193,14 @@ class TestSwitchNodeCycles:
 
         # Add a simple source node to provide initial data
         class NumberSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "numbers": NodeParameter(
                         name="numbers", type=list, required=False, default=[]
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {"numbers": kwargs.get("numbers", [])}
 
         workflow.add_node("number_source", NumberSourceNode())
@@ -267,14 +267,14 @@ class TestMergeNodeCycles:
         class DualProcessorNode(CycleAwareNode):
             """Node that processes data in two ways."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "input_data": NodeParameter(
                         name="input_data", type=list, required=False, default=[]
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 input_data = kwargs.get("input_data", [])
                 iteration = self.get_iteration(context)
 
@@ -294,7 +294,7 @@ class TestMergeNodeCycles:
         class CycleMergeNode(CycleAwareNode):
             """Node that merges results and determines continuation."""
 
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "process_a": NodeParameter(
                         name="process_a", type=list, required=False, default=[]
@@ -304,7 +304,7 @@ class TestMergeNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 process_a = kwargs.get("process_a", [])
                 process_b = kwargs.get("process_b", [])
                 iteration = self.get_iteration(context)
@@ -312,7 +312,9 @@ class TestMergeNodeCycles:
 
                 # Merge results - alternate between processes
                 merged_result = []
-                for i, (a_val, b_val) in enumerate(zip(process_a, process_b)):
+                for i, (a_val, b_val) in enumerate(
+                    zip(process_a, process_b, strict=False)
+                ):
                     if i % 2 == 0:
                         merged_result.append(a_val)
                     else:
@@ -330,14 +332,14 @@ class TestMergeNodeCycles:
 
         # Add a simple source node to provide initial data
         class DataInputNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "input_data": NodeParameter(
                         name="input_data", type=list, required=False, default=[]
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {"input_data": kwargs.get("input_data", [])}
 
         workflow.add_node("data_input", DataInputNode())
@@ -383,7 +385,7 @@ class TestMergeNodeCycles:
 
         # Add source node for initial data (following documented pattern)
         class DataSourceNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "initial_data": NodeParameter(
                         name="initial_data", type=list, required=False, default=[]
@@ -393,14 +395,14 @@ class TestMergeNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 return {
                     "data": kwargs.get("initial_data", []),
                     "batch_size": kwargs.get("batch_size", 10),
                 }
 
         class AggregationMergeNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "data": NodeParameter(
                         name="data", type=list, required=False, default=[]
@@ -410,7 +412,7 @@ class TestMergeNodeCycles:
                     ),
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 data = kwargs.get("data", [])
                 batch_size = kwargs.get("batch_size", 10)
                 iteration = self.get_iteration(context)
@@ -495,14 +497,14 @@ class TestConvergenceCheckerCycles:
         workflow = Workflow("convergence-termination", "Convergence Termination")
 
         class ValueGeneratorNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {
                     "target": NodeParameter(
                         name="target", type=float, required=False, default=100.0
                     )
                 }
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 target = kwargs.get("target", 100.0)
                 iteration = self.get_iteration(context)
                 prev_state = self.get_previous_state(context)
@@ -558,10 +560,10 @@ class TestConvergenceCheckerCycles:
         workflow = Workflow("convergence-stability", "Convergence Stability")
 
         class OscillatingValueNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {}
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
 
                 # Create oscillating values that eventually stabilize
@@ -610,10 +612,10 @@ class TestLogicNodeCycleIntegration:
         workflow = Workflow("complex-logic-cycle", "Complex Logic Cycle")
 
         class DataGeneratorNode(CycleAwareNode):
-            def get_parameters(self) -> Dict[str, NodeParameter]:
+            def get_parameters(self) -> dict[str, NodeParameter]:
                 return {}
 
-            def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
                 iteration = self.get_iteration(context)
 
                 # Generate different data patterns

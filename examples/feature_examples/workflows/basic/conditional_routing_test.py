@@ -755,7 +755,7 @@ def example5_data_filtering_and_merging():
     test_cases = [
         ("High priority data", list(range(8, 12))),  # Values 8-11, priorities 8-1
         ("Medium priority data", list(range(3, 8))),  # Values 3-7, priorities 3-7
-        ("Low priority data", list(range(0, 3))),  # Values 0-2, priorities 0-2
+        ("Low priority data", list(range(3))),  # Values 0-2, priorities 0-2
     ]
 
     for test_name, test_data in test_cases:

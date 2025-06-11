@@ -8,7 +8,7 @@ separation between LLM and embedding capabilities.
 
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 
 class BaseAIProvider(ABC):
@@ -101,9 +101,8 @@ class BaseAIProvider(ABC):
         Returns:
             bool: True if the provider can be used, False otherwise
         """
-        pass
 
-    def get_capabilities(self) -> Dict[str, bool]:
+    def get_capabilities(self) -> dict[str, bool]:
         """
         Get the capabilities supported by this provider.
 
@@ -206,7 +205,7 @@ class LLMProvider(BaseAIProvider):
         self._capabilities["chat"] = True
 
     @abstractmethod
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
         """
         Generate a chat completion using the provider's LLM.
 
@@ -217,7 +216,6 @@ class LLMProvider(BaseAIProvider):
         Returns:
             Dict containing the standardized response
         """
-        pass
 
 
 class EmbeddingProvider(BaseAIProvider):
@@ -304,7 +302,7 @@ class EmbeddingProvider(BaseAIProvider):
         self._capabilities["embeddings"] = True
 
     @abstractmethod
-    def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
+    def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
         Generate embeddings for a list of texts.
 
@@ -315,10 +313,9 @@ class EmbeddingProvider(BaseAIProvider):
         Returns:
             List of embedding vectors
         """
-        pass
 
     @abstractmethod
-    def get_model_info(self, model: str) -> Dict[str, Any]:
+    def get_model_info(self, model: str) -> dict[str, Any]:
         """
         Get information about a specific embedding model.
 
@@ -328,7 +325,6 @@ class EmbeddingProvider(BaseAIProvider):
         Returns:
             Dict containing model information
         """
-        pass
 
 
 class UnifiedAIProvider(LLMProvider, EmbeddingProvider):
@@ -395,7 +391,7 @@ class OllamaProvider(UnifiedAIProvider):
 
         return self._available
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
         """Generate a chat completion using Ollama.
 
         Args:
@@ -470,7 +466,7 @@ class OllamaProvider(UnifiedAIProvider):
         except Exception as e:
             raise RuntimeError(f"Ollama error: {str(e)}")
 
-    def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
+    def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
         Generate embeddings using Ollama.
 
@@ -506,7 +502,7 @@ class OllamaProvider(UnifiedAIProvider):
         except Exception as e:
             raise RuntimeError(f"Ollama embedding error: {str(e)}")
 
-    def get_model_info(self, model: str) -> Dict[str, Any]:
+    def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about an Ollama embedding model."""
         if model in self._model_cache:
             return self._model_cache[model]
@@ -575,7 +571,7 @@ class OpenAIProvider(UnifiedAIProvider):
 
         return self._available
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
         """
         Generate a chat completion using OpenAI.
 
@@ -655,7 +651,7 @@ class OpenAIProvider(UnifiedAIProvider):
         except Exception as e:
             raise RuntimeError(f"OpenAI error: {str(e)}")
 
-    def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
+    def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
         Generate embeddings using OpenAI.
 
@@ -699,7 +695,7 @@ class OpenAIProvider(UnifiedAIProvider):
         except Exception as e:
             raise RuntimeError(f"OpenAI embedding error: {str(e)}")
 
-    def get_model_info(self, model: str) -> Dict[str, Any]:
+    def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about an OpenAI embedding model."""
         models = {
             "text-embedding-3-large": {
@@ -775,7 +771,7 @@ class AnthropicProvider(LLMProvider):
 
         return self._available
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
         """Generate a chat completion using Anthropic."""
         try:
             import anthropic
@@ -869,7 +865,7 @@ class CohereProvider(EmbeddingProvider):
 
         return self._available
 
-    def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
+    def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate embeddings using Cohere."""
         try:
             import cohere
@@ -899,7 +895,7 @@ class CohereProvider(EmbeddingProvider):
         except Exception as e:
             raise RuntimeError(f"Cohere embedding error: {str(e)}")
 
-    def get_model_info(self, model: str) -> Dict[str, Any]:
+    def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a Cohere embedding model."""
         models = {
             "embed-english-v3.0": {
@@ -1050,7 +1046,7 @@ class HuggingFaceProvider(EmbeddingProvider):
 
         return self._available_api or self._available_local
 
-    def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
+    def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate embeddings using HuggingFace."""
         model = kwargs.get("model", "sentence-transformers/all-MiniLM-L6-v2")
         use_api = kwargs.get("use_api", self._available_api)
@@ -1067,8 +1063,8 @@ class HuggingFaceProvider(EmbeddingProvider):
             )
 
     def _embed_api(
-        self, texts: List[str], model: str, normalize: bool
-    ) -> List[List[float]]:
+        self, texts: list[str], model: str, normalize: bool
+    ) -> list[list[float]]:
         """Generate embeddings using HuggingFace Inference API."""
         try:
             import os
@@ -1106,8 +1102,8 @@ class HuggingFaceProvider(EmbeddingProvider):
             raise RuntimeError(f"HuggingFace API error: {str(e)}")
 
     def _embed_local(
-        self, texts: List[str], model: str, device: str, normalize: bool
-    ) -> List[List[float]]:
+        self, texts: list[str], model: str, device: str, normalize: bool
+    ) -> list[list[float]]:
         """Generate embeddings using local HuggingFace model."""
         try:
             import torch
@@ -1165,7 +1161,7 @@ class HuggingFaceProvider(EmbeddingProvider):
         except Exception as e:
             raise RuntimeError(f"HuggingFace local error: {str(e)}")
 
-    def get_model_info(self, model: str) -> Dict[str, Any]:
+    def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a HuggingFace embedding model."""
         models = {
             "sentence-transformers/all-MiniLM-L6-v2": {
@@ -1235,7 +1231,7 @@ class MockProvider(UnifiedAIProvider):
         """Mock provider is always available."""
         return True
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
         """Generate mock LLM response."""
         last_user_message = ""
         for msg in reversed(messages):
@@ -1272,7 +1268,7 @@ class MockProvider(UnifiedAIProvider):
             "metadata": {},
         }
 
-    def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
+    def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate mock embeddings."""
         model = kwargs.get("model", "mock-embedding")
         dimensions = kwargs.get("dimensions", 1536)
@@ -1300,7 +1296,7 @@ class MockProvider(UnifiedAIProvider):
 
         return embeddings
 
-    def get_model_info(self, model: str) -> Dict[str, Any]:
+    def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a mock embedding model."""
         models = {
             "mock-embedding-small": {"dimensions": 384, "max_tokens": 512},
@@ -1335,8 +1331,8 @@ PROVIDERS = {
 
 
 def get_provider(
-    provider_name: str, provider_type: Optional[str] = None
-) -> Union[BaseAIProvider, LLMProvider, EmbeddingProvider]:
+    provider_name: str, provider_type: str | None = None
+) -> BaseAIProvider | LLMProvider | EmbeddingProvider:
     """
     Get an AI provider instance by name.
 
@@ -1408,8 +1404,8 @@ def get_provider(
 
 
 def get_available_providers(
-    provider_type: Optional[str] = None,
-) -> Dict[str, Dict[str, Any]]:
+    provider_type: str | None = None,
+) -> dict[str, dict[str, Any]]:
     """
     Get information about all available providers.
 
@@ -1440,9 +1436,12 @@ def get_available_providers(
             capabilities = provider.get_capabilities()
 
             # Apply filter if specified
-            if provider_type == "chat" and not capabilities.get("chat"):
-                continue
-            elif provider_type == "embeddings" and not capabilities.get("embeddings"):
+            if (
+                provider_type == "chat"
+                and not capabilities.get("chat")
+                or provider_type == "embeddings"
+                and not capabilities.get("embeddings")
+            ):
                 continue
 
             results[name] = {

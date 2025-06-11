@@ -19,7 +19,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Add the parent directory to the path to import kailash
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 def create_unreliable_data_source():
     """Create a node that simulates an unreliable data source."""
 
-    def fetch_data(failure_rate: float = 0.3) -> Dict[str, Any]:
+    def fetch_data(failure_rate: float = 0.3) -> dict[str, Any]:
         """Fetch data with possible failures."""
         # Simulate random failures
         if random.random() < failure_rate:
@@ -98,7 +98,7 @@ def create_unreliable_data_source():
 def create_data_validator_with_recovery():
     """Create a node that validates data and attempts recovery."""
 
-    def validate_and_recover(data: list, strict_mode: bool = False) -> Dict[str, Any]:
+    def validate_and_recover(data: list, strict_mode: bool = False) -> dict[str, Any]:
         """Validate data with recovery strategies."""
         errors = []
         warnings = []
@@ -201,7 +201,7 @@ def create_circuit_breaker():
 
     def circuit_breaker_operation(
         data: Any, failure_threshold: int = 3
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute with circuit breaker protection."""
         # Check circuit breaker state
         if state["status"] == "open":
@@ -278,7 +278,7 @@ def create_circuit_breaker():
 def create_error_aggregator():
     """Create a node that aggregates and reports errors."""
 
-    def aggregate_errors(validation_summary: dict) -> Dict[str, Any]:
+    def aggregate_errors(validation_summary: dict) -> dict[str, Any]:
         """Aggregate errors from various sources."""
         # Extract errors and warnings
         errors = validation_summary.get("errors", [])
@@ -467,7 +467,7 @@ def demonstrate_node_retry():
     # Create a node with retry logic
     retry_count = {"count": 0}
 
-    def flaky_operation() -> Dict[str, Any]:
+    def flaky_operation() -> dict[str, Any]:
         """Operation that fails a few times before succeeding."""
         retry_count["count"] += 1
 

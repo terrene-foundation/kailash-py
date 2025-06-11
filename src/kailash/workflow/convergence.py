@@ -2,7 +2,8 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from kailash.workflow.cycle_state import CycleState
@@ -14,7 +15,7 @@ class ConvergenceCondition(ABC):
     """Base class for cycle convergence conditions."""
 
     @abstractmethod
-    def evaluate(self, results: Dict[str, Any], cycle_state: "CycleState") -> bool:
+    def evaluate(self, results: dict[str, Any], cycle_state: "CycleState") -> bool:
         """Evaluate if cycle should terminate.
 
         Args:
@@ -48,7 +49,7 @@ class ExpressionCondition(ConvergenceCondition):
         """
         self.expression = expression
 
-    def evaluate(self, results: Dict[str, Any], cycle_state: "CycleState") -> bool:
+    def evaluate(self, results: dict[str, Any], cycle_state: "CycleState") -> bool:
         """Evaluate expression with results and cycle state context."""
         # Create evaluation context
         context = {
@@ -117,8 +118,8 @@ class CallbackCondition(ConvergenceCondition):
 
     def __init__(
         self,
-        callback: Callable[[Dict[str, Any], "CycleState"], bool],
-        name: Optional[str] = None,
+        callback: Callable[[dict[str, Any], "CycleState"], bool],
+        name: str | None = None,
     ):
         """Initialize with callback function.
 
@@ -129,7 +130,7 @@ class CallbackCondition(ConvergenceCondition):
         self.callback = callback
         self.name = name or callback.__name__
 
-    def evaluate(self, results: Dict[str, Any], cycle_state: "CycleState") -> bool:
+    def evaluate(self, results: dict[str, Any], cycle_state: "CycleState") -> bool:
         """Evaluate callback with results and cycle state."""
         try:
             return self.callback(results, cycle_state)
@@ -154,7 +155,7 @@ class MaxIterationsCondition(ConvergenceCondition):
         """
         self.max_iterations = max_iterations
 
-    def evaluate(self, results: Dict[str, Any], cycle_state: "CycleState") -> bool:
+    def evaluate(self, results: dict[str, Any], cycle_state: "CycleState") -> bool:
         """Check if maximum iterations reached."""
         return cycle_state.iteration >= self.max_iterations
 
@@ -166,7 +167,7 @@ class MaxIterationsCondition(ConvergenceCondition):
 class CompoundCondition(ConvergenceCondition):
     """Combine multiple conditions with AND/OR logic."""
 
-    def __init__(self, conditions: List[ConvergenceCondition], operator: str = "OR"):
+    def __init__(self, conditions: list[ConvergenceCondition], operator: str = "OR"):
         """Initialize with list of conditions.
 
         Args:
@@ -178,7 +179,7 @@ class CompoundCondition(ConvergenceCondition):
         if self.operator not in ["AND", "OR"]:
             raise ValueError("Operator must be 'AND' or 'OR'")
 
-    def evaluate(self, results: Dict[str, Any], cycle_state: "CycleState") -> bool:
+    def evaluate(self, results: dict[str, Any], cycle_state: "CycleState") -> bool:
         """Evaluate all conditions with specified operator."""
         evaluations = [cond.evaluate(results, cycle_state) for cond in self.conditions]
 
@@ -196,7 +197,7 @@ class CompoundCondition(ConvergenceCondition):
 class AdaptiveCondition(ConvergenceCondition):
     """Adaptive convergence that changes based on iteration progress."""
 
-    def __init__(self, stages: List[tuple[int, ConvergenceCondition]]):
+    def __init__(self, stages: list[tuple[int, ConvergenceCondition]]):
         """Initialize with stages of conditions.
 
         Args:
@@ -205,7 +206,7 @@ class AdaptiveCondition(ConvergenceCondition):
         """
         self.stages = sorted(stages, key=lambda x: x[0])
 
-    def evaluate(self, results: Dict[str, Any], cycle_state: "CycleState") -> bool:
+    def evaluate(self, results: dict[str, Any], cycle_state: "CycleState") -> bool:
         """Evaluate condition based on current iteration stage."""
         current_iteration = cycle_state.iteration
 
@@ -229,7 +230,7 @@ class AdaptiveCondition(ConvergenceCondition):
 
 
 def create_convergence_condition(
-    spec: Union[str, int, Callable, Dict],
+    spec: str | int | Callable | dict,
 ) -> ConvergenceCondition:
     """Factory function to create convergence conditions from various specs.
 

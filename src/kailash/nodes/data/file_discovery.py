@@ -4,9 +4,9 @@ import hashlib
 import mimetypes
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -89,7 +89,7 @@ class FileDiscoveryNode(Node):
         >>> large_files = result['discovered_files']
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "search_paths": NodeParameter(
                 name="search_paths",
@@ -165,7 +165,7 @@ class FileDiscoveryNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         search_paths = kwargs["search_paths"]
         file_patterns = kwargs.get("file_patterns", ["*"])
         exclude_patterns = kwargs.get("exclude_patterns", [])
@@ -218,7 +218,7 @@ class FileDiscoveryNode(Node):
                         "type": "discovery_error",
                         "path": search_path,
                         "error": str(e),
-                        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+                        "timestamp": datetime.now(UTC).isoformat() + "Z",
                     }
                 )
 
@@ -237,23 +237,23 @@ class FileDiscoveryNode(Node):
                 [f for f in discovered_files if f.get("type") != "discovery_error"]
             ),
             "execution_time": execution_time,
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat() + "Z",
         }
 
     def _discover_files_in_path(
         self,
         search_path: str,
-        file_patterns: List[str],
-        exclude_patterns: List[str],
+        file_patterns: list[str],
+        exclude_patterns: list[str],
         max_depth: int,
         include_metadata: bool,
         include_checksums: bool,
-        min_size_mb: Optional[float],
-        max_size_mb: Optional[float],
-        older_than_days: Optional[int],
-        newer_than_days: Optional[int],
+        min_size_mb: float | None,
+        max_size_mb: float | None,
+        older_than_days: int | None,
+        newer_than_days: int | None,
         follow_symlinks: bool,
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    ) -> tuple[list[dict[str, Any]], dict[str, int]]:
         """Discover files in a specific path."""
 
         discovered_files = []
@@ -326,8 +326,7 @@ class FileDiscoveryNode(Node):
                                 "path": file_path,
                                 "name": file_name,
                                 "error": str(e),
-                                "timestamp": datetime.now(timezone.utc).isoformat()
-                                + "Z",
+                                "timestamp": datetime.now(UTC).isoformat() + "Z",
                             }
                         )
 
@@ -338,7 +337,7 @@ class FileDiscoveryNode(Node):
         return discovered_files, stats
 
     def _matches_patterns(
-        self, file_name: str, include_patterns: List[str], exclude_patterns: List[str]
+        self, file_name: str, include_patterns: list[str], exclude_patterns: list[str]
     ) -> bool:
         """Check if filename matches include patterns and doesn't match exclude patterns."""
         import fnmatch
@@ -360,7 +359,7 @@ class FileDiscoveryNode(Node):
 
     def _analyze_file(
         self, file_path: str, include_metadata: bool, include_checksums: bool
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze a single file and return its information."""
 
         file_path_obj = Path(file_path)
@@ -383,15 +382,15 @@ class FileDiscoveryNode(Node):
                     "modified_timestamp": stat_info.st_mtime,
                     "accessed_timestamp": stat_info.st_atime,
                     "created_date": datetime.fromtimestamp(
-                        stat_info.st_ctime, timezone.utc
+                        stat_info.st_ctime, UTC
                     ).isoformat()
                     + "Z",
                     "modified_date": datetime.fromtimestamp(
-                        stat_info.st_mtime, timezone.utc
+                        stat_info.st_mtime, UTC
                     ).isoformat()
                     + "Z",
                     "accessed_date": datetime.fromtimestamp(
-                        stat_info.st_atime, timezone.utc
+                        stat_info.st_atime, UTC
                     ).isoformat()
                     + "Z",
                 }
@@ -445,9 +444,7 @@ class FileDiscoveryNode(Node):
                 # Content analysis for text files
                 if mime_type and mime_type.startswith("text/"):
                     try:
-                        with open(
-                            file_path, "r", encoding="utf-8", errors="ignore"
-                        ) as f:
+                        with open(file_path, encoding="utf-8", errors="ignore") as f:
                             content_sample = f.read(1024)  # Read first 1KB
                             file_info.update(
                                 {
@@ -475,10 +472,10 @@ class FileDiscoveryNode(Node):
                 }
             )
 
-        file_info["timestamp"] = datetime.now(timezone.utc).isoformat() + "Z"
+        file_info["timestamp"] = datetime.now(UTC).isoformat() + "Z"
         return file_info
 
-    def _calculate_checksums(self, file_path: str) -> Dict[str, str]:
+    def _calculate_checksums(self, file_path: str) -> dict[str, str]:
         """Calculate MD5 and SHA256 checksums for a file."""
         checksums = {}
 
@@ -509,9 +506,9 @@ class FileDiscoveryNode(Node):
 
     def _matches_date_criteria(
         self,
-        file_info: Dict[str, Any],
-        older_than_days: Optional[int],
-        newer_than_days: Optional[int],
+        file_info: dict[str, Any],
+        older_than_days: int | None,
+        newer_than_days: int | None,
     ) -> bool:
         """Check if file matches date criteria."""
 
@@ -532,10 +529,10 @@ class FileDiscoveryNode(Node):
 
     def _generate_discovery_summary(
         self,
-        discovered_files: List[Dict],
-        discovery_stats: Dict[str, int],
+        discovered_files: list[dict],
+        discovery_stats: dict[str, int],
         execution_time: float,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate summary of file discovery results."""
 
         # Count files by type/extension

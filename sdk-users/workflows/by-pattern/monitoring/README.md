@@ -74,9 +74,9 @@ api_health_check = HTTPRequestNode(
     timeout=10.0
 )
 
-# Monitor service health endpoints  
+# Monitor service health endpoints
 service_health_check = HTTPRequestNode(
-    name="service_health_check", 
+    name="service_health_check",
     method="GET",
     url="http://localhost:8080/health",
     expected_status=200
@@ -88,7 +88,7 @@ service_health_check = HTTPRequestNode(
 # Check database health via HTTP endpoint
 db_health_check = HTTPRequestNode(
     name="database_health",
-    method="GET", 
+    method="GET",
     url="http://localhost:5432/health",  # PostgreSQL health check
     timeout=5.0
 )
@@ -183,14 +183,14 @@ MONITORED_SERVICES = {
 ALERT_THRESHOLDS = {
     "response_time": {
         "warning": 2.0,   # seconds
-        "critical": 5.0   # seconds  
+        "critical": 5.0   # seconds
     },
     "health_score": {
         "warning": 75,    # percentage
         "critical": 50    # percentage
     },
     "availability": {
-        "warning": 95,    # percentage  
+        "warning": 95,    # percentage
         "critical": 90    # percentage
     }
 }
@@ -200,7 +200,7 @@ ALERT_THRESHOLDS = {
 
 ### Monitoring Frequency
 - **Critical Services**: Every 30 seconds
-- **Important Services**: Every 1-2 minutes  
+- **Important Services**: Every 1-2 minutes
 - **Supporting Services**: Every 5 minutes
 - **Background Services**: Every 15 minutes
 
@@ -276,7 +276,7 @@ health_aggregator = PythonCodeNode.from_function(
 
 ### Historical Reports
 - Monthly availability reports
-- Performance trend analysis  
+- Performance trend analysis
 - SLA compliance tracking
 - Incident root cause analysis
 

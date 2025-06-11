@@ -35,11 +35,11 @@ def process_data(input_data: list) -> dict:
     """Process data with full IDE support."""
     import pandas as pd
     import numpy as np
-    
+
     # Complex processing logic (with syntax highlighting!)
     df = pd.DataFrame(input_data)
     df['calculated'] = df['value'].apply(lambda x: np.log(x + 1))
-    
+
     # More processing...
     return {
         'processed_data': df.to_dict('records'),

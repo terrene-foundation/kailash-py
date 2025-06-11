@@ -20,9 +20,10 @@ Downstream Consumers:
 import asyncio
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 try:
     import psutil
@@ -60,9 +61,9 @@ class PerformanceMetrics:
     io_write_count: int = 0
     thread_count: int = 1
     context_switches: int = 0
-    custom: Dict[str, Any] = field(default_factory=dict)
+    custom: dict[str, Any] = field(default_factory=dict)
 
-    def to_task_metrics(self) -> Dict[str, Any]:
+    def to_task_metrics(self) -> dict[str, Any]:
         """Convert to TaskMetrics compatible format."""
         return {
             "duration": self.duration,
@@ -114,7 +115,7 @@ class MetricsCollector:
             )
 
     @contextmanager
-    def collect(self, node_id: Optional[str] = None):
+    def collect(self, node_id: str | None = None):
         """Context manager for collecting metrics during execution.
 
         Args:
@@ -135,7 +136,7 @@ class MetricsCollector:
         finally:
             context.stop()
 
-    async def collect_async(self, coro, node_id: Optional[str] = None):
+    async def collect_async(self, coro, node_id: str | None = None):
         """Collect metrics for async execution.
 
         Args:
@@ -163,20 +164,20 @@ class MetricsContext:
     """Context for collecting metrics during a specific execution."""
 
     def __init__(
-        self, node_id: Optional[str], sampling_interval: float, monitoring_enabled: bool
+        self, node_id: str | None, sampling_interval: float, monitoring_enabled: bool
     ):
         self.node_id = node_id
         self.sampling_interval = sampling_interval
         self.monitoring_enabled = monitoring_enabled
 
-        self.start_time: Optional[float] = None
-        self.end_time: Optional[float] = None
-        self.process: Optional[Any] = None
-        self.initial_io: Optional[Any] = None
-        self.initial_memory: Optional[float] = None
+        self.start_time: float | None = None
+        self.end_time: float | None = None
+        self.process: Any | None = None
+        self.initial_io: Any | None = None
+        self.initial_memory: float | None = None
         self.peak_memory: float = 0.0
         self.cpu_samples: list = []
-        self.monitoring_thread: Optional[threading.Thread] = None
+        self.monitoring_thread: threading.Thread | None = None
         self._stop_monitoring = threading.Event()
 
     def start(self):
@@ -293,7 +294,7 @@ class MetricsContext:
             self._custom_metrics = {}
         self._custom_metrics[name] = value
 
-    def get_custom_metrics(self) -> Dict[str, Any]:
+    def get_custom_metrics(self) -> dict[str, Any]:
         """Get custom metrics."""
         return getattr(self, "_custom_metrics", {})
 
@@ -302,7 +303,7 @@ class MetricsContext:
 default_collector = MetricsCollector()
 
 
-def collect_metrics(func: Optional[Callable] = None, *, node_id: Optional[str] = None):
+def collect_metrics(func: Callable | None = None, *, node_id: str | None = None):
     """Decorator for collecting metrics on function execution.
 
     Can be used as @collect_metrics or @collect_metrics(node_id="my_node")

@@ -6,7 +6,7 @@ making it easier to handle state transitions in a predictable manner.
 
 import logging
 from copy import deepcopy
-from typing import Any, Generic, List, Tuple, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -24,7 +24,7 @@ class StateManager:
     """
 
     @staticmethod
-    def update_in(state_obj: BaseModel, path: List[str], value: Any) -> BaseModel:
+    def update_in(state_obj: BaseModel, path: list[str], value: Any) -> BaseModel:
         """Update a nested property in the state and return a new state object.
 
         Args:
@@ -61,10 +61,7 @@ class StateManager:
             if isinstance(next_obj, BaseModel):
                 next_obj = next_obj.model_copy(deep=True)
                 setattr(current, key, next_obj)
-            elif isinstance(next_obj, dict):
-                next_obj = deepcopy(next_obj)
-                setattr(current, key, next_obj)
-            elif isinstance(next_obj, list):
+            elif isinstance(next_obj, dict) or isinstance(next_obj, list):
                 next_obj = deepcopy(next_obj)
                 setattr(current, key, next_obj)
 
@@ -80,7 +77,7 @@ class StateManager:
 
     @staticmethod
     def batch_update(
-        state_obj: BaseModel, updates: List[Tuple[List[str], Any]]
+        state_obj: BaseModel, updates: list[tuple[list[str], Any]]
     ) -> BaseModel:
         """Apply multiple updates to the state atomically.
 
@@ -108,7 +105,7 @@ class StateManager:
         return new_state
 
     @staticmethod
-    def get_in(state_obj: BaseModel, path: List[str]) -> Any:
+    def get_in(state_obj: BaseModel, path: list[str]) -> Any:
         """Get the value at a nested path.
 
         Args:
@@ -175,7 +172,7 @@ class WorkflowStateWrapper(Generic[StateT]):
         """
         self._state = state
 
-    def update_in(self, path: List[str], value: Any) -> "WorkflowStateWrapper[StateT]":
+    def update_in(self, path: list[str], value: Any) -> "WorkflowStateWrapper[StateT]":
         """Update state at path and return new wrapper.
 
         Args:
@@ -189,7 +186,7 @@ class WorkflowStateWrapper(Generic[StateT]):
         return WorkflowStateWrapper(new_state)
 
     def batch_update(
-        self, updates: List[Tuple[List[str], Any]]
+        self, updates: list[tuple[list[str], Any]]
     ) -> "WorkflowStateWrapper[StateT]":
         """Apply multiple updates to the state atomically.
 
@@ -202,7 +199,7 @@ class WorkflowStateWrapper(Generic[StateT]):
         new_state = StateManager.batch_update(self._state, updates)
         return WorkflowStateWrapper(new_state)
 
-    def get_in(self, path: List[str]) -> Any:
+    def get_in(self, path: list[str]) -> Any:
         """Get the value at a nested path.
 
         Args:

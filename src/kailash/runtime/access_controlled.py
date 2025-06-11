@@ -27,7 +27,7 @@ Example with access control (opt-in):
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from kailash.access_control import (
     AccessControlManager,
@@ -108,7 +108,7 @@ class AccessControlledRuntime:
     """
 
     def __init__(
-        self, user_context: UserContext, base_runtime: Optional[LocalRuntime] = None
+        self, user_context: UserContext, base_runtime: LocalRuntime | None = None
     ):
         """
         Initialize access-controlled runtime.
@@ -123,11 +123,11 @@ class AccessControlledRuntime:
 
         # Track skipped nodes for alternative routing
         self._skipped_nodes: set[str] = set()
-        self._node_outputs: Dict[str, Any] = {}
+        self._node_outputs: dict[str, Any] = {}
 
     def execute(
-        self, workflow: Workflow, parameters: Optional[Dict[str, Any]] = None
-    ) -> Tuple[Any, str]:
+        self, workflow: Workflow, parameters: dict[str, Any] | None = None
+    ) -> tuple[Any, str]:
         """
         Execute workflow with access control.
 
@@ -272,7 +272,7 @@ class AccessControlledRuntime:
         return wrapper
 
     @staticmethod
-    def _mask_fields(data: Dict[str, Any], fields: List[str]) -> Dict[str, Any]:
+    def _mask_fields(data: dict[str, Any], fields: list[str]) -> dict[str, Any]:
         """Mask sensitive fields in data"""
         masked = data.copy()
         for field in fields:
@@ -281,8 +281,8 @@ class AccessControlledRuntime:
         return masked
 
     def _handle_conditional_routing(
-        self, node_id: str, true_path: List[str], false_path: List[str]
-    ) -> List[str]:
+        self, node_id: str, true_path: list[str], false_path: list[str]
+    ) -> list[str]:
         """
         Determine which path to take based on permissions.
 
@@ -345,14 +345,14 @@ class AccessControlConfig:
     """
 
     def __init__(self):
-        self.rules: List[PermissionRule] = []
+        self.rules: list[PermissionRule] = []
 
     def add_workflow_permission(
         self,
         workflow_id: str,
         permission: WorkflowPermission,
-        user_id: Optional[str] = None,
-        role: Optional[str] = None,
+        user_id: str | None = None,
+        role: str | None = None,
         effect: PermissionEffect = PermissionEffect.ALLOW,
     ):
         """Add a workflow-level permission rule"""
@@ -372,11 +372,11 @@ class AccessControlConfig:
         workflow_id: str,
         node_id: str,
         permission: NodePermission,
-        user_id: Optional[str] = None,
-        role: Optional[str] = None,
+        user_id: str | None = None,
+        role: str | None = None,
         effect: PermissionEffect = PermissionEffect.ALLOW,
-        masked_fields: Optional[List[str]] = None,
-        redirect_node: Optional[str] = None,
+        masked_fields: list[str] | None = None,
+        redirect_node: str | None = None,
     ):
         """Add a node-level permission rule"""
         rule = PermissionRule(
@@ -406,9 +406,9 @@ class AccessControlConfig:
 def execute_with_access_control(
     workflow: Workflow,
     user_context: UserContext,
-    parameters: Optional[Dict[str, Any]] = None,
-    access_config: Optional[AccessControlConfig] = None,
-) -> Tuple[Any, str]:
+    parameters: dict[str, Any] | None = None,
+    access_config: AccessControlConfig | None = None,
+) -> tuple[Any, str]:
     """
     Convenience function to execute a workflow with access control.
 

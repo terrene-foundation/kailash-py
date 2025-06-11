@@ -13,7 +13,6 @@ This script:
 import ast
 import sys
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
 
 # Try to import black and isort
 try:
@@ -86,7 +85,7 @@ class PythonCodeNodeTransformer(ast.NodeTransformer):
 
         return self.generic_visit(node)
 
-    def _generate_function_name(self, node_name: Optional[str]) -> str:
+    def _generate_function_name(self, node_name: str | None) -> str:
         """Generate a function name based on node name."""
         if node_name:
             # Convert node_name to function name (e.g., "data_processor" -> "process_data")
@@ -108,7 +107,7 @@ class PythonCodeNodeTransformer(ast.NodeTransformer):
 
         return func_name
 
-    def _create_function(self, func_name: str, code_str: str) -> Tuple[str, Set[str]]:
+    def _create_function(self, func_name: str, code_str: str) -> tuple[str, set[str]]:
         """Create a function definition from code string."""
         # Parse the code to understand its structure
         lines = code_str.strip().split("\n")
@@ -120,9 +119,7 @@ class PythonCodeNodeTransformer(ast.NodeTransformer):
             stripped = line.strip()
             if stripped.startswith("import ") or stripped.startswith("from "):
                 imports.append(stripped)
-            elif stripped and not stripped.startswith("#"):
-                body_lines.append(line)
-            elif stripped.startswith("#"):
+            elif stripped and not stripped.startswith("#") or stripped.startswith("#"):
                 body_lines.append(line)
 
         # Analyze code for input/output patterns
@@ -186,7 +183,7 @@ def refactor_file(file_path: Path) -> bool:
 
     try:
         # Read the file
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             source = f.read()
 
         # Parse the AST
@@ -294,7 +291,7 @@ def refactor_file(file_path: Path) -> bool:
         return False
 
 
-def find_python_files(directory: Path, pattern: str = "*.py") -> List[Path]:
+def find_python_files(directory: Path, pattern: str = "*.py") -> list[Path]:
     """Find all Python files in directory matching pattern."""
     return list(directory.rglob(pattern))
 

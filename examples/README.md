@@ -53,7 +53,7 @@ Testing utilities and helpers:
 4. **Validate all examples**: Run `python examples/utils/test_runner.py`
 
 ### For Workflow Developers
-**You're in the wrong place!** 
+**You're in the wrong place!**
 - For production workflows → [sdk-users/workflows/](../sdk-users/workflows/)
 - For workflow patterns → [sdk-users/patterns/](../sdk-users/patterns/)
 - For quick start → [sdk-users/essentials/](../sdk-users/essentials/)
@@ -70,7 +70,7 @@ python examples/utils/test_runner.py
 # Test a specific example
 python examples/feature_examples/nodes/data-nodes/csv_reader_test.py
 
-# Test all node examples  
+# Test all node examples
 python examples/utils/test_runner.py
 
 # Run from examples directory
@@ -96,15 +96,15 @@ def test_feature():
     """Test specific feature functionality."""
     # Setup
     workflow = Workflow("test_id", "Test Feature X")
-    
+
     # Test implementation
     node = XxxNode(...)
     workflow.add_node("test", node)
-    
+
     # Validation
     results = runtime.execute(workflow)
     assert results["test"]["output"] == expected_value
-    
+
     print("✓ Feature test passed")
 
 if __name__ == "__main__":

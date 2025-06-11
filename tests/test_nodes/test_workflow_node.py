@@ -1,7 +1,7 @@
 """Tests for WorkflowNode functionality."""
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 import yaml
@@ -17,7 +17,7 @@ from kailash.workflow.graph import Workflow
 class TestInputNode(Node):
     """Test node that provides input data."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "value": NodeParameter(
                 name="value",
@@ -28,7 +28,7 @@ class TestInputNode(Node):
             )
         }
 
-    def run(self, value: int) -> Dict[str, Any]:
+    def run(self, value: int) -> dict[str, Any]:
         return {"output": value * 2}
 
 
@@ -36,7 +36,7 @@ class TestInputNode(Node):
 class TestProcessorNode(Node):
     """Test node that processes data."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(
                 name="data",
@@ -54,7 +54,7 @@ class TestProcessorNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         return {
             "result": NodeParameter(
                 name="result", type=int, required=True, description="Processed result"
@@ -67,7 +67,7 @@ class TestProcessorNode(Node):
             ),
         }
 
-    def run(self, data: int, multiplier: int = 3) -> Dict[str, Any]:
+    def run(self, data: int, multiplier: int = 3) -> dict[str, Any]:
         return {
             "result": data * multiplier,
             "metadata": {"multiplier": multiplier, "original": data},
@@ -150,7 +150,7 @@ class TestWorkflowNode:
         exporter.to_yaml(workflow, str(yaml_path))
 
         # Debug: Check what was exported
-        with open(yaml_path, "r") as f:
+        with open(yaml_path) as f:
             exported_data = yaml.safe_load(f)
             print(f"Exported data: {exported_data}")
 

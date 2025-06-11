@@ -22,7 +22,7 @@ Features:
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
@@ -31,7 +31,7 @@ from kailash.nodes.logic import MergeNode
 from kailash.runtime import LocalRuntime
 
 
-def get_security_targets() -> Dict[str, Any]:
+def get_security_targets() -> dict[str, Any]:
     """Get real security assessment targets from Docker infrastructure."""
     return {
         "databases": [
@@ -117,7 +117,7 @@ security_targets = {
             "assessment_type": "api_security"
         },
         {
-            "name": "mcp-server", 
+            "name": "mcp-server",
             "url": "http://localhost:8765",
             "critical": False,
             "service_type": "mcp",
@@ -132,7 +132,7 @@ security_targets = {
         },
         {
             "name": "kafka-ui",
-            "url": "http://localhost:8082", 
+            "url": "http://localhost:8082",
             "critical": True,  # Admin interface - high security importance
             "service_type": "admin_ui",
             "assessment_type": "web_security"
@@ -144,7 +144,7 @@ result = {
     "security_targets": security_targets,
     "total_databases": len(security_targets["databases"]),
     "total_api_endpoints": len(security_targets["api_endpoints"]),
-    "critical_targets": sum(1 for db in security_targets["databases"] if db["critical"]) + 
+    "critical_targets": sum(1 for db in security_targets["databases"] if db["critical"]) +
                        sum(1 for api in security_targets["api_endpoints"] if api["critical"])
 }
 """,
@@ -171,7 +171,7 @@ for db_config in databases:
     connection_string = db_config["connection_string"]
     is_critical = db_config["critical"]
     service_type = db_config["service_type"]
-    
+
     try:
         # Create SQLDatabaseNode for this database
         sql_node = SQLDatabaseNode(
@@ -180,10 +180,10 @@ for db_config in databases:
             pool_size=2,  # Small pool for security scanning
             pool_timeout=10
         )
-        
+
         # Perform security-focused database queries
         security_checks = []
-        
+
         # 1. Check database version and configuration
         try:
             version_result = sql_node.run(query="SELECT version()")
@@ -205,7 +205,7 @@ for db_config in databases:
                 "description": "Could not retrieve database version"
             }
             security_checks.append(version_check)
-        
+
         # 2. Check for default/weak authentication
         auth_check = {
             "check": "authentication_strength",
@@ -219,7 +219,7 @@ for db_config in databases:
             }
         }
         security_checks.append(auth_check)
-        
+
         # 3. Check database permissions and roles
         try:
             if service_type == "database":  # PostgreSQL
@@ -227,7 +227,7 @@ for db_config in databases:
                     query="SELECT rolname, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles"
                 )
                 roles_data = roles_result.get("data", [])
-                
+
                 # Check for overprivileged roles
                 super_users = [role for role in roles_data if role.get("rolsuper")]
                 overprivileged_check = {
@@ -242,7 +242,7 @@ for db_config in databases:
                     }
                 }
                 security_checks.append(overprivileged_check)
-                
+
         except Exception as e:
             permission_check = {
                 "check": "privilege_escalation",
@@ -252,7 +252,7 @@ for db_config in databases:
                 "description": "Could not assess database permissions"
             }
             security_checks.append(permission_check)
-        
+
         # 4. Check for sensitive data exposure
         try:
             if service_type == "database":  # PostgreSQL
@@ -261,14 +261,14 @@ for db_config in databases:
                     query="SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
                 )
                 tables_data = tables_result.get("data", [])
-                
+
                 sensitive_patterns = ["user", "customer", "payment", "credit", "password", "token"]
                 sensitive_tables = []
                 for table in tables_data:
                     table_name = table.get("table_name", "").lower()
                     if any(pattern in table_name for pattern in sensitive_patterns):
                         sensitive_tables.append(table_name)
-                
+
                 data_exposure_check = {
                     "check": "sensitive_data_exposure",
                     "status": "warning" if sensitive_tables else "pass",
@@ -281,17 +281,17 @@ for db_config in databases:
                     }
                 }
                 security_checks.append(data_exposure_check)
-                
+
         except Exception as e:
             data_check = {
                 "check": "sensitive_data_exposure",
-                "status": "error", 
+                "status": "error",
                 "error": str(e),
                 "risk_level": "medium",
                 "description": "Could not assess sensitive data exposure"
             }
             security_checks.append(data_check)
-        
+
         # 5. Network security assessment
         network_check = {
             "check": "network_security",
@@ -305,13 +305,13 @@ for db_config in databases:
             }
         }
         security_checks.append(network_check)
-        
+
         # Calculate overall security score
         risk_scores = {"low": 1, "medium": 5, "high": 8, "critical": 10}
         total_risk = sum(risk_scores.get(check.get("risk_level", "low"), 1) for check in security_checks)
         max_possible_risk = len(security_checks) * 10
         security_score = max(0, 100 - (total_risk / max_possible_risk * 100))
-        
+
         db_finding = {
             "target_info": {
                 "name": db_name,
@@ -334,9 +334,9 @@ for db_config in databases:
                 "connection_method": "SQLDatabaseNode"
             }
         }
-        
+
         database_findings.append(db_finding)
-        
+
     except Exception as e:
         # Handle connection failures
         error_finding = {
@@ -394,14 +394,14 @@ for api_config in api_endpoints:
     api_url = api_config["url"]
     is_critical = api_config["critical"]
     service_type = api_config["service_type"]
-    
+
     try:
         # Create HTTPRequestNode for this API
         http_node = HTTPRequestNode(name=f"security_scan_{api_name}")
-        
+
         # Perform security-focused API tests
         security_checks = []
-        
+
         # 1. Basic connectivity and response analysis
         try:
             response = http_node.run(
@@ -410,12 +410,12 @@ for api_config in api_endpoints:
                 timeout=10,
                 verify_ssl=False
             )
-            
+
             is_accessible = response.get("success", False)
             status_code = response.get("status_code")
             response_data = response.get("response", {})
             headers = response_data.get("headers", {}) if response_data else {}
-            
+
             connectivity_check = {
                 "check": "service_accessibility",
                 "status": "pass" if is_accessible else "warning",
@@ -428,21 +428,21 @@ for api_config in api_endpoints:
                 }
             }
             security_checks.append(connectivity_check)
-            
+
             # 2. Security headers analysis
             security_headers = {
                 "X-Content-Type-Options": "nosniff",
-                "X-Frame-Options": "DENY", 
+                "X-Frame-Options": "DENY",
                 "X-XSS-Protection": "1; mode=block",
                 "Strict-Transport-Security": "max-age=31536000",
                 "Content-Security-Policy": "default-src 'self'"
             }
-            
+
             missing_headers = []
             for header, expected in security_headers.items():
                 if header.lower() not in [h.lower() for h in headers.keys()]:
                     missing_headers.append(header)
-            
+
             headers_check = {
                 "check": "security_headers",
                 "status": "warning" if missing_headers else "pass",
@@ -455,7 +455,7 @@ for api_config in api_endpoints:
                 }
             }
             security_checks.append(headers_check)
-            
+
         except Exception as e:
             connectivity_check = {
                 "check": "service_accessibility",
@@ -465,12 +465,12 @@ for api_config in api_endpoints:
                 "description": "Could not connect to API endpoint"
             }
             security_checks.append(connectivity_check)
-        
+
         # 3. Authentication bypass testing
         try:
             # Test for unprotected admin endpoints
             admin_paths = ["/admin", "/admin/", "/admin/login", "/dashboard", "/config"]
-            
+
             vulnerable_paths = []
             for path in admin_paths:
                 test_url = f"{api_url}{path}"
@@ -481,13 +481,13 @@ for api_config in api_endpoints:
                         timeout=5,
                         verify_ssl=False
                     )
-                    
+
                     if admin_response.get("success") and admin_response.get("status_code") == 200:
                         vulnerable_paths.append(path)
-                        
+
                 except Exception:
                     pass  # Expected for most paths
-            
+
             auth_check = {
                 "check": "authentication_bypass",
                 "status": "critical" if vulnerable_paths else "pass",
@@ -500,7 +500,7 @@ for api_config in api_endpoints:
                 }
             }
             security_checks.append(auth_check)
-            
+
         except Exception as e:
             auth_check = {
                 "check": "authentication_bypass",
@@ -510,7 +510,7 @@ for api_config in api_endpoints:
                 "description": "Could not test authentication mechanisms"
             }
             security_checks.append(auth_check)
-        
+
         # 4. Information disclosure testing
         try:
             # Test for information disclosure in error responses
@@ -520,15 +520,15 @@ for api_config in api_endpoints:
                 timeout=5,
                 verify_ssl=False
             )
-            
+
             error_content = ""
             if error_response.get("response", {}).get("content"):
                 error_content = str(error_response["response"]["content"]).lower()
-            
+
             # Check for information leakage in error messages
             sensitive_info = ["server", "version", "stack trace", "exception", "debug", "internal"]
             leaked_info = [info for info in sensitive_info if info in error_content]
-            
+
             info_disclosure_check = {
                 "check": "information_disclosure",
                 "status": "warning" if leaked_info else "pass",
@@ -541,7 +541,7 @@ for api_config in api_endpoints:
                 }
             }
             security_checks.append(info_disclosure_check)
-            
+
         except Exception as e:
             info_check = {
                 "check": "information_disclosure",
@@ -551,7 +551,7 @@ for api_config in api_endpoints:
                 "description": "Could not test information disclosure"
             }
             security_checks.append(info_check)
-        
+
         # 5. HTTPS enforcement testing
         if api_url.startswith("http://"):
             https_check = {
@@ -566,13 +566,13 @@ for api_config in api_endpoints:
                 }
             }
             security_checks.append(https_check)
-        
+
         # Calculate overall security score
         risk_scores = {"low": 1, "medium": 5, "high": 8, "critical": 10}
         total_risk = sum(risk_scores.get(check.get("risk_level", "low"), 1) for check in security_checks)
         max_possible_risk = len(security_checks) * 10
         security_score = max(0, 100 - (total_risk / max_possible_risk * 100))
-        
+
         api_finding = {
             "target_info": {
                 "name": api_name,
@@ -597,9 +597,9 @@ for api_config in api_endpoints:
                 "connection_method": "HTTPRequestNode"
             }
         }
-        
+
         api_findings.append(api_finding)
-        
+
     except Exception as e:
         # Handle connection failures
         error_finding = {
@@ -666,7 +666,7 @@ vulnerabilities = []
 for finding in all_findings:
     target_info = finding.get("target_info", {})
     security_checks = finding.get("security_checks", [])
-    
+
     for check in security_checks:
         if check.get("status") in ["warning", "critical", "error"]:
             vulnerability = {
@@ -705,25 +705,25 @@ risk_assessments = []
 
 for vuln in vulnerabilities:
     base_score = severity_scores.get(vuln["severity"], 2)
-    
+
     # Apply risk multipliers
     risk_score = base_score
-    
+
     if vuln["is_critical_target"]:
         risk_score *= risk_multipliers["critical_target"]
-    
+
     if vuln["target_type"] in ["api", "web_security", "admin_ui"]:
         risk_score *= risk_multipliers["external_facing"]
-    
+
     if vuln["target_type"] in ["admin_ui"]:
         risk_score *= risk_multipliers["admin_interface"]
-    
+
     if vuln["target_type"] in ["database", "nosql_database"]:
         risk_score *= risk_multipliers["database"]
-    
+
     # Normalize to 0-10 scale
     risk_score = min(10.0, risk_score)
-    
+
     # Determine priority and timeline
     if risk_score >= 9.0:
         priority = 1
@@ -741,7 +741,7 @@ for vuln in vulnerabilities:
         priority = 4
         remediation_timeline = "3 months"
         business_impact = "low"
-    
+
     # Estimate remediation effort
     effort_estimates = {
         "authentication_bypass": 16,     # High effort - requires authentication system
@@ -753,10 +753,10 @@ for vuln in vulnerabilities:
         "network_security": 12,          # Medium effort - firewall/network config
         "authentication_strength": 8     # Medium effort - credential changes
     }
-    
+
     effort_hours = effort_estimates.get(vuln["vulnerability_type"], 8)
     estimated_cost = effort_hours * 150  # $150/hour security consultant rate
-    
+
     risk_assessment = {
         "vulnerability_id": vuln["vulnerability_id"],
         "target_name": vuln["target_name"],
@@ -784,7 +784,7 @@ for vuln in vulnerabilities:
         },
         "assessment_timestamp": datetime.now().isoformat()
     }
-    
+
     risk_assessments.append(risk_assessment)
 
 # Sort by risk score descending (highest risk first)
@@ -993,11 +993,11 @@ vulnerability_summary = {
 for assessment in risk_assessments:
     target_type = assessment["target_type"]
     vuln_type = assessment["vulnerability_type"]
-    
+
     if target_type not in vulnerability_summary["by_target_type"]:
         vulnerability_summary["by_target_type"][target_type] = 0
     vulnerability_summary["by_target_type"][target_type] += 1
-    
+
     if vuln_type not in vulnerability_summary["by_vulnerability_type"]:
         vulnerability_summary["by_vulnerability_type"][vuln_type] = 0
     vulnerability_summary["by_vulnerability_type"][vuln_type] += 1
@@ -1018,7 +1018,7 @@ report = {
         "report_type": "comprehensive_security_audit",
         "version": "1.0",
         "scanning_method": "SQLDatabaseNode + HTTPRequestNode",
-        "next_audit_date": (current_time.replace(year=current_time.year if current_time.month < 10 else current_time.year + 1, 
+        "next_audit_date": (current_time.replace(year=current_time.year if current_time.month < 10 else current_time.year + 1,
                                                 month=current_time.month + 3 if current_time.month < 10 else current_time.month - 9)).isoformat(),
         "audit_scope": "docker_infrastructure_security"
     },
@@ -1146,7 +1146,7 @@ def main():
     # Display generated reports
     print("\\n=== Security Audit Report Preview ===")
     try:
-        with open("data/outputs/comprehensive_security_audit_report.json", "r") as f:
+        with open("data/outputs/comprehensive_security_audit_report.json") as f:
             report = json.load(f)
             security_dashboard = report["security_audit_report"]["security_dashboard"]
             print(json.dumps(security_dashboard, indent=2))

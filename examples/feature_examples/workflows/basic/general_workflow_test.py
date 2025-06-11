@@ -9,7 +9,7 @@ This example shows how to:
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -30,7 +30,7 @@ output_directory.mkdir(exist_ok=True)
 def create_filter_node():
     """Create a custom Python node for filtering data."""
 
-    def custom_filter(data: list, column_name: str, threshold: float) -> Dict[str, Any]:
+    def custom_filter(data: list, column_name: str, threshold: float) -> dict[str, Any]:
         """Filter data based on threshold and return additional statistics."""
         df = pd.DataFrame(data)
 
@@ -92,7 +92,7 @@ def create_summary_node():
 
     def summarize_data(
         data: list, group_column: str, value_column: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Summarize data by group."""
         df = pd.DataFrame(data)
 

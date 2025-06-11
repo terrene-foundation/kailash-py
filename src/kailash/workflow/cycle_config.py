@@ -93,8 +93,9 @@ See Also:
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any
 
 from kailash.workflow.cycle_exceptions import CycleConfigurationError
 
@@ -150,26 +151,26 @@ class CycleConfig:
     """
 
     # Termination conditions (at least one required)
-    max_iterations: Optional[int] = None
-    convergence_check: Optional[Union[str, Callable]] = None
-    timeout: Optional[float] = None
+    max_iterations: int | None = None
+    convergence_check: str | Callable | None = None
+    timeout: float | None = None
 
     # Safety and resource limits
-    memory_limit: Optional[int] = None
+    memory_limit: int | None = None
     iteration_safety_factor: float = 1.5  # Multiplier for max_iterations safety
 
     # Cycle metadata and identification
-    cycle_id: Optional[str] = None
-    parent_cycle: Optional[str] = None
+    cycle_id: str | None = None
+    parent_cycle: str | None = None
     description: str = ""
 
     # Execution control and conditions
-    condition: Optional[str] = None  # When to execute the cycle
+    condition: str | None = None  # When to execute the cycle
     priority: int = 0  # Execution priority for multiple cycles
 
     # Advanced configuration
-    retry_policy: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    retry_policy: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """
@@ -378,7 +379,7 @@ class CycleConfig:
                 ],
             )
 
-    def get_effective_max_iterations(self) -> Optional[int]:
+    def get_effective_max_iterations(self) -> int | None:
         """
         Get the effective maximum iterations with safety factor applied.
 
@@ -401,7 +402,7 @@ class CycleConfig:
             return None
         return int(self.max_iterations * self.iteration_safety_factor)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert configuration to dictionary format.
 
@@ -433,7 +434,7 @@ class CycleConfig:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CycleConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "CycleConfig":
         """
         Create configuration from dictionary data.
 
@@ -508,7 +509,7 @@ class CycleConfig:
 
         return CycleConfig(**merged_data)
 
-    def create_template(self, template_name: str) -> Dict[str, Any]:
+    def create_template(self, template_name: str) -> dict[str, Any]:
         """
         Create a reusable template from this configuration.
 
@@ -600,7 +601,7 @@ class CycleTemplates:
     def optimization_loop(
         max_iterations: int = 100,
         convergence_threshold: float = 0.01,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> CycleConfig:
         """
         Create configuration for optimization cycles.

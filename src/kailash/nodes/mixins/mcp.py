@@ -5,7 +5,7 @@ allowing them to discover and use MCP tools without being an LLM agent.
 """
 
 import asyncio
-from typing import Any, Dict, List, Union
+from typing import Any
 
 from kailash.mcp import MCPClient
 
@@ -50,8 +50,8 @@ class MCPCapabilityMixin:
         return self._mcp_client
 
     async def discover_mcp_tools(
-        self, mcp_servers: List[Union[str, Dict[str, Any]]]
-    ) -> List[Dict[str, Any]]:
+        self, mcp_servers: list[str | dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Discover tools from MCP servers asynchronously.
 
         Args:
@@ -75,9 +75,9 @@ class MCPCapabilityMixin:
 
     async def call_mcp_tool(
         self,
-        server_config: Union[str, Dict[str, Any]],
+        server_config: str | dict[str, Any],
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> Any:
         """Call an MCP tool asynchronously.
 
@@ -92,8 +92,8 @@ class MCPCapabilityMixin:
         return await self.mcp_client.call_tool(server_config, tool_name, arguments)
 
     async def list_mcp_resources(
-        self, server_config: Union[str, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, server_config: str | dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """List available resources from an MCP server.
 
         Args:
@@ -105,7 +105,7 @@ class MCPCapabilityMixin:
         return await self.mcp_client.list_resources(server_config)
 
     async def read_mcp_resource(
-        self, server_config: Union[str, Dict[str, Any]], uri: str
+        self, server_config: str | dict[str, Any], uri: str
     ) -> Any:
         """Read a resource from an MCP server.
 
@@ -121,8 +121,8 @@ class MCPCapabilityMixin:
     # Synchronous wrappers for non-async nodes
 
     def discover_mcp_tools_sync(
-        self, mcp_servers: List[Union[str, Dict[str, Any]]]
-    ) -> List[Dict[str, Any]]:
+        self, mcp_servers: list[str | dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Synchronous wrapper for discovering MCP tools.
 
         Args:
@@ -139,9 +139,9 @@ class MCPCapabilityMixin:
 
     def call_mcp_tool_sync(
         self,
-        server_config: Union[str, Dict[str, Any]],
+        server_config: str | dict[str, Any],
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> Any:
         """Synchronous wrapper for calling MCP tools.
 
@@ -162,8 +162,8 @@ class MCPCapabilityMixin:
             loop.close()
 
     def list_mcp_resources_sync(
-        self, server_config: Union[str, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, server_config: str | dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Synchronous wrapper for listing MCP resources.
 
         Args:
@@ -179,7 +179,7 @@ class MCPCapabilityMixin:
             loop.close()
 
     def read_mcp_resource_sync(
-        self, server_config: Union[str, Dict[str, Any]], uri: str
+        self, server_config: str | dict[str, Any], uri: str
     ) -> Any:
         """Synchronous wrapper for reading MCP resources.
 
@@ -198,7 +198,7 @@ class MCPCapabilityMixin:
 
     # Helper methods for common patterns
 
-    def get_mcp_parameter_defaults(self) -> Dict[str, Any]:
+    def get_mcp_parameter_defaults(self) -> dict[str, Any]:
         """Get default MCP-related parameters for nodes.
 
         Returns:
@@ -206,7 +206,7 @@ class MCPCapabilityMixin:
         """
         return {"mcp_servers": [], "mcp_context": [], "auto_discover_tools": False}
 
-    def format_mcp_tools_for_display(self, tools: List[Dict[str, Any]]) -> str:
+    def format_mcp_tools_for_display(self, tools: list[dict[str, Any]]) -> str:
         """Format MCP tools for human-readable display.
 
         Args:

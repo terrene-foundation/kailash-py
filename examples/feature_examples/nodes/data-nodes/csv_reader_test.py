@@ -10,7 +10,7 @@ Prerequisites:
 - Docker infrastructure: docker-compose -f docker/docker-compose.sdk-dev.yml up -d
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -65,7 +65,7 @@ output_schema = {
 }
 
 
-def custom_filter(data: list, column_name: str, threshold: float) -> Dict[str, Any]:
+def custom_filter(data: list, column_name: str, threshold: float) -> dict[str, Any]:
     """Filter data based on threshold (Docker infrastructure ready)."""
     df = pd.DataFrame(data)
 
@@ -104,7 +104,7 @@ print(f"Filtered to {len(filter_result['filtered_data'])} records")
 
 
 # Method 4: Chain multiple operations
-def summarize_by_group(data: list, group_col: str, value_col: str) -> Dict[str, Any]:
+def summarize_by_group(data: list, group_col: str, value_col: str) -> dict[str, Any]:
     """Summarize data by group (Docker infrastructure ready)."""
     df = pd.DataFrame(data)
 
@@ -167,7 +167,7 @@ print(f"Total: ${summary_result['total']:,.2f}")
 
 
 # Method 5: Direct execution without schemas (simpler but less validated)
-def simple_stats(data: list, column: str) -> Dict[str, Any]:
+def simple_stats(data: list, column: str) -> dict[str, Any]:
     """Calculate simple statistics (Docker infrastructure ready)."""
     df = pd.DataFrame(data)
 

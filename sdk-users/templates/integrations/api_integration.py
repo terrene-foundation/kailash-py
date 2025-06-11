@@ -11,7 +11,7 @@ Customization Points:
 """
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 from kailash.nodes.api.auth import APIKeyNode, BasicAuthNode, OAuth2Node
 from kailash.nodes.api.rate_limiting import RateLimitedAPINode
@@ -44,7 +44,7 @@ OAUTH_CONFIG = {
 OUTPUT_FILE = "outputs/api_results.json"
 
 
-def prepare_api_request(data: Dict) -> Dict[str, Any]:
+def prepare_api_request(data: dict) -> dict[str, Any]:
     """Prepare data for API request"""
     # Example: Transform input data to API format
     api_payload = {
@@ -70,7 +70,7 @@ def prepare_api_request(data: Dict) -> Dict[str, Any]:
     }
 
 
-def process_api_response(response: Dict) -> Dict[str, Any]:
+def process_api_response(response: dict) -> dict[str, Any]:
     """Process and transform API response"""
     # Handle different response structures
     if "error" in response:
@@ -108,7 +108,7 @@ def process_api_response(response: Dict) -> Dict[str, Any]:
     }
 
 
-def classify_item(item: Dict) -> str:
+def classify_item(item: dict) -> str:
     """Custom classification logic"""
     # Example classification based on attributes
     if item.get("value", 0) > 1000:
@@ -119,7 +119,7 @@ def classify_item(item: Dict) -> str:
         return "inactive"
 
 
-def calculate_priority(item: Dict) -> int:
+def calculate_priority(item: dict) -> int:
     """Calculate item priority"""
     # Example priority calculation
     base_priority = 1
@@ -130,7 +130,7 @@ def calculate_priority(item: Dict) -> int:
     return min(base_priority, 5)  # Cap at 5
 
 
-def handle_pagination(response: Dict, context: Dict) -> Dict[str, Any]:
+def handle_pagination(response: dict, context: dict) -> dict[str, Any]:
     """Handle paginated API responses"""
     current_page = context.get("current_page", 1)
     total_pages = response.get("total_pages", 1)

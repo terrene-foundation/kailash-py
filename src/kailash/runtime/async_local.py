@@ -6,8 +6,8 @@ database queries, or LLM interactions.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import networkx as nx
 
@@ -60,9 +60,9 @@ class AsyncLocalRuntime:
     async def execute(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager] = None,
-        parameters: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow asynchronously.
 
         Args:
@@ -144,10 +144,10 @@ class AsyncLocalRuntime:
     async def _execute_workflow(
         self,
         workflow: Workflow,
-        task_manager: Optional[TaskManager],
-        run_id: Optional[str],
-        parameters: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        task_manager: TaskManager | None,
+        run_id: str | None,
+        parameters: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
         """Execute the workflow nodes asynchronously.
 
         Args:
@@ -195,7 +195,7 @@ class AsyncLocalRuntime:
                         run_id=run_id,
                         node_id=node_id,
                         node_type=node_instance.__class__.__name__,
-                        started_at=datetime.now(timezone.utc),
+                        started_at=datetime.now(UTC),
                     )
                 except Exception as e:
                     self.logger.warning(
@@ -220,7 +220,7 @@ class AsyncLocalRuntime:
                     task.update_status(TaskStatus.RUNNING)
 
                 # Execute node - check if it supports async execution
-                start_time = datetime.now(timezone.utc)
+                start_time = datetime.now(UTC)
 
                 if isinstance(node_instance, AsyncNode):
                     # Use async execution
@@ -229,9 +229,7 @@ class AsyncLocalRuntime:
                     # Fall back to synchronous execution
                     outputs = node_instance.run(**inputs)
 
-                execution_time = (
-                    datetime.now(timezone.utc) - start_time
-                ).total_seconds()
+                execution_time = (datetime.now(UTC) - start_time).total_seconds()
 
                 # Store outputs
                 node_outputs[node_id] = outputs
@@ -245,7 +243,7 @@ class AsyncLocalRuntime:
                     task.update_status(
                         TaskStatus.COMPLETED,
                         result=outputs,
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                         metadata={"execution_time": execution_time},
                     )
 
@@ -262,7 +260,7 @@ class AsyncLocalRuntime:
                     task.update_status(
                         TaskStatus.FAILED,
                         error=str(e),
-                        ended_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(UTC),
                     )
 
                 # Determine if we should continue or stop
@@ -287,9 +285,9 @@ class AsyncLocalRuntime:
         workflow: Workflow,
         node_id: str,
         node_instance: Any,
-        node_outputs: Dict[str, Dict[str, Any]],
-        parameters: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        node_outputs: dict[str, dict[str, Any]],
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
         """Prepare inputs for a node execution.
 
         Args:

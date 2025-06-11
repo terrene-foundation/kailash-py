@@ -7,7 +7,7 @@ without requiring a running API server.
 
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -50,8 +50,8 @@ class StandaloneWorkflowStudioAPI:
             session.commit()
 
     def create_workflow(
-        self, name: str, description: str, definition: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, name: str, description: str, definition: dict[str, Any]
+    ) -> dict[str, Any]:
         """Create a workflow"""
         with get_db_session(self.SessionLocal) as session:
             repo = WorkflowRepository(session)
@@ -72,7 +72,7 @@ class StandaloneWorkflowStudioAPI:
                 "updated_at": workflow.updated_at.isoformat(),
             }
 
-    def list_workflows(self) -> List[Dict[str, Any]]:
+    def list_workflows(self) -> list[dict[str, Any]]:
         """List workflows for tenant"""
         with get_db_session(self.SessionLocal) as session:
             repo = WorkflowRepository(session)
@@ -87,7 +87,7 @@ class StandaloneWorkflowStudioAPI:
                 for wf in workflows
             ]
 
-    def create_custom_node(self, node_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_custom_node(self, node_data: dict[str, Any]) -> dict[str, Any]:
         """Create a custom node"""
         with get_db_session(self.SessionLocal) as session:
             repo = CustomNodeRepository(session)
@@ -104,8 +104,8 @@ class StandaloneWorkflowStudioAPI:
             }
 
     def execute_workflow(
-        self, workflow_id: str, parameters: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        self, workflow_id: str, parameters: dict[str, Any] = None
+    ) -> dict[str, Any]:
         """Execute a workflow"""
         with get_db_session(self.SessionLocal) as session:
             execution_repo = ExecutionRepository(session)

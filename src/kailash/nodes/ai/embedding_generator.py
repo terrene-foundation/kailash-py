@@ -1,7 +1,7 @@
 """Embedding Generator node for vector embeddings with support for multiple providers."""
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -107,7 +107,7 @@ class EmbeddingGeneratorNode(Node):
         )
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "operation": NodeParameter(
                 name="operation",
@@ -222,7 +222,7 @@ class EmbeddingGeneratorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         operation = kwargs["operation"]
         provider = kwargs.get("provider", "mock")
         model = kwargs.get("model", "default")
@@ -343,16 +343,16 @@ class EmbeddingGeneratorNode(Node):
 
     def _embed_single_text(
         self,
-        text: Optional[str],
+        text: str | None,
         provider: str,
         model: str,
         cache_enabled: bool,
         cache_ttl: int,
-        dimensions: Optional[int],
+        dimensions: int | None,
         normalize: bool,
         timeout: int,
         max_retries: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate embedding for a single text."""
         if not text:
             return {
@@ -418,18 +418,18 @@ class EmbeddingGeneratorNode(Node):
 
     def _embed_batch_texts(
         self,
-        texts: List[str],
+        texts: list[str],
         provider: str,
         model: str,
         batch_size: int,
         chunk_size: int,
         cache_enabled: bool,
         cache_ttl: int,
-        dimensions: Optional[int],
+        dimensions: int | None,
         normalize: bool,
         timeout: int,
         max_retries: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate embeddings for a batch of texts."""
         if not texts:
             return {
@@ -538,10 +538,10 @@ class EmbeddingGeneratorNode(Node):
 
     def _calculate_similarity(
         self,
-        embedding_1: Optional[List[float]],
-        embedding_2: Optional[List[float]],
+        embedding_1: list[float] | None,
+        embedding_2: list[float] | None,
         metric: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Calculate similarity between two embedding vectors."""
         if not embedding_1 or not embedding_2:
             return {
@@ -587,17 +587,17 @@ class EmbeddingGeneratorNode(Node):
 
     def _embed_mcp_resource(
         self,
-        resource_uri: Optional[str],
+        resource_uri: str | None,
         provider: str,
         model: str,
         chunk_size: int,
         cache_enabled: bool,
         cache_ttl: int,
-        dimensions: Optional[int],
+        dimensions: int | None,
         normalize: bool,
         timeout: int,
         max_retries: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Embed content from an MCP resource."""
         if not resource_uri:
             return {
@@ -632,7 +632,7 @@ class EmbeddingGeneratorNode(Node):
 
         return result
 
-    def _generate_mock_embedding(self, text: str, dimensions: int) -> List[float]:
+    def _generate_mock_embedding(self, text: str, dimensions: int) -> list[float]:
         """Generate a mock embedding vector based on text content."""
         import hashlib
         import random
@@ -653,10 +653,10 @@ class EmbeddingGeneratorNode(Node):
         text: str,
         provider: str,
         model: str,
-        dimensions: Optional[int],
+        dimensions: int | None,
         timeout: int,
         max_retries: int,
-    ) -> List[float]:
+    ) -> list[float]:
         """Generate embedding using external provider."""
         try:
             from .ai_providers import get_provider
@@ -702,10 +702,10 @@ class EmbeddingGeneratorNode(Node):
         text: str,
         provider: str,
         model: str,
-        dimensions: Optional[int],
+        dimensions: int | None,
         timeout: int,
         max_retries: int,
-    ) -> List[float]:
+    ) -> list[float]:
         """Fallback implementation for backward compatibility."""
         # Handle Ollama provider
         if provider == "ollama":
@@ -739,7 +739,7 @@ class EmbeddingGeneratorNode(Node):
             f"{provider}:{model}:{text}", actual_dimensions
         )
 
-    def _chunk_text(self, text: str, chunk_size: int) -> List[str]:
+    def _chunk_text(self, text: str, chunk_size: int) -> list[str]:
         """Split text into chunks based on token limit."""
         # Simple word-based chunking (real implementation would use proper tokenization)
         words = text.split()
@@ -751,7 +751,7 @@ class EmbeddingGeneratorNode(Node):
 
         return chunks or [""]
 
-    def _average_embeddings(self, embeddings: List[List[float]]) -> List[float]:
+    def _average_embeddings(self, embeddings: list[list[float]]) -> list[float]:
         """Average multiple embedding vectors."""
         if not embeddings:
             return []
@@ -765,16 +765,16 @@ class EmbeddingGeneratorNode(Node):
 
         return averaged
 
-    def _normalize_vector(self, vector: List[float]) -> List[float]:
+    def _normalize_vector(self, vector: list[float]) -> list[float]:
         """Normalize vector to unit length."""
         magnitude = sum(x * x for x in vector) ** 0.5
         if magnitude == 0:
             return vector
         return [x / magnitude for x in vector]
 
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors."""
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         magnitude1 = sum(a * a for a in vec1) ** 0.5
         magnitude2 = sum(b * b for b in vec2) ** 0.5
 
@@ -783,13 +783,13 @@ class EmbeddingGeneratorNode(Node):
 
         return dot_product / (magnitude1 * magnitude2)
 
-    def _euclidean_distance(self, vec1: List[float], vec2: List[float]) -> float:
+    def _euclidean_distance(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate Euclidean distance between two vectors."""
-        return sum((a - b) ** 2 for a, b in zip(vec1, vec2)) ** 0.5
+        return sum((a - b) ** 2 for a, b in zip(vec1, vec2, strict=False)) ** 0.5
 
-    def _dot_product(self, vec1: List[float], vec2: List[float]) -> float:
+    def _dot_product(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate dot product of two vectors."""
-        return sum(a * b for a, b in zip(vec1, vec2))
+        return sum(a * b for a, b in zip(vec1, vec2, strict=False))
 
     def _interpret_similarity(self, score: float, metric: str) -> str:
         """Provide human-readable interpretation of similarity score."""
@@ -823,15 +823,14 @@ class EmbeddingGeneratorNode(Node):
         content = f"{provider}:{model}:{text}"
         return f"emb_{hashlib.md5(content.encode()).hexdigest()[:16]}"
 
-    def _get_cached_embedding(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def _get_cached_embedding(self, cache_key: str) -> dict[str, Any] | None:
         """Retrieve embedding from cache (mock implementation)."""
         # Mock cache lookup - in real implementation, use Redis or similar
         return None
 
-    def _cache_embedding(self, cache_key: str, vector: List[float], ttl: int) -> None:
+    def _cache_embedding(self, cache_key: str, vector: list[float], ttl: int) -> None:
         """Store embedding in cache (mock implementation)."""
         # Mock cache storage - in real implementation, use Redis or similar
-        pass
 
     def _estimate_embedding_cost(self, tokens: int, provider: str, model: str) -> float:
         """Estimate embedding cost based on tokens and provider pricing."""

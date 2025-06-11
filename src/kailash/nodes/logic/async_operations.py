@@ -6,7 +6,7 @@ data processing tasks in workflows.
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -53,7 +53,7 @@ class AsyncMergeNode(AsyncNode):
         [1, 2, 3, 4]
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the AsyncMergeNode."""
         # Reuse parameters from SyncMerge
         return {
@@ -116,7 +116,7 @@ class AsyncMergeNode(AsyncNode):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for AsyncMergeNode."""
         return {
             "merged_data": NodeParameter(
@@ -127,7 +127,7 @@ class AsyncMergeNode(AsyncNode):
             )
         }
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Asynchronously execute the merge operation.
 
         This implementation provides efficient processing for large datasets by:
@@ -199,7 +199,7 @@ class AsyncMergeNode(AsyncNode):
 
         return {"merged_data": result}
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous execution method that delegates to the async implementation.
 
         This method is required by the Node abstract base class but shouldn't
@@ -220,7 +220,7 @@ class AsyncMergeNode(AsyncNode):
             "AsyncMergeNode.run() was called directly. Use execute() or execute_async() instead."
         )
 
-    async def _async_concat(self, data_inputs: List[Any], chunk_size: int) -> Any:
+    async def _async_concat(self, data_inputs: list[Any], chunk_size: int) -> Any:
         """Asynchronously concatenate data.
 
         Args:
@@ -254,7 +254,7 @@ class AsyncMergeNode(AsyncNode):
 
         return result
 
-    async def _async_zip(self, data_inputs: List[Any]) -> List[tuple]:
+    async def _async_zip(self, data_inputs: list[Any]) -> list[tuple]:
         """Asynchronously zip data.
 
         Args:
@@ -275,10 +275,10 @@ class AsyncMergeNode(AsyncNode):
         await asyncio.sleep(0.005)
 
         # Zip the lists together
-        return list(zip(*normalized_inputs))
+        return list(zip(*normalized_inputs, strict=False))
 
     async def _async_merge_dict(
-        self, data_inputs: List[Any], key: Optional[str], chunk_size: int
+        self, data_inputs: list[Any], key: str | None, chunk_size: int
     ) -> Any:
         """Asynchronously merge dictionaries.
 
@@ -326,7 +326,7 @@ class AsyncMergeNode(AsyncNode):
             )
 
     async def _merge_dict_chunk(
-        self, result: List[dict], data: List[dict], key: str
+        self, result: list[dict], data: list[dict], key: str
     ) -> None:
         """Merge a chunk of dictionaries into the result list.
 
@@ -405,7 +405,7 @@ class AsyncSwitchNode(AsyncNode):
         {'priority': 'high', 'task': 'urgent'}
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the AsyncSwitchNode."""
         return {
             "input_data": NodeParameter(
@@ -469,7 +469,7 @@ class AsyncSwitchNode(AsyncNode):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Dynamic schema with standard outputs."""
         return {
             "true_output": NodeParameter(
@@ -499,7 +499,7 @@ class AsyncSwitchNode(AsyncNode):
             # Note: case_X outputs are dynamic and not listed here
         }
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Asynchronously execute the switch operation.
 
         Args:
@@ -624,7 +624,7 @@ class AsyncSwitchNode(AsyncNode):
         self.logger.debug(f"AsyncSwitch node result keys: {list(result.keys())}")
         return result
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous execution method that delegates to the async implementation.
 
         This method is required by the Node abstract base class but shouldn't
@@ -693,12 +693,12 @@ class AsyncSwitchNode(AsyncNode):
 
     async def _handle_list_grouping(
         self,
-        groups: Dict[Any, List],
-        cases: List[Any],
+        groups: dict[Any, list],
+        cases: list[Any],
         case_prefix: str,
         default_field: str,
         pass_condition_result: bool,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Asynchronously handle routing when input is a list of dictionaries.
 
         This method creates outputs for each case with the filtered data.

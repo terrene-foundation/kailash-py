@@ -9,7 +9,7 @@ Customization Points:
 - MERGE_STRATEGY: How to combine results from different paths
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import JSONReaderNode
@@ -33,7 +33,7 @@ ROUTING_CONDITIONS = {
 MERGE_STRATEGY = "concat"  # Options: concat, dict_merge, custom
 
 
-def process_premium_customers(data: List[Dict]) -> Dict[str, Any]:
+def process_premium_customers(data: list[dict]) -> dict[str, Any]:
     """Process premium customers with special treatment"""
     processed = []
 
@@ -59,7 +59,7 @@ def process_premium_customers(data: List[Dict]) -> Dict[str, Any]:
     }
 
 
-def process_standard_customers(data: List[Dict]) -> Dict[str, Any]:
+def process_standard_customers(data: list[dict]) -> dict[str, Any]:
     """Process standard customers"""
     processed = []
 
@@ -87,7 +87,7 @@ def process_standard_customers(data: List[Dict]) -> Dict[str, Any]:
     }
 
 
-def process_inactive_customers(data: List[Dict]) -> Dict[str, Any]:
+def process_inactive_customers(data: list[dict]) -> dict[str, Any]:
     """Process inactive customers with reactivation offers"""
     processed = []
 
@@ -114,7 +114,7 @@ def process_inactive_customers(data: List[Dict]) -> Dict[str, Any]:
     }
 
 
-def merge_results(results: List[Dict]) -> Dict[str, Any]:
+def merge_results(results: list[dict]) -> dict[str, Any]:
     """Custom merge function to combine results from all paths"""
     all_customers = []
     summaries = {}

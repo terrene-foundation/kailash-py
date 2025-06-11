@@ -603,7 +603,7 @@ result = {{
             # Verify file was created and has expected content
             file_path = final_output["result"]["file_path"]
             assert os.path.exists(file_path)
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 file_content = f.read()
             assert "Iteration 1:" in file_content
             assert len(file_content.split("\n")) >= 5

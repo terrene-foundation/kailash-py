@@ -40,7 +40,7 @@ Examples:
 """
 
 import logging
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 from kailash.sdk_exceptions import WorkflowValidationError
 from kailash.workflow.cycle_exceptions import (
@@ -75,7 +75,7 @@ class CycleBuilder:
         ...      .build()
     """
 
-    def __init__(self, workflow: "Workflow", cycle_id: Optional[str] = None):
+    def __init__(self, workflow: "Workflow", cycle_id: str | None = None):
         """
         Initialize a new CycleBuilder.
 
@@ -87,23 +87,23 @@ class CycleBuilder:
         self._cycle_id = cycle_id
 
         # Connection parameters
-        self._source_node: Optional[str] = None
-        self._target_node: Optional[str] = None
-        self._mapping: Optional[Dict[str, str]] = None
+        self._source_node: str | None = None
+        self._target_node: str | None = None
+        self._mapping: dict[str, str] | None = None
 
         # Cycle parameters
-        self._max_iterations: Optional[int] = None
-        self._convergence_check: Optional[str] = None
-        self._timeout: Optional[float] = None
-        self._memory_limit: Optional[int] = None
-        self._condition: Optional[str] = None
-        self._parent_cycle: Optional[str] = None
+        self._max_iterations: int | None = None
+        self._convergence_check: str | None = None
+        self._timeout: float | None = None
+        self._memory_limit: int | None = None
+        self._condition: str | None = None
+        self._parent_cycle: str | None = None
 
     def connect(
         self,
         source_node: str,
         target_node: str,
-        mapping: Optional[Dict[str, str]] = None,
+        mapping: dict[str, str] | None = None,
     ) -> "CycleBuilder":
         """
         Configure the source and target nodes for the cycle connection.

@@ -8,7 +8,7 @@ import asyncio
 import base64
 import time
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
 import requests
@@ -48,8 +48,8 @@ class HTTPResponse(BaseModel):
     """
 
     status_code: int
-    headers: Dict[str, str]
-    content_type: Optional[str] = None
+    headers: dict[str, str]
+    content_type: str | None = None
     content: Any  # Can be dict, str, bytes depending on response format
     response_time_ms: float
     url: str
@@ -194,7 +194,7 @@ class HTTPRequestNode(Node):
         super().__init__(**kwargs)
         self.session = requests.Session()
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -328,7 +328,7 @@ class HTTPRequestNode(Node):
             ),
         }
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -358,10 +358,10 @@ class HTTPRequestNode(Node):
     def _apply_authentication(
         self,
         headers: dict,
-        auth_type: Optional[str],
-        auth_token: Optional[str],
-        auth_username: Optional[str],
-        auth_password: Optional[str],
+        auth_type: str | None,
+        auth_token: str | None,
+        auth_username: str | None,
+        auth_password: str | None,
         api_key_header: str,
     ) -> dict:
         """Apply authentication to request headers.
@@ -398,7 +398,7 @@ class HTTPRequestNode(Node):
 
         return auth_headers
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute an HTTP request.
 
         Args:
@@ -683,7 +683,7 @@ class AsyncHTTPRequestNode(AsyncNode):
         super().__init__(**kwargs)
         self._session = None  # Will be created when needed
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
 
         Returns:
@@ -692,7 +692,7 @@ class AsyncHTTPRequestNode(AsyncNode):
         # Same parameters as the synchronous version
         return HTTPRequestNode().get_parameters()
 
-    def get_output_schema(self) -> Dict[str, NodeParameter]:
+    def get_output_schema(self) -> dict[str, NodeParameter]:
         """Define the output schema for this node.
 
         Returns:
@@ -704,10 +704,10 @@ class AsyncHTTPRequestNode(AsyncNode):
     def _apply_authentication(
         self,
         headers: dict,
-        auth_type: Optional[str],
-        auth_token: Optional[str],
-        auth_username: Optional[str],
-        auth_password: Optional[str],
+        auth_type: str | None,
+        auth_token: str | None,
+        auth_username: str | None,
+        auth_password: str | None,
         api_key_header: str,
     ) -> dict:
         """Apply authentication to request headers.
@@ -744,7 +744,7 @@ class AsyncHTTPRequestNode(AsyncNode):
 
         return auth_headers
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous version of the request, for compatibility.
 
         This is implemented for compatibility but users should use the
@@ -763,7 +763,7 @@ class AsyncHTTPRequestNode(AsyncNode):
         http_node = HTTPRequestNode(**self.config)
         return http_node.run(**kwargs)
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
+    async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute an HTTP request asynchronously.
 
         Args:
@@ -937,7 +937,7 @@ class AsyncHTTPRequestNode(AsyncNode):
 
                     return result
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (TimeoutError, aiohttp.ClientError) as e:
                 self.logger.warning(f"Async request failed: {str(e)}")
 
                 # Last attempt, no more retries

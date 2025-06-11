@@ -93,7 +93,7 @@ current_time = datetime.now()
 # Expected services that we're monitoring
 expected_services = [
     {"name": "jsonplaceholder_api", "url": "https://jsonplaceholder.typicode.com", "critical": True},
-    {"name": "github_api", "url": "https://api.github.com", "critical": False}, 
+    {"name": "github_api", "url": "https://api.github.com", "critical": False},
     {"name": "httpbin_service", "url": "https://httpbin.org", "critical": False}
 ]
 
@@ -101,28 +101,28 @@ expected_services = [
 if isinstance(data, dict):
     # Process each service's actual response from merged data
     service_results = []
-    
+
     # Map expected services to their response data from merge node
     service_mapping = {
         "jsonplaceholder_api": data.get("data1"),  # From merge node
-        "github_api": data.get("data2"),           # From merge node  
+        "github_api": data.get("data2"),           # From merge node
         "httpbin_service": data.get("data3")       # From merge node
     }
-    
+
     for service_info in expected_services:
         service_name = service_info["name"]
         service_response = service_mapping.get(service_name)
-        
+
         if service_response:
             # Parse real HTTP response
             status_code = service_response.get("status_code", 0)
             response_time = service_response.get("response_time", 0)
             success = service_response.get("success", False)
             error_message = service_response.get("error")
-            
+
             # Determine health based on actual response
             is_healthy = success and status_code in [200, 201, 202, 204]
-            
+
             # Classify response time performance
             if response_time < 100:
                 performance_grade = "excellent"
@@ -134,10 +134,10 @@ if isinstance(data, dict):
                 performance_grade = "poor"
             else:
                 performance_grade = "unacceptable"
-            
+
             health_check = {
                 "service_name": service_name,
-                "url": service_info["url"], 
+                "url": service_info["url"],
                 "is_critical": service_info["critical"],
                 "status": "healthy" if is_healthy else "unhealthy",
                 "status_code": status_code,
@@ -158,7 +158,7 @@ if isinstance(data, dict):
             health_check = {
                 "service_name": service_name,
                 "url": service_info["url"],
-                "is_critical": service_info["critical"], 
+                "is_critical": service_info["critical"],
                 "status": "unhealthy",
                 "status_code": 0,
                 "response_time_ms": 0,
@@ -174,14 +174,14 @@ if isinstance(data, dict):
                     "connection_failed": True
                 }
             }
-        
+
         health_checks.append(health_check)
 
 # Calculate real health metrics from actual responses
 total_services = len(health_checks)
 healthy_services = sum(1 for check in health_checks if check["status"] == "healthy")
 critical_services = sum(1 for check in health_checks if check["is_critical"])
-critical_healthy = sum(1 for check in health_checks 
+critical_healthy = sum(1 for check in health_checks
                       if check["is_critical"] and check["status"] == "healthy")
 
 print(f"DEBUG: total_services={total_services}, healthy_services={healthy_services}")
@@ -189,7 +189,7 @@ print(f"DEBUG: critical_services={critical_services}, critical_healthy={critical
 print(f"DEBUG: health_checks data: {health_checks}")
 
 # Calculate performance metrics from real response times
-response_times = [check["response_time_ms"] for check in health_checks 
+response_times = [check["response_time_ms"] for check in health_checks
                  if check["response_time_ms"] > 0]
 avg_response_time = sum(response_times) / len(response_times) if response_times else 0
 
@@ -260,7 +260,7 @@ if isinstance(data, list):
     summary = {"overall_health_percentage": 100, "critical_health_percentage": 100}
     bug_detected = True
 else:
-    # Process real health check data  
+    # Process real health check data
     health_checks = data.get("health_checks", [])
     summary = data.get("summary", {})
     bug_detected = False
@@ -279,7 +279,7 @@ alert_conditions = [
     {
         "name": "high_response_time",
         "description": "Service response time above threshold",
-        "severity": "warning", 
+        "severity": "warning",
         "condition": lambda check: check.get("response_time_ms", 0) > 1000
     },
     {
@@ -295,14 +295,14 @@ alert_conditions = [
         "condition": lambda check: check.get("metadata", {}).get("connection_failed", False)
     },
     {
-        "name": "overall_health_low", 
+        "name": "overall_health_low",
         "description": "Overall system health below threshold",
         "severity": "major",
         "condition": lambda summary: summary.get("overall_health_percentage", 100) < 80
     },
     {
         "name": "critical_health_low",
-        "description": "Critical services health below threshold", 
+        "description": "Critical services health below threshold",
         "severity": "critical",
         "condition": lambda summary: summary.get("critical_health_percentage", 100) < 100
     }
@@ -414,9 +414,9 @@ if not health_checks:
 else:
     # Calculate real response time metrics from actual HTTP requests
     response_times = [check.get("response_time_ms", 0) for check in health_checks if check.get("response_time_ms", 0) > 0]
-    healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks 
+    healthy_response_times = [check.get("response_time_ms", 0) for check in health_checks
                              if check.get("status") == "healthy" and check.get("response_time_ms", 0) > 0]
-    critical_response_times = [check.get("response_time_ms", 0) for check in health_checks 
+    critical_response_times = [check.get("response_time_ms", 0) for check in health_checks
                               if check.get("is_critical") and check.get("response_time_ms", 0) > 0]
 
     # Real service availability metrics
@@ -784,13 +784,13 @@ def main():
     # Display generated reports
     print("\n=== Real Monitoring Report Preview ===")
     try:
-        with open("data/outputs/fixed_monitoring_report.json", "r") as f:
+        with open("data/outputs/fixed_monitoring_report.json") as f:
             report = json.load(f)
             executive_summary = report["monitoring_report"]["executive_summary"]
             print(json.dumps(executive_summary, indent=2))
 
         print("\n=== Real Active Alerts Preview ===")
-        with open("data/outputs/fixed_active_alerts.json", "r") as f:
+        with open("data/outputs/fixed_active_alerts.json") as f:
             alerts = json.load(f)
             print(f"Alert Count: {alerts['alert_count']}")
             print(f"Data Source: {alerts.get('data_source', 'unknown')}")

@@ -17,7 +17,7 @@ Use Cases:
 - Integration nodes that bridge MCP services
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
@@ -33,7 +33,7 @@ class DataEnrichmentNode(Node, MCPCapabilityMixin):
     capabilities to enhance its functionality.
     """
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         """Define node parameters including MCP configuration."""
         return {
             "data": NodeParameter(
@@ -55,7 +55,7 @@ class DataEnrichmentNode(Node, MCPCapabilityMixin):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Enrich data using MCP tools."""
         data = kwargs.get("data", [])
         mcp_servers = kwargs.get("mcp_servers", [])
@@ -105,7 +105,7 @@ class DataEnrichmentNode(Node, MCPCapabilityMixin):
 class MCPResourceValidatorNode(Node, MCPCapabilityMixin):
     """Validates data against MCP resources."""
 
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "data": NodeParameter(name="data", type=dict, required=True),
             "mcp_server": NodeParameter(name="mcp_server", type=str, required=True),
@@ -117,7 +117,7 @@ class MCPResourceValidatorNode(Node, MCPCapabilityMixin):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Validate data against MCP resource."""
         data = kwargs.get("data", {})
         server = kwargs.get("mcp_server")
@@ -230,14 +230,14 @@ def demonstrate_mcp_tool_discovery():
     class ToolExplorerNode(Node, MCPCapabilityMixin):
         """Node that explores available MCP tools."""
 
-        def get_parameters(self) -> Dict[str, NodeParameter]:
+        def get_parameters(self) -> dict[str, NodeParameter]:
             return {
                 "mcp_servers": NodeParameter(
                     name="mcp_servers", type=list, required=True
                 )
             }
 
-        def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
             servers = kwargs.get("mcp_servers", [])
 
             all_tools = []

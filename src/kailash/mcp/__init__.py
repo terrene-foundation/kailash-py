@@ -44,7 +44,7 @@ Examples:
 """
 
 from .client import MCPClient
-from .server import MCPServer, SimpleMCPServer
+from .server_enhanced import MCPServer, SimpleMCPServer
 
 __all__ = [
     "MCPClient",

@@ -13,7 +13,6 @@ The centralized structure:
 """
 
 from pathlib import Path
-from typing import Union
 
 
 def get_project_root() -> Path:
@@ -131,7 +130,7 @@ def get_legacy_path_mapping() -> dict:
     }
 
 
-def migrate_to_centralized_path(old_path: Union[str, Path]) -> Path:
+def migrate_to_centralized_path(old_path: str | Path) -> Path:
     """Convert old scattered path to new centralized path.
 
     Args:

@@ -1,7 +1,6 @@
 """Project template system for Kailash SDK."""
 
 from pathlib import Path
-from typing import Dict, Optional
 
 from kailash.sdk_exceptions import TemplateError
 
@@ -266,7 +265,7 @@ __pycache__/
             },
         }
 
-    def get_template(self, template_name: str) -> Dict:
+    def get_template(self, template_name: str) -> dict:
         """Get an export template by name.
 
         Args:
@@ -286,7 +285,7 @@ __pycache__/
         self,
         project_name: str,
         template: str = "basic",
-        target_dir: Optional[str] = None,
+        target_dir: str | None = None,
     ) -> None:
         """Create a new project from a template.
 
