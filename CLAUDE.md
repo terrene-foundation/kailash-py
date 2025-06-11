@@ -14,22 +14,35 @@
 2. **PythonCodeNode**: Input variables EXCLUDED from outputs!
    - `mapping={"result": "input_data"}` ✓
    - `mapping={"result": "result"}` ✗
-3. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
-4. **Node Creation**: Can create without required params (validated at execution)
-5. **Data Files**: Use centralized `/data/` structure with utilities from `examples/utils/data_paths.py`
-6. **Output Files**: NEVER create `outputs/`, `cycle_analysis_output/` directories!
+3. **PythonCodeNode Output Consistency**: ALL outputs wrapped in `"result"` key
+   - ✅ Functions returning dicts: `{"result": {"processed": data}}`
+   - ✅ Functions returning values: `{"result": 42}`
+   - ✅ Always connect using: `{"result": "input_param"}`
+4. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
+5. **Node Creation**: Can create without required params (validated at execution)
+6. **Data Files**: Use centralized `/data/` structure with utilities from `examples/utils/data_paths.py`
+7. **Output Files**: NEVER create `outputs/`, `cycle_analysis_output/` directories!
    - Use `get_output_data_path()` from `examples/utils/data_paths.py`
    - All outputs go to `/data/outputs/` with proper subdirectories
    - ❌ `os.makedirs("outputs")` → ✅ `ensure_output_dir_exists()`
    - ❌ `"outputs/report.json"` → ✅ `get_output_data_path("category/report.json")`
-7. **PythonCodeNode Best Practice**: ALWAYS use `.from_function()` for code > 3 lines!
+8. **PythonCodeNode Best Practice**: ALWAYS use `.from_function()` for code > 3 lines!
    - ❌ `PythonCodeNode(name="x", code="...100 lines...")` → Inline strings = NO IDE support
    - ✅ `PythonCodeNode.from_function(name="x", func=my_func)` → Full IDE support
    - String code ONLY for: one-liners, dynamic generation, user input
-8. **Enhanced MCP Server**: Production-ready features enabled by default
+9. **Enhanced MCP Server**: Production-ready features enabled by default
    - ✅ `from kailash.mcp import MCPServer` → Gets caching, metrics, config management
    - ✅ `@server.tool(cache_key="name", cache_ttl=600)` → Automatic caching with TTL
    - ✅ `@server.tool(format_response="markdown")` → LLM-friendly formatting
+
+## 🔧 Core Node Quick Reference (80+ total)
+**AI**: LLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, MCPAgentNode, SelfOrganizingAgentNode
+**Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, SharePointGraphReader, DirectoryReaderNode
+**API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
+**Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
+**Transform**: FilterNode, Map, DataTransformer, HierarchicalChunkerNode
+**Code**: PythonCodeNode (use only when no specialized node exists)
+**Full catalog**: sdk-users/nodes/comprehensive-node-catalog.md
 
 ## 📂 Directory Navigation Convention
 **File Naming Standard**:
@@ -100,6 +113,7 @@
 - **Update training data**: Add examples to `# contrib (removed)/training/workflow-examples/`
 - **Update workflows**: Add end-to-end patterns to `sdk-users/workflows/`
 - **Align docs**: Ensure CLAUDE.md ↔ README.md consistency
+- **Update catalog**: `sdk-users/nodes/comprehensive-node-catalog.md` and compressed list in CLAUDE.md
 - **Release**: Commit → PR
 
 ## 🤝 Team Collaboration
