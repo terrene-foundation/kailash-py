@@ -314,9 +314,9 @@ class TestPerformanceTrackingIntegration:
         # Create workflow with custom metrics
         workflow = Workflow(workflow_id="custom_test", name="Custom Test")
 
-        def data_source() -> dict[str, Any]:
+        def data_source() -> list:
             """Provides initial data for the workflow."""
-            return {"data": [10, 20, 60, 70, 80]}
+            return [10, 20, 60, 70, 80]
 
         def custom_metrics_node(data: list) -> dict[str, Any]:
             """Node that would report custom metrics."""
@@ -336,14 +336,13 @@ class TestPerformanceTrackingIntegration:
 
         source_schema = {
             "input": {},  # No inputs required
-            "output": {"data": NodeParameter(name="data", type=list, required=True)},
+            "output": {"result": NodeParameter(name="result", type=list, required=True)},
         }
 
         custom_schema = {
             "input": {"data": NodeParameter(name="data", type=list, required=True)},
             "output": {
-                "data": NodeParameter(name="data", type=list, required=True),
-                "_metrics": NodeParameter(name="_metrics", type=dict, required=False),
+                "result": NodeParameter(name="result", type=dict, required=True),
             },
         }
 
@@ -363,7 +362,7 @@ class TestPerformanceTrackingIntegration:
 
         workflow.add_node("source_node", source_node)
         workflow.add_node("custom_node", custom_node)
-        workflow.connect("source_node", "custom_node", {"data": "data"})
+        workflow.connect("source_node", "custom_node", {"result": "data"})
 
         # Execute
         storage = FileSystemStorage(base_path=str(tmp_path))
@@ -375,9 +374,11 @@ class TestPerformanceTrackingIntegration:
             task_manager=task_manager,
         )
 
-        # Verify custom metrics in results
-        assert "_metrics" in results["custom_node"]
-        metrics = results["custom_node"]["_metrics"]
+        # Verify custom metrics in results - now wrapped under "result"
+        assert "result" in results["custom_node"]
+        result_data = results["custom_node"]["result"]
+        assert "_metrics" in result_data
+        metrics = result_data["_metrics"]
         assert metrics["records_processed"] == 5
         assert metrics["records_filtered"] == 3
         assert metrics["filter_rate"] == 0.6

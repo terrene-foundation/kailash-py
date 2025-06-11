@@ -41,7 +41,7 @@ class TestPythonCodeNodeIntegration:
         csv_file, json_file = sample_data
 
         # Create function node
-        def process_with_config(data: list, config: dict) -> dict:
+        def process_with_config(data: list, config: dict) -> list:
             """Apply threshold and multiply values."""
             threshold = config.get("threshold", 0)
             multiplier = config.get("multiplier", 1)
@@ -55,8 +55,8 @@ class TestPythonCodeNodeIntegration:
             df.loc[mask, "value"] *= multiplier
             df["above_threshold"] = mask
 
-            # Return as dict to be JSON-serializable
-            return {"result": df.to_dict("records")}
+            # Return as list - the framework will wrap it in {"result": ...}
+            return df.to_dict("records")
 
         # Create workflow
         workflow = Workflow(workflow_id="function_workflow", name="function_workflow")
