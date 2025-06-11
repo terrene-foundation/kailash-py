@@ -104,6 +104,11 @@ from kailash.nodes.data.vector_db import (
 )
 from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriterNode
 
+# Async nodes
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from kailash.nodes.data.async_connection import AsyncConnectionManager, get_connection_manager
+from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
+
 __all__ = [
     # Directory
     "DirectoryReaderNode",
@@ -137,4 +142,9 @@ __all__ = [
     "StreamPublisherNode",
     "WebSocketNode",
     "EventStreamNode",
+    # Async
+    "AsyncSQLDatabaseNode",
+    "AsyncConnectionManager",
+    "get_connection_manager",
+    "AsyncPostgreSQLVectorNode",
 ]
