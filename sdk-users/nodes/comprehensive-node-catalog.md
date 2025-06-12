@@ -2,7 +2,7 @@
 
 This reference guide lists all available nodes in the Kailash SDK and their primary use cases. **Always prefer using these specialized nodes over PythonCodeNode when possible.**
 
-*Total: 80+ specialized nodes across 6 categories*
+*Total: 85+ specialized nodes across 7 categories*
 
 ## Table of Contents
 - [AI/ML Nodes](#aiml-nodes) - 30+ nodes for LLM agents, embeddings, self-organizing agents
@@ -10,6 +10,7 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 - [API Integration Nodes](#api-integration-nodes) - 10+ nodes for HTTP, REST, GraphQL
 - [Logic & Control Nodes](#logic--control-nodes) - 8+ nodes for routing, merging, loops
 - [Transform Nodes](#transform-nodes) - 8+ nodes for data transformation
+- [Admin & Security Nodes](#admin--security-nodes) - 5+ nodes for user management, permissions, audit
 - [Code Execution Nodes](#code-execution-nodes) - 1 node for custom Python code
 - [When to Use PythonCodeNode](#when-to-use-pythoncodenode)
 
@@ -89,6 +90,27 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
   node = SQLDatabaseNode(
       connection_string="postgresql://user:pass@host/db",
       query="SELECT * FROM customers WHERE age > 30"
+  )
+  ```
+- **AsyncSQLDatabaseNode**: ⭐ NEW: High-performance async database operations
+  ```python
+  # Use for high-concurrency database operations (Session 065)
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost", database="app_db",
+      query="SELECT * FROM portfolios",
+      pool_size=20, max_pool_size=50
+  )
+  ```
+- **AsyncPostgreSQLVectorNode**: ⭐ NEW: pgvector similarity search
+  ```python
+  # Use for AI/ML vector operations (Session 065)
+  node = AsyncPostgreSQLVectorNode(
+      connection_string="postgresql://user:pass@host/vectordb",
+      table_name="embeddings",
+      operation="search",
+      vector=[0.1, 0.2, ...],
+      distance_metric="cosine"
   )
   ```
 
@@ -214,6 +236,39 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 - **ChunkTextExtractorNode**: Extract text from document chunks
 - **QueryTextWrapperNode**: Wrap queries with additional context
 - **ContextFormatterNode**: Format context for LLM consumption
+
+## Admin & Security Nodes
+
+### User Management
+- **UserManagementNode**: Complete user CRUD operations with ABAC
+  ```python
+  # Use instead of PythonCodeNode for user operations
+  node = UserManagementNode(operation="create", abac_enabled=True)
+  ```
+- **RoleManagementNode**: Hierarchical role management with permissions
+  ```python
+  # Use instead of custom role logic
+  node = RoleManagementNode(operation="assign_permissions")
+  ```
+
+### Security & Permissions
+- **PermissionCheckNode**: Complex permission evaluation with ABAC
+  ```python
+  # Use instead of manual permission checks
+  node = PermissionCheckNode(resource="document", action="read")
+  ```
+- **SecurityEventNode**: Real-time security event tracking
+  ```python
+  # Use for security monitoring
+  node = SecurityEventNode(event_type="suspicious_activity")
+  ```
+
+### Audit & Compliance
+- **AuditLogNode**: Comprehensive audit logging with compliance tags
+  ```python
+  # Use instead of custom logging
+  node = AuditLogNode(compliance_tags=["SOC2", "HIPAA"])
+  ```
 
 ## Code Execution Nodes
 

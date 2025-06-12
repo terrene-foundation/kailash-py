@@ -29,6 +29,8 @@ import json
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime, date
+from decimal import Decimal
 from enum import Enum
 from typing import Any, AsyncIterator, Optional, Union
 
@@ -86,6 +88,23 @@ class DatabaseAdapter(ABC):
     def __init__(self, config: DatabaseConfig):
         self.config = config
         self._pool = None
+    
+    def _convert_row(self, row: dict) -> dict:
+        """Convert database-specific types to JSON-serializable types."""
+        converted = {}
+        for key, value in row.items():
+            if isinstance(value, Decimal):
+                # Convert Decimal to float for JSON serialization
+                converted[key] = float(value)
+            elif isinstance(value, datetime):
+                # Convert datetime to ISO format string
+                converted[key] = value.isoformat()
+            elif isinstance(value, date):
+                # Convert date to ISO format string
+                converted[key] = value.isoformat()
+            else:
+                converted[key] = value
+        return converted
     
     @abstractmethod
     async def connect(self) -> None:
@@ -187,15 +206,15 @@ class PostgreSQLAdapter(DatabaseAdapter):
             
             if fetch_mode == FetchMode.ONE:
                 row = await conn.fetchrow(query, *(params or []))
-                return dict(row) if row else None
+                return self._convert_row(dict(row)) if row else None
             elif fetch_mode == FetchMode.ALL:
                 rows = await conn.fetch(query, *(params or []))
-                return [dict(row) for row in rows]
+                return [self._convert_row(dict(row)) for row in rows]
             elif fetch_mode == FetchMode.MANY:
                 if not fetch_size:
                     raise ValueError("fetch_size required for MANY mode")
                 rows = await conn.fetch(query, *(params or []))
-                return [dict(row) for row in rows[:fetch_size]]
+                return [self._convert_row(dict(row)) for row in rows[:fetch_size]]
             elif fetch_mode == FetchMode.ITERATOR:
                 raise NotImplementedError("Iterator mode not yet implemented")
     
@@ -286,13 +305,13 @@ class MySQLAdapter(DatabaseAdapter):
                     row = await cursor.fetchone()
                     if row and cursor.description:
                         columns = [desc[0] for desc in cursor.description]
-                        return dict(zip(columns, row))
+                        return self._convert_row(dict(zip(columns, row)))
                     return None
                 elif fetch_mode == FetchMode.ALL:
                     rows = await cursor.fetchall()
                     if rows and cursor.description:
                         columns = [desc[0] for desc in cursor.description]
-                        return [dict(zip(columns, row)) for row in rows]
+                        return [self._convert_row(dict(zip(columns, row))) for row in rows]
                     return []
                 elif fetch_mode == FetchMode.MANY:
                     if not fetch_size:
@@ -300,7 +319,7 @@ class MySQLAdapter(DatabaseAdapter):
                     rows = await cursor.fetchmany(fetch_size)
                     if rows and cursor.description:
                         columns = [desc[0] for desc in cursor.description]
-                        return [dict(zip(columns, row)) for row in rows]
+                        return [self._convert_row(dict(zip(columns, row))) for row in rows]
                     return []
     
     async def execute_many(
@@ -367,15 +386,15 @@ class SQLiteAdapter(DatabaseAdapter):
             
             if fetch_mode == FetchMode.ONE:
                 row = await cursor.fetchone()
-                return dict(row) if row else None
+                return self._convert_row(dict(row)) if row else None
             elif fetch_mode == FetchMode.ALL:
                 rows = await cursor.fetchall()
-                return [dict(row) for row in rows]
+                return [self._convert_row(dict(row)) for row in rows]
             elif fetch_mode == FetchMode.MANY:
                 if not fetch_size:
                     raise ValueError("fetch_size required for MANY mode")
                 rows = await cursor.fetchmany(fetch_size)
-                return [dict(row) for row in rows]
+                return [self._convert_row(dict(row)) for row in rows]
             
             await db.commit()
     
@@ -448,102 +467,106 @@ class AsyncSQLDatabaseNode(AsyncNode):
     """
     
     def __init__(self, **config):
-        super().__init__(**config)
         self._adapter: Optional[DatabaseAdapter] = None
         self._connected = False
+        super().__init__(**config)
     
-    def define_parameters(self) -> list[NodeParameter]:
-        return [
+    def get_parameters(self) -> dict[str, NodeParameter]:
+        """Define the parameters this node accepts."""
+        params = [
             NodeParameter(
                 name="database_type",
-                type="str",
+                type=str,
                 required=True,
                 default="postgresql",
                 description="Type of database: postgresql, mysql, or sqlite"
             ),
             NodeParameter(
                 name="connection_string",
-                type="str",
+                type=str,
                 required=False,
                 description="Full database connection string (overrides individual params)"
             ),
             NodeParameter(
                 name="host",
-                type="str",
+                type=str,
                 required=False,
                 description="Database host"
             ),
             NodeParameter(
                 name="port",
-                type="int",
+                type=int,
                 required=False,
                 description="Database port"
             ),
             NodeParameter(
                 name="database",
-                type="str",
+                type=str,
                 required=False,
                 description="Database name"
             ),
             NodeParameter(
                 name="user",
-                type="str",
+                type=str,
                 required=False,
                 description="Database user"
             ),
             NodeParameter(
                 name="password",
-                type="str",
+                type=str,
                 required=False,
                 description="Database password"
             ),
             NodeParameter(
                 name="query",
-                type="str",
+                type=str,
                 required=True,
                 description="SQL query to execute"
             ),
             NodeParameter(
                 name="params",
-                type="Any",
+                type=Any,
                 required=False,
                 description="Query parameters as dict or tuple"
             ),
             NodeParameter(
                 name="fetch_mode",
-                type="str",
+                type=str,
                 required=False,
                 default="all",
                 description="Fetch mode: one, all, many"
             ),
             NodeParameter(
                 name="fetch_size",
-                type="int",
+                type=int,
                 required=False,
                 description="Number of rows to fetch in 'many' mode"
             ),
             NodeParameter(
                 name="pool_size",
-                type="int",
+                type=int,
                 required=False,
                 default=10,
                 description="Initial connection pool size"
             ),
             NodeParameter(
                 name="max_pool_size",
-                type="int",
+                type=int,
                 required=False,
                 default=20,
                 description="Maximum connection pool size"
             ),
             NodeParameter(
                 name="timeout",
-                type="float",
+                type=float,
                 required=False,
                 default=60.0,
                 description="Query timeout in seconds"
             )
         ]
+        
+        # Convert list to dict as required by base class
+        return {param.name: param for param in params}
     
     def validate_config(self):
         """Validate node configuration."""
@@ -658,6 +681,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     
         except Exception as e:
             raise NodeExecutionError(f"Database query failed: {str(e)}")
+    
+    def run(self, **inputs) -> dict[str, Any]:
+        """Synchronous run method - delegates to async_run."""
+        import asyncio
+        return asyncio.run(self.async_run(**inputs))
     
     async def cleanup(self):
         """Clean up database connections."""
