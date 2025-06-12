@@ -96,8 +96,8 @@ export const SecurityDashboard: React.FC = () => {
           </p>
           {trend && (
             <div className={`text-sm mt-1 ${
-              trend === 'up' ? 'text-red-600' : 
-              trend === 'down' ? 'text-green-600' : 
+              trend === 'up' ? 'text-red-600' :
+              trend === 'down' ? 'text-green-600' :
               'text-gray-600'
             }`}>
               {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} vs last period

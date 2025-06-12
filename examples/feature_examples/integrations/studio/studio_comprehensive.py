@@ -76,7 +76,7 @@ class StudioDatabaseExamples:
                         },
                         {
                             "id": "transform",
-                            "type": "DataTransformerNode",
+                            "type": "DataTransformer",
                             "config": {"operations": ["clean", "normalize"]},
                         },
                         {

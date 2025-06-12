@@ -33,9 +33,9 @@ export const RoleManagement: React.FC = () => {
       const result = await executeWorkflow('admin_list_roles', {
         include_system: true
       });
-      
+
       setRoles(result.roles || []);
-      
+
       // Build hierarchy
       const hierarchy = buildRoleHierarchy(result.roles || []);
       setRoleHierarchy(hierarchy);
@@ -108,7 +108,7 @@ export const RoleManagement: React.FC = () => {
   // Delete role
   const handleDeleteRole = async (roleId: string) => {
     if (!confirm('Are you sure you want to delete this role? All users with this role will be affected.')) return;
-    
+
     try {
       await executeWorkflow('admin_delete_role', {
         role_id: roleId
@@ -155,7 +155,7 @@ export const RoleManagement: React.FC = () => {
               />
             </button>
           )}
-          
+
           <div className="flex-1 flex items-center">
             <Shield className="h-5 w-5 text-gray-400 mr-3" />
             <div className="flex-1">
@@ -238,7 +238,7 @@ export const RoleManagement: React.FC = () => {
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-medium text-gray-900">Role Hierarchy</h2>
         </div>
-        
+
         <div className="p-4">
           {loading ? (
             <div className="flex justify-center py-8">
@@ -263,7 +263,7 @@ export const RoleManagement: React.FC = () => {
             setShowCreateModal(false);
             setSelectedRole(null);
           }}
-          onSubmit={selectedRole ? 
+          onSubmit={selectedRole ?
             (data) => handleUpdateRole(selectedRole.role_id, data) :
             handleCreateRole
           }
@@ -330,7 +330,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ role, roles, onClose, onS
         <h2 className="text-xl font-bold mb-4">
           {role ? 'Edit Role' : 'Create New Role'}
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -383,7 +383,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ role, roles, onClose, onS
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Permissions
             </label>
-            
+
             <div className="flex gap-2 mb-2">
               <select
                 value={newPermission}

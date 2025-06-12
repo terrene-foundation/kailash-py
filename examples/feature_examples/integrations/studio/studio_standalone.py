@@ -285,7 +285,7 @@ def example_templates():
             "definition": {
                 "nodes": [
                     {"id": "extract", "type": "DataExtractorNode"},
-                    {"id": "transform", "type": "DataTransformerNode"},
+                    {"id": "transform", "type": "DataTransformer"},
                     {"id": "load", "type": "DataLoaderNode"},
                 ],
                 "connections": [

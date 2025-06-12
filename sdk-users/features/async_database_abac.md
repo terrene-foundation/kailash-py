@@ -261,11 +261,11 @@ Enhanced access control based on user and resource attributes.
 ### Basic ABAC Setup
 
 ```python
-from kailash.access_control_enhanced import EnhancedAccessControlManager
+from kailash.access_control import AccessControlManager
 from kailash.access_control import PermissionRule, NodePermission, PermissionEffect
 
 # Create enhanced ACM
-acm = EnhancedAccessControlManager()
+acm = AccessControlManager(strategy="abac")
 
 # Add ABAC rule based on department
 acm.add_rule(PermissionRule(
@@ -296,7 +296,7 @@ from kailash.access_control_enhanced import (
 # Multiple conditions with AND
 complex_rule = PermissionRule(
     id="sensitive_access",
-    resource_type="node", 
+    resource_type="node",
     resource_id="sensitive_data",
     permission=NodePermission.EXECUTE,
     effect=PermissionEffect.ALLOW,
@@ -399,7 +399,7 @@ class CreateUserProfileTable(Migration):
     id = "001_create_user_profile"
     description = "Create user profile table"
     dependencies = []
-    
+
     async def forward(self, connection):
         await connection.execute("""
             CREATE TABLE user_profiles (
@@ -411,11 +411,11 @@ class CreateUserProfileTable(Migration):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
+
         await connection.execute("""
             CREATE INDEX idx_profile_user ON user_profiles(user_id)
         """)
-    
+
     async def backward(self, connection):
         await connection.execute("DROP TABLE IF EXISTS user_profiles CASCADE")
 ```
@@ -471,13 +471,13 @@ import asyncio
 from kailash.workflow import Workflow
 from kailash.nodes.data import AsyncSQLDatabaseNode, AsyncPostgreSQLVectorNode
 from kailash.access_control import UserContext
-from kailash.access_control_enhanced import EnhancedAccessControlManager
+from kailash.access_control import AccessControlManager
 from kailash.runtime.access_controlled import AccessControlledRuntime
 
 async def secure_data_pipeline():
     # Setup access control
-    acm = EnhancedAccessControlManager()
-    
+    acm = AccessControlManager(strategy="abac")
+
     # Add department-based access
     acm.add_rule(PermissionRule(
         id="finance_data",
@@ -493,15 +493,15 @@ async def secure_data_pipeline():
             }
         }
     ))
-    
+
     # Create workflow
     workflow = Workflow(name="secure_finance_pipeline")
-    
+
     # Add async database query
     workflow.add_node("financial_query", AsyncSQLDatabaseNode(
         connection_string="postgresql://localhost/financedb",
         query="""
-            SELECT 
+            SELECT
                 department,
                 SUM(amount) as total_expenses,
                 AVG(amount) as avg_expense,
@@ -513,7 +513,7 @@ async def secure_data_pipeline():
         params={"start_date": "2024-01-01"},
         pool_size=20
     ))
-    
+
     # Add vector search for similar transactions
     workflow.add_node("similar_transactions", AsyncPostgreSQLVectorNode(
         connection_string="postgresql://localhost/vectordb",
@@ -524,7 +524,7 @@ async def secure_data_pipeline():
         limit=10,
         metadata_filter="metadata->>'department' = 'finance'"
     ))
-    
+
     # Create user
     user = UserContext(
         user_id="fin001",
@@ -535,13 +535,13 @@ async def secure_data_pipeline():
             "clearance": "confidential"
         }
     )
-    
+
     # Execute with access control
     runtime = AccessControlledRuntime(
         access_control_manager=acm,
         user_context=user
     )
-    
+
     results = await runtime.execute_workflow(workflow)
     return results
 

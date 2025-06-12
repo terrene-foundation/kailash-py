@@ -50,7 +50,7 @@ export const AuditLogs: React.FC = () => {
         },
         pagination: { page: currentPage, size: 50 }
       });
-      
+
       setLogs(result.logs || []);
       setTotalPages(result.pagination?.total_pages || 1);
     } catch (error) {
@@ -72,7 +72,7 @@ export const AuditLogs: React.FC = () => {
         format,
         include_metadata: true
       });
-      
+
       // Download the exported file
       if (result.download_url) {
         window.open(result.download_url, '_blank');
@@ -122,7 +122,7 @@ export const AuditLogs: React.FC = () => {
           <Filter className="h-5 w-5 text-gray-400 mr-2" />
           <h2 className="text-lg font-medium">Filters</h2>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <select
             value={filters.event_type}

@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Critical SDK Enhancements** (Session 067) - Real-world usage improvements
+  - Workflow Resilience Features: Integrated retry policies, circuit breakers, and fallback patterns into standard Workflow
+    - Multiple retry strategies (immediate, linear, exponential, Fibonacci)
+    - Circuit breaker pattern with configurable thresholds
+    - Dead letter queue for failed executions
+    - No separate ResilientWorkflow class needed - features available via decorator
+  - CredentialManagerNode: Enterprise credential management with multi-source support
+    - Supports env, file, vault, AWS Secrets Manager, Azure Key Vault
+    - Built-in validation for API keys, OAuth2, database, certificates
+    - Automatic credential masking in logs
+    - Caching with configurable TTL
+  - SharePointGraphReaderEnhanced: Multiple authentication methods
+    - Certificate-based authentication (most secure)
+    - Username/password (legacy support)
+    - Managed Identity (Azure-hosted apps)
+    - Device code flow (CLI tools)
+    - Maintains backward compatibility with existing SharePointGraphReader
+
 - **Admin Tool Framework** (Session 066) - Complete enterprise admin infrastructure
   - Core Admin Nodes: UserManagementNode, RoleManagementNode, PermissionCheckNode, AuditLogNode, SecurityEventNode
   - Admin Workflows: User onboarding, permission assignment, audit trail patterns
@@ -15,22 +33,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - QA Testing Framework: 4 comprehensive QA agents (strategic planning, interactive testing, chaos testing, unified orchestration)
   - Full integration with Session 065's async database and ABAC infrastructure
   - Production architecture documentation explaining distributed vs monolithic deployment
-  
+
 - **Async Database Infrastructure** (Session 065) - Enterprise-grade async database support
   - AsyncSQLDatabaseNode with connection pooling for PostgreSQL, MySQL, SQLite
   - AsyncConnectionManager with health monitoring and metrics
   - AsyncPostgreSQLVectorNode for pgvector similarity search
   - Migration framework with version control and rollback support
   - Real working examples with actual database integration
-  
-- **ABAC Enhancement** (Session 065) - Advanced attribute-based access control
-  - EnhancedAccessControlManager with 16 operators
-  - Complex attribute conditions and hierarchical matching
-  - Data masking capabilities (partial, hash, range)
-  - Security level operators for fine-grained control
+
+- **Unified Access Control Architecture** (Session 066) - Single interface for all strategies
+  - Replaced multiple managers with unified `AccessControlManager(strategy="abac")`
+  - Support for RBAC, ABAC, and Hybrid modes through strategy pattern
+  - Composition-based architecture for better testability and flexibility
+  - Fixed circular import issues and security vulnerabilities
+  - Backward compatible helper functions: `create_attribute_condition()`, `create_complex_condition()`
+  - All 16 ABAC operators preserved with data masking capabilities
+
+### Changed
+- **Access Control Refactoring** - Unified all access control under single interface
+  - Removed `EnhancedAccessControlManager` - use `AccessControlManager` instead
+  - Fixed method resolution order issues in ABAC evaluation
+  - Improved import structure to prevent circular dependencies
+  - All examples and tests updated to use unified interface
 
 ### Documentation
+- ADR-0041: Access Control Composition Architecture decisions
 - ADR-0042: Admin Tool Framework architecture decisions
+- ADR-0043: Unified Access Control Interface design
+- Session 066 mistakes documentation for access control learnings
+- Updated developer guides and feature documentation for unified interface
 - Admin framework feature guide with complete examples
 - Updated node catalog to include admin and security nodes (85+ total)
 - Production architecture guide comparing Kailash to Django deployments

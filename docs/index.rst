@@ -12,16 +12,20 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK v0.3.1 documentation! This release completes the
-**Finance Workflow Library** with production-ready financial workflows powered by AI and
-modern quantitative methods.
+Welcome to the Kailash Python SDK v0.3.2 documentation! This release introduces the
+**Admin Tool Framework** with enterprise-grade infrastructure and comprehensive QA testing.
 
-**Recent Updates (v0.3.1):**
+**Recent Updates (v0.3.2):**
+- 🛡️ **Admin Tool Framework** - Complete enterprise admin infrastructure with React UI, RBAC, audit logging
+- 🔒 **Async Database & ABAC** - High-performance async database operations with Attribute-Based Access Control
+- 🧪 **LLM-based QA Testing** - Comprehensive QA framework with AI agents for frontend and backend testing
+- 📊 **85+ Production Nodes** - Expanded node library including admin, security, and async database nodes
+- 🏗️ **Professional Services Ready** - Infrastructure for Session 067 legal, consulting, accounting workflows
+
+**Previous Updates (v0.3.1):**
 - 💼 **Complete Finance Workflow Library** - Production-ready credit risk, portfolio optimization, trading signals, fraud detection
 - 🧠 **PythonCodeNode Best Practices** - Enhanced from_function() patterns with comprehensive training data
 - 🚀 **Enhanced MCP Server** - Zero-configuration workflow exposure with default tools for discovery and execution
-- 📚 **Enhanced Documentation** - Updated workflow design guidelines and developer best practices
-- ✅ **Code Quality Standards** - Applied black/isort formatting and comprehensive testing
 
 **Previous Major Release (v0.2.0):**
 - 🔁 **Universal Hybrid Cyclic Graph Architecture** with 30,000+ iterations/second performance
@@ -99,12 +103,14 @@ Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It pro
 Key Features
 ------------
 
-🔧 **Comprehensive Node Library**
-   - Data I/O: CSV, JSON, Text, SQL, SharePoint
+🔧 **Comprehensive Node Library (85+ Nodes)**
+   - Data I/O: CSV, JSON, Text, SQL, AsyncSQL, SharePoint
+   - Admin: UserManagement, RoleManagement, PermissionCheck, AuditLog, SecurityEvent
    - Transform: Filter, Map, Sort, Custom processors
    - Logic: SwitchNode, MergeNode, Conditional routing
-   - AI/ML: Classification, Embeddings, NLP
+   - AI/ML: Classification, Embeddings, NLP, MCPAgent
    - API: REST, GraphQL, HTTP with auth
+   - Security: Enhanced Access Control (ABAC with 16 operators)
    - Code: Secure Python code execution
 
 🤖 **Advanced AI Coordination**
@@ -151,7 +157,15 @@ Key Features
    - Resource utilization monitoring (CPU, memory, I/O)
    - Execution history and bottleneck analysis
 
-💼 **Finance Workflow Library** (New in v0.3.1)
+🛡️ **Admin Tool Framework** (New in v0.3.2)
+   - **Enterprise Admin Nodes**: UserManagement, RoleManagement, PermissionCheck, AuditLog, SecurityEvent
+   - **React UI Components**: Complete admin interfaces with TypeScript integration
+   - **RBAC & Multi-Tenancy**: Role-based access control with hierarchical permissions
+   - **Async Database Support**: High-performance PostgreSQL with connection pooling
+   - **ABAC Security**: Attribute-Based Access Control with 16 operators and data masking
+   - **LLM-based QA Testing**: Comprehensive testing framework with AI QA agents
+
+💼 **Finance Workflow Library** (v0.3.1)
    - **Credit Risk Assessment**: AI-powered risk scoring with customer and transaction analysis
    - **Portfolio Optimization**: Modern Portfolio Theory with Sharpe ratio optimization and rebalancing
    - **Trading Signals**: Technical indicators (RSI, MACD, Bollinger Bands) with AI sentiment analysis

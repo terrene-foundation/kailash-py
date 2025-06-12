@@ -6,7 +6,7 @@ SET search_path TO kailash, public;
 
 -- Enhanced Users table for admin framework
 -- (Extends the basic users table with admin fields)
-ALTER TABLE users 
+ALTER TABLE users
 ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) UNIQUE,
 ADD COLUMN IF NOT EXISTS username VARCHAR(255) UNIQUE,
 ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
@@ -187,7 +187,7 @@ SET search_path TO admin, public;
 
 -- Insert default admin roles
 INSERT INTO roles (role_id, tenant_id, name, description, permissions, is_system)
-VALUES 
+VALUES
 (
     'super_admin',
     'b1e7a5d4-7e9c-4f3a-9c2b-1a3b5c7d9e1f',
@@ -199,7 +199,7 @@ VALUES
 (
     'admin',
     'b1e7a5d4-7e9c-4f3a-9c2b-1a3b5c7d9e1f',
-    'Administrator', 
+    'Administrator',
     'Administrative access to most features',
     '["users:*", "roles:*", "audit:read", "security:read"]',
     true

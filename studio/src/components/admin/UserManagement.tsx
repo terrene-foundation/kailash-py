@@ -20,8 +20,8 @@ interface UserManagementProps {
   tenantId?: string;
 }
 
-export const UserManagement: React.FC<UserManagementProps> = ({ 
-  tenantId = 'default' 
+export const UserManagement: React.FC<UserManagementProps> = ({
+  tenantId = 'default'
 }) => {
   const { executeWorkflow } = useWorkflowApi();
   const [users, setUsers] = useState<User[]>([]);
@@ -43,7 +43,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         filters: selectedStatus !== 'all' ? { status: selectedStatus } : {},
         pagination: { page: currentPage, size: 20 }
       });
-      
+
       setUsers(result.users || []);
       setTotalPages(result.pagination?.total_pages || 1);
     } catch (error) {
@@ -88,7 +88,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   // Delete user
   const handleDeleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
-    
+
     try {
       await executeWorkflow('admin_delete_user', {
         tenant_id: tenantId,
@@ -136,7 +136,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             />
           </div>
         </div>
-        
+
         <select
           value={selectedStatus}
           onChange={(e) => setSelectedStatus(e.target.value)}
@@ -295,7 +295,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             setShowCreateModal(false);
             setSelectedUser(null);
           }}
-          onSubmit={selectedUser ? 
+          onSubmit={selectedUser ?
             (data) => handleUpdateUser(selectedUser.user_id, data) :
             handleCreateUser
           }
@@ -335,7 +335,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ user, onClose, onSubmit }
         <h2 className="text-xl font-bold mb-4">
           {user ? 'Edit User' : 'Create New User'}
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

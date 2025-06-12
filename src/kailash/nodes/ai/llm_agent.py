@@ -1,16 +1,53 @@
 """Advanced LLM Agent node with LangChain integration and MCP support."""
 
 import json
-from typing import Any
+import time
+from typing import Any, Dict, List, Optional, Literal
+from datetime import datetime
+from dataclasses import dataclass, field
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+
+
+@dataclass
+class TokenUsage:
+    """Token usage statistics."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    
+    def add(self, other: "TokenUsage"):
+        """Add another usage record."""
+        self.prompt_tokens += other.prompt_tokens
+        self.completion_tokens += other.completion_tokens
+        self.total_tokens += other.total_tokens
+
+
+@dataclass
+class CostEstimate:
+    """Cost estimation for LLM usage."""
+    prompt_cost: float = 0.0
+    completion_cost: float = 0.0
+    total_cost: float = 0.0
+    currency: str = "USD"
+
+
+@dataclass
+class UsageMetrics:
+    """Comprehensive usage metrics."""
+    token_usage: TokenUsage = field(default_factory=TokenUsage)
+    cost_estimate: CostEstimate = field(default_factory=CostEstimate)
+    execution_time_ms: float = 0.0
+    model: str = ""
+    timestamp: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @register_node()
 class LLMAgentNode(Node):
     """
     Advanced Large Language Model agent with LangChain integration and MCP
-    support.
+    support, with optional cost tracking and usage monitoring.
 
     Design Purpose and Philosophy:
     The LLMAgent node provides enterprise-grade AI agent capabilities with
@@ -119,6 +156,60 @@ class LLMAgentNode(Node):
         ... )
     """
 
+    # Model pricing (USD per 1K tokens)
+    MODEL_PRICING = {
+        # OpenAI models
+        "gpt-4": {"prompt": 0.03, "completion": 0.06},
+        "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
+        "gpt-3.5-turbo": {"prompt": 0.001, "completion": 0.002},
+        "gpt-3.5-turbo-16k": {"prompt": 0.003, "completion": 0.004},
+        
+        # Anthropic models
+        "claude-3-opus": {"prompt": 0.015, "completion": 0.075},
+        "claude-3-sonnet": {"prompt": 0.003, "completion": 0.015},
+        "claude-3-haiku": {"prompt": 0.00025, "completion": 0.00125},
+        "claude-2.1": {"prompt": 0.008, "completion": 0.024},
+        
+        # Google models
+        "gemini-pro": {"prompt": 0.00025, "completion": 0.0005},
+        "gemini-pro-vision": {"prompt": 0.00025, "completion": 0.0005},
+        
+        # Cohere models
+        "command": {"prompt": 0.0015, "completion": 0.0015},
+        "command-light": {"prompt": 0.0006, "completion": 0.0006},
+    }
+
+    def __init__(self, **kwargs):
+        """Initialize LLMAgentNode with optional monitoring features.
+        
+        Args:
+            enable_monitoring: Enable token usage and cost tracking
+            budget_limit: Maximum spend allowed in USD (None = unlimited)
+            alert_threshold: Alert when usage reaches this fraction of budget
+            track_history: Whether to keep usage history
+            history_limit: Maximum history entries to keep
+            custom_pricing: Override default pricing (per 1K tokens)
+            cost_multiplier: Multiply all costs by this factor
+            **kwargs: Additional Node parameters
+        """
+        super().__init__(**kwargs)
+        
+        # Monitoring configuration
+        self.enable_monitoring = kwargs.get("enable_monitoring", False)
+        self.budget_limit = kwargs.get("budget_limit")
+        self.alert_threshold = kwargs.get("alert_threshold", 0.8)
+        self.track_history = kwargs.get("track_history", True)
+        self.history_limit = kwargs.get("history_limit", 1000)
+        self.custom_pricing = kwargs.get("custom_pricing")
+        self.cost_multiplier = kwargs.get("cost_multiplier", 1.0)
+        
+        # Usage tracking (only if monitoring enabled)
+        if self.enable_monitoring:
+            self._total_usage = TokenUsage()
+            self._total_cost = 0.0
+            self._usage_history: List[UsageMetrics] = []
+            self._budget_alerts_sent = False
+
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "provider": NodeParameter(
@@ -223,6 +314,40 @@ class LLMAgentNode(Node):
                 required=False,
                 default=3,
                 description="Maximum retry attempts for failed requests",
+            ),
+            # Monitoring parameters
+            "enable_monitoring": NodeParameter(
+                name="enable_monitoring",
+                type=bool,
+                required=False,
+                default=False,
+                description="Enable token usage tracking and cost monitoring",
+            ),
+            "budget_limit": NodeParameter(
+                name="budget_limit",
+                type=float,
+                required=False,
+                description="Maximum spend allowed in USD (None = unlimited)",
+            ),
+            "alert_threshold": NodeParameter(
+                name="alert_threshold",
+                type=float,
+                required=False,
+                default=0.8,
+                description="Alert when usage reaches this fraction of budget",
+            ),
+            "track_history": NodeParameter(
+                name="track_history",
+                type=bool,
+                required=False,
+                default=True,
+                description="Whether to keep usage history for analytics",
+            ),
+            "custom_pricing": NodeParameter(
+                name="custom_pricing",
+                type=dict,
+                required=False,
+                description="Override default model pricing (per 1K tokens)",
             ),
         }
 
@@ -465,6 +590,19 @@ class LLMAgentNode(Node):
         timeout = kwargs.get("timeout", 120)
         max_retries = kwargs.get("max_retries", 3)
 
+        # Check monitoring parameters
+        enable_monitoring = kwargs.get("enable_monitoring", self.enable_monitoring)
+        
+        # Check budget if monitoring is enabled
+        if enable_monitoring and not self._check_budget():
+            raise ValueError(
+                f"Budget limit exceeded: ${self._total_cost:.2f}/${self.budget_limit:.2f} USD. "
+                "Reset budget or increase limit to continue."
+            )
+        
+        # Track execution time
+        start_time = time.time()
+        
         try:
             # Import LangChain and related libraries (graceful fallback)
             langchain_available = self._check_langchain_availability()
@@ -529,6 +667,43 @@ class LLMAgentNode(Node):
             usage_metrics = self._calculate_usage_metrics(
                 enriched_messages, response, model, provider
             )
+            
+            # Add monitoring data if enabled
+            execution_time = time.time() - start_time
+            if enable_monitoring:
+                # Extract token usage for monitoring
+                usage = self._extract_token_usage(response)
+                cost = self._calculate_cost(usage, model)
+                
+                # Update totals
+                if hasattr(self, '_total_usage'):
+                    self._total_usage.add(usage)
+                    self._total_cost += cost.total_cost
+                    
+                    # Record metrics
+                    self._record_usage(usage, cost, execution_time, model)
+                
+                # Add monitoring section to response
+                usage_metrics["monitoring"] = {
+                    "tokens": {
+                        "prompt": usage.prompt_tokens,
+                        "completion": usage.completion_tokens,
+                        "total": usage.total_tokens
+                    },
+                    "cost": {
+                        "prompt": round(cost.prompt_cost, 6),
+                        "completion": round(cost.completion_cost, 6),
+                        "total": round(cost.total_cost, 6),
+                        "currency": cost.currency
+                    },
+                    "execution_time_ms": round(execution_time * 1000, 2),
+                    "model": model,
+                    "budget": {
+                        "used": round(self._total_cost, 4),
+                        "limit": self.budget_limit,
+                        "remaining": round(self.budget_limit - self._total_cost, 4) if self.budget_limit else None
+                    }
+                }
 
             return {
                 "success": True,
@@ -1481,3 +1656,193 @@ class LLMAgentNode(Node):
         except Exception as e:
             self.logger.error(f"MCP tool execution failed: {e}")
             return {"error": str(e), "success": False, "tool_name": tool_name}
+    
+    # Monitoring methods
+    def _get_pricing(self, model: str) -> Dict[str, float]:
+        """Get pricing for current model."""
+        if self.custom_pricing:
+            return {
+                "prompt": self.custom_pricing.get("prompt_token_cost", 0.001),
+                "completion": self.custom_pricing.get("completion_token_cost", 0.002)
+            }
+        
+        # Check if model has pricing info
+        model_key = None
+        for key in self.MODEL_PRICING:
+            if key in model.lower():
+                model_key = key
+                break
+        
+        if model_key:
+            return self.MODEL_PRICING[model_key]
+        
+        # Default pricing if model not found
+        return {"prompt": 0.001, "completion": 0.002}
+    
+    def _calculate_cost(self, usage: TokenUsage, model: str) -> CostEstimate:
+        """Calculate cost from token usage."""
+        pricing = self._get_pricing(model)
+        
+        # Cost per 1K tokens
+        prompt_cost = (usage.prompt_tokens / 1000) * pricing["prompt"] * self.cost_multiplier
+        completion_cost = (usage.completion_tokens / 1000) * pricing["completion"] * self.cost_multiplier
+        
+        return CostEstimate(
+            prompt_cost=prompt_cost,
+            completion_cost=completion_cost,
+            total_cost=prompt_cost + completion_cost,
+            currency="USD"
+        )
+    
+    def _extract_token_usage(self, response: Dict[str, Any]) -> TokenUsage:
+        """Extract token usage from LLM response."""
+        usage = TokenUsage()
+        
+        # Check if response has usage data
+        if "usage" in response:
+            usage_data = response["usage"]
+            usage.prompt_tokens = usage_data.get("prompt_tokens", 0)
+            usage.completion_tokens = usage_data.get("completion_tokens", 0)
+            usage.total_tokens = usage_data.get("total_tokens", 0)
+        
+        # Anthropic format
+        elif "metadata" in response and "usage" in response["metadata"]:
+            usage_data = response["metadata"]["usage"]
+            usage.prompt_tokens = usage_data.get("input_tokens", 0)
+            usage.completion_tokens = usage_data.get("output_tokens", 0)
+            usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
+        
+        # Fallback: estimate from text length
+        elif "content" in response or "text" in response:
+            text = response.get("content") or response.get("text", "")
+            # Rough estimation: 1 token ≈ 4 characters
+            usage.completion_tokens = len(text) // 4
+            usage.prompt_tokens = 100  # Rough estimate
+            usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
+        
+        return usage
+    
+    def _check_budget(self) -> bool:
+        """Check if within budget. Returns True if OK to proceed."""
+        if not self.budget_limit or not hasattr(self, '_total_cost'):
+            return True
+        
+        if self._total_cost >= self.budget_limit:
+            return False
+        
+        # Check alert threshold
+        if not self._budget_alerts_sent and self._total_cost >= self.budget_limit * self.alert_threshold:
+            self._budget_alerts_sent = True
+            # In production, this would send actual alerts
+            self.logger.warning(
+                f"Budget Alert: ${self._total_cost:.2f}/${self.budget_limit:.2f} USD used "
+                f"({self._total_cost/self.budget_limit*100:.1f}%)"
+            )
+        
+        return True
+    
+    def _record_usage(self, usage: TokenUsage, cost: CostEstimate, execution_time: float, model: str):
+        """Record usage metrics."""
+        if not self.track_history or not hasattr(self, '_usage_history'):
+            return
+        
+        metrics = UsageMetrics(
+            token_usage=usage,
+            cost_estimate=cost,
+            execution_time_ms=execution_time * 1000,
+            model=model,
+            timestamp=datetime.utcnow().isoformat(),
+            metadata={
+                "node_id": self.id,
+                "budget_remaining": self.budget_limit - self._total_cost if self.budget_limit else None
+            }
+        )
+        
+        self._usage_history.append(metrics)
+        
+        # Maintain history limit
+        if len(self._usage_history) > self.history_limit:
+            self._usage_history.pop(0)
+    
+    def get_usage_report(self) -> Dict[str, Any]:
+        """Get comprehensive usage report."""
+        if not self.enable_monitoring or not hasattr(self, '_total_usage'):
+            return {"error": "Monitoring not enabled"}
+            
+        report = {
+            "summary": {
+                "total_tokens": self._total_usage.total_tokens,
+                "prompt_tokens": self._total_usage.prompt_tokens,
+                "completion_tokens": self._total_usage.completion_tokens,
+                "total_cost": round(self._total_cost, 4),
+                "currency": "USD",
+                "requests": len(self._usage_history) if hasattr(self, '_usage_history') else 0
+            },
+            "budget": {
+                "limit": self.budget_limit,
+                "used": round(self._total_cost, 4),
+                "remaining": round(self.budget_limit - self._total_cost, 4) if self.budget_limit else None,
+                "percentage_used": round(self._total_cost / self.budget_limit * 100, 1) if self.budget_limit else 0
+            }
+        }
+        
+        if hasattr(self, '_usage_history') and self._usage_history:
+            # Calculate analytics
+            total_time = sum(m.execution_time_ms for m in self._usage_history)
+            avg_time = total_time / len(self._usage_history)
+            
+            report["analytics"] = {
+                "average_tokens_per_request": self._total_usage.total_tokens // len(self._usage_history),
+                "average_cost_per_request": round(self._total_cost / len(self._usage_history), 4),
+                "average_execution_time_ms": round(avg_time, 2),
+                "cost_per_1k_tokens": round(self._total_cost / (self._total_usage.total_tokens / 1000), 4) if self._total_usage.total_tokens > 0 else 0
+            }
+            
+            # Recent history
+            report["recent_usage"] = [
+                {
+                    "timestamp": m.timestamp,
+                    "tokens": m.token_usage.total_tokens,
+                    "cost": round(m.cost_estimate.total_cost, 6),
+                    "execution_time_ms": round(m.execution_time_ms, 2)
+                }
+                for m in self._usage_history[-10:]  # Last 10 requests
+            ]
+        
+        return report
+    
+    def reset_budget(self):
+        """Reset budget tracking."""
+        if hasattr(self, '_total_cost'):
+            self._total_cost = 0.0
+            self._budget_alerts_sent = False
+    
+    def reset_usage(self):
+        """Reset all usage tracking."""
+        if hasattr(self, '_total_usage'):
+            self._total_usage = TokenUsage()
+            self._total_cost = 0.0
+            self._usage_history = []
+            self._budget_alerts_sent = False
+    
+    def export_usage_data(self, format: Literal["json", "csv"] = "json") -> str:
+        """Export usage data for analysis."""
+        if not self.enable_monitoring:
+            return json.dumps({"error": "Monitoring not enabled"})
+            
+        if format == "json":
+            return json.dumps(self.get_usage_report(), indent=2)
+        
+        elif format == "csv":
+            if not hasattr(self, '_usage_history'):
+                return "timestamp,model,prompt_tokens,completion_tokens,total_tokens,cost,execution_time_ms"
+                
+            # Simple CSV export
+            lines = ["timestamp,model,prompt_tokens,completion_tokens,total_tokens,cost,execution_time_ms"]
+            for m in self._usage_history:
+                lines.append(
+                    f"{m.timestamp},{m.model},{m.token_usage.prompt_tokens},"
+                    f"{m.token_usage.completion_tokens},{m.token_usage.total_tokens},"
+                    f"{m.cost_estimate.total_cost:.6f},{m.execution_time_ms:.2f}"
+                )
+            return "\n".join(lines)

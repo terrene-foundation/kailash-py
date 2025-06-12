@@ -10,6 +10,9 @@
 5. **Always include name**: `PythonCodeNode(name="processor", code="...")`
 6. **Node Creation**: Can create without required params (validated at execution)
 7. **Data Files**: Use centralized `/data/` with `examples/utils/data_paths.py`
+8. **Workflow Resilience**: Built into standard Workflow (no separate class needed)
+9. **Credentials**: Always use CredentialManagerNode (never hardcode)
+10. **SharePoint Auth**: Use SharePointGraphReaderEnhanced for multi-auth
 
 ## 📋 Quick Node Selection
 | Task | Use | Don't Use |
@@ -27,9 +30,11 @@
 - **[04-pythoncode-node.md](04-pythoncode-node.md)** - ⚠️ Input exclusion, serialization
 - **[05-directory-reader.md](05-directory-reader.md)** - File discovery patterns
 - **[06-document-processing.md](06-document-processing.md)** - Multi-file workflows
-- **[06-enhanced-mcp-server.md](06-enhanced-mcp-server.md)** - Production MCP with caching & metrics
 - **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and fixes
-- **[08-async-database-patterns.md](08-async-database-patterns.md)** - ⚠️ NEW: Async DB & ABAC
+- **[08-async-database-patterns.md](08-async-database-patterns.md)** - High-performance async DB
+- **[09-workflow-resilience.md](09-workflow-resilience.md)** - 🆕 Retry, fallback, circuit breakers
+- **[10-credential-management.md](10-credential-management.md)** - 🆕 Secure credential handling
+- **[11-sharepoint-multi-auth.md](11-sharepoint-multi-auth.md)** - 🆕 Multi-auth SharePoint
 - **[examples/](examples/)** - Working code examples
 
 ## ⚡ Quick Fix Templates
@@ -90,6 +95,62 @@ node = PythonCodeNode(name="filter", code=code)
 ```python
 # CORRECT: Different variable names for mapping
 workflow.connect("discovery", "processor", mapping={"result": "input_data"})
+```
+
+### Resilient Workflow (NEW)
+```python
+from kailash.workflow import Workflow, RetryStrategy
+
+workflow = Workflow(workflow_id="resilient", name="Resilient Pipeline")
+
+# Add retry policy
+workflow.configure_retry(
+    "api_call",
+    max_retries=3,
+    strategy=RetryStrategy.EXPONENTIAL
+)
+
+# Add fallback
+workflow.add_fallback("primary_service", "backup_service")
+
+# Add circuit breaker
+workflow.configure_circuit_breaker("api_call", failure_threshold=5)
+```
+
+### Credential Management (NEW)
+```python
+from kailash.nodes.security import CredentialManagerNode
+
+# Never hardcode credentials!
+cred_node = CredentialManagerNode(
+    credential_name="api_service",
+    credential_type="api_key",
+    credential_sources=["vault", "env"],  # Try vault first
+    cache_duration_seconds=3600
+)
+```
+
+### SharePoint Multi-Auth (NEW)
+```python
+from kailash.nodes.data import SharePointGraphReaderEnhanced
+
+# Certificate auth (production)
+sp_node = SharePointGraphReaderEnhanced()
+result = await sp_node.execute(
+    auth_method="certificate",
+    certificate_path="/secure/cert.pem",
+    tenant_id="tenant-id",
+    client_id="app-id",
+    site_url="https://company.sharepoint.com/sites/data",
+    operation="list_files"
+)
+
+# Managed Identity (Azure)
+result = await sp_node.execute(
+    auth_method="managed_identity",
+    site_url="https://company.sharepoint.com/sites/data",
+    operation="list_files"
+)
 ```
 
 ### DirectoryReaderNode (Best Practice)

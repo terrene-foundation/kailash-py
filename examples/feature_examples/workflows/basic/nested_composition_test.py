@@ -11,6 +11,7 @@ import os
 import sys
 from pathlib import Path
 
+from examples.utils.data_paths import ensure_output_dir_exists, get_output_data_path
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.logic import WorkflowNode
 from kailash.nodes.transform import Filter
@@ -306,7 +307,7 @@ def example_workflow_from_file():
 
     # First, export a simple workflow to file
     math_workflow = create_simple_workflow()
-    export_path = Path("data/exports/math_processor.yaml")
+    export_path = get_output_data_path("exports/math_processor.yaml", "exports")
 
     exporter = WorkflowExporter()
     exporter.to_yaml(math_workflow, str(export_path))
@@ -501,8 +502,8 @@ def main():
     print("Demonstrating hierarchical workflow composition\n")
 
     # Ensure output directory exists
-    os.makedirs("data/outputs", exist_ok=True)
-    os.makedirs("data/exports", exist_ok=True)
+    ensure_output_dir_exists("outputs")
+    ensure_output_dir_exists("exports")
 
     # Run examples
     try:
@@ -525,7 +526,9 @@ def main():
 
         # Export one of the workflows for visualization
         exporter = WorkflowExporter()
-        export_path = Path("data/exports/nested_workflow_example.yaml")
+        export_path = get_output_data_path(
+            "exports/nested_workflow_example.yaml", "exports"
+        )
         exporter.to_yaml(workflow2, str(export_path))
         print(f"\nExported example workflow to: {export_path}")
 

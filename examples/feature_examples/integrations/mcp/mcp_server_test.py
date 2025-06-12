@@ -24,6 +24,7 @@ To run MCP servers, use the command line:
 from datetime import datetime
 from typing import Any
 
+from examples.utils.data_paths import get_input_data_path
 from kailash import Workflow
 from kailash.mcp import MCPServer, SimpleMCPServer
 from kailash.nodes.ai import LLMAgentNode
@@ -205,7 +206,7 @@ def demonstrate_simple_server():
     def get_node_config(node_name: str) -> dict[str, Any]:
         """Get configuration for a specific node."""
         configs = {
-            "input": {"type": "file", "path": "/data/input.csv"},
+            "input": {"type": "file", "path": f"/{get_input_data_path('input.csv')}"},
             "processor": {
                 "type": "transform",
                 "operations": ["normalize", "aggregate"],

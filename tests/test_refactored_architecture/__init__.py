@@ -1,0 +1,1 @@
+"""Tests for the refactored architecture components."""

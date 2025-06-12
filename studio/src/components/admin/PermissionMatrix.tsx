@@ -56,7 +56,7 @@ export const PermissionMatrix: React.FC = () => {
   // Group permissions by resource
   const groupedPermissions = React.useMemo(() => {
     if (!matrixData) return {};
-    
+
     const groups: Record<string, Permission[]> = {};
     matrixData.permissions.forEach(permission => {
       if (!groups[permission.resource]) {
@@ -70,12 +70,12 @@ export const PermissionMatrix: React.FC = () => {
   // Toggle permission
   const togglePermission = (roleId: string, permissionId: string) => {
     if (!matrixData) return;
-    
+
     const role = matrixData.roles.find(r => r.role_id === roleId);
     if (role?.is_system) return; // Don't allow editing system roles
 
-    const currentValue = pendingChanges[roleId]?.[permissionId] ?? 
-                        matrixData.matrix[roleId]?.[permissionId] ?? 
+    const currentValue = pendingChanges[roleId]?.[permissionId] ??
+                        matrixData.matrix[roleId]?.[permissionId] ??
                         false;
 
     setPendingChanges(prev => ({
@@ -223,13 +223,13 @@ export const PermissionMatrix: React.FC = () => {
                       </td>
                       {matrixData.roles.map((role) => {
                         // Calculate aggregate for resource
-                        const allPermissions = permissions.every(p => 
+                        const allPermissions = permissions.every(p =>
                           getPermissionValue(role.role_id, p.permission_id)
                         );
-                        const somePermissions = permissions.some(p => 
+                        const somePermissions = permissions.some(p =>
                           getPermissionValue(role.role_id, p.permission_id)
                         );
-                        
+
                         return (
                           <td key={role.role_id} className="px-4 py-3 text-center">
                             <div className="flex justify-center">
@@ -245,7 +245,7 @@ export const PermissionMatrix: React.FC = () => {
                         );
                       })}
                     </tr>
-                    
+
                     {/* Individual Permission Rows */}
                     {isExpanded && permissions.map((permission) => (
                       <tr key={permission.permission_id} className="hover:bg-gray-50">
@@ -260,7 +260,7 @@ export const PermissionMatrix: React.FC = () => {
                         {matrixData.roles.map((role) => {
                           const hasPermission = getPermissionValue(role.role_id, permission.permission_id);
                           const isChanged = pendingChanges[role.role_id]?.hasOwnProperty(permission.permission_id);
-                          
+
                           return (
                             <td key={role.role_id} className="px-4 py-3 text-center">
                               <button

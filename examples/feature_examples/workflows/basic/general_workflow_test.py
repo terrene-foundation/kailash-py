@@ -13,6 +13,7 @@ from typing import Any
 
 import pandas as pd
 
+from examples.utils.data_paths import get_test_data_path
 from examples.utils.paths import get_output_dir
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
@@ -317,7 +318,7 @@ if __name__ == "__main__":
         )
 
         sample_data.to_csv(sample_directory / "customer_value.csv", index=False)
-        print("Sample data created at data/test/csv/customer_value.csv\n")
+        print(f"Sample data created at {get_test_data_path('customer_value.csv')}\n")
 
     # Run the workflow example
     main()

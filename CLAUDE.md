@@ -10,52 +10,50 @@
 | | [examples/feature-tests/](examples/feature-tests/) - Feature validation | |
 
 ## ⚡ Critical Validation Rules
-1. **Node Names**: ALL end with "Node" (`CSVReaderNode` ✓)
-2. **PythonCodeNode**: Input variables EXCLUDED from outputs!
-   - `mapping={"result": "input_data"}` ✓
-   - `mapping={"result": "result"}` ✗
-3. **PythonCodeNode Output Consistency**: ALL outputs wrapped in `"result"` key
-   - ✅ Functions returning dicts: `{"result": {"processed": data}}`
-   - ✅ Functions returning values: `{"result": 42}`
-   - ✅ Always connect using: `{"result": "input_param"}`
-4. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
-5. **Node Creation**: Can create without required params (validated at execution)
-6. **Data Files**: Use centralized `/data/` structure with utilities from `examples/utils/data_paths.py`
-7. **Output Files**: NEVER create `outputs/`, `cycle_analysis_output/` directories!
-   - Use `get_output_data_path()` from `examples/utils/data_paths.py`
-   - All outputs go to `/data/outputs/` with proper subdirectories
-   - ❌ `os.makedirs("outputs")` → ✅ `ensure_output_dir_exists()`
-   - ❌ `"outputs/report.json"` → ✅ `get_output_data_path("category/report.json")`
-8. **PythonCodeNode Best Practice**: ALWAYS use `.from_function()` for code > 3 lines!
-   - ❌ `PythonCodeNode(name="x", code="...100 lines...")` → Inline strings = NO IDE support
-   - ✅ `PythonCodeNode.from_function(name="x", func=my_func)` → Full IDE support
-   - String code ONLY for: one-liners, dynamic generation, user input
-9. **Enhanced MCP Server**: Production-ready features enabled by default
-   - ✅ `from kailash.mcp import MCPServer` → Gets caching, metrics, config management
-   - ✅ `@server.tool(cache_key="name", cache_ttl=600)` → Automatic caching with TTL
-   - ✅ `@server.tool(format_response="markdown")` → LLM-friendly formatting
-10. **Async Database Patterns**: High-performance database operations (Session 065)
-   - ✅ `AsyncSQLDatabaseNode` → Connection pooling, non-blocking operations
-   - ✅ `get_parameters()` returns dict → Not list, maps param.name to NodeParameter
-   - ✅ `run()` method required → Sync compatibility with async_run() delegation
-   - ✅ Convert DB types → Decimal→float, datetime→isostring for JSON serialization
-   - ✅ Separate SQL commands → asyncpg doesn't support multiple commands
-11. **ABAC Security**: Attribute-based access control with 16 operators (Session 065)
-   - ✅ `EnhancedAccessControlManager` → Complex attribute conditions and data masking
-   - ✅ Security operators → security_level_meets, security_level_below, contains_any
-   - ✅ Hierarchical matching → Department trees, regional access control
-   - ✅ Data masking → Partial, hash, range masking based on user attributes
+1. **Node Names**: ALL end with "Node" (`CSVReaderNode` ✓, `CSVReader` ✗)
+2. **PythonCodeNode Outputs**: ALWAYS wrapped in `"result"` key
+   - ✅ `{"result": {"data": processed}}` or `{"result": 42}`
+   - ❌ Direct returns without "result" wrapper
+   - ✅ Connect using: `mapping={"result": "next_param"}`
+3. **Data Files**: Use `/data/` structure with path utilities
+   - ✅ `get_output_data_path("reports/analysis.json")` → `/data/outputs/reports/analysis.json`
+   - ❌ `os.makedirs("outputs")` or hardcoded paths
+   - ✅ Import: `from examples.utils.data_paths import get_output_data_path`
+4. **PythonCodeNode**: Use `.from_function()` for multi-line code
+   - ✅ `PythonCodeNode.from_function(name="processor", func=my_func)`
+   - ❌ Inline strings for complex logic (no IDE support)
+5. **Import Structure**: Use specific module imports
+   - ✅ `from kailash.nodes.data import SQLDatabaseNode`
+   - ✅ `from kailash.nodes.api import HTTPRequestNode`
+   - ❌ `from kailash.core` (doesn't exist!)
+6. **Node Parameters**: Must implement `get_parameters()` returning dict
+   - ✅ Returns `Dict[str, NodeParameter]` mapping name→parameter
+   - ❌ Never return a list
+7. **Database Types**: Auto-convert for JSON serialization
+   - ✅ Decimal→float, datetime→ISO string, UUID→string
+   - ✅ SQLDatabaseNode now handles this automatically
+8. **Access Control**: Single unified interface
+   - ✅ `AccessControlManager(strategy="rbac"|"abac"|"hybrid")`
+   - ❌ Don't use old EnhancedAccessControlManager
+9. **Workflow Resilience**: Built into standard Workflow
+   - ✅ `workflow.configure_retry("node_id", max_retries=3)`
+   - ✅ `workflow.add_fallback("primary_node", "backup_node")`
+   - ❌ No separate ResilientWorkflow class needed
+10. **Specialized Nodes First**: Check catalog before using PythonCodeNode
+    - ✅ `CSVReaderNode` for CSV files (not pandas in PythonCodeNode)
+    - ✅ `HTTPRequestNode` for APIs (not requests library)
+    - ✅ `CredentialManagerNode` for secrets (not env vars directly)
 
-## 🔧 Core Node Quick Reference (85+ total)
-**AI**: LLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, MCPAgentNode, SelfOrganizingAgentNode
-**Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, SharePointGraphReader, DirectoryReaderNode
+## 🔧 Core Node Quick Reference (89+ total)
+**AI**: LLMAgentNode, MonitoredLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, MCPAgentNode, SelfOrganizingAgentNode
+**Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, SharePointGraphReader, SharePointGraphReaderEnhanced, DirectoryReaderNode
 **Vector**: AsyncPostgreSQLVectorNode (pgvector similarity search)
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Transform**: FilterNode, Map, DataTransformer, HierarchicalChunkerNode
 **Admin**: UserManagementNode, RoleManagementNode, PermissionCheckNode, AuditLogNode, SecurityEventNode
+**Security**: CredentialManagerNode, AccessControlManager (Unified RBAC/ABAC/Hybrid)
 **Code**: PythonCodeNode (use only when no specialized node exists)
-**Security**: EnhancedAccessControlManager (ABAC with 16 operators)
 **Full catalog**: sdk-users/nodes/comprehensive-node-catalog.md
 
 ## 📂 Directory Navigation Convention

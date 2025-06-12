@@ -23,7 +23,7 @@ by-industry/
 **Example**: TPC Platform Migration
 
 ### Portfolio Analysis
-**Purpose**: Comprehensive portfolio performance and risk analysis  
+**Purpose**: Comprehensive portfolio performance and risk analysis
 **Key Features**:
 - Real-time valuation with market data
 - Multi-dimensional risk metrics (VaR, Sharpe, volatility)
@@ -34,7 +34,7 @@ by-industry/
 **Technologies**: AsyncSQLDatabaseNode, AsyncPostgreSQLVectorNode, LLMAgentNode
 
 ### Document Intelligence
-**Purpose**: AI-powered document processing for due diligence  
+**Purpose**: AI-powered document processing for due diligence
 **Key Features**:
 - Multi-format ingestion (PDF, DOCX, Excel)
 - Entity extraction and classification
@@ -45,7 +45,7 @@ by-industry/
 **Technologies**: DirectoryReaderNode, LLMAgentNode, EmbeddingGeneratorNode
 
 ### Deal Sourcing
-**Purpose**: AI-enhanced deal pipeline management  
+**Purpose**: AI-enhanced deal pipeline management
 **Key Features**:
 - Automated deal scoring
 - Similar deal identification
@@ -58,7 +58,7 @@ by-industry/
 ## Healthcare
 
 ### Patient Journey Optimization
-**Purpose**: Streamline patient care pathways  
+**Purpose**: Streamline patient care pathways
 **Key Features**:
 - Appointment scheduling optimization
 - Treatment plan recommendations
@@ -67,7 +67,7 @@ by-industry/
 - Patient communication automation
 
 ### Medical Document Processing
-**Purpose**: Extract insights from medical records  
+**Purpose**: Extract insights from medical records
 **Key Features**:
 - HIPAA-compliant processing
 - Medical entity recognition
@@ -78,7 +78,7 @@ by-industry/
 ## Manufacturing
 
 ### Supply Chain Optimization
-**Purpose**: Intelligent supply chain management  
+**Purpose**: Intelligent supply chain management
 **Key Features**:
 - Demand forecasting
 - Inventory optimization
@@ -87,7 +87,7 @@ by-industry/
 - Quality control automation
 
 ### Predictive Maintenance
-**Purpose**: Prevent equipment failures  
+**Purpose**: Prevent equipment failures
 **Key Features**:
 - Sensor data analysis
 - Failure prediction models
@@ -98,7 +98,7 @@ by-industry/
 ## Retail & E-commerce
 
 ### Customer Intelligence
-**Purpose**: 360-degree customer understanding  
+**Purpose**: 360-degree customer understanding
 **Key Features**:
 - Behavior analysis
 - Personalization engine
@@ -107,7 +107,7 @@ by-industry/
 - Recommendation system
 
 ### Inventory Management
-**Purpose**: Optimize stock levels and distribution  
+**Purpose**: Optimize stock levels and distribution
 **Key Features**:
 - Multi-location inventory tracking
 - Demand prediction
@@ -118,7 +118,7 @@ by-industry/
 ## Financial Services
 
 ### Credit Risk Assessment
-**Purpose**: Automated lending decisions  
+**Purpose**: Automated lending decisions
 **Key Features**:
 - Credit scoring models
 - Document verification
@@ -127,7 +127,7 @@ by-industry/
 - Decision explanation
 
 ### Transaction Monitoring
-**Purpose**: Real-time fraud and AML detection  
+**Purpose**: Real-time fraud and AML detection
 **Key Features**:
 - Pattern recognition
 - Anomaly detection
@@ -138,7 +138,7 @@ by-industry/
 ## Technology
 
 ### DevOps Automation
-**Purpose**: Streamline software delivery  
+**Purpose**: Streamline software delivery
 **Key Features**:
 - CI/CD pipeline orchestration
 - Infrastructure provisioning
@@ -147,7 +147,7 @@ by-industry/
 - Performance optimization
 
 ### Customer Support AI
-**Purpose**: Intelligent support ticket routing  
+**Purpose**: Intelligent support ticket routing
 **Key Features**:
 - Ticket classification
 - Sentiment analysis
@@ -158,7 +158,7 @@ by-industry/
 ## Education
 
 ### Adaptive Learning
-**Purpose**: Personalized education paths  
+**Purpose**: Personalized education paths
 **Key Features**:
 - Learning style assessment
 - Content recommendation
@@ -167,7 +167,7 @@ by-industry/
 - Intervention triggers
 
 ### Assessment Automation
-**Purpose**: Streamline testing and grading  
+**Purpose**: Streamline testing and grading
 **Key Features**:
 - Automated grading
 - Plagiarism detection
@@ -204,7 +204,7 @@ by-industry/
 1. **Choose Your Industry**
    ```python
    from kailash_workflows.investment import create_portfolio_analysis_workflow
-   
+
    workflow = create_portfolio_analysis_workflow()
    ```
 

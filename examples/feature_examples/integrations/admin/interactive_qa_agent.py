@@ -5,78 +5,104 @@ This example creates an interactive QA agent that can execute actual tests
 against the admin tool framework, simulating real user interactions.
 """
 
-from kailash.core.workflow import Workflow, WorkflowBuilder
-from kailash.core.nodes import (
-    LLMAgentNode, PythonCodeNode, HTTPRequestNode, 
-    SwitchNode, MergeNode, WorkflowNode
-)
-from kailash.core.utils import get_test_data_path
 import json
 import random
 import string
 from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+from examples.utils.data_paths import get_test_data_path
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.logic import MergeNode, SwitchNode, WorkflowNode
+from kailash.workflow import Workflow, WorkflowBuilder
+
 
 def generate_test_data():
     """Generate realistic test data for various scenarios"""
     # Generate random user data
     first_names = ["John", "Jane", "Bob", "Alice", "Charlie", "Diana", "Eve", "Frank"]
     last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller"]
-    
+
     users = []
     for i in range(20):
-        users.append({
-            "email": f"test.user{i}@example.com",
-            "username": f"testuser{i}",
-            "first_name": random.choice(first_names),
-            "last_name": random.choice(last_names),
-            "password": ''.join(random.choices(string.ascii_letters + string.digits, k=12)),
-            "roles": random.sample(["employee", "manager", "admin", "viewer"], k=random.randint(1, 2))
-        })
-    
+        users.append(
+            {
+                "email": f"test.user{i}@example.com",
+                "username": f"testuser{i}",
+                "first_name": random.choice(first_names),
+                "last_name": random.choice(last_names),
+                "password": "".join(
+                    random.choices(string.ascii_letters + string.digits, k=12)
+                ),
+                "roles": random.sample(
+                    ["employee", "manager", "admin", "viewer"], k=random.randint(1, 2)
+                ),
+            }
+        )
+
     # Generate test scenarios
     scenarios = {
         "valid_users": users[:10],
         "invalid_users": [
-            {"email": "notanemail", "username": "test", "password": "123"},  # Invalid email
-            {"email": "test@test.com", "username": "", "password": "password"},  # Empty username
-            {"email": "test@test.com", "username": "test", "password": ""},  # Empty password
+            {
+                "email": "notanemail",
+                "username": "test",
+                "password": "123",
+            },  # Invalid email
+            {
+                "email": "test@test.com",
+                "username": "",
+                "password": "password",
+            },  # Empty username
+            {
+                "email": "test@test.com",
+                "username": "test",
+                "password": "",
+            },  # Empty password
             {"email": "", "username": "test", "password": "password"},  # Empty email
-            {"email": "duplicate@test.com", "username": "duplicate", "password": "password"},  # For duplicate testing
+            {
+                "email": "duplicate@test.com",
+                "username": "duplicate",
+                "password": "password",
+            },  # For duplicate testing
         ],
         "sql_injection_attempts": [
             "admin' OR '1'='1",
             "'; DROP TABLE users; --",
             "' UNION SELECT * FROM users --",
             "admin'--",
-            "' OR 1=1--"
+            "' OR 1=1--",
         ],
         "xss_attempts": [
             "<script>alert('XSS')</script>",
             "<img src=x onerror=alert('XSS')>",
             "<svg onload=alert('XSS')>",
             "javascript:alert('XSS')",
-            "<iframe src='javascript:alert(\"XSS\")'>"
+            "<iframe src='javascript:alert(\"XSS\")'>",
         ],
         "large_payloads": {
             "huge_string": "A" * 10000,
-            "deep_nesting": {"level1": {"level2": {"level3": {"level4": {"level5": "deep"}}}}},
-            "many_items": [f"item_{i}" for i in range(1000)]
-        }
+            "deep_nesting": {
+                "level1": {"level2": {"level3": {"level4": {"level5": "deep"}}}}
+            },
+            "many_items": [f"item_{i}" for i in range(1000)],
+        },
     }
-    
+
     return scenarios
+
 
 def create_interactive_qa_workflow():
     """Create an interactive QA testing workflow"""
     wb = WorkflowBuilder(name="interactive_qa_testing")
-    
+
     # Test data generator
     test_data_gen = PythonCodeNode.from_function(
-        name="test_data_generator",
-        func=generate_test_data
+        name="test_data_generator", func=generate_test_data
     )
-    
+
     # QA Strategy Agent - Plans test execution
     qa_strategist = LLMAgentNode(
         name="qa_strategist",
@@ -107,9 +133,9 @@ Create a comprehensive test plan that covers:
 4. Performance testing (load/stress)
 5. Integration testing (component interaction)
 
-Output a structured test plan with specific test cases for each component."""
+Output a structured test plan with specific test cases for each component.""",
     )
-    
+
     # Test Executor - Simulates actual API calls
     test_executor = PythonCodeNode(
         name="test_executor",
@@ -134,7 +160,7 @@ test_results = {
 # Define test execution functions
 def execute_user_crud_tests():
     results = []
-    
+
     # Test user creation
     results.append({
         "test": "Create valid user",
@@ -142,7 +168,7 @@ def execute_user_crud_tests():
         "response_time": random.randint(50, 200),
         "details": "User created successfully with all required fields"
     })
-    
+
     # Test duplicate user
     results.append({
         "test": "Create duplicate user",
@@ -150,7 +176,7 @@ def execute_user_crud_tests():
         "response_time": random.randint(30, 100),
         "details": "System correctly rejected duplicate email"
     })
-    
+
     # Test invalid email
     results.append({
         "test": "Create user with invalid email",
@@ -158,7 +184,7 @@ def execute_user_crud_tests():
         "response_time": random.randint(20, 50),
         "details": "Validation error returned as expected"
     })
-    
+
     # Simulate a failure
     results.append({
         "test": "Update user roles",
@@ -167,12 +193,12 @@ def execute_user_crud_tests():
         "details": "Permission check failed - user cannot assign admin role",
         "error": "Insufficient privileges"
     })
-    
+
     return results
 
 def execute_permission_tests():
     results = []
-    
+
     # Test permission matrix
     results.append({
         "test": "Load permission matrix",
@@ -180,7 +206,7 @@ def execute_permission_tests():
         "response_time": random.randint(200, 500),
         "details": "Matrix loaded with 50 permissions across 10 roles"
     })
-    
+
     # Test permission inheritance
     results.append({
         "test": "Verify permission inheritance",
@@ -188,7 +214,7 @@ def execute_permission_tests():
         "response_time": random.randint(50, 150),
         "details": "Child roles correctly inherit parent permissions"
     })
-    
+
     # Test circular dependency
     results.append({
         "test": "Create circular role hierarchy",
@@ -196,12 +222,12 @@ def execute_permission_tests():
         "response_time": random.randint(30, 80),
         "details": "System prevented circular dependency"
     })
-    
+
     return results
 
 def execute_security_tests():
     results = []
-    
+
     # SQL Injection tests
     results.append({
         "test": "SQL injection in login",
@@ -209,15 +235,15 @@ def execute_security_tests():
         "response_time": random.randint(50, 100),
         "details": "Input properly escaped, no injection possible"
     })
-    
+
     # XSS tests
     results.append({
         "test": "XSS in user profile",
-        "status": "passed", 
+        "status": "passed",
         "response_time": random.randint(40, 90),
         "details": "HTML properly encoded in output"
     })
-    
+
     # Authentication bypass attempt
     results.append({
         "test": "JWT token manipulation",
@@ -227,12 +253,12 @@ def execute_security_tests():
         "severity": "high",
         "error": "Weak token validation"
     })
-    
+
     return results
 
 def execute_performance_tests():
     results = []
-    
+
     # Load test
     results.append({
         "test": "Load 1000 users",
@@ -240,7 +266,7 @@ def execute_performance_tests():
         "response_time": random.randint(2000, 5000),
         "details": "Successfully loaded, pagination working correctly"
     })
-    
+
     # Stress test
     results.append({
         "test": "Concurrent user updates",
@@ -250,7 +276,7 @@ def execute_performance_tests():
         "severity": "medium",
         "error": "Optimistic locking not implemented"
     })
-    
+
     return results
 
 # Execute all test categories
@@ -282,9 +308,9 @@ test_results["coverage"] = {
 }
 
 result = test_results
-"""
+""",
     )
-    
+
     # Bug Analyzer - Analyzes failed tests
     bug_analyzer = LLMAgentNode(
         name="bug_analyzer",
@@ -301,9 +327,9 @@ For each failed test, provide:
         prompt_template="""Analyze these test failures:
 {failed_tests}
 
-Provide detailed analysis for each failure and prioritize fixes based on severity and user impact."""
+Provide detailed analysis for each failure and prioritize fixes based on severity and user impact.""",
     )
-    
+
     # Test Report Generator
     report_generator = PythonCodeNode(
         name="report_generator",
@@ -394,9 +420,9 @@ result = {
         "critical_issues": len([t for t in failed_tests if t.get("severity") == "high"])
     }
 }
-"""
+""",
     )
-    
+
     # Regression Test Creator
     regression_creator = PythonCodeNode(
         name="regression_test_creator",
@@ -428,9 +454,9 @@ for failed_test in failed_tests:
     })
 
 result = regression_tests
-"""
+""",
     )
-    
+
     # Build workflow
     wb.add_node(test_data_gen)
     wb.add_node(qa_strategist)
@@ -438,12 +464,11 @@ result = regression_tests
     wb.add_node(bug_analyzer)
     wb.add_node(report_generator)
     wb.add_node(regression_creator)
-    
+
     # Connect nodes
     wb.connect(test_data_gen.name, qa_strategist.name)
-    wb.connect(qa_strategist.name, test_executor.name, 
-              {"result": "input_data"})
-    
+    wb.connect(qa_strategist.name, test_executor.name, {"result": "input_data"})
+
     # Extract failed tests for bug analysis
     failed_test_extractor = PythonCodeNode(
         name="extract_failed_tests",
@@ -451,61 +476,60 @@ result = regression_tests
 test_results = input_data
 failed_tests = [t for t in test_results.get("test_cases", []) if t["status"] == "failed"]
 result = {"failed_tests": failed_tests}
-"""
+""",
     )
     wb.add_node(failed_test_extractor)
-    
-    wb.connect(test_executor.name, failed_test_extractor.name,
-              {"result": "input_data"})
+
+    wb.connect(test_executor.name, failed_test_extractor.name, {"result": "input_data"})
     wb.connect(failed_test_extractor.name, bug_analyzer.name)
-    
+
     # Merge results for report
     merge_node = MergeNode(name="merge_results")
     wb.add_node(merge_node)
-    
-    wb.connect(test_executor.name, merge_node.name,
-              {"result": "test_results"})
-    wb.connect(bug_analyzer.name, merge_node.name,
-              {"result": "bug_analysis"})
-    wb.connect(merge_node.name, report_generator.name,
-              {"merged_output": "input_data"})
-    
+
+    wb.connect(test_executor.name, merge_node.name, {"result": "test_results"})
+    wb.connect(bug_analyzer.name, merge_node.name, {"result": "bug_analysis"})
+    wb.connect(merge_node.name, report_generator.name, {"merged_output": "input_data"})
+
     # Create regression tests from results
-    wb.connect(test_executor.name, regression_creator.name,
-              {"result": "input_data"})
-    
+    wb.connect(test_executor.name, regression_creator.name, {"result": "input_data"})
+
     return wb.build()
+
 
 def main():
     """Run interactive QA testing"""
     print("🤖 Starting Interactive QA Testing for Admin Tools...")
     print("=" * 60)
-    
+
     workflow = create_interactive_qa_workflow()
-    
+
     print("\n📋 Executing test plan...")
     result = workflow.run()
-    
+
     if result.is_success:
         # Get report
         report_data = result.node_results.get("report_generator", {})
         if "report" in report_data:
             print("\n" + report_data["report"])
-            
+
             # Show summary
             summary = report_data.get("summary", {})
             if summary.get("critical_issues", 0) > 0:
-                print(f"\n⚠️  WARNING: {summary['critical_issues']} critical issues found!")
+                print(
+                    f"\n⚠️  WARNING: {summary['critical_issues']} critical issues found!"
+                )
                 print("Immediate action required to fix security vulnerabilities.")
-        
+
         # Show regression tests created
         regression_data = result.node_results.get("regression_test_creator", {})
         if regression_data and "tests" in regression_data:
             print(f"\n✅ Created {len(regression_data['tests'])} regression tests")
             print("These tests should be added to your CI/CD pipeline.")
-            
+
     else:
         print(f"\n❌ Testing failed: {result.error}")
+
 
 if __name__ == "__main__":
     main()

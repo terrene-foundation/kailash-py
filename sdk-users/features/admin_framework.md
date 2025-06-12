@@ -210,7 +210,7 @@ from kailash.nodes.code import PythonCodeNode
 
 def create_enterprise_onboarding_workflow():
     workflow = Workflow(name="enterprise_user_onboarding")
-    
+
     # 1. Validate against existing users and policies
     validate = PythonCodeNode.from_function(
         name="validate_user",
@@ -225,42 +225,42 @@ def create_enterprise_onboarding_workflow():
             }
         }
     )
-    
+
     # 2. Create user with ABAC attributes
     create_user = UserManagementNode(
         name="create_user",
         operation="create"
     )
-    
+
     # 3. Assign role based on attributes
     assign_role = RoleManagementNode(
         name="assign_role",
         operation="assign_role_conditional"
     )
-    
+
     # 4. Configure permissions
     configure_permissions = PermissionCheckNode(
         name="configure_permissions",
         operation="apply_initial_permissions"
     )
-    
+
     # 5. Security clearance check
     security_check = SecurityEventNode(
         name="security_check",
         operation="background_verification"
     )
-    
+
     # 6. Comprehensive audit
     audit = AuditLogNode(
         name="audit_onboarding",
         operation="log_event"
     )
-    
+
     # Connect with proper data flow
-    workflow.add_nodes([validate, create_user, assign_role, 
+    workflow.add_nodes([validate, create_user, assign_role,
                        configure_permissions, security_check, audit])
-    
-    workflow.connect("validate_user", "create_user", 
+
+    workflow.connect("validate_user", "create_user",
                     mapping={"result.user_data": "user_data"})
     workflow.connect("create_user", "assign_role",
                     mapping={"result.user.user_id": "user_id"})
@@ -270,7 +270,7 @@ def create_enterprise_onboarding_workflow():
                     mapping={"result.user_context": "user_context"})
     workflow.connect("security_check", "audit_onboarding",
                     mapping={"result": "event_metadata"})
-    
+
     return workflow
 ```
 
@@ -309,10 +309,10 @@ def create_enterprise_onboarding_workflow():
 ## Integration with Enhanced ABAC
 
 ```python
-from kailash.access_control_abac import EnhancedAccessControlManager
+from kailash.access_control import AccessControlManager
 
 # Configure enterprise ABAC
-access_manager = EnhancedAccessControlManager()
+access_manager = AccessControlManager(strategy="abac")
 
 # Admin-specific policy with 16 operators
 access_manager.add_policy({
@@ -341,11 +341,11 @@ access_manager.add_policy({
 ```python
 from kailash.workflow import Workflow
 from kailash.nodes.admin import *
-from kailash.access_control_abac import EnhancedAccessControlManager
+from kailash.access_control import AccessControlManager
 from kailash.api import WorkflowAPI
 
 # 1. Configure enterprise ABAC
-access_manager = EnhancedAccessControlManager()
+access_manager = AccessControlManager(strategy="abac")
 access_manager.load_policies("enterprise_admin_policies.json")
 
 # 2. Create admin orchestration workflow
@@ -401,13 +401,13 @@ api.start(
 
 **Kailash Admin Framework is production-ready and exceeds Django Admin in all critical areas:**
 
-✅ **5-10x better performance** with async architecture  
-✅ **Advanced ABAC security** with 16 operators vs basic RBAC  
-✅ **25+ audit event types** vs Django's 3  
-✅ **Real-time security monitoring** Django lacks  
-✅ **Native horizontal scaling** vs Django's limitations  
-✅ **Workflow composition** vs monolithic classes  
-✅ **Multi-tenant isolation** built-in  
-✅ **API-first design** enabling any frontend  
+✅ **5-10x better performance** with async architecture
+✅ **Advanced ABAC security** with 16 operators vs basic RBAC
+✅ **25+ audit event types** vs Django's 3
+✅ **Real-time security monitoring** Django lacks
+✅ **Native horizontal scaling** vs Django's limitations
+✅ **Workflow composition** vs monolithic classes
+✅ **Multi-tenant isolation** built-in
+✅ **API-first design** enabling any frontend
 
 **We're not missing any features - we've modernized and exceeded Django's capabilities for enterprise cloud-native applications.**

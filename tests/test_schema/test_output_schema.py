@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import pytest
+
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import NodeValidationError
 
@@ -187,7 +189,6 @@ def test_output_schema_validation():
         print(f"✓ Correctly caught serialization error: {e}")
 
     print("\n✅ All output schema validation tests passed!")
-    return True
 
 
 # Test the actual node execution with output validation
@@ -221,7 +222,7 @@ def test_node_execution_with_output_validation():
             return {"doubled": value * 2, "squared": value**2}
 
     try:
-        node = TestExecutionNode()
+        node = TestExecutionNode(value=5)
 
         # This should use the full execution pipeline
         result = node.execute()
@@ -231,14 +232,13 @@ def test_node_execution_with_output_validation():
         assert result["squared"] == 25
 
         print("✅ Node execution with output validation works correctly!")
-        return True
 
     except Exception as e:
         print(f"✗ Execution failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        pytest.fail(f"Node execution failed: {e}")
 
 
 # Test a node that violates its output schema during execution
@@ -272,22 +272,20 @@ def test_schema_violation_during_execution():
             return {"number": value}
 
     try:
-        node = BrokenOutputNode()
+        node = BrokenOutputNode(value=5)
 
         # This should fail during execution
         node.execute()
-        print("✗ Should have failed for schema violation")
-        return False
+        pytest.fail("Should have failed for schema violation")
 
     except NodeValidationError as e:
         print(f"✓ Correctly caught schema violation during execution: {e}")
-        return True
     except Exception as e:
         print(f"✗ Unexpected error: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        pytest.fail(f"Unexpected error: {e}")
 
 
 # Remove main execution block for pytest compatibility

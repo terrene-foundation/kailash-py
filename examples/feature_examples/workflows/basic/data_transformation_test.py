@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from examples.utils.data_paths import get_central_data_dir
 from examples.utils.paths import get_data_dir, get_output_dir
 
 # Add the parent directory to the path to import kailash
@@ -565,7 +566,7 @@ def main():
                     else:
                         print(f"  {key}: {value}")
 
-        print("\n✓ All outputs written to data/outputs/")
+        print(f"\n✓ All outputs written to {get_central_data_dir() / 'outputs'}/")
 
     except Exception as e:
         print(f"\n✗ Transformation failed: {e}")

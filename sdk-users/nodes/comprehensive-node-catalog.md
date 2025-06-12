@@ -2,7 +2,7 @@
 
 This reference guide lists all available nodes in the Kailash SDK and their primary use cases. **Always prefer using these specialized nodes over PythonCodeNode when possible.**
 
-*Total: 85+ specialized nodes across 7 categories*
+*Total: 89+ specialized nodes across 8 categories*
 
 ## Table of Contents
 - [AI/ML Nodes](#aiml-nodes) - 30+ nodes for LLM agents, embeddings, self-organizing agents
@@ -11,6 +11,7 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 - [Logic & Control Nodes](#logic--control-nodes) - 8+ nodes for routing, merging, loops
 - [Transform Nodes](#transform-nodes) - 8+ nodes for data transformation
 - [Admin & Security Nodes](#admin--security-nodes) - 5+ nodes for user management, permissions, audit
+- [Testing Nodes](#testing-nodes) - 1+ nodes for credential and workflow testing
 - [Code Execution Nodes](#code-execution-nodes) - 1 node for custom Python code
 - [When to Use PythonCodeNode](#when-to-use-pythoncodenode)
 
@@ -21,6 +22,11 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
   ```python
   # Use instead of PythonCodeNode calling OpenAI/Anthropic APIs
   node = LLMAgentNode(provider="openai", model="gpt-4")
+  ```
+- **MonitoredLLMAgentNode**: LLM agent with cost tracking and budget controls
+  ```python
+  # Track costs and enforce budget limits
+  node = MonitoredLLMAgentNode(model="gpt-4", budget_limit=10.0, alert_threshold=0.8)
   ```
 - **IterativeLLMAgentNode**: LLM agent with iterative refinement capabilities
 - **ChatAgent**: Conversational agent with context management
@@ -117,6 +123,22 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 ### SharePoint Integration
 - **SharePointGraphReader**: Read files from SharePoint via Graph API
 - **SharePointGraphWriter**: Write files to SharePoint via Graph API
+- **SharePointGraphReaderEnhanced**: ⭐ NEW: Multiple authentication methods (Session 067)
+  ```python
+  # Certificate authentication (most secure)
+  node = SharePointGraphReaderEnhanced(
+      auth_method="certificate",
+      certificate_path="/path/to/cert.pem",
+      tenant_id="your-tenant-id",
+      client_id="your-app-id"
+  )
+  
+  # Managed Identity (Azure-hosted apps)
+  node = SharePointGraphReaderEnhanced(
+      auth_method="managed_identity",
+      site_url="https://company.sharepoint.com/sites/project"
+  )
+  ```
 
 ### Vector Database & Embeddings
 - **EmbeddingNode**: Generate embeddings from text
@@ -262,12 +284,35 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
   # Use for security monitoring
   node = SecurityEventNode(event_type="suspicious_activity")
   ```
+- **CredentialManagerNode**: ⭐ NEW: Enterprise credential management (Session 067)
+  ```python
+  # Multi-source credential management with validation
+  node = CredentialManagerNode(
+      credential_name="api_service",
+      credential_type="oauth2",
+      credential_sources=["vault", "aws_secrets", "env"],
+      validate_on_fetch=True,
+      cache_duration_seconds=3600
+  )
+  ```
 
 ### Audit & Compliance
 - **AuditLogNode**: Comprehensive audit logging with compliance tags
   ```python
   # Use instead of custom logging
   node = AuditLogNode(compliance_tags=["SOC2", "HIPAA"])
+  ```
+
+## Testing Nodes
+
+### Credential Testing
+- **CredentialTestingNode**: Test authentication flows without external services
+  ```python
+  # Use for testing OAuth2, API keys, JWT, Basic auth
+  node = CredentialTestingNode(
+      credential_type="oauth2",
+      scenario="expired"  # success, expired, invalid, network_error
+  )
   ```
 
 ## Code Execution Nodes

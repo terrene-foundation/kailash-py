@@ -80,6 +80,14 @@ Example Workflows:
     workflow.connect('process', 'publish')
 """
 
+from kailash.nodes.data.async_connection import (
+    AsyncConnectionManager,
+    get_connection_manager,
+)
+
+# Async nodes
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
 from kailash.nodes.data.directory import DirectoryReaderNode
 from kailash.nodes.data.event_generation import EventGeneratorNode
 from kailash.nodes.data.file_discovery import FileDiscoveryNode
@@ -89,6 +97,7 @@ from kailash.nodes.data.sharepoint_graph import (
     SharePointGraphReader,
     SharePointGraphWriter,
 )
+from kailash.nodes.data.sharepoint_graph_enhanced import SharePointGraphReaderEnhanced
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.nodes.data.streaming import (
@@ -104,11 +113,6 @@ from kailash.nodes.data.vector_db import (
 )
 from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriterNode
 
-# Async nodes
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-from kailash.nodes.data.async_connection import AsyncConnectionManager, get_connection_manager
-from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
-
 __all__ = [
     # Directory
     "DirectoryReaderNode",
@@ -121,6 +125,7 @@ __all__ = [
     "JSONReaderNode",
     "TextReaderNode",
     "SharePointGraphReader",
+    "SharePointGraphReaderEnhanced",
     # Writers
     "CSVWriterNode",
     "JSONWriterNode",
