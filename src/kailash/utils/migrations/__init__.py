@@ -13,9 +13,9 @@ Key Features:
 - Schema versioning
 """
 
+from kailash.utils.migrations.generator import MigrationGenerator
 from kailash.utils.migrations.models import Migration, MigrationHistory
 from kailash.utils.migrations.runner import MigrationRunner
-from kailash.utils.migrations.generator import MigrationGenerator
 
 __all__ = [
     "Migration",

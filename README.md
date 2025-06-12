@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-751%20passing-brightgreen.svg" alt="Tests: 751 passing">
+  <img src="https://img.shields.io/badge/tests-796%20passing-brightgreen.svg" alt="Tests: 796 passing">
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
 </p>
 
@@ -35,6 +35,7 @@
 - 🤖 **Self-Organizing Agents**: Autonomous agent pools with intelligent team formation and convergence detection
 - 🧠 **Agent-to-Agent Communication**: Shared memory pools and intelligent caching for coordinated multi-agent systems
 - 🔒 **Production Security**: Comprehensive security framework with path traversal prevention, code sandboxing, and audit logging
+- 🛡️ **Admin Tool Framework**: Complete enterprise admin infrastructure with React UI, RBAC, audit logging, and LLM-based QA testing
 - 🎨 **Visual Workflow Builder**: Kailash Workflow Studio - drag-and-drop interface for creating and managing workflows (coming soon)
 - 🔁 **Cyclic Workflows (v0.2.0)**: Universal Hybrid Cyclic Graph Architecture with 30,000+ iterations/second performance
 - 🛠️ **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler for production-ready cyclic workflows
@@ -214,6 +215,33 @@ workflow.add_node("optimizer", PythonCodeNode.from_function(func=optimize_portfo
 
 ## 🔥 Advanced Features
 
+### Unified Access Control (v0.3.3)
+
+Single interface for all access control strategies:
+
+```python
+from kailash.access_control import AccessControlManager
+
+# Choose your strategy
+manager = AccessControlManager(strategy="abac")  # or "rbac" or "hybrid"
+
+# ABAC example with helper functions
+from kailash.access_control import create_attribute_condition
+
+condition = create_attribute_condition(
+    path="user.attributes.department",
+    operator="hierarchical_match",
+    value="finance"
+)
+
+# Database integration
+db_node = AsyncSQLDatabaseNode(
+    name="financial_query",
+    query="SELECT * FROM sensitive_data",
+    access_control_manager=manager
+)
+```
+
 ### Cyclic Workflows (Enhanced in v0.2.2)
 
 Build iterative workflows with the new CycleBuilder API:
@@ -276,14 +304,16 @@ api.run()
 
 ## 🏗️ Key Components
 
-### Nodes (60+ built-in)
+### Nodes (85+ built-in)
 
-- **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, DirectoryReaderNode
+- **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, DirectoryReaderNode
+- **Admin**: UserManagementNode, RoleManagementNode, PermissionCheckNode, AuditLogNode, SecurityEventNode
 - **Transform**: DataTransformer, DataFrameFilter, DataFrameJoiner
-- **AI/ML**: LLMAgentNode, EmbeddingGeneratorNode, A2ACoordinatorNode
-- **API**: RESTClientNode, GraphQLNode, AuthNode
+- **AI/ML**: LLMAgentNode, EmbeddingGeneratorNode, A2ACoordinatorNode, MCPAgentNode
+- **API**: RESTClientNode, GraphQLNode, AuthNode, HTTPRequestNode
 - **Logic**: SwitchNode, MergeNode, ConvergenceCheckerNode
 - **Code**: PythonCodeNode, WorkflowNode
+- **Security**: EnhancedAccessControlManager (ABAC with 16 operators)
 
 ### Runtimes
 
@@ -376,17 +406,22 @@ python scripts/test-all-examples.py
 ## 📈 Project Status
 
 - ✅ Core workflow engine
-- ✅ 60+ production-ready nodes
+- ✅ 85+ production-ready nodes
 - ✅ Local and parallel runtimes
 - ✅ Export to container format
 - ✅ Real-time monitoring
-- ✅ Comprehensive test suite (751 tests)
+- ✅ Comprehensive test suite (796 tests)
 - ✅ Self-organizing agent systems
 - ✅ Hierarchical RAG architecture
 - ✅ REST API wrapper
 - ✅ Cyclic workflow support with CycleBuilder API
 - ✅ Production security framework
-- ✅ Comprehensive workflow library (v0.2.2)
+- ✅ Async database infrastructure with pgvector support
+- ✅ Unified Access Control (RBAC/ABAC/Hybrid) with strategy pattern
+- ✅ Admin tool framework with React UI and QA testing
+- ✅ Comprehensive workflow library (v0.3.2)
+- 🧪 Admin frontend QA testing (LLMAgent validation in progress)
+- 🚧 Professional services workflows (Session 067)
 - 🚧 Visual workflow builder (in progress)
 - 🚧 Docker runtime
 - 🚧 Cloud deployment tools

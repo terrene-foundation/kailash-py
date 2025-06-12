@@ -100,7 +100,19 @@ filter_result = filter_node.run(
     data=csv_result["data"], column_name="value", threshold=1000.0
 )
 
-print(f"Filtered to {len(filter_result['filtered_data'])} records")
+print(f"Filter result keys: {list(filter_result.keys())}")
+print(f"Filter result: {filter_result}")
+
+# Handle PythonCodeNode result structure
+if "result" in filter_result and "filtered_data" in filter_result["result"]:
+    filtered_data = filter_result["result"]["filtered_data"]
+elif "filtered_data" in filter_result:
+    filtered_data = filter_result["filtered_data"]
+else:
+    print("Warning: filtered_data not found in expected location")
+    filtered_data = []
+
+print(f"Filtered to {len(filtered_data)} records")
 
 
 # Method 4: Chain multiple operations
@@ -155,15 +167,26 @@ summary_node = PythonCodeNode.from_function(
 
 # Use filtered data for summary
 summary_result = summary_node.run(
-    data=filter_result["filtered_data"],
+    data=filtered_data,
     group_col="region",
     value_col="value",
 )
 
 print("\nSummary by region:")
-for region, total in summary_result["summary"].items():
+print(f"Summary result: {summary_result}")
+
+# Handle PythonCodeNode result structure
+if "result" in summary_result:
+    result_data = summary_result["result"]
+    summary_data = result_data.get("summary", {})
+    total_data = result_data.get("total", 0)
+else:
+    summary_data = summary_result.get("summary", {})
+    total_data = summary_result.get("total", 0)
+
+for region, total in summary_data.items():
     print(f"  {region}: ${total:,.2f}")
-print(f"Total: ${summary_result['total']:,.2f}")
+print(f"Total: ${total_data:,.2f}")
 
 
 # Method 5: Direct execution without schemas (simpler but less validated)
@@ -218,10 +241,16 @@ stats_node = PythonCodeNode.from_function(
 stats_result = stats_node.run(data=csv_result["data"], column="value")
 
 print("\nStatistics for all data:")
-print(f"  Mean: ${stats_result['mean']:,.2f}")
-print(f"  Max: ${stats_result['max']:,.2f}")
-print(f"  Min: ${stats_result['min']:,.2f}")
-print(f"  Count: {stats_result['count']}")
+# Handle PythonCodeNode result structure for stats
+if "result" in stats_result:
+    stats_data = stats_result["result"]
+else:
+    stats_data = stats_result
+
+print(f"  Mean: ${stats_data['mean']:,.2f}")
+print(f"  Max: ${stats_data['max']:,.2f}")
+print(f"  Min: ${stats_data['min']:,.2f}")
+print(f"  Count: {stats_data['count']}")
 
 # Docker infrastructure pattern complete
 if __name__ == "__main__":

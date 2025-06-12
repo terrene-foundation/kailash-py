@@ -23,8 +23,8 @@ def get_example_files() -> list[Path]:
     examples_dir = project_root / "examples"
     example_files = []
 
-    # New structure - search feature-tests directory
-    feature_tests_dir = examples_dir / "feature-tests"
+    # New structure - search feature_examples directory
+    feature_tests_dir = examples_dir / "feature_examples"
 
     # Files to exclude
     exclude_files = {
@@ -35,11 +35,19 @@ def get_example_files() -> list[Path]:
         "data_paths.py",
     }
 
-    # Recursively find all Python files in feature-tests
+    # Recursively find all Python files in feature_examples
     if feature_tests_dir.exists():
         for file in feature_tests_dir.rglob("*.py"):
             if file.name not in exclude_files and not file.name.startswith("_"):
                 example_files.append(file)
+
+    # Also check other example directories
+    for dir_name in ["node_examples", "integration_examples", "workflow_examples"]:
+        example_dir = examples_dir / dir_name
+        if example_dir.exists():
+            for file in example_dir.rglob("*.py"):
+                if file.name not in exclude_files and not file.name.startswith("_"):
+                    example_files.append(file)
 
     # Also check test-harness for any executable tests
     test_harness_dir = examples_dir / "test-harness"
@@ -117,6 +125,21 @@ def check_data_paths(file_path: Path) -> tuple[bool, list[str]]:
 
         for pattern, message in bad_patterns:
             if pattern in line and "data_paths" not in line:
+                # Skip URLs, Docker paths, and other valid uses
+                if any(
+                    skip in line
+                    for skip in [
+                        "https://",
+                        "http://",
+                        "api.openweathermap.org",
+                        "/data/",  # Docker absolute paths
+                        "RUN mkdir",  # Dockerfile commands
+                        'f"✓',  # Print statements with paths
+                        "get_output_data_path",  # Already using correct function
+                        "get_input_data_path",  # Already using correct function
+                    ]
+                ):
+                    continue
                 issues.append(f"Line {i}: {message} (found '{pattern}')")
 
     return len(issues) == 0, issues

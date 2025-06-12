@@ -155,12 +155,17 @@ class OAuth2Node(Node):
             username (str, optional): Username for password grant
             password (str, optional): Password for password grant
             refresh_token (str, optional): Refresh token for refresh flow
+            refresh_buffer_seconds (int, optional): Seconds before expiry to trigger refresh (default: 300)
+            validate_token_response (bool, optional): Whether to validate token response (default: True)
             **kwargs: Additional parameters passed to base Node
         """
         super().__init__(**kwargs)
         self.http_node = HTTPRequestNode(**kwargs)
         self.token_data = None  # Will store token information
         self.token_expires_at = 0  # Timestamp when token expires
+        self.refresh_buffer_seconds = kwargs.get("refresh_buffer_seconds", 300)
+        self.validate_token_response = kwargs.get("validate_token_response", True)
+        self._last_token_request_duration = None
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
@@ -234,6 +239,27 @@ class OAuth2Node(Node):
                 default=True,
                 description="Whether to automatically refresh expired tokens",
             ),
+            "refresh_buffer_seconds": NodeParameter(
+                name="refresh_buffer_seconds",
+                type=int,
+                required=False,
+                default=300,
+                description="Seconds before token expiry to trigger automatic refresh",
+            ),
+            "validate_token_response": NodeParameter(
+                name="validate_token_response",
+                type=bool,
+                required=False,
+                default=True,
+                description="Whether to validate token response structure",
+            ),
+            "include_token_metadata": NodeParameter(
+                name="include_token_metadata",
+                type=bool,
+                required=False,
+                default=False,
+                description="Include additional token metadata in response",
+            ),
         }
 
     def get_output_schema(self) -> dict[str, NodeParameter]:
@@ -267,7 +293,129 @@ class OAuth2Node(Node):
                 required=False,
                 description="Seconds until token expiration",
             ),
+            "token_type": NodeParameter(
+                name="token_type",
+                type=str,
+                required=False,
+                description="Token type from response (usually 'Bearer')",
+            ),
+            "scope": NodeParameter(
+                name="scope",
+                type=str,
+                required=False,
+                description="Actual granted scopes from response",
+            ),
+            "refresh_token_present": NodeParameter(
+                name="refresh_token_present",
+                type=bool,
+                required=False,
+                description="Whether a refresh token is available",
+            ),
+            "token_expires_at": NodeParameter(
+                name="token_expires_at",
+                type=str,
+                required=False,
+                description="ISO format timestamp of token expiration",
+            ),
+            "raw_response": NodeParameter(
+                name="raw_response",
+                type=dict,
+                required=False,
+                description="Full token response for debugging (if include_raw_response is True)",
+            ),
+            "token": NodeParameter(
+                name="token",
+                type=dict,
+                required=False,
+                description="Structured token information with all components (if include_token_metadata is True)",
+            ),
+            "metadata": NodeParameter(
+                name="metadata",
+                type=dict,
+                required=False,
+                description="Additional token metadata and health information (if include_token_metadata is True)",
+            ),
         }
+
+    def _validate_token_response(self, token_data: dict) -> None:
+        """Validate the token response structure.
+        
+        Args:
+            token_data: Token response from OAuth server
+            
+        Raises:
+            NodeExecutionError: If token response is invalid
+        """
+        required_fields = ["access_token"]
+        missing_fields = [field for field in required_fields if field not in token_data]
+        
+        if missing_fields:
+            raise NodeExecutionError(
+                f"Invalid token response - missing required fields: {missing_fields}. "
+                f"Response contained: {list(token_data.keys())}. "
+                "Please verify your OAuth configuration and credentials."
+            )
+            
+        # Validate token format
+        access_token = token_data.get("access_token", "")
+        if not access_token or not isinstance(access_token, str):
+            raise NodeExecutionError(
+                "Invalid access token format. Token must be a non-empty string. "
+                "Please check your OAuth server configuration."
+            )
+            
+    def _calculate_token_health(self, expires_in: int) -> dict[str, Any]:
+        """Calculate token health metrics.
+        
+        Args:
+            expires_in: Seconds until token expiration
+            
+        Returns:
+            Dictionary with health metrics
+        """
+        health = {
+            "status": "healthy",
+            "expires_in_seconds": expires_in,
+            "expires_in_minutes": round(expires_in / 60, 1),
+            "expires_in_human": self._format_duration(expires_in),
+            "should_refresh": expires_in <= self.refresh_buffer_seconds,
+            "health_percentage": min(100, (expires_in / 3600) * 100)  # Assume 1hr tokens
+        }
+        
+        # Determine health status
+        if expires_in <= 0:
+            health["status"] = "expired"
+        elif expires_in <= 60:
+            health["status"] = "critical"
+        elif expires_in <= self.refresh_buffer_seconds:
+            health["status"] = "needs_refresh"
+        elif expires_in <= 600:  # 10 minutes
+            health["status"] = "warning"
+            
+        return health
+        
+    def _format_duration(self, seconds: int) -> str:
+        """Format duration in human-readable format.
+        
+        Args:
+            seconds: Duration in seconds
+            
+        Returns:
+            Human-readable duration string
+        """
+        if seconds <= 0:
+            return "expired"
+        elif seconds < 60:
+            return f"{seconds} seconds"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            return f"{minutes} minute{'s' if minutes > 1 else ''}"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            if minutes > 0:
+                return f"{hours} hour{'s' if hours > 1 else ''} {minutes} minute{'s' if minutes > 1 else ''}"
+            return f"{hours} hour{'s' if hours > 1 else ''}"
 
     def _get_token(self, **kwargs) -> dict[str, Any]:
         """Get an OAuth token using the configured grant type.
@@ -338,11 +486,16 @@ class OAuth2Node(Node):
             if "client_secret" in data:
                 del data["client_secret"]
 
+        start_time = time.time()
+        
         try:
             response = requests.post(token_url, data=data, headers=headers, timeout=30)
 
             response.raise_for_status()
             token_data = response.json()
+            
+            # Record request duration
+            self._last_token_request_duration = int((time.time() - start_time) * 1000)
 
             # Check for required fields in response
             if "access_token" not in token_data:
@@ -353,7 +506,24 @@ class OAuth2Node(Node):
             return token_data
 
         except requests.RequestException as e:
-            raise NodeExecutionError(f"Failed to acquire OAuth token: {str(e)}") from e
+            # Enhance error message with suggestions
+            error_msg = f"Failed to acquire OAuth token: {str(e)}"
+            
+            suggestions = []
+            if "401" in str(e) or "unauthorized" in str(e).lower():
+                suggestions.append("Verify your client_id and client_secret are correct")
+                suggestions.append("Check if your credentials have the required permissions")
+            elif "400" in str(e) or "bad request" in str(e).lower():
+                suggestions.append("Verify the grant_type is supported by your OAuth server")
+                suggestions.append("Check if all required parameters are provided")
+            elif "connection" in str(e).lower() or "timeout" in str(e).lower():
+                suggestions.append("Verify the token_url is correct and accessible")
+                suggestions.append("Check your network connection and firewall settings")
+                
+            if suggestions:
+                error_msg += f"\n\nSuggestions:\n" + "\n".join(f"- {s}" for s in suggestions)
+                
+            raise NodeExecutionError(error_msg) from e
         except ValueError as e:
             raise NodeExecutionError(
                 f"Failed to parse OAuth token response: {str(e)}"
@@ -383,21 +553,34 @@ class OAuth2Node(Node):
                 token_data: Complete token response
                 auth_type: Authentication type ('oauth2')
                 expires_in: Seconds until token expiration
+                token_type: Token type from response (usually 'Bearer')
+                scope: Actual granted scopes from response
+                refresh_token_present: Whether a refresh token is available
+                token_expires_at: ISO format timestamp of token expiration
+                raw_response: Full token response for debugging (if include_raw is True)
         """
         force_refresh = kwargs.get("force_refresh", False)
         auto_refresh = kwargs.get("auto_refresh", True)
+        include_raw = kwargs.get("include_raw_response", False)
+        include_metadata = kwargs.get("include_token_metadata", False)
 
         current_time = time.time()
 
         # Check if we need to refresh the token
-        if (
+        # Consider the refresh buffer when determining if refresh is needed
+        needs_refresh = (
             not self.token_data
             or force_refresh
-            or (auto_refresh and current_time >= self.token_expires_at)
-        ):
-
+            or (auto_refresh and current_time >= (self.token_expires_at - self.refresh_buffer_seconds))
+        )
+        
+        if needs_refresh:
             # Get new token
             self.token_data = self._get_token(**kwargs)
+            
+            # Validate token response if requested
+            if self.validate_token_response:
+                self._validate_token_response(self.token_data)
 
             # Calculate expiration time
             expires_in = self.token_data.get("expires_in", 3600)  # Default 1 hour
@@ -411,14 +594,80 @@ class OAuth2Node(Node):
         current_expires_in = max(0, int(self.token_expires_at - current_time))
 
         # Create headers
-        headers = {"Authorization": f"Bearer {self.token_data['access_token']}"}
+        access_token = self.token_data.get("access_token", "")
+        token_type = self.token_data.get("token_type", "Bearer")
+        
+        # Format authorization header based on token type
+        if token_type.lower() == "bearer":
+            headers = {"Authorization": f"Bearer {access_token}"}
+        else:
+            headers = {"Authorization": f"{token_type} {access_token}"}
 
-        return {
+        # Calculate expiration timestamp
+        from datetime import datetime, timezone
+        token_expires_at_dt = datetime.fromtimestamp(self.token_expires_at, tz=timezone.utc)
+        token_expires_at_iso = token_expires_at_dt.isoformat()
+
+        # Build response
+        result = {
             "headers": headers,
             "token_data": self.token_data,
             "auth_type": "oauth2",
             "expires_in": current_expires_in,
+            "token_type": token_type,
+            "scope": self.token_data.get("scope", ""),
+            "refresh_token_present": bool(self.token_data.get("refresh_token")),
+            "token_expires_at": token_expires_at_iso,
         }
+
+        # Include raw response if requested
+        if include_raw:
+            result["raw_response"] = self.token_data.copy()
+            
+        # Include structured token and metadata if requested
+        if include_metadata:
+            # Build structured token object
+            issued_at_dt = datetime.fromtimestamp(self.token_expires_at - self.token_data.get("expires_in", 3600), tz=timezone.utc)
+            
+            token = {
+                "access_token": self.token_data.get("access_token", ""),
+                "token_type": token_type,
+                "expires_in": current_expires_in,
+                "expires_at": token_expires_at_iso,
+                "issued_at": issued_at_dt.isoformat(),
+                "scope": self.token_data.get("scope", ""),
+                "is_valid": current_expires_in > 0,
+                "has_refresh_token": bool(self.token_data.get("refresh_token")),
+                "headers": headers,  # Include ready-to-use headers
+            }
+            
+            # Add refresh token hint if present (but not the actual value for security)
+            refresh_token = self.token_data.get("refresh_token")
+            if refresh_token:
+                token["refresh_token_hint"] = f"...{refresh_token[-4:]}" if len(refresh_token) > 4 else "****"
+                
+            result["token"] = token
+            
+            # Add health and metadata
+            health = self._calculate_token_health(current_expires_in)
+            
+            metadata = {
+                "health": health,
+                "grant_type": kwargs.get("grant_type", "client_credentials"),
+                "token_endpoint": kwargs.get("token_url", ""),
+                "scopes_requested": kwargs.get("scope", "").split() if kwargs.get("scope") else [],
+                "scopes_granted": self.token_data.get("scope", "").split() if self.token_data.get("scope") else [],
+                "token_size_bytes": len(self.token_data.get("access_token", "")),
+                "response_fields": list(self.token_data.keys()) if self.token_data else [],
+            }
+            
+            # Add timing information
+            if self._last_token_request_duration is not None:
+                metadata["last_request_duration_ms"] = self._last_token_request_duration
+                
+            result["metadata"] = metadata
+
+        return result
 
 
 @register_node()

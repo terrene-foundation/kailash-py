@@ -13,6 +13,13 @@ from kailash.workflow.cycle_profiler import CycleProfiler, PerformanceMetrics
 from kailash.workflow.graph import Connection, NodeInstance, Workflow
 from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 from kailash.workflow.visualization import WorkflowVisualizer
+from kailash.workflow.resilience import (
+    RetryStrategy,
+    RetryPolicy,
+    CircuitBreakerConfig,
+    WorkflowResilience,
+    apply_resilience_to_workflow
+)
 
 __all__ = [
     "Workflow",
@@ -30,4 +37,9 @@ __all__ = [
     "CycleProfiler",
     "PerformanceMetrics",
     "CycleAnalyzer",
+    "RetryStrategy",
+    "RetryPolicy",
+    "CircuitBreakerConfig",
+    "WorkflowResilience",
+    "apply_resilience_to_workflow",
 ]

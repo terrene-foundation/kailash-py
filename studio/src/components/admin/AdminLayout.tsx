@@ -1,10 +1,10 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { 
-  Users, 
-  Shield, 
-  FileText, 
-  Building2, 
+import {
+  Users,
+  Shield,
+  FileText,
+  Building2,
   Lock,
   LayoutDashboard,
   ChevronLeft
@@ -65,7 +65,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onBackToStudio }) => {
             </button>
           )}
         </div>
-        
+
         <nav className="p-4">
           <ul className="space-y-2">
             {navItems.map((item) => (

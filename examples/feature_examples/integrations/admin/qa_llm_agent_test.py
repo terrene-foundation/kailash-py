@@ -5,12 +5,16 @@ This example creates an LLM agent that roleplays as a QA tester to test the
 robustness of the admin system by performing various test scenarios.
 """
 
-from kailash.core.workflow import Workflow
-from kailash.core.nodes import LLMAgentNode, PythonCodeNode, SwitchNode, MergeNode
-from kailash.core.utils import get_test_data_path
 import json
 import random
 from datetime import datetime, timedelta
+
+from examples.utils.data_paths import get_test_data_path
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.logic import MergeNode, SwitchNode
+from kailash.workflow import Workflow
+
 
 def create_qa_test_scenarios():
     """Generate various QA test scenarios"""
@@ -28,8 +32,8 @@ def create_qa_test_scenarios():
                 "Test with special characters in passwords",
                 "Attempt concurrent logins from multiple locations",
                 "Test password reset with non-existent email",
-                "Try to brute force login (rate limiting test)"
-            ]
+                "Try to brute force login (rate limiting test)",
+            ],
         },
         # User Management Tests
         {
@@ -46,8 +50,8 @@ def create_qa_test_scenarios():
                 "Search users with SQL injection attempts",
                 "Bulk delete users including active sessions",
                 "Create user with role higher than current user",
-                "Test Unicode characters in user names"
-            ]
+                "Test Unicode characters in user names",
+            ],
         },
         # Permission & Role Tests
         {
@@ -62,8 +66,8 @@ def create_qa_test_scenarios():
                 "Test with 1000+ permissions per role",
                 "Remove all permissions from admin role",
                 "Test permission caching after updates",
-                "Create role with duplicate name"
-            ]
+                "Create role with duplicate name",
+            ],
         },
         # Audit Log Tests
         {
@@ -78,8 +82,8 @@ def create_qa_test_scenarios():
                 "Query logs with SQL injection",
                 "Test concurrent audit log writes",
                 "Verify failed actions are logged",
-                "Test audit log backup and restore"
-            ]
+                "Test audit log backup and restore",
+            ],
         },
         # Security Dashboard Tests
         {
@@ -94,8 +98,8 @@ def create_qa_test_scenarios():
                 "Simulate data breach scenarios",
                 "Test compliance score calculations",
                 "Verify security scan scheduling",
-                "Test incident response workflows"
-            ]
+                "Test incident response workflows",
+            ],
         },
         # Multi-tenant Tests
         {
@@ -110,8 +114,8 @@ def create_qa_test_scenarios():
                 "Suspend tenant during active operations",
                 "Test tenant backup isolation",
                 "Verify tenant-specific configurations",
-                "Test cross-tenant user switching"
-            ]
+                "Test cross-tenant user switching",
+            ],
         },
         # Performance & Stress Tests
         {
@@ -126,8 +130,8 @@ def create_qa_test_scenarios():
                 "Measure memory usage during bulk operations",
                 "Test cache invalidation performance",
                 "Simulate network latency scenarios",
-                "Test system behavior at resource limits"
-            ]
+                "Test system behavior at resource limits",
+            ],
         },
         # Edge Cases & Error Handling
         {
@@ -142,22 +146,22 @@ def create_qa_test_scenarios():
                 "Submit forms multiple times rapidly",
                 "Test with cookies disabled",
                 "Use outdated API versions",
-                "Test graceful degradation scenarios"
-            ]
-        }
+                "Test graceful degradation scenarios",
+            ],
+        },
     ]
     return scenarios
+
 
 def create_qa_agent_workflow():
     """Create a workflow with QA LLM Agent"""
     workflow = Workflow(name="admin_qa_test_workflow")
-    
+
     # Generate test scenarios
     scenario_generator = PythonCodeNode.from_function(
-        name="scenario_generator",
-        func=create_qa_test_scenarios
+        name="scenario_generator", func=create_qa_test_scenarios
     )
-    
+
     # QA Agent that acts like a thorough tester
     qa_agent = LLMAgentNode(
         name="qa_tester_agent",
@@ -203,9 +207,9 @@ Please analyze these test scenarios as a QA engineer. For each test:
 4. Expected system behavior
 5. Potential issues and their severity
 
-Also suggest 3 additional creative test cases for this category that might reveal hidden issues."""
+Also suggest 3 additional creative test cases for this category that might reveal hidden issues.""",
     )
-    
+
     # Categorize findings by severity
     severity_classifier = PythonCodeNode(
         name="severity_classifier",
@@ -246,9 +250,9 @@ result = {
     "total_issues": sum(len(v) for v in categorized.values()),
     "requires_immediate_action": len(categorized["critical"]) > 0
 }
-"""
+""",
     )
-    
+
     # Generate detailed test report
     report_generator = PythonCodeNode(
         name="report_generator",
@@ -310,9 +314,9 @@ result = {
     "report": formatted_report,
     "data": report
 }
-"""
+""",
     )
-    
+
     # Security-specific tester
     security_specialist = LLMAgentNode(
         name="security_specialist",
@@ -332,9 +336,9 @@ Be specific about attack vectors and provide proof-of-concept examples where app
 Consider these attack vectors:
 {attack_vectors}
 
-Provide specific examples of how each could be exploited and recommendations for mitigation."""
+Provide specific examples of how each could be exploited and recommendations for mitigation.""",
     )
-    
+
     # Performance tester
     performance_tester = PythonCodeNode(
         name="performance_tester",
@@ -373,7 +377,7 @@ for users in test_results["load_tests"]["concurrent_users"]:
         "p95_response_ms": response_time * 1.5,
         "p99_response_ms": response_time * 2
     })
-    
+
     # Simulate error rates
     error_rate = min(0.1, (users / 100000))  # Error rate increases with load
     test_results["load_tests"]["error_rates"].append({
@@ -387,9 +391,9 @@ if max(r["avg_response_ms"] for r in test_results["load_tests"]["response_times"
     test_results["stress_tests"]["bottlenecks"].append("API rate limiting needed")
 
 result = test_results
-"""
+""",
     )
-    
+
     # Connect nodes
     workflow.add_node(scenario_generator)
     workflow.add_node(qa_agent)
@@ -397,70 +401,81 @@ result = test_results
     workflow.add_node(report_generator)
     workflow.add_node(security_specialist)
     workflow.add_node(performance_tester)
-    
+
     # Create test flow
-    workflow.connect(scenario_generator.name, qa_agent.name, 
-                    {"result": "tests"})
-    workflow.connect(qa_agent.name, severity_classifier.name,
-                    {"result": "input_data"})
-    workflow.connect(severity_classifier.name, report_generator.name,
-                    {"result": "severity"})
-    
+    workflow.connect(scenario_generator.name, qa_agent.name, {"result": "tests"})
+    workflow.connect(qa_agent.name, severity_classifier.name, {"result": "input_data"})
+    workflow.connect(
+        severity_classifier.name, report_generator.name, {"result": "severity"}
+    )
+
     # Parallel security and performance testing
-    workflow.connect(scenario_generator.name, security_specialist.name,
-                    {"result": "attack_vectors"})
+    workflow.connect(
+        scenario_generator.name, security_specialist.name, {"result": "attack_vectors"}
+    )
     workflow.connect(scenario_generator.name, performance_tester.name)
-    
+
     # Merge all results for final report
     merge_results = MergeNode(name="merge_test_results")
     workflow.add_node(merge_results)
-    
-    workflow.connect(report_generator.name, merge_results.name,
-                    {"result": "qa_report"})
-    workflow.connect(security_specialist.name, merge_results.name,
-                    {"result": "security_report"})
-    workflow.connect(performance_tester.name, merge_results.name,
-                    {"result": "performance_report"})
-    
+
+    workflow.connect(report_generator.name, merge_results.name, {"result": "qa_report"})
+    workflow.connect(
+        security_specialist.name, merge_results.name, {"result": "security_report"}
+    )
+    workflow.connect(
+        performance_tester.name, merge_results.name, {"result": "performance_report"}
+    )
+
     return workflow
+
 
 def main():
     """Run QA testing workflow"""
     print("🧪 Starting Admin Tool Framework QA Testing...")
     print("=" * 50)
-    
+
     # Create and run workflow
     workflow = create_qa_agent_workflow()
-    
+
     # Execute QA tests
     result = workflow.run()
-    
+
     # Display results
     if result.is_success:
         print("\n✅ QA Testing Complete!")
         print("\n📊 Test Results:")
-        
+
         merged_results = result.node_results.get("merge_test_results", {})
-        
+
         # Show QA report
         if "qa_report" in merged_results:
             print("\n📋 QA Test Report:")
             print(merged_results["qa_report"].get("report", "No report generated"))
-        
+
         # Show security findings
         if "security_report" in merged_results:
             print("\n🔒 Security Analysis:")
-            print(merged_results["security_report"].get("result", "No security issues found"))
-        
+            print(
+                merged_results["security_report"].get(
+                    "result", "No security issues found"
+                )
+            )
+
         # Show performance results
         if "performance_report" in merged_results:
             print("\n⚡ Performance Test Results:")
             perf_data = merged_results["performance_report"]
             if isinstance(perf_data, dict) and "load_tests" in perf_data:
-                print(f"- Tested up to {perf_data['load_tests']['concurrent_users'][-1]} concurrent users")
-                print(f"- Bottlenecks found: {len(perf_data['stress_tests']['bottlenecks'])}")
+                print(
+                    f"- Tested up to {perf_data['load_tests']['concurrent_users'][-1]} concurrent users"
+                )
+                print(
+                    f"- Bottlenecks found: {len(perf_data['stress_tests']['bottlenecks'])}"
+                )
     else:
         print(f"\n❌ QA Testing failed: {result.error}")
+
 
 if __name__ == "__main__":
     main()

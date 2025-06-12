@@ -8,7 +8,7 @@ version: '3.8'
 services:
   # PostgreSQL with multiple databases for examples
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: kailash-sdk-postgres
     environment:
       POSTGRES_USER: kailash

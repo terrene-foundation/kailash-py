@@ -5,7 +5,7 @@
 ## 🚨 Critical Rules for Async Database Nodes
 
 1. **Return Dict from get_parameters()**: Not a list
-2. **Implement run() method**: For synchronous compatibility  
+2. **Implement run() method**: For synchronous compatibility
 3. **Convert DB types**: Decimal → float, datetime → isostring
 4. **Separate SQL commands**: asyncpg doesn't support multiple commands
 5. **Use proper connection pooling**: AsyncConnectionManager singleton pattern
@@ -16,7 +16,7 @@
 |------|------|--------------|
 | Async SQL queries | `AsyncSQLDatabaseNode` | PostgreSQL, MySQL, SQLite with pooling |
 | Vector similarity | `AsyncPostgreSQLVectorNode` | pgvector HNSW/IVFFlat indexes |
-| Access control | `EnhancedAccessControlManager` | ABAC with 16 operators |
+| Access control | `AccessControlManager` | Unified RBAC/ABAC/Hybrid |
 | Connection pooling | `AsyncConnectionManager` | Per-tenant isolation, health monitoring |
 
 ## ⚡ Quick Patterns
@@ -37,7 +37,7 @@ db_node = AsyncSQLDatabaseNode(
     password="postgres",
     query="""
     SELECT portfolio_id, client_name, total_value
-    FROM portfolios 
+    FROM portfolios
     WHERE risk_profile = $1
     ORDER BY total_value DESC
     """,
@@ -80,14 +80,14 @@ for match in matches:
 
 ```python
 from kailash.access_control_abac import (
-    EnhancedAccessControlManager, 
-    AttributeCondition, 
+    AccessControlManager,
+    AttributeCondition,
     AttributeOperator
 )
 from kailash.access_control import UserContext, NodePermission
 
 # Create access control manager
-acm = EnhancedAccessControlManager()
+acm = AccessControlManager(strategy="abac")
 
 # Create user context
 user = UserContext(
@@ -133,7 +133,7 @@ masking_rules = {
     "account_balance": {
         "condition": {
             "attribute_path": "user.attributes.access_level",
-            "operator": "less_than", 
+            "operator": "less_than",
             "value": 7
         },
         "mask_type": "range",
@@ -161,7 +161,7 @@ from kailash.runtime.async_local import AsyncLocalRuntime
 async def create_portfolio_analysis():
     """Create async portfolio analysis workflow."""
     workflow = Workflow(workflow_id="portfolio_analysis")
-    
+
     # 1. Fetch portfolio data
     workflow.add_node(
         "fetch_portfolios",
@@ -176,7 +176,7 @@ async def create_portfolio_analysis():
                 FROM market_prices
                 ORDER BY symbol, price_date DESC
             )
-            SELECT 
+            SELECT
                 p.portfolio_id,
                 p.client_name,
                 SUM(pos.quantity * lp.close_price) as current_value
@@ -189,21 +189,21 @@ async def create_portfolio_analysis():
             fetch_mode="all"
         )
     )
-    
+
     # 2. Calculate portfolio metrics
     def calculate_metrics(portfolio_data):
         """Calculate portfolio performance metrics."""
         portfolios = portfolio_data["data"]
-        
+
         metrics = {
             "total_portfolios": len(portfolios),
             "total_aum": sum(p["current_value"] for p in portfolios),
             "top_portfolio": max(portfolios, key=lambda x: x["current_value"]),
             "avg_portfolio_value": sum(p["current_value"] for p in portfolios) / len(portfolios)
         }
-        
+
         return {"result": metrics}
-    
+
     workflow.add_node(
         "calculate_metrics",
         PythonCodeNode.from_function(
@@ -211,20 +211,20 @@ async def create_portfolio_analysis():
             func=calculate_metrics
         )
     )
-    
+
     # Connect nodes
     workflow.connect("fetch_portfolios", "calculate_metrics", {"result": "portfolio_data"})
-    
+
     return workflow
 
 # Execute workflow
 async def main():
     workflow = await create_portfolio_analysis()
     runtime = AsyncLocalRuntime()
-    
+
     result, run_id = await runtime.execute(workflow)
     metrics = result["calculate_metrics"]["result"]
-    
+
     print(f"Total AUM: ${metrics['total_aum']:,.2f}")
     print(f"Top Portfolio: {metrics['top_portfolio']['client_name']}")
     print(f"Average Value: ${metrics['avg_portfolio_value']:,.2f}")
@@ -242,7 +242,7 @@ asyncio.run(main())
 - `in`, `not_in` - List membership
 - `contains_any` - Any item in list matches
 
-### Numeric Operators  
+### Numeric Operators
 - `greater_than`, `less_than` - Numeric comparison
 - `greater_or_equal`, `less_or_equal` - Inclusive comparison
 - `between` - Range checking (inclusive)
@@ -258,7 +258,7 @@ asyncio.run(main())
 ```python
 clearance_hierarchy = {
     "public": 0,
-    "internal": 1, 
+    "internal": 1,
     "confidential": 2,
     "secret": 3,
     "top_secret": 4
@@ -274,12 +274,12 @@ class MyAsyncNode(AsyncNode):
     def define_parameters(self):  # Wrong method name
         return [...]  # Wrong return type
 
-# ✅ Correct - implement all abstract methods  
+# ✅ Correct - implement all abstract methods
 class MyAsyncNode(AsyncNode):
     def get_parameters(self) -> dict[str, NodeParameter]:
         params = [...]
         return {param.name: param for param in params}
-    
+
     def run(self, **inputs) -> dict[str, Any]:
         import asyncio
         return asyncio.run(self.async_run(**inputs))
@@ -294,7 +294,7 @@ async def async_run(self, **inputs):
 
 # ✅ Correct - convert to JSON-safe types
 async def async_run(self, **inputs):
-    rows = await connection.fetch(query) 
+    rows = await connection.fetch(query)
     converted_rows = [self._convert_row(dict(row)) for row in rows]
     return {"result": {"data": converted_rows}}
 
@@ -343,13 +343,13 @@ DB_CONFIG = {
     "database": "production_db",
     "user": "app_user",
     "password": "secure_password",
-    
+
     # Pool configuration
-    "pool_size": 50,           # Normal connections  
+    "pool_size": 50,           # Normal connections
     "max_pool_size": 100,      # Peak load connections
     "pool_timeout": 30,        # Connection wait timeout
     "pool_recycle": 3600,      # Recycle connections after 1 hour
-    
+
     # Performance tuning
     "fetch_mode": "all",       # vs "one" for single row
     "timeout": 30,             # Query timeout

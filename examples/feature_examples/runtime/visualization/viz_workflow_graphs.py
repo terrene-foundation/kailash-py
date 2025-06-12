@@ -12,6 +12,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
+from examples.utils.data_paths import get_output_data_path
 from examples.utils.paths import get_data_dir, get_output_dir
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -170,7 +171,7 @@ def demonstrate_basic_visualization():
     workflow = create_sample_workflow()
 
     # Create Mermaid visualization
-    output_path = "../data/basic_workflow.md"
+    output_path = str(get_output_data_path("basic_workflow.md", "md"))
     workflow.save_mermaid_markdown(output_path, title="Data Processing Pipeline")
 
     print(f"✓ Basic visualization created: {output_path}")
@@ -205,7 +206,7 @@ def demonstrate_custom_visualization():
     )
 
     # Save with custom title
-    output_path = "../data/custom_workflow.md"
+    output_path = str(get_output_data_path("custom_workflow.md", "md"))
     mermaid_viz.save_markdown(output_path, title="Enhanced Data Processing Pipeline")
 
     print(f"✓ Custom visualization created: {output_path}")
@@ -319,12 +320,14 @@ def demonstrate_performance_metrics():
 
     plt.tight_layout()
     plt.savefig(
-        "../data/performance_metrics_matplotlib.png", dpi=300, bbox_inches="tight"
+        str(get_output_data_path("performance_metrics_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
 
     print(
-        "✓ Performance metrics visualization created: data/performance_metrics_matplotlib.png"
+        f"✓ Performance metrics visualization created: {get_output_data_path('performance_metrics_matplotlib.png')}"
     )
 
 
@@ -411,7 +414,9 @@ def demonstrate_workflow_comparison():
 
     plt.tight_layout()
     plt.savefig(
-        "../data/workflow_comparison_matplotlib.png", dpi=300, bbox_inches="tight"
+        str(get_output_data_path("workflow_comparison_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
 
@@ -440,7 +445,7 @@ This document compares two versions of a data processing workflow.
 """
 
     # Save comparison
-    output_path = "../data/workflow_comparison.md"
+    output_path = str(get_output_data_path("workflow_comparison.md", "md"))
     with open(output_path, "w") as f:
         f.write(comparison_content)
 
@@ -511,11 +516,15 @@ def demonstrate_execution_timeline():
 
     plt.tight_layout()
     plt.savefig(
-        "../data/execution_timeline_matplotlib.png", dpi=300, bbox_inches="tight"
+        str(get_output_data_path("execution_timeline_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
 
-    print("✓ Execution timeline created: data/execution_timeline_matplotlib.png")
+    print(
+        f"✓ Execution timeline created: {get_output_data_path('execution_timeline_matplotlib.png')}"
+    )
 
 
 def demonstrate_resource_heatmap():
@@ -564,10 +573,16 @@ def demonstrate_resource_heatmap():
     plt.colorbar(im2, ax=ax2)
 
     plt.tight_layout()
-    plt.savefig("../data/resource_heatmap_matplotlib.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        str(get_output_data_path("resource_heatmap_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
+    )
     plt.close()
 
-    print("✓ Resource heatmap created: data/resource_heatmap_matplotlib.png")
+    print(
+        f"✓ Resource heatmap created: {get_output_data_path('resource_heatmap_matplotlib.png')}"
+    )
 
 
 def main():

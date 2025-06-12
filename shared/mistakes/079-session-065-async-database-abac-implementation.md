@@ -1,7 +1,7 @@
 # Session 065: Async Database & ABAC Implementation Mistakes
 
-**Session**: 065 - Async Database & ABAC Infrastructure  
-**Date**: 2025-06-12  
+**Session**: 065 - Async Database & ABAC Infrastructure
+**Date**: 2025-06-12
 **Focus**: Implementation of AsyncSQLDatabaseNode, AsyncConnectionManager, pgvector, and ABAC
 
 ## Core Issues Encountered
@@ -12,7 +12,7 @@
 TypeError: Can't instantiate abstract class AsyncSQLDatabaseNode with abstract methods get_parameters, run
 ```
 
-**Root Cause**: 
+**Root Cause**:
 - Used `define_parameters()` instead of `get_parameters()`
 - Missing `run()` method for synchronous execution compatibility
 - Base `Node` class expects specific abstract method signatures
@@ -29,7 +29,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
     def get_parameters(self) -> dict[str, NodeParameter]:
         params = [...]
         return {param.name: param for param in params}  # Returns dict
-    
+
     def run(self, **inputs) -> dict[str, Any]:
         """Synchronous run method - delegates to async_run."""
         import asyncio
@@ -109,7 +109,7 @@ ValidationError: type Input should be a type [type=is_type, input_value='str', i
 # Wrong approach
 NodeParameter(name="host", type="str", required=True)
 
-# Correct approach  
+# Correct approach
 NodeParameter(name="host", type=str, required=True)
 ```
 
@@ -136,7 +136,7 @@ BETWEEN = "between"
 def _eval_security_level_meets(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
     """Evaluate if security clearance meets minimum level."""
     clearance_levels = {
-        "public": 0, "internal": 1, "confidential": 2, 
+        "public": 0, "internal": 1, "confidential": 2,
         "secret": 3, "top_secret": 4
     }
     value_level = clearance_levels.get(value.lower(), 0)
@@ -177,10 +177,10 @@ workflow.connect("fetch_data", "process_data", {"data": "input_data"})
 class AsyncDatabaseNode(AsyncNode):
     def get_parameters(self) -> dict[str, NodeParameter]:
         # Return dict mapping parameter names to NodeParameter objects
-        
+
     async def async_run(self, **inputs) -> dict[str, Any]:
         # Core async implementation
-        
+
     def run(self, **inputs) -> dict[str, Any]:
         # Synchronous wrapper for compatibility
         import asyncio
@@ -191,7 +191,7 @@ class AsyncDatabaseNode(AsyncNode):
 ```python
 class AsyncConnectionManager:
     _instance = None  # Singleton pattern
-    
+
     async def get_connection(self, tenant_id: str, db_config: dict):
         # Per-tenant connection isolation
         # Health monitoring and metrics
@@ -206,7 +206,7 @@ class AttributeEvaluator:
             AttributeOperator.CUSTOM_OP: self._eval_custom_op,
             # Map all enum values to handler methods
         }
-    
+
     def _eval_custom_op(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
         # Implement evaluation logic
         # Handle type conversion and edge cases
@@ -244,7 +244,7 @@ class AttributeEvaluator:
 
 **Core Implementation**:
 - `/src/kailash/nodes/data/async_sql.py` - AsyncSQLDatabaseNode
-- `/src/kailash/nodes/data/async_connection.py` - AsyncConnectionManager  
+- `/src/kailash/nodes/data/async_connection.py` - AsyncConnectionManager
 - `/src/kailash/nodes/data/async_vector.py` - AsyncPostgreSQLVectorNode
 - `/src/kailash/access_control_abac.py` - ABAC enhancement
 
@@ -261,7 +261,7 @@ class AttributeEvaluator:
 
 This session provides excellent training data for:
 - Async node implementation patterns
-- Database integration best practices  
+- Database integration best practices
 - ABAC security model implementation
 - Real-world example creation
 - Error handling and troubleshooting

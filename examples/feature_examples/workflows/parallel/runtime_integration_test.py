@@ -22,6 +22,7 @@ Key Features Demonstrated:
 
 import time
 
+from examples.utils.data_paths import get_input_data_path, get_output_data_path
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import CSVWriterNode
@@ -30,8 +31,6 @@ from kailash.runtime.local import LocalRuntime
 from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.workflow.graph import Workflow
-
-# from examples.utils.data_paths import get_input_data_path, get_output_data_path
 
 
 def increment(data=None, **kwargs):
@@ -203,7 +202,9 @@ def create_simple_dag_workflow() -> Workflow:
     workflow = Workflow(workflow_id="dag_test", name="DAG Test Workflow")
 
     # Add nodes
-    workflow.add_node("reader", CSVReaderNode(file_path="data/customers.csv"))
+    workflow.add_node(
+        "reader", CSVReaderNode(file_path=str(get_input_data_path("customers.csv")))
+    )
 
     workflow.add_node("processor", FilterNode(field="age", operator=">=", value=25))
 

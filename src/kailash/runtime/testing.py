@@ -127,6 +127,218 @@ class TestDataGenerator:
         return "\n".join(text_lines)
 
 
+class CredentialMockData:
+    """Generate mock credential data for testing authentication flows."""
+
+    @staticmethod
+    def generate_oauth2_config(provider: str = "generic") -> dict[str, Any]:
+        """Generate OAuth2 configuration for testing."""
+        configs = {
+            "generic": {
+                "token_url": "https://auth.example.com/oauth/token",
+                "client_id": "test_client_id_123",
+                "client_secret": "test_client_secret_456",
+                "scope": "read write",
+                "grant_type": "client_credentials",
+            },
+            "github": {
+                "token_url": "https://github.com/login/oauth/access_token",
+                "client_id": "test_github_client",
+                "client_secret": "test_github_secret",
+                "scope": "repo user",
+                "grant_type": "authorization_code",
+            },
+            "google": {
+                "token_url": "https://oauth2.googleapis.com/token",
+                "client_id": "test_google_client.apps.googleusercontent.com",
+                "client_secret": "test_google_secret",
+                "scope": "https://www.googleapis.com/auth/userinfo.email",
+                "grant_type": "authorization_code",
+            },
+        }
+        return configs.get(provider, configs["generic"])
+
+    @staticmethod
+    def generate_api_key_config(service: str = "generic") -> dict[str, Any]:
+        """Generate API key configuration for testing."""
+        configs = {
+            "generic": {
+                "api_key": "sk_test_4eC39HqLyjWDarjtT1zdp7dc",
+                "header_name": "X-API-Key",
+                "prefix": None,
+            },
+            "stripe": {
+                "api_key": "sk_test_4eC39HqLyjWDarjtT1zdp7dc",
+                "header_name": "Authorization",
+                "prefix": "Bearer",
+            },
+            "openai": {
+                "api_key": "sk-test-1234567890abcdef",
+                "header_name": "Authorization",
+                "prefix": "Bearer",
+            },
+        }
+        return configs.get(service, configs["generic"])
+
+    @staticmethod
+    def generate_jwt_claims(user_type: str = "user") -> dict[str, Any]:
+        """Generate JWT claims for testing."""
+        import time
+        
+        now = int(time.time())
+        claims = {
+            "user": {
+                "sub": "1234567890",
+                "name": "Test User",
+                "email": "test@example.com",
+                "iat": now,
+                "exp": now + 3600,
+                "iss": "test_issuer",
+                "aud": "test_audience",
+                "roles": ["user"],
+            },
+            "admin": {
+                "sub": "admin_123",
+                "name": "Admin User",
+                "email": "admin@example.com",
+                "iat": now,
+                "exp": now + 3600,
+                "iss": "test_issuer",
+                "aud": "test_audience",
+                "roles": ["admin", "user"],
+                "permissions": ["read", "write", "delete"],
+            },
+            "service": {
+                "sub": "service_account_456",
+                "name": "Service Account",
+                "iat": now,
+                "exp": now + 86400,  # 24 hours
+                "iss": "test_issuer",
+                "aud": "test_audience",
+                "scope": "api:read api:write",
+            },
+        }
+        return claims.get(user_type, claims["user"])
+
+
+class SecurityTestHelper:
+    """Helper class for testing security and authentication flows."""
+
+    def __init__(self):
+        """Initialize security test helper."""
+        self.credential_mock = CredentialMockData()
+
+    def create_auth_test_workflow(self, auth_type: str = "oauth2") -> Workflow:
+        """Create a workflow for testing authentication."""
+        from kailash.nodes.api.auth import APIKeyNode, BasicAuthNode, OAuth2Node
+        from kailash.nodes.api.http import HTTPRequestNode
+        from kailash.nodes.testing import CredentialTestingNode
+
+        workflow = Workflow(workflow_id=f"test_{auth_type}_auth", name=f"Test {auth_type} Auth")
+
+        if auth_type == "oauth2":
+            # Add OAuth2 testing nodes
+            workflow.add_node(
+                "credential_test",
+                CredentialTestingNode(),
+                credential_type="oauth2",
+                scenario="success",
+            )
+            workflow.add_node("oauth", OAuth2Node())
+            workflow.add_node("http", HTTPRequestNode())
+
+            # Connect nodes
+            workflow.connect(
+                "credential_test", "oauth", 
+                {"credentials": "mock_data"}
+            )
+            workflow.connect(
+                "oauth", "http",
+                {"headers": "headers"}
+            )
+
+        elif auth_type == "api_key":
+            # Add API key testing nodes
+            workflow.add_node(
+                "credential_test",
+                CredentialTestingNode(),
+                credential_type="api_key",
+                scenario="success",
+            )
+            workflow.add_node("api_key", APIKeyNode())
+            workflow.add_node("http", HTTPRequestNode())
+
+            # Connect nodes
+            workflow.connect(
+                "credential_test", "api_key",
+                {"credentials.api_key": "api_key"}
+            )
+            workflow.connect(
+                "api_key", "http",
+                {"headers": "headers"}
+            )
+
+        elif auth_type == "basic":
+            # Add Basic auth testing nodes
+            workflow.add_node(
+                "credential_test",
+                CredentialTestingNode(),
+                credential_type="basic",
+                scenario="success",
+                mock_data={"username": "test_user", "password": "test_pass"},
+            )
+            workflow.add_node("basic", BasicAuthNode())
+            workflow.add_node("http", HTTPRequestNode())
+
+            # Connect nodes
+            workflow.connect(
+                "credential_test", "basic",
+                {
+                    "credentials.username": "username",
+                    "credentials.password": "password",
+                }
+            )
+            workflow.connect(
+                "basic", "http",
+                {"headers": "headers"}
+            )
+
+        return workflow
+
+    def test_credential_scenarios(
+        self, credential_type: str, scenarios: list[str] = None
+    ) -> dict[str, Any]:
+        """Test multiple credential scenarios and return results."""
+        from kailash.nodes.testing import CredentialTestingNode
+
+        if scenarios is None:
+            scenarios = ["success", "expired", "invalid", "rate_limit"]
+
+        results = {}
+        tester = CredentialTestingNode()
+
+        for scenario in scenarios:
+            try:
+                result = tester.run(
+                    credential_type=credential_type,
+                    scenario=scenario,
+                    mock_data=getattr(self.credential_mock, f"generate_{credential_type}_config")()
+                    if hasattr(self.credential_mock, f"generate_{credential_type}_config")
+                    else {},
+                )
+                results[scenario] = {
+                    "success": result.get("valid", False),
+                    "result": result,
+                }
+            except Exception as e:
+                results[scenario] = {
+                    "success": False,
+                    "error": str(e),
+                }
+
+        return results
+
+
 class WorkflowTestHelper:
     """Helper class for testing workflows."""
 
@@ -137,7 +349,7 @@ class WorkflowTestHelper:
 
     def create_test_workflow(self, name: str = "test_workflow") -> Workflow:
         """Create a simple test workflow."""
-        workflow = Workflow(name=name)
+        workflow = Workflow(workflow_id=name, name=f"Test Workflow: {name}")
 
         # Add some mock nodes
         workflow.add_node("input", MockNode(), return_value={"data": [1, 2, 3]})

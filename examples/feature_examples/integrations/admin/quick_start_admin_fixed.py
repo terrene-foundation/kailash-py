@@ -6,25 +6,29 @@ This example demonstrates how to quickly get started with the Kailash Admin Fram
 showing all five core admin nodes working together with the Docker database setup.
 """
 
-from datetime import datetime, UTC
-from kailash.workflow import Workflow
+from datetime import UTC, datetime
+
 from kailash.nodes.admin import (
-    UserManagementNode, RoleManagementNode, PermissionCheckNode,
-    AuditLogNode, SecurityEventNode
+    AuditLogNode,
+    PermissionCheckNode,
+    RoleManagementNode,
+    SecurityEventNode,
+    UserManagementNode,
 )
 from kailash.nodes.data import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
 
 
 def setup_database_schema():
     """Ensure database schema is set up correctly."""
     print("Setting up database schema...")
-    
+
     runtime = LocalRuntime()
-    
+
     # Create a workflow to set schema
     setup_workflow = Workflow(workflow_id="db_setup", name="Database Setup")
-    
+
     # First, set the search path
     set_schema = AsyncSQLDatabaseNode(
         name="set_schema",
@@ -35,9 +39,9 @@ def setup_database_schema():
         user="admin",
         password="admin",
         query="SET search_path TO kailash, public;",
-        fetch_mode="none"
+        fetch_mode="none",
     )
-    
+
     setup_workflow.add_node("set_schema", set_schema)
     result, _ = runtime.execute(setup_workflow)
     print("✅ Database schema configured")
@@ -45,18 +49,18 @@ def setup_database_schema():
 
 def quick_admin_demo():
     """Quick demonstration of admin framework capabilities."""
-    
+
     print("🚀 Kailash Admin Framework - Quick Start Demo")
     print("=" * 50)
-    
+
     # Setup database first
     setup_database_schema()
-    
+
     runtime = LocalRuntime()
-    
+
     # For now, let's create a simpler demo that tests each node individually
     # without relying on database state
-    
+
     # Step 1: Test UserManagementNode creation
     print("\n1️⃣ Testing UserManagementNode...")
     try:
@@ -70,13 +74,13 @@ def quick_admin_demo():
                 "port": 5433,
                 "database": "kailash_admin",
                 "user": "admin",
-                "password": "admin"
-            }
+                "password": "admin",
+            },
         )
         print("✅ UserManagementNode created successfully")
     except Exception as e:
         print(f"❌ UserManagementNode error: {e}")
-    
+
     # Step 2: Test RoleManagementNode
     print("\n2️⃣ Testing RoleManagementNode...")
     try:
@@ -90,13 +94,13 @@ def quick_admin_demo():
                 "port": 5433,
                 "database": "kailash_admin",
                 "user": "admin",
-                "password": "admin"
-            }
+                "password": "admin",
+            },
         )
         print("✅ RoleManagementNode created successfully")
     except Exception as e:
         print(f"❌ RoleManagementNode error: {e}")
-    
+
     # Step 3: Test PermissionCheckNode
     print("\n3️⃣ Testing PermissionCheckNode...")
     try:
@@ -113,13 +117,13 @@ def quick_admin_demo():
                 "port": 5433,
                 "database": "kailash_admin",
                 "user": "admin",
-                "password": "admin"
-            }
+                "password": "admin",
+            },
         )
         print("✅ PermissionCheckNode created successfully")
     except Exception as e:
         print(f"❌ PermissionCheckNode error: {e}")
-    
+
     # Step 4: Test AuditLogNode
     print("\n4️⃣ Testing AuditLogNode...")
     try:
@@ -130,7 +134,7 @@ def quick_admin_demo():
                 "event_type": "test_event",
                 "severity": "low",
                 "action": "demo_test",
-                "description": "Testing audit log functionality"
+                "description": "Testing audit log functionality",
             },
             tenant_id="demo_company",
             database_config={
@@ -139,13 +143,13 @@ def quick_admin_demo():
                 "port": 5433,
                 "database": "kailash_admin",
                 "user": "admin",
-                "password": "admin"
-            }
+                "password": "admin",
+            },
         )
         print("✅ AuditLogNode created successfully")
     except Exception as e:
         print(f"❌ AuditLogNode error: {e}")
-    
+
     # Step 5: Test SecurityEventNode
     print("\n5️⃣ Testing SecurityEventNode...")
     try:
@@ -156,7 +160,7 @@ def quick_admin_demo():
                 "event_type": "test_security",
                 "threat_level": "low",
                 "source_ip": "127.0.0.1",
-                "description": "Testing security event functionality"
+                "description": "Testing security event functionality",
             },
             tenant_id="demo_company",
             database_config={
@@ -165,19 +169,19 @@ def quick_admin_demo():
                 "port": 5433,
                 "database": "kailash_admin",
                 "user": "admin",
-                "password": "admin"
-            }
+                "password": "admin",
+            },
         )
         print("✅ SecurityEventNode created successfully")
     except Exception as e:
         print(f"❌ SecurityEventNode error: {e}")
-    
+
     # Step 6: Test simple workflow execution
     print("\n6️⃣ Testing simple workflow execution...")
     try:
         # Create a workflow that lists users (should return empty list initially)
         list_workflow = Workflow(workflow_id="list_users_demo", name="List Users")
-        
+
         list_users = UserManagementNode(
             name="list_users",
             operation="list",
@@ -189,13 +193,13 @@ def quick_admin_demo():
                 "port": 5433,
                 "database": "kailash_admin",
                 "user": "admin",
-                "password": "admin"
-            }
+                "password": "admin",
+            },
         )
-        
+
         list_workflow.add_node("list_users", list_users)
         result, _ = runtime.execute(list_workflow)
-        
+
         if "list_users" in result:
             users = result["list_users"].get("users", [])
             print(f"✅ Workflow executed successfully - Found {len(users)} users")
@@ -204,8 +208,9 @@ def quick_admin_demo():
     except Exception as e:
         print(f"❌ Workflow execution error: {e}")
         import traceback
+
         traceback.print_exc()
-    
+
     # Summary
     print("\n" + "=" * 50)
     print("✨ QUICK START DEMO COMPLETE!")
@@ -214,7 +219,7 @@ def quick_admin_demo():
     print("1. UserManagementNode - ✓")
     print("2. RoleManagementNode - ✓")
     print("3. PermissionCheckNode - ✓")
-    print("4. AuditLogNode - ✓") 
+    print("4. AuditLogNode - ✓")
     print("5. SecurityEventNode - ✓")
     print("\n🚀 Your admin framework is ready for development!")
     print("\nNext steps:")
@@ -222,14 +227,10 @@ def quick_admin_demo():
     print("- Implement role hierarchy")
     print("- Set up audit logging")
     print("- Configure security monitoring")
-    
-    return {
-        "demo_completed": True,
-        "nodes_tested": 5,
-        "database_connected": True
-    }
+
+    return {"demo_completed": True, "nodes_tested": 5, "database_connected": True}
 
 
 if __name__ == "__main__":
     result = quick_admin_demo()
-    print(f"\n📄 Demo completed successfully!")
+    print("\n📄 Demo completed successfully!")

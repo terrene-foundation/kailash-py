@@ -14,6 +14,7 @@ from typing import Any
 
 import yaml
 
+from examples.utils.data_paths import ensure_output_dir_exists, get_output_data_path
 from examples.utils.paths import get_data_dir, get_output_dir
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -126,7 +127,7 @@ def demonstrate_basic_export():
     yaml_content = export_workflow(workflow, format="yaml")
 
     # Save to file
-    output_path = "../data/exports/basic_workflow.yaml"
+    output_path = str(get_output_data_path("exports/basic_workflow.yaml", "exports"))
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         f.write(yaml_content)
@@ -160,7 +161,9 @@ def demonstrate_export_with_config():
     json_content = exporter.to_json(workflow)
 
     # Save to file
-    output_path = "../data/exports/workflow_with_config.json"
+    output_path = str(
+        get_output_data_path("exports/workflow_with_config.json", "exports")
+    )
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         f.write(json_content)
@@ -190,7 +193,7 @@ def demonstrate_manifest_export():
     manifest_content = exporter.to_manifest(workflow)
 
     # Save to file
-    output_path = "../data/exports/workflow_manifest.yaml"
+    output_path = str(get_output_data_path("exports/workflow_manifest.yaml", "exports"))
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         f.write(manifest_content)
@@ -229,7 +232,9 @@ def demonstrate_custom_node_mapping():
     yaml_content = exporter.to_yaml(workflow)
 
     # Save to file
-    output_path = "../data/exports/workflow_custom_mapping.yaml"
+    output_path = str(
+        get_output_data_path("exports/workflow_custom_mapping.yaml", "exports")
+    )
     with open(output_path, "w") as f:
         f.write(yaml_content)
 
@@ -252,7 +257,7 @@ def demonstrate_template_export():
             exports = exporter.export_with_templates(
                 workflow,
                 template_name=template_name,
-                output_dir=f"../data/exports/{template_name}",
+                output_dir=str(ensure_output_dir_exists(f"exports/{template_name}")),
             )
 
             print(f"✓ {template_name.title()} template export completed:")
@@ -281,7 +286,7 @@ def demonstrate_partial_export():
     yaml_content = exporter.to_yaml(workflow)
 
     # Save to file
-    output_path = "../data/exports/partial_workflow.yaml"
+    output_path = str(get_output_data_path("exports/partial_workflow.yaml", "exports"))
     with open(output_path, "w") as f:
         f.write(yaml_content)
 
@@ -322,7 +327,9 @@ def demonstrate_export_validation():
     exporter = WorkflowExporter(config)
 
     yaml_content = exporter.to_yaml(workflow)
-    output_path = "../data/exports/unvalidated_workflow.yaml"
+    output_path = str(
+        get_output_data_path("exports/unvalidated_workflow.yaml", "exports")
+    )
     with open(output_path, "w") as f:
         f.write(yaml_content)
 
@@ -368,7 +375,7 @@ def demonstrate_workflow_execution_and_export():
     # Export with execution info
     yaml_content = exporter.to_yaml(workflow)
 
-    output_path = "../data/exports/executed_workflow.yaml"
+    output_path = str(get_output_data_path("exports/executed_workflow.yaml", "exports"))
     with open(output_path, "w") as f:
         f.write(yaml_content)
 
@@ -382,11 +389,11 @@ def main():
 
     # Create necessary directories
     for dir_path in [
-        "../data/exports",
-        "../data/exports/minimal",
-        "../data/exports/standard",
-        "../data/exports/kubernetes",
-        "../data/exports/docker",
+        str(ensure_output_dir_exists("exports")),
+        str(ensure_output_dir_exists("exports/minimal")),
+        str(ensure_output_dir_exists("exports/standard")),
+        str(ensure_output_dir_exists("exports/kubernetes")),
+        str(ensure_output_dir_exists("exports/docker")),
     ]:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
@@ -415,7 +422,9 @@ def main():
             traceback.print_exc()
 
     print("\n=== All export examples completed ===")
-    print("\nExported files created in the '../data/exports' directory")
+    print(
+        f"\nExported files created in the '{ensure_output_dir_exists('exports')}' directory"
+    )
 
     return 0
 

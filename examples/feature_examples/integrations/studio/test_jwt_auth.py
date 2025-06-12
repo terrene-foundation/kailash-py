@@ -487,7 +487,7 @@ def test_workflow_execution_with_auth():
             "nodes": {
                 "input": {"type": "kailash.nodes.base.InputNode", "config": {}},
                 "multiply": {
-                    "type": "kailash.nodes.transform.processors.DataTransformerNode",
+                    "type": "kailash.nodes.transform.processors.DataTransformer",
                     "config": {
                         "transform_type": "custom",
                         "custom_function": "lambda x: x * 2",

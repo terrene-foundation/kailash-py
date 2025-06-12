@@ -12,11 +12,14 @@ Design Philosophy:
 5. Transaction support
 """
 
+import base64
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Optional
+from uuid import UUID
 
 import yaml
 from sqlalchemy import create_engine, text
@@ -249,6 +252,9 @@ class SQLDatabaseNode(Node):
         # Add connection_string to kwargs for base class validation
         kwargs["connection_string"] = connection_string
 
+        # Extract access control manager before passing to parent
+        self.access_control_manager = kwargs.pop("access_control_manager", None)
+
         # Call parent constructor
         super().__init__(**kwargs)
 
@@ -357,10 +363,21 @@ class SQLDatabaseNode(Node):
         query = kwargs.get("query")
         parameters = kwargs.get("parameters", [])
         result_format = kwargs.get("result_format", "dict")
+        user_context = kwargs.get("user_context")
 
         # Validate required parameters
         if not query:
             raise NodeExecutionError("query parameter is required")
+
+        # Check access control if enabled
+        if self.access_control_manager and user_context:
+            from kailash.access_control import NodePermission
+
+            decision = self.access_control_manager.check_node_access(
+                user_context, self.metadata.name, NodePermission.EXECUTE
+            )
+            if not decision.allowed:
+                raise NodeExecutionError(f"Access denied: {decision.reason}")
 
         # Validate query safety
         self._validate_query_safety(query)
@@ -449,6 +466,20 @@ class SQLDatabaseNode(Node):
         self.logger.info(
             f"Query executed successfully in {execution_time:.3f}s, {row_count} rows affected/returned"
         )
+
+        # Apply data masking if access control is enabled
+        if self.access_control_manager and user_context and formatted_data:
+            if result_format == "dict" and isinstance(formatted_data, list):
+                masked_data = []
+                for row in formatted_data:
+                    if isinstance(row, dict):
+                        masked_row = self.access_control_manager.apply_data_masking(
+                            user_context, self.metadata.name, row
+                        )
+                        masked_data.append(masked_row)
+                    else:
+                        masked_data.append(row)
+                formatted_data = masked_data
 
         return {
             "data": formatted_data,
@@ -789,6 +820,35 @@ class SQLDatabaseNode(Node):
 
         return modified_query, param_dict
 
+    def _serialize_value(self, value: Any) -> Any:
+        """Convert database-specific types to JSON-serializable types.
+        
+        Args:
+            value: Value to serialize
+            
+        Returns:
+            JSON-serializable value
+        """
+        if value is None:
+            return None
+        elif isinstance(value, Decimal):
+            return float(value)
+        elif isinstance(value, datetime):
+            return value.isoformat()
+        elif isinstance(value, date):
+            return value.isoformat()
+        elif isinstance(value, timedelta):
+            return value.total_seconds()
+        elif isinstance(value, UUID):
+            return str(value)
+        elif isinstance(value, bytes):
+            return base64.b64encode(value).decode('utf-8')
+        elif isinstance(value, (list, tuple)):
+            return [self._serialize_value(item) for item in value]
+        elif isinstance(value, dict):
+            return {k: self._serialize_value(v) for k, v in value.items()}
+        return value
+
     def _format_results(
         self, rows: list, columns: list[str], result_format: str
     ) -> list[Any]:
@@ -805,19 +865,38 @@ class SQLDatabaseNode(Node):
         if result_format == "dict":
             # List of dictionaries with column names as keys
             # SQLAlchemy rows can be converted to dict using _asdict() or dict()
-            return [dict(row._mapping) for row in rows]
+            result = []
+            for row in rows:
+                row_dict = dict(row._mapping)
+                # Serialize values for JSON compatibility
+                serialized_dict = {k: self._serialize_value(v) for k, v in row_dict.items()}
+                result.append(serialized_dict)
+            return result
 
         elif result_format == "list":
             # List of lists (raw rows)
-            return [list(row) for row in rows]
+            result = []
+            for row in rows:
+                serialized_row = [self._serialize_value(value) for value in row]
+                result.append(serialized_row)
+            return result
 
         elif result_format == "raw":
             # Raw SQLAlchemy row objects (converted to list for JSON serialization)
-            return [list(row) for row in rows]
+            result = []
+            for row in rows:
+                serialized_row = [self._serialize_value(value) for value in row]
+                result.append(serialized_row)
+            return result
 
         else:
             # Default to dict format
             self.logger.warning(
                 f"Unknown result_format '{result_format}', defaulting to 'dict'"
             )
-            return [dict(zip(columns, row, strict=False)) for row in rows]
+            result = []
+            for row in rows:
+                row_dict = dict(zip(columns, row, strict=False))
+                serialized_dict = {k: self._serialize_value(v) for k, v in row_dict.items()}
+                result.append(serialized_dict)
+            return result

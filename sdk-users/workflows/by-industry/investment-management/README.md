@@ -7,8 +7,8 @@ This directory contains enterprise-grade workflows for investment management fir
 ## Workflow Catalog
 
 ### 1. Portfolio Analysis
-**File**: `portfolio_analysis_workflow.py`  
-**Purpose**: Comprehensive portfolio performance and risk analysis  
+**File**: `portfolio_analysis_workflow.py`
+**Purpose**: Comprehensive portfolio performance and risk analysis
 **Use Cases**:
 - Daily portfolio valuation
 - Risk assessment and monitoring
@@ -23,8 +23,8 @@ This directory contains enterprise-grade workflows for investment management fir
 - Automated report generation
 
 ### 2. Deal Sourcing & Pipeline
-**File**: `deal_sourcing_workflow.py`  
-**Purpose**: AI-enhanced deal flow management  
+**File**: `deal_sourcing_workflow.py`
+**Purpose**: AI-enhanced deal flow management
 **Use Cases**:
 - Deal screening and scoring
 - Due diligence automation
@@ -39,8 +39,8 @@ This directory contains enterprise-grade workflows for investment management fir
 - Workflow orchestration
 
 ### 3. Risk Management
-**File**: `risk_management_workflow.py`  
-**Purpose**: Enterprise risk monitoring and mitigation  
+**File**: `risk_management_workflow.py`
+**Purpose**: Enterprise risk monitoring and mitigation
 **Use Cases**:
 - Market risk analysis
 - Credit risk assessment
@@ -55,8 +55,8 @@ This directory contains enterprise-grade workflows for investment management fir
 - Alert generation
 
 ### 4. Investment Research
-**File**: `investment_research_workflow.py`  
-**Purpose**: AI-powered research and analysis  
+**File**: `investment_research_workflow.py`
+**Purpose**: AI-powered research and analysis
 **Use Cases**:
 - Company analysis
 - Market research
@@ -71,8 +71,8 @@ This directory contains enterprise-grade workflows for investment management fir
 - Visualization
 
 ### 5. Compliance & Reporting
-**File**: `compliance_reporting_workflow.py`  
-**Purpose**: Automated regulatory compliance  
+**File**: `compliance_reporting_workflow.py`
+**Purpose**: Automated regulatory compliance
 **Use Cases**:
 - Regulatory reporting
 - Audit trail generation

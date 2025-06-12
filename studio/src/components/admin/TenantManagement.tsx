@@ -83,7 +83,7 @@ export const TenantManagement: React.FC = () => {
   // Delete tenant
   const handleDeleteTenant = async (tenantId: string) => {
     if (!confirm('Are you sure you want to delete this tenant? This action cannot be undone.')) return;
-    
+
     try {
       await executeWorkflow('admin_delete_tenant', {
         tenant_id: tenantId
@@ -133,7 +133,7 @@ export const TenantManagement: React.FC = () => {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        
+
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -267,7 +267,7 @@ export const TenantManagement: React.FC = () => {
             setShowCreateModal(false);
             setSelectedTenant(null);
           }}
-          onSubmit={selectedTenant ? 
+          onSubmit={selectedTenant ?
             (data) => handleUpdateTenant(selectedTenant.tenant_id, data) :
             handleCreateTenant
           }
@@ -321,7 +321,7 @@ const TenantFormModal: React.FC<TenantFormModalProps> = ({ tenant, onClose, onSu
         <h2 className="text-xl font-bold mb-4">
           {tenant ? 'Edit Tenant' : 'Create New Tenant'}
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
