@@ -34,14 +34,28 @@
    - ✅ `from kailash.mcp import MCPServer` → Gets caching, metrics, config management
    - ✅ `@server.tool(cache_key="name", cache_ttl=600)` → Automatic caching with TTL
    - ✅ `@server.tool(format_response="markdown")` → LLM-friendly formatting
+10. **Async Database Patterns**: High-performance database operations (Session 065)
+   - ✅ `AsyncSQLDatabaseNode` → Connection pooling, non-blocking operations
+   - ✅ `get_parameters()` returns dict → Not list, maps param.name to NodeParameter
+   - ✅ `run()` method required → Sync compatibility with async_run() delegation
+   - ✅ Convert DB types → Decimal→float, datetime→isostring for JSON serialization
+   - ✅ Separate SQL commands → asyncpg doesn't support multiple commands
+11. **ABAC Security**: Attribute-based access control with 16 operators (Session 065)
+   - ✅ `EnhancedAccessControlManager` → Complex attribute conditions and data masking
+   - ✅ Security operators → security_level_meets, security_level_below, contains_any
+   - ✅ Hierarchical matching → Department trees, regional access control
+   - ✅ Data masking → Partial, hash, range masking based on user attributes
 
-## 🔧 Core Node Quick Reference (80+ total)
+## 🔧 Core Node Quick Reference (85+ total)
 **AI**: LLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, MCPAgentNode, SelfOrganizingAgentNode
-**Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, SharePointGraphReader, DirectoryReaderNode
+**Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, SharePointGraphReader, DirectoryReaderNode
+**Vector**: AsyncPostgreSQLVectorNode (pgvector similarity search)
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Transform**: FilterNode, Map, DataTransformer, HierarchicalChunkerNode
+**Admin**: UserManagementNode, RoleManagementNode, PermissionCheckNode, AuditLogNode, SecurityEventNode
 **Code**: PythonCodeNode (use only when no specialized node exists)
+**Security**: EnhancedAccessControlManager (ABAC with 16 operators)
 **Full catalog**: sdk-users/nodes/comprehensive-node-catalog.md
 
 ## 📂 Directory Navigation Convention

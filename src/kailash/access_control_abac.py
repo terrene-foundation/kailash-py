@@ -36,6 +36,7 @@ class AttributeOperator(Enum):
     NOT_EQUALS = "not_equals"
     CONTAINS = "contains"
     NOT_CONTAINS = "not_contains"
+    CONTAINS_ANY = "contains_any"
     IN = "in"
     NOT_IN = "not_in"
     GREATER_THAN = "greater_than"
@@ -44,6 +45,10 @@ class AttributeOperator(Enum):
     LESS_OR_EQUAL = "less_or_equal"
     MATCHES = "matches"  # Regex match
     HIERARCHICAL_MATCH = "hierarchical_match"  # For department trees
+    SECURITY_LEVEL_MEETS = "security_level_meets"  # Security clearance levels
+    SECURITY_LEVEL_BELOW = "security_level_below"  # Security clearance levels
+    MATCHES_DATA_REGION = "matches_data_region"  # Region matching
+    BETWEEN = "between"  # For ranges
 
 
 class LogicalOperator(Enum):
@@ -100,6 +105,7 @@ class AttributeEvaluator:
             AttributeOperator.NOT_EQUALS: self._eval_not_equals,
             AttributeOperator.CONTAINS: self._eval_contains,
             AttributeOperator.NOT_CONTAINS: self._eval_not_contains,
+            AttributeOperator.CONTAINS_ANY: self._eval_contains_any,
             AttributeOperator.IN: self._eval_in,
             AttributeOperator.NOT_IN: self._eval_not_in,
             AttributeOperator.GREATER_THAN: self._eval_greater_than,
@@ -108,6 +114,10 @@ class AttributeEvaluator:
             AttributeOperator.LESS_OR_EQUAL: self._eval_less_or_equal,
             AttributeOperator.MATCHES: self._eval_matches,
             AttributeOperator.HIERARCHICAL_MATCH: self._eval_hierarchical_match,
+            AttributeOperator.SECURITY_LEVEL_MEETS: self._eval_security_level_meets,
+            AttributeOperator.SECURITY_LEVEL_BELOW: self._eval_security_level_below,
+            AttributeOperator.MATCHES_DATA_REGION: self._eval_matches_data_region,
+            AttributeOperator.BETWEEN: self._eval_between,
         }
     
     def evaluate_expression(
@@ -276,6 +286,103 @@ class AttributeEvaluator:
             expected = expected.lower()
         
         return value == expected or value.startswith(expected + ".")
+    
+    def _eval_contains_any(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
+        """Evaluate if value contains any of the expected items."""
+        if not isinstance(expected, (list, set, tuple)):
+            return False
+        
+        if isinstance(value, (list, set, tuple)):
+            # Check if any expected item is in value
+            for item in expected:
+                if item in value:
+                    return True
+            return False
+        elif isinstance(value, str):
+            # Check if value contains any of the expected strings
+            if not case_sensitive:
+                value = value.lower()
+                expected = [e.lower() if isinstance(e, str) else e for e in expected]
+            
+            for item in expected:
+                if isinstance(item, str) and item in value:
+                    return True
+            return False
+        
+        return False
+    
+    def _eval_security_level_meets(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
+        """Evaluate if security clearance meets minimum level."""
+        # Define clearance hierarchy
+        clearance_levels = {
+            "public": 0,
+            "internal": 1,
+            "confidential": 2,
+            "secret": 3,
+            "top_secret": 4
+        }
+        
+        if not isinstance(value, str) or not isinstance(expected, str):
+            return False
+        
+        value_level = clearance_levels.get(value.lower(), 0)
+        required_level = clearance_levels.get(expected.lower(), 0)
+        
+        return value_level >= required_level
+    
+    def _eval_security_level_below(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
+        """Evaluate if security clearance is below a certain level."""
+        # Define clearance hierarchy
+        clearance_levels = {
+            "public": 0,
+            "internal": 1,
+            "confidential": 2,
+            "secret": 3,
+            "top_secret": 4
+        }
+        
+        if not isinstance(value, str) or not isinstance(expected, str):
+            return False
+        
+        value_level = clearance_levels.get(value.lower(), 0)
+        threshold_level = clearance_levels.get(expected.lower(), 0)
+        
+        return value_level < threshold_level
+    
+    def _eval_matches_data_region(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
+        """Evaluate if user region matches data region requirements."""
+        # Simple region matching - can be extended for complex regional rules
+        if not isinstance(value, str) or not isinstance(expected, str):
+            return False
+        
+        # Special handling for global access
+        if value.lower() == "global":
+            return True
+        
+        # Check exact match or region family (e.g., us_east matches us_*)
+        if not case_sensitive:
+            value = value.lower()
+            expected = expected.lower()
+        
+        if value == expected:
+            return True
+        
+        # Check region family (e.g., us_east and us_west both match "us")
+        value_family = value.split("_")[0] if "_" in value else value
+        expected_family = expected.split("_")[0] if "_" in expected else expected
+        
+        return value_family == expected_family
+    
+    def _eval_between(self, value: Any, expected: Any, case_sensitive: bool) -> bool:
+        """Evaluate if value is between two bounds (inclusive)."""
+        if not isinstance(expected, (list, tuple)) or len(expected) != 2:
+            return False
+        
+        try:
+            lower_bound, upper_bound = expected
+            return lower_bound <= value <= upper_bound
+        except (TypeError, ValueError):
+            return False
 
 
 class DataMasker:
@@ -519,6 +626,155 @@ class EnhancedConditionEvaluator(ConditionEvaluator):
         return current_day in allowed_days
 
 
+class EnhancedAccessControlManager:
+    """Enhanced Access Control Manager with ABAC capabilities."""
+    
+    def __init__(self):
+        """Initialize with enhanced evaluators."""
+        self.condition_evaluator = EnhancedConditionEvaluator()
+        self.attribute_evaluator = AttributeEvaluator()
+        self.data_masker = DataMasker(self.attribute_evaluator)
+        self.rules: List[PermissionRule] = []
+    
+    def add_rule(self, rule: PermissionRule):
+        """Add a permission rule."""
+        self.rules.append(rule)
+    
+    def check_node_access(
+        self,
+        user: UserContext,
+        resource_id: str,
+        permission: NodePermission,
+        context: Optional[Dict[str, Any]] = None
+    ) -> AccessDecision:
+        """Check if user has access to a node resource."""
+        if context is None:
+            context = self._build_context(user)
+        
+        # Check all applicable rules
+        applicable_rules = [
+            rule for rule in self.rules
+            if (rule.resource_type == "node" or rule.resource_type == "database_query") 
+            and rule.resource_id == resource_id
+            and rule.permission == permission
+        ]
+        
+        if not applicable_rules:
+            return AccessDecision(
+                allowed=False,
+                reason="No applicable rules found",
+                applied_rules=[]
+            )
+        
+        # Evaluate rules
+        for rule in applicable_rules:
+            if rule.conditions:
+                try:
+                    result = self.condition_evaluator.evaluate(rule.conditions["type"], rule.conditions.get("value", {}), context)
+                    if result and rule.effect == PermissionEffect.ALLOW:
+                        return AccessDecision(
+                            allowed=True,
+                            reason=f"Rule {rule.id} granted access",
+                            applied_rules=[rule.id]
+                        )
+                    elif result and rule.effect == PermissionEffect.DENY:
+                        return AccessDecision(
+                            allowed=False,
+                            reason=f"Rule {rule.id} denied access",
+                            applied_rules=[rule.id]
+                        )
+                except Exception as e:
+                    # Rule evaluation failed - deny access
+                    return AccessDecision(
+                        allowed=False,
+                        reason=f"Rule evaluation failed: {e}",
+                        applied_rules=[rule.id]
+                    )
+        
+        # Default deny
+        return AccessDecision(
+            allowed=False,
+            reason="No matching allow rules",
+            applied_rules=[rule.id for rule in applicable_rules]
+        )
+    
+    def mask_data(
+        self,
+        data: Dict[str, Any],
+        masking_rules: Dict[str, Dict[str, Any]],
+        user: UserContext
+    ) -> Dict[str, Any]:
+        """Apply data masking based on user attributes."""
+        context = self._build_context(user)
+        masked_data = data.copy()
+        
+        for field_name, mask_config in masking_rules.items():
+            if field_name in masked_data:
+                # Check if masking condition applies
+                condition = mask_config.get("condition", {})
+                attr_condition = AttributeCondition(
+                    attribute_path=condition["attribute_path"],
+                    operator=AttributeOperator(condition["operator"]),
+                    value=condition["value"]
+                )
+                if self.attribute_evaluator._evaluate_condition(attr_condition, context):
+                    # Apply masking
+                    original_value = masked_data[field_name]
+                    mask_type = mask_config.get("mask_type", "redact")
+                    
+                    if mask_type == "partial":
+                        visible_chars = mask_config.get("visible_chars", 4)
+                        mask_char = mask_config.get("mask_char", "*")
+                        if isinstance(original_value, str) and len(original_value) > visible_chars:
+                            masked_data[field_name] = (
+                                original_value[:2] + 
+                                mask_char * (len(original_value) - 4) + 
+                                original_value[-2:]
+                            )
+                    elif mask_type == "range":
+                        ranges = mask_config.get("ranges", [])
+                        if isinstance(original_value, (int, float)):
+                            if original_value < 1000000:
+                                masked_data[field_name] = ranges[0] if ranges else "< $1M"
+                            elif original_value < 10000000:
+                                masked_data[field_name] = ranges[1] if len(ranges) > 1 else "$1M-$10M"
+                            elif original_value < 50000000:
+                                masked_data[field_name] = ranges[2] if len(ranges) > 2 else "$10M-$50M"
+                            else:
+                                masked_data[field_name] = ranges[3] if len(ranges) > 3 else "> $50M"
+                    elif mask_type == "hash":
+                        import hashlib
+                        value_str = str(original_value).encode('utf-8')
+                        masked_data[field_name] = hashlib.sha256(value_str).hexdigest()[:16]
+                    else:  # redact
+                        masked_data[field_name] = "[REDACTED]"
+        
+        return masked_data
+    
+    def _build_context(self, user: UserContext) -> Dict[str, Any]:
+        """Build evaluation context from user and environment."""
+        from datetime import datetime
+        
+        now = datetime.now()
+        return {
+            "user": {
+                "user_id": user.user_id,
+                "tenant_id": user.tenant_id,
+                "email": user.email,
+                "roles": user.roles,
+                "attributes": user.attributes
+            },
+            "context": {
+                "time": {
+                    "hour": now.hour,
+                    "minute": now.minute,
+                    "weekday": now.weekday() + 1,  # 1-7 for Monday-Sunday
+                    "timestamp": now.isoformat()
+                }
+            }
+        }
+
+
 # Export enhanced components
 __all__ = [
     "AttributeOperator",
@@ -529,4 +785,5 @@ __all__ = [
     "AttributeEvaluator",
     "DataMasker",
     "EnhancedConditionEvaluator",
+    "EnhancedAccessControlManager",
 ]

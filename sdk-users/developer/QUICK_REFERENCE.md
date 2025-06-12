@@ -27,7 +27,9 @@
 - **[04-pythoncode-node.md](04-pythoncode-node.md)** - ⚠️ Input exclusion, serialization
 - **[05-directory-reader.md](05-directory-reader.md)** - File discovery patterns
 - **[06-document-processing.md](06-document-processing.md)** - Multi-file workflows
+- **[06-enhanced-mcp-server.md](06-enhanced-mcp-server.md)** - Production MCP with caching & metrics
 - **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and fixes
+- **[08-async-database-patterns.md](08-async-database-patterns.md)** - ⚠️ NEW: Async DB & ABAC
 - **[examples/](examples/)** - Working code examples
 
 ## ⚡ Quick Fix Templates

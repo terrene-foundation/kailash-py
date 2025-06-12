@@ -112,86 +112,88 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
     """
     
     def __init__(self, **config):
+        self._connection_manager = None
         super().__init__(**config)
         self._connection_manager = get_connection_manager()
     
-    def define_parameters(self) -> list[NodeParameter]:
-        return [
+    def get_parameters(self) -> dict[str, NodeParameter]:
+        """Define the parameters this node accepts."""
+        params = [
             # Connection parameters
             NodeParameter(
                 name="connection_string",
-                type="str",
+                type=str,
                 required=False,
                 description="PostgreSQL connection string"
             ),
             NodeParameter(
                 name="host",
-                type="str",
+                type=str,
                 required=False,
                 description="Database host"
             ),
             NodeParameter(
                 name="port",
-                type="int",
+                type=int,
                 required=False,
                 default=5432,
                 description="Database port"
             ),
             NodeParameter(
                 name="database",
-                type="str",
+                type=str,
                 required=False,
                 description="Database name"
             ),
             NodeParameter(
                 name="user",
-                type="str",
+                type=str,
                 required=False,
                 description="Database user"
             ),
             NodeParameter(
                 name="password",
-                type="str",
+                type=str,
                 required=False,
                 description="Database password"
             ),
             # Table configuration
             NodeParameter(
                 name="table_name",
-                type="str",
+                type=str,
                 required=True,
                 description="Table name for vector operations"
             ),
             NodeParameter(
                 name="vector_column",
-                type="str",
+                type=str,
                 required=False,
                 default="embedding",
                 description="Column name for vectors"
             ),
             NodeParameter(
                 name="dimension",
-                type="int",
+                type=int,
                 required=False,
                 description="Vector dimension (required for table creation)"
             ),
             # Operation parameters
             NodeParameter(
                 name="operation",
-                type="str",
+                type=str,
                 required=True,
                 description="Operation: search, insert, create_table, create_index"
             ),
             NodeParameter(
                 name="distance_metric",
-                type="str",
+                type=str,
                 required=False,
                 default="l2",
                 description="Distance metric: l2, cosine, ip"
             ),
             NodeParameter(
                 name="index_type",
-                type="str",
+                type=str,
                 required=False,
                 default="hnsw",
                 description="Index type: hnsw, ivfflat, none"
@@ -199,66 +201,66 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
             # Search parameters
             NodeParameter(
                 name="vector",
-                type="list",
+                type=list,
                 required=False,
                 description="Query vector for search or single insert"
             ),
             NodeParameter(
                 name="limit",
-                type="int",
+                type=int,
                 required=False,
                 default=10,
                 description="Number of results to return"
             ),
             NodeParameter(
                 name="metadata_filter",
-                type="str",
+                type=str,
                 required=False,
                 description="SQL WHERE clause for metadata filtering"
             ),
             NodeParameter(
                 name="ef_search",
-                type="int",
+                type=int,
                 required=False,
                 description="HNSW ef parameter for search"
             ),
             NodeParameter(
                 name="probes",
-                type="int",
+                type=int,
                 required=False,
                 description="IVFFlat probes parameter"
             ),
             # Insert parameters
             NodeParameter(
                 name="vectors",
-                type="list",
+                type=list,
                 required=False,
                 description="Batch of vectors for bulk insert"
             ),
             NodeParameter(
                 name="metadata",
-                type="Any",
+                type=Any,
                 required=False,
                 description="Metadata for insert (dict or list of dicts)"
             ),
             # Index parameters
             NodeParameter(
                 name="m",
-                type="int",
+                type=int,
                 required=False,
                 default=16,
                 description="HNSW M parameter"
             ),
             NodeParameter(
                 name="ef_construction",
-                type="int",
+                type=int,
                 required=False,
                 default=64,
                 description="HNSW ef_construction parameter"
             ),
             NodeParameter(
                 name="lists",
-                type="int",
+                type=int,
                 required=False,
                 default=100,
                 description="IVFFlat lists parameter"
@@ -266,19 +268,22 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
             # Pool configuration
             NodeParameter(
                 name="pool_size",
-                type="int",
+                type=int,
                 required=False,
                 default=10,
                 description="Connection pool size"
             ),
             NodeParameter(
                 name="tenant_id",
-                type="str",
+                type=str,
                 required=False,
                 default="default",
                 description="Tenant ID for connection isolation"
             )
         ]
+        
+        # Convert list to dict as required by base class
+        return {param.name: param for param in params}
     
     def validate_config(self):
         """Validate node configuration."""
@@ -592,6 +597,11 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
                     
         except Exception as e:
             raise NodeExecutionError(f"Vector operation failed: {str(e)}")
+    
+    def run(self, **inputs) -> dict[str, Any]:
+        """Synchronous run method - delegates to async_run."""
+        import asyncio
+        return asyncio.run(self.async_run(**inputs))
 
 
 # Import logger at module level to avoid circular imports
