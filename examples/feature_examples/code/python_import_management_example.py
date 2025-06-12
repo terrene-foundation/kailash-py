@@ -5,9 +5,12 @@ and helpful suggestions when working with PythonCodeNode.
 """
 
 import json
-from kailash import setup_logging
+import logging
 from kailash.nodes.code import PythonCodeNode
 from kailash.workflow import Workflow
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
 
 def demonstrate_module_checking():
@@ -350,7 +353,10 @@ def create_workflow_with_validation():
     """Create a workflow that validates code before execution."""
     print("\n=== Workflow with Code Validation ===")
     
-    workflow = Workflow(name="validated_python_workflow")
+    workflow = Workflow(
+        workflow_id="validated_python_workflow",
+        name="validated_python_workflow"
+    )
     
     # Add a PythonCodeNode with validation
     code = """
@@ -387,8 +393,6 @@ result = {
 
 def main():
     """Run all demonstrations."""
-    setup_logging()
-    
     print("PythonCodeNode Import Management Demonstration")
     print("=" * 50)
     
