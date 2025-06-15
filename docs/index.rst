@@ -50,7 +50,6 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
    :maxdepth: 2
    :caption: User Guide
 
-   guides/cyclic_workflows
    best_practices
    troubleshooting
    performance
