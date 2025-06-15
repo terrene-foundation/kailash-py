@@ -198,10 +198,11 @@ jobs:
             PY311=$(pyenv versions --bare | grep "^3\.11\." | head -1)
             echo "Using pyenv Python $PY311"
             PYENV_VERSION=$PY311 uv venv .venv-3.11 --python python
-            uv sync --python .venv-3.11/bin/python
+            # Activate and sync dependencies in the correct venv
+            source .venv-3.11/bin/activate && uv sync
           elif command -v python3.11 &> /dev/null; then
             uv venv .venv-3.11 --python python3.11
-            uv sync --python .venv-3.11/bin/python
+            source .venv-3.11/bin/activate && uv sync
           else
             echo "⚠️  Python 3.11 not found, skipping"
           fi
@@ -212,15 +213,16 @@ jobs:
             PY312=$(pyenv versions --bare | grep "^3\.12\." | head -1)
             echo "Using pyenv Python $PY312"
             PYENV_VERSION=$PY312 uv venv .venv-3.12 --python python
-            uv sync --python .venv-3.12/bin/python
+            # Activate and sync dependencies in the correct venv
+            source .venv-3.12/bin/activate && uv sync
           elif command -v python3.12 &> /dev/null; then
             uv venv .venv-3.12 --python python3.12
-            uv sync --python .venv-3.12/bin/python
+            source .venv-3.12/bin/activate && uv sync
           else
             # Fallback to system python3
             echo "Using system Python for 3.12"
             uv venv .venv-3.12 --python python3
-            uv sync --python .venv-3.12/bin/python
+            source .venv-3.12/bin/activate && uv sync
           fi
 
       - name: Run all checks in parallel
