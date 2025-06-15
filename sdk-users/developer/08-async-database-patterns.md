@@ -47,7 +47,7 @@ db_node = AsyncSQLDatabaseNode(
 )
 
 # Execute with parameters
-result = await db_node.async_run(params=["Conservative"])
+result = await db_node.execute_async(params=["Conservative"])
 portfolios = result["result"]["data"]
 ```
 
@@ -69,7 +69,7 @@ search_node = AsyncPostgreSQLVectorNode(
 )
 
 # Execute search
-result = await search_node.async_run()
+result = await search_node.execute_async()
 matches = result["result"]["matches"]
 for match in matches:
     print(f"Distance: {match['distance']:.3f}")
@@ -282,7 +282,7 @@ class MyAsyncNode(AsyncNode):
 
     def run(self, **inputs) -> dict[str, Any]:
         import asyncio
-        return asyncio.run(self.async_run(**inputs))
+        return asyncio.run(self.execute_async(**inputs))
 ```
 
 ### 2. Database Type Conversion
@@ -318,7 +318,7 @@ DROP TABLE IF EXISTS test;
 CREATE TABLE test (id INT);
 INSERT INTO test VALUES (1);
 """
-await node.async_run(query=query)  # PostgresSyntaxError
+await node.execute_async(query=query)  # PostgresSyntaxError
 
 # ✅ Correct - separate command execution
 commands = [
@@ -329,7 +329,7 @@ commands = [
 
 for cmd in commands:
     setup_node = AsyncSQLDatabaseNode(name="setup", query=cmd, **db_config)
-    await setup_node.async_run()
+    await setup_node.execute_async()
 ```
 
 ## 🔧 Connection Pool Configuration

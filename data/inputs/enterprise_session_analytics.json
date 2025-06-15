@@ -1,0 +1,65 @@
+{
+  "session_id": "e6657905-61d6-4270-9f69-4534440206b4",
+  "processing_timestamp": "2025-06-15T13:15:53.761457",
+  "processing_time_seconds": 0.0,
+  "actions_processed": 8,
+  "state_updates": {
+    "workflow_steps_added": 0,
+    "tasks_added": 0,
+    "data_cache_entries": 0,
+    "collaboration_updates": 0,
+    "metrics_updated": true
+  },
+  "session_insights": {
+    "productivity_score": 79.0,
+    "efficiency_rating": "good",
+    "user_engagement": "medium",
+    "session_velocity": 4.44,
+    "error_rate": 25.0,
+    "data_intensity": 186.60999999999999,
+    "business_impact_distribution": {
+      "high": 2,
+      "medium": 4,
+      "low": 2
+    }
+  },
+  "security_assessment": {
+    "overall_security_score": 80,
+    "risk_level": "medium",
+    "security_events": [
+      {
+        "type": "high_data_volume",
+        "severity": "medium",
+        "description": "High data volume processed: 186.6 MB"
+      }
+    ],
+    "compliance_status": "compliant",
+    "recommendations": [
+      "Increase monitoring frequency",
+      "Review user access patterns"
+    ]
+  },
+  "business_recommendations": [
+    {
+      "type": "error_reduction",
+      "priority": "medium",
+      "title": "Reduce Error Rate",
+      "description": "Error rate (25.0%) above acceptable threshold",
+      "actions": [
+        "Improve input validation",
+        "Add helpful error messages",
+        "Provide process guidance"
+      ],
+      "expected_impact": "50% reduction in errors"
+    }
+  ],
+  "next_suggested_actions": [
+    "Continue to next workflow step",
+    "Review progress and metrics"
+  ],
+  "session_health": {
+    "health_score": 100,
+    "status": "excellent",
+    "last_assessed": "2025-06-15T13:15:53.761460"
+  }
+}

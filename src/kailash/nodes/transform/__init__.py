@@ -1,12 +1,17 @@
 """Transform processing nodes for the Kailash SDK."""
 
-from kailash.nodes.transform.chunkers import HierarchicalChunkerNode
+from kailash.nodes.transform.chunkers import (
+    HierarchicalChunkerNode,
+    SemanticChunkerNode,
+    StatisticalChunkerNode,
+)
 from kailash.nodes.transform.formatters import (
     ChunkTextExtractorNode,
     ContextFormatterNode,
     QueryTextWrapperNode,
 )
 from kailash.nodes.transform.processors import (
+    ContextualCompressorNode,
     DataTransformer,
     Filter,
     FilterNode,
@@ -15,12 +20,15 @@ from kailash.nodes.transform.processors import (
 )
 
 __all__ = [
+    "ContextualCompressorNode",
+    "DataTransformer",
     "Filter",
     "FilterNode",
     "Map",
     "Sort",
-    "DataTransformer",
     "HierarchicalChunkerNode",
+    "SemanticChunkerNode",
+    "StatisticalChunkerNode",
     "ChunkTextExtractorNode",
     "QueryTextWrapperNode",
     "ContextFormatterNode",

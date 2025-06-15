@@ -1,0 +1,78 @@
+{
+  "routing_distribution": {
+    "critical_escalation": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "executive_review": {
+      "count": 5,
+      "percentage": 12.5
+    },
+    "specialist_assignment": {
+      "count": 23,
+      "percentage": 57.5
+    },
+    "standard_processing": {
+      "count": 3,
+      "percentage": 7.5
+    },
+    "automated_resolution": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "compliance_review": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "approval_workflow": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "expert_consultation": {
+      "count": 9,
+      "percentage": 22.5
+    }
+  },
+  "confidence_metrics": {
+    "average_confidence": 0.688,
+    "high_confidence_count": 9,
+    "low_confidence_count": 2
+  },
+  "sla_analysis": {
+    "average_sla_hours": 10.5,
+    "urgent_requests": 5,
+    "standard_requests": 35,
+    "long_term_requests": 0
+  },
+  "resource_allocation": {
+    "executive_review": {
+      "request_count": 5,
+      "total_estimated_hours": 197.7,
+      "average_complexity": 8.2,
+      "resource_intensity": "high"
+    },
+    "specialist_assignment": {
+      "request_count": 23,
+      "total_estimated_hours": 1747.3,
+      "average_complexity": 8.5,
+      "resource_intensity": "high"
+    },
+    "standard_processing": {
+      "request_count": 3,
+      "total_estimated_hours": 362.3,
+      "average_complexity": 7.49,
+      "resource_intensity": "high"
+    },
+    "expert_consultation": {
+      "request_count": 9,
+      "total_estimated_hours": 1135.5,
+      "average_complexity": 9.56,
+      "resource_intensity": "high"
+    }
+  },
+  "quality_indicators": {
+    "automated_rate": 0.0,
+    "expert_required_rate": 80.0,
+    "escalation_rate": 0.0
+  }
+}

@@ -398,7 +398,7 @@ class ParallelRuntime:
                     async def execute_with_metrics():
                         with collector.collect(node_id=node_id) as context:
                             result = await loop.run_in_executor(
-                                None, lambda: node_instance.run(**inputs)
+                                None, lambda: node_instance.execute(**inputs)
                             )
                             return result, context.result()
 

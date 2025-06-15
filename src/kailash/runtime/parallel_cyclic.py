@@ -380,7 +380,7 @@ class ParallelCyclicRuntime:
             # Execute node with metrics collection
             collector = MetricsCollector()
             with collector.collect(node_id=node_id) as metrics_context:
-                outputs = node_instance.run(**inputs)
+                outputs = node_instance.execute(**inputs)
 
             # Get performance metrics
             performance_metrics = metrics_context.result()

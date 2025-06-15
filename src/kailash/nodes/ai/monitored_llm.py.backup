@@ -18,7 +18,7 @@ class TokenUsage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
-    
+
     def add(self, other: "TokenUsage"):
         """Add another usage record."""
         self.prompt_tokens += other.prompt_tokens
@@ -49,14 +49,14 @@ class UsageMetrics:
 class MonitoredLLMAgentNode(LLMAgentNode):
     """
     LLM Agent Node with comprehensive monitoring and cost tracking.
-    
+
     Features:
     - Token counting for all requests
     - Cost estimation based on model pricing
     - Budget alerts and hard limits
     - Usage analytics and reporting
     - Multi-provider support
-    
+
     Example:
         ```python
         # Basic usage with monitoring
@@ -67,7 +67,7 @@ class MonitoredLLMAgentNode(LLMAgentNode):
             budget_limit=10.0,  # $10 USD limit
             alert_threshold=0.8  # Alert at 80% of budget
         )
-        
+
         # With custom pricing
         llm_node = MonitoredLLMAgentNode(
             name="custom_llm",
@@ -77,12 +77,12 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                 "completion_token_cost": 0.00006
             }
         )
-        
+
         # Get usage report
         report = llm_node.get_usage_report()
         ```
     """
-    
+
     # Model pricing (USD per 1K tokens)
     MODEL_PRICING = {
         # OpenAI models
@@ -90,22 +90,22 @@ class MonitoredLLMAgentNode(LLMAgentNode):
         "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
         "gpt-3.5-turbo": {"prompt": 0.001, "completion": 0.002},
         "gpt-3.5-turbo-16k": {"prompt": 0.003, "completion": 0.004},
-        
+
         # Anthropic models
         "claude-3-opus": {"prompt": 0.015, "completion": 0.075},
         "claude-3-sonnet": {"prompt": 0.003, "completion": 0.015},
         "claude-3-haiku": {"prompt": 0.00025, "completion": 0.00125},
         "claude-2.1": {"prompt": 0.008, "completion": 0.024},
-        
+
         # Google models
         "gemini-pro": {"prompt": 0.00025, "completion": 0.0005},
         "gemini-pro-vision": {"prompt": 0.00025, "completion": 0.0005},
-        
+
         # Cohere models
         "command": {"prompt": 0.0015, "completion": 0.0015},
         "command-light": {"prompt": 0.0006, "completion": 0.0006},
     }
-    
+
     def __init__(
         self,
         budget_limit: Optional[float] = None,
@@ -119,7 +119,7 @@ class MonitoredLLMAgentNode(LLMAgentNode):
     ):
         """
         Initialize monitored LLM node.
-        
+
         Args:
             budget_limit: Maximum spend allowed (None = unlimited)
             alert_threshold: Alert when usage reaches this fraction of budget
@@ -130,7 +130,7 @@ class MonitoredLLMAgentNode(LLMAgentNode):
             enable_analytics: Enable detailed analytics tracking
         """
         super().__init__(**kwargs)
-        
+
         self.budget_limit = budget_limit
         self.alert_threshold = alert_threshold
         self.track_history = track_history
@@ -138,16 +138,16 @@ class MonitoredLLMAgentNode(LLMAgentNode):
         self.custom_pricing = custom_pricing
         self.cost_multiplier = cost_multiplier
         self.enable_analytics = enable_analytics
-        
+
         # Usage tracking
         self._total_usage = TokenUsage()
         self._total_cost = 0.0
         self._usage_history: List[UsageMetrics] = []
         self._budget_alerts_sent = False
-        
+
         # Get model from parent config
         self._model = self.config.get("model", "gpt-3.5-turbo")
-    
+
     def _get_pricing(self) -> Dict[str, float]:
         """Get pricing for current model."""
         if self.custom_pricing:
@@ -155,53 +155,53 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                 "prompt": self.custom_pricing.get("prompt_token_cost", 0.001),
                 "completion": self.custom_pricing.get("completion_token_cost", 0.002)
             }
-        
+
         # Check if model has pricing info
         model_key = None
         for key in self.MODEL_PRICING:
             if key in self._model.lower():
                 model_key = key
                 break
-        
+
         if model_key:
             return self.MODEL_PRICING[model_key]
-        
+
         # Default pricing if model not found
         return {"prompt": 0.001, "completion": 0.002}
-    
+
     def _calculate_cost(self, usage: TokenUsage) -> CostEstimate:
         """Calculate cost from token usage."""
         pricing = self._get_pricing()
-        
+
         # Cost per 1K tokens
         prompt_cost = (usage.prompt_tokens / 1000) * pricing["prompt"] * self.cost_multiplier
         completion_cost = (usage.completion_tokens / 1000) * pricing["completion"] * self.cost_multiplier
-        
+
         return CostEstimate(
             prompt_cost=prompt_cost,
             completion_cost=completion_cost,
             total_cost=prompt_cost + completion_cost,
             currency="USD"
         )
-    
+
     def _extract_token_usage(self, response: Dict[str, Any]) -> TokenUsage:
         """Extract token usage from LLM response."""
         usage = TokenUsage()
-        
+
         # OpenAI format
         if "usage" in response:
             usage_data = response["usage"]
             usage.prompt_tokens = usage_data.get("prompt_tokens", 0)
             usage.completion_tokens = usage_data.get("completion_tokens", 0)
             usage.total_tokens = usage_data.get("total_tokens", 0)
-        
+
         # Anthropic format
         elif "usage" in response.get("metadata", {}):
             usage_data = response["metadata"]["usage"]
             usage.prompt_tokens = usage_data.get("input_tokens", 0)
             usage.completion_tokens = usage_data.get("output_tokens", 0)
             usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
-        
+
         # Fallback: estimate from text length
         elif "content" in response or "text" in response:
             text = response.get("content") or response.get("text", "")
@@ -209,30 +209,30 @@ class MonitoredLLMAgentNode(LLMAgentNode):
             usage.completion_tokens = len(text) // 4
             usage.prompt_tokens = 100  # Rough estimate
             usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
-        
+
         return usage
-    
+
     def _check_budget(self) -> bool:
         """Check if within budget. Returns True if OK to proceed."""
         if not self.budget_limit:
             return True
-        
+
         if self._total_cost >= self.budget_limit:
             return False
-        
+
         # Check alert threshold
         if not self._budget_alerts_sent and self._total_cost >= self.budget_limit * self.alert_threshold:
             self._budget_alerts_sent = True
             # In production, this would send actual alerts
             print(f"⚠️ Budget Alert: {self._total_cost:.2f}/{self.budget_limit:.2f} USD used ({self._total_cost/self.budget_limit*100:.1f}%)")
-        
+
         return True
-    
+
     def _record_usage(self, usage: TokenUsage, cost: CostEstimate, execution_time: float):
         """Record usage metrics."""
         if not self.track_history:
             return
-        
+
         metrics = UsageMetrics(
             token_usage=usage,
             cost_estimate=cost,
@@ -244,13 +244,13 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                 "budget_remaining": self.budget_limit - self._total_cost if self.budget_limit else None
             }
         )
-        
+
         self._usage_history.append(metrics)
-        
+
         # Maintain history limit
         if len(self._usage_history) > self.history_limit:
             self._usage_history.pop(0)
-    
+
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute LLM request with monitoring."""
         # Check budget before execution
@@ -259,29 +259,29 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                 f"Budget limit exceeded: {self._total_cost:.2f}/{self.budget_limit:.2f} USD. "
                 "Reset budget or increase limit to continue."
             )
-        
+
         # Track execution time
         import time
         start_time = time.time()
-        
+
         try:
             # Execute parent LLM logic
             result = super().run(**inputs)
-            
+
             # Extract token usage
             usage = self._extract_token_usage(result)
-            
+
             # Calculate cost
             cost = self._calculate_cost(usage)
-            
+
             # Update totals
             self._total_usage.add(usage)
             self._total_cost += cost.total_cost
-            
+
             # Record metrics
             execution_time = time.time() - start_time
             self._record_usage(usage, cost, execution_time)
-            
+
             # Add monitoring data to result
             if self.enable_analytics:
                 result["monitoring"] = {
@@ -304,15 +304,15 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                         "remaining": round(self.budget_limit - self._total_cost, 4) if self.budget_limit else None
                     }
                 }
-            
+
             return result
-            
+
         except Exception as e:
             # Still track failed attempts
             execution_time = time.time() - start_time
             self._record_usage(TokenUsage(), CostEstimate(), execution_time)
             raise
-    
+
     def get_usage_report(self) -> Dict[str, Any]:
         """Get comprehensive usage report."""
         report = {
@@ -332,19 +332,19 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                 "percentage_used": round(self._total_cost / self.budget_limit * 100, 1) if self.budget_limit else 0
             }
         }
-        
+
         if self.enable_analytics and self._usage_history:
             # Calculate analytics
             total_time = sum(m.execution_time_ms for m in self._usage_history)
             avg_time = total_time / len(self._usage_history)
-            
+
             report["analytics"] = {
                 "average_tokens_per_request": self._total_usage.total_tokens // len(self._usage_history),
                 "average_cost_per_request": round(self._total_cost / len(self._usage_history), 4),
                 "average_execution_time_ms": round(avg_time, 2),
                 "cost_per_1k_tokens": round(self._total_cost / (self._total_usage.total_tokens / 1000), 4) if self._total_usage.total_tokens > 0 else 0
             }
-            
+
             # Recent history
             report["recent_usage"] = [
                 {
@@ -355,26 +355,26 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                 }
                 for m in self._usage_history[-10:]  # Last 10 requests
             ]
-        
+
         return report
-    
+
     def reset_budget(self):
         """Reset budget tracking."""
         self._total_cost = 0.0
         self._budget_alerts_sent = False
-    
+
     def reset_usage(self):
         """Reset all usage tracking."""
         self._total_usage = TokenUsage()
         self._total_cost = 0.0
         self._usage_history = []
         self._budget_alerts_sent = False
-    
+
     def export_usage_data(self, format: Literal["json", "csv"] = "json") -> str:
         """Export usage data for analysis."""
         if format == "json":
             return json.dumps(self.get_usage_report(), indent=2)
-        
+
         elif format == "csv":
             # Simple CSV export
             lines = ["timestamp,model,prompt_tokens,completion_tokens,total_tokens,cost,execution_time_ms"]
@@ -385,7 +385,7 @@ class MonitoredLLMAgentNode(LLMAgentNode):
                     f"{m.cost_estimate.total_cost:.6f},{m.execution_time_ms:.2f}"
                 )
             return "\n".join(lines)
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters including monitoring params."""
         params = super().get_parameters()

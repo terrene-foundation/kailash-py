@@ -15,7 +15,7 @@ from pathlib import Path
 def run_command(cmd, cwd=None):
     """Run a shell command and handle errors."""
     print(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    result = subprocess.execute(cmd, cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"Error: {result.stderr}")
         sys.exit(1)

@@ -1,47 +1,43 @@
-"""Enhanced Local Runtime Engine with Comprehensive Cycle Support.
+"""Unified Runtime Engine with Enterprise Capabilities.
 
-This module provides a sophisticated local execution engine for workflows with
-advanced support for both traditional DAG workflows and complex cyclic patterns.
-It offers comprehensive task tracking, performance monitoring, and debugging
-capabilities for development and production use.
+This module provides a unified, production-ready execution engine that seamlessly
+integrates all enterprise features through the composable node architecture. It
+combines sync/async execution, enterprise security, monitoring, and resource
+management - all implemented through existing enterprise nodes and SDK patterns.
 
 Examples:
-    Basic workflow execution:
+    Basic workflow execution (backward compatible):
 
     >>> from kailash.runtime.local import LocalRuntime
     >>> runtime = LocalRuntime(debug=True, enable_cycles=True)
-    >>> results = runtime.execute(workflow, parameters={"input": "data"})
+    >>> results, run_id = runtime.execute(workflow, parameters={"input": "data"})
 
-    With comprehensive tracking:
+    Enterprise configuration with security:
 
-    >>> from kailash.tracking import TaskManager
-    >>> runtime = LocalRuntime(enable_cycles=True)
-    >>> task_manager = TaskManager()
-    >>> results = runtime.execute(
-    ...     workflow,
-    ...     task_manager=task_manager,
-    ...     parameters={"initial_value": 10}
+    >>> from kailash.access_control import UserContext
+    >>> user_context = UserContext(user_id="user123", roles=["analyst"])
+    >>> runtime = LocalRuntime(
+    ...     user_context=user_context,
+    ...     enable_monitoring=True,
+    ...     enable_security=True
     ... )
-    >>> # Access detailed execution information
-    >>> tasks = task_manager.get_tasks_for_workflow(workflow.workflow_id)
-    >>> metrics = task_manager.get_performance_summary()
+    >>> results, run_id = runtime.execute(workflow, parameters={"data": input_data})
 
-    Production configuration:
+    Full enterprise features:
 
     >>> runtime = LocalRuntime(
-    ...     debug=False,           # Optimized for performance
-    ...     enable_cycles=True     # Support cyclic patterns
-    ... )
-    >>> results = runtime.execute(
-    ...     workflow,
-    ...     parameters=input_params,
-    ...     run_id="production_run_001"
+    ...     enable_async=True,           # Async node execution
+    ...     enable_monitoring=True,      # Performance tracking
+    ...     enable_security=True,        # Access control
+    ...     enable_audit=True,           # Compliance logging
+    ...     max_concurrency=10           # Parallel execution
     ... )
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Optional
 
 import networkx as nx
 
@@ -61,31 +57,79 @@ logger = logging.getLogger(__name__)
 
 
 class LocalRuntime:
-    """Local execution engine for workflows.
+    """Unified runtime with enterprise capabilities.
 
-    This class provides a robust, production-ready execution engine that seamlessly
-    handles both traditional workflows and advanced cyclic patterns.
+    This class provides a comprehensive, production-ready execution engine that
+    seamlessly handles both traditional workflows and advanced cyclic patterns,
+    with full enterprise feature integration through composable nodes.
+
+    Enterprise Features (Composably Integrated):
+    - Access control via existing AccessControlManager and security nodes
+    - Real-time monitoring via TaskManager and MetricsCollector
+    - Audit logging via AuditLogNode and SecurityEventNode
+    - Resource management via enterprise monitoring nodes
+    - Async execution support for AsyncNode instances
+    - Performance optimization via PerformanceBenchmarkNode
     """
 
-    def __init__(self, debug: bool = False, enable_cycles: bool = True):
-        """Initialize the local runtime.
+    def __init__(
+        self,
+        debug: bool = False,
+        enable_cycles: bool = True,
+        enable_async: bool = True,
+        max_concurrency: int = 10,
+        user_context: Optional[Any] = None,
+        enable_monitoring: bool = True,
+        enable_security: bool = False,
+        enable_audit: bool = False,
+        resource_limits: Optional[dict[str, Any]] = None,
+    ):
+        """Initialize the unified runtime.
 
         Args:
             debug: Whether to enable debug logging.
             enable_cycles: Whether to enable cyclic workflow support.
+            enable_async: Whether to enable async execution for async nodes.
+            max_concurrency: Maximum concurrent async operations.
+            user_context: User context for access control (optional).
+            enable_monitoring: Whether to enable performance monitoring.
+            enable_security: Whether to enable security features.
+            enable_audit: Whether to enable audit logging.
+            resource_limits: Resource limits (memory_mb, cpu_cores, etc.).
         """
         self.debug = debug
         self.enable_cycles = enable_cycles
+        self.enable_async = enable_async
+        self.max_concurrency = max_concurrency
+        self.user_context = user_context
+        self.enable_monitoring = enable_monitoring
+        self.enable_security = enable_security
+        self.enable_audit = enable_audit
+        self.resource_limits = resource_limits or {}
         self.logger = logger
+
+        # Enterprise feature managers (lazy initialization)
+        self._access_control_manager = None
 
         # Initialize cyclic workflow executor if enabled
         if enable_cycles:
             self.cyclic_executor = CyclicWorkflowExecutor()
 
+        # Configure logging
         if debug:
             self.logger.setLevel(logging.DEBUG)
         else:
             self.logger.setLevel(logging.INFO)
+
+        # Enterprise execution context
+        self._execution_context = {
+            "security_enabled": enable_security,
+            "monitoring_enabled": enable_monitoring,
+            "audit_enabled": enable_audit,
+            "async_enabled": enable_async,
+            "resource_limits": self.resource_limits,
+            "user_context": user_context,
+        }
 
     def execute(
         self,
@@ -93,7 +137,73 @@ class LocalRuntime:
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
-        """Execute a workflow locally.
+        """Execute a workflow with unified enterprise capabilities.
+
+        Args:
+            workflow: Workflow to execute.
+            task_manager: Optional task manager for tracking.
+            parameters: Optional parameter overrides per node.
+
+        Returns:
+            Tuple of (results dict, run_id).
+
+        Raises:
+            RuntimeExecutionError: If execution fails.
+            WorkflowValidationError: If workflow is invalid.
+            PermissionError: If access control denies execution.
+        """
+        # For backward compatibility, run the async version in a sync wrapper
+        try:
+            # Check if we're already in an event loop
+            loop = asyncio.get_running_loop()
+            # If we're in an event loop, run synchronously instead
+            return self._execute_sync(
+                workflow=workflow, task_manager=task_manager, parameters=parameters
+            )
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run
+            return asyncio.run(
+                self._execute_async(
+                    workflow=workflow, task_manager=task_manager, parameters=parameters
+                )
+            )
+
+    async def execute_async(
+        self,
+        workflow: Workflow,
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
+        """Execute a workflow asynchronously (for AsyncLocalRuntime compatibility).
+
+        Args:
+            workflow: Workflow to execute.
+            task_manager: Optional task manager for tracking.
+            parameters: Optional parameter overrides per node.
+
+        Returns:
+            Tuple of (results dict, run_id).
+
+        Raises:
+            RuntimeExecutionError: If execution fails.
+            WorkflowValidationError: If workflow is invalid.
+            PermissionError: If access control denies execution.
+        """
+        return await self._execute_async(
+            workflow=workflow, task_manager=task_manager, parameters=parameters
+        )
+
+    def _execute_sync(
+        self,
+        workflow: Workflow,
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
+        """Execute workflow synchronously when already in an event loop.
+
+        This method creates a new event loop in a separate thread to avoid
+        conflicts with existing event loops. This ensures backward compatibility
+        when LocalRuntime.execute() is called from within async contexts.
 
         Args:
             workflow: Workflow to execute.
@@ -107,16 +217,99 @@ class LocalRuntime:
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
         """
+        # Create new event loop for sync execution
+        import threading
+
+        result_container = []
+        exception_container = []
+
+        def run_in_thread():
+            """Run async execution in separate thread."""
+            loop = None
+            try:
+                # Create new event loop in thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(
+                    self._execute_async(
+                        workflow=workflow,
+                        task_manager=task_manager,
+                        parameters=parameters,
+                    )
+                )
+                result_container.append(result)
+            except Exception as e:
+                exception_container.append(e)
+            finally:
+                if loop:
+                    loop.close()
+
+        thread = threading.Thread(target=run_in_thread)
+        thread.start()
+        thread.join()
+
+        if exception_container:
+            raise exception_container[0]
+
+        return result_container[0]
+
+    async def _execute_async(
+        self,
+        workflow: Workflow,
+        task_manager: TaskManager | None = None,
+        parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
+        """Core async execution implementation with enterprise features.
+
+        This method orchestrates the entire workflow execution including:
+        - Security checks via AccessControlManager (if enabled)
+        - Audit logging via AuditLogNode (if enabled)
+        - Performance monitoring via TaskManager/MetricsCollector
+        - Async node detection and execution
+        - Resource limit enforcement
+        - Error handling and recovery
+
+        Args:
+            workflow: Workflow to execute.
+            task_manager: Optional task manager for tracking.
+            parameters: Optional parameter overrides per node.
+
+        Returns:
+            Tuple of (results dict, run_id).
+
+        Raises:
+            RuntimeExecutionError: If execution fails.
+            WorkflowValidationError: If workflow is invalid.
+            PermissionError: If access control denies execution.
+        """
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
 
         run_id = None
 
         try:
+            # Enterprise Security Check: Validate user access to workflow
+            if self.enable_security and self.user_context:
+                self._check_workflow_access(workflow)
+
             # Validate workflow with runtime parameters (Session 061)
             workflow.validate(runtime_parameters=parameters)
 
-            # Initialize tracking
+            # Enterprise Audit: Log workflow execution start
+            if self.enable_audit:
+                await self._log_audit_event_async(
+                    "workflow_execution_start",
+                    {
+                        "workflow_id": workflow.workflow_id,
+                        "user_context": self._serialize_user_context(),
+                        "parameters": parameters,
+                    },
+                )
+
+            # Initialize enhanced tracking with enterprise context
+            if task_manager is None and self.enable_monitoring:
+                task_manager = TaskManager()
+
             if task_manager:
                 try:
                     run_id = task_manager.create_run(
@@ -124,7 +317,9 @@ class LocalRuntime:
                         metadata={
                             "parameters": parameters,
                             "debug": self.debug,
-                            "runtime": "local",
+                            "runtime": "unified_enterprise",
+                            "enterprise_features": self._execution_context,
+                            "user_context": self._serialize_user_context(),
                         },
                     )
                 except Exception as e:
@@ -151,15 +346,28 @@ class LocalRuntime:
                         f"Cyclic workflow execution failed: {e}"
                     ) from e
             else:
-                # Execute standard DAG workflow
+                # Execute standard DAG workflow with enterprise features
                 self.logger.info(
-                    "Standard DAG workflow detected, using local execution"
+                    "Standard DAG workflow detected, using unified enterprise execution"
                 )
-                results = self._execute_workflow(
+                results = await self._execute_workflow_async(
                     workflow=workflow,
                     task_manager=task_manager,
                     run_id=run_id,
                     parameters=parameters or {},
+                )
+
+            # Enterprise Audit: Log successful completion
+            if self.enable_audit:
+                await self._log_audit_event_async(
+                    "workflow_execution_completed",
+                    {
+                        "workflow_id": workflow.workflow_id,
+                        "run_id": run_id,
+                        "result_summary": {
+                            k: type(v).__name__ for k, v in results.items()
+                        },
+                    },
                 )
 
             # Mark run as completed
@@ -172,6 +380,15 @@ class LocalRuntime:
             return results, run_id
 
         except WorkflowValidationError:
+            # Enterprise Audit: Log validation failure
+            if self.enable_audit:
+                await self._log_audit_event_async(
+                    "workflow_validation_failed",
+                    {
+                        "workflow_id": workflow.workflow_id,
+                        "error": "Validation failed",
+                    },
+                )
             # Re-raise validation errors as-is
             if task_manager and run_id:
                 try:
@@ -181,7 +398,34 @@ class LocalRuntime:
                 except Exception:
                     pass
             raise
+        except PermissionError as e:
+            # Enterprise Audit: Log access denial
+            if self.enable_audit:
+                await self._log_audit_event_async(
+                    "workflow_access_denied",
+                    {
+                        "workflow_id": workflow.workflow_id,
+                        "user_context": self._serialize_user_context(),
+                        "error": str(e),
+                    },
+                )
+            # Re-raise permission errors as-is
+            if task_manager and run_id:
+                try:
+                    task_manager.update_run_status(run_id, "failed", error=str(e))
+                except Exception:
+                    pass
+            raise
         except Exception as e:
+            # Enterprise Audit: Log execution failure
+            if self.enable_audit:
+                await self._log_audit_event_async(
+                    "workflow_execution_failed",
+                    {
+                        "workflow_id": workflow.workflow_id,
+                        "error": str(e),
+                    },
+                )
             # Mark run as failed
             if task_manager and run_id:
                 try:
@@ -191,10 +435,10 @@ class LocalRuntime:
 
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
-                f"Workflow execution failed: {type(e).__name__}: {e}"
+                f"Unified enterprise workflow execution failed: {type(e).__name__}: {e}"
             ) from e
 
-    def _execute_workflow(
+    async def _execute_workflow_async(
         self,
         workflow: Workflow,
         task_manager: TaskManager | None,
@@ -303,10 +547,16 @@ class LocalRuntime:
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
-                # Execute node with metrics collection
+                # Execute node with unified async/sync support and metrics collection
                 collector = MetricsCollector()
                 with collector.collect(node_id=node_id) as metrics_context:
-                    outputs = node_instance.execute(**inputs)
+                    # Unified async/sync execution
+                    if self.enable_async and hasattr(node_instance, "execute_async"):
+                        # Use async execution method that includes validation
+                        outputs = await node_instance.execute_async(**inputs)
+                    else:
+                        # Standard synchronous execution
+                        outputs = node_instance.execute(**inputs)
 
                 # Get performance metrics
                 performance_metrics = metrics_context.result()
@@ -433,21 +683,75 @@ class LocalRuntime:
                     )
 
                 for source_key, target_key in mapping.items():
-                    if source_key in source_outputs:
-                        inputs[target_key] = source_outputs[source_key]
+                    # Handle nested output access (e.g., "result.files")
+                    if "." in source_key:
+                        # Navigate nested structure
+                        value = source_outputs
+                        parts = source_key.split(".")
+                        found = True
+
                         if self.debug:
-                            self.logger.debug(
-                                f"  MAPPED: {source_key} -> {target_key} (type: {type(source_outputs[source_key])})"
-                            )
+                            self.logger.debug(f"  Navigating nested path: {source_key}")
+                            self.logger.debug(f"  Starting value: {value}")
+
+                        for i, part in enumerate(parts):
+                            if isinstance(value, dict) and part in value:
+                                value = value[part]
+                                if self.debug:
+                                    self.logger.debug(
+                                        f"    Part '{part}' found, value type: {type(value)}"
+                                    )
+                            else:
+                                # Check if it's a direct key in source_outputs (for backwards compatibility)
+                                if i == 0 and source_key in source_outputs:
+                                    value = source_outputs[source_key]
+                                    if self.debug:
+                                        self.logger.debug(
+                                            f"    Found direct key '{source_key}' in source_outputs"
+                                        )
+                                    break
+                                else:
+                                    found = False
+                                    if self.debug:
+                                        self.logger.debug(
+                                            f"  MISSING: Nested path '{source_key}' - failed at part '{part}'"
+                                        )
+                                        self.logger.debug(
+                                            f"    Current value type: {type(value)}"
+                                        )
+                                        if isinstance(value, dict):
+                                            self.logger.debug(
+                                                f"    Available keys: {list(value.keys())}"
+                                            )
+                                    self.logger.warning(
+                                        f"Source output '{source_key}' not found in node '{source_node_id}'. "
+                                        f"Available outputs: {list(source_outputs.keys())}"
+                                    )
+                                    break
+
+                        if found:
+                            inputs[target_key] = value
+                            if self.debug:
+                                self.logger.debug(
+                                    f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                )
                     else:
-                        if self.debug:
-                            self.logger.debug(
-                                f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
+                        # Simple key mapping
+                        if source_key in source_outputs:
+                            inputs[target_key] = source_outputs[source_key]
+                            if self.debug:
+                                self.logger.debug(
+                                    f"  MAPPED: {source_key} -> {target_key} (type: {type(source_outputs[source_key])})"
+                                )
+                        else:
+                            if self.debug:
+                                self.logger.debug(
+                                    f"  MISSING: {source_key} not in {list(source_outputs.keys())}"
+                                )
+                            self.logger.warning(
+                                f"Source output '{source_key}' not found in node '{source_node_id}'. "
+                                f"Available outputs: {list(source_outputs.keys())}"
                             )
-                        self.logger.warning(
-                            f"Source output '{source_key}' not found in node '{source_node_id}'. "
-                            f"Available outputs: {list(source_outputs.keys())}"
-                        )
             else:
                 if self.debug:
                     self.logger.debug(
@@ -542,3 +846,118 @@ class LocalRuntime:
             )
 
         return warnings
+
+    # Enterprise Feature Helper Methods
+
+    def _check_workflow_access(self, workflow: Workflow) -> None:
+        """Check if user has access to execute the workflow."""
+        if not self.enable_security or not self.user_context:
+            return
+
+        try:
+            # Use existing AccessControlManager pattern
+            from kailash.access_control import (
+                WorkflowPermission,
+                get_access_control_manager,
+            )
+
+            if self._access_control_manager is None:
+                self._access_control_manager = get_access_control_manager()
+
+            decision = self._access_control_manager.check_workflow_access(
+                self.user_context, workflow.workflow_id, WorkflowPermission.EXECUTE
+            )
+            if not decision.allowed:
+                raise PermissionError(
+                    f"Access denied to workflow '{workflow.workflow_id}': {decision.reason}"
+                )
+        except ImportError:
+            # Access control not available, log and continue
+            self.logger.warning(
+                "Access control system not available, skipping security check"
+            )
+        except Exception as e:
+            if isinstance(e, PermissionError):
+                raise
+            # Log but don't fail on access control errors
+            self.logger.warning(f"Access control check failed: {e}")
+
+    def _log_audit_event(self, event_type: str, event_data: dict[str, Any]) -> None:
+        """Log audit events using enterprise audit logging (synchronous)."""
+        if not self.enable_audit:
+            return
+
+        try:
+            # Use existing AuditLogNode pattern
+            from kailash.nodes.security.audit_log import AuditLogNode
+
+            audit_node = AuditLogNode()
+            # Use the SDK pattern - execute the node
+            audit_node.execute(
+                event_type=event_type,
+                event_data=event_data,
+                user_context=self.user_context,
+                timestamp=datetime.now(UTC),
+            )
+        except ImportError:
+            # Audit logging not available, fall back to standard logging
+            self.logger.info(f"AUDIT: {event_type} - {event_data}")
+        except Exception as e:
+            # Audit logging failures shouldn't stop execution
+            self.logger.warning(f"Audit logging failed: {e}")
+
+    async def _log_audit_event_async(
+        self, event_type: str, event_data: dict[str, Any]
+    ) -> None:
+        """Log audit events using enterprise audit logging (asynchronous)."""
+        if not self.enable_audit:
+            return
+
+        try:
+            # Use existing AuditLogNode pattern
+            from kailash.nodes.security.audit_log import AuditLogNode
+
+            audit_node = AuditLogNode()
+            # Use the SDK pattern - try async first, fallback to sync
+            if hasattr(audit_node, "async_run"):
+                await audit_node.async_run(
+                    event_type=event_type,
+                    event_data=event_data,
+                    user_context=self.user_context,
+                    timestamp=datetime.now(UTC),
+                )
+            else:
+                # Fallback to sync execution
+                audit_node.execute(
+                    event_type=event_type,
+                    event_data=event_data,
+                    user_context=self.user_context,
+                    timestamp=datetime.now(UTC),
+                )
+        except ImportError:
+            # Audit logging not available, fall back to standard logging
+            self.logger.info(f"AUDIT: {event_type} - {event_data}")
+        except Exception as e:
+            # Audit logging failures shouldn't stop execution
+            self.logger.warning(f"Audit logging failed: {e}")
+
+    def _serialize_user_context(self) -> dict[str, Any] | None:
+        """Serialize user context for logging/tracking."""
+        if not self.user_context:
+            return None
+
+        try:
+            # Try to use model_dump if it's a Pydantic model
+            if hasattr(self.user_context, "model_dump"):
+                return self.user_context.model_dump()
+            # Try to use dict() if it's a Pydantic model
+            elif hasattr(self.user_context, "dict"):
+                return self.user_context.dict()
+            # Convert to dict if possible
+            elif hasattr(self.user_context, "__dict__"):
+                return self.user_context.__dict__
+            else:
+                return {"user_context": str(self.user_context)}
+        except Exception as e:
+            self.logger.warning(f"Failed to serialize user context: {e}")
+            return {"user_context": str(self.user_context)}

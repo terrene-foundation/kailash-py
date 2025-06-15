@@ -1,18 +1,24 @@
 """Visual workflow example with data nodes and Python nodes."""
 
+import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from examples.utils.data_paths import get_test_data_path
-from examples.utils.paths import get_output_dir
-from kailash.nodes.base import NodeParameter
-from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode
-from kailash.runtime import LocalRuntime
-from kailash.workflow import Workflow
-from kailash.workflow.visualization import WorkflowVisualizer
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+# Imports after path setup
+from examples.utils.data_paths import get_test_data_path  # noqa: E402
+from examples.utils.paths import get_output_dir  # noqa: E402
+from kailash.nodes.base import NodeParameter  # noqa: E402
+from kailash.nodes.code.python import PythonCodeNode  # noqa: E402
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode  # noqa: E402
+from kailash.runtime import LocalRuntime  # noqa: E402
+from kailash.workflow import Workflow  # noqa: E402
+from kailash.workflow.visualization import WorkflowVisualizer  # noqa: E402
 
 
 def create_data_pipeline():

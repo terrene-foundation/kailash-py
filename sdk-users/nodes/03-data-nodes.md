@@ -54,6 +54,75 @@ This document covers all data input/output nodes including file operations, data
   - `file_path`: Path to text file
   - `encoding`: File encoding
 
+### DocumentProcessorNode ⭐ **NEW**
+- **Module**: `kailash.nodes.data.readers`
+- **Purpose**: Advanced document processor for multiple formats with automatic format detection and metadata extraction
+- **Key Features**:
+  - Automatic format detection (PDF, DOCX, MD, HTML, RTF, TXT)
+  - Rich metadata extraction (title, author, dates, structure)
+  - Structure preservation (sections, headings, pages)
+  - Unified output format across all document types
+  - Encoding detection and handling
+  - Comprehensive error handling with fallbacks
+- **Supported Formats**:
+  - **PDF**: Text extraction with page information
+  - **DOCX**: Content and document properties
+  - **Markdown**: Structure parsing with heading detection
+  - **HTML**: Clean text extraction with structure
+  - **RTF**: Rich text format processing
+  - **TXT**: Plain text with encoding detection
+- **Parameters**:
+  - `file_path`: Path to document file (required)
+  - `extract_metadata`: Extract document metadata (default: True)
+  - `preserve_structure`: Maintain document structure (default: True)
+  - `encoding`: Text encoding for plain text files (default: "utf-8")
+  - `page_numbers`: Include page/section numbers (default: True)
+  - `extract_images`: Extract image references (default: False)
+- **Best For**:
+  - Document management systems
+  - RAG pipelines requiring document analysis
+  - Content migration and processing
+  - Multi-format document workflows
+  - Metadata-driven applications
+- **Example**:
+  ```python
+  processor = DocumentProcessorNode(
+      extract_metadata=True,
+      preserve_structure=True
+  )
+  result = processor.run(file_path="report.pdf")
+
+  content = result["content"]           # Extracted text
+  metadata = result["metadata"]         # Document properties
+  sections = result["sections"]         # Structural elements
+  doc_format = result["document_format"] # Detected format
+  ```
+- **Output Structure**:
+  ```python
+  {
+      "content": "Full document text",
+      "metadata": {
+          "title": "Document Title",
+          "author": "Author Name",
+          "creation_date": "2024-01-01",
+          "word_count": 1500,
+          "character_count": 8500,
+          "document_format": "pdf"
+      },
+      "sections": [
+          {
+              "type": "heading",
+              "level": 1,
+              "title": "Chapter 1",
+              "content": "Chapter content...",
+              "start_position": 0,
+              "end_position": 100
+          }
+      ],
+      "document_format": "pdf"
+  }
+  ```
+
 ### TextWriterNode
 - **Module**: `kailash.nodes.data.writers`
 - **Purpose**: Write text files
@@ -152,13 +221,45 @@ This document covers all data input/output nodes including file operations, data
 
 ## Retrieval Nodes
 
+### HybridRetrieverNode ⭐ **NEW**
+- **Module**: `kailash.nodes.data.retrieval`
+- **Purpose**: State-of-the-art hybrid retrieval combining dense and sparse methods
+- **Key Features**: Combines semantic (dense) and keyword (sparse) retrieval for 20-30% better performance
+- **Parameters**:
+  - `fusion_strategy`: Fusion method - "rrf", "linear", or "weighted" (default: "rrf")
+  - `dense_weight`: Weight for dense retrieval (0.0-1.0, default: 0.6)
+  - `sparse_weight`: Weight for sparse retrieval (0.0-1.0, default: 0.4)
+  - `top_k`: Number of results to return (default: 5)
+  - `rrf_k`: RRF parameter for rank fusion (default: 60)
+- **Best For**: Production RAG systems, enterprise search, multi-modal retrieval
+- **Example**:
+  ```python
+  retriever = HybridRetrieverNode(fusion_strategy="rrf", top_k=5)
+  result = retriever.run(
+      query="machine learning algorithms",
+      dense_results=vector_search_results,  # From semantic search
+      sparse_results=keyword_search_results  # From BM25/keyword search
+  )
+  hybrid_results = result["hybrid_results"]  # Best of both methods
+  ```
+
 ### RelevanceScorerNode
 - **Module**: `kailash.nodes.data.retrieval`
-- **Purpose**: Score document relevance
+- **Purpose**: Score document relevance with advanced ranking
 - **Parameters**:
-  - `query`: Search query
-  - `documents`: Documents to score
-  - `scoring_method`: Scoring algorithm
+  - `similarity_method`: Scoring method - "cosine", "dot", "euclidean" (default: "cosine")
+  - `top_k`: Number of top results to return (default: 5)
+- **Enhanced Features**: Works with embeddings for precise relevance scoring
+- **Example**:
+  ```python
+  scorer = RelevanceScorerNode(similarity_method="cosine", top_k=3)
+  result = scorer.run(
+      chunks=retrieved_chunks,
+      query_embedding=query_embeddings,
+      chunk_embeddings=chunk_embeddings
+  )
+  relevant_chunks = result["relevant_chunks"]  # Top ranked results
+  ```
 
 ## SharePoint Integration Nodes
 

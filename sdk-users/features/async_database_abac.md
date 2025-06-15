@@ -587,7 +587,7 @@ results = asyncio.run(secure_data_pipeline())
 from kailash.sdk_exceptions import NodeExecutionError
 
 try:
-    result = await node.async_run()
+    result = await node.execute_async()
 except NodeExecutionError as e:
     # Handle database errors
     if "connection" in str(e):

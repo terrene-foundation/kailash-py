@@ -61,7 +61,7 @@ if __name__ == "__main__":
         print(f"  {name}: {param.type.__name__}, required={param.required}")
 
     # Test execution
-    result = node.run(text="Hello World", operation="lowercase")
+    result = node.execute(text="Hello World", operation="lowercase")
     print("\nExecution result:")
     print(result)
     # Output: {'transformed': 'hello world', 'original': 'Hello World', 'operation': 'lowercase'}

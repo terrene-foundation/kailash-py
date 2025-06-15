@@ -1,15 +1,31 @@
 """Node system for the Kailash SDK."""
 
 # Import all node modules to ensure registration
-from kailash.nodes import ai, api, code, data, logic, mixins, testing, transform
+from kailash.nodes import (
+    ai,
+    api,
+    auth,
+    code,
+    compliance,
+    data,
+    enterprise,
+    logic,
+    mixins,
+    monitoring,
+    security,
+    testing,
+    transform,
+)
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry, register_node
-from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 
+# Compatibility alias - AsyncNode is now just Node
+AsyncNode = Node
+
 __all__ = [
     "Node",
-    "AsyncNode",
+    "AsyncNode",  # Compatibility alias
     "CycleAwareNode",
     "NodeParameter",
     "NodeRegistry",
@@ -18,10 +34,15 @@ __all__ = [
     # Node modules
     "ai",
     "api",
+    "auth",
     "code",
+    "compliance",
     "data",
+    "enterprise",
     "logic",
     "mixins",
+    "monitoring",
+    "security",
     "testing",
     "transform",
 ]

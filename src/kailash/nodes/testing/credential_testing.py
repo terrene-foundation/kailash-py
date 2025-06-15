@@ -254,7 +254,7 @@ class CredentialTestingNode(Node):
     ) -> dict[str, Any]:
         """Generate OAuth2 mock credentials."""
         now = datetime.now(timezone.utc)
-        
+
         if scenario == "expired":
             # Generate expired token
             expires_at = now - timedelta(hours=1)
@@ -330,7 +330,7 @@ class CredentialTestingNode(Node):
         else:  # success or expired scenario
             key_length = validation_rules.get("key_length", 32)
             api_key = f"sk_test_{uuid4().hex[:key_length]}"
-            
+
             credentials = {
                 "api_key": api_key,
                 "key_prefix": mock_data.get("key_prefix", "sk_test"),
@@ -340,7 +340,7 @@ class CredentialTestingNode(Node):
             credentials.update(mock_data)
 
             header_name = validation_rules.get("header_name", "X-API-Key")
-            
+
             if scenario == "expired":
                 return {
                     "valid": False,
@@ -386,7 +386,7 @@ class CredentialTestingNode(Node):
             # Generate Basic Auth header
             auth_string = f"{username}:{password}"
             encoded_auth = base64.b64encode(auth_string.encode()).decode()
-            
+
             return {
                 "valid": True,
                 "credentials": credentials,
@@ -399,10 +399,10 @@ class CredentialTestingNode(Node):
     ) -> dict[str, Any]:
         """Generate JWT mock credentials."""
         now = datetime.now(timezone.utc)
-        
+
         # Mock JWT structure (not cryptographically valid)
         header = {"alg": "HS256", "typ": "JWT"}
-        
+
         if scenario == "expired":
             payload = {
                 "sub": mock_data.get("subject", "1234567890"),
@@ -410,7 +410,7 @@ class CredentialTestingNode(Node):
                 "iat": int((now - timedelta(hours=2)).timestamp()),
                 "exp": int((now - timedelta(hours=1)).timestamp()),
             }
-            
+
             return {
                 "valid": False,
                 "expired": True,
@@ -450,14 +450,14 @@ class CredentialTestingNode(Node):
                     payload[key] = value
 
             # Create mock JWT (base64 encoded parts separated by dots)
-            header_b64 = base64.urlsafe_b64encode(
-                str(header).encode()
-            ).decode().rstrip("=")
-            payload_b64 = base64.urlsafe_b64encode(
-                str(payload).encode()
-            ).decode().rstrip("=")
+            header_b64 = (
+                base64.urlsafe_b64encode(str(header).encode()).decode().rstrip("=")
+            )
+            payload_b64 = (
+                base64.urlsafe_b64encode(str(payload).encode()).decode().rstrip("=")
+            )
             signature = uuid4().hex[:32]
-            
+
             jwt_token = f"{header_b64}.{payload_b64}.{signature}"
 
             credentials = {
@@ -474,9 +474,7 @@ class CredentialTestingNode(Node):
                 "expired": False,
             }
 
-    def _validate_oauth2(
-        self, credentials: dict, rules: dict
-    ) -> tuple[bool, str]:
+    def _validate_oauth2(self, credentials: dict, rules: dict) -> tuple[bool, str]:
         """Validate OAuth2 credentials against rules."""
         # Check required fields
         required_fields = rules.get("required_fields", ["access_token", "token_type"])
@@ -488,7 +486,7 @@ class CredentialTestingNode(Node):
         if "token_format" in rules:
             token = credentials.get("access_token", "")
             if not token.startswith(rules["token_format"]):
-                return False, f"Invalid token format"
+                return False, "Invalid token format"
 
         # Check scope requirements
         if "required_scopes" in rules:

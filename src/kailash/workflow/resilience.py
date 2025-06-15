@@ -4,16 +4,17 @@ This module provides resilience patterns that can be applied to any workflow,
 including retry policies, fallback nodes, and circuit breakers.
 """
 
-from typing import Dict, Any, Optional, List, Callable, Union
 import asyncio
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Union
 
 
 class RetryStrategy(Enum):
     """Retry strategies for failed nodes."""
+
     IMMEDIATE = "immediate"
     LINEAR = "linear"
     EXPONENTIAL = "exponential"
@@ -23,12 +24,13 @@ class RetryStrategy(Enum):
 @dataclass
 class RetryPolicy:
     """Configuration for node retry behavior."""
+
     max_retries: int = 3
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
     base_delay: float = 1.0
     max_delay: float = 60.0
     retry_on: List[type] = field(default_factory=lambda: [Exception])
-    
+
     def calculate_delay(self, attempt: int) -> float:
         """Calculate delay based on retry strategy."""
         if self.strategy == RetryStrategy.IMMEDIATE:
@@ -45,28 +47,29 @@ class RetryPolicy:
             delay = self.base_delay * fib[min(attempt - 1, len(fib) - 1)]
         else:
             delay = self.base_delay
-        
+
         return min(delay, self.max_delay)
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker pattern."""
+
     failure_threshold: int = 5
     success_threshold: int = 2
     timeout: float = 60.0
-    
+
     # Runtime state
     failures: int = 0
     successes: int = 0
     state: str = "closed"  # closed, open, half-open
     last_failure_time: Optional[float] = None
-    
+
     def is_open(self) -> bool:
         """Check if circuit breaker is open."""
         if self.state == "closed":
             return False
-            
+
         if self.state == "open":
             # Check if timeout has passed
             if self.last_failure_time:
@@ -77,25 +80,25 @@ class CircuitBreakerConfig:
                     self.successes = 0
                     return False
             return True
-        
+
         # Half-open state
         return False
-    
+
     def record_success(self):
         """Record successful execution."""
         self.failures = 0
         self.successes += 1
-        
+
         # Close circuit if enough successes in half-open state
         if self.state == "half-open" and self.successes >= self.success_threshold:
             self.state = "closed"
-    
+
     def record_failure(self):
         """Record failed execution."""
         self.failures += 1
         self.successes = 0
         self.last_failure_time = time.time()
-        
+
         # Open circuit if threshold reached
         if self.failures >= self.failure_threshold:
             self.state = "open"
@@ -103,7 +106,7 @@ class CircuitBreakerConfig:
 
 class WorkflowResilience:
     """Mixin class to add resilience features to workflows."""
-    
+
     def __init__(self):
         """Initialize resilience features."""
         self._fallback_nodes: Dict[str, List[Any]] = {}
@@ -112,7 +115,7 @@ class WorkflowResilience:
         self._execution_history: List[Dict[str, Any]] = []
         self._dead_letter_queue: List[Dict[str, Any]] = []
         self._node_metrics: Dict[str, Dict[str, Any]] = {}
-    
+
     def configure_retry(
         self,
         node_id: str,
@@ -120,11 +123,11 @@ class WorkflowResilience:
         strategy: RetryStrategy = RetryStrategy.EXPONENTIAL,
         base_delay: float = 1.0,
         max_delay: float = 60.0,
-        retry_on: Optional[List[type]] = None
+        retry_on: Optional[List[type]] = None,
     ):
         """
         Configure retry policy for a specific node.
-        
+
         Args:
             node_id: Node to apply policy to
             max_retries: Maximum retry attempts
@@ -138,32 +141,32 @@ class WorkflowResilience:
             strategy=strategy,
             base_delay=base_delay,
             max_delay=max_delay,
-            retry_on=retry_on or [Exception]
+            retry_on=retry_on or [Exception],
         )
-    
+
     def add_fallback(self, primary_node_id: str, fallback_node_id: str):
         """
         Add a fallback node for automatic failover.
-        
+
         Args:
             primary_node_id: Primary node that might fail
             fallback_node_id: Fallback node to use on failure
         """
         if primary_node_id not in self._fallback_nodes:
             self._fallback_nodes[primary_node_id] = []
-        
+
         self._fallback_nodes[primary_node_id].append(fallback_node_id)
-    
+
     def configure_circuit_breaker(
         self,
         node_id: str,
         failure_threshold: int = 5,
         success_threshold: int = 2,
-        timeout: float = 60.0
+        timeout: float = 60.0,
     ):
         """
         Configure circuit breaker for a node.
-        
+
         Args:
             node_id: Node to protect
             failure_threshold: Failures before opening circuit
@@ -173,9 +176,9 @@ class WorkflowResilience:
         self._circuit_breakers[node_id] = CircuitBreakerConfig(
             failure_threshold=failure_threshold,
             success_threshold=success_threshold,
-            timeout=timeout
+            timeout=timeout,
         )
-    
+
     def get_resilience_metrics(self) -> Dict[str, Any]:
         """Get execution metrics for monitoring."""
         return {
@@ -184,7 +187,7 @@ class WorkflowResilience:
                 name: {
                     "state": breaker.state,
                     "failures": breaker.failures,
-                    "last_failure": breaker.last_failure_time
+                    "last_failure": breaker.last_failure_time,
                 }
                 for name, breaker in self._circuit_breakers.items()
             },
@@ -192,20 +195,20 @@ class WorkflowResilience:
             "retry_policies": {
                 name: {
                     "max_retries": policy.max_retries,
-                    "strategy": policy.strategy.value
+                    "strategy": policy.strategy.value,
                 }
                 for name, policy in self._retry_policies.items()
-            }
+            },
         }
-    
+
     def get_dead_letter_queue(self) -> List[Dict[str, Any]]:
         """Get failed executions for manual intervention."""
         return self._dead_letter_queue
-    
+
     def clear_dead_letter_queue(self):
         """Clear the dead letter queue after processing."""
         self._dead_letter_queue = []
-    
+
     def reset_circuit_breaker(self, node_id: str):
         """Manually reset a circuit breaker."""
         if node_id in self._circuit_breakers:
@@ -218,10 +221,10 @@ class WorkflowResilience:
 
 def apply_resilience_to_workflow(workflow_class):
     """Decorator to add resilience features to a workflow class."""
-    
+
     # Store original methods
     original_init = workflow_class.__init__
-    
+
     def new_init(self, *args, **kwargs):
         # Call original init
         original_init(self, *args, **kwargs)
@@ -232,15 +235,15 @@ def apply_resilience_to_workflow(workflow_class):
         self._execution_history = []
         self._dead_letter_queue = []
         self._node_metrics = {}
-    
+
     # Add resilience methods to the class
     for attr_name in dir(WorkflowResilience):
-        if not attr_name.startswith('_'):
+        if not attr_name.startswith("_"):
             attr = getattr(WorkflowResilience, attr_name)
-            if callable(attr) and attr_name not in ['__init__']:
+            if callable(attr) and attr_name not in ["__init__"]:
                 setattr(workflow_class, attr_name, attr)
-    
+
     # Override __init__
     workflow_class.__init__ = new_init
-    
+
     return workflow_class

@@ -334,7 +334,7 @@ def main():
         print("Demo workflow created with mock data")
     else:
         # Production mode
-        asyncio.run(run_api_integration())
+        asyncio.execute(run_api_integration())
 
 
 if __name__ == "__main__":

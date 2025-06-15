@@ -184,7 +184,7 @@ class CredentialMockData:
     def generate_jwt_claims(user_type: str = "user") -> dict[str, Any]:
         """Generate JWT claims for testing."""
         import time
-        
+
         now = int(time.time())
         claims = {
             "user": {
@@ -234,7 +234,9 @@ class SecurityTestHelper:
         from kailash.nodes.api.http import HTTPRequestNode
         from kailash.nodes.testing import CredentialTestingNode
 
-        workflow = Workflow(workflow_id=f"test_{auth_type}_auth", name=f"Test {auth_type} Auth")
+        workflow = Workflow(
+            workflow_id=f"test_{auth_type}_auth", name=f"Test {auth_type} Auth"
+        )
 
         if auth_type == "oauth2":
             # Add OAuth2 testing nodes
@@ -248,14 +250,8 @@ class SecurityTestHelper:
             workflow.add_node("http", HTTPRequestNode())
 
             # Connect nodes
-            workflow.connect(
-                "credential_test", "oauth", 
-                {"credentials": "mock_data"}
-            )
-            workflow.connect(
-                "oauth", "http",
-                {"headers": "headers"}
-            )
+            workflow.connect("credential_test", "oauth", {"credentials": "mock_data"})
+            workflow.connect("oauth", "http", {"headers": "headers"})
 
         elif auth_type == "api_key":
             # Add API key testing nodes
@@ -270,13 +266,9 @@ class SecurityTestHelper:
 
             # Connect nodes
             workflow.connect(
-                "credential_test", "api_key",
-                {"credentials.api_key": "api_key"}
+                "credential_test", "api_key", {"credentials.api_key": "api_key"}
             )
-            workflow.connect(
-                "api_key", "http",
-                {"headers": "headers"}
-            )
+            workflow.connect("api_key", "http", {"headers": "headers"})
 
         elif auth_type == "basic":
             # Add Basic auth testing nodes
@@ -292,16 +284,14 @@ class SecurityTestHelper:
 
             # Connect nodes
             workflow.connect(
-                "credential_test", "basic",
+                "credential_test",
+                "basic",
                 {
                     "credentials.username": "username",
                     "credentials.password": "password",
-                }
+                },
             )
-            workflow.connect(
-                "basic", "http",
-                {"headers": "headers"}
-            )
+            workflow.connect("basic", "http", {"headers": "headers"})
 
         return workflow
 
@@ -322,9 +312,15 @@ class SecurityTestHelper:
                 result = tester.run(
                     credential_type=credential_type,
                     scenario=scenario,
-                    mock_data=getattr(self.credential_mock, f"generate_{credential_type}_config")()
-                    if hasattr(self.credential_mock, f"generate_{credential_type}_config")
-                    else {},
+                    mock_data=(
+                        getattr(
+                            self.credential_mock, f"generate_{credential_type}_config"
+                        )()
+                        if hasattr(
+                            self.credential_mock, f"generate_{credential_type}_config"
+                        )
+                        else {}
+                    ),
                 )
                 results[scenario] = {
                     "success": result.get("valid", False),
@@ -441,7 +437,7 @@ class NodeTestHelper:
         """Test node execution with given inputs."""
         if should_fail:
             try:
-                result = node.run(**inputs)
+                result = node.execute(**inputs)
                 assert False, "Node execution should have failed but didn't"
             except (NodeValidationError, WorkflowExecutionError):
                 return {}

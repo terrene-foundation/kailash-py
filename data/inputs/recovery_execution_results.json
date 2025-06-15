@@ -1,0 +1,67 @@
+{
+  "recovery_summary": {
+    "total_recovery_attempts": 3,
+    "successful_recoveries": 3,
+    "success_rate": 100.0,
+    "average_recovery_time_ms": 0.0,
+    "timestamp": "2025-06-15T14:32:02.452820"
+  },
+  "recovery_actions": [
+    {
+      "service": "payment_gateway",
+      "strategy": "retry",
+      "status": "success",
+      "duration_ms": 0,
+      "timestamp": "2025-06-15T14:32:02.452802"
+    },
+    {
+      "service": "notification_service",
+      "strategy": "graceful_degrade",
+      "status": "success",
+      "duration_ms": 0,
+      "timestamp": "2025-06-15T14:32:02.452814"
+    },
+    {
+      "service": "analytics_engine",
+      "strategy": "graceful_degrade",
+      "status": "success",
+      "duration_ms": 0,
+      "timestamp": "2025-06-15T14:32:02.452817"
+    }
+  ],
+  "recovery_results": [
+    {
+      "service": "payment_gateway",
+      "strategy": "retry",
+      "status": "success",
+      "attempts": 1,
+      "duration_ms": 0,
+      "details": "Service recovered after 1 retries"
+    },
+    {
+      "service": "notification_service",
+      "strategy": "graceful_degrade",
+      "status": "success",
+      "duration_ms": 0,
+      "details": "Service degraded gracefully to maintain core functionality",
+      "degradation_actions": [
+        "Cached static responses",
+        "Disabled non-essential features"
+      ],
+      "functionality_retained": "85%"
+    },
+    {
+      "service": "analytics_engine",
+      "strategy": "graceful_degrade",
+      "status": "success",
+      "duration_ms": 0,
+      "details": "Service degraded gracefully to maintain core functionality",
+      "degradation_actions": [
+        "Cached static responses",
+        "Reduced data refresh frequency"
+      ],
+      "functionality_retained": "85%"
+    }
+  ],
+  "system_stability_restored": true
+}

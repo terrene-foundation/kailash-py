@@ -299,8 +299,8 @@ def demonstrate_caching_strategy():
 
 if __name__ == "__main__":
     # Run all demonstrations
-    asyncio.execute(demonstrate_pool_usage())
-    asyncio.execute(demonstrate_concurrent_execution())
+    asyncio.run(demonstrate_pool_usage())
+    asyncio.run(demonstrate_concurrent_execution())
     demonstrate_caching_strategy()
 
     print("\n\n=== Demo Complete ===")

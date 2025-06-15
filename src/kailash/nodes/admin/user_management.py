@@ -16,6 +16,7 @@ Features:
 """
 
 import hashlib
+import json
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -26,6 +27,27 @@ from kailash.access_control import AccessControlManager, UserContext
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import AsyncSQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+
+
+@dataclass
+class UserConfig:
+    """Configuration for user management node."""
+
+    abac_enabled: bool = True
+    audit_enabled: bool = True
+    multi_tenant: bool = True
+    password_policy: Dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.password_policy is None:
+            self.password_policy = {
+                "min_length": 8,
+                "require_uppercase": True,
+                "require_lowercase": True,
+                "require_numbers": True,
+                "require_special": False,
+                "history_count": 3,
+            }
 
 
 class UserOperation(Enum):
@@ -145,6 +167,23 @@ class UserManagementNode(Node):
         super().__init__(**config)
         self._db_node = None
         self._access_manager = None
+        self._config = UserConfig(
+            abac_enabled=config.get("abac_enabled", True),
+            audit_enabled=config.get("audit_enabled", True),
+            multi_tenant=config.get("multi_tenant", True),
+            password_policy=config.get(
+                "password_policy",
+                {
+                    "min_length": 8,
+                    "require_uppercase": True,
+                    "require_lowercase": True,
+                    "require_numbers": True,
+                    "require_special": False,
+                    "history_count": 3,
+                },
+            ),
+        )
+        self._audit_logger = None
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define parameters for user management operations."""
@@ -254,7 +293,25 @@ class UserManagementNode(Node):
         }
 
     def run(self, **inputs) -> Dict[str, Any]:
-        """Execute user management operation."""
+        """Execute user management operation (sync wrapper for async_run)."""
+        import asyncio
+
+        try:
+            # Check if we're already in an event loop
+            loop = asyncio.get_running_loop()
+            # If we are, we need to handle this differently
+            import concurrent.futures
+
+            # Run in a thread pool to avoid blocking the event loop
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, self.async_run(**inputs))
+                return future.result()
+        except RuntimeError:
+            # No event loop running, we can use asyncio.run()
+            return asyncio.run(self.async_run(**inputs))
+
+    async def async_run(self, **inputs) -> Dict[str, Any]:
+        """Execute user management operation asynchronously."""
         try:
             operation = UserOperation(inputs["operation"])
 
@@ -263,33 +320,33 @@ class UserManagementNode(Node):
 
             # Route to appropriate operation
             if operation == UserOperation.CREATE:
-                return self._create_user(inputs)
+                return await self._create_user_async(inputs)
             elif operation == UserOperation.READ:
-                return self._read_user(inputs)
+                return await self._read_user_async(inputs)
             elif operation == UserOperation.UPDATE:
-                return self._update_user(inputs)
+                return await self._update_user_async(inputs)
             elif operation == UserOperation.DELETE:
-                return self._delete_user(inputs)
+                return await self._delete_user_async(inputs)
             elif operation == UserOperation.RESTORE:
-                return self._restore_user(inputs)
+                return await self._restore_user_async(inputs)
             elif operation == UserOperation.LIST:
-                return self._list_users(inputs)
+                return await self._list_users_async(inputs)
             elif operation == UserOperation.SEARCH:
-                return self._search_users(inputs)
+                return await self._search_users_async(inputs)
             elif operation == UserOperation.BULK_CREATE:
-                return self._bulk_create_users(inputs)
+                return await self._bulk_create_users_async(inputs)
             elif operation == UserOperation.BULK_UPDATE:
-                return self._bulk_update_users(inputs)
+                return await self._bulk_update_users_async(inputs)
             elif operation == UserOperation.BULK_DELETE:
-                return self._bulk_delete_users(inputs)
+                return await self._bulk_delete_users_async(inputs)
             elif operation == UserOperation.CHANGE_PASSWORD:
-                return self._change_password(inputs)
+                return await self._change_password_async(inputs)
             elif operation == UserOperation.RESET_PASSWORD:
-                return self._reset_password(inputs)
+                return await self._reset_password_async(inputs)
             elif operation == UserOperation.DEACTIVATE:
-                return self._deactivate_user(inputs)
+                return await self._deactivate_user_async(inputs)
             elif operation == UserOperation.ACTIVATE:
-                return self._activate_user(inputs)
+                return await self._activate_user_async(inputs)
             else:
                 raise NodeExecutionError(f"Unknown operation: {operation}")
 
@@ -316,6 +373,147 @@ class UserManagementNode(Node):
 
         # Initialize enhanced access manager
         self._access_manager = AccessControlManager(strategy="abac")
+
+    async def _create_user_async(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new user with validation and audit logging (async version)."""
+        user_data = inputs["user_data"]
+        tenant_id = inputs.get("tenant_id", "default")
+
+        # Validate required fields
+        required_fields = ["email", "username", "first_name", "last_name"]
+        for field in required_fields:
+            if field not in user_data:
+                raise NodeValidationError(f"Missing required field: {field}")
+
+        # Validate email format
+        if inputs.get("validate_email", True):
+            if not self._validate_email(user_data["email"]):
+                raise NodeValidationError(f"Invalid email format: {user_data['email']}")
+
+        # Validate username format
+        if inputs.get("validate_username", True):
+            if not self._validate_username(user_data["username"]):
+                raise NodeValidationError(
+                    "Invalid username format. Username must be 3-50 characters, "
+                    "alphanumeric with underscores/dashes allowed"
+                )
+
+        # Generate user ID
+        user_id = self._generate_user_id()
+
+        # Hash password if provided
+        password_hash = None
+        if "password" in user_data:
+            # Validate password against policy
+            policy = self._config.password_policy
+            password = user_data["password"]
+
+            if len(password) < policy["min_length"]:
+                raise NodeValidationError(
+                    f"Password must be at least {policy['min_length']} characters"
+                )
+
+            if policy.get("require_uppercase") and not any(
+                c.isupper() for c in password
+            ):
+                raise NodeValidationError("Password must contain uppercase letters")
+
+            if policy.get("require_lowercase") and not any(
+                c.islower() for c in password
+            ):
+                raise NodeValidationError("Password must contain lowercase letters")
+
+            if policy.get("require_numbers") and not any(c.isdigit() for c in password):
+                raise NodeValidationError("Password must contain numbers")
+
+            if policy.get("require_special") and not any(
+                c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password
+            ):
+                raise NodeValidationError("Password must contain special characters")
+
+            password_hash = self._hash_password(password)
+
+        # Create user record
+        user_record = {
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "email": user_data["email"],
+            "username": user_data["username"],
+            "first_name": user_data["first_name"],
+            "last_name": user_data["last_name"],
+            "status": user_data.get("status", UserStatus.ACTIVE.value),
+            "roles": json.dumps(user_data.get("roles", ["user"])),
+            "attributes": json.dumps(user_data.get("attributes", {})),
+            "password_hash": password_hash,
+            "force_password_change": user_data.get("force_password_change", False),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
+            "created_by": inputs.get("metadata", {}).get("created_by", "system"),
+        }
+
+        # Insert into database
+        insert_query = """
+        INSERT INTO users (
+            user_id, tenant_id, email, username, first_name, last_name,
+            status, roles, attributes, password_hash, force_password_change,
+            created_at, updated_at, created_by
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+        )
+        """
+
+        # Execute database insert using async method
+        query = {
+            "query": insert_query,
+            "params": [
+                user_record["user_id"],
+                user_record["tenant_id"],
+                user_record["email"],
+                user_record["username"],
+                user_record["first_name"],
+                user_record["last_name"],
+                user_record["status"],
+                user_record["roles"],
+                user_record["attributes"],
+                user_record["password_hash"],
+                user_record["force_password_change"],
+                user_record["created_at"],
+                user_record["updated_at"],
+                user_record["created_by"],
+            ],
+        }
+
+        db_result = await self._db_node.async_run(**query)
+
+        # Create user profile response
+        user_profile = UserProfile(
+            user_id=user_id,
+            email=user_record["email"],
+            username=user_record["username"],
+            first_name=user_record["first_name"],
+            last_name=user_record["last_name"],
+            status=UserStatus(user_record["status"]),
+            roles=user_record["roles"],
+            attributes=user_record["attributes"],
+            created_at=user_record["created_at"],
+            updated_at=user_record["updated_at"],
+        )
+
+        # Handle initial role assignments
+        if inputs.get("initial_roles"):
+            # Role assignment would be handled by RoleManagementNode
+            pass
+
+        # Audit log
+        if self._config.audit_enabled:
+            # In production, this would use AuditLogNode
+            print(f"[AUDIT] user_created: {user_id} ({user_record['username']})")
+
+        return {
+            "success": True,
+            "user": user_profile.__dict__,
+            "message": f"User {user_record['username']} created successfully",
+        }
 
     def _create_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new user with validation and audit logging."""
@@ -381,29 +579,27 @@ class UserManagementNode(Node):
         """
 
         # Execute database insert
-        self._db_node.config.update(
-            {
-                "query": insert_query,
-                "params": [
-                    user_record["user_id"],
-                    user_record["tenant_id"],
-                    user_record["email"],
-                    user_record["username"],
-                    user_record["first_name"],
-                    user_record["last_name"],
-                    user_record["status"],
-                    user_record["roles"],
-                    user_record["attributes"],
-                    user_record["password_hash"],
-                    user_record["force_password_change"],
-                    user_record["created_at"],
-                    user_record["updated_at"],
-                    user_record["created_by"],
-                ],
-            }
-        )
+        query = {
+            "query": insert_query,
+            "params": [
+                user_record["user_id"],
+                user_record["tenant_id"],
+                user_record["email"],
+                user_record["username"],
+                user_record["first_name"],
+                user_record["last_name"],
+                user_record["status"],
+                user_record["roles"],
+                user_record["attributes"],
+                user_record["password_hash"],
+                user_record["force_password_change"],
+                user_record["created_at"],
+                user_record["updated_at"],
+                user_record["created_by"],
+            ],
+        }
 
-        db_result = self._db_node.run()
+        db_result = self._db_node.run(**query)
 
         # Create user profile response
         user_profile = UserProfile(
@@ -482,7 +678,7 @@ class UserManagementNode(Node):
             {"query": query, "params": params, "fetch_mode": "one"}
         )
 
-        db_result = self._db_node.run()
+        db_result = self._db_node.run(**query)
 
         if not db_result.get("result", {}).get("data"):
             return {

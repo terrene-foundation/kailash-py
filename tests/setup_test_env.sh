@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
 );
 
 -- Create index for vector similarity search
-CREATE INDEX IF NOT EXISTS embeddings_embedding_idx 
+CREATE INDEX IF NOT EXISTS embeddings_embedding_idx
 ON embeddings USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 EOF

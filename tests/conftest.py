@@ -1,24 +1,173 @@
-"""Shared fixtures for Kailash tests."""
+"""Consolidated test fixtures and configuration for Kailash SDK tests."""
 
+import asyncio
+import json
+import os
 import shutil
+import subprocess
 import tempfile
+import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
+import requests
+import yaml
 
-from kailash.nodes.base import Node, NodeMetadata
+from kailash.access_control import (
+    AccessControlManager,
+    NodePermission,
+    PermissionEffect,
+    PermissionRule,
+    UserContext,
+    WorkflowPermission,
+)
+from kailash.manifest import KailashManifest
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 
-# Import SDK development infrastructure support
-try:
-    from .conftest_sdk_dev import sdk_infrastructure
-except ImportError:
-    pass  # SDK dev infrastructure is optional
+# Import Docker configuration
+from tests.docker_config import (
+    DATABASE_CONFIG,
+    KAFKA_CONFIG,
+    MONGODB_CONFIG,
+    OAUTH2_CONFIG,
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+)
+
+# ===========================
+# SDK Infrastructure Support
+# ===========================
+
+
+def is_sdk_dev_running():
+    """Check if SDK development infrastructure is running."""
+    try:
+        response = requests.get("http://localhost:8889/health", timeout=1)
+        return response.status_code == 200
+    except:
+        return False
+
+
+def start_sdk_dev_infrastructure():
+    """Start SDK development infrastructure if not running."""
+    if is_sdk_dev_running():
+        print("✓ SDK development infrastructure is already running")
+        return True
+
+    print("Starting SDK development infrastructure...")
+    project_root = Path(__file__).parent.parent
+    docker_dir = project_root / "docker"
+
+    try:
+        # Check if Docker is running
+        subprocess.run(["docker", "info"], capture_output=True, check=True)
+    except subprocess.CalledProcessError:
+        print("⚠️  Docker is not running. Please start Docker first.")
+        return False
+
+    # Start infrastructure
+    cmd = ["docker", "compose", "-f", "docker-compose.sdk-dev.yml", "up", "-d"]
+    result = subprocess.run(cmd, cwd=docker_dir, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"Failed to start infrastructure: {result.stderr}")
+        return False
+
+    # Wait for services to be ready
+    print("Waiting for services to be ready...")
+    max_retries = 30
+    for i in range(max_retries):
+        if is_sdk_dev_running():
+            print("✓ SDK development infrastructure is ready")
+            return True
+        time.sleep(2)
+        if i % 5 == 0:
+            print(f"  Still waiting... ({i}/{max_retries})")
+
+    print("⚠️  Timeout waiting for infrastructure to start")
+    return False
+
+
+# ===========================
+# Pytest Configuration
+# ===========================
+
+
+def pytest_configure(config):
+    """Configure pytest with custom settings and markers."""
+    # Start SDK infrastructure if needed
+    if os.getenv("SDK_DEV_MODE") == "true":
+        if not start_sdk_dev_infrastructure():
+            pytest.exit("Failed to start SDK development infrastructure", 1)
+
+    # Register all custom markers
+    markers = [
+        "requires_infrastructure: mark test as requiring SDK development infrastructure",
+        "requires_kafka: mark test as requiring Kafka",
+        "requires_mongodb: mark test as requiring MongoDB",
+        "requires_qdrant: mark test as requiring Qdrant vector database",
+        "requires_postgres: mark test as requiring PostgreSQL",
+        "requires_ollama: mark test as requiring Ollama",
+        "slow: mark test as slow running",
+        "integration: mark test as integration test",
+        "unit: mark test as unit test",
+    ]
+
+    for marker in markers:
+        config.addinivalue_line("markers", marker)
+
+
+def pytest_collection_modifyitems(config, items):
+    """Modify test collection to handle infrastructure requirements."""
+    # Check service availability for conditional skipping
+    import asyncio
+
+    postgres_available = asyncio.run(check_postgres_connection())
+    skip_postgres = pytest.mark.skip(reason="PostgreSQL not available")
+
+    for item in items:
+        # Add infrastructure marker for tests that need specific services
+        if any(
+            marker in item.keywords
+            for marker in ["requires_kafka", "requires_mongodb", "requires_qdrant"]
+        ):
+            item.add_marker(pytest.mark.requires_infrastructure)
+
+        # Skip tests requiring unavailable services
+        if "requires_postgres" in item.keywords and not postgres_available:
+            item.add_marker(skip_postgres)
+
+
+async def check_postgres_connection():
+    """Check if PostgreSQL is available."""
+    try:
+        import asyncpg
+
+        conn = await asyncpg.connect(
+            host="localhost",
+            port=5432,
+            user="kailash",
+            password="kailash123",
+            database="test_db",
+            timeout=5,
+        )
+        await conn.close()
+        return True
+    except Exception:
+        return False
+
+
+# ===========================
+# Mock Classes
+# ===========================
 
 
 class MockNode(Node):
@@ -37,8 +186,6 @@ class MockNode(Node):
 
     def get_parameters(self) -> dict[str, Any]:
         """Define input parameters for the mock node."""
-        from kailash.nodes.base import NodeParameter
-
         return {
             "value": NodeParameter(
                 name="value",
@@ -54,12 +201,66 @@ class MockNode(Node):
         return {"result": value * 2}
 
 
+# ===========================
+# Core Fixtures
+# ===========================
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an event loop for async tests."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def sdk_infrastructure():
+    """Fixture that ensures SDK infrastructure is available."""
+    if os.getenv("SDK_DEV_MODE") != "true":
+        pytest.skip(
+            "SDK development infrastructure not enabled (set SDK_DEV_MODE=true)"
+        )
+
+    if not is_sdk_dev_running():
+        pytest.skip("SDK development infrastructure is not running")
+
+    # Load environment variables
+    env_file = Path(__file__).parent.parent / "sdk-users" / ".env.sdk-dev"
+    if env_file.exists():
+        from dotenv import load_dotenv
+
+        load_dotenv(env_file)
+
+    return {
+        "postgres": os.getenv("TRANSACTION_DB"),
+        "mongodb": os.getenv("MONGO_URL"),
+        "kafka": os.getenv("KAFKA_BROKERS"),
+        "qdrant": "http://localhost:6333",
+        "ollama": os.getenv("OLLAMA_HOST"),
+        "mock_api": os.getenv("WEBHOOK_API"),
+        "mcp_server": os.getenv("MCP_SERVER_URL"),
+    }
+
+
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for tests."""
     temp_path = Path(tempfile.mkdtemp())
     yield temp_path
     shutil.rmtree(temp_path)
+
+
+@pytest.fixture
+def temp_data_dir() -> Generator[Path, None, None]:
+    """Create a temporary directory for test data (alias for compatibility)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+# ===========================
+# Node Fixtures
+# ===========================
 
 
 @pytest.fixture
@@ -81,39 +282,108 @@ def mock_node_with_config():
 
 
 @pytest.fixture
-def sample_workflow():
-    """Create a sample workflow graph."""
-    workflow = Workflow(name="Test Workflow")
-
-    # Add nodes
-    node1 = MockNode(name="Node 1")
-    node2 = MockNode(name="Node 2")
-
-    workflow.add_node(node1)
-    workflow.add_node(node2)
-    workflow.add_edge(node1, node2)
-
-    return workflow
+def mock_node_for_access_control():
+    """Create a mock node for access control testing."""
+    node = Mock()
+    node.name = "test_node"
+    node.metadata = Mock()
+    node.metadata.name = "test_node"
+    node.execute = Mock(return_value={"result": "success"})
+    node.get_parameters = Mock(return_value={})
+    return node
 
 
-@pytest.fixture
-def sample_task():
-    """Create a sample task."""
-    return TaskRun(
-        task_id="test-task",
-        run_id="test-run",
-        node_id="test-node",
-        node_type="MockNode",
-        status=TaskStatus.PENDING,
-        metadata={"user": "test"},
-    )
+# ===========================
+# Data Fixtures
+# ===========================
 
 
 @pytest.fixture
-def task_manager(temp_dir):
-    """Create a task manager with filesystem storage."""
-    storage = FileSystemStorage(temp_dir)
-    return TaskManager(storage)
+def sample_csv_file(temp_data_dir: Path) -> Path:
+    """Create a sample CSV file for testing."""
+    csv_path = temp_data_dir / "sample.csv"
+    csv_path.write_text("id,name,value\n1,Alice,100\n2,Bob,200\n3,Charlie,300\n")
+    return csv_path
+
+
+@pytest.fixture
+def sample_json_file(temp_data_dir: Path) -> Path:
+    """Create a sample JSON file for testing."""
+    json_path = temp_data_dir / "sample.json"
+    data = {
+        "items": [
+            {"id": 1, "name": "Alice", "value": 100},
+            {"id": 2, "name": "Bob", "value": 200},
+            {"id": 3, "name": "Charlie", "value": 300},
+        ]
+    }
+    json_path.write_text(json.dumps(data, indent=2))
+    return json_path
+
+
+@pytest.fixture
+def large_dataset(temp_data_dir: Path) -> Path:
+    """Create a large dataset for performance testing."""
+    csv_path = temp_data_dir / "large_dataset.csv"
+
+    # Create a CSV with 10,000 rows
+    with open(csv_path, "w") as f:
+        f.write("id,name,value,category\n")
+        for i in range(10000):
+            name = f"User_{i}"
+            value = i * 10 % 1000
+            category = f"Cat_{i % 10}"
+            f.write(f"{i},{name},{value},{category}\n")
+
+    return csv_path
+
+
+@pytest.fixture
+def yaml_workflow_config(temp_data_dir: Path) -> Path:
+    """Create a YAML workflow configuration for testing."""
+    config = {
+        "workflow": {
+            "name": "yaml_test_workflow",
+            "description": "Workflow loaded from YAML",
+            "nodes": [
+                {
+                    "id": "reader",
+                    "type": "CSVReaderNode",
+                    "inputs": {"file_path": str(temp_data_dir / "input.csv")},
+                },
+                {
+                    "id": "processor",
+                    "type": "FilterNode",
+                    "inputs": {"field": "value", "operator": ">", "value": 100},
+                },
+                {
+                    "id": "writer",
+                    "type": "CSVWriterNode",
+                    "inputs": {"file_path": str(temp_data_dir / "output.csv")},
+                },
+            ],
+            "connections": [
+                {
+                    "from": "reader",
+                    "from_output": "data",
+                    "to": "processor",
+                    "to_input": "data",
+                },
+                {
+                    "from": "processor",
+                    "from_output": "filtered_data",
+                    "to": "writer",
+                    "to_input": "data",
+                },
+            ],
+        }
+    }
+
+    yaml_path = temp_data_dir / "workflow.yaml"
+    with open(yaml_path, "w") as f:
+        yaml.dump(config, f)
+
+    return yaml_path
 
 
 @pytest.fixture
@@ -139,9 +409,61 @@ def valid_input_data():
 
 
 @pytest.fixture
+def mock_api_data() -> dict:
+    """Create mock API response data."""
+    return {
+        "status": "success",
+        "data": [
+            {"id": 1, "metric": 42.5},
+            {"id": 2, "metric": 37.8},
+            {"id": 3, "metric": 55.1},
+        ],
+    }
+
+
+@pytest.fixture
+def mock_llm_response() -> str:
+    """Create a mock LLM response for testing."""
+    return """Based on the data analysis:
+
+    1. Total records: 3
+    2. Average value: 200
+    3. Key insights:
+       - Bob has the median value
+       - Charlie has the highest value at 300
+       - Alice has the lowest value at 100
+
+    Recommendations:
+    - Focus on understanding Charlie's high performance
+    - Investigate why Alice's value is lower
+    """
+
+
+# ===========================
+# Workflow Fixtures
+# ===========================
+
+
+@pytest.fixture
+def sample_workflow():
+    """Create a sample workflow graph."""
+    workflow = Workflow(workflow_id="test_workflow", name="Test Workflow")
+
+    # Add nodes
+    node1 = MockNode(name="Node 1")
+    node2 = MockNode(name="Node 2")
+
+    workflow.add_node("node1", node1, value=1.0)
+    workflow.add_node("node2", node2, value=2.0)
+    workflow.connect("node1", "node2", mapping={"result": "value"})
+
+    return workflow
+
+
+@pytest.fixture
 def complex_workflow():
     """Create a complex workflow with multiple nodes."""
-    workflow = Workflow(name="Complex Workflow")
+    workflow = Workflow(workflow_id="complex_workflow_test", name="Complex Workflow")
 
     # Create a diamond-shaped workflow
     nodes = {
@@ -151,12 +473,315 @@ def complex_workflow():
         "merge": MockNode(name="Merge Node"),
     }
 
-    for node in nodes.values():
-        workflow.add_node(node)
+    for node_id, node in nodes.items():
+        workflow.add_node(node_id, node, value=1.0)  # Provide required value parameter
 
-    workflow.add_edge(nodes["start"], nodes["branch1"])
-    workflow.add_edge(nodes["start"], nodes["branch2"])
-    workflow.add_edge(nodes["branch1"], nodes["merge"])
-    workflow.add_edge(nodes["branch2"], nodes["merge"])
+    workflow.connect("start", "branch1", mapping={"result": "value"})
+    workflow.connect("start", "branch2", mapping={"result": "value"})
+    workflow.connect("branch1", "merge", mapping={"result": "value"})
+    workflow.connect("branch2", "merge", mapping={"result": "value"})
 
     return workflow
+
+
+@pytest.fixture
+def simple_workflow(sample_csv_file: Path, temp_data_dir: Path) -> Workflow:
+    """Create a simple workflow for testing."""
+    builder = WorkflowBuilder()
+
+    # Add nodes
+    reader_id = builder.add_node(
+        "CSVReaderNode", "reader", config={"file_path": str(sample_csv_file)}
+    )
+
+    filter_id = builder.add_node(
+        "FilterNode", "filter", config={"field": "value", "operator": ">", "value": 100}
+    )
+
+    writer_id = builder.add_node(
+        "CSVWriterNode",
+        "writer",
+        config={"file_path": str(temp_data_dir / "output.csv")},
+    )
+
+    # Connect nodes
+    builder.add_connection(reader_id, "data", filter_id, "data")
+    builder.add_connection(filter_id, "filtered_data", writer_id, "data")
+
+    return builder.build("simple_test_workflow")
+
+
+@pytest.fixture
+def complex_integration_workflow(
+    sample_csv_file: Path, sample_json_file: Path, temp_data_dir: Path
+) -> Workflow:
+    """Create a complex multi-branch workflow for testing."""
+    builder = WorkflowBuilder()
+
+    # Add CSV reader
+    csv_reader_id = builder.add_node(
+        "CSVReaderNode", "csv_reader", config={"file_path": str(sample_csv_file)}
+    )
+
+    # Add filter
+    filter_id = builder.add_node(
+        "FilterNode", "filter", config={"field": "value", "operator": ">", "value": 150}
+    )
+
+    # Add AI processor
+    ai_processor_id = builder.add_node(
+        "TextSummarizer",
+        "ai_processor",
+        config={"texts": ["Analyze this data and provide insights"], "max_length": 100},
+    )
+
+    # Add outputs
+    csv_writer_id = builder.add_node(
+        "CSVWriterNode",
+        "csv_writer",
+        config={"file_path": str(temp_data_dir / "processed.csv")},
+    )
+
+    json_writer_id = builder.add_node(
+        "JSONWriterNode",
+        "json_writer",
+        config={"file_path": str(temp_data_dir / "processed.json")},
+    )
+
+    report_writer_id = builder.add_node(
+        "TextWriterNode",
+        "report_writer",
+        config={
+            "file_path": str(temp_data_dir / "report.txt"),
+            "text": "Data analysis complete",
+        },
+    )
+
+    # Connect nodes
+    builder.add_connection(csv_reader_id, "data", filter_id, "data")
+    builder.add_connection(filter_id, "filtered_data", csv_writer_id, "data")
+    builder.add_connection(filter_id, "filtered_data", json_writer_id, "data")
+    # AI processor can run independently
+    builder.add_connection(ai_processor_id, "summaries", report_writer_id, "data")
+
+    return builder.build("complex_test_workflow")
+
+
+@pytest.fixture
+def error_workflow(temp_data_dir: Path) -> Workflow:
+    """Create a workflow that will produce errors for testing."""
+    builder = WorkflowBuilder()
+
+    # Add a reader that will fail
+    reader_id = builder.add_node(
+        "CSVReaderNode",
+        "bad_reader",
+        config={"file_path": str(temp_data_dir / "nonexistent.csv")},
+    )
+
+    # Add a processor that will fail
+    processor_id = builder.add_node(
+        "FilterNode",
+        "bad_filter",
+        config={"field": "value", "operator": "invalid_op", "value": 100},
+    )
+
+    writer_id = builder.add_node(
+        "CSVWriterNode",
+        "writer",
+        config={"file_path": str(temp_data_dir / "output.csv")},
+    )
+
+    builder.add_connection(reader_id, "data", processor_id, "data")
+    builder.add_connection(processor_id, "filtered_data", writer_id, "data")
+
+    return builder.build("error_test_workflow")
+
+
+@pytest.fixture
+def parallel_workflow(temp_data_dir: Path) -> Workflow:
+    """Create a workflow with parallel execution paths."""
+    builder = WorkflowBuilder()
+
+    # Single input
+    reader_id = builder.add_node(
+        "CSVReaderNode",
+        "reader",
+        config={"file_path": str(temp_data_dir / "input.csv")},
+    )
+
+    # Parallel processing branches
+    filter1_id = builder.add_node(
+        "FilterNode",
+        "filter_high",
+        config={"field": "value", "operator": ">", "value": 500},
+    )
+
+    filter2_id = builder.add_node(
+        "FilterNode",
+        "filter_low",
+        config={"field": "value", "operator": "<=", "value": 500},
+    )
+
+    # Parallel outputs
+    writer1_id = builder.add_node(
+        "CSVWriterNode",
+        "writer_high",
+        config={"file_path": str(temp_data_dir / "high_values.csv")},
+    )
+
+    writer2_id = builder.add_node(
+        "CSVWriterNode",
+        "writer_low",
+        config={"file_path": str(temp_data_dir / "low_values.csv")},
+    )
+
+    # Connect parallel branches
+    builder.add_connection(reader_id, "data", filter1_id, "data")
+    builder.add_connection(reader_id, "data", filter2_id, "data")
+    builder.add_connection(filter1_id, "filtered_data", writer1_id, "data")
+    builder.add_connection(filter2_id, "filtered_data", writer2_id, "data")
+
+    return builder.build("parallel_test_workflow")
+
+
+# ===========================
+# Task Management Fixtures
+# ===========================
+
+
+@pytest.fixture
+def sample_task():
+    """Create a sample task."""
+    return TaskRun(
+        task_id="test-task",
+        run_id="test-run",
+        node_id="test-node",
+        node_type="MockNode",
+        status=TaskStatus.PENDING,
+        metadata={"user": "test"},
+    )
+
+
+@pytest.fixture
+def task_manager(temp_dir):
+    """Create a task manager with filesystem storage."""
+    storage = FileSystemStorage(temp_dir)
+    return TaskManager(storage)
+
+
+@pytest.fixture
+def sample_manifest(simple_workflow: Workflow) -> KailashManifest:
+    """Create a sample manifest for testing."""
+    return KailashManifest(
+        metadata={
+            "id": "test-manifest",
+            "name": "Test Manifest",
+            "version": "1.0.0",
+            "author": "Test Author",
+            "description": "Test manifest for integration tests",
+        },
+        workflow=simple_workflow,
+    )
+
+
+# ===========================
+# Access Control Fixtures
+# ===========================
+
+
+@pytest.fixture
+def clean_acm():
+    """Provide a clean AccessControlManager instance."""
+    return AccessControlManager()
+
+
+@pytest.fixture
+def admin_user():
+    """Standard admin user for testing."""
+    return UserContext(
+        user_id="admin-001",
+        tenant_id="tenant-001",
+        email="admin@test.com",
+        roles=["admin"],
+    )
+
+
+@pytest.fixture
+def analyst_user():
+    """Standard analyst user for testing."""
+    return UserContext(
+        user_id="analyst-001",
+        tenant_id="tenant-001",
+        email="analyst@test.com",
+        roles=["analyst"],
+    )
+
+
+@pytest.fixture
+def viewer_user():
+    """Standard viewer user for testing."""
+    return UserContext(
+        user_id="viewer-001",
+        tenant_id="tenant-001",
+        email="viewer@test.com",
+        roles=["viewer"],
+    )
+
+
+@pytest.fixture
+def multi_role_user():
+    """User with multiple roles for testing."""
+    return UserContext(
+        user_id="multi-001",
+        tenant_id="tenant-001",
+        email="multi@test.com",
+        roles=["viewer", "analyst", "reporter"],
+    )
+
+
+@pytest.fixture
+def standard_rules():
+    """Create a standard set of permission rules."""
+    return [
+        PermissionRule(
+            id="admin_all_nodes",
+            resource_type="node",
+            resource_id="*",
+            permission=NodePermission.EXECUTE,
+            effect=PermissionEffect.ALLOW,
+            role="admin",
+        ),
+        PermissionRule(
+            id="admin_all_workflows",
+            resource_type="workflow",
+            resource_id="*",
+            permission=WorkflowPermission.EXECUTE,
+            effect=PermissionEffect.ALLOW,
+            role="admin",
+        ),
+        PermissionRule(
+            id="analyst_process_nodes",
+            resource_type="node",
+            resource_id="process_*",
+            permission=NodePermission.EXECUTE,
+            effect=PermissionEffect.ALLOW,
+            role="analyst",
+        ),
+        PermissionRule(
+            id="viewer_read_nodes",
+            resource_type="node",
+            resource_id="read_*",
+            permission=NodePermission.READ,
+            effect=PermissionEffect.ALLOW,
+            role="viewer",
+        ),
+    ]
+
+
+@pytest.fixture
+def acm_with_standard_rules(clean_acm, standard_rules):
+    """AccessControlManager with standard rules pre-loaded."""
+    for rule in standard_rules:
+        clean_acm.add_rule(rule)
+    return clean_acm

@@ -1,0 +1,133 @@
+{
+  "value_segments": {
+    "platinum": {
+      "customer_count": 50,
+      "total_revenue": 37246245285.10368,
+      "average_spend": 744924905.7020737,
+      "average_clv": 3865770003.0678577,
+      "average_satisfaction": 3.6111003541077626,
+      "churn_risk_avg": 0.876869791185126
+    },
+    "gold": {
+      "customer_count": 100,
+      "total_revenue": 13251891847.133127,
+      "average_spend": 132518918.47133127,
+      "average_clv": 661483563.4873799,
+      "average_satisfaction": 3.759235964029393,
+      "churn_risk_avg": 0.8727434203263899
+    },
+    "silver": {
+      "customer_count": 150,
+      "total_revenue": 298047621.9659045,
+      "average_spend": 1986984.1464393632,
+      "average_clv": 9984013.94244223,
+      "average_satisfaction": 3.7648479571974165,
+      "churn_risk_avg": 0.8793195339951299
+    },
+    "bronze": {
+      "customer_count": 200,
+      "total_revenue": 21504679.527972545,
+      "average_spend": 107523.39763986273,
+      "average_clv": 554731.605035807,
+      "average_satisfaction": 3.819306220631839,
+      "churn_risk_avg": 0.8731093512827676
+    }
+  },
+  "behavioral_segments": {
+    "at_risk": {
+      "customer_count": 24,
+      "total_revenue": 290625746.52775145,
+      "avg_engagement": 0.7696702011902955,
+      "avg_churn_risk": 0.8145072219533877,
+      "recommendations": [
+        "Immediate intervention",
+        "Value reinforcement",
+        "Success review"
+      ]
+    },
+    "cannot_lose": {
+      "customer_count": 462,
+      "total_revenue": 50526908667.41253,
+      "avg_engagement": 0.5736227575315697,
+      "avg_churn_risk": 0.8777081427641,
+      "recommendations": [
+        "Executive engagement",
+        "Custom solutions",
+        "Retention incentives"
+      ]
+    },
+    "hibernating": {
+      "customer_count": 14,
+      "total_revenue": 155019.7904134534,
+      "avg_engagement": 0.30952635249795746,
+      "avg_churn_risk": 0.8991640474159103,
+      "recommendations": [
+        "Reactivation campaigns",
+        "New value propositions",
+        "Win-back offers"
+      ]
+    }
+  },
+  "risk_segments": {
+    "high_risk": {
+      "customer_count": 488,
+      "revenue_at_risk": 48746280135.12932,
+      "avg_satisfaction": 3.7629299231209266,
+      "avg_support_tickets": 12.586065573770492,
+      "intervention_priority": "immediate_action_required"
+    },
+    "medium_risk": {
+      "customer_count": 12,
+      "revenue_at_risk": 2071409298.6013744,
+      "avg_satisfaction": 4.063104110941301,
+      "avg_support_tickets": 1.75,
+      "intervention_priority": "proactive_monitoring"
+    }
+  },
+  "lifecycle_stages": {
+    "new_customer": {
+      "customer_count": 15,
+      "avg_clv": 86253739.36589293,
+      "avg_engagement": 0.5622739260566029,
+      "upsell_opportunity": 0.4849677403977377,
+      "stage_specific_strategies": [
+        "Onboarding optimization",
+        "Quick wins",
+        "Adoption acceleration"
+      ]
+    },
+    "growing": {
+      "customer_count": 56,
+      "avg_clv": 873168669.7360765,
+      "avg_engagement": 0.580527120898133,
+      "upsell_opportunity": 0.506395295478569,
+      "stage_specific_strategies": [
+        "Value expansion",
+        "Feature education",
+        "Success planning"
+      ]
+    },
+    "mature": {
+      "customer_count": 128,
+      "avg_clv": 321013875.42193997,
+      "avg_engagement": 0.5658432426731872,
+      "upsell_opportunity": 0.47151697494515526,
+      "stage_specific_strategies": [
+        "Optimization focus",
+        "Advanced features",
+        "Strategic partnership"
+      ]
+    },
+    "veteran": {
+      "customer_count": 301,
+      "avg_clv": 564001253.3713866,
+      "avg_engagement": 0.5795601495674793,
+      "upsell_opportunity": 0.5119833379144537,
+      "stage_specific_strategies": [
+        "Innovation preview",
+        "Loyalty rewards",
+        "Advocacy programs"
+      ]
+    }
+  }
+}

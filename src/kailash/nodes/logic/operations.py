@@ -98,6 +98,14 @@ class SwitchNode(Node):
                 type=Any,
                 required=False,  # For testing flexibility - required at execution time
                 description="Input data to route",
+                auto_map_primary=True,  # Auto-map the main workflow input
+                auto_map_from=[
+                    "data",
+                    "input",
+                    "value",
+                    "items",
+                ],  # Common alternatives
+                workflow_alias="data",  # Preferred name in workflow connections
             ),
             "condition_field": NodeParameter(
                 name="condition_field",
@@ -333,10 +341,13 @@ class SwitchNode(Node):
             # Default case always gets the input data
             result[default_field] = input_data
 
-            # Find which case matches
-            matched_case = None
+            # Initialize ALL case outputs to None first (for workflow compatibility)
+            for case in cases:
+                case_str = f"{case_prefix}{self._sanitize_case_name(case)}"
+                result[case_str] = None
 
-            # Match cases and populate the matching one
+            # Find which case matches and populate it
+            matched_case = None
             for case in cases:
                 if self._evaluate_condition(check_value, operator, case):
                     # Convert case value to a valid output field name

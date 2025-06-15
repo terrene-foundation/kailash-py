@@ -1,0 +1,33 @@
+{
+  "report_id": "78956299-5bc8-4dbe-b60d-f10d2a351293",
+  "generated_at": "2025-06-15T13:15:53.907932",
+  "executive_summary": {
+    "continuity_status": "maintained",
+    "recovery_success_rate": "50.0%",
+    "estimated_impact": "low",
+    "business_continuity_score": "87.5/100"
+  },
+  "recovery_details": {
+    "checkpoint_created": "23f79366-46c3-4fad-9ff8-d994c7c1687c",
+    "strategies_deployed": 2,
+    "automated_actions": 6,
+    "recovery_time_estimate": "3.0 minutes"
+  },
+  "business_impact": {
+    "data_preservation": "98.9%",
+    "cost_impact": {
+      "recovery_cost_usd": 548.5347135651256,
+      "productivity_loss_usd": 1297.9345026141732,
+      "potential_revenue_loss_usd": 393.55056198776384,
+      "total_estimated_cost_usd": 4738.015062925973
+    },
+    "stakeholder_notification_required": false
+  },
+  "recommendations": [
+    "Monitor session health continuously",
+    "Implement proactive error detection",
+    "Regular recovery testing and validation",
+    "Enhanced user training on recovery procedures"
+  ],
+  "next_review_date": "2025-07-15T13:15:53.907938"
+}

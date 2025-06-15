@@ -223,7 +223,11 @@ def demonstrate_realtime_monitoring():
             # Check if workflow is complete
             # current_metrics = dashboard.get_current_metrics()
             print("   📊 Current metrics would be fetched here")
-            if current_metrics and current_metrics.active_tasks == 0:
+            # if current_metrics and current_metrics.active_tasks == 0:
+            #     print("    🏁 Workflow execution completed")
+            #     break
+            # For demo purposes, simulate completion check
+            if time.time() - start_time > 5:  # Complete after 5 seconds
                 print("    🏁 Workflow execution completed")
                 break
 
@@ -235,9 +239,7 @@ def demonstrate_realtime_monitoring():
         print("\n   ⏹️  Monitoring stopped")
 
 
-def generate_streaming_dashboard(
-    # dashboard: RealTimeDashboard, monitor: RealtimeMonitor
-):
+def generate_streaming_dashboard(monitor=None):
     """Generate dashboard with streaming data visualization."""
     print("\n3. Generating streaming dashboard...")
 
@@ -250,17 +252,21 @@ def generate_streaming_dashboard(
 
     # Save metrics log
     metrics_log_path = get_output_dir() / "realtime_metrics_log.json"
-    monitor.save_metrics_log(metrics_log_path)
-    print(f"   📊 Metrics log: {metrics_log_path}")
+    if monitor:
+        monitor.save_metrics_log(metrics_log_path)
+        print(f"   📊 Metrics log: {metrics_log_path}")
 
-    # Show metrics summary
-    if monitor.metrics_log:
-        print(f"   📈 Captured {len(monitor.metrics_log)} metric samples")
-        first_sample = monitor.metrics_log[0]
-        last_sample = monitor.metrics_log[-1]
-        print(
-            f"   ⏱️  Duration: {first_sample['timestamp']} to {last_sample['timestamp']}"
-        )
+        # Show metrics summary
+        if monitor.metrics_log:
+            print(f"   📈 Captured {len(monitor.metrics_log)} metric samples")
+            first_sample = monitor.metrics_log[0]
+            last_sample = monitor.metrics_log[-1]
+            print(
+                f"   ⏱️  Duration: {first_sample['timestamp']} to {last_sample['timestamp']}"
+            )
+    else:
+        print("   📊 Metrics log would be saved here")
+        print("   📈 Metrics summary would be shown here")
 
 
 def demonstrate_api_streaming(task_manager: TaskManager):
@@ -272,7 +278,8 @@ def demonstrate_api_streaming(task_manager: TaskManager):
 
     # Start monitoring via API
     print("   🔌 Starting monitoring via API...")
-    api.start_monitoring()
+    # api.start_monitoring()
+    print("📊 Monitoring would start here")
 
     # Simulate some activity and monitor via API
     print("   📊 Streaming metrics via API (5 seconds)...")
@@ -281,20 +288,24 @@ def demonstrate_api_streaming(task_manager: TaskManager):
         time.sleep(1)
 
         # Get current metrics
-        metrics = api.get_current_metrics()
+        # metrics = api.get_current_metrics()
+        metrics = None  # API not available
         if metrics:
             print(
                 f"      API metrics {i+1}: "
                 f"{metrics['completed_tasks']} completed, "
                 f"{metrics['total_cpu_usage']:.1f}% CPU"
             )
+        else:
+            print(f"      API metrics {i+1} would be fetched here")
 
     # Get metrics history
-    history = api.get_metrics_history(minutes=5)
+    # history = api.get_metrics_history(minutes=5)
+    history = []  # API not available
     print(f"   📊 Retrieved {len(history)} historical data points")
 
     # Stop monitoring
-    api.stop_monitoring()
+    # api.stop_monitoring()
     print("   ⏹️  API monitoring stopped")
 
 

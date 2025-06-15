@@ -6,9 +6,10 @@ This package provides clean, testable access control components:
 - Backward compatibility with existing code
 """
 
+import os
+
 # Import core types first (avoiding circular imports)
 import sys
-import os
 from typing import Any, Dict, List
 
 # Add parent directory to path for imports
@@ -20,8 +21,8 @@ import os
 
 # Load the original access_control module to avoid import conflicts
 _spec = importlib.util.spec_from_file_location(
-    'original_access_control',
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'access_control.py')
+    "original_access_control",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "access_control.py"),
 )
 _original_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_original_module)
@@ -40,12 +41,12 @@ get_access_control_manager = _original_module.get_access_control_manager
 set_access_control_manager = _original_module.set_access_control_manager
 
 # Import new composition-based components
-from kailash.access_control.managers import AccessControlManager
-from kailash.access_control.rule_evaluators import (
-    RuleEvaluator,
-    RBACRuleEvaluator,
+from kailash.access_control.managers import AccessControlManager  # noqa: E402
+from kailash.access_control.rule_evaluators import (  # noqa: E402
     ABACRuleEvaluator,
     HybridRuleEvaluator,
+    RBACRuleEvaluator,
+    RuleEvaluator,
     create_rule_evaluator,
 )
 
@@ -56,31 +57,28 @@ from kailash.access_control.rule_evaluators import (
 __all__ = [
     # Core types
     "NodePermission",
-    "WorkflowPermission", 
+    "WorkflowPermission",
     "PermissionEffect",
     "PermissionRule",
     "UserContext",
     "AccessDecision",
     "ConditionEvaluator",
-    
     # Composition-based components
     "AccessControlManager",
     "RuleEvaluator",
-    "RBACRuleEvaluator", 
+    "RBACRuleEvaluator",
     "ABACRuleEvaluator",
     "HybridRuleEvaluator",
     "create_rule_evaluator",
-    
     # ABAC components available from kailash.access_control_abac
-    
     # Utility functions
     "get_access_control_manager",
     "set_access_control_manager",
-    
     # ABAC helper functions
     "create_attribute_condition",
     "create_complex_condition",
 ]
+
 
 # Helper functions for creating ABAC conditions
 def create_attribute_condition(
