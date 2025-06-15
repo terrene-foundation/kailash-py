@@ -14,6 +14,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
+# JWT and cryptography imports
+try:
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+except ImportError:
+    jwt = None
+    rsa = None
+
 # Import Kailash SDK components
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.code import PythonCodeNode

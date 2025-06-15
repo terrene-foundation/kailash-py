@@ -959,7 +959,7 @@ def create_automation_orchestrator() -> PythonCodeNode:
         }
 
     def identify_additional_automations(
-        insights: Dict[str, Any]
+        insights: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Identify additional automation opportunities."""
 
@@ -1013,7 +1013,7 @@ def create_automation_orchestrator() -> PythonCodeNode:
         return automations
 
     def calculate_automation_maturity(
-        initiatives: List[Dict[str, Any]]
+        initiatives: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Calculate automation maturity level."""
 

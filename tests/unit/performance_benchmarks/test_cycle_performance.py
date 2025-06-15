@@ -10,10 +10,6 @@ Tests performance characteristics of cycles including:
 Note: These tests are marked as slow and skipped in normal CI runs.
 """
 
-import pytest
-
-pytestmark = pytest.mark.slow
-
 import gc
 import os
 import time
@@ -27,6 +23,8 @@ from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
+
+pytestmark = pytest.mark.slow
 
 
 class PerformanceCounterNode(CycleAwareNode):

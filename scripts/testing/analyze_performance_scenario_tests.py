@@ -230,7 +230,7 @@ def determine_recommendation(
 
 
 def generate_removal_relocation_report(
-    analysis_results: List[Dict[str, Any]]
+    analysis_results: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """Generate comprehensive report with recommendations."""
 

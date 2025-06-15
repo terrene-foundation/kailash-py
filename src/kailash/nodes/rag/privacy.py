@@ -149,7 +149,7 @@ def detect_and_redact_pii(text, redact={self.redact_pii}):
                 }})
 
                 # Redact with type indicator
-                replacement = f"[{{pii_type.upper()}}_{hash_value}]"
+                replacement = f"[{pii_type.upper()}_{hash_value}]"
                 redacted_text = redacted_text.replace(match, replacement)
 
     # Additional sensitive data patterns
@@ -218,7 +218,7 @@ def anonymize_query(query, pii_info, anonymize={self.anonymize_queries}):
     for pattern, replacement in generalization_rules.items():
         if re.search(pattern, anonymized, re.IGNORECASE):
             anonymized = re.sub(pattern, replacement, anonymized, flags=re.IGNORECASE)
-            generalizations.append(f"{{pattern}}->{replacement}")
+            generalizations.append(f"{pattern}->{replacement}")
 
     # Add query perturbation for additional privacy
     if len(anonymized.split()) > 5:

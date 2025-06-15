@@ -449,7 +449,7 @@ def create_result_aggregator() -> PythonCodeNode:
         return high_risk_handled * 1000  # Estimated value per risk mitigated
 
     def generate_optimization_recommendations(
-        stats: Dict[str, Any]
+        stats: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Generate optimization recommendations based on performance."""
         recommendations = []

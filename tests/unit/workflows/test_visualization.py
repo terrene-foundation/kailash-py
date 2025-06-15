@@ -24,16 +24,12 @@ class MockNode(Node):
         return data
 
     def run(self, **kwargs):
-        """Run the node."""
+        """Execute the node."""
         return self.process(kwargs)
 
     def get_parameters(self):
         """Get node parameters."""
         return {}
-
-    def run(self, **kwargs):
-        """Execute the node."""
-        return self.process(kwargs)
 
 
 class TestWorkflowVisualizer:

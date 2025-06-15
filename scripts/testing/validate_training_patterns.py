@@ -308,7 +308,7 @@ def test_switch_cycle_pattern():
         # Should have converged
         final_optimizer = results.get("optimizer", {})
         assert final_optimizer.get("result", {}).get("score", 0) >= 0.9
-        assert final_optimizer.get("result", {}).get("converged", False) == True
+        assert final_optimizer.get("result", {}).get("converged", False)
 
         print("✅ SwitchNode Cycle Pattern: PASSED")
         return True
