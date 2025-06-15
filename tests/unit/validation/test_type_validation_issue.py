@@ -1,10 +1,10 @@
 """Test to reproduce the type validation issue."""
 
 import pandas as pd
+import pytest
 
 from kailash.nodes.code import PythonCodeNode
 from kailash.sdk_exceptions import NodeValidationError
-import pytest
 
 
 def test_type_validation_issue():

@@ -26,14 +26,13 @@ class TestPhase53Features:
 
         # Add simple nodes for testing
         processor = PythonCodeNode(
-            name="processor",
-            code="result = {'quality': 0.8, 'iteration': 1}"
+            name="processor", code="result = {'quality': 0.8, 'iteration': 1}"
         )
         workflow.add_node("processor", processor)
 
         evaluator = PythonCodeNode(
             name="evaluator",
-            code="result = {'quality': 0.9, 'evaluation_complete': True}"
+            code="result = {'quality': 0.9, 'evaluation_complete': True}",
         )
         workflow.add_node("evaluator", evaluator)
 
@@ -45,11 +44,11 @@ class TestPhase53Features:
             convergence="quality > 0.85",
             max_iterations=5,
         )
-        
+
         # Verify cycle was created (cycle_id returned)
         assert cycle_id is not None
         assert isinstance(cycle_id, str)
-        
+
         # Verify workflow has cycles
         assert workflow.has_cycles()
 
@@ -60,14 +59,12 @@ class TestPhase53Features:
 
         # Add nodes that might form cycles
         optimizer = PythonCodeNode(
-            name="optimizer",
-            code="result = {'data': 'optimized', 'iteration': 1}"
+            name="optimizer", code="result = {'data': 'optimized', 'iteration': 1}"
         )
         workflow.add_node("optimizer", optimizer)
 
         evaluator = PythonCodeNode(
-            name="evaluator",
-            code="result = {'quality': 0.8, 'should_retry': False}"
+            name="evaluator", code="result = {'quality': 0.8, 'should_retry': False}"
         )
         workflow.add_node("evaluator", evaluator)
 
@@ -77,7 +74,7 @@ class TestPhase53Features:
         # Test converter
         converter = DAGToCycleConverter(workflow)
         opportunities = converter.analyze_cyclification_opportunities()
-        
+
         # Verify analysis results
         assert isinstance(opportunities, list)
         # The specific opportunities depend on implementation
@@ -89,29 +86,27 @@ class TestPhase53Features:
         workflow = Workflow("lint_test", "Lint Test")
 
         # Add simple cyclic pattern
-        counter = PythonCodeNode(
-            name="counter",
-            code="result = {'count': 1}"
-        )
+        counter = PythonCodeNode(name="counter", code="result = {'count': 1}")
         workflow.add_node("counter", counter)
 
         # Create self-loop with proper configuration
         workflow.connect(
-            "counter", "counter",
+            "counter",
+            "counter",
             cycle=True,
             max_iterations=10,  # Provide max_iterations
-            cycle_id="test_cycle"
+            cycle_id="test_cycle",
         )
 
         # Test linter
         linter = CycleLinter(workflow)
-        
+
         # Verify linter exists and can be created
         assert linter is not None
         assert linter.workflow == workflow
-        
+
         # If lint method exists, test it
-        if hasattr(linter, 'lint'):
+        if hasattr(linter, "lint"):
             issues = linter.lint()
             assert isinstance(issues, list)
 
@@ -121,20 +116,19 @@ class TestPhase53Features:
 
         # Add operation node
         operation = PythonCodeNode(
-            name="operation",
-            code="result = {'success': False, 'attempt': 1}"
+            name="operation", code="result = {'success': False, 'attempt': 1}"
         )
         workflow.add_node("operation", operation)
 
         # Test retry template if it exists
-        if hasattr(CycleTemplates, 'retry_pattern'):
+        if hasattr(CycleTemplates, "retry_pattern"):
             cycle_id = CycleTemplates.retry_pattern(
                 workflow=workflow,
                 operation_node="operation",
                 max_retries=3,
-                retry_delay=1.0
+                retry_delay=1.0,
             )
-            
+
             assert cycle_id is not None
             assert workflow.has_cycles()
 
@@ -146,8 +140,7 @@ class TestPhase53Features:
         nodes = {}
         for i in range(5):
             node = PythonCodeNode(
-                name=f"node_{i}",
-                code=f"result = {{'data': 'processed_{i}'}}"
+                name=f"node_{i}", code=f"result = {{'data': 'processed_{i}'}}"
             )
             nodes[f"node_{i}"] = node
             workflow.add_node(f"node_{i}", node)
@@ -162,7 +155,7 @@ class TestPhase53Features:
         # Test converter
         converter = DAGToCycleConverter(workflow)
         opportunities = converter.analyze_cyclification_opportunities()
-        
+
         # Verify it handles complex structures
         assert isinstance(opportunities, list)
 
@@ -172,18 +165,18 @@ class TestPhase53Features:
 
         # Add accumulator node
         accumulator = PythonCodeNode(
-            name="accumulator",
-            code="result = {'total': 10, 'done': False}"
+            name="accumulator", code="result = {'total': 10, 'done': False}"
         )
         workflow.add_node("accumulator", accumulator)
 
         # Create well-configured cycle
         workflow.connect(
-            "accumulator", "accumulator",
+            "accumulator",
+            "accumulator",
             cycle=True,
             max_iterations=10,
             convergence_check="done == True",
-            cycle_id="valid_cycle"
+            cycle_id="valid_cycle",
         )
 
         # Test linter creation
@@ -197,7 +190,9 @@ class TestPhase53Features:
 
         # Try to create cycle with non-existent nodes
         # This should raise an error during the connect phase
-        with pytest.raises(Exception):  # Can be ValueError, KeyError, or WorkflowValidationError
+        with pytest.raises(
+            Exception
+        ):  # Can be ValueError, KeyError, or WorkflowValidationError
             CycleTemplates.optimization_cycle(
                 workflow=workflow,
                 processor_node="missing_node",
@@ -209,10 +204,10 @@ class TestPhase53Features:
     def test_converter_empty_workflow(self):
         """Test converter handles empty workflows."""
         workflow = Workflow("empty", "Empty Workflow")
-        
+
         converter = DAGToCycleConverter(workflow)
         opportunities = converter.analyze_cyclification_opportunities()
-        
+
         # Should handle empty workflow gracefully
         assert isinstance(opportunities, list)
         assert len(opportunities) == 0
@@ -226,18 +221,15 @@ class TestPhase53Features:
         workflow1.add_node("node1", node1)
         workflow1.add_node("node2", node2)
         workflow1.connect("node1", "node2")
-        
+
         assert not workflow1.has_cycles()
-        
+
         # Workflow with cycles
         workflow2 = Workflow("with_cycles", "With Cycles")
         counter = PythonCodeNode(name="counter", code="result = {'count': 1}")
         workflow2.add_node("counter", counter)
         workflow2.connect(
-            "counter", "counter",
-            cycle=True,
-            max_iterations=5,
-            cycle_id="test_cycle"
+            "counter", "counter", cycle=True, max_iterations=5, cycle_id="test_cycle"
         )
-        
+
         assert workflow2.has_cycles()

@@ -1,4 +1,3 @@
-
 # Docker infrastructure configuration
 import os
 
@@ -46,6 +45,7 @@ QDRANT_CONFIG = {
     "port": int(os.getenv("QDRANT_PORT", "6333")),
 }
 
+
 # Connection string helpers
 def get_postgres_connection_string(database=None):
     """Get PostgreSQL connection string for the Docker setup."""
@@ -55,6 +55,7 @@ def get_postgres_connection_string(database=None):
         f"@{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{db}"
     )
 
+
 def get_mongodb_connection_string(database="kailash"):
     """Get MongoDB connection string for the Docker setup."""
     return (
@@ -62,9 +63,11 @@ def get_mongodb_connection_string(database="kailash"):
         f"@{MONGODB_CONFIG['host']}:{MONGODB_CONFIG['port']}/{database}"
     )
 
+
 def get_redis_url():
     """Get Redis URL for the Docker setup."""
     return f"redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}"
+
 
 # Test database names
 TEST_DATABASES = {

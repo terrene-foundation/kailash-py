@@ -19,7 +19,7 @@ class SessionManager:
     def __init__(self):
         self.sessions = {}
         self.lock = asyncio.Lock()
-    
+
     async def create_session(self, user_id):
         async with self.lock:
             session_id = str(uuid.uuid4())
@@ -37,7 +37,7 @@ class SessionManager:
 builder = WorkflowBuilder()
 
 # Permission check
-builder.add_node("PermissionCheckNode", node_id="check_perms", 
+builder.add_node("PermissionCheckNode", node_id="check_perms",
     config={"permission": "session.create"})
 
 # Data transformation
@@ -64,7 +64,7 @@ class EventProcessor:
     def __init__(self):
         self.events = []
         self.batch_size = 100
-    
+
     async def process_events(self):
         while self.events:
             batch = self.events[:self.batch_size]
@@ -121,7 +121,7 @@ class SimpleCache:
     def __init__(self):
         self.cache = {}
         self.ttl = {}
-    
+
     def get(self, key):
         if key in self.cache:
             if time.time() < self.ttl.get(key, 0):
@@ -172,7 +172,7 @@ class MetricsCollector:
     def __init__(self):
         self.metrics = defaultdict(int)
         self.timings = []
-    
+
     def record_event(self, event_type):
         self.metrics[event_type] += 1
 ```
@@ -200,7 +200,7 @@ class TokenManager:
     def __init__(self):
         self.tokens = {}
         self.secret_key = "hardcoded_secret"
-    
+
     def create_token(self, user_id):
         # Manual JWT creation
         pass

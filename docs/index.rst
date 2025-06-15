@@ -54,6 +54,9 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
    troubleshooting
    performance
    workflow_studio
+   data-consolidation-guide
+   enhancements/sql-oauth-credential-enhancements
+   features/http_nodes_comparison
 
 .. toctree::
    :maxdepth: 2
@@ -62,6 +65,7 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
    api/nodes
    api/workflow
    api/middleware
+   api/gateway
    api/workflow_api
    api/runtime
    api/access_control
@@ -87,6 +91,13 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
    contributing
    security
    unimplemented_nodes_tracker
+   v0.2.0-release-summary
+   adr/README
+   adr/0017-llm-provider-architecture
+   adr/0017-multi-workflow-api-architecture
+   adr/0018-http-rest-client-architecture
+   todos/000-master
+   todos/completed-archive
 
 Overview
 ========

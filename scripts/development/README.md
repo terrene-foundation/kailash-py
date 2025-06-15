@@ -294,6 +294,6 @@ mongodump --uri mongodb://kailash:kailash123@localhost:27017/kailash
 
 ---
 
-**Dependencies**: Docker, Docker Compose, curl, PostgreSQL client tools  
-**Tested On**: macOS (Intel/Apple Silicon), Ubuntu 20.04+, Windows 10+ with WSL2  
+**Dependencies**: Docker, Docker Compose, curl, PostgreSQL client tools
+**Tested On**: macOS (Intel/Apple Silicon), Ubuntu 20.04+, Windows 10+ with WSL2
 **Last Updated**: Scripts directory reorganization

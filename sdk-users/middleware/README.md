@@ -56,7 +56,7 @@ const session = await fetch('http://localhost:8000/api/sessions', {
     body: JSON.stringify({user_id: 'frontend_user'})
 });
 
-// Execute workflow  
+// Execute workflow
 const execution = await fetch('http://localhost:8000/api/executions', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -83,7 +83,7 @@ from kailash.middleware import AgentUIMiddleware
 async def create_dynamic_workflow():
     agent_ui = AgentUIMiddleware()
     session_id = await agent_ui.create_session(user_id="user123")
-    
+
     # Workflow from frontend JSON
     workflow_config = {
         "nodes": [
@@ -94,22 +94,22 @@ async def create_dynamic_workflow():
             },
             {
                 "id": "process",
-                "type": "PythonCodeNode", 
+                "type": "PythonCodeNode",
                 "config": {"name": "process", "code": "result = {'count': len(input_data)}"}
             }
         ],
         "connections": [
-            {"from_node": "input", "from_output": "output", 
+            {"from_node": "input", "from_output": "output",
              "to_node": "process", "to_input": "input_data"}
         ]
     }
-    
+
     # Create and execute
     workflow_id = await agent_ui.create_dynamic_workflow(
         session_id=session_id,
         workflow_config=workflow_config
     )
-    
+
     execution_id = await agent_ui.execute_workflow(
         session_id=session_id,
         workflow_id=workflow_id
@@ -190,7 +190,7 @@ mcp = MiddlewareMCPServer(name="tools", agent_ui=gateway.agent_ui)
 
 ### Frontend Examples
 - **JavaScript Integration** - Vanilla JS patterns
-- **React Integration** - React hooks and components  
+- **React Integration** - React hooks and components
 - **Vue.js Integration** - Vue composition patterns
 
 ## Troubleshooting

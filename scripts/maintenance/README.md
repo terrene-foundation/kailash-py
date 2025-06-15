@@ -191,7 +191,7 @@ processor = PythonCodeNode.from_function(
 
 **Organization Strategy**:
 - **cycle_analysis/** - Cycle analysis outputs
-- **visualizations/** - Visualization outputs  
+- **visualizations/** - Visualization outputs
 - **workflows/** - Workflow outputs
 - **misc/** - Other outputs
 
@@ -421,6 +421,6 @@ git add -p
 
 ---
 
-**Safety Level**: fix-imports.py and consolidate-outputs.py are safe. refactor-pythoncode.py requires review.  
-**Frequency**: fix-imports.py daily, others weekly or as needed  
+**Safety Level**: fix-imports.py and consolidate-outputs.py are safe. refactor-pythoncode.py requires review.
+**Frequency**: fix-imports.py daily, others weekly or as needed
 **Last Updated**: Scripts directory reorganization

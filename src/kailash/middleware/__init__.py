@@ -2,11 +2,11 @@
 Enterprise Middleware Layer for Kailash SDK
 ===========================================
 
-Consolidated enterprise-grade middleware components that provide a comprehensive 
+Consolidated enterprise-grade middleware components that provide a comprehensive
 foundation for building production-ready applications with the Kailash SDK.
 
 This middleware layer consolidates and enhances existing api/ and mcp/ implementations
-into a unified, enterprise-grade middleware stack built entirely with Kailash SDK 
+into a unified, enterprise-grade middleware stack built entirely with Kailash SDK
 components, following strict SDK patterns and best practices.
 
 Core Design Principles
@@ -99,14 +99,14 @@ Usage Examples
 
 **Basic Middleware Stack**:
     >>> from kailash.middleware import AgentUIMiddleware, APIGateway
-    >>> 
+    >>>
     >>> # Create agent-UI middleware with session management
     >>> agent_ui = AgentUIMiddleware(
     ...     max_sessions=1000,
     ...     session_timeout_minutes=60,
     ...     enable_persistence=True
     ... )
-    >>> 
+    >>>
     >>> # Create API gateway with authentication
     >>> gateway = create_gateway(
     ...     title="My Kailash API",
@@ -117,29 +117,29 @@ Usage Examples
 
 **Real-time Communication**:
     >>> from kailash.middleware import RealtimeMiddleware, EventStream
-    >>> 
+    >>>
     >>> # Create real-time middleware with WebSocket support
     >>> realtime = RealtimeMiddleware(agent_ui)
-    >>> 
+    >>>
     >>> # Subscribe to workflow events
     >>> async def handle_workflow_events(event):
     ...     print(f"Workflow {event.workflow_id}: {event.type}")
-    >>> 
+    >>>
     >>> await realtime.event_stream.subscribe(
-    ...     "workflow_monitor", 
+    ...     "workflow_monitor",
     ...     handle_workflow_events
     ... )
 
 **AI Chat Integration**:
     >>> from kailash.middleware import AIChatMiddleware
-    >>> 
+    >>>
     >>> # Create AI chat with semantic search
     >>> ai_chat = AIChatMiddleware(
     ...     agent_ui,
     ...     enable_vector_search=True,
     ...     vector_database_url="postgresql://..."
     ... )
-    >>> 
+    >>>
     >>> # Start chat session and get workflow suggestions
     >>> session_id = await ai_chat.start_chat_session("user123")
     >>> response = await ai_chat.send_message(
@@ -158,7 +158,7 @@ Usage Examples
     ...             "config": {"file_path": "/data/input.csv"}
     ...         },
     ...         {
-    ...             "id": "data_processor", 
+    ...             "id": "data_processor",
     ...             "type": "PythonCodeNode",
     ...             "config": {
     ...                 "name": "data_processor",
@@ -170,12 +170,12 @@ Usage Examples
     ...         {
     ...             "from_node": "csv_reader",
     ...             "from_output": "data",
-    ...             "to_node": "data_processor", 
+    ...             "to_node": "data_processor",
     ...             "to_input": "data"
     ...         }
     ...     ]
     ... }
-    >>> 
+    >>>
     >>> # Create and execute workflow
     >>> session_id = await agent_ui.create_session("user123")
     >>> workflow_id = await agent_ui.create_dynamic_workflow(
@@ -210,59 +210,60 @@ License: See LICENSE file
 Documentation: https://docs.kailash.ai/middleware/
 """
 
-# Core Middleware Components
-from .core.agent_ui import AgentUIMiddleware
-from .core.workflows import MiddlewareWorkflows, WorkflowBasedMiddleware
-from .core.schema import NodeSchemaGenerator, DynamicSchemaRegistry
-
-# Communication Layer
-from .communication.events import (
-    EventStream,
-    EventType,
-    EventPriority,
-    EventFilter,
-    WorkflowEvent,
-    NodeEvent,
-    UIEvent
+from .auth.access_control import (
+    MiddlewareAccessControlManager,
+    MiddlewareAuthenticationMiddleware,
 )
-from .communication.realtime import RealtimeMiddleware
-from .communication.api_gateway import APIGateway, create_gateway
-from .communication.ai_chat import AIChatMiddleware, ChatMessage, WorkflowGenerator
+from .auth.auth_manager import AuthLevel, MiddlewareAuthManager
 
 # Authentication & Access Control
 from .auth.jwt_auth import JWTAuthManager
-from .auth.auth_manager import MiddlewareAuthManager, AuthLevel
-from .auth.access_control import (
-    MiddlewareAccessControlManager,
-    MiddlewareAuthenticationMiddleware
+from .communication.ai_chat import AIChatMiddleware, ChatMessage, WorkflowGenerator
+from .communication.api_gateway import APIGateway, create_gateway
+
+# Communication Layer
+from .communication.events import (
+    EventFilter,
+    EventPriority,
+    EventStream,
+    EventType,
+    NodeEvent,
+    UIEvent,
+    WorkflowEvent,
+)
+from .communication.realtime import RealtimeMiddleware
+
+# Core Middleware Components
+from .core.agent_ui import AgentUIMiddleware
+from .core.schema import DynamicSchemaRegistry, NodeSchemaGenerator
+from .core.workflows import MiddlewareWorkflows, WorkflowBasedMiddleware
+
+# Database Layer
+from .database import (
+    CustomNodeModel,
+    MiddlewareDatabaseManager,
+    MiddlewareWorkflowRepository,
+    WorkflowExecutionModel,
+    WorkflowModel,
+)
+from .mcp.client_integration import (
+    MCPClientConfig,
+    MCPServerConnection,
+    MiddlewareMCPClient,
 )
 
 # MCP Integration
 from .mcp.enhanced_server import (
-    MiddlewareMCPServer,
+    MCPResourceNode,
     MCPServerConfig,
     MCPToolNode,
-    MCPResourceNode
-)
-from .mcp.client_integration import (
-    MiddlewareMCPClient,
-    MCPClientConfig,
-    MCPServerConnection
-)
-
-# Database Layer
-from .database import (
-    WorkflowModel,
-    WorkflowExecutionModel,
-    CustomNodeModel,
-    MiddlewareWorkflowRepository,
-    MiddlewareDatabaseManager
+    MiddlewareMCPServer,
 )
 
 __all__ = [
     # Core Components
     "AgentUIMiddleware",
-    "AIChatMiddleware", 
+    "AIChatMiddleware",
     "ChatMessage",
     "WorkflowGenerator",
     "APIGateway",
@@ -272,36 +273,31 @@ __all__ = [
     "EventPriority",
     "EventFilter",
     "WorkflowEvent",
-    "NodeEvent", 
+    "NodeEvent",
     "UIEvent",
     "RealtimeMiddleware",
     "NodeSchemaGenerator",
     "DynamicSchemaRegistry",
-    
     # Authentication & Access Control
     "JWTAuthManager",
     "MiddlewareAuthManager",
     "AuthLevel",
-    "MiddlewareAccessControlManager", 
+    "MiddlewareAccessControlManager",
     "MiddlewareAuthenticationMiddleware",
-    
     # MCP Integration
     "MiddlewareMCPServer",
     "MCPServerConfig",
     "MCPToolNode",
     "MCPResourceNode",
     "MiddlewareMCPClient",
-    "MCPClientConfig", 
+    "MCPClientConfig",
     "MCPServerConnection",
-    
-    
     # Database Layer
     "WorkflowModel",
     "WorkflowExecutionModel",
     "CustomNodeModel",
     "MiddlewareWorkflowRepository",
     "MiddlewareDatabaseManager",
-    
     # Workflow-based Optimizations
     "MiddlewareWorkflows",
     "WorkflowBasedMiddleware",

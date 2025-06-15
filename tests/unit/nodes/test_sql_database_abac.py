@@ -1,11 +1,13 @@
 """Test SQL Database Node with ABAC integration."""
 
+import os
 import sqlite3
 import tempfile
-import os
+
 import pytest
 
 from kailash.access_control import (
+    AccessControlManager,
     NodePermission,
     PermissionEffect,
     PermissionRule,
@@ -18,7 +20,6 @@ from kailash.access_control_abac import (
     AttributeOperator,
     LogicalOperator,
 )
-from kailash.access_control import AccessControlManager
 from kailash.nodes.data import SQLDatabaseNode
 
 
@@ -28,15 +29,16 @@ class TestSQLDatabaseNodeABAC:
     @pytest.fixture
     def temp_db(self):
         """Create a temporary SQLite database with test data."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.db', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".db", delete=False) as f:
             db_path = f.name
-        
+
         # Create test data
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
+
         # Create users table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY,
                 name TEXT,
@@ -44,8 +46,9 @@ class TestSQLDatabaseNodeABAC:
                 department TEXT,
                 salary REAL
             )
-        """)
-        
+        """
+        )
+
         # Insert test data
         users = [
             (1, "Alice Johnson", "alice@company.com", "IT", 95000),
@@ -54,12 +57,12 @@ class TestSQLDatabaseNodeABAC:
             (4, "Diana Prince", "diana@company.com", "IT", 98000),
         ]
         cursor.executemany("INSERT INTO users VALUES (?, ?, ?, ?, ?)", users)
-        
+
         conn.commit()
         conn.close()
-        
+
         yield db_path
-        
+
         # Cleanup
         if os.path.exists(db_path):
             os.unlink(db_path)
@@ -96,7 +99,7 @@ class TestSQLDatabaseNodeABAC:
                         )
                     ],
                 ),
-            )
+            ),
         )
 
         # Define masking rule for email - partial mask for non-IT users
@@ -115,7 +118,7 @@ class TestSQLDatabaseNodeABAC:
                         )
                     ],
                 ),
-            )
+            ),
         )
 
         # Create SQL node with access control
@@ -135,15 +138,16 @@ class TestSQLDatabaseNodeABAC:
         )
 
         result = node.execute(
-            query="SELECT * FROM users ORDER BY id",
-            user_context=finance_context
+            query="SELECT * FROM users ORDER BY id", user_context=finance_context
         )
 
         assert result["row_count"] == 4
         # Finance users see full salary
         assert result["data"][0]["salary"] == 95000
         # But emails are masked (except IT emails)
-        assert "***" in result["data"][0]["email"]  # Alice is IT, but finance sees masked
+        assert (
+            "***" in result["data"][0]["email"]
+        )  # Alice is IT, but finance sees masked
         assert "***" in result["data"][1]["email"]  # Bob is Finance, but still masked
 
         # Test with IT user (sees emails but not salaries)
@@ -156,8 +160,7 @@ class TestSQLDatabaseNodeABAC:
         )
 
         result = node.execute(
-            query="SELECT * FROM users ORDER BY id",
-            user_context=it_context
+            query="SELECT * FROM users ORDER BY id", user_context=it_context
         )
 
         # IT users see full emails
@@ -177,8 +180,7 @@ class TestSQLDatabaseNodeABAC:
         )
 
         result = node.execute(
-            query="SELECT * FROM users ORDER BY id",
-            user_context=hr_context
+            query="SELECT * FROM users ORDER BY id", user_context=hr_context
         )
 
         # HR users see masked emails
@@ -245,11 +247,8 @@ class TestSQLDatabaseNodeABAC:
         )
 
         with pytest.raises(Exception) as exc_info:
-            node.execute(
-                query="SELECT * FROM users",
-                user_context=it_context
-            )
-        
+            node.execute(query="SELECT * FROM users", user_context=it_context)
+
         assert "Access denied" in str(exc_info.value)
 
         # Test with Finance user - should succeed
@@ -262,8 +261,7 @@ class TestSQLDatabaseNodeABAC:
         )
 
         result = node.execute(
-            query="SELECT COUNT(*) as total FROM users",
-            user_context=finance_context
+            query="SELECT COUNT(*) as total FROM users", user_context=finance_context
         )
 
         assert result["data"][0]["total"] == 4
@@ -278,8 +276,7 @@ class TestSQLDatabaseNodeABAC:
 
         # Execute query without user context
         result = node.execute(
-            query="SELECT * FROM users WHERE department = ?",
-            parameters=["IT"]
+            query="SELECT * FROM users WHERE department = ?", parameters=["IT"]
         )
 
         assert result["row_count"] == 2

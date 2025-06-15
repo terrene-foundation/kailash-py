@@ -158,6 +158,6 @@ kubectl cluster-info
 
 ---
 
-**Risk Level**: High - These scripts affect infrastructure  
-**Dependencies**: Docker, GitHub CLI, kubectl, cloud CLI tools  
+**Risk Level**: High - These scripts affect infrastructure
+**Dependencies**: Docker, GitHub CLI, kubectl, cloud CLI tools
 **Last Updated**: Scripts directory reorganization

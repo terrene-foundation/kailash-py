@@ -7,7 +7,7 @@ A comprehensive middleware layer for agent-frontend communication, providing rea
 The Kailash Middleware layer bridges the gap between the Kailash SDK and frontend applications, enabling:
 
 - **Real-time Communication**: WebSocket, SSE, and Webhook support
-- **Agent-UI Protocol**: Standardized event-driven communication 
+- **Agent-UI Protocol**: Standardized event-driven communication
 - **Dynamic Workflows**: Create and modify workflows on-the-fly
 - **AI Chat Integration**: Natural language workflow generation
 - **Schema Generation**: Dynamic UI form generation
@@ -215,7 +215,7 @@ The AI chat middleware provides:
 
 ```
 User: "Create a workflow that reads a CSV file and counts the rows"
-AI: I've created a workflow for you. It uses a CSVReaderNode to read the file 
+AI: I've created a workflow for you. It uses a CSVReaderNode to read the file
     and a PythonCodeNode to count the rows and return the total.
 
 User: "What nodes should I use for processing images?"
@@ -265,7 +265,7 @@ from kailash.middleware.events import BaseEvent, EventType
 
 class CustomEvent(BaseEvent):
     custom_field: str
-    
+
 # Emit custom events
 await event_stream.emit(CustomEvent(
     type=EventType.SYSTEM_STATUS,
@@ -281,13 +281,13 @@ from kailash.nodes.mixins import EventEmitterMixin
 class MyCustomNode(Node, EventEmitterMixin):
     async def process(self, inputs):
         await self.emit_node_started(inputs)
-        
+
         # ... processing logic ...
-        
+
         await self.emit_node_progress(50.0, "Halfway done")
-        
+
         # ... more processing ...
-        
+
         await self.emit_node_completed(outputs)
         return outputs
 ```
@@ -349,11 +349,11 @@ from kailash.middleware import create_gateway
 @pytest.mark.asyncio
 async def test_middleware():
     gateway = create_gateway()
-    
+
     # Test session creation
     session_id = await gateway.agent_ui.create_session()
     assert session_id is not None
-    
+
     # Test workflow execution
     execution_id = await gateway.agent_ui.execute_workflow(
         session_id, "test_workflow", {}

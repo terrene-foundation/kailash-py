@@ -1,7 +1,7 @@
 # Advanced Document Processing and Compression Guide
 
-**Last Updated**: 2025-01-06  
-**Difficulty**: Intermediate to Advanced  
+**Last Updated**: 2025-01-06
+**Difficulty**: Intermediate to Advanced
 **Prerequisites**: [Basic Node Usage](01-getting-started.md), [Data Nodes](../nodes/03-data-nodes.md)
 
 This guide covers the advanced document processing and compression capabilities newly added to the Kailash SDK, including the DocumentProcessorNode and ContextualCompressorNode.
@@ -102,7 +102,7 @@ def process_document_directory(directory_path: str):
     """Process all documents in a directory."""
     processor = DocumentProcessorNode()
     results = []
-    
+
     for file_path in Path(directory_path).rglob("*"):
         if file_path.is_file() and file_path.suffix in ['.pdf', '.docx', '.md', '.html', '.txt']:
             try:
@@ -119,7 +119,7 @@ def process_document_directory(directory_path: str):
                     "success": False,
                     "error": str(e)
                 })
-    
+
     return results
 ```
 
@@ -134,15 +134,15 @@ def categorize_documents_by_metadata(file_paths: list):
         "academic": [],
         "other": []
     }
-    
+
     for file_path in file_paths:
         result = processor.run(file_path=file_path)
         metadata = result["metadata"]
-        
+
         # Categorize based on content characteristics
         word_count = metadata.get("word_count", 0)
         has_technical_structure = len(result.get("sections", [])) > 5
-        
+
         if word_count > 5000 and has_technical_structure:
             categories["technical"].append(file_path)
         elif "business" in result["content"].lower():
@@ -151,7 +151,7 @@ def categorize_documents_by_metadata(file_paths: list):
             categories["academic"].append(file_path)
         else:
             categories["other"].append(file_path)
-    
+
     return categories
 ```
 
@@ -229,19 +229,19 @@ def compress_for_llm_context(documents: list, query: str, max_tokens: int):
         relevance_threshold=0.8,  # Higher threshold for quality
         compression_strategy="extractive_summarization"
     )
-    
+
     result = compressor.run(
         query=query,
         retrieved_docs=documents
     )
-    
+
     # Validate compression success
     if result["compression_success"]:
         metadata = result["compression_metadata"]
         print(f"Compressed {metadata['original_document_count']} documents")
         print(f"Achieved {metadata['compression_ratio']:.2%} compression")
         print(f"Average relevance: {metadata['avg_relevance_score']:.3f}")
-        
+
         return result["compressed_context"]
     else:
         raise Exception(f"Compression failed: {result.get('error', 'Unknown error')}")
@@ -251,13 +251,13 @@ def compress_for_llm_context(documents: list, query: str, max_tokens: int):
 ```python
 def adaptive_compression(documents: list, query: str, quality_threshold: float = 0.8):
     """Adaptive compression that prioritizes quality over compression ratio."""
-    
+
     # Start with conservative compression
     compressor = ContextualCompressorNode(
         relevance_threshold=quality_threshold,
         compression_strategy="extractive_summarization"
     )
-    
+
     # Try different compression targets until quality is maintained
     for target_tokens in [4000, 3000, 2000, 1500]:
         result = compressor.run(
@@ -265,12 +265,12 @@ def adaptive_compression(documents: list, query: str, quality_threshold: float =
             retrieved_docs=documents,
             compression_target=target_tokens
         )
-        
+
         if result["compression_success"]:
             avg_relevance = result["compression_metadata"]["avg_relevance_score"]
             if avg_relevance >= quality_threshold:
                 return result["compressed_context"]
-    
+
     # Fallback to minimal compression
     return compressor.run(
         query=query,
@@ -290,46 +290,46 @@ from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 def document_qa_pipeline(file_path: str, question: str):
     """Complete pipeline from document to answer."""
-    
+
     # Step 1: Process document
     processor = DocumentProcessorNode(
         extract_metadata=True,
         preserve_structure=True
     )
     doc_result = processor.run(file_path=file_path)
-    
+
     if "error" in doc_result:
         return {"error": f"Document processing failed: {doc_result['error']}"}
-    
+
     # Step 2: Create retrieved documents structure
     retrieved_docs = [{
         "content": doc_result["content"],
         "similarity_score": 0.9,  # High since it's the source document
         "metadata": doc_result["metadata"]
     }]
-    
+
     # Step 3: Compress for LLM context
     compressor = ContextualCompressorNode(
         compression_target=2000,
         relevance_threshold=0.6,  # Lower threshold for single document
         compression_strategy="extractive_summarization"
     )
-    
+
     compression_result = compressor.run(
         query=question,
         retrieved_docs=retrieved_docs
     )
-    
+
     if not compression_result["compression_success"]:
         return {"error": f"Compression failed: {compression_result.get('error')}"}
-    
+
     # Step 4: Generate answer using LLM
     llm = LLMAgentNode(
         provider="openai",
         model="gpt-4",
         temperature=0.1
     )
-    
+
     prompt = f"""Based on the following document content, answer the question:
 
 Question: {question}
@@ -338,9 +338,9 @@ Document Content:
 {compression_result['compressed_context']}
 
 Please provide a comprehensive answer based only on the information in the document."""
-    
+
     answer_result = llm.run(messages=[{"role": "user", "content": prompt}])
-    
+
     return {
         "answer": answer_result.get("content", ""),
         "source_metadata": doc_result["metadata"],
@@ -353,45 +353,45 @@ Please provide a comprehensive answer based only on the information in the docum
 ```python
 def analyze_document_collection(document_paths: list, analysis_query: str):
     """Analyze a collection of documents for specific information."""
-    
+
     processor = DocumentProcessorNode()
     compressor = ContextualCompressorNode(
         compression_target=1000,  # Smaller chunks for batch processing
         compression_strategy="hierarchical_organization"
     )
-    
+
     analysis_results = []
-    
+
     for doc_path in document_paths:
         # Process document
         doc_result = processor.run(file_path=doc_path)
-        
+
         if "error" in doc_result:
             analysis_results.append({
                 "document": doc_path,
                 "error": doc_result["error"]
             })
             continue
-        
+
         # Compress for analysis
         retrieved_docs = [{
             "content": doc_result["content"],
             "similarity_score": 0.9,
             "metadata": doc_result["metadata"]
         }]
-        
+
         compression_result = compressor.run(
             query=analysis_query,
             retrieved_docs=retrieved_docs
         )
-        
+
         analysis_results.append({
             "document": doc_path,
             "compressed_content": compression_result.get("compressed_context", ""),
             "metadata": doc_result["metadata"],
             "compression_success": compression_result["compression_success"]
         })
-    
+
     return analysis_results
 ```
 
@@ -402,28 +402,28 @@ def analyze_document_collection(document_paths: list, analysis_query: str):
 ```python
 def process_large_document_safely(file_path: str, chunk_size: int = 10000):
     """Process large documents with memory management."""
-    
+
     processor = DocumentProcessorNode(
         extract_metadata=True,
         preserve_structure=False  # Reduces memory for large docs
     )
-    
+
     result = processor.run(file_path=file_path)
-    
+
     # For very large documents, process in chunks
     if len(result["content"]) > chunk_size:
         content_chunks = [
-            result["content"][i:i+chunk_size] 
+            result["content"][i:i+chunk_size]
             for i in range(0, len(result["content"]), chunk_size)
         ]
-        
+
         # Process each chunk separately if needed
         return {
             "chunks": content_chunks,
             "metadata": result["metadata"],
             "total_length": len(result["content"])
         }
-    
+
     return result
 ```
 
@@ -436,11 +436,11 @@ from pathlib import Path
 
 class DocumentCache:
     """Simple file-based cache for processed documents."""
-    
+
     def __init__(self, cache_dir: str = ".document_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
-    
+
     def _get_cache_key(self, file_path: str, options: dict) -> str:
         """Generate cache key from file path and processing options."""
         file_stat = Path(file_path).stat()
@@ -451,22 +451,22 @@ class DocumentCache:
             "options": options
         }
         return hashlib.md5(json.dumps(cache_input, sort_keys=True).encode()).hexdigest()
-    
+
     def get(self, file_path: str, options: dict):
         """Get cached result if available."""
         cache_key = self._get_cache_key(file_path, options)
         cache_file = self.cache_dir / f"{cache_key}.json"
-        
+
         if cache_file.exists():
             with open(cache_file, 'r') as f:
                 return json.load(f)
         return None
-    
+
     def set(self, file_path: str, options: dict, result: dict):
         """Cache processing result."""
         cache_key = self._get_cache_key(file_path, options)
         cache_file = self.cache_dir / f"{cache_key}.json"
-        
+
         with open(cache_file, 'w') as f:
             json.dump(result, f)
 
@@ -475,16 +475,16 @@ cache = DocumentCache()
 
 def cached_document_processing(file_path: str, **options):
     """Process document with caching."""
-    
+
     # Check cache first
     cached_result = cache.get(file_path, options)
     if cached_result:
         return cached_result
-    
+
     # Process document
     processor = DocumentProcessorNode(**options)
     result = processor.run(file_path=file_path)
-    
+
     # Cache result
     cache.set(file_path, options, result)
     return result
@@ -497,7 +497,7 @@ def cached_document_processing(file_path: str, **options):
 ```python
 def robust_document_processing(file_path: str, max_retries: int = 3):
     """Robust document processing with retries and fallbacks."""
-    
+
     for attempt in range(max_retries):
         try:
             # Try with full feature set
@@ -505,31 +505,31 @@ def robust_document_processing(file_path: str, max_retries: int = 3):
                 extract_metadata=True,
                 preserve_structure=True
             )
-            
+
             result = processor.run(file_path=file_path)
-            
+
             if "error" not in result:
                 return result
-            
+
             # If error, log and retry with simpler settings
             print(f"Attempt {attempt + 1} failed: {result['error']}")
-            
+
             if attempt < max_retries - 1:
                 # Retry with simpler settings
                 processor = DocumentProcessorNode(
                     extract_metadata=False,
                     preserve_structure=False
                 )
-                
+
         except Exception as e:
             print(f"Exception on attempt {attempt + 1}: {str(e)}")
-            
+
             if attempt == max_retries - 1:
                 # Final fallback: treat as plain text
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
-                    
+
                     return {
                         "content": content,
                         "metadata": {"file_path": file_path, "fallback_mode": True},
@@ -538,7 +538,7 @@ def robust_document_processing(file_path: str, max_retries: int = 3):
                     }
                 except Exception as final_error:
                     return {"error": f"All processing attempts failed: {str(final_error)}"}
-    
+
     return {"error": "Maximum retries exceeded"}
 ```
 
@@ -555,43 +555,43 @@ logger = logging.getLogger(__name__)
 
 def monitored_processing(file_path: str) -> Dict[str, Any]:
     """Document processing with comprehensive monitoring."""
-    
+
     start_time = time.time()
-    
+
     try:
         # Log processing start
         logger.info(f"Starting document processing: {file_path}")
-        
+
         processor = DocumentProcessorNode()
         result = processor.run(file_path=file_path)
-        
+
         # Calculate processing metrics
         processing_time = time.time() - start_time
         content_length = len(result.get("content", ""))
-        
+
         # Log success metrics
         logger.info(f"Processing completed: {file_path}")
         logger.info(f"Processing time: {processing_time:.2f}s")
         logger.info(f"Content length: {content_length} characters")
         logger.info(f"Document format: {result.get('document_format', 'unknown')}")
-        
+
         # Add monitoring metadata
         result["processing_metrics"] = {
             "processing_time_seconds": processing_time,
             "content_length": content_length,
             "success": True
         }
-        
+
         return result
-        
+
     except Exception as e:
         processing_time = time.time() - start_time
-        
+
         # Log error
         logger.error(f"Processing failed: {file_path}")
         logger.error(f"Error: {str(e)}")
         logger.error(f"Processing time before failure: {processing_time:.2f}s")
-        
+
         return {
             "error": str(e),
             "processing_metrics": {
@@ -647,7 +647,7 @@ compressor = ContextualCompressorNode(
 # Solution: Try multiple encodings
 def try_multiple_encodings(file_path: str):
     encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
-    
+
     for encoding in encodings:
         try:
             processor = DocumentProcessorNode(encoding=encoding)
@@ -656,7 +656,7 @@ def try_multiple_encodings(file_path: str):
                 return result
         except Exception:
             continue
-    
+
     return {"error": "Could not decode with any supported encoding"}
 ```
 
@@ -668,9 +668,9 @@ import time
 
 def diagnose_slow_processing(file_path: str):
     """Diagnose performance issues in document processing."""
-    
+
     start_time = time.time()
-    
+
     # Test basic file operations
     try:
         with open(file_path, 'rb') as f:
@@ -680,20 +680,20 @@ def diagnose_slow_processing(file_path: str):
     except Exception as e:
         print(f"File read failed: {e}")
         return
-    
+
     # Test document processing
     start_time = time.time()
     processor = DocumentProcessorNode(
         extract_metadata=False,  # Minimal processing
         preserve_structure=False
     )
-    
+
     result = processor.run(file_path=file_path)
     processing_time = time.time() - start_time
-    
+
     print(f"Document processing time: {processing_time:.2f}s")
     print(f"Processing rate: {file_size / processing_time:.0f} bytes/second")
-    
+
     if processing_time > 10:  # Slow processing
         print("⚠️  Slow processing detected. Consider:")
         print("  - Disabling metadata extraction")

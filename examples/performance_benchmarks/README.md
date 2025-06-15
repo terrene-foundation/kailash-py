@@ -19,7 +19,7 @@ These tests are designed for:
   - Parallel cycle execution benchmarks
   - Cycle overhead measurements
 
-### Monitoring Benchmarks  
+### Monitoring Benchmarks
 - `test_performance_benchmark.py` - PerformanceBenchmarkNode functionality
   - Latency measurement and tracking
   - Throughput monitoring
@@ -71,7 +71,7 @@ python -m pytest examples/performance_benchmarks/ -k "quick" -v
 
 Some benchmarks may require additional dependencies:
 - `psutil` - System resource monitoring
-- `numpy` - Numerical performance analysis  
+- `numpy` - Numerical performance analysis
 - `pytest-benchmark` - Performance measurement framework
 
 ## Guidelines
@@ -113,7 +113,7 @@ While these tests don't run in regular CI, they can be integrated:
 
 Performance benchmark results should be:
 - **Tracked over time** - Identify performance trends
-- **Alerted on regressions** - Notify when thresholds are exceeded  
+- **Alerted on regressions** - Notify when thresholds are exceeded
 - **Reported in releases** - Include performance impact in release notes
 - **Documented for users** - Help users understand performance characteristics
 

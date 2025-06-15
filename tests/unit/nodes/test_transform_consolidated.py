@@ -107,22 +107,22 @@ class TestTransformNodes:
         """Test SemanticChunkerNode with various scenarios."""
         # Test basic semantic chunking without embeddings (fallback mode)
         text = """
-        Artificial intelligence has revolutionized many industries. Machine learning algorithms 
-        can process vast amounts of data quickly. Natural language processing enables computers 
+        Artificial intelligence has revolutionized many industries. Machine learning algorithms
+        can process vast amounts of data quickly. Natural language processing enables computers
         to understand human language. Computer vision allows machines to interpret visual information.
-        
-        Healthcare applications of AI include diagnostic imaging and drug discovery. Financial 
-        services use AI for fraud detection and algorithmic trading. Transportation is being 
+
+        Healthcare applications of AI include diagnostic imaging and drug discovery. Financial
+        services use AI for fraud detection and algorithmic trading. Transportation is being
         transformed by autonomous vehicles and traffic optimization systems.
         """
-        
+
         node = SemanticChunkerNode(chunk_size=200, similarity_threshold=0.8)
         result = node.execute(text=text, metadata={"domain": "ai"})
-        
+
         assert "chunks" in result
         assert len(result["chunks"]) > 0
         assert isinstance(result["chunks"], list)
-        
+
         # Check chunk structure
         chunk = result["chunks"][0]
         assert "chunk_id" in chunk
@@ -130,21 +130,23 @@ class TestTransformNodes:
         assert "chunking_method" in chunk
         assert chunk["chunking_method"] == "semantic"
         assert "domain" in chunk  # metadata should be included
-        
+
         # Test with provided embeddings
-        sentences = ["This is sentence one.", "This is sentence two.", "This is sentence three."]
+        sentences = [
+            "This is sentence one.",
+            "This is sentence two.",
+            "This is sentence three.",
+        ]
         embeddings = [
             [0.1, 0.2, 0.3],  # Similar to second
             [0.15, 0.25, 0.35],  # Similar to first
-            [0.8, 0.9, 0.1]   # Different from others
+            [0.8, 0.9, 0.1],  # Different from others
         ]
-        
+
         result = node.execute(
-            text=" ".join(sentences), 
-            embeddings=embeddings,
-            similarity_threshold=0.7
+            text=" ".join(sentences), embeddings=embeddings, similarity_threshold=0.7
         )
-        
+
         assert "chunks" in result
         assert len(result["chunks"]) >= 1
 
@@ -152,27 +154,25 @@ class TestTransformNodes:
         """Test StatisticalChunkerNode with various scenarios."""
         # Test basic statistical chunking without embeddings
         text = """
-        The field of machine learning encompasses various algorithms and techniques. 
-        Supervised learning uses labeled data to train models. Unsupervised learning 
-        discovers patterns in unlabeled data. Reinforcement learning enables agents 
+        The field of machine learning encompasses various algorithms and techniques.
+        Supervised learning uses labeled data to train models. Unsupervised learning
+        discovers patterns in unlabeled data. Reinforcement learning enables agents
         to learn through interaction with environments.
-        
-        Deep learning is a subset of machine learning that uses neural networks. 
-        Convolutional neural networks excel at image processing tasks. Recurrent 
+
+        Deep learning is a subset of machine learning that uses neural networks.
+        Convolutional neural networks excel at image processing tasks. Recurrent
         neural networks are effective for sequential data processing.
         """
-        
+
         node = StatisticalChunkerNode(
-            chunk_size=150, 
-            min_sentences_per_chunk=2,
-            max_sentences_per_chunk=10
+            chunk_size=150, min_sentences_per_chunk=2, max_sentences_per_chunk=10
         )
         result = node.execute(text=text, metadata={"topic": "ml"})
-        
+
         assert "chunks" in result
         assert len(result["chunks"]) > 0
         assert isinstance(result["chunks"], list)
-        
+
         # Check chunk structure
         chunk = result["chunks"][0]
         assert "chunk_id" in chunk
@@ -182,7 +182,7 @@ class TestTransformNodes:
         assert chunk["chunking_method"] == "statistical"
         assert "topic" in chunk  # metadata should be included
         assert chunk["sentence_count"] >= 2  # Minimum enforced
-        
+
         # Test with provided embeddings (variance-based chunking)
         sentences = [
             "Machine learning is powerful.",
@@ -190,24 +190,24 @@ class TestTransformNodes:
             "Cars need maintenance.",  # Topic shift
             "Regular servicing is important.",
             "Python is a programming language.",  # Another topic shift
-            "It's great for data science."
+            "It's great for data science.",
         ]
         embeddings = [
             [0.1, 0.8, 0.2],  # ML cluster
             [0.15, 0.85, 0.25],  # ML cluster
-            [0.7, 0.1, 0.8],   # Cars cluster
+            [0.7, 0.1, 0.8],  # Cars cluster
             [0.75, 0.15, 0.85],  # Cars cluster
-            [0.2, 0.3, 0.9],   # Programming cluster
-            [0.25, 0.35, 0.95]   # Programming cluster
+            [0.2, 0.3, 0.9],  # Programming cluster
+            [0.25, 0.35, 0.95],  # Programming cluster
         ]
-        
+
         result = node.execute(
             text=" ".join(sentences),
             embeddings=embeddings,
             variance_threshold=0.3,
-            min_sentences_per_chunk=2
+            min_sentences_per_chunk=2,
         )
-        
+
         assert "chunks" in result
         assert len(result["chunks"]) >= 1
 
@@ -217,35 +217,32 @@ class TestTransformNodes:
         semantic_node = SemanticChunkerNode()
         result = semantic_node.execute(text="")
         assert result["chunks"] == []
-        
+
         statistical_node = StatisticalChunkerNode()
         result = statistical_node.execute(text="")
         assert result["chunks"] == []
-        
+
         # Test very short text (single sentence)
         short_text = "This is a single sentence."
-        
+
         result = semantic_node.execute(text=short_text)
         assert len(result["chunks"]) == 1
         assert result["chunks"][0]["content"] == short_text.strip()
-        
+
         result = statistical_node.execute(text=short_text)
         assert len(result["chunks"]) == 1
         assert result["chunks"][0]["content"] == short_text.strip()
-        
+
         # Test mismatched embeddings length
         text = "First sentence. Second sentence. Third sentence."
         embeddings = [[0.1, 0.2]]  # Only one embedding for three sentences
-        
+
         result = semantic_node.execute(text=text, embeddings=embeddings)
         assert "chunks" in result  # Should fallback to statistical boundaries
-        
+
         # Test parameter variations
         node = SemanticChunkerNode(
-            chunk_size=100, 
-            chunk_overlap=20, 
-            similarity_threshold=0.9,
-            window_size=2
+            chunk_size=100, chunk_overlap=20, similarity_threshold=0.9, window_size=2
         )
         result = node.execute(text="This is a test. Another sentence. Final sentence.")
         assert "chunks" in result

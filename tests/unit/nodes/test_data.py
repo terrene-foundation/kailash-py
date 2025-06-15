@@ -99,20 +99,20 @@ class TestCSVReaderNode:
             writer.writerow({"name": "Bob", "age": "25", "city": "San Francisco"})
 
         node = CSVReaderNode(name="csv_reader_async")
-        
+
         # Verify async_run method exists
-        assert hasattr(node, 'async_run'), "CSVReaderNode missing async_run method"
-        
+        assert hasattr(node, "async_run"), "CSVReaderNode missing async_run method"
+
         # Test async execution
         result = await node.async_run(file_path=str(csv_path))
-        
+
         # Verify results
         assert "data" in result
         assert len(result["data"]) == 2
         # Async version does type inference, so age becomes int
         assert result["data"][0] == {"name": "Alice", "age": 30, "city": "New York"}
         assert result["data"][1] == {"name": "Bob", "age": 25, "city": "San Francisco"}
-        
+
         # Compare with sync version (sync version keeps strings, async does type inference)
         sync_result = node.execute(file_path=str(csv_path))
         # Verify data structure is the same even if types differ
@@ -129,17 +129,17 @@ class TestCSVReaderNode:
             writer.writeheader()
             for i in range(100):  # Larger file for performance test
                 writer.writerow({"id": i, "value": i * 10})
-        
+
         # Create workflow with CSV reader
         workflow = Workflow(workflow_id="csv_async_test", name="CSV Async Test")
         csv_reader = CSVReaderNode(name="reader", file_path=str(csv_path))
         workflow.add_node("reader", csv_reader)
-        
+
         # Test with async-enabled runtime
         runtime = LocalRuntime(enable_async=True, debug=True)
-        
+
         results, run_id = runtime.execute(workflow)
-        
+
         # Verify results
         assert "reader" in results
         assert len(results["reader"]["data"]) == 100
@@ -208,58 +208,63 @@ class TestJSONReaderNode:
         # Create test JSON file
         json_path = temp_dir / "test_async.json"
         test_data = {
-            "users": [{"id": i, "name": f"User {i}", "active": i % 2 == 0} for i in range(500)],
+            "users": [
+                {"id": i, "name": f"User {i}", "active": i % 2 == 0} for i in range(500)
+            ],
             "config": {"version": "1.0", "features": ["async", "performance"]},
-            "metadata": {"total": 500, "created": "2025-06-15"}
+            "metadata": {"total": 500, "created": "2025-06-15"},
         }
-        
+
         with open(json_path, "w") as f:
             json.dump(test_data, f)
-        
+
         node = JSONReaderNode(name="json_reader_async")
-        
+
         # Verify async_run method exists
-        assert hasattr(node, 'async_run'), "JSONReaderNode missing async_run method"
-        
+        assert hasattr(node, "async_run"), "JSONReaderNode missing async_run method"
+
         # Test async execution
         result = await node.async_run(file_path=str(json_path))
-        
+
         # Verify results
         assert "data" in result
         assert result["data"] == test_data
         assert len(result["data"]["users"]) == 500
-        
+
         # Compare with sync version
         sync_result = node.execute(file_path=str(json_path))
-        assert result["data"] == sync_result["data"], "Async and sync results should be identical"
+        assert (
+            result["data"] == sync_result["data"]
+        ), "Async and sync results should be identical"
 
     @pytest.mark.asyncio
     async def test_json_reader_async_graceful_fallback(self, temp_dir):
         """Test JSONReaderNode graceful fallback when aiofiles unavailable."""
         json_path = temp_dir / "fallback_test.json"
         test_data = {"test": "fallback"}
-        
+
         with open(json_path, "w") as f:
             json.dump(test_data, f)
-        
+
         node = JSONReaderNode(name="json_fallback")
-        
+
         # Mock the import failure scenario by temporarily removing aiofiles
         import sys
+
         original_modules = sys.modules.copy()
-        
+
         try:
             # Remove aiofiles from sys.modules if it exists
-            if 'aiofiles' in sys.modules:
-                del sys.modules['aiofiles']
-            
+            if "aiofiles" in sys.modules:
+                del sys.modules["aiofiles"]
+
             # Test async_run falls back to sync
             result = await node.async_run(file_path=str(json_path))
-            
+
             # Should still work via fallback
             assert "data" in result
             assert result["data"] == test_data
-            
+
         finally:
             # Restore modules
             sys.modules.clear()

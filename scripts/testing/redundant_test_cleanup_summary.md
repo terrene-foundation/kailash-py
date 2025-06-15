@@ -22,7 +22,7 @@ Found 5 substantial documentation files (600+ lines each) in tests/ directory:
    - Should move to: `# contrib (removed)/architecture/middleware-requirements.md`
 
 2. **tests/integration/workflows/export_test.py** (433 lines)
-   - Workflow export functionality documentation  
+   - Workflow export functionality documentation
    - Should move to: `# contrib (removed)/architecture/workflow-export-analysis.md`
 
 3. **tests/integration/workflows/data_transformation_test.py** (582 lines)

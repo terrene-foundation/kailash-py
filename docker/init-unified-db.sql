@@ -129,7 +129,7 @@ CREATE INDEX idx_workflow_executions_workflow ON workflow_executions(workflow_id
 CREATE INDEX idx_workflow_executions_status ON workflow_executions(status);
 
 -- Insert default data
-INSERT INTO roles (name, description) VALUES 
+INSERT INTO roles (name, description) VALUES
     ('admin', 'System administrator with full access'),
     ('user', 'Regular user with basic access'),
     ('viewer', 'Read-only access')

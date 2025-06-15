@@ -2,13 +2,14 @@
 
 from typing import Any
 
+import pytest
+
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking import TaskManager
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.workflow import Workflow
-import pytest
 
 
 class TestBasicRuntime:

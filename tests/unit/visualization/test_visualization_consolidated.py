@@ -2,12 +2,13 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.visualization.api import SimpleDashboardAPI
 from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import WorkflowPerformanceReporter
-import pytest
 
 
 class TestVisualizationSuite:

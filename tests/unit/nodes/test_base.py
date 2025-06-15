@@ -15,7 +15,11 @@ class SimpleNode(Node):
         """Define input parameters."""
         return {
             "x": NodeParameter(
-                name="x", type=float, required=True, description="Input value", default=0.0
+                name="x",
+                type=float,
+                required=True,
+                description="Input value",
+                default=0.0,
             )
         }
 
@@ -166,12 +170,16 @@ class TestBaseNode:
             def get_parameters(self):
                 return {
                     "required_param": NodeParameter(
-                        name="required_param", type=str, required=True, description="Required without default"
+                        name="required_param",
+                        type=str,
+                        required=True,
+                        description="Required without default",
                     )
                 }
+
             def run(self, **kwargs):
                 return {"result": kwargs.get("required_param", "")}
-        
+
         test_node = NodeWithoutDefault(name="Test")
         with pytest.raises(NodeValidationError) as exc_info:
             test_node.validate_inputs()  # Missing 'required_param'

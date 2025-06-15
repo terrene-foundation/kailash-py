@@ -15,7 +15,7 @@ These tests focus on:
 ### Cyclic Workflow Scenarios
 - `test_cycle_scenarios.py` - Real-world cyclic workflow applications
   - ETL pipeline with retry cycles
-  - API polling with backoff cycles  
+  - API polling with backoff cycles
   - Data quality improvement cycles
   - Resource optimization cycles
   - Batch processing with checkpoints
@@ -33,7 +33,7 @@ These tests focus on:
 - **Data Quality** - Iterative data cleaning and validation cycles
 - **Batch Processing** - Large dataset processing with checkpointing
 
-### API Integration Scenarios  
+### API Integration Scenarios
 - **Polling Patterns** - Regular API polling with intelligent backoff
 - **Webhook Processing** - Event-driven workflow execution
 - **Rate-Limited Operations** - Handling API rate limits gracefully
@@ -70,7 +70,7 @@ python -m pytest examples/scenarios/ -k "etl" -v
 These scenarios can serve as starting points for your own implementations:
 
 1. **Copy scenario code** - Use as template for similar use cases
-2. **Modify parameters** - Adapt to your specific requirements  
+2. **Modify parameters** - Adapt to your specific requirements
 3. **Extend functionality** - Add additional processing steps
 4. **Integrate patterns** - Combine multiple scenario patterns
 
@@ -80,7 +80,7 @@ These scenarios can serve as starting points for your own implementations:
 ```python
 class ETLRetryNode(CycleAwareNode):
     """ETL processor with retry capabilities."""
-    
+
     def run(self, **kwargs) -> dict[str, Any]:
         # Implement retry logic
         # Handle failures gracefully
@@ -92,7 +92,7 @@ class ETLRetryNode(CycleAwareNode):
 ```python
 class APIPollingNode(CycleAwareNode):
     """API polling with intelligent backoff."""
-    
+
     def run(self, **kwargs) -> dict[str, Any]:
         # Poll API endpoint
         # Implement backoff strategy
@@ -104,7 +104,7 @@ class APIPollingNode(CycleAwareNode):
 ```python
 class ResourceOptimizerNode(CycleAwareNode):
     """Iterative resource optimization."""
-    
+
     def run(self, **kwargs) -> dict[str, Any]:
         # Analyze current resource usage
         # Calculate optimization steps
@@ -161,11 +161,11 @@ Real-world applications:
 
 class ScenarioNode(CycleAwareNode):
     """[Node description]."""
-    
+
     def get_parameters(self) -> dict[str, NodeParameter]:
         # Define scenario parameters
         pass
-    
+
     def run(self, **kwargs) -> dict[str, Any]:
         # Implement scenario logic
         pass

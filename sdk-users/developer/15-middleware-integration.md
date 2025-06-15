@@ -18,7 +18,7 @@ The Kailash middleware layer provides enterprise-grade features for frontend int
 
 ### 2. Key Components
 - **AgentUIMiddleware**: Session-based workflow management
-- **RealtimeMiddleware**: WebSocket/SSE event streaming  
+- **RealtimeMiddleware**: WebSocket/SSE event streaming
 - **APIGateway**: Unified REST API with documentation
 - **AIChatMiddleware**: AI-powered workflow creation
 - **EventStream**: Real-time event broadcasting
@@ -60,7 +60,7 @@ const session = await sessionResponse.json();
 
 // Execute workflow
 const executionResponse = await fetch('http://localhost:8000/api/executions', {
-    method: 'POST', 
+    method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
         session_id: session.session_id,
@@ -86,17 +86,17 @@ from kailash.middleware import AgentUIMiddleware
 
 async def session_example():
     agent_ui = AgentUIMiddleware()
-    
+
     # Create session
     session_id = await agent_ui.create_session(
         user_id="user123",
         metadata={"department": "analytics", "role": "analyst"}
     )
-    
+
     # Get session info
     session = await agent_ui.get_session(session_id)
     print(f"Session created: {session.session_id}")
-    
+
     # Session automatically expires after timeout
     # Manual cleanup
     await agent_ui.close_session(session_id)
@@ -107,28 +107,28 @@ async def session_example():
 async def workflow_execution_example():
     agent_ui = AgentUIMiddleware()
     session_id = await agent_ui.create_session(user_id="analyst")
-    
+
     # Register workflow in session
     from kailash.workflow.builder import WorkflowBuilder
-    
+
     builder = WorkflowBuilder()
-    reader_id = builder.add_node("CSVReaderNode", 
+    reader_id = builder.add_node("CSVReaderNode",
         config={"name": "reader", "file_path": "/data/input.csv"}
     )
-    
+
     await agent_ui.register_workflow(
         workflow_id="data_analysis",
         workflow=builder,
         session_id=session_id
     )
-    
+
     # Execute workflow
     execution_id = await agent_ui.execute_workflow(
         session_id=session_id,
         workflow_id="data_analysis",
         inputs={"custom_param": "value"}
     )
-    
+
     # Monitor execution
     status = await agent_ui.get_execution_status(execution_id, session_id)
     print(f"Execution status: {status['status']}")
@@ -143,7 +143,7 @@ from kailash.middleware.events import EventType
 async def event_handling_example():
     agent_ui = AgentUIMiddleware()
     realtime = RealtimeMiddleware(agent_ui)
-    
+
     # Define event handler
     async def workflow_event_handler(event):
         print(f"Event: {event.type}")
@@ -151,7 +151,7 @@ async def event_handling_example():
             print(f"Workflow {event.workflow_id} completed!")
         elif event.type == EventType.WORKFLOW_FAILED:
             print(f"Workflow {event.workflow_id} failed: {event.data.get('error')}")
-    
+
     # Subscribe to events
     await agent_ui.subscribe_to_events(
         subscriber_id="my_app",
@@ -163,7 +163,7 @@ async def event_handling_example():
             EventType.WORKFLOW_PROGRESS
         ]
     )
-    
+
     # Events will be automatically delivered to handler
 ```
 
@@ -171,22 +171,22 @@ async def event_handling_example():
 ```python
 async def websocket_example():
     realtime = RealtimeMiddleware(agent_ui)
-    
+
     # Register WebSocket endpoint
     @realtime.websocket_handler
     async def handle_websocket(websocket, session_id):
         await websocket.accept()
-        
+
         # Subscribe to session events
         async def send_to_client(event):
             await websocket.send_json(event.to_dict())
-        
+
         await agent_ui.subscribe_to_events(
             f"ws_{session_id}",
             send_to_client,
             session_id=session_id
         )
-        
+
         # Handle incoming messages
         try:
             while True:
@@ -204,7 +204,7 @@ async def websocket_example():
 async def dynamic_workflow_example():
     agent_ui = AgentUIMiddleware()
     session_id = await agent_ui.create_session(user_id="developer")
-    
+
     # Workflow configuration from frontend
     workflow_config = {
         "nodes": [
@@ -218,7 +218,7 @@ async def dynamic_workflow_example():
             },
             {
                 "id": "processor",
-                "type": "PythonCodeNode", 
+                "type": "PythonCodeNode",
                 "config": {
                     "name": "processor",
                     "code": '''
@@ -235,19 +235,19 @@ result = {
             {
                 "from_node": "data_input",
                 "from_output": "result",
-                "to_node": "processor", 
+                "to_node": "processor",
                 "to_input": "input_data"
             }
         ]
     }
-    
+
     # Create workflow from config
     workflow_id = await agent_ui.create_dynamic_workflow(
         session_id=session_id,
         workflow_config=workflow_config,
         workflow_id="user_generated"
     )
-    
+
     print(f"Created dynamic workflow: {workflow_id}")
 ```
 
@@ -258,17 +258,17 @@ from kailash.middleware import AIChatMiddleware
 async def ai_workflow_example():
     agent_ui = AgentUIMiddleware()
     ai_chat = AIChatMiddleware(agent_ui)
-    
+
     session_id = await agent_ui.create_session(user_id="user")
     await ai_chat.start_chat_session(session_id)
-    
+
     # Ask AI to create workflow
     response = await ai_chat.send_message(
         session_id,
         "Create a workflow that reads a CSV file and counts the rows",
         context={"available_files": ["/data/customers.csv"]}
     )
-    
+
     # AI generates workflow configuration
     if response.get("workflow_config"):
         workflow_id = await agent_ui.create_dynamic_workflow(
@@ -284,21 +284,21 @@ async def ai_workflow_example():
 ```python
 async def schema_example():
     gateway = create_gateway()
-    
+
     # Get available nodes
     available_nodes = await gateway.agent_ui.get_available_nodes()
-    
+
     for node_info in available_nodes:
         print(f"Node: {node_info['type']}")
         print(f"Description: {node_info['description']}")
         print(f"Parameters: {node_info['schema']['parameters']}")
         print("---")
-    
+
     # Generate schema for specific node
     from kailash.nodes.base import NodeRegistry
     node_class = NodeRegistry.get_node("CSVReaderNode")
     schema = gateway.schema_registry.get_node_schema(node_class)
-    
+
     print(f"CSV Reader schema: {schema}")
 ```
 
@@ -312,20 +312,20 @@ const nodes = await nodesResponse.json();
 function generateForm(nodeType) {
     const node = nodes.find(n => n.type === nodeType);
     const form = document.createElement('form');
-    
+
     for (const [paramName, param] of Object.entries(node.schema.parameters)) {
         const label = document.createElement('label');
         label.textContent = param.description;
-        
+
         const input = document.createElement('input');
         input.name = paramName;
         input.type = param.type === 'int' ? 'number' : 'text';
         input.required = param.required;
-        
+
         form.appendChild(label);
         form.appendChild(input);
     }
-    
+
     return form;
 }
 ```
@@ -351,19 +351,19 @@ async def auth_example():
     auth_config = AuthConfig()
     auth_manager = KailashJWTAuthManager(auth_config)
     access_control = MiddlewareAccessControlManager(strategy="rbac")
-    
+
     # Create token
     token = auth_manager.create_token({
         "user_id": "user123",
         "role": "analyst",
         "exp": datetime.utcnow() + timedelta(hours=24)
     })
-    
+
     # Validate token
     payload = auth_manager.validate_token(token)
     if payload:
         print(f"Valid user: {payload['user_id']}")
-    
+
     # Check permissions
     allowed = access_control.check_permission(
         user_id="user123",
@@ -378,7 +378,7 @@ async def auth_example():
 ```python
 async def template_example():
     agent_ui = AgentUIMiddleware()
-    
+
     # Create reusable workflow template
     template_config = {
         "name": "Data Processing Template",
@@ -393,7 +393,7 @@ async def template_example():
                 }
             },
             {
-                "id": "process", 
+                "id": "process",
                 "type": "PythonCodeNode",
                 "config": {
                     "name": "process",
@@ -410,7 +410,7 @@ async def template_example():
             }
         ]
     }
-    
+
     # Register as shared template
     await agent_ui.register_workflow(
         workflow_id="data_processing_template",
@@ -423,18 +423,18 @@ async def template_example():
 ```python
 async def monitoring_example():
     gateway = create_gateway()
-    
+
     # Get middleware statistics
     stats = gateway.agent_ui.get_stats()
     print(f"Active sessions: {stats['active_sessions']}")
     print(f"Workflows executed: {stats['workflows_executed']}")
     print(f"Events emitted: {stats['events_emitted']}")
-    
+
     # Real-time statistics
     realtime_stats = gateway.realtime.get_stats()
     print(f"Events processed: {realtime_stats['events_processed']}")
     print(f"Average latency: {realtime_stats['latency_stats']['avg_ms']}ms")
-    
+
     # Schema statistics
     schema_stats = gateway.schema_registry.get_stats()
     print(f"Schemas generated: {schema_stats['schemas_generated']}")
@@ -493,21 +493,21 @@ async def robust_middleware_example():
     try:
         agent_ui = AgentUIMiddleware()
         session_id = await agent_ui.create_session(user_id="user")
-        
+
         execution_id = await agent_ui.execute_workflow(
             session_id=session_id,
             workflow_id="data_processing",
             inputs={"file_path": "/data/input.csv"}
         )
-        
+
         # Wait for completion with timeout
         import asyncio
         await asyncio.sleep(2)  # Allow processing time
-        
+
         status = await agent_ui.get_execution_status(execution_id)
         if status["status"] == "failed":
             print(f"Workflow failed: {status['error']}")
-        
+
     except Exception as e:
         print(f"Middleware error: {e}")
         # Cleanup and recovery logic
@@ -519,7 +519,7 @@ async def resource_management_example():
     # Use context managers for automatic cleanup
     async with AgentUIMiddleware() as agent_ui:
         session_id = await agent_ui.create_session(user_id="user")
-        
+
         # Session will be automatically cleaned up
         try:
             await agent_ui.execute_workflow(

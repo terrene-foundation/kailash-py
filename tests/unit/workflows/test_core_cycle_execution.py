@@ -28,38 +28,36 @@ class TestCoreCycleExecution:
         # Simple counter node
         def counter(count=0, increment=1):
             """Increment counter."""
-            return {
-                "count": count + increment,
-                "increment": increment
-            }
-        
+            return {"count": count + increment, "increment": increment}
+
         counter_node = PythonCodeNode.from_function(
             func=counter,
             name="counter",
             input_schema={
-                "count": NodeParameter(name="count", type=int, required=False, default=0),
-                "increment": NodeParameter(name="increment", type=int, required=False, default=1)
-            }
+                "count": NodeParameter(
+                    name="count", type=int, required=False, default=0
+                ),
+                "increment": NodeParameter(
+                    name="increment", type=int, required=False, default=1
+                ),
+            },
         )
         workflow.add_node("counter", counter_node)
 
         # Create basic cycle
         workflow.connect(
-            "counter", "counter",
-            mapping={
-                "result.count": "count",
-                "result.increment": "increment"
-            },
+            "counter",
+            "counter",
+            mapping={"result.count": "count", "result.increment": "increment"},
             cycle=True,
             max_iterations=5,
-            cycle_id="basic_cycle"
+            cycle_id="basic_cycle",
         )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
-            workflow,
-            parameters={"counter": {"count": 0, "increment": 2}}
+            workflow, parameters={"counter": {"count": 0, "increment": 2}}
         )
 
         # Verify execution
@@ -76,43 +74,47 @@ class TestCoreCycleExecution:
             step = diff * rate
             new_value = value + step
             converged = abs(new_value - target) < 0.01
-            
+
             return {
                 "value": new_value,
                 "target": target,
                 "converged": converged,
-                "difference": abs(new_value - target)
+                "difference": abs(new_value - target),
             }
-        
+
         converge_node = PythonCodeNode.from_function(
             func=converge_value,
             name="converger",
             input_schema={
-                "value": NodeParameter(name="value", type=float, required=False, default=0.0),
-                "target": NodeParameter(name="target", type=float, required=False, default=1.0),
-                "rate": NodeParameter(name="rate", type=float, required=False, default=0.1)
-            }
+                "value": NodeParameter(
+                    name="value", type=float, required=False, default=0.0
+                ),
+                "target": NodeParameter(
+                    name="target", type=float, required=False, default=1.0
+                ),
+                "rate": NodeParameter(
+                    name="rate", type=float, required=False, default=0.1
+                ),
+            },
         )
         workflow.add_node("converger", converge_node)
 
         # Create convergence cycle
         workflow.connect(
-            "converger", "converger",
-            mapping={
-                "result.value": "value",
-                "result.target": "target"
-            },
+            "converger",
+            "converger",
+            mapping={"result.value": "value", "result.target": "target"},
             cycle=True,
             max_iterations=50,
             convergence_check="difference < 0.01",  # If supported
-            cycle_id="convergence_cycle"
+            cycle_id="convergence_cycle",
         )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
             workflow,
-            parameters={"converger": {"value": 0.0, "target": 10.0, "rate": 0.2}}
+            parameters={"converger": {"value": 0.0, "target": 10.0, "rate": 0.2}},
         )
 
         # Verify convergence
@@ -126,35 +128,27 @@ class TestCoreCycleExecution:
         # Node that modifies multiple parameters
         def process_params(a=1, b=2, c=3):
             """Process multiple parameters."""
-            return {
-                "a": a + 1,
-                "b": b * 2,
-                "c": c - 1,
-                "sum": a + b + c
-            }
-        
+            return {"a": a + 1, "b": b * 2, "c": c - 1, "sum": a + b + c}
+
         processor = PythonCodeNode.from_function(
             func=process_params,
             name="processor",
             input_schema={
                 "a": NodeParameter(name="a", type=int, required=False, default=1),
                 "b": NodeParameter(name="b", type=int, required=False, default=2),
-                "c": NodeParameter(name="c", type=int, required=False, default=3)
-            }
+                "c": NodeParameter(name="c", type=int, required=False, default=3),
+            },
         )
         workflow.add_node("processor", processor)
 
         # Create cycle with multiple parameter mappings
         workflow.connect(
-            "processor", "processor",
-            mapping={
-                "result.a": "a",
-                "result.b": "b",
-                "result.c": "c"
-            },
+            "processor",
+            "processor",
+            mapping={"result.a": "a", "result.b": "b", "result.c": "c"},
             cycle=True,
             max_iterations=3,
-            cycle_id="param_cycle"
+            cycle_id="param_cycle",
         )
 
         # Execute
@@ -165,7 +159,7 @@ class TestCoreCycleExecution:
         result = results["processor"]["result"]
         assert result["a"] == 4  # 1 + 1 + 1 + 1
         assert result["b"] == 16  # 2 * 2 * 2 * 2
-        assert result["c"] == 0   # 3 - 1 - 1 - 1
+        assert result["c"] == 0  # 3 - 1 - 1 - 1
 
     def test_nested_cycle_execution(self):
         """Test nested cycle scenarios."""
@@ -177,59 +171,63 @@ class TestCoreCycleExecution:
             return {
                 "outer_count": outer_count + 1,
                 "inner_input": outer_count * 10,
-                "accumulated": inner_result
+                "accumulated": inner_result,
             }
-        
+
         outer_node = PythonCodeNode.from_function(
             func=outer_process,
             name="outer",
             input_schema={
-                "outer_count": NodeParameter(name="outer_count", type=int, required=False, default=0),
-                "inner_result": NodeParameter(name="inner_result", type=int, required=False, default=0)
-            }
+                "outer_count": NodeParameter(
+                    name="outer_count", type=int, required=False, default=0
+                ),
+                "inner_result": NodeParameter(
+                    name="inner_result", type=int, required=False, default=0
+                ),
+            },
         )
         workflow.add_node("outer", outer_node)
 
         # Inner loop node
         def inner_process(inner_count=0, base_value=0):
             """Inner loop processing."""
-            return {
-                "inner_count": inner_count + 1,
-                "result": base_value + inner_count
-            }
-        
+            return {"inner_count": inner_count + 1, "result": base_value + inner_count}
+
         inner_node = PythonCodeNode.from_function(
             func=inner_process,
             name="inner",
             input_schema={
-                "inner_count": NodeParameter(name="inner_count", type=int, required=False, default=0),
-                "base_value": NodeParameter(name="base_value", type=int, required=False, default=0)
-            }
+                "inner_count": NodeParameter(
+                    name="inner_count", type=int, required=False, default=0
+                ),
+                "base_value": NodeParameter(
+                    name="base_value", type=int, required=False, default=0
+                ),
+            },
         )
         workflow.add_node("inner", inner_node)
 
         # Connect outer to inner
-        workflow.connect(
-            "outer", "inner",
-            mapping={"result.inner_input": "base_value"}
-        )
+        workflow.connect("outer", "inner", mapping={"result.inner_input": "base_value"})
 
         # Create inner cycle
         workflow.connect(
-            "inner", "inner",
+            "inner",
+            "inner",
             mapping={"result.inner_count": "inner_count"},
             cycle=True,
             max_iterations=2,
-            cycle_id="inner_cycle"
+            cycle_id="inner_cycle",
         )
 
         # Create outer cycle
         workflow.connect(
-            "inner", "outer",
+            "inner",
+            "outer",
             mapping={"result.result": "inner_result"},
             cycle=True,
             max_iterations=3,
-            cycle_id="outer_cycle"
+            cycle_id="outer_cycle",
         )
 
         # Execute
@@ -255,42 +253,45 @@ class TestCoreCycleExecution:
                 new_total = max(total, value)
             else:
                 new_total = total
-                
-            return {
-                "total": new_total,
-                "value": value,
-                "operation": operation
-            }
-        
+
+            return {"total": new_total, "value": value, "operation": operation}
+
         accumulator = PythonCodeNode.from_function(
             func=accumulate,
             name="accumulator",
             input_schema={
-                "total": NodeParameter(name="total", type=float, required=False, default=0),
-                "value": NodeParameter(name="value", type=float, required=False, default=1),
-                "operation": NodeParameter(name="operation", type=str, required=False, default="add")
-            }
+                "total": NodeParameter(
+                    name="total", type=float, required=False, default=0
+                ),
+                "value": NodeParameter(
+                    name="value", type=float, required=False, default=1
+                ),
+                "operation": NodeParameter(
+                    name="operation", type=str, required=False, default="add"
+                ),
+            },
         )
         workflow.add_node("accumulator", accumulator)
 
         # Create accumulation cycle
         workflow.connect(
-            "accumulator", "accumulator",
+            "accumulator",
+            "accumulator",
             mapping={
                 "result.total": "total",
                 "result.value": "value",
-                "result.operation": "operation"
+                "result.operation": "operation",
             },
             cycle=True,
             max_iterations=5,
-            cycle_id="accumulate_cycle"
+            cycle_id="accumulate_cycle",
         )
 
         # Test addition
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
             workflow,
-            parameters={"accumulator": {"total": 0, "value": 2, "operation": "add"}}
+            parameters={"accumulator": {"total": 0, "value": 2, "operation": "add"}},
         )
         # The cycle starts with 0, then adds 2 for max_iterations (5 times)
         # But note that "value" stays constant at 2 throughout
@@ -302,7 +303,9 @@ class TestCoreCycleExecution:
         # Test multiplication
         results, run_id = runtime.execute(
             workflow,
-            parameters={"accumulator": {"total": 1, "value": 2, "operation": "multiply"}}
+            parameters={
+                "accumulator": {"total": 1, "value": 2, "operation": "multiply"}
+            },
         )
         assert results["accumulator"]["result"]["total"] == 32  # 1 * 2^5
 
@@ -314,40 +317,41 @@ class TestCoreCycleExecution:
         def process_value(value=0, threshold=10):
             """Process value with threshold."""
             new_value = value + 3
-            
+
             return {
                 "value": new_value,
                 "threshold": threshold,
-                "done": new_value >= threshold
+                "done": new_value >= threshold,
             }
-        
+
         processor = PythonCodeNode.from_function(
             func=process_value,
             name="processor",
             input_schema={
-                "value": NodeParameter(name="value", type=int, required=False, default=0),
-                "threshold": NodeParameter(name="threshold", type=int, required=False, default=10)
-            }
+                "value": NodeParameter(
+                    name="value", type=int, required=False, default=0
+                ),
+                "threshold": NodeParameter(
+                    name="threshold", type=int, required=False, default=10
+                ),
+            },
         )
         workflow.add_node("processor", processor)
 
         # Create simple cycle without conditional routing
         workflow.connect(
-            "processor", "processor",
-            mapping={
-                "result.value": "value",
-                "result.threshold": "threshold"
-            },
+            "processor",
+            "processor",
+            mapping={"result.value": "value", "result.threshold": "threshold"},
             cycle=True,
             max_iterations=10,
-            cycle_id="value_cycle"
+            cycle_id="value_cycle",
         )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
-            workflow,
-            parameters={"processor": {"value": 0, "threshold": 10}}
+            workflow, parameters={"processor": {"value": 0, "threshold": 10}}
         )
 
         # Verify execution - should reach at least threshold
@@ -362,23 +366,26 @@ class TestCoreCycleExecution:
         def increment(value=0):
             """Increment value."""
             return {"value": value + 1}
-        
+
         incrementor = PythonCodeNode.from_function(
             func=increment,
             name="incrementor",
             input_schema={
-                "value": NodeParameter(name="value", type=int, required=False, default=0)
-            }
+                "value": NodeParameter(
+                    name="value", type=int, required=False, default=0
+                )
+            },
         )
         workflow.add_node("inc", incrementor)
 
         # Create cycle with specific limit
         workflow.connect(
-            "inc", "inc",
+            "inc",
+            "inc",
             mapping={"result.value": "value"},
             cycle=True,
             max_iterations=7,
-            cycle_id="limit_test"
+            cycle_id="limit_test",
         )
 
         # Execute

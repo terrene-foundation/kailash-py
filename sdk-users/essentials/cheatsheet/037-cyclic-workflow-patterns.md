@@ -10,15 +10,15 @@ class OptimizerNode(CycleAwareNode):
         # Get state
         iteration = self.get_iteration(context)
         prev_state = self.get_previous_state(context)
-        
+
         # Preserve config
         targets = kwargs.get("targets", {})
         if not targets and prev_state.get("targets"):
             targets = prev_state["targets"]
-        
+
         # Do work
         result = optimize(kwargs.get("metrics", {}), targets)
-        
+
         # Save state
         return {
             "metrics": result,

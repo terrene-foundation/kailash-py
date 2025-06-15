@@ -437,7 +437,9 @@ class ResearchSystem:
             "criteria": "Based on literature, data, statistical rigor, and domain expertise",
         }
 
-        self.coordinator.execute(action="consensus", consensus_proposal=consensus_proposal)
+        self.coordinator.execute(
+            action="consensus", consensus_proposal=consensus_proposal
+        )
 
         # Simulate agent votes based on their analysis
         for agent_id in [

@@ -21,7 +21,7 @@ from kailash.runtime.local import LocalRuntime
 
 class TestConvergence:
     """Test convergence functionality in cyclic workflows."""
-    
+
     def test_max_iterations_safety(self):
         """Test maximum iterations safety limit prevents infinite loops."""
         # Create workflow
@@ -34,13 +34,15 @@ class TestConvergence:
         def slow_increment(value=0):
             """Increment very slowly."""
             return {"value": value + 0.01}
-        
+
         incrementor = PythonCodeNode.from_function(
             func=slow_increment,
             name="incrementor",
             input_schema={
-                "value": NodeParameter(name="value", type=float, required=False, default=0.0),
-            }
+                "value": NodeParameter(
+                    name="value", type=float, required=False, default=0.0
+                ),
+            },
         )
         workflow.add_node("incrementor", incrementor)
 
@@ -67,7 +69,7 @@ class TestConvergence:
                 }
             },
         )
-        
+
         # Verify max iterations safety worked
         assert "incrementor" in results
         final_value = results["incrementor"]["result"].get("value", 0)
@@ -88,13 +90,13 @@ class TestConvergence:
         def count(n=0):
             """Simple counter."""
             return {"count": n + 1}
-        
+
         counter = PythonCodeNode.from_function(
             func=count,
             name="counter",
             input_schema={
                 "n": NodeParameter(name="n", type=int, required=False, default=0),
-            }
+            },
         )
         workflow.add_node("counter", counter)
 
@@ -113,7 +115,7 @@ class TestConvergence:
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(workflow)
-        
+
         # Verify cycle executed
         assert "counter" in results
         # Should have counted up to max_iterations
@@ -133,14 +135,18 @@ class TestConvergence:
         def accumulate(total=0, step=1):
             """Accumulate by step amount."""
             return {"total": total + step, "step": step}
-        
+
         accumulator = PythonCodeNode.from_function(
             func=accumulate,
             name="accumulator",
             input_schema={
-                "total": NodeParameter(name="total", type=float, required=False, default=0.0),
-                "step": NodeParameter(name="step", type=float, required=False, default=1.0),
-            }
+                "total": NodeParameter(
+                    name="total", type=float, required=False, default=0.0
+                ),
+                "step": NodeParameter(
+                    name="step", type=float, required=False, default=1.0
+                ),
+            },
         )
         workflow.add_node("accumulator", accumulator)
 
@@ -168,7 +174,7 @@ class TestConvergence:
                 }
             },
         )
-        
+
         # Verify accumulation worked
         assert "accumulator" in results
         final_total = results["accumulator"]["result"].get("total", 0)
@@ -180,40 +186,38 @@ class TestConvergence:
     def test_none_handling_in_cycle(self):
         """Test that None values are properly handled in cycles."""
         # Create workflow
-        workflow = Workflow(
-            workflow_id="none_handling",
-            name="None Handling Test"
-        )
-        
+        workflow = Workflow(workflow_id="none_handling", name="None Handling Test")
+
         # Create a node that handles None
         def handle_none(value=None):
             """Function that handles None values."""
             if value is None:
                 return {"value": 1}
             return {"value": value + 1}
-        
+
         node = PythonCodeNode.from_function(
             func=handle_none,
             name="none_handler",
             input_schema={
                 "value": NodeParameter(name="value", type=int, required=False)
-            }
+            },
         )
         workflow.add_node("handler", node)
-        
+
         # Create cycle
         workflow.connect(
-            "handler", "handler",
+            "handler",
+            "handler",
             mapping={"result.value": "value"},
             cycle=True,
             max_iterations=3,
-            cycle_id="none_loop"
+            cycle_id="none_loop",
         )
-        
+
         # Execute with no parameters (None initial value)
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(workflow, parameters={})
-        
+
         # Should handle None and produce values
         assert "handler" in results
         final_value = results["handler"]["result"]["value"]
@@ -234,13 +238,15 @@ class TestConvergence:
                 "data": f"data_{iteration}",
                 "iteration": iteration,
             }
-        
+
         generator = PythonCodeNode.from_function(
             func=generate,
             name="generator",
             input_schema={
-                "iteration": NodeParameter(name="iteration", type=int, required=False, default=0),
-            }
+                "iteration": NodeParameter(
+                    name="iteration", type=int, required=False, default=0
+                ),
+            },
         )
         workflow.add_node("generator", generator)
 
@@ -253,14 +259,14 @@ class TestConvergence:
                 "processed_data": processed,
                 "iteration": new_iteration,
             }
-        
+
         processor = PythonCodeNode.from_function(
             func=process,
             name="processor",
             input_schema={
                 "data": NodeParameter(name="data", type=str, required=True),
                 "iteration": NodeParameter(name="iteration", type=int, required=True),
-            }
+            },
         )
         workflow.add_node("processor", processor)
 
@@ -271,9 +277,9 @@ class TestConvergence:
             mapping={
                 "result.data": "data",
                 "result.iteration": "iteration",
-            }
+            },
         )
-        
+
         # Create cycle from processor back to generator
         workflow.connect(
             "processor",
@@ -289,7 +295,7 @@ class TestConvergence:
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(workflow)
-        
+
         # Verify cycle executed properly
         assert "processor" in results
         processor_result = results["processor"]["result"]

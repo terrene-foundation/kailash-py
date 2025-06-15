@@ -1,7 +1,7 @@
 """Compliance-related nodes for the Kailash SDK."""
 
-from .gdpr import GDPRComplianceNode
 from .data_retention import DataRetentionPolicyNode
+from .gdpr import GDPRComplianceNode
 
 __all__ = [
     "GDPRComplianceNode",

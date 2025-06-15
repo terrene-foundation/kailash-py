@@ -1,8 +1,9 @@
 """Test to verify validation flow in PythonCodeNode."""
 
+import pytest
+
 from kailash.nodes.code import PythonCodeNode
 from kailash.sdk_exceptions import NodeValidationError
-import pytest
 
 
 def test_trace_validation():

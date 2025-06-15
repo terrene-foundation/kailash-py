@@ -2,7 +2,7 @@
 RAG (Retrieval Augmented Generation) Toolkit
 
 Comprehensive RAG implementation with swappable strategies, conditional routing,
-and enterprise-grade features. Supports semantic, statistical, hybrid, and 
+and enterprise-grade features. Supports semantic, statistical, hybrid, and
 hierarchical RAG approaches with advanced similarity methods.
 
 ## Quick Start
@@ -44,7 +44,7 @@ workflow.add_node("multi_vector", MultiVectorRetrievalNode())
 
 ### Core Strategies
 - **SemanticRAGNode**: Semantic chunking + dense retrieval
-- **StatisticalRAGNode**: Statistical chunking + sparse retrieval  
+- **StatisticalRAGNode**: Statistical chunking + sparse retrieval
 - **HybridRAGNode**: Combines semantic + statistical approaches
 - **HierarchicalRAGNode**: Multi-level document processing
 
@@ -127,140 +127,104 @@ workflow.add_node("multi_vector", MultiVectorRetrievalNode())
 - **CrossSiloRAGNode**: Cross-organizational data federation
 """
 
-from .strategies import (
-    SemanticRAGNode,
-    StatisticalRAGNode,
-    HybridRAGNode,
-    HierarchicalRAGNode,
-    RAGConfig
-)
-
-from .workflows import (
-    SimpleRAGWorkflowNode,
-    AdvancedRAGWorkflowNode,
-    AdaptiveRAGWorkflowNode
-)
-
-from .router import (
-    RAGStrategyRouterNode,
-    RAGQualityAnalyzerNode,
-    RAGPerformanceMonitorNode
-)
-
-from .registry import RAGWorkflowRegistry
-
-from .advanced import (
-    SelfCorrectingRAGNode,
-    RAGFusionNode,
-    HyDENode,
-    StepBackRAGNode
-)
-
-from .similarity import (
-    DenseRetrievalNode,
-    SparseRetrievalNode,
-    ColBERTRetrievalNode,
-    MultiVectorRetrievalNode,
-    CrossEncoderRerankNode,
-    HybridFusionNode,
-    PropositionBasedRetrievalNode
-)
-
-from .query_processing import (
-    QueryExpansionNode,
-    QueryDecompositionNode,
-    QueryRewritingNode,
-    QueryIntentClassifierNode,
-    MultiHopQueryPlannerNode,
-    AdaptiveQueryProcessorNode
-)
-
-from .optimized import (
-    CacheOptimizedRAGNode,
-    AsyncParallelRAGNode,
-    StreamingRAGNode,
-    BatchOptimizedRAGNode
-)
-
-# Graph-based RAG
-from .graph import (
-    GraphRAGNode,
-    GraphBuilderNode,
-    GraphQueryNode
-)
+from .advanced import HyDENode, RAGFusionNode, SelfCorrectingRAGNode, StepBackRAGNode
 
 # Agentic RAG
-from .agentic import (
-    AgenticRAGNode,
-    ToolAugmentedRAGNode,
-    ReasoningRAGNode
-)
+from .agentic import AgenticRAGNode, ReasoningRAGNode, ToolAugmentedRAGNode
+
+# Conversational RAG
+from .conversational import ConversationalRAGNode, ConversationMemoryNode
+
+# Evaluation Framework
+from .evaluation import RAGBenchmarkNode, RAGEvaluationNode, TestDatasetGeneratorNode
+
+# Federated RAG
+from .federated import CrossSiloRAGNode, EdgeRAGNode, FederatedRAGNode
+
+# Graph-based RAG
+from .graph import GraphBuilderNode, GraphQueryNode, GraphRAGNode
 
 # Multimodal RAG
 from .multimodal import (
+    ImageTextMatchingNode,
     MultimodalRAGNode,
     VisualQuestionAnsweringNode,
-    ImageTextMatchingNode
 )
-
-# Real-time RAG
-from .realtime import (
-    RealtimeRAGNode,
-    StreamingRAGNode as RealtimeStreamingRAGNode,  # Avoid name conflict
-    IncrementalIndexNode
-)
-
-# Evaluation Framework
-from .evaluation import (
-    RAGEvaluationNode,
-    RAGBenchmarkNode,
-    TestDatasetGeneratorNode
+from .optimized import (
+    AsyncParallelRAGNode,
+    BatchOptimizedRAGNode,
+    CacheOptimizedRAGNode,
+    StreamingRAGNode,
 )
 
 # Privacy-preserving RAG
 from .privacy import (
+    ComplianceRAGNode,
     PrivacyPreservingRAGNode,
     SecureMultiPartyRAGNode,
-    ComplianceRAGNode
+)
+from .query_processing import (
+    AdaptiveQueryProcessorNode,
+    MultiHopQueryPlannerNode,
+    QueryDecompositionNode,
+    QueryExpansionNode,
+    QueryIntentClassifierNode,
+    QueryRewritingNode,
 )
 
-# Conversational RAG
-from .conversational import (
-    ConversationalRAGNode,
-    ConversationMemoryNode
+# Real-time RAG
+from .realtime import IncrementalIndexNode, RealtimeRAGNode
+from .realtime import (
+    StreamingRAGNode as RealtimeStreamingRAGNode,  # Avoid name conflict
 )
-
-# Federated RAG
-from .federated import (
-    FederatedRAGNode,
-    EdgeRAGNode,
-    CrossSiloRAGNode
+from .registry import RAGWorkflowRegistry
+from .router import (
+    RAGPerformanceMonitorNode,
+    RAGQualityAnalyzerNode,
+    RAGStrategyRouterNode,
+)
+from .similarity import (
+    ColBERTRetrievalNode,
+    CrossEncoderRerankNode,
+    DenseRetrievalNode,
+    HybridFusionNode,
+    MultiVectorRetrievalNode,
+    PropositionBasedRetrievalNode,
+    SparseRetrievalNode,
+)
+from .strategies import (
+    HierarchicalRAGNode,
+    HybridRAGNode,
+    RAGConfig,
+    SemanticRAGNode,
+    StatisticalRAGNode,
+)
+from .workflows import (
+    AdaptiveRAGWorkflowNode,
+    AdvancedRAGWorkflowNode,
+    SimpleRAGWorkflowNode,
 )
 
 __all__ = [
     # Core Strategy Nodes
     "SemanticRAGNode",
-    "StatisticalRAGNode", 
+    "StatisticalRAGNode",
     "HybridRAGNode",
     "HierarchicalRAGNode",
     "RAGConfig",
-    
     # Workflow Nodes
     "SimpleRAGWorkflowNode",
     "AdvancedRAGWorkflowNode",
     "AdaptiveRAGWorkflowNode",
-    
     # Router & Analysis
     "RAGStrategyRouterNode",
     "RAGQualityAnalyzerNode",
     "RAGPerformanceMonitorNode",
-    
     # Advanced RAG Techniques
     "SelfCorrectingRAGNode",
     "RAGFusionNode",
     "HyDENode",
     "StepBackRAGNode",
-    
     # Similarity Approaches
     "DenseRetrievalNode",
     "SparseRetrievalNode",
@@ -269,7 +233,6 @@ __all__ = [
     "CrossEncoderRerankNode",
     "HybridFusionNode",
     "PropositionBasedRetrievalNode",
-    
     # Query Processing
     "QueryExpansionNode",
     "QueryDecompositionNode",
@@ -277,52 +240,42 @@ __all__ = [
     "QueryIntentClassifierNode",
     "MultiHopQueryPlannerNode",
     "AdaptiveQueryProcessorNode",
-    
     # Performance Optimization
     "CacheOptimizedRAGNode",
     "AsyncParallelRAGNode",
     "StreamingRAGNode",
     "BatchOptimizedRAGNode",
-    
     # Registry
     "RAGWorkflowRegistry",
-    
     # Graph-based RAG
     "GraphRAGNode",
     "GraphBuilderNode",
     "GraphQueryNode",
-    
     # Agentic RAG
     "AgenticRAGNode",
     "ToolAugmentedRAGNode",
     "ReasoningRAGNode",
-    
     # Multimodal RAG
     "MultimodalRAGNode",
     "VisualQuestionAnsweringNode",
     "ImageTextMatchingNode",
-    
     # Real-time RAG
     "RealtimeRAGNode",
     "RealtimeStreamingRAGNode",
     "IncrementalIndexNode",
-    
     # Evaluation Framework
     "RAGEvaluationNode",
     "RAGBenchmarkNode",
     "TestDatasetGeneratorNode",
-    
     # Privacy-preserving RAG
     "PrivacyPreservingRAGNode",
     "SecureMultiPartyRAGNode",
     "ComplianceRAGNode",
-    
     # Conversational RAG
     "ConversationalRAGNode",
     "ConversationMemoryNode",
-    
     # Federated RAG
     "FederatedRAGNode",
     "EdgeRAGNode",
-    "CrossSiloRAGNode"
+    "CrossSiloRAGNode",
 ]

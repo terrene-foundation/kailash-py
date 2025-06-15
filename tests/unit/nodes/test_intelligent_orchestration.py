@@ -200,7 +200,9 @@ class TestConvergenceDetectorNode:
             {"evaluation": {"overall_score": 0.8}},
         ]
 
-        result = detector.execute(solution_history=improving_history, current_iteration=3)
+        result = detector.execute(
+            solution_history=improving_history, current_iteration=3
+        )
 
         assert result["success"] is True
         trend = result["improvement_trend"]

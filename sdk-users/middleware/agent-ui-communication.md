@@ -71,7 +71,7 @@ result = {
         {
             "from_node": "reader",
             "from_output": "output",
-            "to_node": "analyzer", 
+            "to_node": "analyzer",
             "to_input": "input_data"
         }
     ]
@@ -118,7 +118,7 @@ session_id = await agent_ui.create_session(
     user_id="analyst_1",
     metadata={
         "role": "data_analyst",
-        "department": "analytics", 
+        "department": "analytics",
         "permissions": ["read_data", "create_reports"],
         "preferences": {"theme": "dark", "auto_save": True}
     }
@@ -171,7 +171,7 @@ from kailash.workflow.builder import WorkflowBuilder
 # Create workflow with builder
 builder = WorkflowBuilder()
 
-reader_id = builder.add_node("CSVReaderNode", 
+reader_id = builder.add_node("CSVReaderNode",
     config={"name": "reader", "file_path": "/data/input.csv"}
 )
 
@@ -190,7 +190,7 @@ await agent_ui.register_workflow(
 
 # Register for specific session only
 await agent_ui.register_workflow(
-    workflow_id="custom_analysis", 
+    workflow_id="custom_analysis",
     workflow=builder,
     session_id=session_id
 )
@@ -232,7 +232,7 @@ async def workflow_event_handler(event):
     print(f"Event: {event.type}")
     print(f"Workflow: {event.workflow_id}")
     print(f"Data: {event.data}")
-    
+
     if event.type == EventType.WORKFLOW_COMPLETED:
         print("Workflow finished successfully!")
     elif event.type == EventType.WORKFLOW_FAILED:
@@ -270,7 +270,7 @@ await agent_ui.subscribe_to_events(
 
 # All events for monitoring
 await agent_ui.subscribe_to_events(
-    subscriber_id="global_monitor", 
+    subscriber_id="global_monitor",
     callback=global_event_handler
 )
 ```
@@ -312,13 +312,13 @@ if status['outputs']:
 async def monitor_execution(execution_id, session_id):
     while True:
         status = await agent_ui.get_execution_status(execution_id, session_id)
-        
+
         if not status:
             print("Execution not found")
             break
-            
+
         print(f"Progress: {status['progress']}%")
-        
+
         if status['status'] in ['completed', 'failed', 'cancelled']:
             print(f"Final status: {status['status']}")
             if status['status'] == 'completed':
@@ -326,7 +326,7 @@ async def monitor_execution(execution_id, session_id):
             elif status['status'] == 'failed':
                 print(f"Error: {status['error']}")
             break
-            
+
         await asyncio.sleep(1)
 
 # Start monitoring
@@ -383,27 +383,27 @@ print(f"Execution completed in {execution_time:.2f} seconds")
 try:
     # Session operations
     session_id = await agent_ui.create_session(user_id="user123")
-    
-    # Workflow operations  
+
+    # Workflow operations
     workflow_id = await agent_ui.create_dynamic_workflow(
         session_id=session_id,
         workflow_config=workflow_config
     )
-    
+
     # Execution operations
     execution_id = await agent_ui.execute_workflow(
         session_id=session_id,
         workflow_id=workflow_id
     )
-    
+
 except ValueError as e:
     # Invalid parameters, missing session, etc.
     print(f"Invalid request: {e}")
-    
+
 except Exception as e:
     # Other errors
     print(f"Unexpected error: {e}")
-    
+
     # Cleanup on error
     if 'session_id' in locals():
         await agent_ui.close_session(session_id)
@@ -420,8 +420,8 @@ try:
 except WorkflowValidationError as e:
     print(f"Workflow validation failed: {e}")
     # Show user-friendly error message
-    
-# Handle execution errors  
+
+# Handle execution errors
 try:
     execution_id = await agent_ui.execute_workflow(
         session_id=session_id,
@@ -525,7 +525,7 @@ async def robust_execution(session_id, workflow_id, max_retries=3):
             await asyncio.sleep(2 ** attempt)  # Exponential backoff
 ```
 
-### 3. Performance Optimization  
+### 3. Performance Optimization
 ```python
 # Batch workflow creations
 workflows_to_create = [config1, config2, config3]
@@ -540,7 +540,7 @@ for config in workflows_to_create:
 
 # Execute in parallel
 execution_tasks = [
-    agent_ui.execute_workflow(session_id, wf_id) 
+    agent_ui.execute_workflow(session_id, wf_id)
     for wf_id in workflow_ids
 ]
 execution_ids = await asyncio.gather(*execution_tasks)

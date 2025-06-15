@@ -9,8 +9,13 @@ import pytest
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode
-from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.data import (
+    CSVReaderNode,
+    CSVWriterNode,
+    JSONReaderNode,
+    JSONWriterNode,
+)
+from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
 
 
@@ -34,22 +39,20 @@ class TestWorkflowPatterns:
 
         # Add nodes
         reader = CSVReaderNode(file_path=str(input_file))
-        
+
         def transform_data(data):
             """Add 10% to each value."""
             for record in data:
                 if "value" in record:
                     record["value"] = float(record["value"]) * 1.1
             return data
-        
+
         transformer = PythonCodeNode.from_function(
             func=transform_data,
             name="transformer",
-            input_schema={
-                "data": NodeParameter(name="data", type=list, required=True)
-            }
+            input_schema={"data": NodeParameter(name="data", type=list, required=True)},
         )
-        
+
         writer = CSVWriterNode(file_path=str(output_file))
 
         workflow.add_node("reader", reader)
@@ -82,11 +85,14 @@ class TestWorkflowPatterns:
         # Create test data
         input_file = tmp_path / "customers.json"
         with open(input_file, "w") as f:
-            json.dump([
-                {"name": "Alice", "value": 500, "status": "active"},
-                {"name": "Bob", "value": 100, "status": "inactive"},
-                {"name": "Charlie", "value": 300, "status": "active"}
-            ], f)
+            json.dump(
+                [
+                    {"name": "Alice", "value": 500, "status": "active"},
+                    {"name": "Bob", "value": 100, "status": "inactive"},
+                    {"name": "Charlie", "value": 300, "status": "active"},
+                ],
+                f,
+            )
 
         high_value_file = tmp_path / "high_value.json"
         low_value_file = tmp_path / "low_value.json"
@@ -96,33 +102,34 @@ class TestWorkflowPatterns:
 
         # Add nodes
         reader = JSONReaderNode(file_path=str(input_file))
-        
+
         def evaluate_customer(data):
             """Evaluate customer and determine routing."""
             high_value = []
             low_value = []
-            
+
             for customer in data:
-                if customer.get("status") == "active" and customer.get("value", 0) >= 300:
+                if (
+                    customer.get("status") == "active"
+                    and customer.get("value", 0) >= 300
+                ):
                     high_value.append(customer)
                 else:
                     low_value.append(customer)
-            
+
             return {
                 "high_value": high_value,
                 "low_value": low_value,
                 "high_count": len(high_value),
-                "low_count": len(low_value)
+                "low_count": len(low_value),
             }
-        
+
         evaluator = PythonCodeNode.from_function(
             func=evaluate_customer,
             name="evaluator",
-            input_schema={
-                "data": NodeParameter(name="data", type=list, required=True)
-            }
+            input_schema={"data": NodeParameter(name="data", type=list, required=True)},
         )
-        
+
         # Process high value customers
         def process_high_value(customers):
             """Add premium benefits."""
@@ -130,15 +137,15 @@ class TestWorkflowPatterns:
                 customer["tier"] = "premium"
                 customer["discount"] = 0.2
             return customers
-        
+
         high_processor = PythonCodeNode.from_function(
             func=process_high_value,
             name="high_processor",
             input_schema={
                 "customers": NodeParameter(name="customers", type=list, required=True)
-            }
+            },
         )
-        
+
         # Process low value customers
         def process_low_value(customers):
             """Add standard benefits."""
@@ -146,15 +153,15 @@ class TestWorkflowPatterns:
                 customer["tier"] = "standard"
                 customer["discount"] = 0.05
             return customers
-        
+
         low_processor = PythonCodeNode.from_function(
             func=process_low_value,
             name="low_processor",
             input_schema={
                 "customers": NodeParameter(name="customers", type=list, required=True)
-            }
+            },
         )
-        
+
         high_writer = JSONWriterNode(file_path=str(high_value_file))
         low_writer = JSONWriterNode(file_path=str(low_value_file))
 
@@ -168,8 +175,12 @@ class TestWorkflowPatterns:
 
         # Connect nodes
         workflow.connect("reader", "evaluator", mapping={"data": "data"})
-        workflow.connect("evaluator", "high_processor", mapping={"result.high_value": "customers"})
-        workflow.connect("evaluator", "low_processor", mapping={"result.low_value": "customers"})
+        workflow.connect(
+            "evaluator", "high_processor", mapping={"result.high_value": "customers"}
+        )
+        workflow.connect(
+            "evaluator", "low_processor", mapping={"result.low_value": "customers"}
+        )
         workflow.connect("high_processor", "high_writer", mapping={"result": "data"})
         workflow.connect("low_processor", "low_writer", mapping={"result": "data"})
 
@@ -180,14 +191,14 @@ class TestWorkflowPatterns:
         # Verify
         assert high_value_file.exists()
         assert low_value_file.exists()
-        
+
         # Check high value customers
         with open(high_value_file) as f:
             high_value_data = json.load(f)
             assert len(high_value_data) == 2  # Alice and Charlie
             assert all(c["tier"] == "premium" for c in high_value_data)
             assert all(c["discount"] == 0.2 for c in high_value_data)
-        
+
         # Check low value customers
         with open(low_value_file) as f:
             low_value_data = json.load(f)
@@ -200,10 +211,7 @@ class TestWorkflowPatterns:
         # Create test data
         input_file = tmp_path / "data.json"
         with open(input_file, "w") as f:
-            json.dump({
-                "values": [1, 2, 3, 4, 5],
-                "multiplier": 2
-            }, f)
+            json.dump({"values": [1, 2, 3, 4, 5], "multiplier": 2}, f)
 
         output_file = tmp_path / "results.json"
 
@@ -212,34 +220,34 @@ class TestWorkflowPatterns:
 
         # Add nodes
         reader = JSONReaderNode(file_path=str(input_file))
-        
+
         # Branch 1: Calculate sum
         def calculate_sum(values):
             """Calculate sum of values."""
             return {"sum": sum(values)}
-        
+
         sum_calculator = PythonCodeNode.from_function(
             func=calculate_sum,
             name="sum_calculator",
             input_schema={
                 "values": NodeParameter(name="values", type=list, required=True)
-            }
+            },
         )
-        
+
         # Branch 2: Calculate product
         def calculate_product(values, multiplier):
             """Multiply each value."""
             return {"products": [v * multiplier for v in values]}
-        
+
         product_calculator = PythonCodeNode.from_function(
             func=calculate_product,
             name="product_calculator",
             input_schema={
                 "values": NodeParameter(name="values", type=list, required=True),
-                "multiplier": NodeParameter(name="multiplier", type=int, required=True)
-            }
+                "multiplier": NodeParameter(name="multiplier", type=int, required=True),
+            },
         )
-        
+
         # Branch 3: Calculate statistics
         def calculate_stats(values):
             """Calculate statistics."""
@@ -247,36 +255,42 @@ class TestWorkflowPatterns:
                 "mean": sum(values) / len(values) if values else 0,
                 "max": max(values) if values else 0,
                 "min": min(values) if values else 0,
-                "count": len(values)
+                "count": len(values),
             }
-        
+
         stats_calculator = PythonCodeNode.from_function(
             func=calculate_stats,
             name="stats_calculator",
             input_schema={
                 "values": NodeParameter(name="values", type=list, required=True)
-            }
+            },
         )
-        
+
         # Merge results
         def merge_results(sum_result, product_result, stats_result):
             """Merge all results."""
             return {
                 "sum": sum_result["sum"],
                 "products": product_result["products"],
-                "statistics": stats_result
+                "statistics": stats_result,
             }
-        
+
         merger = PythonCodeNode.from_function(
             func=merge_results,
             name="merger",
             input_schema={
-                "sum_result": NodeParameter(name="sum_result", type=dict, required=True),
-                "product_result": NodeParameter(name="product_result", type=dict, required=True),
-                "stats_result": NodeParameter(name="stats_result", type=dict, required=True)
-            }
+                "sum_result": NodeParameter(
+                    name="sum_result", type=dict, required=True
+                ),
+                "product_result": NodeParameter(
+                    name="product_result", type=dict, required=True
+                ),
+                "stats_result": NodeParameter(
+                    name="stats_result", type=dict, required=True
+                ),
+            },
         )
-        
+
         writer = JSONWriterNode(file_path=str(output_file))
 
         # Add nodes to workflow
@@ -289,17 +303,24 @@ class TestWorkflowPatterns:
 
         # Connect nodes - parallel branches
         workflow.connect("reader", "sum_calculator", mapping={"data.values": "values"})
-        workflow.connect("reader", "product_calculator", mapping={
-            "data.values": "values",
-            "data.multiplier": "multiplier"
-        })
-        workflow.connect("reader", "stats_calculator", mapping={"data.values": "values"})
-        
+        workflow.connect(
+            "reader",
+            "product_calculator",
+            mapping={"data.values": "values", "data.multiplier": "multiplier"},
+        )
+        workflow.connect(
+            "reader", "stats_calculator", mapping={"data.values": "values"}
+        )
+
         # Connect to merger
         workflow.connect("sum_calculator", "merger", mapping={"result": "sum_result"})
-        workflow.connect("product_calculator", "merger", mapping={"result": "product_result"})
-        workflow.connect("stats_calculator", "merger", mapping={"result": "stats_result"})
-        
+        workflow.connect(
+            "product_calculator", "merger", mapping={"result": "product_result"}
+        )
+        workflow.connect(
+            "stats_calculator", "merger", mapping={"result": "stats_result"}
+        )
+
         # Connect to writer
         workflow.connect("merger", "writer", mapping={"result": "data"})
 
@@ -309,7 +330,7 @@ class TestWorkflowPatterns:
 
         # Verify
         assert output_file.exists()
-        
+
         with open(output_file) as f:
             result_data = json.load(f)
             assert result_data["sum"] == 15  # 1+2+3+4+5

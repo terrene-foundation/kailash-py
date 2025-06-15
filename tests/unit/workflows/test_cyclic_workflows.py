@@ -11,8 +11,8 @@ Tests core cyclic workflow features including:
 import pytest
 
 from kailash import Workflow
-from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.base import NodeParameter
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import WorkflowValidationError
 from kailash.workflow.cycle_exceptions import CycleConfigurationError
@@ -33,16 +33,20 @@ class TestCyclicWorkflowBasics:
             return {
                 "count": new_count,
                 "increment": increment,
-                "converged": new_count >= 5
+                "converged": new_count >= 5,
             }
-        
+
         counter = PythonCodeNode.from_function(
             func=counter_func,
             name="counter",
             input_schema={
-                "count": NodeParameter(name="count", type=int, required=False, default=0),
-                "increment": NodeParameter(name="increment", type=int, required=False, default=1)
-            }
+                "count": NodeParameter(
+                    name="count", type=int, required=False, default=0
+                ),
+                "increment": NodeParameter(
+                    name="increment", type=int, required=False, default=1
+                ),
+            },
         )
         workflow.add_node("counter", counter)
 
@@ -50,10 +54,7 @@ class TestCyclicWorkflowBasics:
         workflow.connect(
             "counter",
             "counter",
-            mapping={
-                "result.count": "count",
-                "result.increment": "increment"
-            },
+            mapping={"result.count": "count", "result.increment": "increment"},
             cycle=True,
             max_iterations=3,
             cycle_id="count_loop",
@@ -62,8 +63,7 @@ class TestCyclicWorkflowBasics:
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
-            workflow, 
-            parameters={"counter": {"count": 0, "increment": 2}}
+            workflow, parameters={"counter": {"count": 0, "increment": 2}}
         )
 
         # Check results
@@ -105,14 +105,18 @@ class TestCyclicWorkflowBasics:
             """Accumulate values."""
             new_total = total + step
             return {"total": new_total, "step": step}
-        
+
         accumulator = PythonCodeNode.from_function(
             func=accumulate,
             name="accumulator",
             input_schema={
-                "total": NodeParameter(name="total", type=float, required=False, default=0.0),
-                "step": NodeParameter(name="step", type=float, required=False, default=0.1)
-            }
+                "total": NodeParameter(
+                    name="total", type=float, required=False, default=0.0
+                ),
+                "step": NodeParameter(
+                    name="step", type=float, required=False, default=0.1
+                ),
+            },
         )
         workflow.add_node("accumulator", accumulator)
 
@@ -120,10 +124,7 @@ class TestCyclicWorkflowBasics:
         workflow.connect(
             "accumulator",
             "accumulator",
-            mapping={
-                "result.total": "total",
-                "result.step": "step"
-            },
+            mapping={"result.total": "total", "result.step": "step"},
             cycle=True,
             max_iterations=50,  # Safety limit
             convergence_check="total >= 1.0",
@@ -145,44 +146,48 @@ class TestCyclicWorkflowBasics:
 
         # First cycle - counter
         def counter_func(count=0):
-            return {'count': count + 1}
-        
+            return {"count": count + 1}
+
         counter = PythonCodeNode.from_function(
             func=counter_func,
             name="counter",
             input_schema={
-                "count": NodeParameter(name="count", type=int, required=False, default=0)
-            }
+                "count": NodeParameter(
+                    name="count", type=int, required=False, default=0
+                )
+            },
         )
         workflow.add_node("counter", counter)
-        
+
         workflow.connect(
-            "counter", "counter",
+            "counter",
+            "counter",
             mapping={"result.count": "count"},
             cycle=True,
             max_iterations=3,
-            cycle_id="counter_cycle"
+            cycle_id="counter_cycle",
         )
 
         # Second cycle - accumulator (independent)
         def accumulator_func(sum=0):
-            return {'sum': sum + 5}
-        
+            return {"sum": sum + 5}
+
         accumulator = PythonCodeNode.from_function(
             func=accumulator_func,
             name="accumulator",
             input_schema={
                 "sum": NodeParameter(name="sum", type=int, required=False, default=0)
-            }
+            },
         )
         workflow.add_node("accumulator", accumulator)
-        
+
         workflow.connect(
-            "accumulator", "accumulator",
+            "accumulator",
+            "accumulator",
             mapping={"result.sum": "sum"},
             cycle=True,
             max_iterations=2,
-            cycle_id="accumulator_cycle"
+            cycle_id="accumulator_cycle",
         )
 
         # Execute
@@ -199,8 +204,7 @@ class TestCyclicWorkflowBasics:
 
         # Config node provides configuration
         config = PythonCodeNode(
-            name="config",
-            code="result = {'multiplier': 2, 'threshold': 10}"
+            name="config", code="result = {'multiplier': 2, 'threshold': 10}"
         )
         workflow.add_node("config", config)
 
@@ -208,35 +212,40 @@ class TestCyclicWorkflowBasics:
         def process(value=0, multiplier=1, threshold=10):
             """Process with external config."""
             new_value = value + multiplier
-            return {
-                "value": new_value,
-                "done": new_value >= threshold
-            }
-        
+            return {"value": new_value, "done": new_value >= threshold}
+
         processor = PythonCodeNode.from_function(
             func=process,
             name="processor",
             input_schema={
-                "value": NodeParameter(name="value", type=int, required=False, default=0),
-                "multiplier": NodeParameter(name="multiplier", type=int, required=False, default=1),
-                "threshold": NodeParameter(name="threshold", type=int, required=False, default=10)
-            }
+                "value": NodeParameter(
+                    name="value", type=int, required=False, default=0
+                ),
+                "multiplier": NodeParameter(
+                    name="multiplier", type=int, required=False, default=1
+                ),
+                "threshold": NodeParameter(
+                    name="threshold", type=int, required=False, default=10
+                ),
+            },
         )
         workflow.add_node("processor", processor)
 
         # Connect config to processor
-        workflow.connect("config", "processor", {
-            "result.multiplier": "multiplier",
-            "result.threshold": "threshold"
-        })
+        workflow.connect(
+            "config",
+            "processor",
+            {"result.multiplier": "multiplier", "result.threshold": "threshold"},
+        )
 
         # Create cycle
         workflow.connect(
-            "processor", "processor",
+            "processor",
+            "processor",
             mapping={"result.value": "value"},
             cycle=True,
             max_iterations=10,
-            cycle_id="process_cycle"
+            cycle_id="process_cycle",
         )
 
         # Execute
@@ -256,20 +265,15 @@ class TestCyclicWorkflowBasics:
         workflow1.add_node("n1", node1)
         workflow1.add_node("n2", node2)
         workflow1.connect("n1", "n2")
-        
+
         assert not workflow1.has_cycles()
 
         # Cyclic workflow
         workflow2 = Workflow("cyclic", "Cyclic Workflow")
         node = PythonCodeNode(name="node", code="result = 1")
         workflow2.add_node("node", node)
-        workflow2.connect(
-            "node", "node",
-            cycle=True,
-            max_iterations=5,
-            cycle_id="test"
-        )
-        
+        workflow2.connect("node", "node", cycle=True, max_iterations=5, cycle_id="test")
+
         assert workflow2.has_cycles()
 
     def test_cycle_id_uniqueness(self):
@@ -284,10 +288,7 @@ class TestCyclicWorkflowBasics:
 
         # Create first cycle
         workflow.connect(
-            "node1", "node1",
-            cycle=True,
-            max_iterations=3,
-            cycle_id="same_id"
+            "node1", "node1", cycle=True, max_iterations=3, cycle_id="same_id"
         )
 
         # Try to create second cycle with same ID
@@ -295,10 +296,11 @@ class TestCyclicWorkflowBasics:
         # but test the behavior anyway
         try:
             workflow.connect(
-                "node2", "node2",
+                "node2",
+                "node2",
                 cycle=True,
                 max_iterations=3,
-                cycle_id="same_id"  # Duplicate ID
+                cycle_id="same_id",  # Duplicate ID
             )
             # If no error raised, at least verify both cycles exist
             assert workflow.has_cycles()

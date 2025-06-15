@@ -182,13 +182,13 @@ def demonstrate_team_formation(
         "required_capabilities": ["data_analysis", "machine_learning", "visualization"],
         "complexity_score": 0.7,
         "estimated_agents": 3,
-        "time_estimate": 60
+        "time_estimate": 60,
     }
 
     # Get all agents from the pool
     all_agents_result = pool_manager.execute(action="list")
     all_agents = all_agents_result.get("agents", [])
-    
+
     # Filter agents that have at least one matching capability
     available_agents = []
     for agent in all_agents:
@@ -225,15 +225,16 @@ def demonstrate_team_formation(
         # Debug what's in the result
         team_formation_data = formation_result.get("team_formation", {})
         if "team" not in team_formation_data:
-            print(f"  WARNING: No team found in result. Keys: {list(team_formation_data.keys())}")
+            print(
+                f"  WARNING: No team found in result. Keys: {list(team_formation_data.keys())}"
+            )
             print(f"  Full result: {team_formation_data}")
             continue
-            
+
         team = team_formation_data["team"]
-        metrics = team_formation_data.get("team_metrics", {
-            "fitness_score": 0.0,
-            "capability_coverage": 0.0
-        })
+        metrics = team_formation_data.get(
+            "team_metrics", {"fitness_score": 0.0, "capability_coverage": 0.0}
+        )
 
         print(f"Team size: {len(team)}")
         print(f"Fitness score: {metrics['fitness_score']:.2f}")
@@ -394,7 +395,9 @@ def main():
     problem_analysis = demonstrate_problem_analysis(workflow)
 
     # Step 3: Team Formation
-    teams, demo_problem_analysis = demonstrate_team_formation(workflow, pool_manager, problem_analysis)
+    teams, demo_problem_analysis = demonstrate_team_formation(
+        workflow, pool_manager, problem_analysis
+    )
 
     # Step 4: Collaboration
     solution = demonstrate_collaboration(workflow, teams, demo_problem_analysis)
@@ -431,9 +434,10 @@ def main():
 
     # Create output directory if it doesn't exist
     import os
+
     output_dir = "examples/outputs"
     os.makedirs(output_dir, exist_ok=True)
-    
+
     output_file = os.path.join(output_dir, "self_organizing_simple_results.json")
     with open(output_file, "w") as f:
         json.dump(results, f, indent=2, default=str)

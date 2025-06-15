@@ -17,8 +17,7 @@ import pytest
 
 # Import Kailash components
 from kailash.nodes.base import Node
-
-from kailash.runtime.docker import DockerRuntime, DockerNodeWrapper
+from kailash.runtime.docker import DockerNodeWrapper, DockerRuntime
 from kailash.runtime.local import LocalRuntime  # noqa: E402
 
 # Simplified exception imports

@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 # Skip all tests in this file as MCP has been refactored
-pytestmark = pytest.mark.skip(reason="MCP refactored to middleware - tests need rewrite")
+pytestmark = pytest.mark.skip(
+    reason="MCP refactored to middleware - tests need rewrite"
+)
 
 from kailash.nodes.ai import LLMAgentNode
 

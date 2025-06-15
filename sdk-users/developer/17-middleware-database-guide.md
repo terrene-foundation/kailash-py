@@ -49,7 +49,7 @@ from kailash.middleware.database import BaseWorkflowModel
 
 class StudioWorkflow(BaseWorkflowModel):
     __tablename__ = "studio_workflows"
-    
+
     # Only add app-specific fields
     # All standard fields are inherited
 ```
@@ -66,7 +66,7 @@ from kailash.middleware.database import BaseExecutionModel
 
 class MyExecution(BaseExecutionModel):
     __tablename__ = "my_executions"
-    
+
     # Inherited methods:
     # - start(started_by)
     # - complete(outputs)
@@ -124,10 +124,10 @@ async with db_manager.get_session() as session:
         name="New Workflow",
         tenant_id="tenant123"
     )
-    
+
     # Find by tenant (soft-deleted excluded automatically)
     workflows = await workflow_repo.find_by_tenant(session, "tenant123")
-    
+
     # Soft delete with audit
     await workflow_repo.soft_delete(session, workflow, "user123")
 ```
@@ -162,13 +162,13 @@ class StudioWorkflow(Base):
     tenant_id = Column(String, index=True)
     created_at = Column(DateTime, default=func.now())
     # ... 20+ more fields
-    
+
     # Manual indexes
     __table_args__ = (
         Index("idx_tenant_status", "tenant_id", "status"),
         # ... more indexes
     )
-    
+
     # Manual validation
     @validates('name')
     def validate_name(self, key, name):
@@ -182,7 +182,7 @@ from kailash.middleware.database import BaseWorkflowModel
 
 class StudioWorkflow(BaseWorkflowModel):
     __tablename__ = "studio_workflows"
-    
+
     # All fields inherited!
     # Only add Studio-specific customizations
 ```
@@ -195,8 +195,8 @@ Don't create models from scratch:
 # ❌ Wrong
 class MyModel(Base):
     # Reinventing the wheel
-    
-# ✅ Correct  
+
+# ✅ Correct
 class MyModel(BaseWorkflowModel):
     # Inherit enterprise features
 ```
@@ -246,7 +246,7 @@ Built-in connection pooling and query optimization:
 ```python
 # Automatic indexes on common patterns
 - tenant_id + status
-- created_at  
+- created_at
 - session_id
 ```
 

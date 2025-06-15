@@ -333,7 +333,9 @@ class TestAuthNodes:
     def test_api_key_header(self):
         """Test the APIKeyNode with header placement."""
         node = APIKeyNode()
-        result = node.execute(api_key="abcd1234", location="header", param_name="X-API-Key")
+        result = node.execute(
+            api_key="abcd1234", location="header", param_name="X-API-Key"
+        )
 
         assert result["auth_type"] == "api_key"
         assert result["headers"]["X-API-Key"] == "abcd1234"
@@ -343,7 +345,9 @@ class TestAuthNodes:
     def test_api_key_query(self):
         """Test the APIKeyNode with query parameter placement."""
         node = APIKeyNode()
-        result = node.execute(api_key="abcd1234", location="query", param_name="api_key")
+        result = node.execute(
+            api_key="abcd1234", location="query", param_name="api_key"
+        )
 
         assert result["auth_type"] == "api_key"
         assert not result["headers"]
@@ -445,144 +449,165 @@ class TestAsyncNodes:
 
 class TestAsyncUpgradesIntegration:
     """Integration tests for async upgrades (070-upgrade-components)."""
-    
+
     @pytest.mark.asyncio
     async def test_mixed_async_sync_workflow(self):
         """Test workflow with mixed async and sync nodes."""
-        from kailash.workflow import Workflow
-        from kailash.runtime.local import LocalRuntime
-        from kailash.nodes.data.readers import JSONReaderNode
-        from kailash.nodes.code.python import PythonCodeNode
-        import tempfile
         import json
-        
+        import tempfile
+
+        from kailash.nodes.code.python import PythonCodeNode
+        from kailash.nodes.data.readers import JSONReaderNode
+        from kailash.runtime.local import LocalRuntime
+        from kailash.workflow import Workflow
+
         # Create test data
-        test_data = {"users": [{"id": 1, "name": "User 1"}, {"id": 2, "name": "User 2"}]}
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        test_data = {
+            "users": [{"id": 1, "name": "User 1"}, {"id": 2, "name": "User 2"}]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(test_data, f)
             json_file = f.name
-        
+
         try:
             # Create workflow
             workflow = Workflow(workflow_id="mixed_async_test", name="Mixed Async Test")
-            
+
             # Add async JSON reader
             json_reader = JSONReaderNode(name="reader")
             workflow.add_node("reader", json_reader)
-            
+
             # Add sync Python processor
             def process_users(data):
                 users = data.get("users", [])
-                return {"result": {"total_users": len(users), "user_names": [u["name"] for u in users]}}
-            
-            processor = PythonCodeNode.from_function(func=process_users, name="processor")
+                return {
+                    "result": {
+                        "total_users": len(users),
+                        "user_names": [u["name"] for u in users],
+                    }
+                }
+
+            processor = PythonCodeNode.from_function(
+                func=process_users, name="processor"
+            )
             workflow.add_node("processor", processor)
-            
+
             # Connect nodes
             workflow.connect("reader", "processor", {"data": "data"})
-            
+
             # Execute with async runtime
             runtime = LocalRuntime(enable_async=True, debug=True)
-            
-            results, run_id = await runtime.execute(workflow, {"reader": {"file_path": json_file}})
-            
+
+            results, run_id = await runtime.execute(
+                workflow, {"reader": {"file_path": json_file}}
+            )
+
             # Verify results
             assert "reader" in results
             assert "processor" in results
             assert results["reader"]["data"] == test_data
             assert results["processor"]["result"]["result"]["total_users"] == 2
             assert "User 1" in results["processor"]["result"]["result"]["user_names"]
-            
+
         finally:
             # Cleanup
             import os
+
             os.unlink(json_file)
-    
+
     @pytest.mark.asyncio
     async def test_async_node_performance_comparison(self):
         """Test performance comparison between async and sync execution."""
-        from kailash.nodes.data.readers import CSVReaderNode
-        import tempfile
         import csv
+        import tempfile
         import time
-        
+
+        from kailash.nodes.data.readers import CSVReaderNode
+
         # Create larger test CSV file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, newline=""
+        ) as f:
             writer = csv.DictWriter(f, fieldnames=["id", "name", "value"])
             writer.writeheader()
             for i in range(1000):  # Larger dataset
                 writer.writerow({"id": i, "name": f"Item {i}", "value": i * 10})
             csv_file = f.name
-        
+
         try:
             node = CSVReaderNode(name="perf_test")
-            
+
             # Test sync execution
             start_time = time.time()
             sync_result = node.execute(file_path=csv_file)
             sync_time = time.time() - start_time
-            
+
             # Test async execution
             start_time = time.time()
             async_result = await node.async_run(file_path=csv_file)
             async_time = time.time() - start_time
-            
+
             # Verify results are identical
             assert len(sync_result["data"]) == len(async_result["data"])
             assert sync_result["data"] == async_result["data"]
-            
+
             # Performance should be comparable (async may be slightly faster for I/O)
             print(f"Sync time: {sync_time:.3f}s, Async time: {async_time:.3f}s")
-            
+
             # Both should complete reasonably quickly
             assert sync_time < 5.0, "Sync execution too slow"
             assert async_time < 5.0, "Async execution too slow"
-            
+
         finally:
             # Cleanup
             import os
+
             os.unlink(csv_file)
-    
+
     @pytest.mark.asyncio
     async def test_async_runtime_auto_detection(self):
         """Test that LocalRuntime auto-detects async capabilities."""
-        from kailash.workflow import Workflow
-        from kailash.runtime.local import LocalRuntime
-        from kailash.nodes.data.readers import JSONReaderNode
-        import tempfile
         import json
-        
+        import tempfile
+
+        from kailash.nodes.data.readers import JSONReaderNode
+        from kailash.runtime.local import LocalRuntime
+        from kailash.workflow import Workflow
+
         # Create test data
         test_data = {"message": "async detection test"}
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(test_data, f)
             json_file = f.name
-        
+
         try:
             # Create workflow
             workflow = Workflow(workflow_id="auto_detect_test", name="Auto Detect Test")
-            
+
             json_reader = JSONReaderNode(name="reader")
             workflow.add_node("reader", json_reader)
-            
+
             # Test with different runtime configurations
             runtimes = [
-                LocalRuntime(enable_async=True),   # Explicit async
+                LocalRuntime(enable_async=True),  # Explicit async
                 LocalRuntime(enable_async=False),  # Explicit sync
-                LocalRuntime(),                    # Default (async enabled by default)
+                LocalRuntime(),  # Default (async enabled by default)
             ]
-            
+
             for i, runtime in enumerate(runtimes):
-                results, run_id = await runtime.execute(workflow, {"reader": {"file_path": json_file}})
-                
+                results, run_id = await runtime.execute(
+                    workflow, {"reader": {"file_path": json_file}}
+                )
+
                 # All should work and return same data
                 assert "reader" in results
                 assert results["reader"]["data"] == test_data
                 print(f"Runtime {i+1} (async={runtime.enable_async}): SUCCESS")
-            
+
         finally:
             # Cleanup
             import os
+
             os.unlink(json_file)

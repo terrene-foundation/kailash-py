@@ -41,23 +41,23 @@ providing session management, dynamic workflow creation, and execution monitorin
 .. code-block:: python
 
    from kailash.middleware import AgentUIMiddleware
-   
+
    agent_ui = AgentUIMiddleware(
        max_sessions=1000,
        session_timeout_minutes=60,
        enable_persistence=True
    )
-   
+
    # Create session
    session_id = await agent_ui.create_session("user123")
-   
+
    # Create dynamic workflow
    workflow_config = {
        "name": "data_pipeline",
        "nodes": [...],
        "connections": [...]
    }
-   
+
    workflow_id = await agent_ui.create_dynamic_workflow(
        session_id, workflow_config
    )
@@ -89,17 +89,17 @@ OpenAPI documentation generation.
 .. code-block:: python
 
    from kailash.middleware import create_gateway
-   
+
    gateway = create_gateway(
        title="My Production API",
        cors_origins=["https://myapp.com"],
        enable_docs=True,
        enable_auth=True
    )
-   
+
    # Gateway provides automatic endpoints:
    # POST /api/sessions - Create session
-   # POST /api/workflows - Create workflow  
+   # POST /api/workflows - Create workflow
    # POST /api/executions - Execute workflow
    # GET /health - Health check
    # GET /docs - API documentation
@@ -129,13 +129,13 @@ for live workflow updates.
 .. code-block:: python
 
    from kailash.middleware import RealtimeMiddleware
-   
+
    realtime = RealtimeMiddleware(agent_ui)
-   
+
    # Subscribe to events
    async def handle_events(event):
        print(f"Event: {event.type} - {event.data}")
-   
+
    await realtime.event_stream.subscribe(
        "my_listener", handle_events
    )
@@ -164,17 +164,17 @@ AI-powered conversation management with natural language workflow generation cap
 .. code-block:: python
 
    from kailash.middleware import AIChatMiddleware
-   
+
    ai_chat = AIChatMiddleware(
        agent_ui,
        enable_vector_search=True,
        vector_database_url="postgresql://...",
        llm_provider="ollama"
    )
-   
+
    # Start chat session
    chat_session_id = await ai_chat.start_chat_session("user123")
-   
+
    # Send message
    response = await ai_chat.send_message(
        chat_session_id,
@@ -239,7 +239,7 @@ Authentication & Security
 JWT Authentication Manager
 ---------------------------
 
-.. autoclass:: kailash.middleware.auth.JWTAuthManager
+.. autoclass:: kailash.middleware.auth.jwt_auth.JWTAuthManager
    :members:
    :undoc-members:
    :show-inheritance:
@@ -251,20 +251,20 @@ JWT-based authentication system with token management and validation.
 
 .. code-block:: python
 
-   from kailash.middleware.auth import JWTAuthManager
-   
+   from kailash.middleware.auth.jwt_auth import JWTAuthManager
+
    auth_manager = JWTAuthManager(
        secret_key="your-secret-key",
        algorithm="HS256",
        access_token_expire_minutes=30
    )
-   
+
    # Create token
    token = await auth_manager.create_access_token(
        user_id="user123",
        permissions=["read", "write"]
    )
-   
+
    # Verify token
    payload = await auth_manager.verify_token(token)
 
@@ -407,19 +407,19 @@ Basic Middleware Stack
 
    from kailash.middleware import (
        AgentUIMiddleware,
-       APIGateway, 
+       APIGateway,
        create_gateway,
        RealtimeMiddleware
    )
-   
+
    # Create basic stack
    agent_ui = AgentUIMiddleware(max_sessions=1000)
    gateway = create_gateway(title="My App")
    gateway.agent_ui = agent_ui
-   
+
    # Add real-time communication
    realtime = RealtimeMiddleware(agent_ui)
-   
+
    # Start server
    gateway.run(port=8000)
 
@@ -430,7 +430,7 @@ Production Configuration
 
    import os
    from kailash.middleware import create_gateway
-   
+
    # Environment-based configuration
    gateway = create_gateway(
        title=os.getenv("APP_TITLE", "Production App"),
@@ -449,12 +449,12 @@ Frontend Integration
 
    // WebSocket connection for real-time updates
    const ws = new WebSocket('ws://localhost:8000/ws?session_id=my-session');
-   
+
    ws.onmessage = (event) => {
        const update = JSON.parse(event.data);
        console.log('Workflow update:', update);
    };
-   
+
    // Create and execute workflow via REST API
    const response = await fetch('/api/workflows', {
        method: 'POST',
@@ -480,7 +480,7 @@ From Legacy API to Middleware
 
    # ❌ OLD - Don't use
    from kailash.api.gateway import WorkflowAPIGateway
-   
+
    gateway = WorkflowAPIGateway(title="App")
    gateway.register_workflow("process", workflow)
 
@@ -490,7 +490,7 @@ From Legacy API to Middleware
 
    # ✅ NEW - Use this
    from kailash.middleware import create_gateway
-   
+
    gateway = create_gateway(title="App")
    # Workflows created dynamically via API
 
@@ -536,13 +536,13 @@ Unit Testing
 
    import pytest
    from kailash.middleware import AgentUIMiddleware
-   
+
    @pytest.mark.asyncio
    async def test_session_creation():
        agent_ui = AgentUIMiddleware()
        session_id = await agent_ui.create_session("test_user")
        assert session_id is not None
-       
+
        session = await agent_ui.get_session(session_id)
        assert session.user_id == "test_user"
 
@@ -555,7 +555,7 @@ Integration Testing
    async def test_workflow_execution():
        agent_ui = AgentUIMiddleware()
        session_id = await agent_ui.create_session("test_user")
-       
+
        workflow_config = {
            "name": "test_workflow",
            "nodes": [
@@ -570,20 +570,20 @@ Integration Testing
            ],
            "connections": []
        }
-       
+
        workflow_id = await agent_ui.create_dynamic_workflow(
            session_id, workflow_config
        )
-       
+
        execution_id = await agent_ui.execute_workflow(
            session_id, workflow_id, inputs={}
        )
-       
+
        # Wait for completion and verify results
        results = await agent_ui.get_execution_results(
            session_id, execution_id
        )
-       
+
        assert results["test_node"]["result"]["test"] is True
 
 Related Documentation

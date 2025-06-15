@@ -1,7 +1,7 @@
 # Node Initialization Patterns - Critical Fixes
 
-**Created**: 2025-06-13  
-**Category**: Critical Patterns  
+**Created**: 2025-06-13
+**Category**: Critical Patterns
 **Priority**: HIGHEST - These errors occur in 90% of custom node implementations
 
 ## 🚨 Most Common Node Initialization Errors
@@ -24,7 +24,7 @@ class MyNode(Node):
         # Set ALL attributes BEFORE super().__init__()
         self.my_param = kwargs.get("my_param", "default")
         self.threshold = kwargs.get("threshold", 0.75)
-        
+
         # NOW call parent init - validation will find attributes
         super().__init__(name=name)
 ```
@@ -82,7 +82,7 @@ class MyNode(Node):
     def __init__(self, name: str, **kwargs):
         self.config = kwargs
         super().__init__(name=name)
-    
+
     # Missing required methods!
 ```
 
@@ -92,7 +92,7 @@ class MyNode(Node):
     def __init__(self, name: str, **kwargs):
         self.config = kwargs
         super().__init__(name=name)
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Required by Kailash"""
         return {
@@ -103,11 +103,11 @@ class MyNode(Node):
                 description="Input data to process"
             )
         }
-    
+
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Required by Kailash"""
         return self.process(inputs)
-    
+
     def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Your actual logic here"""
         # Process the data

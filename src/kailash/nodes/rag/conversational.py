@@ -12,19 +12,19 @@ Implements RAG with conversation context and memory management:
 Based on conversational AI and dialogue systems research.
 """
 
-from typing import Dict, Any, List, Optional, Union, Deque
+import hashlib
 import json
 import logging
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
-from collections import deque, defaultdict
-import hashlib
+from typing import Any, Deque, Dict, List, Optional, Union
 
-from ..base import Node, NodeParameter, register_node
-from ..logic.workflow import WorkflowNode
-from ..ai.llm_agent import LLMAgentNode
-from ..code.python import PythonCodeNode
 # from ..data.cache import CacheNode  # TODO: Implement CacheNode
 from ...workflow.builder import WorkflowBuilder
+from ..ai.llm_agent import LLMAgentNode
+from ..base import Node, NodeParameter, register_node
+from ..code.python import PythonCodeNode
+from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +33,16 @@ logger = logging.getLogger(__name__)
 class ConversationalRAGNode(WorkflowNode):
     """
     Conversational RAG with Context Management
-    
+
     Implements RAG that maintains conversation context across multiple turns,
     enabling coherent multi-turn interactions with memory of previous exchanges.
-    
+
     When to use:
     - Best for: Chatbots, virtual assistants, interactive help systems
     - Not ideal for: Single-turn queries, stateless interactions
     - Performance: 200-500ms per turn (with context loading)
     - Context quality: Maintains coherence across 10-20 turns
-    
+
     Key features:
     - Conversation memory with sliding window
     - Automatic context summarization
@@ -50,55 +50,58 @@ class ConversationalRAGNode(WorkflowNode):
     - Topic tracking and smooth transitions
     - Personalization based on user history
     - Session management and persistence
-    
+
     Example:
         conv_rag = ConversationalRAGNode(
             max_context_turns=10,
             enable_summarization=True,
             personalization_enabled=True
         )
-        
+
         # Initialize conversation
         session = await conv_rag.create_session(user_id="user123")
-        
+
         # First turn
         response1 = await conv_rag.run(
             query="What is transformer architecture?",
             session_id=session.id
         )
-        
+
         # Follow-up with context
         response2 = await conv_rag.run(
             query="How does its attention mechanism work?",  # "its" refers to transformer
             session_id=session.id
         )
-        
+
         # Topic switch with smooth transition
         response3 = await conv_rag.run(
             query="Now tell me about BERT",
             session_id=session.id
         )
-    
+
     Parameters:
         max_context_turns: Maximum conversation turns to maintain
         enable_summarization: Summarize old context when window exceeds
         personalization_enabled: Use user history for personalization
         coreference_resolution: Resolve pronouns and references
         topic_tracking: Track and manage topic changes
-    
+
     Returns:
         response: Contextual response to current query
         session_state: Current conversation state
         topic_info: Current topic and transitions
         conversation_metrics: Engagement and coherence metrics
     """
-    
-    def __init__(self, name: str = "conversational_rag",
-                 max_context_turns: int = 10,
-                 enable_summarization: bool = True,
-                 personalization_enabled: bool = True,
-                 coreference_resolution: bool = True,
-                 topic_tracking: bool = True):
+
+    def __init__(
+        self,
+        name: str = "conversational_rag",
+        max_context_turns: int = 10,
+        enable_summarization: bool = True,
+        personalization_enabled: bool = True,
+        coreference_resolution: bool = True,
+        topic_tracking: bool = True,
+    ):
         self.max_context_turns = max_context_turns
         self.enable_summarization = enable_summarization
         self.personalization_enabled = personalization_enabled
@@ -107,13 +110,14 @@ class ConversationalRAGNode(WorkflowNode):
         # In-memory session storage (use persistent storage in production)
         self.sessions = {}
         super().__init__(name, self._create_workflow())
-    
+
     def _create_workflow(self) -> WorkflowNode:
         """Create conversational RAG workflow"""
         builder = WorkflowBuilder()
-        
+
         # Session context loader
-        context_loader_id = builder.add_node("PythonCodeNode",
+        context_loader_id = builder.add_node(
+            "PythonCodeNode",
             node_id="context_loader",
             config={
                 "code": f"""
@@ -122,7 +126,7 @@ from collections import deque
 
 def load_conversation_context(session_id, sessions_store):
     '''Load conversation context for session'''
-    
+
     if session_id not in sessions_store:
         # Create new session
         session = {{
@@ -139,18 +143,18 @@ def load_conversation_context(session_id, sessions_store):
             }}
         }}
         sessions_store[session_id] = session
-    
+
     session = sessions_store[session_id]
-    
+
     # Get recent context (sliding window)
     recent_turns = session["turns"][-{self.max_context_turns}:]
-    
+
     # Format context for processing
     context_text = ""
     for turn in recent_turns:
         context_text += f"User: {{turn['query']}}\\n"
         context_text += f"Assistant: {{turn['response']}}\\n\\n"
-    
+
     result = {{
         "session_context": {{
             "session_id": session_id,
@@ -163,12 +167,13 @@ def load_conversation_context(session_id, sessions_store):
         }}
     }}
 """
-            }
+            },
         )
-        
+
         # Coreference resolver
         if self.coreference_resolution:
-            coreference_resolver_id = builder.add_node("LLMAgentNode",
+            coreference_resolver_id = builder.add_node(
+                "LLMAgentNode",
                 node_id="coreference_resolver",
                 config={
                     "system_prompt": """Resolve coreferences in the user query based on conversation context.
@@ -190,25 +195,26 @@ Return JSON:
 }
 
 If no coreferences found, return the original query.""",
-                    "model": "gpt-4"
-                }
+                    "model": "gpt-4",
+                },
             )
-        
+
         # Topic tracker
         if self.topic_tracking:
-            topic_tracker_id = builder.add_node("PythonCodeNode",
+            topic_tracker_id = builder.add_node(
+                "PythonCodeNode",
                 node_id="topic_tracker",
                 config={
                     "code": """
 def track_conversation_topic(current_query, session_context):
     '''Track and identify topic changes in conversation'''
-    
+
     current_topic = session_context.get("current_topic")
     recent_turns = session_context.get("recent_turns", [])
-    
+
     # Extract key terms from current query
     query_terms = set(current_query.lower().split())
-    
+
     # Define topic keywords (simplified - use NER/classification in production)
     topics = {
         "transformers": ["transformer", "attention", "self-attention", "encoder", "decoder"],
@@ -217,17 +223,17 @@ def track_conversation_topic(current_query, session_context):
         "training": ["training", "optimization", "learning rate", "batch", "epoch"],
         "architecture": ["architecture", "layer", "network", "model", "structure"]
     }
-    
+
     # Identify current query topic
     query_topics = []
     for topic, keywords in topics.items():
         if any(keyword in query_terms for keyword in keywords):
             query_topics.append(topic)
-    
+
     # Determine if topic changed
     topic_changed = False
     transition_type = "continuation"
-    
+
     if not current_topic and query_topics:
         # First topic
         new_topic = query_topics[0]
@@ -245,7 +251,7 @@ def track_conversation_topic(current_query, session_context):
         # No clear topic
         new_topic = current_topic or "general"
         transition_type = "clarification"
-    
+
     # Check for explicit transitions
     transition_phrases = {
         "now tell me about": "explicit_switch",
@@ -256,12 +262,12 @@ def track_conversation_topic(current_query, session_context):
         "furthermore": "continuation",
         "however": "contrast"
     }
-    
+
     for phrase, trans_type in transition_phrases.items():
         if phrase in current_query.lower():
             transition_type = trans_type
             break
-    
+
     result = {
         "topic_analysis": {
             "current_topic": new_topic,
@@ -273,82 +279,84 @@ def track_conversation_topic(current_query, session_context):
         }
     }
 """
-                }
+                },
             )
-        
+
         # Context-aware retriever
-        context_retriever_id = builder.add_node("PythonCodeNode",
+        context_retriever_id = builder.add_node(
+            "PythonCodeNode",
             node_id="context_retriever",
             config={
-                "code": f"""
+                "code": """
 def retrieve_with_context(query, documents, session_context, topic_info=None):
     '''Retrieve documents considering conversation context'''
-    
+
     # Combine current query with context
     context_summary = session_context.get("summary", "")
     recent_context = session_context.get("context_text", "")
-    
+
     # Build enhanced query
     enhanced_query = query
-    
+
     # Add topic context if available
     if topic_info and topic_info.get("topic_analysis"):
         current_topic = topic_info["topic_analysis"].get("current_topic")
         if current_topic:
-            enhanced_query = f"{{current_topic}} context: {{query}}"
-    
+            enhanced_query = f"{current_topic} context: {query}"
+
     # Add conversation context keywords
     if recent_context:
         # Extract key terms from recent context
         context_words = set(recent_context.lower().split())
         important_words = [w for w in context_words if len(w) > 4][:5]
         enhanced_query += " " + " ".join(important_words)
-    
+
     # Score documents with context awareness
     scored_docs = []
     query_words = set(enhanced_query.lower().split())
-    
+
     for doc in documents:
         content = doc.get("content", "").lower()
         doc_words = set(content.split())
-        
+
         # Base relevance score
         if query_words:
             relevance = len(query_words & doc_words) / len(query_words)
         else:
             relevance = 0
-        
+
         # Boost score for topic-relevant documents
         if topic_info and current_topic in content:
             relevance *= 1.3
-        
+
         # Boost for documents related to recent context
         if recent_context and any(turn.get("response", "") in content for turn in session_context.get("recent_turns", [])):
             relevance *= 1.2
-        
-        scored_docs.append({{
+
+        scored_docs.append({
             "document": doc,
             "score": min(1.0, relevance),
             "context_boosted": relevance > len(query_words & doc_words) / len(query_words) if query_words else False
-        }})
-    
+        })
+
     # Sort by score
     scored_docs.sort(key=lambda x: x["score"], reverse=True)
-    
-    result = {{
-        "contextual_retrieval": {{
+
+    result = {
+        "contextual_retrieval": {
             "documents": [d["document"] for d in scored_docs[:10]],
             "scores": [d["score"] for d in scored_docs[:10]],
             "enhanced_query": enhanced_query,
             "context_influence": sum(1 for d in scored_docs[:10] if d["context_boosted"]) / min(10, len(scored_docs))
-        }}
-    }}
+        }
+    }
 """
-            }
+            },
         )
-        
+
         # Response generator with context
-        response_generator_id = builder.add_node("LLMAgentNode",
+        response_generator_id = builder.add_node(
+            "LLMAgentNode",
             node_id="response_generator",
             config={
                 "system_prompt": f"""Generate a contextual response considering the conversation history.
@@ -374,13 +382,14 @@ For continuations, reference previous context:
 {"Personalize based on user preferences when available." if self.personalization_enabled else ""}
 
 Keep responses conversational and engaging.""",
-                "model": "gpt-4"
-            }
+                "model": "gpt-4",
+            },
         )
-        
+
         # Context summarizer (for long conversations)
         if self.enable_summarization:
-            summarizer_id = builder.add_node("LLMAgentNode",
+            summarizer_id = builder.add_node(
+                "LLMAgentNode",
                 node_id="context_summarizer",
                 config={
                     "system_prompt": """Summarize the conversation history concisely.
@@ -394,20 +403,21 @@ Focus on:
 
 Keep the summary under 100 words.
 This will be used to maintain context in future turns.""",
-                    "model": "gpt-4"
-                }
+                    "model": "gpt-4",
+                },
             )
-        
+
         # Session updater
-        session_updater_id = builder.add_node("PythonCodeNode",
+        session_updater_id = builder.add_node(
+            "PythonCodeNode",
             node_id="session_updater",
             config={
                 "code": f"""
 def update_session(session_id, sessions_store, query, response, topic_info, summary=None):
     '''Update session with new turn'''
-    
+
     session = sessions_store[session_id]
-    
+
     # Add new turn
     new_turn = {{
         "turn_number": len(session["turns"]) + 1,
@@ -416,32 +426,32 @@ def update_session(session_id, sessions_store, query, response, topic_info, summ
         "response": response.get("response", ""),
         "topic": topic_info.get("topic_analysis", {{}}).get("current_topic")
     }}
-    
+
     session["turns"].append(new_turn)
-    
+
     # Update summary if provided
     if summary and summary.get("response"):
         session["summary"] = summary["response"]
-    
+
     # Update current topic
     if topic_info and topic_info.get("topic_analysis"):
         session["current_topic"] = topic_info["topic_analysis"]["current_topic"]
-        
+
         # Track topics discussed
         topic = topic_info["topic_analysis"]["current_topic"]
         if topic and topic not in session["metrics"]["topics_discussed"]:
             session["metrics"]["topics_discussed"].append(topic)
-    
+
     # Update metrics
     session["metrics"]["turn_count"] = len(session["turns"])
     total_response_length = sum(len(turn.get("response", "")) for turn in session["turns"])
     session["metrics"]["avg_response_length"] = total_response_length / len(session["turns"]) if session["turns"] else 0
-    
+
     # Trim old turns if exceeds max + buffer for summarization
     if len(session["turns"]) > {self.max_context_turns} * 1.5:
         # Keep recent turns and rely on summary for older context
         session["turns"] = session["turns"][-{self.max_context_turns}:]
-    
+
     # Calculate conversation health metrics
     conversation_metrics = {{
         "coherence_score": 0.85,  # Would calculate based on topic consistency
@@ -449,7 +459,7 @@ def update_session(session_id, sessions_store, query, response, topic_info, summ
         "topic_diversity": len(session["metrics"]["topics_discussed"]) / max(1, session["metrics"]["turn_count"]),
         "avg_turn_length": session["metrics"]["avg_response_length"]
     }}
-    
+
     result = {{
         "session_update": {{
             "session_id": session_id,
@@ -460,11 +470,12 @@ def update_session(session_id, sessions_store, query, response, topic_info, summ
         }}
     }}
 """
-            }
+            },
         )
-        
+
         # Result formatter
-        result_formatter_id = builder.add_node("PythonCodeNode",
+        result_formatter_id = builder.add_node(
+            "PythonCodeNode",
             node_id="result_formatter",
             config={
                 "code": """
@@ -509,45 +520,93 @@ result = {
     }
 }
 """
-            }
+            },
         )
-        
+
         # Connect workflow
-        builder.add_connection(context_loader_id, "session_context", context_retriever_id, "session_context")
-        
+        builder.add_connection(
+            context_loader_id,
+            "session_context",
+            context_retriever_id,
+            "session_context",
+        )
+
         if self.coreference_resolution:
-            builder.add_connection(context_loader_id, "session_context", coreference_resolver_id, "context")
-            builder.add_connection(coreference_resolver_id, "resolved_query", context_retriever_id, "query")
-        
+            builder.add_connection(
+                context_loader_id, "session_context", coreference_resolver_id, "context"
+            )
+            builder.add_connection(
+                coreference_resolver_id, "resolved_query", context_retriever_id, "query"
+            )
+
         if self.topic_tracking:
-            builder.add_connection(context_loader_id, "session_context", topic_tracker_id, "session_context")
-            builder.add_connection(topic_tracker_id, "topic_analysis", context_retriever_id, "topic_info")
-        
-        builder.add_connection(context_retriever_id, "contextual_retrieval", response_generator_id, "retrieval_results")
-        builder.add_connection(context_loader_id, "session_context", response_generator_id, "conversation_context")
-        
+            builder.add_connection(
+                context_loader_id,
+                "session_context",
+                topic_tracker_id,
+                "session_context",
+            )
+            builder.add_connection(
+                topic_tracker_id, "topic_analysis", context_retriever_id, "topic_info"
+            )
+
+        builder.add_connection(
+            context_retriever_id,
+            "contextual_retrieval",
+            response_generator_id,
+            "retrieval_results",
+        )
+        builder.add_connection(
+            context_loader_id,
+            "session_context",
+            response_generator_id,
+            "conversation_context",
+        )
+
         if self.enable_summarization:
-            builder.add_connection(context_loader_id, "session_context", summarizer_id, "conversation_history")
-            builder.add_connection(summarizer_id, "response", session_updater_id, "summary")
-        
-        builder.add_connection(response_generator_id, "response", session_updater_id, "response")
+            builder.add_connection(
+                context_loader_id,
+                "session_context",
+                summarizer_id,
+                "conversation_history",
+            )
+            builder.add_connection(
+                summarizer_id, "response", session_updater_id, "summary"
+            )
+
+        builder.add_connection(
+            response_generator_id, "response", session_updater_id, "response"
+        )
         if self.topic_tracking:
-            builder.add_connection(topic_tracker_id, "topic_analysis", session_updater_id, "topic_info")
-        
-        builder.add_connection(session_updater_id, "session_update", result_formatter_id, "session_update")
-        builder.add_connection(response_generator_id, "response", result_formatter_id, "response")
+            builder.add_connection(
+                topic_tracker_id, "topic_analysis", session_updater_id, "topic_info"
+            )
+
+        builder.add_connection(
+            session_updater_id, "session_update", result_formatter_id, "session_update"
+        )
+        builder.add_connection(
+            response_generator_id, "response", result_formatter_id, "response"
+        )
         if self.topic_tracking:
-            builder.add_connection(topic_tracker_id, "topic_analysis", result_formatter_id, "topic_info")
-        builder.add_connection(context_retriever_id, "contextual_retrieval", result_formatter_id, "contextual_retrieval")
-        
+            builder.add_connection(
+                topic_tracker_id, "topic_analysis", result_formatter_id, "topic_info"
+            )
+        builder.add_connection(
+            context_retriever_id,
+            "contextual_retrieval",
+            result_formatter_id,
+            "contextual_retrieval",
+        )
+
         return builder.build(name="conversational_rag_workflow")
-    
+
     def create_session(self, user_id: str = None) -> Dict[str, Any]:
         """Create a new conversation session"""
         session_id = hashlib.sha256(
             f"{user_id or 'anonymous'}_{datetime.now().isoformat()}".encode()
         ).hexdigest()[:16]
-        
+
         session = {
             "id": session_id,
             "user_id": user_id,
@@ -559,16 +618,16 @@ result = {
             "metrics": {
                 "turn_count": 0,
                 "topics_discussed": [],
-                "avg_response_length": 0
-            }
+                "avg_response_length": 0,
+            },
         }
-        
+
         self.sessions[session_id] = session
-        
+
         return {
             "session_id": session_id,
             "created": True,
-            "expires_in": 3600  # 1 hour default expiry
+            "expires_in": 3600,  # 1 hour default expiry
         }
 
 
@@ -576,20 +635,20 @@ result = {
 class ConversationMemoryNode(Node):
     """
     Long-term Conversation Memory Management
-    
+
     Manages persistent conversation memory across sessions.
-    
+
     When to use:
     - Best for: Virtual assistants, customer support, personalized systems
     - Memory types: Episodic, semantic, user preferences
     - Retention: Configurable from hours to permanent
-    
+
     Example:
         memory = ConversationMemoryNode(
             memory_types=["episodic", "semantic", "preferences"],
             retention_policy="adaptive"
         )
-        
+
         # Store conversation insights
         await memory.store(
             user_id="user123",
@@ -600,72 +659,74 @@ class ConversationMemoryNode(Node):
                 "key_facts": ["user is a beginner", "interested in NLP"]
             }
         )
-        
+
         # Retrieve relevant memories
         memories = await memory.retrieve(
             user_id="user123",
             context="python programming question"
         )
-    
+
     Parameters:
         memory_types: Types of memory to maintain
         retention_policy: How long to retain memories
         max_memories_per_user: Memory limit per user
-    
+
     Returns:
         relevant_memories: Memories relevant to current context
         memory_summary: Aggregated user knowledge
         personalization_hints: Suggestions for personalization
     """
-    
-    def __init__(self, name: str = "conversation_memory",
-                 memory_types: List[str] = None,
-                 retention_policy: str = "adaptive",
-                 max_memories_per_user: int = 1000):
+
+    def __init__(
+        self,
+        name: str = "conversation_memory",
+        memory_types: List[str] = None,
+        retention_policy: str = "adaptive",
+        max_memories_per_user: int = 1000,
+    ):
         self.memory_types = memory_types or ["episodic", "semantic", "preferences"]
         self.retention_policy = retention_policy
         self.max_memories_per_user = max_memories_per_user
         # In-memory storage (use persistent DB in production)
-        self.memory_store = defaultdict(lambda: {
-            "episodic": deque(maxlen=max_memories_per_user),
-            "semantic": {},
-            "preferences": {}
-        })
+        self.memory_store = defaultdict(
+            lambda: {
+                "episodic": deque(maxlen=max_memories_per_user),
+                "semantic": {},
+                "preferences": {},
+            }
+        )
         super().__init__(name)
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
             "operation": NodeParameter(
                 name="operation",
                 type=str,
                 required=True,
-                description="Operation: store, retrieve, update, forget"
+                description="Operation: store, retrieve, update, forget",
             ),
             "user_id": NodeParameter(
-                name="user_id",
-                type=str,
-                required=True,
-                description="User identifier"
+                name="user_id", type=str, required=True, description="User identifier"
             ),
             "data": NodeParameter(
                 name="data",
                 type=dict,
                 required=False,
-                description="Data to store or update"
+                description="Data to store or update",
             ),
             "context": NodeParameter(
                 name="context",
                 type=str,
                 required=False,
-                description="Context for retrieval"
-            )
+                description="Context for retrieval",
+            ),
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute memory operation"""
         operation = kwargs.get("operation", "retrieve")
         user_id = kwargs.get("user_id", "")
-        
+
         if operation == "store":
             return self._store_memory(user_id, kwargs.get("data", {}))
         elif operation == "retrieve":
@@ -676,12 +737,12 @@ class ConversationMemoryNode(Node):
             return self._forget_memories(user_id, kwargs.get("data", {}))
         else:
             return {"error": f"Unknown operation: {operation}"}
-    
+
     def _store_memory(self, user_id: str, data: Dict) -> Dict[str, Any]:
         """Store new memories"""
         user_memory = self.memory_store[user_id]
         stored = defaultdict(int)
-        
+
         # Store episodic memory (specific interactions)
         if "episodic" in self.memory_types and "conversation" in data:
             episode = {
@@ -690,11 +751,11 @@ class ConversationMemoryNode(Node):
                 "summary": data["conversation"].get("summary", ""),
                 "topics": data["conversation"].get("topics", []),
                 "sentiment": data["conversation"].get("sentiment", "neutral"),
-                "importance": data["conversation"].get("importance", 0.5)
+                "importance": data["conversation"].get("importance", 0.5),
             }
             user_memory["episodic"].append(episode)
             stored["episodic"] += 1
-        
+
         # Store semantic memory (facts and knowledge)
         if "semantic" in self.memory_types and "facts" in data:
             for fact in data["facts"]:
@@ -704,121 +765,128 @@ class ConversationMemoryNode(Node):
                         "value": fact.get("value"),
                         "confidence": fact.get("confidence", 0.8),
                         "source": fact.get("source", "conversation"),
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
                     }
                     stored["semantic"] += 1
-        
+
         # Store preferences
         if "preferences" in self.memory_types and "preferences" in data:
             user_memory["preferences"].update(data["preferences"])
             stored["preferences"] += len(data["preferences"])
-        
+
         # Apply retention policy
         self._apply_retention_policy(user_id)
-        
+
         return {
             "stored": dict(stored),
             "total_memories": {
                 "episodic": len(user_memory["episodic"]),
                 "semantic": len(user_memory["semantic"]),
-                "preferences": len(user_memory["preferences"])
+                "preferences": len(user_memory["preferences"]),
             },
-            "storage_status": "success"
+            "storage_status": "success",
         }
-    
+
     def _retrieve_memories(self, user_id: str, context: str) -> Dict[str, Any]:
         """Retrieve relevant memories"""
         if user_id not in self.memory_store:
             return {
                 "relevant_memories": [],
                 "memory_summary": "No memories found",
-                "personalization_hints": {}
+                "personalization_hints": {},
             }
-        
+
         user_memory = self.memory_store[user_id]
         relevant_memories = []
-        
+
         # Search episodic memories
         context_words = set(context.lower().split())
         for episode in user_memory["episodic"]:
             # Check topic overlap
             episode_topics = set(topic.lower() for topic in episode.get("topics", []))
             if context_words & episode_topics:
-                relevant_memories.append({
-                    "type": "episodic",
-                    "content": episode,
-                    "relevance": len(context_words & episode_topics) / len(context_words) if context_words else 0
-                })
-        
+                relevant_memories.append(
+                    {
+                        "type": "episodic",
+                        "content": episode,
+                        "relevance": (
+                            len(context_words & episode_topics) / len(context_words)
+                            if context_words
+                            else 0
+                        ),
+                    }
+                )
+
         # Search semantic memories
         for key, fact in user_memory["semantic"].items():
             if any(word in key.lower() for word in context_words):
-                relevant_memories.append({
-                    "type": "semantic",
-                    "content": {"key": key, **fact},
-                    "relevance": fact.get("confidence", 0.5)
-                })
-        
+                relevant_memories.append(
+                    {
+                        "type": "semantic",
+                        "content": {"key": key, **fact},
+                        "relevance": fact.get("confidence", 0.5),
+                    }
+                )
+
         # Sort by relevance
         relevant_memories.sort(key=lambda x: x["relevance"], reverse=True)
-        
+
         # Generate memory summary
         memory_summary = self._generate_memory_summary(user_memory)
-        
+
         # Extract personalization hints
         personalization_hints = {
             "preferences": dict(user_memory["preferences"]),
             "frequent_topics": self._extract_frequent_topics(user_memory["episodic"]),
-            "interaction_style": self._infer_interaction_style(user_memory["episodic"])
+            "interaction_style": self._infer_interaction_style(user_memory["episodic"]),
         }
-        
+
         return {
             "relevant_memories": relevant_memories[:10],
             "memory_summary": memory_summary,
-            "personalization_hints": personalization_hints
+            "personalization_hints": personalization_hints,
         }
-    
+
     def _update_memory(self, user_id: str, data: Dict) -> Dict[str, Any]:
         """Update existing memories"""
         if user_id not in self.memory_store:
             return {"error": "No memories found for user"}
-        
+
         user_memory = self.memory_store[user_id]
         updated = defaultdict(int)
-        
+
         # Update semantic facts
         if "facts_update" in data:
             for fact_update in data["facts_update"]:
                 key = fact_update.get("key")
                 if key in user_memory["semantic"]:
                     user_memory["semantic"][key].update(fact_update.get("updates", {}))
-                    user_memory["semantic"][key]["timestamp"] = datetime.now().isoformat()
+                    user_memory["semantic"][key][
+                        "timestamp"
+                    ] = datetime.now().isoformat()
                     updated["semantic"] += 1
-        
+
         # Update preferences
         if "preferences_update" in data:
             user_memory["preferences"].update(data["preferences_update"])
             updated["preferences"] += len(data["preferences_update"])
-        
-        return {
-            "updated": dict(updated),
-            "update_status": "success"
-        }
-    
+
+        return {"updated": dict(updated), "update_status": "success"}
+
     def _forget_memories(self, user_id: str, data: Dict) -> Dict[str, Any]:
         """Forget specific memories (GDPR compliance)"""
         if user_id not in self.memory_store:
             return {"error": "No memories found for user"}
-        
+
         forgotten = defaultdict(int)
-        
+
         if data.get("forget_all"):
             # Complete memory wipe
             del self.memory_store[user_id]
             return {"forgotten": "all", "status": "complete"}
-        
+
         user_memory = self.memory_store[user_id]
-        
+
         # Forget specific types
         if "forget_types" in data:
             for memory_type in data["forget_types"]:
@@ -831,34 +899,35 @@ class ConversationMemoryNode(Node):
                 elif memory_type == "preferences":
                     forgotten["preferences"] = len(user_memory["preferences"])
                     user_memory["preferences"].clear()
-        
+
         # Forget specific items
         if "forget_items" in data:
             for item in data["forget_items"]:
-                if item["type"] == "semantic" and item["key"] in user_memory["semantic"]:
+                if (
+                    item["type"] == "semantic"
+                    and item["key"] in user_memory["semantic"]
+                ):
                     del user_memory["semantic"][item["key"]]
                     forgotten["semantic"] += 1
-        
-        return {
-            "forgotten": dict(forgotten),
-            "forget_status": "success"
-        }
-    
+
+        return {"forgotten": dict(forgotten), "forget_status": "success"}
+
     def _apply_retention_policy(self, user_id: str):
         """Apply retention policy to memories"""
         if self.retention_policy == "adaptive":
             # Keep important and recent memories
             user_memory = self.memory_store[user_id]
-            
+
             # Remove old low-importance episodic memories
             if len(user_memory["episodic"]) > self.max_memories_per_user * 0.8:
                 # Keep high importance memories
                 important_episodes = [
-                    ep for ep in user_memory["episodic"] 
+                    ep
+                    for ep in user_memory["episodic"]
                     if ep.get("importance", 0.5) > 0.7
                 ]
                 recent_episodes = list(user_memory["episodic"])[-100:]
-                
+
                 # Combine and deduplicate
                 kept_episodes = []
                 seen = set()
@@ -867,65 +936,64 @@ class ConversationMemoryNode(Node):
                     if ep_key not in seen:
                         kept_episodes.append(ep)
                         seen.add(ep_key)
-                
-                user_memory["episodic"] = deque(kept_episodes, maxlen=self.max_memories_per_user)
-    
+
+                user_memory["episodic"] = deque(
+                    kept_episodes, maxlen=self.max_memories_per_user
+                )
+
     def _generate_memory_summary(self, user_memory: Dict) -> str:
         """Generate a summary of user's memories"""
         num_episodes = len(user_memory["episodic"])
         num_facts = len(user_memory["semantic"])
         num_preferences = len(user_memory["preferences"])
-        
+
         topics = []
         for episode in user_memory["episodic"]:
             topics.extend(episode.get("topics", []))
-        
+
         unique_topics = list(set(topics))[:5]
-        
+
         summary = f"User has {num_episodes} conversation memories covering topics like {', '.join(unique_topics)}. "
-        summary += f"Knows {num_facts} facts about the user and {num_preferences} preferences."
-        
+        summary += (
+            f"Knows {num_facts} facts about the user and {num_preferences} preferences."
+        )
+
         return summary
-    
+
     def _extract_frequent_topics(self, episodes: Deque) -> List[str]:
         """Extract frequently discussed topics"""
         topic_counts = defaultdict(int)
-        
+
         for episode in episodes:
             for topic in episode.get("topics", []):
                 topic_counts[topic] += 1
-        
+
         # Sort by frequency
         sorted_topics = sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)
         return [topic for topic, _ in sorted_topics[:10]]
-    
+
     def _infer_interaction_style(self, episodes: Deque) -> Dict[str, Any]:
         """Infer user's preferred interaction style"""
         if not episodes:
             return {"style": "unknown", "confidence": 0}
-        
+
         # Analyze recent interactions
         recent_episodes = list(episodes)[-20:]
-        
+
         # Simple heuristics (would use ML in production)
-        avg_importance = sum(ep.get("importance", 0.5) for ep in recent_episodes) / len(recent_episodes)
-        
+        avg_importance = sum(ep.get("importance", 0.5) for ep in recent_episodes) / len(
+            recent_episodes
+        )
+
         if avg_importance > 0.7:
             style = "detailed"
         elif avg_importance < 0.3:
             style = "concise"
         else:
             style = "balanced"
-        
-        return {
-            "style": style,
-            "confidence": 0.8,
-            "avg_importance": avg_importance
-        }
+
+        return {"style": style, "confidence": 0.8, "avg_importance": avg_importance}
 
 
 # Export all conversational nodes
-__all__ = [
-    "ConversationalRAGNode",
-    "ConversationMemoryNode"
-]
+__all__ = ["ConversationalRAGNode", "ConversationMemoryNode"]

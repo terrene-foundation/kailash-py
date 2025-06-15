@@ -375,7 +375,9 @@ class TestCycleAwareNodeIntegration:
             context["cycle"]["iteration"] = iteration
 
             # Run test node
-            test_result = test_node.execute(context=context, target=target, current=current)
+            test_result = test_node.execute(
+                context=context, target=target, current=current
+            )
             current = test_result["value"]
 
             # Check convergence
@@ -459,17 +461,23 @@ class TestConvergenceNodesWithCycles:
         context = {"cycle": {"iteration": 0, "max_iterations": 10}}
 
         # Threshold mode - not converged
-        result = node.execute(context=context, value=0.5, threshold=0.8, mode="threshold")
+        result = node.execute(
+            context=context, value=0.5, threshold=0.8, mode="threshold"
+        )
         assert result["converged"] is False
         assert "threshold" in result["reason"]
 
         # Threshold mode - converged
-        result = node.execute(context=context, value=0.9, threshold=0.8, mode="threshold")
+        result = node.execute(
+            context=context, value=0.9, threshold=0.8, mode="threshold"
+        )
         assert result["converged"] is True
 
         # Test with iteration tracking
         context["cycle"]["iteration"] = 5
-        result = node.execute(context=context, value=0.9, threshold=0.8, mode="threshold")
+        result = node.execute(
+            context=context, value=0.9, threshold=0.8, mode="threshold"
+        )
         assert result["iteration"] == 5
 
     def test_convergence_checker_stability_mode(self):
@@ -514,7 +522,9 @@ class TestConvergenceNodesWithCycles:
             "recall": {"threshold": 0.9, "mode": "threshold"},
         }
 
-        result = node.execute(context=context, metrics=metrics, criteria=criteria, require_all=True)
+        result = node.execute(
+            context=context, metrics=metrics, criteria=criteria, require_all=True
+        )
 
         # Should converge when all criteria met
         assert result["converged"] is True
@@ -620,7 +630,9 @@ class TestSwitchNodeWithCycleAware:
 
         # Test not converged - should route to false_output
         context = {"cycle": {"iteration": 5, "max_iterations": 10}}
-        result = packager.execute(context=context, converged=False, value=0.5, data=[1, 2, 3])
+        result = packager.execute(
+            context=context, converged=False, value=0.5, data=[1, 2, 3]
+        )
 
         switch_result = switch_node.execute(
             input_data=result["input_data"],
@@ -633,7 +645,9 @@ class TestSwitchNodeWithCycleAware:
         assert switch_result["false_output"]["value"] == 0.5
 
         # Test converged - should route to true_output
-        result = packager.execute(context=context, converged=True, value=0.95, data=[4, 5, 6])
+        result = packager.execute(
+            context=context, converged=True, value=0.95, data=[4, 5, 6]
+        )
 
         switch_result = switch_node.execute(
             input_data=result["input_data"],

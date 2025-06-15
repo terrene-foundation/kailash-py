@@ -99,9 +99,10 @@ def main():
     # Create input node - reads CSV data
     # Use a temporary file for this example
     import tempfile
+
     temp_dir = tempfile.mkdtemp()
     input_file = Path(temp_dir) / "customers.csv"
-    
+
     # Create sample data
     print("Creating sample customer data...")
     sample_data = pd.DataFrame(
@@ -120,7 +121,7 @@ def main():
     )
     sample_data.to_csv(input_file, index=False)
     print(f"Created {input_file}")
-    
+
     csv_reader = CSVReaderNode(file_path=str(input_file), headers=True)
 
     # Create transformation node
@@ -206,4 +207,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

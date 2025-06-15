@@ -32,7 +32,7 @@ gateway = WorkflowAPIGateway(
 )
 gateway.register_workflow("process", workflow)
 
-# ✅ NEW - Current  
+# ✅ NEW - Current
 gateway = create_gateway(
     title="My App",
     description="Description",
@@ -56,7 +56,7 @@ def my_tool():
 from kailash.middleware import MiddlewareMCPServer
 
 mcp = MiddlewareMCPServer(name="tools", agent_ui=gateway.agent_ui)
-@mcp.tool  
+@mcp.tool
 def my_tool():
     return "result"
 ```

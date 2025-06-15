@@ -44,7 +44,7 @@ middleware/
 
 ## Key Changes Made
 
-1. **Removed Confusion**: 
+1. **Removed Confusion**:
    - Deleted standalone `auth.py` file
    - Moved `SDKAuthManager` to `auth/auth_manager.py` as `MiddlewareAuthManager`
    - All auth-related code now in `auth/` directory
@@ -72,16 +72,16 @@ from kailash.middleware import (
     # Core
     AgentUIMiddleware,
     MiddlewareWorkflows,
-    
+
     # Communication
     EventStream,
     APIGateway,
     RealtimeMiddleware,
-    
+
     # Auth
     MiddlewareAuthManager,
     KailashJWTAuthManager,
-    
+
     # Database
     MiddlewareWorkflowRepository
 )

@@ -76,7 +76,9 @@ def create_data_cleaner():
             "missing_values_filled": df.isnull().sum().to_dict(),
         }
 
-        return {"result": {"data": df.to_dict(orient="records"), "cleaning_report": report}}
+        return {
+            "result": {"data": df.to_dict(orient="records"), "cleaning_report": report}
+        }
 
     input_schema = {
         "data": NodeParameter(
@@ -86,7 +88,10 @@ def create_data_cleaner():
 
     output_schema = {
         "result": NodeParameter(
-            name="result", type=dict, required=True, description="Cleaned data and report"
+            name="result",
+            type=dict,
+            required=True,
+            description="Cleaned data and report",
         )
     }
 
@@ -246,7 +251,10 @@ def create_data_aggregator():
 
     output_schema = {
         "result": NodeParameter(
-            name="result", type=dict, required=True, description="Aggregated data and stats"
+            name="result",
+            type=dict,
+            required=True,
+            description="Aggregated data and stats",
         )
     }
 
@@ -335,7 +343,10 @@ def create_quality_checker():
 
     output_schema = {
         "result": NodeParameter(
-            name="result", type=dict, required=True, description="Data and quality report"
+            name="result",
+            type=dict,
+            required=True,
+            description="Data and quality report",
         )
     }
 
@@ -420,9 +431,7 @@ def create_transformation_pipeline():
     workflow.connect("cleaner", "cleaned_writer", {"result": "data"})
     workflow.connect("feature_engineer", "features_writer", {"result": "data"})
     workflow.connect("aggregator", "aggregated_writer", {"result": "data"})
-    workflow.connect(
-        "quality_checker", "quality_report_writer", {"result": "data"}
-    )
+    workflow.connect("quality_checker", "quality_report_writer", {"result": "data"})
 
     return workflow
 
@@ -523,7 +532,9 @@ def main():
                                 print(
                                     f"    Uniqueness rate: {result_value.get('uniqueness_rate', 0):.2%}"
                                 )
-                                print(f"    Quality score: {result_value.get('quality_score', 0):.2%}")
+                                print(
+                                    f"    Quality score: {result_value.get('quality_score', 0):.2%}"
+                                )
                             elif result_key == "new_features":
                                 print(f"  New features created: {result_value}")
                             else:

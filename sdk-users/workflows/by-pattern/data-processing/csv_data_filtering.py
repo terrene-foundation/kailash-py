@@ -36,23 +36,56 @@ def main():
 
     # Setup paths - use temporary directory for testing
     import tempfile
+
     temp_dir = tempfile.mkdtemp()
     input_file = Path(temp_dir) / "financial_transactions.csv"
     output_dir = Path(temp_dir) / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create sample data
     print("Creating sample financial transaction data...")
-    data = pd.DataFrame({
-        "transaction_id": [f"TXN{i:04d}" for i in range(1, 11)],
-        "customer": ["Alice", "Bob", "Charlie", "David", "Eve", 
-                    "Frank", "Grace", "Henry", "Ivy", "Jack"],
-        "amount": [1500, 800, 2500, 600, 1200, 3000, 450, 1800, 950, 2200],
-        "category": ["Electronics", "Groceries", "Travel", "Utilities", "Shopping",
-                    "Travel", "Food", "Electronics", "Shopping", "Travel"],
-        "status": ["completed", "completed", "pending", "completed", "completed",
-                  "completed", "failed", "completed", "completed", "pending"]
-    })
+    data = pd.DataFrame(
+        {
+            "transaction_id": [f"TXN{i:04d}" for i in range(1, 11)],
+            "customer": [
+                "Alice",
+                "Bob",
+                "Charlie",
+                "David",
+                "Eve",
+                "Frank",
+                "Grace",
+                "Henry",
+                "Ivy",
+                "Jack",
+            ],
+            "amount": [1500, 800, 2500, 600, 1200, 3000, 450, 1800, 950, 2200],
+            "category": [
+                "Electronics",
+                "Groceries",
+                "Travel",
+                "Utilities",
+                "Shopping",
+                "Travel",
+                "Food",
+                "Electronics",
+                "Shopping",
+                "Travel",
+            ],
+            "status": [
+                "completed",
+                "completed",
+                "pending",
+                "completed",
+                "completed",
+                "completed",
+                "failed",
+                "completed",
+                "completed",
+                "pending",
+            ],
+        }
+    )
     data.to_csv(input_file, index=False)
     print(f"Created {input_file}")
 
@@ -61,16 +94,12 @@ def main():
     workflow = Workflow(
         workflow_id="csv_data_filtering",
         name="CSV Data Filtering Workflow",
-        description="Filter and analyze customer transaction data"
+        description="Filter and analyze customer transaction data",
     )
 
     # Step 2: Create CSV reader node
     print("Setting up nodes...")
-    csv_reader = CSVReaderNode(
-        file_path=str(input_file),
-        headers=True,
-        delimiter=","
-    )
+    csv_reader = CSVReaderNode(file_path=str(input_file), headers=True, delimiter=",")
 
     # Step 3: Create custom Python node for filtering
     def filter_high_value_customers(
@@ -91,7 +120,9 @@ def main():
             "filtered_data": filtered_df.to_dict(orient="records"),
             "count": int(len(filtered_df)),
             "total_value": float(filtered_df[column_name].sum()),
-            "average_value": float(filtered_df[column_name].mean()) if len(filtered_df) > 0 else 0.0
+            "average_value": (
+                float(filtered_df[column_name].mean()) if len(filtered_df) > 0 else 0.0
+            ),
         }
 
     # Define schemas for the Python node
@@ -102,24 +133,26 @@ def main():
         input_schema={
             "data": NodeParameter(name="data", type=list, required=True),
             "column_name": NodeParameter(
-                name="column_name", 
-                type=str, 
-                required=False, 
+                name="column_name",
+                type=str,
+                required=False,
                 default="amount",
-                description="Column to filter on"
+                description="Column to filter on",
             ),
             "threshold": NodeParameter(
-                name="threshold", 
-                type=float, 
-                required=False, 
+                name="threshold",
+                type=float,
+                required=False,
                 default=1000.0,
-                description="Minimum value threshold"
+                description="Minimum value threshold",
             ),
         },
         output_schema={
             "result": NodeParameter(
-                name="result", type=dict, required=True,
-                description="Filter results containing filtered_data, count, total_value, and average_value"
+                name="result",
+                type=dict,
+                required=True,
+                description="Filter results containing filtered_data, count, total_value, and average_value",
             ),
         },
     )
@@ -154,20 +187,20 @@ def main():
 
         filter_output = results.get("filter", {}).get("result", {})
         if filter_output:
-            print(f"\nResults:")
+            print("\nResults:")
             print(f"  Found {filter_output.get('count', 0)} high-value transactions")
             print(f"  Total value: ${filter_output.get('total_value', 0):,.2f}")
             print(f"  Average value: ${filter_output.get('average_value', 0):,.2f}")
         print(f"\nResults saved to: {output_dir / 'high_value_customers.csv'}")
-        
+
     except Exception as e:
         print(f"✗ Workflow execution failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
-    
-    return 0
 
+    return 0
 
 
 if __name__ == "__main__":

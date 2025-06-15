@@ -18,7 +18,7 @@ workflow_config = {
     "nodes": [
         {
             "id": "processor",
-            "type": "PythonCodeNode", 
+            "type": "PythonCodeNode",
             "config": {
                 "code": "result = {'processed': True}"
                 # 'name' parameter auto-mapped from 'id'
@@ -67,7 +67,7 @@ class CustomNode(Node):
         super().__init__()
 
 # Registration warning:
-# "Node CustomNode constructor may not work with WorkflowBuilder.from_dict(). 
+# "Node CustomNode constructor may not work with WorkflowBuilder.from_dict().
 #  Constructor should accept 'name', 'id', or **kwargs parameter."
 ```
 
@@ -109,7 +109,7 @@ workflow_config = {
             "config": {"file_path": "data.csv"}
         },
         {
-            "id": "processor", 
+            "id": "processor",
             "type": "PythonCodeNode",          # Name-based pattern
             "config": {
                 "code": "result = {'count': len(input_data)}"
@@ -124,14 +124,14 @@ workflow_config = {
     "connections": [
         {
             "from_node": "data_reader",
-            "from_output": "data", 
+            "from_output": "data",
             "to_node": "processor",
             "to_input": "input_data"
         },
         {
             "from_node": "processor",
             "from_output": "result",
-            "to_node": "filter", 
+            "to_node": "filter",
             "to_input": "data"
         }
     ]
@@ -146,7 +146,7 @@ workflow = builder.build()
 ```python
 class DataProcessingWorkflow:
     """Reusable workflow template."""
-    
+
     @staticmethod
     def get_config(input_file: str, processing_code: str):
         return {
@@ -159,7 +159,7 @@ class DataProcessingWorkflow:
                 },
                 {
                     "id": "processor",
-                    "type": "PythonCodeNode", 
+                    "type": "PythonCodeNode",
                     "config": {"code": processing_code}
                 }
             ],
@@ -175,7 +175,7 @@ class DataProcessingWorkflow:
 
 # Usage with automatic parameter mapping
 config = DataProcessingWorkflow.get_config(
-    "sales_data.csv", 
+    "sales_data.csv",
     "result = {'total': sum(item['amount'] for item in input_data)}"
 )
 workflow = WorkflowBuilder.from_dict(config).build()
@@ -192,11 +192,11 @@ async def create_dynamic_workflow(self, session_id: str, workflow_config: dict):
     try:
         # Automatic parameter mapping handles all node types
         workflow = WorkflowBuilder.from_dict(workflow_config).build()
-        
+
         # Execute with SDK runtime
         runtime = AsyncLocalRuntime()
         results, run_id = await runtime.execute(workflow, parameters={})
-        
+
         return results
     except WorkflowValidationError as e:
         # Enhanced error diagnostics help debug configuration issues
@@ -227,7 +227,7 @@ python -m pytest tests/test_middleware/test_middleware_comprehensive.py
 ## Benefits
 
 - ✅ **Seamless Dynamic Workflows**: All node types work with WorkflowBuilder.from_dict()
-- ✅ **Better Developer Experience**: Clear error messages with actionable guidance  
+- ✅ **Better Developer Experience**: Clear error messages with actionable guidance
 - ✅ **Future-Proof**: Constructor validation prevents compatibility issues
 - ✅ **Middleware Ready**: Robust foundation for dynamic workflow creation
 - ✅ **Backward Compatible**: Existing code continues to work unchanged

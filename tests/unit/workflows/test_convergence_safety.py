@@ -10,11 +10,12 @@ Tests the convergence and safety features including:
 """
 
 import time
+
 import pytest
 
 from kailash import Workflow
-from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.base import NodeParameter
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.cycle_exceptions import CycleConfigurationError
 
@@ -30,36 +31,38 @@ class TestConvergenceSafety:
         def improve_quality(quality=0.0, improvement_rate=0.1):
             """Improve quality gradually."""
             new_quality = min(1.0, quality + improvement_rate)
-            return {
-                "quality": new_quality,
-                "improvement": new_quality - quality
-            }
-        
+            return {"quality": new_quality, "improvement": new_quality - quality}
+
         improver = PythonCodeNode.from_function(
             func=improve_quality,
             name="improver",
             input_schema={
-                "quality": NodeParameter(name="quality", type=float, required=False, default=0.0),
-                "improvement_rate": NodeParameter(name="improvement_rate", type=float, required=False, default=0.1)
-            }
+                "quality": NodeParameter(
+                    name="quality", type=float, required=False, default=0.0
+                ),
+                "improvement_rate": NodeParameter(
+                    name="improvement_rate", type=float, required=False, default=0.1
+                ),
+            },
         )
         workflow.add_node("improver", improver)
 
         # Create cycle with convergence expression
         workflow.connect(
-            "improver", "improver",
+            "improver",
+            "improver",
             mapping={"result.quality": "quality"},
             cycle=True,
             max_iterations=20,
             convergence_check="quality >= 0.9",
-            cycle_id="quality_cycle"
+            cycle_id="quality_cycle",
         )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
             workflow,
-            parameters={"improver": {"quality": 0.0, "improvement_rate": 0.15}}
+            parameters={"improver": {"quality": 0.0, "improvement_rate": 0.15}},
         )
 
         # Verify convergence
@@ -73,24 +76,27 @@ class TestConvergenceSafety:
         def slow_improve(value=0.0):
             """Very slow improvement."""
             return {"value": value + 0.01}
-        
+
         improver = PythonCodeNode.from_function(
             func=slow_improve,
             name="slow_improver",
             input_schema={
-                "value": NodeParameter(name="value", type=float, required=False, default=0.0)
-            }
+                "value": NodeParameter(
+                    name="value", type=float, required=False, default=0.0
+                )
+            },
         )
         workflow.add_node("improver", improver)
 
         # Create cycle with low max_iterations
         workflow.connect(
-            "improver", "improver",
+            "improver",
+            "improver",
             mapping={"result.value": "value"},
             cycle=True,
             max_iterations=5,
             convergence_check="value >= 1.0",  # Won't reach this
-            cycle_id="slow_cycle"
+            cycle_id="slow_cycle",
         )
 
         # Execute
@@ -114,31 +120,36 @@ class TestConvergenceSafety:
             return {
                 "error_rate": new_error_rate,
                 "processed_count": new_count,
-                "quality": 1.0 - new_error_rate
+                "quality": 1.0 - new_error_rate,
             }
-        
+
         processor = PythonCodeNode.from_function(
             func=process_data,
             name="processor",
             input_schema={
-                "error_rate": NodeParameter(name="error_rate", type=float, required=False, default=0.5),
-                "processed_count": NodeParameter(name="processed_count", type=int, required=False, default=0)
-            }
+                "error_rate": NodeParameter(
+                    name="error_rate", type=float, required=False, default=0.5
+                ),
+                "processed_count": NodeParameter(
+                    name="processed_count", type=int, required=False, default=0
+                ),
+            },
         )
         workflow.add_node("processor", processor)
 
         # Create cycle with compound conditions
         # Note: Current SDK may have limitations on complex expressions
         workflow.connect(
-            "processor", "processor",
+            "processor",
+            "processor",
             mapping={
                 "result.error_rate": "error_rate",
-                "result.processed_count": "processed_count"
+                "result.processed_count": "processed_count",
             },
             cycle=True,
             max_iterations=15,
             convergence_check="error_rate <= 0.1",  # Primary condition
-            cycle_id="process_cycle"
+            cycle_id="process_cycle",
         )
 
         # Execute
@@ -161,37 +172,41 @@ class TestConvergenceSafety:
             # This simulates processing time
             time.sleep(delay)
             return {"counter": counter + 1, "delay": delay}
-        
+
         slow_node = PythonCodeNode.from_function(
             func=slow_process,
             name="slow_processor",
             input_schema={
-                "counter": NodeParameter(name="counter", type=int, required=False, default=0),
-                "delay": NodeParameter(name="delay", type=float, required=False, default=0.1)
-            }
+                "counter": NodeParameter(
+                    name="counter", type=int, required=False, default=0
+                ),
+                "delay": NodeParameter(
+                    name="delay", type=float, required=False, default=0.1
+                ),
+            },
         )
         workflow.add_node("slow", slow_node)
 
         # Create cycle with timeout consideration
         workflow.connect(
-            "slow", "slow",
+            "slow",
+            "slow",
             mapping={"result.counter": "counter"},
             cycle=True,
             max_iterations=3,  # Keep low for test speed
-            cycle_id="slow_cycle"
+            cycle_id="slow_cycle",
         )
 
         # Execute with runtime timeout (if supported)
         runtime = LocalRuntime(enable_cycles=True)
         start_time = time.time()
-        
+
         results, run_id = runtime.execute(
-            workflow,
-            parameters={"slow": {"counter": 0, "delay": 0.01}}  # Small delay
+            workflow, parameters={"slow": {"counter": 0, "delay": 0.01}}  # Small delay
         )
-        
+
         elapsed = time.time() - start_time
-        
+
         # Should complete within reasonable time
         assert elapsed < 1.0  # Less than 1 second
         assert results["slow"]["result"]["counter"] == 3
@@ -208,29 +223,31 @@ class TestConvergenceSafety:
             return {
                 "size": size * 2,  # Double size each iteration
                 "iteration": iteration + 1,
-                "data_sample": data[:5] if data else []
+                "data_sample": data[:5] if data else [],
             }
-        
+
         memory_node = PythonCodeNode.from_function(
             func=memory_intensive,
             name="memory_node",
             input_schema={
-                "size": NodeParameter(name="size", type=int, required=False, default=100),
-                "iteration": NodeParameter(name="iteration", type=int, required=False, default=0)
-            }
+                "size": NodeParameter(
+                    name="size", type=int, required=False, default=100
+                ),
+                "iteration": NodeParameter(
+                    name="iteration", type=int, required=False, default=0
+                ),
+            },
         )
         workflow.add_node("memory", memory_node)
 
         # Create cycle with resource limits
         workflow.connect(
-            "memory", "memory",
-            mapping={
-                "result.size": "size",
-                "result.iteration": "iteration"
-            },
+            "memory",
+            "memory",
+            mapping={"result.size": "size", "result.iteration": "iteration"},
             cycle=True,
             max_iterations=5,  # Limit iterations to prevent excessive memory
-            cycle_id="memory_cycle"
+            cycle_id="memory_cycle",
         )
 
         # Execute with resource monitoring
@@ -238,15 +255,14 @@ class TestConvergenceSafety:
             enable_cycles=True,
             # If supported: resource_limits={"memory_mb": 100}
         )
-        
+
         results, run_id = runtime.execute(
-            workflow,
-            parameters={"memory": {"size": 100}}
+            workflow, parameters={"memory": {"size": 100}}
         )
 
         # Should complete without resource exhaustion
         assert results["memory"]["result"]["iteration"] <= 5
-        assert results["memory"]["result"]["size"] == 100 * (2 ** 5)  # Geometric growth
+        assert results["memory"]["result"]["size"] == 100 * (2**5)  # Geometric growth
 
     def test_early_termination_on_convergence(self):
         """Test that cycles terminate early when convergence is reached."""
@@ -256,24 +272,27 @@ class TestConvergenceSafety:
         def fast_converge(value=0.0):
             """Converges quickly."""
             return {"value": value + 0.3}  # Large steps
-        
+
         fast_node = PythonCodeNode.from_function(
             func=fast_converge,
             name="fast_node",
             input_schema={
-                "value": NodeParameter(name="value", type=float, required=False, default=0.0)
-            }
+                "value": NodeParameter(
+                    name="value", type=float, required=False, default=0.0
+                )
+            },
         )
         workflow.add_node("fast", fast_node)
 
         # Create cycle that should terminate early
         workflow.connect(
-            "fast", "fast",
+            "fast",
+            "fast",
             mapping={"result.value": "value"},
             cycle=True,
             max_iterations=10,  # More than needed
             convergence_check="value >= 1.0",
-            cycle_id="fast_cycle"
+            cycle_id="fast_cycle",
         )
 
         # Execute
@@ -295,16 +314,17 @@ class TestConvergenceSafety:
         # Create cycle with potentially invalid expression
         # SDK should handle this gracefully
         workflow.connect(
-            "node", "node",
+            "node",
+            "node",
             cycle=True,
             max_iterations=5,
             convergence_check="invalid_var > 10",  # Variable doesn't exist
-            cycle_id="invalid_cycle"
+            cycle_id="invalid_cycle",
         )
 
         # Execute - should handle gracefully (rely on max_iterations)
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(workflow)
-        
+
         # Should complete based on max_iterations
         assert "node" in results
