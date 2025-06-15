@@ -53,7 +53,7 @@ def main():
 
     # Run workflow
     try:
-        results, run_id = workflow.run()
+        results, run_id = workflow.execute()
         print(f"Workflow completed! Run ID: {run_id}")
         print(f"Output saved to: {OUTPUT_FILE}")
         return 0

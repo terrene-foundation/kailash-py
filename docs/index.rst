@@ -12,16 +12,26 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK v0.3.1 documentation! This release completes the
-**Finance Workflow Library** with production-ready financial workflows powered by AI and
-modern quantitative methods.
+Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces the
+**Enterprise Middleware Architecture** with real-time communication and production-ready features.
 
-**Recent Updates (v0.3.1):**
+**Latest Updates (v0.4.0):**
+- 🌉 **Enterprise Middleware Architecture** - Complete refactor from monolithic to composable middleware
+- 🔄 **Real-time Communication** - WebSocket/SSE with comprehensive event streaming
+- 🤖 **AI Chat Integration** - Built-in chat middleware with natural language workflow generation
+- ✅ **Test Excellence** - 799 tests passing (100% pass rate), CI optimization
+- 🚀 **Production Ready** - Health checks, metrics, graceful shutdown, connection pooling
+
+**Previous Updates (v0.3.2):**
+- 🛡️ **Admin Tool Framework** - Complete enterprise admin infrastructure with React UI, RBAC, audit logging
+- 🔒 **Async Database & ABAC** - High-performance async database operations with Attribute-Based Access Control
+- 🧪 **LLM-based QA Testing** - Comprehensive QA framework with AI agents for frontend and backend testing
+- 📊 **100+ Production Nodes** - Expanded node library including middleware, admin, security, and async database nodes
+
+**Previous Updates (v0.3.1):**
 - 💼 **Complete Finance Workflow Library** - Production-ready credit risk, portfolio optimization, trading signals, fraud detection
 - 🧠 **PythonCodeNode Best Practices** - Enhanced from_function() patterns with comprehensive training data
 - 🚀 **Enhanced MCP Server** - Zero-configuration workflow exposure with default tools for discovery and execution
-- 📚 **Enhanced Documentation** - Updated workflow design guidelines and developer best practices
-- ✅ **Code Quality Standards** - Applied black/isort formatting and comprehensive testing
 
 **Previous Major Release (v0.2.0):**
 - 🔁 **Universal Hybrid Cyclic Graph Architecture** with 30,000+ iterations/second performance
@@ -40,11 +50,13 @@ modern quantitative methods.
    :maxdepth: 2
    :caption: User Guide
 
-   guides/cyclic_workflows
    best_practices
    troubleshooting
    performance
    workflow_studio
+   data-consolidation-guide
+   enhancements/sql-oauth-credential-enhancements
+   features/http_nodes_comparison
 
 .. toctree::
    :maxdepth: 2
@@ -52,6 +64,8 @@ modern quantitative methods.
 
    api/nodes
    api/workflow
+   api/middleware
+   api/gateway
    api/workflow_api
    api/runtime
    api/access_control
@@ -77,6 +91,13 @@ modern quantitative methods.
    contributing
    security
    unimplemented_nodes_tracker
+   v0.2.0-release-summary
+   adr/README
+   adr/0017-llm-provider-architecture
+   adr/0017-multi-workflow-api-architecture
+   adr/0018-http-rest-client-architecture
+   todos/000-master
+   todos/completed-archive
 
 Overview
 ========
@@ -99,12 +120,14 @@ Coaches (ABCs) and the Product Delivery Team (PDT) at Terrene Foundation. It pro
 Key Features
 ------------
 
-🔧 **Comprehensive Node Library**
-   - Data I/O: CSV, JSON, Text, SQL, SharePoint
+🔧 **Comprehensive Node Library (85+ Nodes)**
+   - Data I/O: CSV, JSON, Text, SQL, AsyncSQL, SharePoint
+   - Admin: UserManagement, RoleManagement, PermissionCheck, AuditLog, SecurityEvent
    - Transform: Filter, Map, Sort, Custom processors
    - Logic: SwitchNode, MergeNode, Conditional routing
-   - AI/ML: Classification, Embeddings, NLP
+   - AI/ML: Classification, Embeddings, NLP, MCPAgent
    - API: REST, GraphQL, HTTP with auth
+   - Security: Enhanced Access Control (ABAC with 16 operators)
    - Code: Secure Python code execution
 
 🤖 **Advanced AI Coordination**
@@ -151,7 +174,15 @@ Key Features
    - Resource utilization monitoring (CPU, memory, I/O)
    - Execution history and bottleneck analysis
 
-💼 **Finance Workflow Library** (New in v0.3.1)
+🛡️ **Admin Tool Framework** (New in v0.3.2)
+   - **Enterprise Admin Nodes**: UserManagement, RoleManagement, PermissionCheck, AuditLog, SecurityEvent
+   - **React UI Components**: Complete admin interfaces with TypeScript integration
+   - **RBAC & Multi-Tenancy**: Role-based access control with hierarchical permissions
+   - **Async Database Support**: High-performance PostgreSQL with connection pooling
+   - **ABAC Security**: Attribute-Based Access Control with 16 operators and data masking
+   - **LLM-based QA Testing**: Comprehensive testing framework with AI QA agents
+
+💼 **Finance Workflow Library** (v0.3.1)
    - **Credit Risk Assessment**: AI-powered risk scoring with customer and transaction analysis
    - **Portfolio Optimization**: Modern Portfolio Theory with Sharpe ratio optimization and rebalancing
    - **Trading Signals**: Technical indicators (RSI, MACD, Bollinger Bands) with AI sentiment analysis

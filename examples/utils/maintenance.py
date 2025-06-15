@@ -5,6 +5,7 @@ Includes path fixing and import updating functionality.
 """
 
 import re
+import sys
 from pathlib import Path
 
 
@@ -226,6 +227,5 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
 
     sys.exit(main())

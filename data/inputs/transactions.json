@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tx001",
+    "amount": 150.0,
+    "status": "completed",
+    "customer_id": "cust1"
+  },
+  {
+    "id": "tx002",
+    "amount": 75.25,
+    "status": "pending",
+    "customer_id": "cust2"
+  },
+  {
+    "id": "tx003",
+    "amount": 200.0,
+    "status": "failed",
+    "customer_id": "cust3"
+  },
+  {
+    "id": "tx004",
+    "amount": 50.0,
+    "status": "completed",
+    "customer_id": "cust4"
+  },
+  {
+    "id": "tx005",
+    "amount": 125.75,
+    "status": "pending",
+    "customer_id": "cust5"
+  },
+  {
+    "id": "tx006",
+    "amount": 300.0,
+    "status": "completed",
+    "customer_id": "cust1"
+  },
+  {
+    "id": "tx007",
+    "amount": 25.5,
+    "status": "failed",
+    "customer_id": "cust2"
+  },
+  {
+    "id": "tx008",
+    "amount": 175.0,
+    "status": "pending",
+    "customer_id": "cust3"
+  }
+]

@@ -143,7 +143,7 @@ integration_results = []
 users_url = f"{base_url}{endpoint_paths.get('users', '')}"
 try:
     http_node = HTTPRequestNode(name="users_fetcher")
-    users_response = http_node.run(
+    users_response = http_node.execute(
         url=users_url,
         method="GET",
         timeout=30,
@@ -196,7 +196,7 @@ except Exception as e:
 posts_url = f"{base_url}{endpoint_paths.get('posts', '')}"
 try:
     http_node = HTTPRequestNode(name="posts_fetcher")
-    posts_response = http_node.run(
+    posts_response = http_node.execute(
         url=posts_url,
         method="GET",
         timeout=30,
@@ -281,7 +281,7 @@ integration_results = []
 repo_url = f"{base_url}{endpoint_paths.get('repos', '')}"
 try:
     http_node = HTTPRequestNode(name="repo_fetcher")
-    repo_response = http_node.run(
+    repo_response = http_node.execute(
         url=repo_url,
         method="GET",
         timeout=30,
@@ -339,7 +339,7 @@ except Exception as e:
 user_url = f"{base_url}{endpoint_paths.get('user', '')}"
 try:
     http_node = HTTPRequestNode(name="user_fetcher")
-    user_response = http_node.run(
+    user_response = http_node.execute(
         url=user_url,
         method="GET",
         timeout=30,
@@ -425,7 +425,7 @@ integration_results = []
 get_url = f"{base_url}{endpoint_paths.get('get', '')}"
 try:
     http_node = HTTPRequestNode(name="get_tester")
-    get_response = http_node.run(
+    get_response = http_node.execute(
         url=get_url,
         method="GET",
         timeout=30,
@@ -482,7 +482,7 @@ except Exception as e:
 headers_url = f"{base_url}{endpoint_paths.get('headers', '')}"
 try:
     http_node = HTTPRequestNode(name="headers_tester")
-    headers_response = http_node.run(
+    headers_response = http_node.execute(
         url=headers_url,
         method="GET",
         timeout=30,

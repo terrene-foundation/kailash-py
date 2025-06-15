@@ -1,0 +1,62 @@
+[
+  {
+    "type": "critical_service_recovery",
+    "priority": "immediate",
+    "title": "Restore Critical Services",
+    "description": "18 critical services require immediate attention",
+    "actions": [
+      "Activate incident response procedures",
+      "Deploy emergency patches or rollbacks",
+      "Scale resources to handle increased load",
+      "Implement temporary workarounds for affected functionality"
+    ],
+    "expected_impact": "Restore service availability within 30 minutes",
+    "implementation_effort": "high",
+    "timeline_hours": 1
+  },
+  {
+    "type": "sla_compliance_improvement",
+    "priority": "high",
+    "title": "Address SLA Violations",
+    "description": "18 services experiencing SLA violations",
+    "actions": [
+      "Review and adjust SLA thresholds based on current performance",
+      "Implement proactive monitoring for early SLA breach detection",
+      "Optimize service performance to meet SLA requirements",
+      "Enhance error handling and retry mechanisms"
+    ],
+    "expected_impact": "Achieve 95%+ SLA compliance within 1 week",
+    "implementation_effort": "medium",
+    "timeline_hours": 48
+  },
+  {
+    "type": "automation_enhancement",
+    "priority": "medium",
+    "title": "Increase Operational Automation",
+    "description": "Current automation rate (0.0%) below target (80%)",
+    "actions": [
+      "Implement auto-scaling for high-traffic services",
+      "Deploy automated rollback mechanisms for failed deployments",
+      "Create runbooks for common operational procedures",
+      "Enhance monitoring alerting with automated triage"
+    ],
+    "expected_impact": "Reduce manual interventions by 50%",
+    "implementation_effort": "high",
+    "timeline_hours": 168
+  },
+  {
+    "type": "business_continuity_enhancement",
+    "priority": "medium",
+    "title": "Strengthen Business Continuity",
+    "description": "Enhance disaster recovery and business continuity capabilities",
+    "actions": [
+      "Implement multi-region failover capabilities",
+      "Conduct regular disaster recovery drills",
+      "Enhance backup and recovery procedures",
+      "Create business impact assessment framework"
+    ],
+    "expected_impact": "Reduce potential downtime impact by 75%",
+    "implementation_effort": "high",
+    "timeline_hours": 336
+  }
+]

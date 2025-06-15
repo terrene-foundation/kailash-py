@@ -1,417 +1,532 @@
-# Multi-Workflow API Gateway
+# Kailash Middleware API Gateway
 
-The Multi-Workflow API Gateway provides a unified entry point for managing and executing multiple Kailash workflows through a single server with dynamic routing, MCP integration, and production-ready features.
+The Kailash Middleware API Gateway provides a unified, enterprise-grade entry point for managing workflows, real-time communication, and frontend integration through a comprehensive middleware layer.
 
 ## Overview
 
-The gateway architecture solves the problem of running multiple workflows with different endpoints alongside MCP (Model Context Protocol) servers. Instead of running each workflow as a separate service, the gateway provides:
+The middleware gateway architecture provides:
 
-- **Unified Access**: Single server managing all workflows
-- **Dynamic Routing**: Path-based routing to different workflows
-- **MCP Integration**: AI-powered tools available to all workflows
-- **Resource Efficiency**: Shared infrastructure and thread pools
-- **Production Features**: Health monitoring, WebSocket support, CORS
+- **Unified Access**: Single server managing all workflows and real-time communication
+- **Agent-UI Communication**: Session-based workflow management with real-time updates
+- **Dynamic Workflow Creation**: JSON-based workflow building from frontend applications
+- **Event Streaming**: WebSocket, SSE, and webhook support for real-time updates
+- **AI Integration**: Built-in AI chat for intelligent workflow creation
+- **Enterprise Security**: JWT authentication and RBAC/ABAC access control
+- **Production Features**: Automatic API documentation, health monitoring, CORS
 
 ## Quick Start
 
-```python
-from kailash.api.gateway import WorkflowAPIGateway
-from kailash.workflow import Workflow
+### Basic Gateway Setup
 
-# Create gateway
-gateway = WorkflowAPIGateway(
+```python
+from kailash.middleware import create_gateway
+
+# Create comprehensive middleware gateway
+gateway = create_gateway(
     title="My Platform",
-    description="Unified workflow platform",
-    max_workers=10
+    description="Enterprise workflow platform with real-time capabilities",
+    cors_origins=["http://localhost:3000"],
+    enable_docs=True,
+    max_sessions=100
 )
 
-# Register workflows
-gateway.register_workflow("process", data_processing_workflow)
-gateway.register_workflow("analyze", analytics_workflow)
+# Start the server
+gateway.run(port=8000)
+```
+
+### Manual Component Setup
+
+```python
+from kailash.middleware import (
+    AgentUIMiddleware, RealtimeMiddleware, APIGateway,
+    AIChatMiddleware, KailashJWTAuthManager
+)
+
+# Create components
+auth_manager = KailashJWTAuthManager()
+agent_ui = AgentUIMiddleware(auth_manager=auth_manager)
+realtime = RealtimeMiddleware(agent_ui)
+ai_chat = AIChatMiddleware(agent_ui)
+
+# Create gateway with components
+gateway = APIGateway(
+    agent_ui=agent_ui,
+    realtime=realtime,
+    ai_chat=ai_chat,
+    auth_manager=auth_manager,
+    title="Custom Platform"
+)
 
 # Start server
 gateway.run(port=8000)
 ```
 
-## Core Components
+## Core Features
 
-### WorkflowAPIGateway
-
-The main gateway class that manages multiple workflows.
+### 1. Session-Based Workflow Management
 
 ```python
-class WorkflowAPIGateway:
-    def __init__(
-        self,
-        title: str = "Kailash Workflow Gateway",
-        description: str = "Unified API for Kailash workflows",
-        version: str = "1.0.0",
-        max_workers: int = 10,
-        cors_origins: List[str] = None
-    ):
-        """Initialize the API gateway."""
+# Frontend creates session
+POST /api/sessions
+{
+    "user_id": "user123",
+    "metadata": {"role": "analyst"}
+}
+
+# Response
+{
+    "session_id": "session-uuid",
+    "created_at": "2025-06-13T10:00:00Z"
+}
 ```
 
-**Parameters:**
-- `title`: API title shown in documentation
-- `description`: API description
-- `version`: API version string
-- `max_workers`: Thread pool size for synchronous execution
-- `cors_origins`: List of allowed CORS origins
-
-### Workflow Registration
-
-Register workflows to make them available through the gateway:
+### 2. Dynamic Workflow Creation
 
 ```python
-gateway.register_workflow(
-    name="sales",
-    workflow=sales_workflow,
-    description="Sales data processing",
-    version="1.0.0",
-    tags=["sales", "data"]
-)
-```
-
-This creates endpoints:
-- `POST /sales/execute` - Execute the workflow
-- `GET /sales/workflow/info` - Get workflow information
-- `GET /sales/health` - Check workflow health
-- `GET /sales/docs` - Interactive API documentation
-
-### MCP Integration
-
-Integrate AI-powered tools through MCP servers:
-
-```python
-from kailash.api.mcp_integration import MCPIntegration
-
-# Create MCP server
-mcp = MCPIntegration("ai_tools", "AI-powered analysis tools")
-
-# Add tools
-mcp.add_tool(
-    "sentiment_analysis",
-    analyze_sentiment_function,
-    "Analyze text sentiment",
-    parameters={
-        "text": {"type": "string", "required": True}
+# Frontend sends workflow configuration
+POST /api/workflows
+{
+    "session_id": "session-uuid",
+    "workflow_config": {
+        "nodes": [
+            {
+                "id": "reader",
+                "type": "CSVReaderNode",
+                "config": {
+                    "name": "reader",
+                    "file_path": "/data/customers.csv"
+                }
+            },
+            {
+                "id": "processor",
+                "type": "PythonCodeNode",
+                "config": {
+                    "name": "processor",
+                    "code": "result = {'count': len(input_data)}"
+                }
+            }
+        ],
+        "connections": [
+            {
+                "from_node": "reader",
+                "from_output": "output",
+                "to_node": "processor",
+                "to_input": "input_data"
+            }
+        ]
     }
-)
+}
 
-# Register with gateway
-gateway.register_mcp_server("ai", mcp)
+# Response
+{
+    "workflow_id": "workflow-uuid",
+    "status": "created"
+}
 ```
 
-Use MCP tools in workflows:
+### 3. Workflow Execution
 
 ```python
-from kailash.api.mcp_integration import MCPToolNode
+# Execute workflow
+POST /api/executions
+{
+    "session_id": "session-uuid",
+    "workflow_id": "workflow-uuid",
+    "inputs": {"custom_param": "value"}
+}
 
-# Create node that uses MCP tool
-sentiment_node = MCPToolNode(
-    mcp_server="ai_tools",
-    tool_name="sentiment_analysis"
-)
-workflow.add_node("analyze_sentiment", sentiment_node)
+# Response
+{
+    "execution_id": "execution-uuid",
+    "status": "started"
+}
+
+# Monitor execution
+GET /api/executions/{execution_id}
+
+# Response
+{
+    "execution_id": "execution-uuid",
+    "status": "completed",
+    "progress": 100,
+    "outputs": {"count": 1500},
+    "created_at": "2025-06-13T10:01:00Z",
+    "completed_at": "2025-06-13T10:01:05Z"
+}
 ```
 
-## Gateway Endpoints
+### 4. Real-Time Communication
 
-### Root Endpoints
+```javascript
+// WebSocket connection
+const ws = new WebSocket('ws://localhost:8000/ws?session_id=session-uuid');
 
-- `GET /` - Gateway information
-  ```json
-  {
-    "name": "My Platform",
-    "version": "1.0.0",
-    "workflows": ["sales", "analytics"],
-    "mcp_servers": ["ai_tools"]
-  }
-  ```
+ws.onmessage = (event) => {
+    const update = JSON.parse(event.data);
 
-- `GET /workflows` - List all workflows
-  ```json
-  {
-    "sales": {
-      "type": "embedded",
-      "description": "Sales processing",
-      "version": "1.0.0",
-      "tags": ["sales"],
-      "endpoints": [
-        "/sales/execute",
-        "/sales/workflow/info",
-        "/sales/health",
-        "/sales/docs"
-      ]
+    switch(update.type) {
+        case 'workflow.started':
+            console.log('Workflow started:', update.workflow_id);
+            break;
+        case 'workflow.progress':
+            console.log('Progress:', update.progress + '%');
+            break;
+        case 'workflow.completed':
+            console.log('Completed:', update.outputs);
+            break;
     }
-  }
-  ```
+};
 
-- `GET /health` - Gateway health check
-  ```json
-  {
-    "status": "healthy",
-    "workflows": {
-      "sales": "healthy",
-      "analytics": "healthy"
+// Server-Sent Events
+const eventSource = new EventSource('http://localhost:8000/events?session_id=session-uuid');
+eventSource.onmessage = (event) => {
+    const update = JSON.parse(event.data);
+    console.log('SSE Update:', update);
+};
+```
+
+### 5. AI Chat Integration
+
+```python
+# Start AI chat session
+POST /api/chat/sessions
+{
+    "session_id": "session-uuid",
+    "user_id": "user123"
+}
+
+# Send message to AI
+POST /api/chat/message
+{
+    "session_id": "session-uuid",
+    "message": "Create a workflow that processes customer data and generates a report",
+    "context": {
+        "available_data": ["/data/customers.csv"],
+        "output_format": "json"
+    }
+}
+
+# Response (AI generates workflow)
+{
+    "message": "I'll create a customer data processing workflow for you.",
+    "workflow_config": {
+        "nodes": [...],
+        "connections": [...]
     },
-    "mcp_servers": {
-      "ai_tools": "healthy"
-    }
-  }
-  ```
-
-- `WS /ws` - WebSocket for real-time updates
-
-### Workflow Endpoints
-
-Each registered workflow gets its own set of endpoints under `/{workflow_name}/`:
-
-- `POST /{name}/execute` - Execute workflow
-- `GET /{name}/workflow/info` - Workflow metadata
-- `GET /{name}/health` - Workflow health
-- `GET /{name}/docs` - Interactive docs
-
-## Deployment Patterns
-
-### Pattern 1: Single Gateway (Recommended)
-
-Best for most use cases where all workflows have similar resource requirements.
-
-```python
-gateway = WorkflowAPIGateway(title="Company Platform")
-gateway.register_workflow("sales", sales_wf)
-gateway.register_workflow("analytics", analytics_wf)
-gateway.register_workflow("reports", reports_wf)
-gateway.run(port=8000)
+    "workflow_id": "ai-generated-workflow-uuid"
+}
 ```
 
-### Pattern 2: Hybrid Deployment
+## API Endpoints
 
-For mixed workloads with some compute-intensive workflows.
+### Session Management
+- `POST /api/sessions` - Create new session
+- `GET /api/sessions/{session_id}` - Get session info
+- `DELETE /api/sessions/{session_id}` - Close session
+
+### Workflow Management
+- `POST /api/workflows` - Create dynamic workflow
+- `GET /api/workflows/{workflow_id}` - Get workflow info
+- `POST /api/workflows/{workflow_id}/execute` - Execute workflow
+
+### Execution Management
+- `POST /api/executions` - Start workflow execution
+- `GET /api/executions/{execution_id}` - Get execution status
+- `DELETE /api/executions/{execution_id}` - Cancel execution
+
+### Real-Time Communication
+- `GET /ws` - WebSocket connection for real-time updates
+- `GET /events` - Server-Sent Events stream
+- `POST /api/webhooks` - Register webhook endpoints
+
+### AI Chat
+- `POST /api/chat/sessions` - Start AI chat session
+- `POST /api/chat/message` - Send message to AI
+- `GET /api/chat/history/{session_id}` - Get chat history
+
+### Schema and Discovery
+- `GET /api/nodes` - Get available node types with schemas
+- `GET /api/nodes/{node_type}/schema` - Get specific node schema
+- `GET /health` - Health check endpoint
+
+## Authentication
+
+### JWT Authentication
 
 ```python
-# Light workflows embedded
-gateway.register_workflow("api", api_workflow)
-gateway.register_workflow("data", data_workflow)
+from kailash.middleware.auth import KailashJWTAuthManager
 
-# Heavy workflows proxied to separate services
-gateway.proxy_workflow(
-    "ml_training",
-    "http://ml-service:8001",
-    health_check="/health"
+# Setup authentication
+auth_manager = KailashJWTAuthManager(
+    secret_key="your-secret-key",
+    algorithm="HS256",
+    expiration_hours=24
+)
+
+# Create gateway with auth
+gateway = create_gateway(
+    title="Secure Platform",
+    auth_manager=auth_manager,
+    enable_auth=True
+)
+
+# Protected endpoints require Authorization header
+# Authorization: Bearer <jwt_token>
+```
+
+### Authentication Flow
+
+```python
+# Login (implement your login logic)
+POST /api/auth/login
+{
+    "username": "user123",
+    "password": "password"
+}
+
+# Response
+{
+    "access_token": "jwt-token-here",
+    "token_type": "bearer",
+    "expires_in": 86400
+}
+
+# Use token in requests
+Authorization: Bearer jwt-token-here
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Server Configuration
+KAILASH_HOST=0.0.0.0
+KAILASH_PORT=8000
+KAILASH_DEBUG=false
+
+# Security
+KAILASH_JWT_SECRET=your-secret-key
+KAILASH_CORS_ORIGINS=http://localhost:3000,https://myapp.com
+
+# Session Management
+KAILASH_MAX_SESSIONS=1000
+KAILASH_SESSION_TIMEOUT=3600
+
+# Real-time Features
+KAILASH_ENABLE_WEBSOCKET=true
+KAILASH_ENABLE_SSE=true
+KAILASH_EVENT_BATCH_SIZE=10
+```
+
+### Configuration Object
+
+```python
+from kailash.middleware import create_gateway
+import os
+
+gateway = create_gateway(
+    title="Production Platform",
+    cors_origins=os.getenv("KAILASH_CORS_ORIGINS", "").split(","),
+    enable_docs=os.getenv("KAILASH_DEBUG", "false").lower() == "true",
+    max_sessions=int(os.getenv("KAILASH_MAX_SESSIONS", "1000")),
+    session_timeout_minutes=int(os.getenv("KAILASH_SESSION_TIMEOUT", "60")),
+    enable_auth=True,
+    jwt_secret=os.getenv("KAILASH_JWT_SECRET")
 )
 ```
 
-### Pattern 3: High Availability
+## Production Deployment
 
-For production environments requiring high uptime.
+### Docker Setup
 
-```yaml
-# docker-compose.yml
-services:
-  gateway1:
-    image: kailash-gateway
-    environment:
-      - INSTANCE_ID=1
+```dockerfile
+FROM python:3.11-slim
 
-  gateway2:
-    image: kailash-gateway
-    environment:
-      - INSTANCE_ID=2
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-  haproxy:
-    image: haproxy
-    depends_on:
-      - gateway1
-      - gateway2
-    ports:
-      - "80:80"
+COPY . .
+
+# Expose middleware port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["python", "-m", "kailash.middleware.server"]
 ```
 
-### Pattern 4: Kubernetes
-
-For cloud-native deployments with auto-scaling.
+### Kubernetes Deployment
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kailash-gateway
+  name: kailash-middleware
 spec:
   replicas: 3
+  selector:
+    matchLabels:
+      app: kailash-middleware
   template:
+    metadata:
+      labels:
+        app: kailash-middleware
     spec:
       containers:
-      - name: gateway
-        image: kailash-gateway:latest
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "500m"
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: kailash-gateway-hpa
-spec:
-  scaleTargetRef:
-    kind: Deployment
-    name: kailash-gateway
-  minReplicas: 3
-  maxReplicas: 20
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+      - name: middleware
+        image: kailash-middleware:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: KAILASH_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: kailash-secrets
+              key: jwt-secret
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
 ```
 
-## Advanced Features
-
-### WebSocket Support
-
-The gateway provides WebSocket support for real-time updates:
-
-```javascript
-const ws = new WebSocket('ws://localhost:8000/ws');
-
-ws.onopen = () => {
-  // Subscribe to workflow events
-  ws.send(JSON.stringify({
-    type: 'subscribe',
-    workflow: 'sales'
-  }));
-};
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Workflow update:', data);
-};
-```
-
-### Dynamic Workflow Management
-
-Add or remove workflows at runtime:
+### Load Balancing
 
 ```python
-# Add new workflow
-gateway.register_workflow("new_workflow", new_wf)
+# Multiple gateway instances
+gateway1 = create_gateway(port=8001)
+gateway2 = create_gateway(port=8002)
+gateway3 = create_gateway(port=8003)
 
-# Remove workflow (planned feature)
-# gateway.unregister_workflow("old_workflow")
+# Use nginx or cloud load balancer to distribute traffic
 ```
 
-### Custom Middleware
+## Migration from Legacy API
 
-Add custom middleware for authentication, logging, etc.:
-
-```python
-from fastapi import Request
-
-@gateway.app.middleware("http")
-async def add_custom_header(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Custom-Header"] = "value"
-    return response
-```
-
-## Example: Complete Platform
+### Old Pattern (Deprecated)
 
 ```python
+# ❌ OLD - Don't use
 from kailash.api.gateway import WorkflowAPIGateway
 from kailash.api.mcp_integration import MCPIntegration
-import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-
-# Create MCP server with AI tools
-mcp = MCPIntegration("ai_tools")
-mcp.add_tool("analyze", analyze_data)
-mcp.add_tool("predict", make_predictions)
-
-# Create gateway
-gateway = WorkflowAPIGateway(
-    title="Enterprise Data Platform",
-    description="Unified platform for data processing and analytics",
-    version="2.0.0",
-    max_workers=20,
-    cors_origins=["https://app.company.com"]
-)
-
-# Register MCP
-gateway.register_mcp_server("ai", mcp)
-
-# Register workflows
-gateway.register_workflow(
-    "ingest",
-    data_ingestion_workflow,
-    description="Data ingestion and validation",
-    tags=["data", "etl"]
-)
-
-gateway.register_workflow(
-    "process",
-    data_processing_workflow,
-    description="Data transformation and enrichment",
-    tags=["data", "processing"]
-)
-
-gateway.register_workflow(
-    "analyze",
-    analytics_workflow,
-    description="Analytics and insights generation",
-    tags=["analytics", "reporting"]
-)
-
-# Start server
-if __name__ == "__main__":
-    gateway.run(
-        host="0.0.0.0",
-        port=8000,
-        ssl_keyfile="ssl/key.pem",
-        ssl_certfile="ssl/cert.pem"
-    )
+gateway = WorkflowAPIGateway(title="App")
+gateway.add_mcp_integration(mcp_server)
+gateway.register_workflow("process", workflow)
 ```
 
-## Best Practices
+### New Pattern (Current)
 
-1. **Workflow Naming**: Use clear, descriptive names for workflows
-2. **Error Handling**: Implement proper error handling in workflows
-3. **Monitoring**: Use the health endpoints for monitoring
-4. **Security**: Implement authentication/authorization as needed
-5. **Resource Management**: Set appropriate thread pool sizes
-6. **Documentation**: Keep workflow descriptions up to date
+```python
+# ✅ NEW - Use this
+from kailash.middleware import create_gateway
+
+gateway = create_gateway(title="App")
+# Workflows created dynamically via API
+# MCP integration built-in
+```
+
+## Examples
+
+### Complete Integration Example
+
+```python
+from kailash.middleware import create_gateway
+import asyncio
+
+async def main():
+    # Create gateway
+    gateway = create_gateway(
+        title="Customer Analytics Platform",
+        description="Real-time customer data processing and analytics",
+        cors_origins=["http://localhost:3000"],
+        enable_docs=True
+    )
+
+    # Pre-register some common workflows
+    agent_ui = gateway.agent_ui
+
+    # Customer analysis template
+    from kailash.workflow.builder import WorkflowBuilder
+
+    template = WorkflowBuilder()
+    reader_id = template.add_node("CSVReaderNode",
+        config={"name": "reader", "file_path": "{{input_file}}"}
+    )
+    analyzer_id = template.add_node("PythonCodeNode",
+        config={
+            "name": "analyzer",
+            "code": """
+result = {
+    'total_customers': len(input_data),
+    'analysis_date': datetime.now().isoformat(),
+    'summary': 'Customer analysis completed'
+}
+"""
+        }
+    )
+    template.add_connection(reader_id, "output", analyzer_id, "input_data")
+
+    await agent_ui.register_workflow(
+        "customer_analysis_template",
+        template,
+        make_shared=True
+    )
+
+    print("🚀 Middleware gateway started!")
+    print("📡 API: http://localhost:8000")
+    print("📚 Docs: http://localhost:8000/docs")
+    print("🔌 WebSocket: ws://localhost:8000/ws")
+
+    # Start server
+    gateway.run(port=8000)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Port Already in Use**
-   ```bash
-   # Find process using port
-   lsof -i :8000
-   # Kill process
-   kill -9 <PID>
-   ```
+1. **CORS Errors**: Add your frontend domain to `cors_origins`
+2. **Session Timeouts**: Increase `session_timeout_minutes`
+3. **WebSocket Disconnections**: Implement reconnection logic in frontend
+4. **Memory Usage**: Monitor session count and implement cleanup
 
-2. **Workflow Registration Fails**
-   - Check workflow has unique name
-   - Ensure workflow is properly initialized
-   - Verify no circular dependencies
+### Debug Mode
 
-3. **High Memory Usage**
-   - Reduce max_workers setting
-   - Implement workflow cleanup
-   - Use proxied workflows for heavy processing
+```python
+import logging
+logging.getLogger("kailash.middleware").setLevel(logging.DEBUG)
 
-## See Also
+gateway = create_gateway(debug=True)
+```
 
-- [WorkflowAPI Documentation](workflow_api.md) - Single workflow API wrapper
-- [MCP Integration Guide](mcp_integration.md) - MCP server details
-- [Gateway Examples](../../examples/integration_examples/) - Complete examples
-- [ADR-0017](../adr/0017-multi-workflow-api-architecture.md) - Architecture decision
+### Health Monitoring
+
+```python
+# Check gateway health
+GET /health
+
+# Response
+{
+    "status": "healthy",
+    "uptime_seconds": 3600,
+    "active_sessions": 25,
+    "memory_usage_mb": 512,
+    "version": "1.0.0"
+}
+```
+
+## Related Documentation
+
+- [Agent-UI Communication Guide](../../sdk-users/middleware/agent-ui-communication.md)
+- [Real-time Communication](../../sdk-users/middleware/real-time-communication.md)
+- [Authentication & Security](../../sdk-users/middleware/authentication-security.md)
+- [Middleware Examples](../../examples/feature_examples/middleware/)

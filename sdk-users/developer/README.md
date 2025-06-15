@@ -2,6 +2,12 @@
 
 This directory contains comprehensive guides and resources for developing with the Kailash SDK.
 
+## 🔗 Key Features
+- **Unified Runtime**: LocalRuntime handles sync/async + enterprise features
+- **Dot Notation Mapping**: Access nested outputs (`"result.data"`, `"metrics.performance"`)
+- **PythonCodeNode Auto-wrapping**: Function returns wrapped in `"result"` key
+- **Auto-Mapping Parameters**: `auto_map_primary`, `auto_map_from`, `workflow_alias` for seamless connections
+
 ## 🚨 Start Here: [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
 Critical rules, common patterns, and quick-fix templates for immediate use.
 
@@ -15,7 +21,13 @@ Critical rules, common patterns, and quick-fix templates for immediate use.
 - **[05-directory-reader.md](05-directory-reader.md)** - File discovery best practices
 - **[06-enhanced-mcp-server.md](06-enhanced-mcp-server.md)** - 🆕 Production-ready MCP servers with caching & metrics
 - **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and solutions
-- **[08-why-enhanced-mcp-server.md](08-why-enhanced-mcp-server.md)** - Why enhanced vs raw Anthropic SDK
+- **[08-async-database-patterns.md](08-async-database-patterns.md)** - High-performance async database operations
+- **[09-cyclic-workflows-guide.md](09-cyclic-workflows-guide.md)** - 🆕 Iterative optimization with state preservation & convergence
+- **[10-workflow-resilience.md](10-workflow-resilience.md)** - 🆕 Enterprise reliability with retry, fallback, circuit breakers
+- **[11-credential-management.md](11-credential-management.md)** - 🆕 Secure credential handling with multi-source support
+- **[12-sharepoint-multi-auth.md](12-sharepoint-multi-auth.md)** - 🆕 SharePoint with certificate, managed identity, and more
+- **[16-middleware-integration-guide.md](16-middleware-integration-guide.md)** - 🆕 Enterprise middleware architecture with real-time communication
+- **[18-unified-runtime-guide.md](18-unified-runtime-guide.md)** - 🌟 NEW: Unified runtime with automatic enterprise capabilities
 
 ### Other Resources
 - **[pre-commit-hooks.md](pre-commit-hooks.md)** - Git hooks for code quality
@@ -43,6 +55,16 @@ Critical rules, common patterns, and quick-fix templates for immediate use.
 1. Check [07-troubleshooting.md](07-troubleshooting.md)
 2. Review [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for common mistakes
 3. Look for your error in the troubleshooting guide
+
+### Building Resilient Workflows
+1. Read [09-workflow-resilience.md](09-workflow-resilience.md)
+2. Add retry policies and fallbacks
+3. Configure circuit breakers for external services
+
+### Managing Credentials
+1. Start with [10-credential-management.md](10-credential-management.md)
+2. Never hardcode credentials
+3. Use appropriate credential sources (vault for production)
 
 ## ⚠️ Critical Knowledge
 

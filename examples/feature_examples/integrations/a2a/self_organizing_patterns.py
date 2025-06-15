@@ -658,7 +658,7 @@ def demonstrate_emergent_specialization():
             1.0, base_performance[task_type] + improvement + random.uniform(-0.1, 0.1)
         )
 
-        result = tracker.run(
+        result = tracker.execute(
             agent_id=agent_id,
             task_type=task_type,
             performance_score=performance,
@@ -674,7 +674,7 @@ def demonstrate_emergent_specialization():
             print(f"  Recommended focus: {result['recommended_focus']}")
 
     print("\nFinal specialization analysis:")
-    final_result = tracker.run(
+    final_result = tracker.execute(
         agent_id=agent_id, task_type="assessment", performance_score=0.8
     )
 
@@ -758,7 +758,7 @@ def demonstrate_dynamic_coalitions():
     print(f"Available agents: {len(agents)}")
 
     # Form coalitions
-    formation_result = manager.run(
+    formation_result = manager.execute(
         action="form", objective=objective, available_agents=agents
     )
 
@@ -770,7 +770,7 @@ def demonstrate_dynamic_coalitions():
 
     # Evaluate coalitions
     time.sleep(1)  # Simulate passage of time
-    evaluation_result = manager.run(action="evaluate")
+    evaluation_result = manager.execute(action="evaluate")
 
     print("\nCoalition performance evaluation:")
     for coalition_id, eval_data in evaluation_result["evaluations"].items():
@@ -866,7 +866,7 @@ def demonstrate_adaptive_topology():
         print(f"\nScenario {i}: {scenario['type']}")
         print(f"Team size: {len(scenario['members'])}")
 
-        result = designer.run(
+        result = designer.execute(
             problem_type=scenario["type"],
             team_members=scenario["members"],
             performance_history=[],

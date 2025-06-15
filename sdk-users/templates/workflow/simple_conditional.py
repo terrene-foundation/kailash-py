@@ -106,7 +106,7 @@ def main():
 
     # Run workflow
     try:
-        results, run_id = workflow.run()
+        results, run_id = workflow.execute()
         print(f"Workflow completed! Run ID: {run_id}")
         print(f"High value items: {OUTPUT_DIR}/high_value.json")
         print(f"Low value items: {OUTPUT_DIR}/low_value.json")

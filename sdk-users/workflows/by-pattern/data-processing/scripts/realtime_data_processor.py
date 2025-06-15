@@ -17,7 +17,7 @@ Key Features:
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from kailash import Workflow
 from kailash.nodes.api import WebhookNode
@@ -120,9 +120,9 @@ async def run_realtime_processor():
         "event_enricher": {
             "transformations": [
                 # Add processing timestamp
-                "lambda event: {**event, 'processed_at': datetime.utcnow().isoformat()}",
+                "lambda event: {**event, 'processed_at': datetime.now(timezone.utc).isoformat()}",
                 # Calculate event age
-                "lambda event: {**event, 'age_seconds': (datetime.utcnow() - datetime.fromisoformat(event['timestamp'])).total_seconds()}",
+                "lambda event: {**event, 'age_seconds': (datetime.now(timezone.utc) - datetime.fromisoformat(event['timestamp'])).total_seconds()}",
             ]
         },
         "window_aggregator": {
@@ -133,7 +133,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 window_size = timedelta(minutes=5)
-now = datetime.utcnow()
+now = datetime.now(timezone.utc)
 window_start = now - window_size
 
 # Filter events in window
@@ -189,7 +189,7 @@ def simulate_event_stream():
     import random
 
     events = []
-    base_time = datetime.utcnow() - timedelta(minutes=10)
+    base_time = datetime.now(timezone.utc) - timedelta(minutes=10)
 
     for i in range(50):
         event = {
@@ -210,7 +210,7 @@ def simulate_event_stream():
     for i in range(5):
         event = {
             "id": f"evt_anom_{i:04d}",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "priority": 9,  # High priority
             "source": f"sensor_anomaly_{i}",
             "type": "alert",
@@ -249,7 +249,7 @@ def main():
     )
 
     # Run async processing
-    asyncio.run(run_realtime_processor())
+    asyncio.execute(run_realtime_processor())
 
 
 if __name__ == "__main__":

@@ -215,7 +215,7 @@ kafka_consumer = KafkaConsumerNode(
 node.configure({"provider": "openai", "model": "gpt-4"})
 
 # 2. Execute with runtime data
-results = node.run(input_text="Hello world")
+results = node.execute(input_text="Hello world")
 ```
 
 **OLD**: Mixed execution patterns (deprecated):

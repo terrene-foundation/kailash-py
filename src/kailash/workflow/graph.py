@@ -1,5 +1,6 @@
 """Workflow DAG implementation for the Kailash SDK."""
 
+import inspect
 import json
 import logging
 import uuid
@@ -128,6 +129,71 @@ class Workflow:
 
         logger.info(f"Created workflow '{name}' (ID: {workflow_id})")
 
+    def _create_node_instance(
+        self, node_class: type, node_id: str, config: dict
+    ) -> Node:
+        """Create a node instance with proper parameter mapping.
+
+        Handles the inconsistency between nodes that expect 'name' vs 'id' parameters.
+        This is a core SDK improvement to standardize node constructor patterns.
+
+        Args:
+            node_class: The node class to instantiate
+            node_id: The node identifier from workflow config
+            config: Node configuration parameters
+
+        Returns:
+            Instantiated node instance
+
+        Raises:
+            NodeConfigurationError: If node creation fails with detailed diagnostics
+        """
+        # Inspect the node constructor signature
+        sig = inspect.signature(node_class.__init__)
+        params = list(sig.parameters.keys())
+
+        try:
+            # Handle different constructor patterns
+            if "name" in params and "id" not in params:
+                # Node expects 'name' parameter (like PythonCodeNode)
+                if "name" not in config:
+                    config = config.copy()  # Don't modify original
+                    config["name"] = node_id
+                return node_class(**config)
+            elif "id" in params:
+                # Node expects 'id' parameter (traditional pattern)
+                return node_class(id=node_id, **config)
+            else:
+                # Fallback: try both patterns
+                try:
+                    return node_class(id=node_id, **config)
+                except TypeError:
+                    # Try with name parameter
+                    config = config.copy()
+                    config["name"] = node_id
+                    return node_class(**config)
+
+        except TypeError as e:
+            error_msg = str(e)
+            if "missing 1 required positional argument: 'name'" in error_msg:
+                raise NodeConfigurationError(
+                    f"Node '{node_class.__name__}' requires 'name' parameter. "
+                    f"Expected constructor signature includes 'name'. "
+                    f"Config provided: {list(config.keys())}. "
+                    f"Add 'name': '{node_id}' to node config."
+                ) from e
+            elif "unexpected keyword argument" in error_msg:
+                raise NodeConfigurationError(
+                    f"Node '{node_class.__name__}' received unexpected parameters. "
+                    f"Constructor signature: {sig}. "
+                    f"Config provided: {list(config.keys())}."
+                ) from e
+            else:
+                raise NodeConfigurationError(
+                    f"Failed to create node '{node_id}' of type '{node_class.__name__}': {e}. "
+                    f"Constructor signature: {sig}. Config: {config}"
+                ) from e
+
     def add_node(self, node_id: str, node_or_type: Any, **config) -> None:
         """Add a node to the workflow.
 
@@ -151,11 +217,13 @@ class Workflow:
             if isinstance(node_or_type, str):
                 # Node type name provided
                 node_class = NodeRegistry.get(node_or_type)
-                node_instance = node_class(id=node_id, **config)
+                node_instance = self._create_node_instance(node_class, node_id, config)
                 node_type = node_or_type
             elif isinstance(node_or_type, type) and issubclass(node_or_type, Node):
                 # Node class provided
-                node_instance = node_or_type(id=node_id, **config)
+                node_instance = self._create_node_instance(
+                    node_or_type, node_id, config
+                )
                 node_type = node_or_type.__name__
             elif isinstance(node_or_type, Node):
                 # Node instance provided

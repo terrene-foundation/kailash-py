@@ -328,7 +328,7 @@ def main():
     print("Registering specialist agents...")
 
     for agent_spec in create_specialist_agents():
-        agent_pool.run(
+        agent_pool.execute(
             action="register",
             agent_id=agent_spec["id"],
             capabilities=agent_spec["capabilities"],

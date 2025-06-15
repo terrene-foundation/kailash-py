@@ -466,7 +466,7 @@ runtime.execute(workflow, parameters={
 # 1. Test individual node behavior first
 def test_node_functionality():
     node = MyNode()
-    result = node.run({}, data="test")
+    result = node.execute({}, data="test")
     assert result["processed"] == expected
 
 # 2. Test simple cycles

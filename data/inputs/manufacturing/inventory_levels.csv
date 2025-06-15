@@ -1,0 +1,16 @@
+material_id,material_name,category,current_stock,min_stock,max_stock,unit_cost,supplier_id,lead_time_days,last_order_date
+MAT_001,Steel Sheet 2mm,raw_material,5000,1000,10000,25.50,SUP_101,7,2025-01-05
+MAT_002,Steel Sheet 5mm,raw_material,3200,800,8000,45.75,SUP_101,7,2025-01-03
+MAT_003,Aluminum Alloy,raw_material,2800,500,5000,85.20,SUP_102,10,2025-01-01
+MAT_004,Copper Wire,raw_material,15000,5000,30000,12.30,SUP_103,5,2025-01-08
+MAT_005,Plastic Pellets,raw_material,8500,2000,15000,8.45,SUP_104,3,2025-01-09
+COMP_001,Circuit Board A,component,1200,200,2000,145.00,SUP_201,14,2024-12-28
+COMP_002,Circuit Board B,component,800,150,1500,225.50,SUP_201,14,2024-12-25
+COMP_003,Motor Assembly,component,450,100,800,350.00,SUP_202,21,2024-12-20
+COMP_004,Control Unit,component,320,50,500,580.75,SUP_203,28,2024-12-15
+COMP_005,Sensor Module,component,650,150,1000,95.25,SUP_204,10,2025-01-02
+PROD_001,Assembly Kit A,finished_good,180,50,300,1250.00,INTERNAL,0,2025-01-10
+PROD_002,Assembly Kit B,finished_good,220,75,400,1850.00,INTERNAL,0,2025-01-10
+PROD_003,Control System,finished_good,85,25,150,3500.00,INTERNAL,0,2025-01-09
+PROD_004,Sensor Array,finished_good,125,40,200,2200.00,INTERNAL,0,2025-01-09
+PROD_005,Complete Unit,finished_good,65,20,100,5800.00,INTERNAL,0,2025-01-08

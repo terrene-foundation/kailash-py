@@ -12,11 +12,13 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
-from examples.utils.paths import get_data_dir, get_output_dir
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from kailash.nodes.code.python import PythonCodeNode
+from examples.utils.data_paths import get_output_data_path  # noqa: E402
+from examples.utils.paths import get_data_dir, get_output_dir  # noqa: E402
+from kailash.nodes.base import NodeParameter  # noqa: E402
+from kailash.nodes.code.python import PythonCodeNode  # noqa: E402
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
 from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode
 from kailash.tracking.manager import TaskManager
@@ -51,7 +53,7 @@ def create_sample_workflow():
             joined.append({**customer, "transactions": customer_transactions})
         return {"data": joined}
 
-    from kailash.nodes.base import NodeParameter
+    # NodeParameter imported at top of file
 
     # Create schemas for joiner
     joiner_input_schema = {
@@ -170,7 +172,7 @@ def demonstrate_basic_visualization():
     workflow = create_sample_workflow()
 
     # Create Mermaid visualization
-    output_path = "../data/basic_workflow.md"
+    output_path = str(get_output_data_path("basic_workflow.md", "md"))
     workflow.save_mermaid_markdown(output_path, title="Data Processing Pipeline")
 
     print(f"✓ Basic visualization created: {output_path}")
@@ -205,7 +207,7 @@ def demonstrate_custom_visualization():
     )
 
     # Save with custom title
-    output_path = "../data/custom_workflow.md"
+    output_path = str(get_output_data_path("custom_workflow.md", "md"))
     mermaid_viz.save_markdown(output_path, title="Enhanced Data Processing Pipeline")
 
     print(f"✓ Custom visualization created: {output_path}")
@@ -319,12 +321,14 @@ def demonstrate_performance_metrics():
 
     plt.tight_layout()
     plt.savefig(
-        "../data/performance_metrics_matplotlib.png", dpi=300, bbox_inches="tight"
+        str(get_output_data_path("performance_metrics_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
 
     print(
-        "✓ Performance metrics visualization created: data/performance_metrics_matplotlib.png"
+        f"✓ Performance metrics visualization created: {get_output_data_path('performance_metrics_matplotlib.png')}"
     )
 
 
@@ -346,7 +350,6 @@ def demonstrate_workflow_comparison():
         return {"data": data}
 
     # Import NodeParameter for schemas
-    from kailash.nodes.base import NodeParameter
 
     # Create schemas for extra processor
     extra_processor_input_schema = {
@@ -411,7 +414,9 @@ def demonstrate_workflow_comparison():
 
     plt.tight_layout()
     plt.savefig(
-        "../data/workflow_comparison_matplotlib.png", dpi=300, bbox_inches="tight"
+        str(get_output_data_path("workflow_comparison_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
 
@@ -440,7 +445,7 @@ This document compares two versions of a data processing workflow.
 """
 
     # Save comparison
-    output_path = "../data/workflow_comparison.md"
+    output_path = str(get_output_data_path("workflow_comparison.md", "md"))
     with open(output_path, "w") as f:
         f.write(comparison_content)
 
@@ -511,11 +516,15 @@ def demonstrate_execution_timeline():
 
     plt.tight_layout()
     plt.savefig(
-        "../data/execution_timeline_matplotlib.png", dpi=300, bbox_inches="tight"
+        str(get_output_data_path("execution_timeline_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
 
-    print("✓ Execution timeline created: data/execution_timeline_matplotlib.png")
+    print(
+        f"✓ Execution timeline created: {get_output_data_path('execution_timeline_matplotlib.png')}"
+    )
 
 
 def demonstrate_resource_heatmap():
@@ -564,10 +573,16 @@ def demonstrate_resource_heatmap():
     plt.colorbar(im2, ax=ax2)
 
     plt.tight_layout()
-    plt.savefig("../data/resource_heatmap_matplotlib.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        str(get_output_data_path("resource_heatmap_matplotlib.png", "png")),
+        dpi=300,
+        bbox_inches="tight",
+    )
     plt.close()
 
-    print("✓ Resource heatmap created: data/resource_heatmap_matplotlib.png")
+    print(
+        f"✓ Resource heatmap created: {get_output_data_path('resource_heatmap_matplotlib.png')}"
+    )
 
 
 def main():
