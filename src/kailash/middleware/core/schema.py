@@ -233,7 +233,7 @@ class NodeSchemaGenerator:
         widget = None
         if hasattr(param, "widget"):
             widget = param.widget
-        elif param.type == bool:
+        elif param.type is bool:
             widget = UIWidget.TOGGLE
         elif hasattr(param, "choices") and param.choices:
             widget = UIWidget.SELECT
@@ -272,11 +272,11 @@ class NodeSchemaGenerator:
             return self.type_mapping[python_type]
 
         # Handle special types
-        if python_type == str:
+        if python_type is str:
             return SchemaType.STRING
         elif python_type in (int, float):
-            return SchemaType.INTEGER if python_type == int else SchemaType.FLOAT
-        elif python_type == bool:
+            return SchemaType.INTEGER if python_type is int else SchemaType.FLOAT
+        elif python_type is bool:
             return SchemaType.BOOLEAN
         elif hasattr(python_type, "__origin__"):
             # Handle generic types like List[str], Dict[str, Any]

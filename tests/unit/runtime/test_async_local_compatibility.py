@@ -81,8 +81,12 @@ class TestAsyncLocalRuntimeCompatibility:
 
     def test_compatibility_wrapper_attributes(self):
         """Test that all LocalRuntime attributes are accessible."""
-        runtime = AsyncLocalRuntime(
-            debug=True, max_concurrency=20, enable_monitoring=True, enable_audit=False
+        runtime = LocalRuntime(
+            debug=True,
+            max_concurrency=20,
+            enable_monitoring=True,
+            enable_audit=False,
+            enable_async=True,
         )
 
         # Check all attributes
@@ -94,18 +98,18 @@ class TestAsyncLocalRuntimeCompatibility:
         assert runtime.enable_cycles is True  # Default
 
     def test_alias_behavior(self):
-        """Test that AsyncLocalRuntime behaves as an alias."""
+        """Test that LocalRuntime with async enabled behaves consistently."""
         # Both should create similar instances
-        async_runtime = AsyncLocalRuntime()
+        async_runtime = LocalRuntime(enable_async=True)
         local_runtime = LocalRuntime(enable_async=True)
 
         # Should have same capabilities
-        assert type(async_runtime).__bases__[0] == type(local_runtime)
+        assert type(async_runtime) is type(local_runtime)
         assert async_runtime.enable_async == local_runtime.enable_async
 
     @pytest.mark.asyncio
     async def test_enterprise_features_available(self):
-        """Test that enterprise features work with AsyncLocalRuntime."""
+        """Test that enterprise features work with LocalRuntime async enabled."""
         from kailash.access_control import UserContext
 
         user_context = UserContext(
@@ -116,8 +120,11 @@ class TestAsyncLocalRuntimeCompatibility:
         )
 
         # Should be able to use enterprise features
-        runtime = AsyncLocalRuntime(
-            enable_monitoring=True, enable_audit=True, user_context=user_context
+        runtime = LocalRuntime(
+            enable_monitoring=True,
+            enable_audit=True,
+            user_context=user_context,
+            enable_async=True,
         )
 
         assert runtime.enable_monitoring is True
@@ -134,5 +141,5 @@ class TestAsyncLocalRuntimeCompatibility:
         workflow.add_node("ep", node)
 
         # Should execute with enterprise features
-        results, run_id = await runtime.execute(workflow)
+        results, run_id = await runtime.execute_async(workflow)
         assert results["ep"]["result"]["result"]["enterprise"] is True

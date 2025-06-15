@@ -488,7 +488,7 @@ def create_customer_analytics_engine() -> PythonCodeNode:
         }
 
     def analyze_customer_lifetime_value(
-        customers: List[Dict[str, Any]]
+        customers: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Analyze customer lifetime value patterns."""
         total_clv = sum(c["clv_estimated"] for c in customers)
@@ -516,7 +516,7 @@ def create_customer_analytics_engine() -> PythonCodeNode:
         }
 
     def analyze_geographic_distribution(
-        customers: List[Dict[str, Any]]
+        customers: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Analyze customer distribution and performance by geography."""
         regions = {}
@@ -772,7 +772,7 @@ def create_customer_analytics_engine() -> PythonCodeNode:
         return drivers if drivers else ["No significant churn drivers identified"]
 
     def generate_retention_strategies(
-        high_risk_customers: List[Dict[str, Any]]
+        high_risk_customers: List[Dict[str, Any]],
     ) -> List[str]:
         """Generate targeted retention strategies."""
         if not high_risk_customers:

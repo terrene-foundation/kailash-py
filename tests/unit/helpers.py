@@ -25,7 +25,7 @@ class MockTimeProvider:
         self.time_step = time_step
         self.call_count = 0
 
-    def time(self) -> float:
+    def get_time(self) -> float:
         """Get current mock time."""
         current = self.current_time + (self.call_count * self.time_step)
         self.call_count += 1

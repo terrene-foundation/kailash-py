@@ -217,7 +217,7 @@ def create_advanced_data_processor(processor_name: str) -> PythonCodeNode:
     """Create advanced data processor with machine learning capabilities."""
 
     def process_enterprise_data(
-        enterprise_data: List[Dict[str, Any]]
+        enterprise_data: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Advanced data processing with machine learning and statistical analysis."""
 
@@ -676,7 +676,7 @@ def create_enterprise_enrichment_engine() -> PythonCodeNode:
     """Create enterprise-grade data enrichment engine with external integrations."""
 
     def enrich_enterprise_data(
-        filtered_categories: Dict[str, List[Dict[str, Any]]]
+        filtered_categories: Dict[str, List[Dict[str, Any]]],
     ) -> Dict[str, Any]:
         """Advanced data enrichment with external integrations and predictive analytics."""
 
@@ -1342,7 +1342,7 @@ def main():
             }
 
         def analyze_regional_distribution(
-            records: List[Dict[str, Any]]
+            records: List[Dict[str, Any]],
         ) -> Dict[str, Any]:
             """Analyze regional distribution and performance."""
             regional_data = {}
@@ -1374,7 +1374,7 @@ def main():
             return regional_data
 
         def analyze_priority_distribution(
-            records: List[Dict[str, Any]]
+            records: List[Dict[str, Any]],
         ) -> Dict[str, Any]:
             """Analyze priority distribution and characteristics."""
             priority_data = {}
@@ -1408,7 +1408,7 @@ def main():
             return priority_data
 
         def analyze_domain_distribution(
-            records: List[Dict[str, Any]]
+            records: List[Dict[str, Any]],
         ) -> Dict[str, Any]:
             """Analyze domain distribution and performance."""
             domain_data = {}

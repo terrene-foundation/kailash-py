@@ -1163,7 +1163,7 @@ def create_session_recovery_engine() -> PythonCodeNode:
         return checkpoint
 
     def generate_recovery_strategies(
-        assessment: Dict[str, Any]
+        assessment: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Generate recovery strategies based on assessment."""
         strategies = []

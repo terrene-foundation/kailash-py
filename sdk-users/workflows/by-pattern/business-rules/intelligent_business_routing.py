@@ -405,7 +405,7 @@ def create_intelligent_routing_engine() -> PythonCodeNode:
     """Create intelligent routing engine with advanced decision-making logic."""
 
     def route_business_requests(
-        business_requests: List[Dict[str, Any]]
+        business_requests: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Advanced business request routing with intelligent decision-making."""
 
@@ -870,7 +870,7 @@ def create_intelligent_routing_engine() -> PythonCodeNode:
         return metrics
 
     def generate_optimization_recommendations(
-        analytics: Dict[str, Any]
+        analytics: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Generate recommendations for routing optimization."""
 
