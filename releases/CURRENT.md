@@ -1,103 +1,107 @@
 # Current Release Status
 
-## Next Release: v0.3.0
+## Current Release: v0.3.1
 
-**Planned Date**: June 10, 2025
-**Status**: 🟡 In Preparation
-**Type**: Minor Release (Parameter Lifecycle Architecture)
-**PR**: TBD
-**PyPI**: TBD
-**GitHub**: TBD
+**Release Date**: June 11, 2025  
+**Status**: ✅ Released  
+**Type**: Minor Feature Release  
+**PR**: #122  
+**PyPI**: https://pypi.org/project/kailash/0.3.1/  
+**GitHub**: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.3.1
 
 ### Release Theme
-Parameter Lifecycle Architecture & Data Consolidation - Major architectural improvements for flexible node construction and centralized data management
+Finance Industry Workflows & Enhanced MCP Server - Production-ready finance patterns with zero-configuration MCP server capabilities
+
+### Key Features
+1. **Finance Industry Workflows** (Session 064)
+   - Credit Risk Assessment with AI integration
+   - Real-time Fraud Detection with velocity checking
+   - Portfolio Optimization using Modern Portfolio Theory
+   - Trading Signals with technical indicators (MACD, RSI)
+   - Simple Credit Risk evaluation
+
+2. **Enhanced MCP Server**
+   - Zero-configuration production features
+   - Built-in LRU caching with TTL support
+   - Automatic performance metrics collection
+   - Hierarchical configuration management
+   - 100% backward compatible
+
+3. **Code Quality Improvements**
+   - Mandatory `PythonCodeNode.from_function()` for code >3 lines
+   - 200+ lines refactored to maintainable functions
+   - Full IDE support for debugging and testing
+   - Comprehensive error handling
+
+4. **Training Data**
+   - 26+ wrong→correct patterns for finance domain
+   - LLM-ready training examples
+   - Production best practices documented
+
+### Release Statistics
+- **Total Tests**: 599 passing (100%)
+- **Files Changed**: 538
+- **Python Files Updated**: 246
+- **Breaking Changes**: None
+
+## Previous Release: v0.3.0
+
+**Release Date**: June 10, 2025  
+**Status**: ✅ Released  
+**Type**: Major Release (Architecture & Consolidation)  
+**PR**: #112  
+**PyPI**: https://pypi.org/project/kailash/0.3.0/  
+**GitHub**: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.3.0
+
+### Release Theme
+Parameter Lifecycle Architecture & Workflow Library Consolidation
 
 ### Key Features
 1. **Parameter Lifecycle Architecture** (Session 061/062)
    - Nodes can be created without required parameters
    - Parameters validated at execution time
    - Clear separation: Construction → Configuration → Execution
-   - More flexible workflow construction patterns
 
 2. **Data Consolidation**
    - Centralized `/data/` directory structure
-   - Standardized data access utilities
-   - Backward compatibility maintained
    - 2,487+ files reorganized
+   - Backward compatibility maintained
 
-3. **Runtime Architecture Fixes**
-   - Fixed critical bug: `execute()` → `run()`
-   - Workflow validation supports runtime parameters
-   - Improved error handling and messages
-
-4. **PythonCodeNode Enhancements**
-   - Better `from_function()` with full IDE support
-   - Enhanced data science capabilities
-   - Improved type inference
-   - Best practices documentation
-
-5. **Enterprise Workflow Library**
+3. **Enterprise Workflow Library**
    - Production-ready workflow patterns
    - Control flow implementations
    - Industry-specific examples
-   - Migration guides from code-heavy patterns
 
-### Breaking Changes
-- Runtime method change (`execute()` → `run()`)
-- Workflow validation API accepts runtime parameters
-- Data file reorganization (backward compatible)
+## Next Release: v0.4.0
 
-## Previous Release: v0.2.2
-
-**Release Date**: 2025-06-10
-**Status**: ✅ Released
-**Type**: Minor Release (Documentation & API Modernization)
-**PR**: #109
-**PyPI**: https://pypi.org/project/kailash/0.2.2/
-**GitHub**: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.2.2
-
-### Release Theme
-Major documentation restructuring and comprehensive migration to new CycleBuilder API
-
-### Key Features
-1. **Documentation Restructuring**
-   - Reorganized into `sdk-users/` and `# contrib (removed)/` directories
-   - Production-ready workflow library with industry-specific examples
-   - Improved navigation with CLAUDE.md files at each level
-   - Clear separation between building WITH the SDK vs developing the SDK
-
-2. **CycleBuilder API Migration**
-   - 130+ test updates from deprecated `workflow.connect(..., cycle=True)` to new fluent API
-   - Improved readability with method chaining
-   - Backward compatibility for complex conditional cycles
-
-3. **Enhanced Workflow Library**
-   - By Pattern: API integration, data processing, file processing workflows
-   - By Industry: Healthcare, finance-specific implementations
-   - By Enterprise: Customer operations, multi-system integrations
-   - Quick Start: 30-second workflow patterns for rapid prototyping
-
-### Release Statistics
-- **Total Tests**: 751 passing (99.3% pass rate)
-- **Deprecation Warnings Fixed**: 130
-- **Documentation Files Updated**: 50+
-- **Breaking Changes**: None
-
-## Next Release: v0.2.3
-
-**Planned Date**: TBD
-**Status**: 🔵 Planning
-**Type**: Minor Release
+**Planned Date**: TBD  
+**Status**: 🔵 Planning  
+**Type**: Minor Feature Release
 
 ### Planned Features
-1. Enhanced visualization for cyclic workflows
-2. More pre-built cycle patterns
-3. Integration with popular ML frameworks
-4. Performance optimizations for nested cycles
+1. **Manufacturing Workflows**
+   - IoT sensor integration
+   - Quality control automation
+   - Supply chain optimization
+   - Production line monitoring
+
+2. **Professional Services**
+   - Consulting project management
+   - Legal document processing
+   - HR workflow automation
+   - Client relationship management
+
+3. **Retail/E-commerce**
+   - Inventory management
+   - Customer journey mapping
+   - Order fulfillment automation
+   - Dynamic pricing strategies
 
 ### Release History
+- v0.3.1 - 2025-06-11 - Finance Workflows & Enhanced MCP Server
+- v0.3.0 - 2025-06-10 - Parameter Lifecycle Architecture & Consolidation
 - v0.2.2 - 2025-06-10 - Documentation Restructuring & CycleBuilder Migration
-- v0.2.1 - 2025-06-09 - DirectoryReaderNode, DataTransformer fixes, Real-world examples
+- v0.2.1 - 2025-06-09 - DirectoryReaderNode, DataTransformer fixes
 - v0.2.0 - 2025-06-08 - Universal Hybrid Cyclic Graph Architecture
 - v0.1.6 - 2025-06-05 - Security & Production Hardening + CI/CD
 - v0.1.5 - 2025-06-05 - Self-Organizing Agents + Test Fixes
