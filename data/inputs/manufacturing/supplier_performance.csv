@@ -1,0 +1,13 @@
+supplier_id,supplier_name,category,on_time_delivery_rate,quality_score,average_lead_time_days,total_orders_2024,rejected_shipments,cost_index
+SUP_101,SteelCorp Industries,raw_material,94.5,98.2,7.2,156,3,1.02
+SUP_102,Aluminum Solutions,raw_material,92.1,97.5,10.5,89,2,1.05
+SUP_103,WireTech Supplies,raw_material,96.8,99.1,5.1,234,1,0.98
+SUP_104,PolyMaterials Inc,raw_material,91.3,96.8,3.3,312,5,0.95
+SUP_201,CircuitPro Electronics,component,88.5,95.2,14.8,67,4,1.12
+SUP_202,MotorWorks Ltd,component,85.2,94.1,22.3,45,3,1.18
+SUP_203,ControlTech Systems,component,93.7,98.5,28.1,28,1,1.08
+SUP_204,SensorDynamics,component,95.1,98.8,10.2,98,2,1.03
+SUP_301,LogisticsPro,logistics,97.2,99.5,1.5,523,2,1.01
+SUP_302,FastShip Solutions,logistics,95.8,98.9,2.1,412,4,1.04
+SUP_401,QualityTools Inc,equipment,92.5,97.2,21.5,34,1,1.15
+SUP_402,MaintenancePro,services,94.1,98.5,0.5,156,0,1.06

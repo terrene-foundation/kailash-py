@@ -229,7 +229,7 @@ def test_node_without_state_persistence():
     # Simulate multiple iterations without state
     for iteration in range(3):
         context = {"cycle": {"iteration": iteration}}
-        result = node.run(context, data=[1, 2, 3])
+        result = node.execute(context, data=[1, 2, 3])
 
         # Node should still work without accumulated state
         assert "converged" in result
@@ -247,7 +247,7 @@ def test_node_with_state_persistence():
                 "node_state": accumulated_state
             }
         }
-        result = node.run(context, data=[1, 2, 3])
+        result = node.execute(context, data=[1, 2, 3])
 
         # Update accumulated state for next iteration
         accumulated_state = {"count": result.get("count", 0)}

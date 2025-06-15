@@ -144,7 +144,7 @@ def main():
 
         # Execute workflow
         print("\n⚡ Executing workflow...")
-        results, run_id = workflow.run()
+        results, run_id = workflow.execute()
 
         print("\n📊 Workflow Results:")
         print("-" * 30)

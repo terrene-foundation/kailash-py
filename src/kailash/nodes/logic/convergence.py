@@ -216,8 +216,11 @@ class ConvergenceCheckerNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute convergence checking logic."""
+        # Get context
+        context = kwargs.get("context", {})
+
         # Get parameters
         value = kwargs["value"]
         threshold = kwargs.get("threshold", 0.8)
@@ -243,12 +246,24 @@ class ConvergenceCheckerNode(CycleAwareNode):
         no_improvement_count = prev_state.get("no_improvement_count", 0)
         convergence_start_iteration = prev_state.get("convergence_start_iteration")
 
-        # Update best value and improvement tracking
-        if value > best_value:
-            best_value = value
-            no_improvement_count = 0
+        # Detect if we're dealing with boolean values (common in cycle convergence)
+        is_boolean_convergence = isinstance(value, bool) or (
+            len(value_history) >= 2 and all(v in [0.0, 1.0] for v in value_history[-2:])
+        )
+
+        # Update best value and improvement tracking (skip for boolean convergence)
+        if not is_boolean_convergence:
+            if value > best_value:
+                best_value = value
+                no_improvement_count = 0
+            else:
+                no_improvement_count += 1
         else:
-            no_improvement_count += 1
+            # For boolean convergence, don't track "improvement" - just track changes
+            if value != prev_state.get("last_value", value):
+                no_improvement_count = 0
+            else:
+                no_improvement_count += 1
 
         # Initialize convergence state
         converged = False
@@ -265,7 +280,10 @@ class ConvergenceCheckerNode(CycleAwareNode):
         if early_stop_iterations and iteration >= early_stop_iterations:
             converged = True
             reason = f"Early stop: reached {early_stop_iterations} iterations"
-        elif patience and no_improvement_count >= patience:
+        elif (
+            patience and no_improvement_count >= patience and not is_boolean_convergence
+        ):
+            # Only apply patience mechanism for non-boolean convergence
             converged = True
             reason = f"Early stop: no improvement for {patience} iterations"
         else:
@@ -324,6 +342,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
             "best_value": best_value,
             "no_improvement_count": no_improvement_count,
             "convergence_start_iteration": convergence_start_iteration,
+            "last_value": value,  # Track last value for boolean convergence
         }
 
         # Include pass-through data if provided
@@ -537,8 +556,11 @@ class MultiCriteriaConvergenceNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Execute multi-criteria convergence checking."""
+        # Get context
+        context = kwargs.get("context", {})
+
         metrics = kwargs.get("metrics", {})
 
         # On first iteration, store criteria in state
@@ -597,7 +619,7 @@ class MultiCriteriaConvergenceNode(CycleAwareNode):
             }
 
             # Run individual convergence check
-            result = checker.run(mock_context, **checker_params)
+            result = checker.run(context=mock_context, **checker_params)
 
             results[metric_name] = {
                 "converged": result["converged"],

@@ -1,0 +1,30 @@
+{
+  "optimization_complete": true,
+  "final_metrics": {
+    "efficiency_rate": 0.8616499878613949,
+    "cost_per_unit": 256.9596784638576,
+    "quality_score": 0.8859136926599923,
+    "processing_time": 38.89478975829516
+  },
+  "final_score": 0.9527483877903222,
+  "total_iterations": 18,
+  "business_value": -83066.32185869297,
+  "roi": -4.614795658816276,
+  "convergence_analysis": {
+    "current_iteration": 18,
+    "predicted_iterations_remaining": 0,
+    "convergence_velocity": 0.011232676519758929,
+    "convergence_confidence": 0.0,
+    "early_stop_recommended": false,
+    "metric_convergence": {
+      "efficiency_rate": false,
+      "cost_per_unit": false,
+      "quality_score": false,
+      "processing_time": false
+    },
+    "insights": [
+      "Metrics not converging: efficiency_rate, cost_per_unit, quality_score, processing_time. May need targeted optimization."
+    ]
+  },
+  "timestamp": "2025-06-15T07:39:01.578227+00:00"
+}

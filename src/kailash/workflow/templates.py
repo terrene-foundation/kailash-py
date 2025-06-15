@@ -664,6 +664,671 @@ items_processed += actual_batch_size
         return cycle_id
 
 
+class BusinessWorkflowTemplates:
+    """Pre-built templates for common business workflow patterns."""
+
+    @staticmethod
+    def investment_data_pipeline(
+        workflow: Workflow,
+        data_source: str = "market_data",
+        processor: str = "portfolio_analyzer",
+        validator: str = "risk_assessor",
+        output: str = "investment_report",
+    ) -> str:
+        """
+        Create a complete investment data processing pipeline.
+
+        Args:
+            workflow: Target workflow
+            data_source: Node that fetches market/portfolio data
+            processor: Node that analyzes investment data
+            validator: Node that validates risk metrics
+            output: Node that generates investment reports
+
+        Returns:
+            str: Pipeline identifier
+        """
+        # Add data fetching node if not exists
+        if data_source not in workflow.nodes:
+            from kailash.nodes.data import HTTPRequestNode
+
+            workflow.add_node(
+                data_source,
+                HTTPRequestNode(
+                    name=data_source,
+                    url="https://api.example.com/market-data",
+                    method="GET",
+                ),
+            )
+
+        # Add portfolio analysis node if not exists
+        if processor not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            analysis_code = """
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# Process investment data
+data = market_data if 'market_data' in locals() else {}
+portfolio_value = data.get('portfolio_value', 1000000)
+positions = data.get('positions', [])
+
+# Calculate key metrics
+total_return = sum(pos.get('return_pct', 0) * pos.get('weight', 0) for pos in positions)
+volatility = np.std([pos.get('return_pct', 0) for pos in positions])
+sharpe_ratio = total_return / volatility if volatility > 0 else 0
+
+# Risk assessment
+risk_level = 'LOW' if volatility < 0.1 else 'MEDIUM' if volatility < 0.2 else 'HIGH'
+
+result = {
+    'portfolio_value': portfolio_value,
+    'total_return': total_return,
+    'volatility': volatility,
+    'sharpe_ratio': sharpe_ratio,
+    'risk_level': risk_level,
+    'positions_count': len(positions),
+    'analysis_date': datetime.now().isoformat()
+}
+"""
+            workflow.add_node(
+                processor, PythonCodeNode(name=processor, code=analysis_code)
+            )
+
+        # Add risk validation node if not exists
+        if validator not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            validation_code = """
+# Risk validation and compliance checks
+analysis = result if 'result' in locals() else {}
+
+# Risk limits and compliance
+max_volatility = 0.25
+max_single_position = 0.10
+min_diversification = 5
+
+# Validate metrics
+volatility_ok = analysis.get('volatility', 0) <= max_volatility
+diversification_ok = analysis.get('positions_count', 0) >= min_diversification
+risk_acceptable = analysis.get('risk_level') in ['LOW', 'MEDIUM']
+
+# Generate warnings
+warnings = []
+if not volatility_ok:
+    warnings.append(f"Portfolio volatility {analysis.get('volatility', 0):.2%} exceeds limit {max_volatility:.2%}")
+if not diversification_ok:
+    warnings.append(f"Insufficient diversification: {analysis.get('positions_count', 0)} positions (min {min_diversification})")
+if not risk_acceptable:
+    warnings.append(f"Risk level {analysis.get('risk_level')} may be too high")
+
+validation_result = {
+    'validated': len(warnings) == 0,
+    'warnings': warnings,
+    'compliance_score': (int(volatility_ok) + int(diversification_ok) + int(risk_acceptable)) / 3,
+    'validation_date': analysis.get('analysis_date'),
+    'risk_metrics': analysis
+}
+"""
+            workflow.add_node(
+                validator, PythonCodeNode(name=validator, code=validation_code)
+            )
+
+        # Add report generation node if not exists
+        if output not in workflow.nodes:
+            from kailash.examples.utils.data_paths import get_output_data_path
+            from kailash.nodes.data import JSONWriterNode
+
+            workflow.add_node(
+                output,
+                JSONWriterNode(
+                    name=output,
+                    file_path=get_output_data_path("investment_report.json"),
+                ),
+            )
+
+        # Connect the pipeline
+        workflow.connect(data_source, processor)
+        workflow.connect(processor, validator, {"result": "result"})
+        workflow.connect(validator, output, {"validation_result": "data"})
+
+        return "investment_pipeline"
+
+    @staticmethod
+    def document_ai_workflow(
+        workflow: Workflow,
+        document_reader: str = "pdf_reader",
+        text_processor: str = "ai_analyzer",
+        extractor: str = "data_extractor",
+        output: str = "structured_data",
+    ) -> str:
+        """
+        Create a document AI processing workflow.
+
+        Args:
+            workflow: Target workflow
+            document_reader: Node that reads documents
+            text_processor: Node that processes text with AI
+            extractor: Node that extracts structured data
+            output: Node that saves extracted data
+
+        Returns:
+            str: Workflow identifier
+        """
+        # Add document reader if not exists
+        if document_reader not in workflow.nodes:
+            from kailash.examples.utils.data_paths import get_input_data_path
+            from kailash.nodes.data import DirectoryReaderNode
+
+            workflow.add_node(
+                document_reader,
+                DirectoryReaderNode(
+                    name=document_reader,
+                    directory_path=get_input_data_path("documents"),
+                    file_types=[".pdf", ".docx", ".txt"],
+                ),
+            )
+
+        # Add AI text processor if not exists
+        if text_processor not in workflow.nodes:
+            from kailash.nodes.ai import LLMAgentNode
+
+            workflow.add_node(
+                text_processor,
+                LLMAgentNode(
+                    name=text_processor,
+                    model="llama3.2",
+                    prompt_template="""
+Analyze the following document and extract key information:
+
+Document: {document_content}
+
+Please extract:
+1. Document type (contract, invoice, report, etc.)
+2. Key dates mentioned
+3. Important entities (people, companies, amounts)
+4. Main topics or subjects
+5. Any action items or deadlines
+
+Provide the response in JSON format with these fields:
+- document_type
+- dates
+- entities
+- topics
+- action_items
+""",
+                    base_url="http://localhost:11434",
+                ),
+            )
+
+        # Add data extractor if not exists
+        if extractor not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            extraction_code = """
+import json
+import re
+from datetime import datetime
+
+# Process AI analysis result
+ai_response = response if 'response' in locals() else ""
+document_info = files if 'files' in locals() else []
+
+# Try to parse JSON from AI response
+try:
+    # Extract JSON from response (handle cases where AI adds extra text)
+    json_match = re.search(r'\\{.*\\}', ai_response, re.DOTALL)
+    if json_match:
+        extracted_data = json.loads(json_match.group())
+    else:
+        # Fallback if no JSON found
+        extracted_data = {"raw_response": ai_response}
+except:
+    extracted_data = {"raw_response": ai_response}
+
+# Add metadata
+extracted_data.update({
+    'extraction_date': datetime.now().isoformat(),
+    'document_count': len(document_info) if isinstance(document_info, list) else 1,
+    'processing_status': 'completed'
+})
+
+# Structure the final result
+result = {
+    'extracted_data': extracted_data,
+    'source_documents': document_info,
+    'processing_metadata': {
+        'extraction_method': 'ai_analysis',
+        'model_used': 'llama3.2',
+        'processing_date': datetime.now().isoformat()
+    }
+}
+"""
+            workflow.add_node(
+                extractor, PythonCodeNode(name=extractor, code=extraction_code)
+            )
+
+        # Add output writer if not exists
+        if output not in workflow.nodes:
+            from kailash.examples.utils.data_paths import get_output_data_path
+            from kailash.nodes.data import JSONWriterNode
+
+            workflow.add_node(
+                output,
+                JSONWriterNode(
+                    name=output,
+                    file_path=get_output_data_path("extracted_document_data.json"),
+                ),
+            )
+
+        # Connect the workflow
+        workflow.connect(document_reader, text_processor, {"files": "document_content"})
+        workflow.connect(
+            text_processor, extractor, {"response": "response", "files": "files"}
+        )
+        workflow.connect(extractor, output, {"result": "data"})
+
+        return "document_ai_pipeline"
+
+    @staticmethod
+    def api_integration_pattern(
+        workflow: Workflow,
+        auth_node: str = "api_auth",
+        data_fetcher: str = "api_client",
+        transformer: str = "data_transformer",
+        validator: str = "response_validator",
+        output: str = "api_output",
+    ) -> str:
+        """
+        Create a robust API integration pattern with auth, retry, and validation.
+
+        Args:
+            workflow: Target workflow
+            auth_node: Node that handles API authentication
+            data_fetcher: Node that fetches data from API
+            transformer: Node that transforms API responses
+            validator: Node that validates responses
+            output: Node that outputs processed data
+
+        Returns:
+            str: Integration identifier
+        """
+        # Add OAuth2 authentication if not exists
+        if auth_node not in workflow.nodes:
+            from kailash.nodes.api import OAuth2Node
+
+            workflow.add_node(
+                auth_node,
+                OAuth2Node(
+                    name=auth_node,
+                    client_id="${API_CLIENT_ID}",
+                    client_secret="${API_CLIENT_SECRET}",
+                    token_url="https://api.example.com/oauth/token",
+                    scope="read write",
+                ),
+            )
+
+        # Add API client with retry logic if not exists
+        if data_fetcher not in workflow.nodes:
+            from kailash.nodes.api import HTTPRequestNode
+
+            workflow.add_node(
+                data_fetcher,
+                HTTPRequestNode(
+                    name=data_fetcher,
+                    url="https://api.example.com/data",
+                    method="GET",
+                    timeout=30,
+                    retry_count=3,
+                ),
+            )
+
+        # Add data transformer if not exists
+        if transformer not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            transform_code = """
+import json
+from datetime import datetime
+
+# Transform API response data
+response_data = response if 'response' in locals() else {}
+token_info = token if 'token' in locals() else {}
+
+# Handle different response formats
+if isinstance(response_data, str):
+    try:
+        response_data = json.loads(response_data)
+    except:
+        response_data = {"raw_response": response_data}
+
+# Transform data structure
+transformed_data = {
+    'api_data': response_data,
+    'request_metadata': {
+        'timestamp': datetime.now().isoformat(),
+        'authenticated': bool(token_info.get('access_token')),
+        'token_expires': token_info.get('expires_at'),
+        'data_source': 'external_api'
+    },
+    'data_quality': {
+        'record_count': len(response_data) if isinstance(response_data, list) else 1,
+        'has_errors': 'error' in str(response_data).lower(),
+        'response_size_kb': len(str(response_data)) / 1024
+    }
+}
+
+result = transformed_data
+"""
+            workflow.add_node(
+                transformer, PythonCodeNode(name=transformer, code=transform_code)
+            )
+
+        # Add response validator if not exists
+        if validator not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            validation_code = """
+# Validate API response and transformed data
+data = result if 'result' in locals() else {}
+
+# Validation checks
+api_data = data.get('api_data', {})
+metadata = data.get('request_metadata', {})
+quality = data.get('data_quality', {})
+
+validation_results = {
+    'data_present': bool(api_data),
+    'authenticated_request': metadata.get('authenticated', False),
+    'no_errors': not quality.get('has_errors', True),
+    'reasonable_size': quality.get('response_size_kb', 0) > 0,
+    'recent_data': True  # Could add timestamp validation
+}
+
+# Overall validation
+all_valid = all(validation_results.values())
+validation_score = sum(validation_results.values()) / len(validation_results)
+
+validated_result = {
+    'validation_passed': all_valid,
+    'validation_score': validation_score,
+    'validation_details': validation_results,
+    'validated_data': data if all_valid else None,
+    'validation_timestamp': metadata.get('timestamp')
+}
+"""
+            workflow.add_node(
+                validator, PythonCodeNode(name=validator, code=validation_code)
+            )
+
+        # Add output node if not exists
+        if output not in workflow.nodes:
+            from kailash.examples.utils.data_paths import get_output_data_path
+            from kailash.nodes.data import JSONWriterNode
+
+            workflow.add_node(
+                output,
+                JSONWriterNode(
+                    name=output,
+                    file_path=get_output_data_path("api_integration_result.json"),
+                ),
+            )
+
+        # Connect the integration pattern
+        workflow.connect(auth_node, data_fetcher, {"token": "auth_header"})
+        workflow.connect(
+            data_fetcher, transformer, {"response": "response", "token": "token"}
+        )
+        workflow.connect(transformer, validator, {"result": "result"})
+        workflow.connect(validator, output, {"validated_result": "data"})
+
+        return "api_integration"
+
+    @staticmethod
+    def data_processing_pipeline(
+        workflow: Workflow,
+        data_reader: str = "data_reader",
+        cleaner: str = "data_cleaner",
+        enricher: str = "data_enricher",
+        aggregator: str = "data_aggregator",
+        writer: str = "data_writer",
+    ) -> str:
+        """
+        Create a comprehensive data processing pipeline.
+
+        Args:
+            workflow: Target workflow
+            data_reader: Node that reads raw data
+            cleaner: Node that cleans and validates data
+            enricher: Node that enriches data with additional information
+            aggregator: Node that aggregates and summarizes data
+            writer: Node that writes processed data
+
+        Returns:
+            str: Pipeline identifier
+        """
+        # Add data reader if not exists
+        if data_reader not in workflow.nodes:
+            from kailash.examples.utils.data_paths import get_input_data_path
+            from kailash.nodes.data import CSVReaderNode
+
+            workflow.add_node(
+                data_reader,
+                CSVReaderNode(
+                    name=data_reader, file_path=get_input_data_path("raw_data.csv")
+                ),
+            )
+
+        # Add data cleaner if not exists
+        if cleaner not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            cleaning_code = """
+import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# Clean and validate data
+data = data if 'data' in locals() else []
+
+# Convert to DataFrame for easier processing
+if isinstance(data, list) and data:
+    df = pd.DataFrame(data)
+elif isinstance(data, dict):
+    df = pd.DataFrame([data])
+else:
+    df = pd.DataFrame()
+
+# Data cleaning operations
+if not df.empty:
+    # Remove duplicates
+    original_count = len(df)
+    df = df.drop_duplicates()
+    duplicates_removed = original_count - len(df)
+
+    # Handle missing values
+    numeric_columns = df.select_dtypes(include=[np.number]).columns
+    df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].mean())
+
+    # Remove outliers (3 standard deviations)
+    for col in numeric_columns:
+        mean = df[col].mean()
+        std = df[col].std()
+        df = df[abs(df[col] - mean) <= 3 * std]
+
+    # Standardize text fields
+    text_columns = df.select_dtypes(include=['object']).columns
+    for col in text_columns:
+        df[col] = df[col].astype(str).str.strip().str.title()
+
+    cleaned_data = df.to_dict('records')
+else:
+    cleaned_data = []
+    duplicates_removed = 0
+
+result = {
+    'cleaned_data': cleaned_data,
+    'cleaning_stats': {
+        'original_records': len(data) if isinstance(data, list) else 1,
+        'cleaned_records': len(cleaned_data),
+        'duplicates_removed': duplicates_removed,
+        'cleaning_date': datetime.now().isoformat()
+    }
+}
+"""
+            workflow.add_node(cleaner, PythonCodeNode(name=cleaner, code=cleaning_code))
+
+        # Add data enricher if not exists
+        if enricher not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            enrichment_code = """
+import pandas as pd
+from datetime import datetime
+
+# Enrich data with additional calculated fields
+clean_result = result if 'result' in locals() else {}
+cleaned_data = clean_result.get('cleaned_data', [])
+
+if cleaned_data:
+    df = pd.DataFrame(cleaned_data)
+
+    # Add calculated fields
+    if 'amount' in df.columns:
+        df['amount_category'] = pd.cut(df['amount'],
+                                     bins=[0, 100, 1000, 10000, float('inf')],
+                                     labels=['Small', 'Medium', 'Large', 'Enterprise'])
+
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df['year'] = df['date'].dt.year
+        df['month'] = df['date'].dt.month
+        df['quarter'] = df['date'].dt.quarter
+
+    # Add data quality scores
+    df['completeness_score'] = (df.count(axis=1) / len(df.columns))
+    df['data_quality'] = pd.cut(df['completeness_score'],
+                               bins=[0, 0.5, 0.8, 1.0],
+                               labels=['Poor', 'Fair', 'Good'])
+
+    enriched_data = df.to_dict('records')
+else:
+    enriched_data = []
+
+result = {
+    'enriched_data': enriched_data,
+    'enrichment_stats': {
+        'records_enriched': len(enriched_data),
+        'fields_added': ['amount_category', 'year', 'month', 'quarter', 'completeness_score', 'data_quality'],
+        'enrichment_date': datetime.now().isoformat()
+    },
+    'original_stats': clean_result.get('cleaning_stats', {})
+}
+"""
+            workflow.add_node(
+                enricher, PythonCodeNode(name=enricher, code=enrichment_code)
+            )
+
+        # Add aggregator if not exists
+        if aggregator not in workflow.nodes:
+            from kailash.nodes.code import PythonCodeNode
+
+            aggregation_code = """
+import pandas as pd
+from datetime import datetime
+
+# Aggregate and summarize enriched data
+enrich_result = result if 'result' in locals() else {}
+enriched_data = enrich_result.get('enriched_data', [])
+
+if enriched_data:
+    df = pd.DataFrame(enriched_data)
+
+    # Calculate summary statistics
+    summary_stats = {}
+
+    # Numeric summaries
+    numeric_cols = df.select_dtypes(include=['number']).columns
+    for col in numeric_cols:
+        summary_stats[col] = {
+            'mean': df[col].mean(),
+            'median': df[col].median(),
+            'std': df[col].std(),
+            'min': df[col].min(),
+            'max': df[col].max(),
+            'count': df[col].count()
+        }
+
+    # Categorical summaries
+    categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+    category_summaries = {}
+    for col in categorical_cols:
+        if col not in ['data_quality', 'amount_category']:  # Skip our generated categories
+            category_summaries[col] = df[col].value_counts().to_dict()
+
+    # Data quality summary
+    quality_summary = {
+        'total_records': len(df),
+        'complete_records': (df['completeness_score'] == 1.0).sum(),
+        'quality_distribution': df['data_quality'].value_counts().to_dict() if 'data_quality' in df.columns else {},
+        'average_completeness': df['completeness_score'].mean() if 'completeness_score' in df.columns else 1.0
+    }
+
+    aggregated_result = {
+        'summary_statistics': summary_stats,
+        'category_summaries': category_summaries,
+        'quality_summary': quality_summary,
+        'aggregation_date': datetime.now().isoformat()
+    }
+else:
+    aggregated_result = {
+        'summary_statistics': {},
+        'category_summaries': {},
+        'quality_summary': {'total_records': 0},
+        'aggregation_date': datetime.now().isoformat()
+    }
+
+result = {
+    'aggregated_results': aggregated_result,
+    'processed_data': enriched_data,
+    'processing_pipeline': {
+        'original_stats': enrich_result.get('original_stats', {}),
+        'enrichment_stats': enrich_result.get('enrichment_stats', {}),
+        'aggregation_stats': {
+            'fields_summarized': len(aggregated_result['summary_statistics']),
+            'categories_analyzed': len(aggregated_result['category_summaries'])
+        }
+    }
+}
+"""
+            workflow.add_node(
+                aggregator, PythonCodeNode(name=aggregator, code=aggregation_code)
+            )
+
+        # Add data writer if not exists
+        if writer not in workflow.nodes:
+            from kailash.examples.utils.data_paths import get_output_data_path
+            from kailash.nodes.data import JSONWriterNode
+
+            workflow.add_node(
+                writer,
+                JSONWriterNode(
+                    name=writer,
+                    file_path=get_output_data_path("processed_data_results.json"),
+                ),
+            )
+
+        # Connect the pipeline
+        workflow.connect(data_reader, cleaner, {"data": "data"})
+        workflow.connect(cleaner, enricher, {"result": "result"})
+        workflow.connect(enricher, aggregator, {"result": "result"})
+        workflow.connect(aggregator, writer, {"result": "data"})
+
+        return "data_processing_pipeline"
+
+
 # Convenience methods to add to Workflow class
 def add_optimization_cycle(
     self,
@@ -754,6 +1419,61 @@ def add_batch_processing_cycle(
     )
 
 
+# Business workflow convenience methods
+def add_investment_pipeline(
+    self,
+    data_source: str = "market_data",
+    processor: str = "portfolio_analyzer",
+    validator: str = "risk_assessor",
+    output: str = "investment_report",
+) -> str:
+    """Add an investment data processing pipeline to this workflow."""
+    return BusinessWorkflowTemplates.investment_data_pipeline(
+        self, data_source, processor, validator, output
+    )
+
+
+def add_document_ai_workflow(
+    self,
+    document_reader: str = "pdf_reader",
+    text_processor: str = "ai_analyzer",
+    extractor: str = "data_extractor",
+    output: str = "structured_data",
+) -> str:
+    """Add a document AI processing workflow to this workflow."""
+    return BusinessWorkflowTemplates.document_ai_workflow(
+        self, document_reader, text_processor, extractor, output
+    )
+
+
+def add_api_integration_pattern(
+    self,
+    auth_node: str = "api_auth",
+    data_fetcher: str = "api_client",
+    transformer: str = "data_transformer",
+    validator: str = "response_validator",
+    output: str = "api_output",
+) -> str:
+    """Add an API integration pattern to this workflow."""
+    return BusinessWorkflowTemplates.api_integration_pattern(
+        self, auth_node, data_fetcher, transformer, validator, output
+    )
+
+
+def add_data_processing_pipeline(
+    self,
+    data_reader: str = "data_reader",
+    cleaner: str = "data_cleaner",
+    enricher: str = "data_enricher",
+    aggregator: str = "data_aggregator",
+    writer: str = "data_writer",
+) -> str:
+    """Add a data processing pipeline to this workflow."""
+    return BusinessWorkflowTemplates.data_processing_pipeline(
+        self, data_reader, cleaner, enricher, aggregator, writer
+    )
+
+
 # Add convenience methods to Workflow class
 Workflow.add_optimization_cycle = add_optimization_cycle
 Workflow.add_retry_cycle = add_retry_cycle
@@ -761,3 +1481,9 @@ Workflow.add_data_quality_cycle = add_data_quality_cycle
 Workflow.add_learning_cycle = add_learning_cycle
 Workflow.add_convergence_cycle = add_convergence_cycle
 Workflow.add_batch_processing_cycle = add_batch_processing_cycle
+
+# Add business workflow methods to Workflow class
+Workflow.add_investment_pipeline = add_investment_pipeline
+Workflow.add_document_ai_workflow = add_document_ai_workflow
+Workflow.add_api_integration_pattern = add_api_integration_pattern
+Workflow.add_data_processing_pipeline = add_data_processing_pipeline

@@ -5,9 +5,11 @@ allowing them to discover and use MCP tools without being an LLM agent.
 """
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from kailash.mcp import MCPClient
+# Avoid circular import
+if TYPE_CHECKING:
+    from kailash.middleware.mcp import MiddlewareMCPClient as MCPClient
 
 
 class MCPCapabilityMixin:
@@ -43,10 +45,13 @@ class MCPCapabilityMixin:
         self._mcp_client = None
 
     @property
-    def mcp_client(self) -> MCPClient:
+    def mcp_client(self):
         """Get or create MCP client instance."""
         if self._mcp_client is None:
-            self._mcp_client = MCPClient()
+            # Lazy import to avoid circular dependency
+            from kailash.middleware.mcp import MiddlewareMCPClient
+
+            self._mcp_client = MiddlewareMCPClient()
         return self._mcp_client
 
     async def discover_mcp_tools(

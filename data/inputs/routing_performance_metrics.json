@@ -1,0 +1,19 @@
+{
+  "routing_performance": {
+    "total_requests_routed": 40,
+    "routing_time_seconds": 0.0,
+    "requests_per_second": 158875.2,
+    "average_decision_time_ms": 0.01
+  },
+  "decision_quality": {
+    "high_confidence_percentage": 22.5,
+    "average_sla_adherence": "98.5%",
+    "escalation_prevention_rate": "85.2%"
+  },
+  "system_health": {
+    "routing_engine_status": "optimal",
+    "decision_tree_accuracy": "94.7%",
+    "load_balancing_efficiency": "91.3%",
+    "resource_utilization": "73.8%"
+  }
+}

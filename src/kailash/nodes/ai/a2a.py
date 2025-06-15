@@ -112,8 +112,11 @@ class SharedMemoryPoolNode(Node):
         ... )
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None, **kwargs):
+        # Accept name parameter and pass all kwargs to parent
+        if name:
+            kwargs["name"] = name
+        super().__init__(**kwargs)
         self.memory_segments = defaultdict(deque)
         self.agent_subscriptions = defaultdict(set)
         self.attention_indices = defaultdict(lambda: defaultdict(list))
@@ -182,6 +185,13 @@ class SharedMemoryPoolNode(Node):
                 type=str,
                 required=False,
                 description="Search query for semantic memory search",
+            ),
+            "segments": NodeParameter(
+                name="segments",
+                type=list,
+                required=False,
+                default=["general"],
+                description="Memory segments to subscribe to",
             ),
         }
 
@@ -545,8 +555,11 @@ class A2AAgentNode(LLMAgentNode):
         >>> assert all("content" in i for i in insights)
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None, **kwargs):
+        # Accept name parameter and pass all kwargs to parent
+        if name:
+            kwargs["name"] = name
+        super().__init__(**kwargs)
         self.local_memory = deque(maxlen=100)
         self.communication_log = deque(maxlen=50)
 
@@ -1220,8 +1233,11 @@ class A2ACoordinatorNode(CycleAwareNode):
         ... )
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None, **kwargs):
+        # Accept name parameter and pass all kwargs to parent
+        if name:
+            kwargs["name"] = name
+        super().__init__(**kwargs)
         self.registered_agents = {}
         self.task_queue = deque()
         self.consensus_sessions = {}
@@ -1275,7 +1291,7 @@ class A2ACoordinatorNode(CycleAwareNode):
             ),
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> Dict[str, Any]:
         """
         Execute coordination action with cycle awareness.
 
@@ -1315,6 +1331,7 @@ class A2ACoordinatorNode(CycleAwareNode):
             ... )
             >>> assert result[\"success\"] == True
         """
+        context = kwargs.get("context", {})
         action = kwargs.get("action")
 
         # Get cycle information using CycleAwareNode helpers

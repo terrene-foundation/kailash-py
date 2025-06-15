@@ -291,7 +291,8 @@ SDK Integration
 
 .. code-block:: python
 
-   from kailash.api.studio import StudioClient
+   # This import is deprecated - use middleware instead
+   # from kailash.middleware import create_gateway
 
    # Initialize client
    client = StudioClient(

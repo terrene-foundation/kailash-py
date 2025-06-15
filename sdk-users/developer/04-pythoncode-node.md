@@ -209,6 +209,37 @@ workflow.connect("stage1", "stage2", mapping={"result": "stage1_output"})
 workflow.connect("stage2", "stage3", mapping={"result": "stage2_output"})
 ```
 
+## 🔄 Output Handling (Framework Update)
+
+**Important**: As of the latest framework version, all PythonCodeNode outputs are consistently wrapped in a `"result"` key, regardless of whether your function returns a dict, list, or other type.
+
+### Consistent Behavior
+```python
+# Function returning a simple value
+def simple_func(x):
+    return x * 2
+
+# Function returning a dict
+def dict_func(data):
+    return {"processed": data, "count": len(data)}
+
+# Both are wrapped consistently in {"result": ...}
+node1 = PythonCodeNode.from_function(func=simple_func)  # Output: {"result": 42}
+node2 = PythonCodeNode.from_function(func=dict_func)    # Output: {"result": {"processed": [...], "count": 5}}
+```
+
+### Connection Patterns
+```python
+# Always connect using "result" key
+workflow.connect("node1", "node2", {"result": "input_data"})
+workflow.connect("node2", "node3", {"result": "processed_data"})
+```
+
+### Backward Compatibility
+- Existing workflows continue to work unchanged
+- String-based code nodes work as before
+- Only affects the internal wrapping logic for consistency
+
 ## Data Serialization
 
 ### DataFrame Handling

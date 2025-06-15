@@ -18,14 +18,24 @@ Key Features Demonstrated:
 - Data export capabilities for external analysis
 """
 
+import random
+import sys
 import time
+from pathlib import Path
 from typing import Any
 
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 from examples.utils.data_paths import get_output_data_path
-from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.local import LocalRuntime
-from kailash.workflow import CycleAnalyzer, CycleDebugger, CycleProfiler, CycleTemplates
+from kailash.workflow import (
+    CycleAnalyzer,
+    CycleDebugger,
+    CycleProfiler,
+    CycleTemplates,
+    Workflow,
+)
 
 
 class OptimizationNode(Node):
@@ -240,7 +250,9 @@ def demonstrate_cycle_analyzer():
         analysis_level="comprehensive",
         enable_profiling=True,
         enable_debugging=True,
-        output_directory=str(get_output_data_path(".", subdirectory="cycle_analysis")),
+        output_directory=str(
+            get_output_data_path("cycle_analysis", file_type="json").parent
+        ),
     )
 
     # Start analysis session
@@ -287,7 +299,6 @@ def demonstrate_cycle_analyzer():
 
             # Add noise
             if config["noise"] > 0:
-                import random
 
                 noise = random.uniform(-config["noise"], config["noise"]) * improvement
                 improvement += noise

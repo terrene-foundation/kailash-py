@@ -132,15 +132,30 @@ class EmbeddingNode(Node):
         tags={"embedding", "nlp", "vector"},
     )
 
-    def __init__(self):
+    def __init__(self, name: str = None, id: str = None, **kwargs):
         """Initialize the embedding node.
 
         Sets up the node with default configuration and prepares for
         model initialization. The actual model is loaded during configuration.
         """
-        super().__init__()
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self._model = None
         self._model_info = {}
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the embedding node."""
@@ -432,15 +447,30 @@ class VectorDatabaseNode(Node):
         tags={"vector", "database", "storage"},
     )
 
-    def __init__(self):
+    def __init__(self, name: str = None, id: str = None, **kwargs):
         """Initialize the vector database node.
 
         Sets up the node and prepares for database connection.
         The actual connection is established during configuration.
         """
-        super().__init__()
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self._client = None
         self._index = None
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the vector database node."""
@@ -747,6 +777,26 @@ class TextSplitterNode(Node):
         version="1.0.0",
         tags={"text", "processing", "nlp"},
     )
+
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        """Initialize the text splitter node.
+
+        Sets up the node with default configuration.
+        """
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the text splitter node."""

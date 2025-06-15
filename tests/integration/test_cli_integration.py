@@ -384,7 +384,7 @@ from kailash.nodes.base import Node
 class CustomPlugin(Node):
     '''Custom plugin node for testing.'''
 
-    def execute(self, inputs):
+    def run(self, inputs):
         return {"message": "Plugin executed!"}
 
     @classmethod

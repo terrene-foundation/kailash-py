@@ -192,7 +192,7 @@ class DocumentedNode(Node):
     Examples
     --------
     >>> node = DocumentedNode()
-    >>> result = node.run(
+    >>> result = node.execute(
     ...     customers=[
     ...         {'id': 1, 'age': 25, 'purchase_history': [100, 200]},
     ...         {'id': 2, 'age': 17, 'purchase_history': [50]}
@@ -682,7 +682,7 @@ class TestDataProcessorNode:
     def test_process_valid_data(self):
         """Test processing with valid data"""
         node = DataProcessorNode()
-        result = node.run(data=[
+        result = node.execute(data=[
             {'id': 1, 'value': 100},
             {'id': 2, 'value': 200}
         ])
@@ -694,7 +694,7 @@ class TestDataProcessorNode:
     def test_process_empty_data(self):
         """Test handling of empty data"""
         node = DataProcessorNode()
-        result = node.run(data=[])
+        result = node.execute(data=[])
 
         assert result['processed'] == []
         assert result['warning'] == 'No data to process'
@@ -704,7 +704,7 @@ class TestDataProcessorNode:
         node = DataProcessorNode()
 
         with pytest.raises(TypeError) as exc_info:
-            node.run(data="not a list")
+            node.execute(data="not a list")
 
         assert "Expected list" in str(exc_info.value)
 
@@ -714,7 +714,7 @@ class TestDataProcessorNode:
         mock_api.return_value = {'enrichment': 'data'}
 
         node = EnrichmentNode()
-        result = node.run(data=[{'id': 1}])
+        result = node.execute(data=[{'id': 1}])
 
         assert mock_api.called
         assert result['enriched'][0]['enrichment'] == 'data'

@@ -1105,6 +1105,7 @@ BaseAIProvider
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 LLMProvider
 ~~~~~~~~~~~
@@ -1113,6 +1114,7 @@ LLMProvider
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 EmbeddingProvider
 ~~~~~~~~~~~~~~~~~
@@ -1121,6 +1123,7 @@ EmbeddingProvider
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 API Nodes
 =========
@@ -1222,7 +1225,7 @@ Model Context Protocol (MCP) nodes for AI context management.
 MCPClient
 ---------
 
-.. autoclass:: kailash.nodes.mcp.client.MCPClient
+.. autoclass:: kailash.middleware.mcp.client_integration.MiddlewareMCPClient
    :members:
    :undoc-members:
    :show-inheritance:

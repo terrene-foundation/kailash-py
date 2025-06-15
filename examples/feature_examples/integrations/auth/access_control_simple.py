@@ -54,7 +54,11 @@ Example:
 """
 
 import os
+import sys
+from pathlib import Path
 
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 from examples.utils.data_paths import get_input_data_path
 from kailash.access_control import (
     NodePermission,
@@ -129,10 +133,9 @@ def summarizer(data=None, **kwargs):
 
 def create_sample_data():
     """Create sample customers data file"""
-    import os
 
     # Create data in centralized directory structure
-    csv_path = get_input_data_path("customers.csv", subdirectory="csv")
+    csv_path = get_input_data_path("customers.csv", file_type="csv")
     if not os.path.exists(csv_path):
         with open(csv_path, "w") as f:
             f.write("name,email,phone,ssn,balance\n")
@@ -221,7 +224,7 @@ def create_workflow():
     # 1. Read customer data (everyone can read)
     reader = CSVReaderNode(
         name="csv_reader",
-        file_path=str(get_input_data_path("customers.csv", subdirectory="csv")),
+        file_path=str(get_input_data_path("customers.csv", file_type="csv")),
     )
 
     # 2. Process sensitive data (admin and analyst only)
