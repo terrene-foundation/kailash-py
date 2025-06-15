@@ -64,6 +64,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "aiomysql>=0.2.0",
     "twilio>=9.6.3",
+    "qrcode>=8.2",
 ]
 
 [project.optional-dependencies]
