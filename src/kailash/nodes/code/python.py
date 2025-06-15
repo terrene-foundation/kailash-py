@@ -120,12 +120,14 @@ class SafeCodeChecker(ast.NodeVisitor):
             module_name = alias.name.split(".")[0]
             self.imports_found.append(module_name)
             if module_name not in ALLOWED_MODULES:
-                self.violations.append({
-                    "type": "import",
-                    "module": module_name,
-                    "line": node.lineno,
-                    "message": f"Import of module '{module_name}' is not allowed"
-                })
+                self.violations.append(
+                    {
+                        "type": "import",
+                        "module": module_name,
+                        "line": node.lineno,
+                        "message": f"Import of module '{module_name}' is not allowed",
+                    }
+                )
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
@@ -134,12 +136,14 @@ class SafeCodeChecker(ast.NodeVisitor):
             module_name = node.module.split(".")[0]
             self.imports_found.append(module_name)
             if module_name not in ALLOWED_MODULES:
-                self.violations.append({
-                    "type": "import_from",
-                    "module": module_name,
-                    "line": node.lineno,
-                    "message": f"Import from module '{module_name}' is not allowed"
-                })
+                self.violations.append(
+                    {
+                        "type": "import_from",
+                        "module": module_name,
+                        "line": node.lineno,
+                        "message": f"Import from module '{module_name}' is not allowed",
+                    }
+                )
         self.generic_visit(node)
 
     def visit_Call(self, node):
@@ -148,21 +152,25 @@ class SafeCodeChecker(ast.NodeVisitor):
             func_name = node.func.id
             # Check for dangerous built-in functions
             if func_name in {"eval", "exec", "compile"}:
-                self.violations.append({
-                    "type": "function_call",
-                    "function": func_name,
-                    "line": node.lineno,
-                    "message": f"Call to '{func_name}' is not allowed"
-                })
+                self.violations.append(
+                    {
+                        "type": "function_call",
+                        "function": func_name,
+                        "line": node.lineno,
+                        "message": f"Call to '{func_name}' is not allowed",
+                    }
+                )
         elif isinstance(node.func, ast.Attribute):
             # Check for dangerous method calls
             if node.func.attr in {"system", "popen"}:
-                self.violations.append({
-                    "type": "method_call",
-                    "method": node.func.attr,
-                    "line": node.lineno,
-                    "message": f"Call to method '{node.func.attr}' is not allowed"
-                })
+                self.violations.append(
+                    {
+                        "type": "method_call",
+                        "method": node.func.attr,
+                        "line": node.lineno,
+                        "message": f"Call to method '{node.func.attr}' is not allowed",
+                    }
+                )
         self.generic_visit(node)
 
 
@@ -287,40 +295,58 @@ class CodeExecutor:
                 # Create detailed error message with suggestions
                 error_parts = []
                 suggestions = []
-                
+
                 for violation in checker.violations:
-                    error_parts.append(f"Line {violation['line']}: {violation['message']}")
-                    
+                    error_parts.append(
+                        f"Line {violation['line']}: {violation['message']}"
+                    )
+
                     # Add suggestions based on violation type
-                    if violation['type'] in ['import', 'import_from']:
-                        module = violation['module']
-                        suggestions.append(f"Module '{module}' is not allowed. Available modules: {', '.join(sorted(ALLOWED_MODULES))}")
-                        
+                    if violation["type"] in ["import", "import_from"]:
+                        module = violation["module"]
+                        suggestions.append(
+                            f"Module '{module}' is not allowed. Available modules: {', '.join(sorted(ALLOWED_MODULES))}"
+                        )
+
                         # Suggest alternatives for common cases
-                        if module == 'subprocess':
-                            suggestions.append("For file operations, use 'os' or 'pathlib' modules instead")
-                        elif module == 'requests':
-                            suggestions.append("For HTTP requests, use HTTPRequestNode instead of importing requests")
-                        elif module == 'sqlite3' or module == 'psycopg2':
-                            suggestions.append("For database operations, use SQLDatabaseNode instead")
-                        elif module == 'boto3':
-                            suggestions.append("For AWS operations, create a custom node or use existing cloud nodes")
-                    
-                    elif violation['type'] == 'function_call':
-                        func = violation['function']
-                        if func in ['eval', 'exec']:
-                            suggestions.append(f"'{func}' is dangerous. Write explicit code instead of dynamic execution")
-                        elif func == 'compile':
-                            suggestions.append("'compile' is not allowed. Use standard Python code instead")
-                
+                        if module == "subprocess":
+                            suggestions.append(
+                                "For file operations, use 'os' or 'pathlib' modules instead"
+                            )
+                        elif module == "requests":
+                            suggestions.append(
+                                "For HTTP requests, use HTTPRequestNode instead of importing requests"
+                            )
+                        elif module == "sqlite3" or module == "psycopg2":
+                            suggestions.append(
+                                "For database operations, use SQLDatabaseNode instead"
+                            )
+                        elif module == "boto3":
+                            suggestions.append(
+                                "For AWS operations, create a custom node or use existing cloud nodes"
+                            )
+
+                    elif violation["type"] == "function_call":
+                        func = violation["function"]
+                        if func in ["eval", "exec"]:
+                            suggestions.append(
+                                f"'{func}' is dangerous. Write explicit code instead of dynamic execution"
+                            )
+                        elif func == "compile":
+                            suggestions.append(
+                                "'compile' is not allowed. Use standard Python code instead"
+                            )
+
                 error_msg = "Code safety violations found:\n" + "\n".join(error_parts)
                 if suggestions:
-                    error_msg += "\n\nSuggestions:\n" + "\n".join(f"- {s}" for s in suggestions)
-                
+                    error_msg += "\n\nSuggestions:\n" + "\n".join(
+                        f"- {s}" for s in suggestions
+                    )
+
                 raise SafetyViolationError(error_msg)
-            
+
             return True, checker.violations, checker.imports_found
-            
+
         except SyntaxError as e:
             raise NodeExecutionError(
                 f"Invalid Python syntax at line {e.lineno}: {e.msg}\n"
@@ -822,10 +848,12 @@ class PythonCodeNode(Node):
         self._input_schema = input_schema
         self._output_schema = output_schema
         self.max_code_lines = max_code_lines
-        
+
         # Check code length and warn if exceeds threshold
         if self.code and self.max_code_lines > 0:
-            code_lines = [line for line in self.code.strip().split('\n') if line.strip()]
+            code_lines = [
+                line for line in self.code.strip().split("\n") if line.strip()
+            ]
             if len(code_lines) > self.max_code_lines:
                 logger.warning(
                     f"PythonCodeNode '{name}' contains {len(code_lines)} lines of code, "
@@ -1000,23 +1028,27 @@ class PythonCodeNode(Node):
             # Enhanced import error handling
             module_name = str(e).split("'")[1] if "'" in str(e) else "unknown"
             error_msg = f"Import error: {str(e)}\n\n"
-            
+
             # Check if module is in allowed list
             if module_name not in ALLOWED_MODULES:
                 error_msg += f"Module '{module_name}' is not in the allowed list.\n"
-                error_msg += f"Allowed modules: {', '.join(sorted(ALLOWED_MODULES))}\n\n"
-                
+                error_msg += (
+                    f"Allowed modules: {', '.join(sorted(ALLOWED_MODULES))}\n\n"
+                )
+
                 # Suggest alternatives
-                if module_name == 'requests':
+                if module_name == "requests":
                     error_msg += "Suggestion: Use HTTPRequestNode for HTTP requests instead of importing requests.\n"
-                elif module_name in ['sqlite3', 'psycopg2', 'pymongo']:
-                    error_msg += "Suggestion: Use SQLDatabaseNode for database operations.\n"
-                elif module_name == 'boto3':
+                elif module_name in ["sqlite3", "psycopg2", "pymongo"]:
+                    error_msg += (
+                        "Suggestion: Use SQLDatabaseNode for database operations.\n"
+                    )
+                elif module_name == "boto3":
                     error_msg += "Suggestion: Create a custom node for AWS operations or use cloud-specific nodes.\n"
             else:
                 error_msg += f"Module '{module_name}' is allowed but not installed.\n"
                 error_msg += "Suggestion: Install the module using pip or check your environment.\n"
-            
+
             raise NodeExecutionError(error_msg)
         except Exception as e:
             logger.error(f"Python code execution failed: {e}")
@@ -1256,23 +1288,23 @@ class PythonCodeNode(Node):
             config["process_method"] = self.process_method
 
         return config
-    
+
     @staticmethod
     def list_allowed_modules() -> list[str]:
         """List all allowed modules for import in PythonCodeNode.
-        
+
         Returns:
             Sorted list of allowed module names
         """
         return sorted(ALLOWED_MODULES)
-    
+
     @staticmethod
     def check_module_availability(module_name: str) -> dict[str, Any]:
         """Check if a module is allowed and available for import.
-        
+
         Args:
             module_name: Name of the module to check
-            
+
         Returns:
             Dictionary with status information
         """
@@ -1282,28 +1314,40 @@ class PythonCodeNode(Node):
             "installed": False,
             "importable": False,
             "error": None,
-            "suggestions": []
+            "suggestions": [],
         }
-        
+
         if not result["allowed"]:
-            result["suggestions"].append(f"Module '{module_name}' is not in the allowed list.")
-            result["suggestions"].append(f"Allowed modules: {', '.join(sorted(ALLOWED_MODULES))}")
-            
+            result["suggestions"].append(
+                f"Module '{module_name}' is not in the allowed list."
+            )
+            result["suggestions"].append(
+                f"Allowed modules: {', '.join(sorted(ALLOWED_MODULES))}"
+            )
+
             # Add specific suggestions for common modules
-            if module_name == 'requests':
-                result["suggestions"].append("Use HTTPRequestNode for HTTP requests instead.")
-            elif module_name in ['sqlite3', 'psycopg2', 'pymongo', 'mysql']:
-                result["suggestions"].append("Use SQLDatabaseNode for database operations.")
-            elif module_name == 'boto3':
-                result["suggestions"].append("Use cloud-specific nodes or create a custom node.")
-            elif module_name == 'subprocess':
-                result["suggestions"].append("For security reasons, subprocess is not allowed. Use os or pathlib for file operations.")
+            if module_name == "requests":
+                result["suggestions"].append(
+                    "Use HTTPRequestNode for HTTP requests instead."
+                )
+            elif module_name in ["sqlite3", "psycopg2", "pymongo", "mysql"]:
+                result["suggestions"].append(
+                    "Use SQLDatabaseNode for database operations."
+                )
+            elif module_name == "boto3":
+                result["suggestions"].append(
+                    "Use cloud-specific nodes or create a custom node."
+                )
+            elif module_name == "subprocess":
+                result["suggestions"].append(
+                    "For security reasons, subprocess is not allowed. Use os or pathlib for file operations."
+                )
         else:
             # Check if module is installed
             try:
                 spec = importlib.util.find_spec(module_name)
                 result["installed"] = spec is not None
-                
+
                 if result["installed"]:
                     # Try to import it
                     try:
@@ -1311,21 +1355,25 @@ class PythonCodeNode(Node):
                         result["importable"] = True
                     except Exception as e:
                         result["error"] = str(e)
-                        result["suggestions"].append(f"Module is installed but cannot be imported: {e}")
+                        result["suggestions"].append(
+                            f"Module is installed but cannot be imported: {e}"
+                        )
                 else:
-                    result["suggestions"].append(f"Module '{module_name}' needs to be installed: pip install {module_name}")
+                    result["suggestions"].append(
+                        f"Module '{module_name}' needs to be installed: pip install {module_name}"
+                    )
             except Exception as e:
                 result["error"] = str(e)
                 result["suggestions"].append(f"Error checking module: {e}")
-        
+
         return result
-    
+
     def validate_code(self, code: str) -> dict[str, Any]:
         """Validate Python code and provide detailed feedback.
-        
+
         Args:
             code: Python code to validate
-            
+
         Returns:
             Dictionary with validation results
         """
@@ -1335,48 +1383,55 @@ class PythonCodeNode(Node):
             "safety_violations": [],
             "imports": [],
             "suggestions": [],
-            "warnings": []
+            "warnings": [],
         }
-        
+
         # Check syntax
         try:
             ast.parse(code)
         except SyntaxError as e:
             result["valid"] = False
-            result["syntax_errors"].append({
-                "line": e.lineno,
-                "column": e.offset,
-                "message": e.msg,
-                "text": e.text
-            })
-            result["suggestions"].append(f"Fix syntax error at line {e.lineno}: {e.msg}")
+            result["syntax_errors"].append(
+                {"line": e.lineno, "column": e.offset, "message": e.msg, "text": e.text}
+            )
+            result["suggestions"].append(
+                f"Fix syntax error at line {e.lineno}: {e.msg}"
+            )
             return result
-        
+
         # Check safety
         try:
             is_safe, violations, imports_found = self.executor.check_code_safety(code)
             result["imports"] = imports_found
-            
+
             if violations:
                 result["valid"] = False
                 result["safety_violations"] = violations
-                
+
                 # Add suggestions from violations
                 for violation in violations:
-                    if violation['type'] in ['import', 'import_from']:
-                        module_info = self.check_module_availability(violation['module'])
+                    if violation["type"] in ["import", "import_from"]:
+                        module_info = self.check_module_availability(
+                            violation["module"]
+                        )
                         result["suggestions"].extend(module_info["suggestions"])
-                
+
         except Exception as e:
             result["warnings"].append(f"Could not complete safety check: {e}")
-        
+
         # Check for common issues
         if "print(" in code and "result" not in code:
-            result["warnings"].append("Code uses print() but doesn't set 'result'. Output might not be captured.")
-            result["suggestions"].append("Set 'result' variable to return values from the node.")
-        
+            result["warnings"].append(
+                "Code uses print() but doesn't set 'result'. Output might not be captured."
+            )
+            result["suggestions"].append(
+                "Set 'result' variable to return values from the node."
+            )
+
         if "input(" in code:
             result["warnings"].append("Code uses input() which will block execution.")
-            result["suggestions"].append("Use node parameters instead of input() for user input.")
-        
+            result["suggestions"].append(
+                "Use node parameters instead of input() for user input."
+            )
+
         return result

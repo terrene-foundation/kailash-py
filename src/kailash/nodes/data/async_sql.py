@@ -34,8 +34,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, AsyncIterator, Optional, Union
 
-from kailash.nodes.base import NodeParameter, register_node
-from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
@@ -426,7 +425,7 @@ class SQLiteAdapter(DatabaseAdapter):
 
 
 @register_node()
-class AsyncSQLDatabaseNode(AsyncNode):
+class AsyncSQLDatabaseNode(Node):
     """Asynchronous SQL database node for high-concurrency database operations.
 
     This node provides non-blocking database operations with connection pooling,
@@ -551,6 +550,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 required=False,
                 default=60.0,
                 description="Query timeout in seconds",
+            ),
+            NodeParameter(
+                name="user_context",
+                type=Any,
+                required=False,
+                description="User context for access control",
             ),
         ]
 
@@ -712,7 +717,25 @@ class AsyncSQLDatabaseNode(AsyncNode):
         """Synchronous run method - delegates to async_run."""
         import asyncio
 
-        return asyncio.run(self.async_run(**inputs))
+        import nest_asyncio
+
+        try:
+            # Check if we're already in an event loop
+            loop = asyncio.get_running_loop()
+
+            # Apply nest_asyncio to allow nested event loops
+            nest_asyncio.apply()
+
+            # Now we can safely run even in an existing event loop
+            return asyncio.run(self.async_run(**inputs))
+
+        except RuntimeError:
+            # No event loop running, we can use asyncio.run() directly
+            return asyncio.run(self.async_run(**inputs))
+
+    async def process(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        """Async process method for middleware compatibility."""
+        return await self.async_run(**inputs)
 
     async def cleanup(self):
         """Clean up database connections."""

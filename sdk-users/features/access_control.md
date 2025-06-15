@@ -91,7 +91,7 @@ from kailash.access_control import AccessControlManager
 # RBAC - Role-based access control
 rbac_manager = AccessControlManager(strategy="rbac")
 
-# ABAC - Attribute-based access control  
+# ABAC - Attribute-based access control
 abac_manager = AccessControlManager(strategy="abac")
 
 # Hybrid - Combine RBAC and ABAC
@@ -113,7 +113,7 @@ manager = AccessControlManager(strategy="abac")
 # Simple attribute condition
 dept_condition = create_attribute_condition(
     path="user.attributes.department",
-    operator="hierarchical_match", 
+    operator="hierarchical_match",
     value="finance"
 )
 

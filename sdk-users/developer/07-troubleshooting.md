@@ -14,7 +14,7 @@ node = CSVReaderNode(name="reader")  # Missing file_path - OK!
 
 # ✅ Configure before execution
 node.configure(file_path="data.csv")
-result = node.run()
+result = node.execute()
 
 # ✅ Or pass at runtime
 runtime.execute(workflow, parameters={"reader": {"file_path": "data.csv"}})
@@ -85,6 +85,121 @@ node = PythonCodeNode(name="calc", code="result = value * 2")
 ```
 
 **Migration Tool**: Use `scripts/refactor-pythoncode-strings.py` to convert existing code.
+
+## Issue: Node Initialization Order (Most Common!)
+
+### Error: "'MyNode' object has no attribute 'my_param'"
+```
+AttributeError: 'MyNode' object has no attribute 'my_param'
+```
+
+### Cause: Attributes Set After super().__init__()
+```python
+# ❌ WRONG - Attributes set too late
+class MyNode(Node):
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name=name)  # Kailash validates here!
+        self.my_param = kwargs.get("my_param", "default")  # Too late!
+
+# ✅ CORRECT - Set attributes first
+class MyNode(Node):
+    def __init__(self, name: str, **kwargs):
+        # Set ALL attributes BEFORE super().__init__()
+        self.my_param = kwargs.get("my_param", "default")
+        self.threshold = kwargs.get("threshold", 0.75)
+
+        # NOW call parent init
+        super().__init__(name=name)
+```
+
+**Why**: Kailash validates node parameters during `__init__()`. Attributes must exist before validation.
+
+## Issue: get_parameters() Return Type
+
+### Error: "'int' object has no attribute 'required'"
+```
+AttributeError: 'int' object has no attribute 'required'
+```
+
+### Cause: Returning Raw Values Instead of NodeParameter
+```python
+# ❌ WRONG - Returns raw values
+def get_parameters(self) -> Dict[str, Any]:
+    return {
+        "max_tokens": self.max_tokens,  # int object
+        "threshold": 0.75               # float object
+    }
+
+# ✅ CORRECT - Return NodeParameter objects
+def get_parameters(self) -> Dict[str, NodeParameter]:
+    return {
+        "max_tokens": NodeParameter(
+            name="max_tokens",
+            type=int,
+            required=False,
+            default=self.max_tokens,
+            description="Maximum tokens"
+        ),
+        "threshold": NodeParameter(
+            name="threshold",
+            type=float,
+            required=False,
+            default=0.75,
+            description="Threshold value"
+        )
+    }
+```
+
+## Issue: LLMAgentNode Interface
+
+### Error: "'LLMAgentNode' object has no attribute 'process'"
+```python
+# ❌ WRONG - Using process() method
+result = llm_node.process(messages=[...])
+
+# ✅ CORRECT - Use run() with provider
+result = llm_node.execute(
+    provider="ollama",  # Required!
+    model="llama3.2:3b",
+    messages=[{"role": "user", "content": json.dumps(data)}]
+)
+```
+
+### Error: "KeyError: 'provider'"
+```python
+# ❌ WRONG - Missing provider parameter
+result = llm_node.execute(messages=[...])
+
+# ✅ CORRECT - Always include provider
+result = llm_node.execute(
+    provider="ollama",
+    model="llama3.2:3b",
+    messages=[...]
+)
+```
+
+## Issue: Ollama Embedding Format
+
+### Error: "TypeError: unsupported operand type(s) for *: 'dict' and 'dict'"
+```python
+# ❌ WRONG - Assuming embeddings are lists
+embeddings = result.get("embeddings", [])
+similarity = cosine_similarity(embeddings[0], embeddings[1])  # Fails!
+
+# ✅ CORRECT - Extract vectors from dictionaries
+embedding_dicts = result.get("embeddings", [])
+embeddings = []
+for embedding_dict in embedding_dicts:
+    if isinstance(embedding_dict, dict) and "embedding" in embedding_dict:
+        vector = embedding_dict["embedding"]  # Extract actual vector
+        embeddings.append(vector)
+    elif isinstance(embedding_dict, list):
+        embeddings.append(embedding_dict)  # Already a vector
+```
+
+**Provider Response Formats**:
+- **Ollama**: `{"embeddings": [{"embedding": [0.1, 0.2, ...]}, ...]}`
+- **OpenAI**: `{"embeddings": [[0.1, 0.2, ...], ...]}`
 
 ## Issue: "Can't instantiate abstract class"
 
@@ -243,7 +358,7 @@ params = node.get_parameters()
 print("Parameters:", params)
 
 # Test with valid inputs
-result = node.run(param1="value1", param2=123)
+result = node.execute(param1="value1", param2=123)
 print("Result:", result)
 ```
 
@@ -459,6 +574,11 @@ amount = safe_float(transaction.get('amount'))
 
 ## Common Mistakes Checklist
 
+- [ ] **Setting attributes AFTER super().__init__() - #1 MOST COMMON ERROR**
+- [ ] **Returning raw values from get_parameters() instead of NodeParameter objects**
+- [ ] **Using .process() on LLMAgentNode instead of .run()**
+- [ ] **Missing provider parameter in LLM/embedding calls**
+- [ ] **Not extracting vectors from Ollama embedding dictionaries**
 - [ ] Using `List[T]`, `Dict[K,V]` instead of `list`, `dict`
 - [ ] Missing `run()` method implementation
 - [ ] Wrong return type from `get_parameters()`

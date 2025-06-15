@@ -12,15 +12,21 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK v0.3.2 documentation! This release introduces the
-**Admin Tool Framework** with enterprise-grade infrastructure and comprehensive QA testing.
+Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces the
+**Enterprise Middleware Architecture** with real-time communication and production-ready features.
 
-**Recent Updates (v0.3.2):**
+**Latest Updates (v0.4.0):**
+- 🌉 **Enterprise Middleware Architecture** - Complete refactor from monolithic to composable middleware
+- 🔄 **Real-time Communication** - WebSocket/SSE with comprehensive event streaming
+- 🤖 **AI Chat Integration** - Built-in chat middleware with natural language workflow generation
+- ✅ **Test Excellence** - 799 tests passing (100% pass rate), CI optimization
+- 🚀 **Production Ready** - Health checks, metrics, graceful shutdown, connection pooling
+
+**Previous Updates (v0.3.2):**
 - 🛡️ **Admin Tool Framework** - Complete enterprise admin infrastructure with React UI, RBAC, audit logging
 - 🔒 **Async Database & ABAC** - High-performance async database operations with Attribute-Based Access Control
 - 🧪 **LLM-based QA Testing** - Comprehensive QA framework with AI agents for frontend and backend testing
-- 📊 **85+ Production Nodes** - Expanded node library including admin, security, and async database nodes
-- 🏗️ **Professional Services Ready** - Infrastructure for Session 067 legal, consulting, accounting workflows
+- 📊 **100+ Production Nodes** - Expanded node library including middleware, admin, security, and async database nodes
 
 **Previous Updates (v0.3.1):**
 - 💼 **Complete Finance Workflow Library** - Production-ready credit risk, portfolio optimization, trading signals, fraud detection
@@ -56,6 +62,7 @@ Welcome to the Kailash Python SDK v0.3.2 documentation! This release introduces 
 
    api/nodes
    api/workflow
+   api/middleware
    api/workflow_api
    api/runtime
    api/access_control

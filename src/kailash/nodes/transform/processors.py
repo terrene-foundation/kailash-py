@@ -352,14 +352,12 @@ class DataTransformer(Node):
         return validated
 
     def run(self, **kwargs) -> dict[str, Any]:
-        # Extract the transformation functions
-        transformations = kwargs.get("transformations", [])
+        # Extract the transformation functions from config first, then kwargs
+        transformations = self.config.get("transformations", []) or kwargs.get(
+            "transformations", []
+        )
         if not transformations:
             return {"result": kwargs.get("data", [])}
-
-        # Debug: Check what kwargs we received
-        print(f"DATATRANSFORMER RUN DEBUG: kwargs keys = {list(kwargs.keys())}")
-        print(f"DATATRANSFORMER RUN DEBUG: kwargs = {kwargs}")
 
         # Get all input data
         input_data = {}
@@ -368,7 +366,13 @@ class DataTransformer(Node):
                 input_data[key] = value
 
         # Execute the transformations
-        result = input_data.get("data", [])
+        # Initialize result - default to empty dict if no data key and we have other inputs
+        if "data" in input_data:
+            result = input_data["data"]
+        elif input_data:  # If we have other inputs but no 'data' key
+            result = {}  # Default to empty dict instead of list
+        else:
+            result = []  # Only use empty list if no inputs at all
 
         for transform_str in transformations:
             try:
@@ -386,6 +390,10 @@ class DataTransformer(Node):
                     "float": float,
                     "bool": bool,
                     "sorted": sorted,
+                    "print": print,  # Allow print for debugging
+                    "isinstance": isinstance,
+                    "type": type,
+                    "__builtins__": {"__import__": __import__},  # Allow imports
                 }
 
                 # For multi-line code blocks
@@ -394,13 +402,8 @@ class DataTransformer(Node):
                     local_vars = input_data.copy()
                     local_vars["result"] = result
 
-                    # Debug: Print available variables
-                    print(
-                        f"DataTransformer DEBUG - Available variables: {list(local_vars.keys())}"
-                    )
-                    print(
-                        f"DataTransformer DEBUG - Input data keys: {list(input_data.keys())}"
-                    )
+                    # Add a locals function that returns the current local_vars
+                    safe_globals["locals"] = lambda: local_vars
 
                     # Execute the code block
                     exec(transform_str, safe_globals, local_vars)  # noqa: S102
@@ -473,6 +476,9 @@ class DataTransformer(Node):
             except Exception as e:
                 tb = traceback.format_exc()
                 self.logger.error(f"Error executing transformation: {e}")
+                self.logger.error(f"Transformation: {transform_str}")
+                self.logger.error(f"Input data: {input_data}")
+                self.logger.error(f"Result before error: {result}")
                 raise RuntimeError(
                     f"Error executing transformation '{transform_str}': {str(e)}\n{tb}"
                 )
@@ -521,6 +527,470 @@ class Sort(Node):
             sorted_data = sorted(data, reverse=reverse)
 
         return {"sorted_data": sorted_data}
+
+
+@register_node()
+class ContextualCompressorNode(Node):
+    """
+    Contextual compression node that filters and compresses retrieved content
+    to maximize relevant information density for optimal context utilization.
+
+    This node is essential for managing LLM context windows by intelligently
+    compressing retrieved documents while preserving query-relevant information.
+    It uses multiple compression strategies and relevance scoring to ensure
+    optimal information density.
+
+    Design Philosophy:
+        The ContextualCompressorNode embodies "information density optimization."
+        Rather than naive truncation, it uses semantic understanding to preserve
+        the most relevant information for the given query while respecting token
+        budget constraints.
+
+    Upstream Dependencies:
+        - Retrieval nodes providing candidate documents
+        - Embedding nodes for semantic analysis
+        - LLM nodes for relevance scoring
+        - Query transformation nodes
+
+    Downstream Consumers:
+        - LLM Agent nodes consuming compressed context
+        - Response generation nodes
+        - Context-aware processing nodes
+        - Token-budgeted operations
+
+    Configuration:
+        - max_tokens: Maximum token budget for compressed output
+        - compression_ratio: Target compression ratio (0.0-1.0)
+        - relevance_threshold: Minimum relevance score for inclusion
+        - compression_strategy: Method for content compression
+
+    Examples:
+        >>> compressor = ContextualCompressorNode(
+        ...     max_tokens=2000,
+        ...     compression_ratio=0.6,
+        ...     relevance_threshold=0.7
+        ... )
+        >>> result = compressor.run(
+        ...     query="machine learning algorithms",
+        ...     retrieved_docs=[{"content": "...", "metadata": {}}],
+        ...     compression_target=1500
+        ... )
+        >>> compressed_context = result["compressed_context"]
+    """
+
+    def __init__(self, name: str = "contextual_compressor", **kwargs):
+        # Set attributes before calling super().__init__() as Kailash validates during init
+        self.max_tokens = kwargs.get("max_tokens", 4000)
+        self.compression_ratio = kwargs.get("compression_ratio", 0.6)
+        self.relevance_threshold = kwargs.get("relevance_threshold", 0.7)
+        self.compression_strategy = kwargs.get(
+            "compression_strategy", "extractive_summarization"
+        )
+
+        super().__init__(name=name)
+
+    def get_parameters(self) -> dict[str, NodeParameter]:
+        """Get node parameters for Kailash framework."""
+        return {
+            "query": NodeParameter(
+                name="query",
+                type=str,
+                required=True,
+                description="Query for relevance-based compression",
+            ),
+            "retrieved_docs": NodeParameter(
+                name="retrieved_docs",
+                type=list,
+                required=True,
+                description="List of retrieved documents to compress",
+            ),
+            "compression_target": NodeParameter(
+                name="compression_target",
+                type=int,
+                required=False,
+                default=self.max_tokens,
+                description="Target token count for compressed content",
+            ),
+            "max_tokens": NodeParameter(
+                name="max_tokens",
+                type=int,
+                required=False,
+                default=self.max_tokens,
+                description="Maximum tokens for contextual compression",
+            ),
+            "compression_ratio": NodeParameter(
+                name="compression_ratio",
+                type=float,
+                required=False,
+                default=self.compression_ratio,
+                description="Target compression ratio (0.0-1.0)",
+            ),
+            "relevance_threshold": NodeParameter(
+                name="relevance_threshold",
+                type=float,
+                required=False,
+                default=self.relevance_threshold,
+                description="Relevance threshold for passage selection",
+            ),
+            "compression_strategy": NodeParameter(
+                name="compression_strategy",
+                type=str,
+                required=False,
+                default=self.compression_strategy,
+                description="Compression strategy (extractive_summarization, abstractive_synthesis, hierarchical_organization)",
+            ),
+        }
+
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Run contextual compression on retrieved documents."""
+        query = kwargs.get("query", "")
+        retrieved_docs = kwargs.get("retrieved_docs", [])
+        compression_target = kwargs.get("compression_target", self.max_tokens)
+
+        if not query:
+            return {
+                "error": "Query is required for contextual compression",
+                "compressed_context": "",
+                "compression_metadata": {},
+            }
+
+        if not retrieved_docs:
+            return {
+                "compressed_context": "",
+                "compression_metadata": {
+                    "original_document_count": 0,
+                    "selected_passage_count": 0,
+                    "compression_ratio": 0.0,
+                },
+                "num_input_docs": 0,
+                "compression_success": False,
+            }
+
+        try:
+            # Stage 1: Score passages for relevance
+            scored_passages = self._score_passage_relevance(query, retrieved_docs)
+
+            # Stage 2: Select optimal passages within budget
+            selected_passages = self._select_optimal_passages(
+                scored_passages, compression_target
+            )
+
+            # Stage 3: Compress selected content
+            compressed_context = self._compress_selected_content(
+                query, selected_passages
+            )
+
+            # Stage 4: Generate metadata
+            compression_metadata = self._generate_compression_metadata(
+                retrieved_docs, selected_passages, compressed_context
+            )
+
+            return {
+                "compressed_context": compressed_context,
+                "compression_metadata": compression_metadata,
+                "selected_passages": selected_passages,
+                "num_input_docs": len(retrieved_docs),
+                "compression_success": len(compressed_context) > 0,
+            }
+
+        except Exception as e:
+            return {
+                "error": f"Compression failed: {str(e)}",
+                "compressed_context": "",
+                "compression_metadata": {},
+                "num_input_docs": len(retrieved_docs),
+                "compression_success": False,
+            }
+
+    def _score_passage_relevance(self, query: str, documents: list) -> list:
+        """Score each passage for relevance to the query using heuristic methods."""
+        scored_passages = []
+        query_words = set(query.lower().split())
+
+        for i, doc in enumerate(documents):
+            content = doc.get("content", "") if isinstance(doc, dict) else str(doc)
+
+            if not content.strip():
+                continue
+
+            # Calculate relevance score using multiple factors
+            content_words = set(content.lower().split())
+
+            # 1. Keyword overlap score
+            keyword_overlap = (
+                len(query_words & content_words) / len(query_words)
+                if query_words
+                else 0
+            )
+
+            # 2. Content density score (information per word)
+            word_count = len(content_words)
+            density_score = min(1.0, word_count / 100)  # Normalize to reasonable length
+
+            # 3. Position bonus (earlier documents often more relevant)
+            position_bonus = max(0.1, 1.0 - (i * 0.1))
+
+            # 4. Original similarity score if available
+            original_score = (
+                doc.get("similarity_score", 0.5) if isinstance(doc, dict) else 0.5
+            )
+
+            # Combine scores
+            relevance_score = (
+                0.4 * keyword_overlap
+                + 0.2 * density_score
+                + 0.1 * position_bonus
+                + 0.3 * original_score
+            )
+
+            # Apply relevance threshold
+            if relevance_score >= self.relevance_threshold:
+                scored_passages.append(
+                    {
+                        "document": doc,
+                        "content": content,
+                        "relevance_score": relevance_score,
+                        "keyword_overlap": keyword_overlap,
+                        "original_index": i,
+                        "token_count": len(content.split())
+                        * 1.3,  # Rough token estimate
+                    }
+                )
+
+        # Sort by relevance score
+        scored_passages.sort(key=lambda x: x["relevance_score"], reverse=True)
+        return scored_passages
+
+    def _select_optimal_passages(
+        self, scored_passages: list, target_tokens: int
+    ) -> list:
+        """Select optimal passages within token budget."""
+        if not scored_passages:
+            return []
+
+        selected = []
+        total_tokens = 0
+        diversity_threshold = 0.8
+
+        for passage in scored_passages:
+            passage_tokens = passage["token_count"]
+
+            # Check token budget
+            if total_tokens + passage_tokens > target_tokens:
+                # Try to fit partial content if it's high value
+                if passage["relevance_score"] > 0.9 and len(selected) < 3:
+                    remaining_tokens = target_tokens - total_tokens
+                    if remaining_tokens > 50:  # Minimum useful content
+                        # Truncate passage to fit
+                        truncated_content = self._truncate_passage(
+                            passage["content"], remaining_tokens
+                        )
+                        passage_copy = passage.copy()
+                        passage_copy["content"] = truncated_content
+                        passage_copy["token_count"] = remaining_tokens
+                        passage_copy["is_truncated"] = True
+                        selected.append(passage_copy)
+                        total_tokens = target_tokens
+                break
+
+            # Check diversity (avoid near-duplicate content)
+            is_diverse = True
+            for selected_passage in selected:
+                similarity = self._calculate_content_similarity(
+                    passage["content"], selected_passage["content"]
+                )
+                if similarity > diversity_threshold:
+                    is_diverse = False
+                    break
+
+            if is_diverse:
+                selected.append(passage)
+                total_tokens += passage_tokens
+
+        return selected
+
+    def _compress_selected_content(self, query: str, selected_passages: list) -> str:
+        """Compress selected passages into coherent context."""
+        if not selected_passages:
+            return ""
+
+        # For now, use extractive summarization (concatenate most relevant parts)
+        if self.compression_strategy == "extractive_summarization":
+            return self._extractive_compression(query, selected_passages)
+        elif self.compression_strategy == "abstractive_synthesis":
+            return self._abstractive_compression(query, selected_passages)
+        elif self.compression_strategy == "hierarchical_organization":
+            return self._hierarchical_compression(query, selected_passages)
+        else:
+            # Default to extractive
+            return self._extractive_compression(query, selected_passages)
+
+    def _extractive_compression(self, query: str, passages: list) -> str:
+        """Extract and concatenate the most relevant sentences."""
+        compressed_parts = []
+        query_words = set(query.lower().split())
+
+        for passage in passages:
+            content = passage["content"]
+
+            # Split into sentences
+            sentences = self._split_into_sentences(content)
+
+            # Score each sentence for relevance
+            sentence_scores = []
+            for sentence in sentences:
+                sentence_words = set(sentence.lower().split())
+                overlap = (
+                    len(query_words & sentence_words) / len(query_words)
+                    if query_words
+                    else 0
+                )
+                sentence_scores.append((sentence, overlap))
+
+            # Sort by relevance and take top sentences
+            sentence_scores.sort(key=lambda x: x[1], reverse=True)
+            top_sentences = [
+                s[0] for s in sentence_scores[:3]
+            ]  # Top 3 sentences per passage
+
+            if top_sentences:
+                compressed_parts.append(" ".join(top_sentences))
+
+        return "\n\n".join(compressed_parts)
+
+    def _abstractive_compression(self, query: str, passages: list) -> str:
+        """Create abstractive summary (simplified version)."""
+        # In a real implementation, this would use an LLM
+        # For now, create a structured summary
+        key_points = []
+
+        for passage in passages:
+            content = passage["content"]
+            # Extract key phrases (simplified)
+            sentences = self._split_into_sentences(content)
+            if sentences:
+                # Take first and last sentence as key points
+                key_points.append(sentences[0])
+                if len(sentences) > 1:
+                    key_points.append(sentences[-1])
+
+        return f"Summary for query '{query}':\n" + "\n".join(
+            f"• {point}" for point in key_points[:10]
+        )
+
+    def _hierarchical_compression(self, query: str, passages: list) -> str:
+        """Organize information hierarchically."""
+        organized_content = {
+            "primary_information": [],
+            "supporting_details": [],
+            "additional_context": [],
+        }
+
+        for i, passage in enumerate(passages):
+            content = passage["content"]
+            relevance = passage["relevance_score"]
+
+            if relevance > 0.8:
+                organized_content["primary_information"].append(content)
+            elif relevance > 0.6:
+                organized_content["supporting_details"].append(content)
+            else:
+                organized_content["additional_context"].append(content)
+
+        result_parts = []
+
+        if organized_content["primary_information"]:
+            result_parts.append("PRIMARY INFORMATION:")
+            result_parts.extend(organized_content["primary_information"])
+
+        if organized_content["supporting_details"]:
+            result_parts.append("\nSUPPORTING DETAILS:")
+            result_parts.extend(organized_content["supporting_details"])
+
+        if organized_content["additional_context"]:
+            result_parts.append("\nADDITIONAL CONTEXT:")
+            result_parts.extend(
+                organized_content["additional_context"][:2]
+            )  # Limit additional context
+
+        return "\n".join(result_parts)
+
+    def _split_into_sentences(self, text: str) -> list:
+        """Split text into sentences (simplified)."""
+        import re
+
+        sentences = re.split(r"[.!?]+", text)
+        return [s.strip() for s in sentences if s.strip()]
+
+    def _calculate_content_similarity(self, content1: str, content2: str) -> float:
+        """Calculate Jaccard similarity between two content pieces."""
+        words1 = set(content1.lower().split())
+        words2 = set(content2.lower().split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = len(words1 & words2)
+        union = len(words1 | words2)
+
+        return intersection / union if union > 0 else 0.0
+
+    def _truncate_passage(self, content: str, max_tokens: int) -> str:
+        """Intelligently truncate passage to fit token budget."""
+        words = content.split()
+        target_words = int(max_tokens / 1.3)  # Rough token-to-word ratio
+
+        if len(words) <= target_words:
+            return content
+
+        # Try to end at sentence boundary
+        truncated_words = words[:target_words]
+        truncated_text = " ".join(truncated_words)
+
+        # Find last sentence boundary
+        last_sentence_end = max(
+            truncated_text.rfind("."),
+            truncated_text.rfind("!"),
+            truncated_text.rfind("?"),
+        )
+
+        if (
+            last_sentence_end > len(truncated_text) * 0.7
+        ):  # If we can preserve most content
+            return truncated_text[: last_sentence_end + 1]
+        else:
+            return truncated_text + "..."
+
+    def _generate_compression_metadata(
+        self, original_docs: list, selected_passages: list, compressed_context: str
+    ) -> dict:
+        """Generate metadata about the compression process."""
+        original_length = sum(
+            len(doc.get("content", "") if isinstance(doc, dict) else str(doc))
+            for doc in original_docs
+        )
+        compressed_length = len(compressed_context)
+
+        return {
+            "original_document_count": len(original_docs),
+            "selected_passage_count": len(selected_passages),
+            "original_char_count": original_length,
+            "compressed_char_count": compressed_length,
+            "compression_ratio": (
+                compressed_length / original_length if original_length > 0 else 0
+            ),
+            "avg_relevance_score": (
+                sum(p["relevance_score"] for p in selected_passages)
+                / len(selected_passages)
+                if selected_passages
+                else 0
+            ),
+            "compression_strategy": self.compression_strategy,
+            "token_budget": self.max_tokens,
+            "passages_truncated": sum(
+                1 for p in selected_passages if p.get("is_truncated", False)
+            ),
+        }
 
 
 # Backward compatibility aliases

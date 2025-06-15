@@ -109,8 +109,20 @@ class AgentPoolManagerNode(Node):
         >>> assert result["success"] == True
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.agent_registry = {}
         self.availability_tracker = {}
         self.performance_metrics = defaultdict(
@@ -124,6 +136,9 @@ class AgentPoolManagerNode(Node):
         )
         self.capability_index = defaultdict(set)
         self.team_history = deque(maxlen=100)
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -484,8 +499,20 @@ class ProblemAnalyzerNode(Node):
         >>> assert "decomposition_strategy" in params
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.capability_patterns = {
             "data": ["data_collection", "data_cleaning", "data_validation"],
             "analysis": [
@@ -498,6 +525,9 @@ class ProblemAnalyzerNode(Node):
             "visualization": ["data_visualization", "reporting", "presentation"],
             "domain": ["domain_expertise", "validation", "interpretation"],
         }
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -784,10 +814,25 @@ class TeamFormationNode(Node):
         ... )
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.formation_history = deque(maxlen=50)
         self.team_performance_cache = {}
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -1225,11 +1270,26 @@ class SelfOrganizingAgentNode(A2AAgentNode):
         >>> assert "capabilities" in params
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.team_memberships = {}
         self.collaboration_history = deque(maxlen=50)
         self.skill_adaptations = defaultdict(float)
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         params = super().get_parameters()
@@ -1438,9 +1498,24 @@ class SolutionEvaluatorNode(Node):
         ... )
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.evaluation_history = deque(maxlen=100)
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {

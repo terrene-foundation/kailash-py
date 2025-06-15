@@ -1,11 +1,15 @@
 """
-A2A Communication Demo - Showcasing Core Features
+A2A Communication Demo - SDK Feature Validation
 
-This demo illustrates:
-1. Shared memory pool for inter-agent communication
-2. Selective attention mechanisms
-3. Agent coordination and task delegation
-4. Memory relevance scoring
+This example validates A2A communication nodes without workflows.
+It demonstrates direct node usage for testing purposes only.
+
+Purpose: SDK Feature Validation (Direct Node Testing)
+SDK Features: A2ACoordinatorNode, SharedMemoryPoolNode
+Testing Focus: Node-level functionality without workflow orchestration
+
+Note: This is for SDK development testing only. Production code should
+use workflows and runtime for all node execution.
 """
 
 from kailash.nodes.ai import A2ACoordinatorNode, SharedMemoryPoolNode
@@ -20,7 +24,7 @@ def demo_shared_memory():
 
     # Agent 1 writes a discovery
     print("1. Agent writes discovery to shared memory:")
-    result = memory.run(
+    result = memory.execute(
         action="write",
         agent_id="researcher_001",
         content="Found 30% increase in customer satisfaction after UI redesign",
@@ -33,7 +37,7 @@ def demo_shared_memory():
 
     # Agent 2 writes another finding
     print("\n2. Another agent writes finding:")
-    memory.run(
+    memory.execute(
         action="write",
         agent_id="analyst_001",
         content="Minor bug in payment processing",
@@ -44,7 +48,7 @@ def demo_shared_memory():
 
     # Agent 3 reads with attention filter
     print("\n3. Third agent reads with attention filter (high importance only):")
-    filtered_result = memory.run(
+    filtered_result = memory.execute(
         action="read",
         agent_id="manager_001",
         attention_filter={
@@ -60,7 +64,7 @@ def demo_shared_memory():
 
     # Semantic query
     print("\n4. Semantic query across all memories:")
-    query_result = memory.run(
+    query_result = memory.execute(
         action="query", agent_id="searcher_001", query="customer satisfaction"
     )
 
@@ -97,7 +101,7 @@ def demo_agent_coordination():
     ]
 
     for agent in agents:
-        result = coordinator.run(action="register", agent_info=agent)
+        result = coordinator.execute(action="register", agent_info=agent)
         print(f"   - {agent['id']}: {', '.join(agent['skills'])}")
 
     # Delegate tasks
@@ -115,14 +119,14 @@ def demo_agent_coordination():
     ]
 
     for task in tasks:
-        result = coordinator.run(
+        result = coordinator.execute(
             action="delegate", task=task, coordination_strategy="best_match"
         )
         print(f"   - '{task['name']}' → {result['delegated_to']}")
 
     # Broadcast message
     print("\n3. Broadcasting message to relevant agents:")
-    broadcast_result = coordinator.run(
+    broadcast_result = coordinator.execute(
         action="broadcast",
         message={
             "content": "New dataset available for analysis",
@@ -133,7 +137,7 @@ def demo_agent_coordination():
 
     # Consensus building
     print("\n4. Building consensus on approach:")
-    coordinator.run(
+    coordinator.execute(
         action="consensus",
         consensus_proposal={
             "session_id": "approach_decision",
@@ -143,7 +147,7 @@ def demo_agent_coordination():
 
     # Simulate votes
     for agent_id in ["data_analyst_001", "ml_engineer_001"]:
-        coordinator.run(
+        coordinator.execute(
             action="consensus",
             consensus_proposal={"session_id": "approach_decision"},
             agent_id=agent_id,
@@ -186,7 +190,7 @@ def demo_attention_mechanism():
     ]
 
     for content, tags, importance, segment in memories:
-        memory.run(
+        memory.execute(
             action="write",
             agent_id="system",
             content=content,
@@ -202,7 +206,7 @@ def demo_attention_mechanism():
 
     # Security-focused agent
     print("\n   Security Agent (high importance security issues only):")
-    security_memories = memory.run(
+    security_memories = memory.execute(
         action="read",
         agent_id="security_agent",
         attention_filter={
@@ -218,7 +222,7 @@ def demo_attention_mechanism():
 
     # Operations agent
     print("\n   Operations Agent (all operational items):")
-    ops_memories = memory.run(
+    ops_memories = memory.execute(
         action="read",
         agent_id="ops_agent",
         attention_filter={
@@ -234,7 +238,7 @@ def demo_attention_mechanism():
 
     # Executive agent
     print("\n   Executive Agent (only high-importance items):")
-    exec_memories = memory.run(
+    exec_memories = memory.execute(
         action="read",
         agent_id="exec_agent",
         attention_filter={
@@ -258,7 +262,7 @@ def demo_memory_insights():
     print("1. Research workflow generating insights:")
 
     # Phase 1: Initial observation
-    memory.run(
+    memory.execute(
         action="write",
         agent_id="observer_001",
         content="User engagement drops 40% after 3pm",
@@ -269,7 +273,7 @@ def demo_memory_insights():
     print("   Observer: Noted engagement pattern")
 
     # Phase 2: Analysis
-    memory.run(
+    memory.execute(
         action="write",
         agent_id="analyst_001",
         content="3pm drop correlates with school pickup times - parents leaving work early",
@@ -280,7 +284,7 @@ def demo_memory_insights():
     print("   Analyst: Identified probable cause")
 
     # Phase 3: Strategy
-    memory.run(
+    memory.execute(
         action="write",
         agent_id="strategist_001",
         content="Recommend scheduling important content before 3pm or after 6pm",
@@ -294,7 +298,7 @@ def demo_memory_insights():
     print("\n2. Agents querying related insights:")
 
     # Marketing agent looks for engagement insights
-    engagement_insights = memory.run(
+    engagement_insights = memory.execute(
         action="read",
         agent_id="marketing_001",
         attention_filter={

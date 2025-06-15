@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionContext:
     """Context for database execution pipeline."""
-    
+
     query: str
     parameters: Optional[Union[Dict[str, Any], List[Any]]] = None
     user_context: Optional[UserContext] = None
@@ -32,7 +32,7 @@ class ExecutionContext:
 @dataclass
 class ExecutionResult:
     """Result from database execution pipeline."""
-    
+
     data: Any
     row_count: int
     columns: List[str]
@@ -45,16 +45,14 @@ class PipelineStage(ABC):
 
     @abstractmethod
     async def process(
-        self, 
-        context: ExecutionContext, 
-        result: Optional[ExecutionResult] = None
+        self, context: ExecutionContext, result: Optional[ExecutionResult] = None
     ) -> Optional[ExecutionResult]:
         """Process this stage of the pipeline.
-        
+
         Args:
             context: Execution context
             result: Result from previous stage (None for first stage)
-            
+
         Returns:
             Result to pass to next stage, or None to stop pipeline
         """
@@ -71,7 +69,7 @@ class PermissionCheckStage(PipelineStage):
 
     def __init__(self, access_control_manager=None):
         """Initialize permission check stage.
-        
+
         Args:
             access_control_manager: Access control manager for permission checks
         """
@@ -79,14 +77,14 @@ class PermissionCheckStage(PipelineStage):
         self.logger = logging.getLogger(f"{__name__}.PermissionCheckStage")
 
     async def process(
-        self, 
-        context: ExecutionContext, 
-        result: Optional[ExecutionResult] = None
+        self, context: ExecutionContext, result: Optional[ExecutionResult] = None
     ) -> Optional[ExecutionResult]:
         """Check user permissions before query execution."""
         # Skip if no access control or no user context
         if not self.access_control_manager or not context.user_context:
-            self.logger.debug("Skipping permission check - no access control or user context")
+            self.logger.debug(
+                "Skipping permission check - no access control or user context"
+            )
             return result
 
         # Check execute permission
@@ -100,7 +98,9 @@ class PermissionCheckStage(PipelineStage):
         if not decision.allowed:
             raise NodeExecutionError(f"Access denied: {decision.reason}")
 
-        self.logger.debug(f"Permission granted for {context.node_name}: {decision.reason}")
+        self.logger.debug(
+            f"Permission granted for {context.node_name}: {decision.reason}"
+        )
         return result
 
     def get_stage_name(self) -> str:
@@ -113,7 +113,7 @@ class QueryValidationStage(PipelineStage):
 
     def __init__(self, validation_rules: Optional[Dict[str, Any]] = None):
         """Initialize query validation stage.
-        
+
         Args:
             validation_rules: Custom validation rules
         """
@@ -121,9 +121,7 @@ class QueryValidationStage(PipelineStage):
         self.logger = logging.getLogger(f"{__name__}.QueryValidationStage")
 
     async def process(
-        self, 
-        context: ExecutionContext, 
-        result: Optional[ExecutionResult] = None
+        self, context: ExecutionContext, result: Optional[ExecutionResult] = None
     ) -> Optional[ExecutionResult]:
         """Validate query for security and safety."""
         if not context.query:
@@ -131,7 +129,7 @@ class QueryValidationStage(PipelineStage):
 
         # Basic SQL injection checks
         self._validate_query_safety(context.query)
-        
+
         self.logger.debug(f"Query validation passed for: {context.query[:100]}...")
         return result
 
@@ -144,16 +142,28 @@ class QueryValidationStage(PipelineStage):
 
         # Check for dangerous operations
         dangerous_keywords = [
-            "DROP", "DELETE", "TRUNCATE", "ALTER", "CREATE",
-            "GRANT", "REVOKE", "EXEC", "EXECUTE", "SHUTDOWN",
-            "BACKUP", "RESTORE"
+            "DROP",
+            "DELETE",
+            "TRUNCATE",
+            "ALTER",
+            "CREATE",
+            "GRANT",
+            "REVOKE",
+            "EXEC",
+            "EXECUTE",
+            "SHUTDOWN",
+            "BACKUP",
+            "RESTORE",
         ]
 
         import re
+
         for keyword in dangerous_keywords:
             pattern = r"\b" + re.escape(keyword) + r"\b"
             if re.search(pattern, query_upper):
-                self.logger.warning(f"Query contains potentially dangerous keyword: {keyword}")
+                self.logger.warning(
+                    f"Query contains potentially dangerous keyword: {keyword}"
+                )
                 # In production, you might want to block these entirely
                 # raise NodeExecutionError(f"Query contains forbidden keyword: {keyword}")
 
@@ -167,7 +177,7 @@ class QueryExecutionStage(PipelineStage):
 
     def __init__(self, query_executor):
         """Initialize query execution stage.
-        
+
         Args:
             query_executor: Object that can execute queries (engine, connection, etc.)
         """
@@ -175,9 +185,7 @@ class QueryExecutionStage(PipelineStage):
         self.logger = logging.getLogger(f"{__name__}.QueryExecutionStage")
 
     async def process(
-        self, 
-        context: ExecutionContext, 
-        result: Optional[ExecutionResult] = None
+        self, context: ExecutionContext, result: Optional[ExecutionResult] = None
     ) -> Optional[ExecutionResult]:
         """Execute the SQL query."""
         start_time = time.time()
@@ -185,18 +193,15 @@ class QueryExecutionStage(PipelineStage):
         try:
             # This is where the actual query execution happens
             # The implementation depends on whether it's sync or async
-            if hasattr(self.query_executor, 'execute_query'):
+            if hasattr(self.query_executor, "execute_query"):
                 # Custom executor interface
                 query_result = await self.query_executor.execute_query(
-                    context.query, 
-                    context.parameters,
-                    context.result_format
+                    context.query, context.parameters, context.result_format
                 )
             else:
                 # Fallback - assume it's a callable
                 query_result = await self.query_executor(
-                    context.query, 
-                    context.parameters
+                    context.query, context.parameters
                 )
 
             execution_time = time.time() - start_time
@@ -215,14 +220,18 @@ class QueryExecutionStage(PipelineStage):
                 # Raw result - format it
                 return ExecutionResult(
                     data=query_result,
-                    row_count=len(query_result) if isinstance(query_result, list) else 1,
+                    row_count=(
+                        len(query_result) if isinstance(query_result, list) else 1
+                    ),
                     columns=[],
                     execution_time=execution_time,
                 )
 
         except Exception as e:
             execution_time = time.time() - start_time
-            self.logger.error(f"Query execution failed after {execution_time:.3f}s: {e}")
+            self.logger.error(
+                f"Query execution failed after {execution_time:.3f}s: {e}"
+            )
             raise NodeExecutionError(f"Database query failed: {e}") from e
 
     def get_stage_name(self) -> str:
@@ -235,7 +244,7 @@ class DataMaskingStage(PipelineStage):
 
     def __init__(self, access_control_manager=None):
         """Initialize data masking stage.
-        
+
         Args:
             access_control_manager: Access control manager with masking capabilities
         """
@@ -243,9 +252,7 @@ class DataMaskingStage(PipelineStage):
         self.logger = logging.getLogger(f"{__name__}.DataMaskingStage")
 
     async def process(
-        self, 
-        context: ExecutionContext, 
-        result: Optional[ExecutionResult] = None
+        self, context: ExecutionContext, result: Optional[ExecutionResult] = None
     ) -> Optional[ExecutionResult]:
         """Apply data masking based on user attributes."""
         if not result or not result.data:
@@ -253,7 +260,9 @@ class DataMaskingStage(PipelineStage):
 
         # Skip if no access control or no user context
         if not self.access_control_manager or not context.user_context:
-            self.logger.debug("Skipping data masking - no access control or user context")
+            self.logger.debug(
+                "Skipping data masking - no access control or user context"
+            )
             return result
 
         # Skip if not dict format (masking only works on structured data)
@@ -266,11 +275,9 @@ class DataMaskingStage(PipelineStage):
         for row in result.data:
             if isinstance(row, dict):
                 # Apply masking if access control manager supports it
-                if hasattr(self.access_control_manager, 'apply_data_masking'):
+                if hasattr(self.access_control_manager, "apply_data_masking"):
                     masked_row = self.access_control_manager.apply_data_masking(
-                        context.user_context,
-                        context.node_name,
-                        row
+                        context.user_context, context.node_name, row
                     )
                     masked_data.append(masked_row)
                 else:
@@ -294,25 +301,25 @@ class DataMaskingStage(PipelineStage):
 
 class DatabaseExecutionPipeline:
     """Pipeline for executing database operations with clean separation of concerns.
-    
+
     This pipeline provides:
     - Permission checking
     - Query validation
     - Query execution
     - Data masking
-    
+
     Example:
         >>> pipeline = DatabaseExecutionPipeline(
         ...     access_control_manager=access_manager,
         ...     query_executor=my_executor
         ... )
-        >>> 
+        >>>
         >>> context = ExecutionContext(
         ...     query="SELECT * FROM users",
         ...     user_context=user,
         ...     node_name="user_query"
         ... )
-        >>> 
+        >>>
         >>> result = await pipeline.execute(context)
     """
 
@@ -324,7 +331,7 @@ class DatabaseExecutionPipeline:
         custom_stages: Optional[List[PipelineStage]] = None,
     ):
         """Initialize database execution pipeline.
-        
+
         Args:
             access_control_manager: Access control manager for permissions and masking
             query_executor: Object that can execute database queries
@@ -367,13 +374,13 @@ class DatabaseExecutionPipeline:
 
     async def execute(self, context: ExecutionContext) -> ExecutionResult:
         """Execute the full database pipeline.
-        
+
         Args:
             context: Execution context with query, user, etc.
-            
+
         Returns:
             Execution result with data, timing, etc.
-            
+
         Raises:
             NodeExecutionError: If any stage fails
         """
@@ -386,23 +393,27 @@ class DatabaseExecutionPipeline:
             # Execute each stage in sequence
             for i, stage in enumerate(self.stages):
                 stage_start = time.time()
-                
+
                 try:
                     result = await stage.process(context, result)
                     stage_time = time.time() - stage_start
-                    
+
                     self.logger.debug(
                         f"Stage {i+1}/{len(self.stages)} ({stage.get_stage_name()}) "
                         f"completed in {stage_time:.3f}s"
                     )
-                    
+
                     # Allow stages to stop the pipeline
                     if result is None and stage.get_stage_name() != "permission_check":
-                        self.logger.warning(f"Pipeline stopped at stage: {stage.get_stage_name()}")
+                        self.logger.warning(
+                            f"Pipeline stopped at stage: {stage.get_stage_name()}"
+                        )
                         break
-                        
+
                 except Exception as e:
-                    self.logger.error(f"Pipeline failed at stage {stage.get_stage_name()}: {e}")
+                    self.logger.error(
+                        f"Pipeline failed at stage {stage.get_stage_name()}: {e}"
+                    )
                     raise
 
             pipeline_time = time.time() - pipeline_start
@@ -421,12 +432,14 @@ class DatabaseExecutionPipeline:
 
         except Exception as e:
             pipeline_time = time.time() - pipeline_start
-            self.logger.error(f"Pipeline execution failed after {pipeline_time:.3f}s: {e}")
+            self.logger.error(
+                f"Pipeline execution failed after {pipeline_time:.3f}s: {e}"
+            )
             raise
 
     def add_stage(self, stage: PipelineStage, position: Optional[int] = None) -> None:
         """Add a custom stage to the pipeline.
-        
+
         Args:
             stage: Pipeline stage to add
             position: Position to insert at (None = append)
@@ -435,30 +448,32 @@ class DatabaseExecutionPipeline:
             self.stages.append(stage)
         else:
             self.stages.insert(position, stage)
-        
-        self.logger.info(f"Added stage {stage.get_stage_name()} at position {position or len(self.stages)}")
+
+        self.logger.info(
+            f"Added stage {stage.get_stage_name()} at position {position or len(self.stages)}"
+        )
 
     def remove_stage(self, stage_name: str) -> bool:
         """Remove a stage from the pipeline.
-        
+
         Args:
             stage_name: Name of stage to remove
-            
+
         Returns:
             True if stage was found and removed
         """
         initial_count = len(self.stages)
         self.stages = [s for s in self.stages if s.get_stage_name() != stage_name]
         removed = len(self.stages) < initial_count
-        
+
         if removed:
             self.logger.info(f"Removed stage {stage_name}")
-        
+
         return removed
 
     def get_stage_info(self) -> List[Dict[str, str]]:
         """Get information about all pipeline stages.
-        
+
         Returns:
             List of stage information dictionaries
         """
@@ -474,7 +489,7 @@ class DatabaseExecutionPipeline:
 # Export components
 __all__ = [
     "ExecutionContext",
-    "ExecutionResult", 
+    "ExecutionResult",
     "PipelineStage",
     "PermissionCheckStage",
     "QueryValidationStage",

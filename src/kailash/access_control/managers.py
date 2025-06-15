@@ -19,25 +19,25 @@ try:
     )
 except ImportError:
     # Local definitions to handle circular import during initial setup
-    from enum import Enum
     from dataclasses import dataclass
     from datetime import datetime
-    
+    from enum import Enum
+
     class NodePermission(Enum):
         EXECUTE = "execute"
         READ_OUTPUT = "read_output"
         WRITE_INPUT = "write_input"
-    
+
     class WorkflowPermission(Enum):
         VIEW = "view"
         EXECUTE = "execute"
         MODIFY = "modify"
-    
+
     class PermissionEffect(Enum):
         ALLOW = "allow"
         DENY = "deny"
         CONDITIONAL = "conditional"
-    
+
     @dataclass
     class UserContext:
         user_id: str
@@ -45,7 +45,7 @@ except ImportError:
         email: str
         roles: List[str]
         attributes: Dict[str, Any]
-    
+
     @dataclass
     class AccessDecision:
         allowed: bool
@@ -53,7 +53,7 @@ except ImportError:
         applied_rules: List[str]
         conditions_met: Optional[Dict[str, bool]] = None
         masked_fields: Optional[List[str]] = None
-    
+
     @dataclass
     class PermissionRule:
         id: str
@@ -67,6 +67,8 @@ except ImportError:
         conditions: Optional[Dict[str, Any]] = None
         priority: int = 0
         expires_at: Optional[datetime] = None
+
+
 from kailash.access_control.rule_evaluators import RuleEvaluator, create_rule_evaluator
 
 logger = logging.getLogger(__name__)
@@ -74,36 +76,36 @@ logger = logging.getLogger(__name__)
 
 class AccessControlManager:
     """Access control manager using composition pattern.
-    
+
     This manager separates rule storage from rule evaluation, allowing:
     - Easy testing with mock evaluators
     - Flexible evaluation strategies (RBAC, ABAC, Hybrid)
     - Clear separation of concerns
     - No inheritance-related bugs
-    
+
     Example:
         >>> # Create with hybrid evaluation (RBAC + ABAC)
         >>> manager = AccessControlManager()
-        
+
         >>> # Or specify evaluation strategy
         >>> rbac_manager = AccessControlManager(strategy="rbac")
         >>> abac_manager = AccessControlManager(strategy="abac")
-        
+
         >>> # Add rules
         >>> manager.add_rule(PermissionRule(...))
-        
+
         >>> # Check access
         >>> decision = manager.check_node_access(user, "node_id", NodePermission.EXECUTE)
     """
 
     def __init__(
-        self, 
+        self,
         rule_evaluator: Optional[RuleEvaluator] = None,
         strategy: str = "hybrid",
-        enabled: bool = True
+        enabled: bool = True,
     ):
         """Initialize access control manager.
-        
+
         Args:
             rule_evaluator: Custom rule evaluator (overrides strategy)
             strategy: Evaluation strategy ('rbac', 'abac', 'hybrid')
@@ -111,31 +113,34 @@ class AccessControlManager:
         """
         self.enabled = enabled
         self.rules: List[PermissionRule] = []
-        
+
         # Use provided evaluator or create one based on strategy
         if rule_evaluator:
             self.rule_evaluator = rule_evaluator
         else:
             self.rule_evaluator = create_rule_evaluator(strategy)
-        
+
         # Cache for performance
         self._cache: Dict[str, AccessDecision] = {}
         self._cache_lock = threading.Lock()
-        
+
         # Audit logging
         self.audit_logger = logging.getLogger("kailash.access_control.audit")
-        
+
         # Data masking for ABAC (only needed for abac/hybrid strategies)
         self._masking_rules: Dict[str, List[Any]] = {}
         if strategy in ["abac", "hybrid"]:
             self._init_abac_components()
-        
-        logger.info(f"Initialized AccessControlManager with {type(self.rule_evaluator).__name__}")
+
+        logger.info(
+            f"Initialized AccessControlManager with {type(self.rule_evaluator).__name__}"
+        )
 
     def _init_abac_components(self) -> None:
         """Initialize ABAC-specific components."""
         try:
             from kailash.access_control_abac import AttributeEvaluator, DataMasker
+
             self.attribute_evaluator = AttributeEvaluator()
             self.data_masker = DataMasker(self.attribute_evaluator)
         except ImportError:
@@ -145,31 +150,33 @@ class AccessControlManager:
 
     def add_rule(self, rule: PermissionRule) -> None:
         """Add a permission rule.
-        
+
         Args:
             rule: Permission rule to add
         """
         self.rules.append(rule)
         self._clear_cache()
-        logger.debug(f"Added rule {rule.id} for {rule.resource_type}:{rule.resource_id}")
+        logger.debug(
+            f"Added rule {rule.id} for {rule.resource_type}:{rule.resource_id}"
+        )
 
     def remove_rule(self, rule_id: str) -> bool:
         """Remove a permission rule.
-        
+
         Args:
             rule_id: ID of rule to remove
-            
+
         Returns:
             True if rule was found and removed
         """
         initial_count = len(self.rules)
         self.rules = [r for r in self.rules if r.id != rule_id]
         removed = len(self.rules) < initial_count
-        
+
         if removed:
             self._clear_cache()
             logger.debug(f"Removed rule {rule_id}")
-        
+
         return removed
 
     def check_workflow_access(
@@ -180,13 +187,13 @@ class AccessControlManager:
         runtime_context: Optional[Dict[str, Any]] = None,
     ) -> AccessDecision:
         """Check if user has permission on workflow.
-        
+
         Args:
             user: User requesting access
             workflow_id: Workflow to access
             permission: Permission being requested
             runtime_context: Additional runtime context
-            
+
         Returns:
             AccessDecision with allow/deny and reasoning
         """
@@ -198,7 +205,7 @@ class AccessControlManager:
             )
 
         cache_key = f"workflow:{workflow_id}:{user.user_id}:{permission.value}"
-        
+
         # Check cache (if no runtime context)
         if not runtime_context:
             with self._cache_lock:
@@ -208,8 +215,10 @@ class AccessControlManager:
                     return cached_decision
 
         # Get applicable rules
-        applicable_rules = self._get_applicable_rules("workflow", workflow_id, permission)
-        
+        applicable_rules = self._get_applicable_rules(
+            "workflow", workflow_id, permission
+        )
+
         # Evaluate using configured strategy
         decision = self.rule_evaluator.evaluate_rules(
             applicable_rules,
@@ -238,13 +247,13 @@ class AccessControlManager:
         runtime_context: Optional[Dict[str, Any]] = None,
     ) -> AccessDecision:
         """Check if user has permission on node.
-        
+
         Args:
             user: User requesting access
             node_id: Node to access
             permission: Permission being requested
             runtime_context: Additional runtime context
-            
+
         Returns:
             AccessDecision with allow/deny and reasoning
         """
@@ -256,7 +265,7 @@ class AccessControlManager:
             )
 
         cache_key = f"node:{node_id}:{user.user_id}:{permission.value}"
-        
+
         # Check cache (if no runtime context)
         if not runtime_context:
             with self._cache_lock:
@@ -267,7 +276,7 @@ class AccessControlManager:
 
         # Get applicable rules
         applicable_rules = self._get_applicable_rules("node", node_id, permission)
-        
+
         # Evaluate using configured strategy
         decision = self.rule_evaluator.evaluate_rules(
             applicable_rules,
@@ -289,45 +298,43 @@ class AccessControlManager:
         return decision
 
     def get_accessible_nodes(
-        self, 
-        user: UserContext, 
-        workflow_id: str, 
-        permission: NodePermission
+        self, user: UserContext, workflow_id: str, permission: NodePermission
     ) -> set[str]:
         """Get all nodes user can access in a workflow.
-        
+
         Args:
             user: User to check access for
             workflow_id: Workflow containing nodes
             permission: Permission type to check
-            
+
         Returns:
             Set of accessible node IDs
         """
         # Get all node rules for this workflow
         node_rules = [
-            rule for rule in self.rules
+            rule
+            for rule in self.rules
             if rule.resource_type == "node" and rule.permission == permission
         ]
-        
+
         accessible = set()
-        
+
         for rule in node_rules:
             decision = self.check_node_access(user, rule.resource_id, permission)
             if decision.allowed:
                 accessible.add(rule.resource_id)
-        
+
         return accessible
 
     def add_masking_rule(self, node_id: str, rule: Any) -> None:
         """Add attribute-based masking rule for a node."""
-        if not hasattr(self, 'data_masker') or self.data_masker is None:
+        if not hasattr(self, "data_masker") or self.data_masker is None:
             logger.warning("Data masking not available - use ABAC or hybrid strategy")
             return
-            
+
         if node_id not in self._masking_rules:
             self._masking_rules[node_id] = []
-        
+
         self._masking_rules[node_id].append(rule)
         logger.info(f"Added masking rule for node {node_id}")
 
@@ -336,10 +343,10 @@ class AccessControlManager:
     ) -> Dict[str, Any]:
         """Apply attribute-based data masking to node output."""
         # Check if ABAC components are available
-        if not hasattr(self, 'data_masker') or self.data_masker is None:
+        if not hasattr(self, "data_masker") or self.data_masker is None:
             logger.warning("Data masking not available - returning original data")
             return data
-            
+
         # Get masking rules for node
         rules = self._masking_rules.get(node_id, [])
         if not rules:
@@ -353,7 +360,7 @@ class AccessControlManager:
 
     def supports_conditions(self) -> bool:
         """Check if current evaluator supports conditional rules.
-        
+
         Returns:
             True if complex conditions are supported
         """
@@ -361,7 +368,7 @@ class AccessControlManager:
 
     def get_strategy_info(self) -> Dict[str, Any]:
         """Get information about the current evaluation strategy.
-        
+
         Returns:
             Dictionary with strategy details
         """
@@ -373,37 +380,40 @@ class AccessControlManager:
         }
 
     def _get_applicable_rules(
-        self, 
-        resource_type: str, 
-        resource_id: str, 
-        permission: Union[NodePermission, WorkflowPermission]
+        self,
+        resource_type: str,
+        resource_id: str,
+        permission: Union[NodePermission, WorkflowPermission],
     ) -> List[PermissionRule]:
         """Get rules that apply to a specific resource and permission.
-        
+
         Args:
             resource_type: Type of resource (node/workflow)
             resource_id: Specific resource ID
             permission: Permission being checked
-            
+
         Returns:
             List of applicable rules
         """
         applicable_rules = []
-        
+
         for rule in self.rules:
             # Check resource type, ID, and permission match
-            if (rule.resource_type == resource_type and 
-                rule.resource_id == resource_id and 
-                rule.permission == permission):
-                
+            if (
+                rule.resource_type == resource_type
+                and rule.resource_id == resource_id
+                and rule.permission == permission
+            ):
+
                 # Check expiration
                 if rule.expires_at:
                     from datetime import UTC, datetime
+
                     if rule.expires_at < datetime.now(UTC):
                         continue
-                
+
                 applicable_rules.append(rule)
-        
+
         return applicable_rules
 
     def _clear_cache(self) -> None:
@@ -421,7 +431,7 @@ class AccessControlManager:
         decision: AccessDecision,
     ) -> None:
         """Log access control decision for auditing.
-        
+
         Args:
             user: User who made the request
             resource_type: Type of resource accessed

@@ -25,7 +25,7 @@ from kailash.nodes.data import SQLDatabaseNode
 
 # Query returns Decimal and datetime types
 sql_node = SQLDatabaseNode(connection_string="sqlite:///example.db")
-result = sql_node.run(
+result = sql_node.execute(
     query="SELECT price, created_at FROM products",
     result_format="dict"
 )
@@ -63,7 +63,7 @@ oauth_node = OAuth2Node(
     client_secret="secret_456"
 )
 
-result = oauth_node.run(include_raw_response=True)
+result = oauth_node.execute(include_raw_response=True)
 # Returns:
 # {
 #   "headers": {"Authorization": "Bearer access_token_123"},

@@ -224,7 +224,7 @@ class AsyncNodeWithAccessControl(AsyncNode):
         self._fallback_node = config.get("fallback_node", None)
         self._mask_output_fields = config.get("mask_output_fields", [])
 
-    async def run(self, **inputs) -> Any:
+    async def async_run(self, **inputs) -> Any:
         """Async execution with optional access control"""
         runtime_context = inputs.pop("_runtime_context", None)
         user_context = inputs.pop("_user_context", None)

@@ -12,12 +12,13 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
-from examples.utils.data_paths import get_output_data_path
-from examples.utils.paths import get_data_dir, get_output_dir
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from kailash.nodes.code.python import PythonCodeNode
+from examples.utils.data_paths import get_output_data_path  # noqa: E402
+from examples.utils.paths import get_data_dir, get_output_dir  # noqa: E402
+from kailash.nodes.base import NodeParameter  # noqa: E402
+from kailash.nodes.code.python import PythonCodeNode  # noqa: E402
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
 from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode
 from kailash.tracking.manager import TaskManager
@@ -52,7 +53,7 @@ def create_sample_workflow():
             joined.append({**customer, "transactions": customer_transactions})
         return {"data": joined}
 
-    from kailash.nodes.base import NodeParameter
+    # NodeParameter imported at top of file
 
     # Create schemas for joiner
     joiner_input_schema = {
@@ -349,7 +350,6 @@ def demonstrate_workflow_comparison():
         return {"data": data}
 
     # Import NodeParameter for schemas
-    from kailash.nodes.base import NodeParameter
 
     # Create schemas for extra processor
     extra_processor_input_schema = {

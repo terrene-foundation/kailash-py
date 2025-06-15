@@ -27,7 +27,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
 - **Example**:
   ```python
   node = LLMAgentNode()
-  result = node.run(
+  result = node.execute(
       provider="openai",
       model="gpt-4",
       prompt="Explain quantum computing",
@@ -49,7 +49,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
 - **Example**:
   ```python
   node = EmbeddingGeneratorNode()
-  result = node.run(
+  result = node.execute(
       provider="openai",
       model="text-embedding-3-large",
       input_text="This is a sample document",

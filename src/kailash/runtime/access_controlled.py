@@ -239,7 +239,7 @@ class AccessControlledRuntime:
                     return {}
 
                 # Execute the original node
-                result = self._original_node.run(**inputs)
+                result = self._original_node.execute(**inputs)
 
                 # Check output read permission
                 output_decision = runtime.acm.check_node_access(

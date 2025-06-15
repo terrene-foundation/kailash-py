@@ -300,6 +300,12 @@ class SQLDatabaseNode(Node):
                 default="dict",
                 description="Result format: 'dict', 'list', or 'raw'",
             ),
+            "user_context": NodeParameter(
+                name="user_context",
+                type=Any,
+                required=False,
+                description="User context for access control",
+            ),
         }
 
     @staticmethod
@@ -822,10 +828,10 @@ class SQLDatabaseNode(Node):
 
     def _serialize_value(self, value: Any) -> Any:
         """Convert database-specific types to JSON-serializable types.
-        
+
         Args:
             value: Value to serialize
-            
+
         Returns:
             JSON-serializable value
         """
@@ -842,7 +848,7 @@ class SQLDatabaseNode(Node):
         elif isinstance(value, UUID):
             return str(value)
         elif isinstance(value, bytes):
-            return base64.b64encode(value).decode('utf-8')
+            return base64.b64encode(value).decode("utf-8")
         elif isinstance(value, (list, tuple)):
             return [self._serialize_value(item) for item in value]
         elif isinstance(value, dict):
@@ -869,7 +875,9 @@ class SQLDatabaseNode(Node):
             for row in rows:
                 row_dict = dict(row._mapping)
                 # Serialize values for JSON compatibility
-                serialized_dict = {k: self._serialize_value(v) for k, v in row_dict.items()}
+                serialized_dict = {
+                    k: self._serialize_value(v) for k, v in row_dict.items()
+                }
                 result.append(serialized_dict)
             return result
 
@@ -897,6 +905,8 @@ class SQLDatabaseNode(Node):
             result = []
             for row in rows:
                 row_dict = dict(zip(columns, row, strict=False))
-                serialized_dict = {k: self._serialize_value(v) for k, v in row_dict.items()}
+                serialized_dict = {
+                    k: self._serialize_value(v) for k, v in row_dict.items()
+                }
                 result.append(serialized_dict)
             return result

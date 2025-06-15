@@ -21,25 +21,25 @@ try:
     )
 except ImportError:
     # Local definitions to handle circular import during initial setup
-    from enum import Enum
     from dataclasses import dataclass
     from datetime import datetime
-    
+    from enum import Enum
+
     class NodePermission(Enum):
         EXECUTE = "execute"
         READ_OUTPUT = "read_output"
         WRITE_INPUT = "write_input"
-    
+
     class WorkflowPermission(Enum):
         VIEW = "view"
         EXECUTE = "execute"
         MODIFY = "modify"
-    
+
     class PermissionEffect(Enum):
         ALLOW = "allow"
         DENY = "deny"
         CONDITIONAL = "conditional"
-    
+
     @dataclass
     class UserContext:
         user_id: str
@@ -47,7 +47,7 @@ except ImportError:
         email: str
         roles: List[str]
         attributes: Dict[str, Any]
-    
+
     @dataclass
     class AccessDecision:
         allowed: bool
@@ -55,7 +55,7 @@ except ImportError:
         applied_rules: List[str]
         conditions_met: Optional[Dict[str, bool]] = None
         masked_fields: Optional[List[str]] = None
-    
+
     @dataclass
     class PermissionRule:
         id: str
@@ -69,6 +69,7 @@ except ImportError:
         conditions: Optional[Dict[str, Any]] = None
         priority: int = 0
         expires_at: Optional[datetime] = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class RuleEvaluator(ABC):
 
 class RBACRuleEvaluator(RuleEvaluator):
     """Role-Based Access Control rule evaluator.
-    
+
     This evaluator handles traditional RBAC rules based on:
     - User roles
     - Direct user assignments
@@ -132,8 +133,7 @@ class RBACRuleEvaluator(RuleEvaluator):
         """Evaluate RBAC rules."""
         # Filter applicable rules (only those that apply to this user)
         applicable_rules = [
-            rule for rule in rules 
-            if self._rule_applies_to_user(rule, user)
+            rule for rule in rules if self._rule_applies_to_user(rule, user)
         ]
 
         if not applicable_rules:
@@ -202,7 +202,7 @@ class RBACRuleEvaluator(RuleEvaluator):
 
 class ABACRuleEvaluator(RuleEvaluator):
     """Attribute-Based Access Control rule evaluator.
-    
+
     This evaluator handles advanced ABAC rules with:
     - Complex attribute expressions
     - Dynamic condition evaluation
@@ -214,6 +214,7 @@ class ABACRuleEvaluator(RuleEvaluator):
         self.logger = logging.getLogger(f"{__name__}.ABACRuleEvaluator")
         # Import here to avoid circular dependencies
         from kailash.access_control_abac import EnhancedConditionEvaluator
+
         self.condition_evaluator = EnhancedConditionEvaluator()
 
     def evaluate_rules(
@@ -235,7 +236,7 @@ class ABACRuleEvaluator(RuleEvaluator):
             # First check basic RBAC criteria
             if not self._rule_applies_to_user(rule, user):
                 continue
-                
+
             applicable_rules.append(rule)
 
         if not applicable_rules:
@@ -323,7 +324,9 @@ class ABACRuleEvaluator(RuleEvaluator):
 
         return False
 
-    def _build_context(self, user: UserContext, runtime_context: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_context(
+        self, user: UserContext, runtime_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Build evaluation context for ABAC."""
         now = datetime.now(UTC)
         context = {
@@ -342,7 +345,7 @@ class ABACRuleEvaluator(RuleEvaluator):
 
 class HybridRuleEvaluator(RuleEvaluator):
     """Hybrid evaluator that combines RBAC and ABAC evaluation.
-    
+
     This evaluator:
     1. Uses RBAC for basic rules without conditions
     2. Uses ABAC for complex conditional rules
@@ -375,10 +378,15 @@ class HybridRuleEvaluator(RuleEvaluator):
         # First evaluate complex ABAC rules (higher precedence)
         if complex_rules:
             abac_decision = self.abac_evaluator.evaluate_rules(
-                complex_rules, user, resource_type, resource_id, permission, runtime_context
+                complex_rules,
+                user,
+                resource_type,
+                resource_id,
+                permission,
+                runtime_context,
             )
             all_decisions.append(("ABAC", abac_decision))
-            
+
             # If ABAC explicitly allows or denies, use that decision
             if abac_decision.allowed:
                 return abac_decision
@@ -388,22 +396,26 @@ class HybridRuleEvaluator(RuleEvaluator):
         # Then evaluate simple RBAC rules
         if simple_rules:
             rbac_decision = self.rbac_evaluator.evaluate_rules(
-                simple_rules, user, resource_type, resource_id, permission, runtime_context
+                simple_rules,
+                user,
+                resource_type,
+                resource_id,
+                permission,
+                runtime_context,
             )
             all_decisions.append(("RBAC", rbac_decision))
-            
+
             if rbac_decision.allowed:
                 return rbac_decision
 
         # Combine reasoning from all evaluations
-        combined_reason = "; ".join([
-            f"{eval_type}: {decision.reason}" 
-            for eval_type, decision in all_decisions
-        ])
-        
+        combined_reason = "; ".join(
+            [f"{eval_type}: {decision.reason}" for eval_type, decision in all_decisions]
+        )
+
         combined_applied_rules = [
-            rule_id 
-            for _, decision in all_decisions 
+            rule_id
+            for _, decision in all_decisions
             for rule_id in decision.applied_rules
         ]
 
@@ -421,18 +433,18 @@ class HybridRuleEvaluator(RuleEvaluator):
 # Factory function for easy evaluator creation
 def create_rule_evaluator(strategy: str = "hybrid") -> RuleEvaluator:
     """Create a rule evaluator based on strategy.
-    
+
     Args:
         strategy: One of 'rbac', 'abac', or 'hybrid'
-        
+
     Returns:
         Appropriate RuleEvaluator instance
-        
+
     Raises:
         ValueError: If strategy is not recognized
     """
     strategy = strategy.lower()
-    
+
     if strategy == "rbac":
         return RBACRuleEvaluator()
     elif strategy == "abac":
@@ -440,13 +452,15 @@ def create_rule_evaluator(strategy: str = "hybrid") -> RuleEvaluator:
     elif strategy == "hybrid":
         return HybridRuleEvaluator()
     else:
-        raise ValueError(f"Unknown strategy: {strategy}. Use 'rbac', 'abac', or 'hybrid'")
+        raise ValueError(
+            f"Unknown strategy: {strategy}. Use 'rbac', 'abac', or 'hybrid'"
+        )
 
 
 # Export components
 __all__ = [
     "RuleEvaluator",
-    "RBACRuleEvaluator", 
+    "RBACRuleEvaluator",
     "ABACRuleEvaluator",
     "HybridRuleEvaluator",
     "create_rule_evaluator",

@@ -75,7 +75,7 @@ user_node = UserManagementNode(
 )
 
 # Rich user attributes for ABAC
-result = await user_node.async_run({
+result = await user_node.execute_async({
     "user_data": {
         "email": "john.doe@company.com",
         "username": "johndoe",
@@ -120,7 +120,7 @@ role_node = RoleManagementNode(
 )
 
 # Create hierarchical role with constraints
-result = await role_node.async_run({
+result = await role_node.execute_async({
     "role_data": {
         "role_id": "senior_analyst",
         "display_name": "Senior Financial Analyst",
@@ -167,7 +167,7 @@ permission_node = PermissionCheckNode(
     cache_ttl=300      # 5-minute permission cache
 )
 
-result = await permission_node.async_run({
+result = await permission_node.execute_async({
     "user_id": "analyst123",
     "resource": "financial_report_q4_2024",
     "action": "export",
@@ -213,7 +213,7 @@ audit_node = AuditLogNode(
 )
 
 # Comprehensive audit event (Django only has add/change/delete)
-result = await audit_node.async_run({
+result = await audit_node.execute_async({
     "event_data": {
         "event_type": "data_export",  # One of 25+ types
         "severity": "high",
@@ -264,7 +264,7 @@ security_node = SecurityEventNode(
 )
 
 # ML-based threat detection with automated response
-result = await security_node.async_run({
+result = await security_node.execute_async({
     "event_data": {
         "event_type": "anomalous_access",
         "threat_level": "high",
@@ -328,7 +328,7 @@ from kailash.nodes.code import PythonCodeNode
 def create_enterprise_onboarding_workflow():
     """Complete user onboarding with security checks and compliance."""
     workflow = Workflow(name="enterprise_user_onboarding")
-    
+
     # 1. Validate user data and enrich with defaults
     validate = PythonCodeNode.from_function(
         name="validate_user",
@@ -345,7 +345,7 @@ def create_enterprise_onboarding_workflow():
             }
         }
     )
-    
+
     # 2. Create user with ABAC attributes
     create_user = UserManagementNode(
         name="create_user",
@@ -353,7 +353,7 @@ def create_enterprise_onboarding_workflow():
         enable_mfa=True,
         password_policy="enterprise_strong"
     )
-    
+
     # 3. Assign role based on department and level
     assign_role = RoleManagementNode(
         name="assign_role",
@@ -365,7 +365,7 @@ def create_enterprise_onboarding_workflow():
             "engineering.lead": "tech_lead"
         }
     )
-    
+
     # 4. Configure fine-grained permissions
     configure_permissions = PermissionCheckNode(
         name="configure_permissions",
@@ -376,7 +376,7 @@ def create_enterprise_onboarding_workflow():
             "api_rate_limits": "tier_based"
         }
     )
-    
+
     # 5. Security clearance verification
     security_check = SecurityEventNode(
         name="security_check",
@@ -384,7 +384,7 @@ def create_enterprise_onboarding_workflow():
         checks=["identity_verification", "sanctions_screening", "credential_validation"],
         blocking=True
     )
-    
+
     # 6. Comprehensive audit trail
     audit = AuditLogNode(
         name="audit_onboarding",
@@ -393,12 +393,12 @@ def create_enterprise_onboarding_workflow():
         severity="medium",
         include_full_context=True
     )
-    
+
     # Connect nodes in sequence with data flow
-    workflow.add_nodes([validate, create_user, assign_role, 
+    workflow.add_nodes([validate, create_user, assign_role,
                        configure_permissions, security_check, audit])
-    
-    workflow.connect("validate_user", "create_user", 
+
+    workflow.connect("validate_user", "create_user",
                     mapping={"result.user_data": "user_data"})
     workflow.connect("create_user", "assign_role",
                     mapping={
@@ -421,7 +421,7 @@ def create_enterprise_onboarding_workflow():
                         "result": "event_metadata",
                         "result.verification_status": "security_status"
                     })
-    
+
     return workflow
 
 # Usage:
@@ -447,14 +447,14 @@ result = await workflow.run({
 def create_incident_response_workflow():
     """Automated security incident response with escalation."""
     workflow = Workflow(name="security_incident_response")
-    
+
     # 1. Detect security event
     detect = SecurityEventNode(
         name="detect_threat",
         operation="analyze_event",
         ml_models=["anomaly_detection", "threat_classification"]
     )
-    
+
     # 2. Assess severity and impact
     assess = PythonCodeNode.from_function(
         name="assess_impact",
@@ -471,21 +471,21 @@ def create_incident_response_workflow():
             }
         }
     )
-    
+
     # 3. Execute immediate containment
     contain = SecurityEventNode(
         name="contain_threat",
         operation="execute_response",
         auto_containment=True
     )
-    
+
     # 4. Revoke permissions if needed
     revoke = PermissionCheckNode(
         name="revoke_access",
         operation="emergency_revoke",
         cascade=True
     )
-    
+
     # 5. Create detailed audit trail
     audit = AuditLogNode(
         name="audit_incident",
@@ -494,7 +494,7 @@ def create_incident_response_workflow():
         severity="critical",
         compliance_tags=["incident_response", "security_breach"]
     )
-    
+
     # 6. Notify stakeholders
     notify = NotificationNode(
         name="alert_teams",
@@ -505,11 +505,11 @@ def create_incident_response_workflow():
             "medium": ["security_team"]
         }
     )
-    
+
     # Connect workflow
     workflow.add_nodes([detect, assess, contain, revoke, audit, notify])
     workflow.connect_sequence()
-    
+
     return workflow
 ```
 
@@ -519,7 +519,7 @@ def create_incident_response_workflow():
 def create_compliance_audit_workflow():
     """Automated compliance reporting for GDPR, SOC2, HIPAA."""
     workflow = Workflow(name="compliance_audit")
-    
+
     # 1. Gather user activity logs
     gather_logs = AuditLogNode(
         name="gather_activity",
@@ -529,20 +529,20 @@ def create_compliance_audit_workflow():
             "date_range": {"days": 90}
         }
     )
-    
+
     # 2. Analyze access patterns
     analyze = PythonCodeNode.from_function(
         name="analyze_patterns",
         func=analyze_compliance_patterns  # Complex analysis function
     )
-    
+
     # 3. Check permission compliance
     check_permissions = PermissionCheckNode(
         name="verify_permissions",
         operation="audit_all_permissions",
         include_inherited=True
     )
-    
+
     # 4. Generate compliance report
     report = AuditLogNode(
         name="generate_report",
@@ -550,7 +550,7 @@ def create_compliance_audit_workflow():
         export_format="pdf",
         compliance_frameworks=["GDPR", "SOC2", "HIPAA"]
     )
-    
+
     # 5. Archive for retention
     archive = AuditLogNode(
         name="archive_report",
@@ -558,10 +558,10 @@ def create_compliance_audit_workflow():
         retention_years=7,
         encryption="AES-256"
     )
-    
+
     workflow.add_nodes([gather_logs, analyze, check_permissions, report, archive])
     workflow.connect_sequence()
-    
+
     return workflow
 ```
 
@@ -661,32 +661,32 @@ access_manager.add_policy({
             # Role-based checks
             {"attribute": "user.role", "operator": "contains", "value": "admin"},
             {"attribute": "user.role", "operator": "not_contains", "value": "restricted"},
-            
+
             # Security clearance
             {"attribute": "user.clearance", "operator": "security_level_meets", "value": 3},
             {"attribute": "resource.classification", "operator": "security_level_below", "value": 5},
-            
+
             # Department hierarchy
             {"attribute": "user.department", "operator": "hierarchical_match", "value": "$resource.department"},
-            
+
             # Location-based
             {"attribute": "user.location", "operator": "matches_data_region", "value": "$resource.region"},
             {"attribute": "user.country", "operator": "not_in", "value": ["sanctioned_list"]},
-            
+
             # Time-based
             {"attribute": "time.current", "operator": "between", "value": ["08:00", "18:00"]},
-            
+
             # Numeric comparisons
             {"attribute": "user.failed_attempts", "operator": "less_than", "value": 3},
             {"attribute": "user.account_age_days", "operator": "greater_than", "value": 30},
-            
+
             # Training requirements
             {"attribute": "user.training", "operator": "contains_all", "value": ["security", "compliance"]},
             {"attribute": "user.certifications", "operator": "contains_any", "value": ["CISSP", "CISA", "Security+"]},
-            
+
             # Pattern matching
             {"attribute": "resource.name", "operator": "matches", "value": "^(public|internal)_.*"},
-            
+
             # Complex conditions
             {"attribute": "user.risk_score", "operator": "less_or_equal", "value": 5},
             {"attribute": "user.mfa_enabled", "operator": "equals", "value": true}
@@ -792,10 +792,10 @@ security_monitor = SecurityEventNode(
 
 # 4. Build the admin workflow
 admin_workflow.add_nodes([
-    user_mgmt, 
-    role_mgmt, 
-    permission_check, 
-    audit_log, 
+    user_mgmt,
+    role_mgmt,
+    permission_check,
+    audit_log,
     security_monitor
 ])
 
@@ -919,7 +919,7 @@ await RoleManagementNode(
     operation="assign_user",
     user_id=user_id,
     role_id="financial_analyst"
-).async_run()
+).execute_async()
 ```
 
 ### Step 3: Admin Action Migration

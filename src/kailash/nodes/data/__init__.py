@@ -91,13 +91,17 @@ from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
 from kailash.nodes.data.directory import DirectoryReaderNode
 from kailash.nodes.data.event_generation import EventGeneratorNode
 from kailash.nodes.data.file_discovery import FileDiscoveryNode
-from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode, TextReaderNode
-from kailash.nodes.data.retrieval import RelevanceScorerNode
+from kailash.nodes.data.readers import (
+    CSVReaderNode,
+    DocumentProcessorNode,
+    JSONReaderNode,
+    TextReaderNode,
+)
+from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNode
 from kailash.nodes.data.sharepoint_graph import (
     SharePointGraphReader,
     SharePointGraphWriter,
 )
-from kailash.nodes.data.sharepoint_graph_enhanced import SharePointGraphReaderEnhanced
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.nodes.data.streaming import (
@@ -122,10 +126,10 @@ __all__ = [
     "FileDiscoveryNode",
     # Readers
     "CSVReaderNode",
+    "DocumentProcessorNode",
     "JSONReaderNode",
     "TextReaderNode",
     "SharePointGraphReader",
-    "SharePointGraphReaderEnhanced",
     # Writers
     "CSVWriterNode",
     "JSONWriterNode",
@@ -136,6 +140,7 @@ __all__ = [
     "QuerySourceNode",
     # Retrieval
     "RelevanceScorerNode",
+    "HybridRetrieverNode",
     # SQL
     "SQLDatabaseNode",
     # Vector DB

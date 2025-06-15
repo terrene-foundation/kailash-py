@@ -379,8 +379,8 @@ result = {
             assert results2["identifier"]["result"]["session_data"] == "session_2_data"
 
         # Test cleanup
-        await agent_ui.cleanup_session(session1_id)
-        await agent_ui.cleanup_session(session2_id)
+        await agent_ui.close_session(session1_id)
+        await agent_ui.close_session(session2_id)
 
         # Verify sessions are cleaned up
         # Attempting to get results from cleaned up session should handle gracefully

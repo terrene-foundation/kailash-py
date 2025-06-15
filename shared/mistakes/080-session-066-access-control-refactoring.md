@@ -1,7 +1,7 @@
 # Session 066: Access Control Architecture Refactoring Mistakes & Learnings
 
-**Date**: 2025-06-12  
-**Session Focus**: Refactoring access control from inheritance to composition pattern  
+**Date**: 2025-06-12
+**Session Focus**: Refactoring access control from inheritance to composition pattern
 **Outcome**: ✅ Successful - Unified access control interface with RBAC/ABAC/Hybrid strategies
 
 ## 🎯 Critical Mistakes & Solutions
@@ -10,7 +10,7 @@
 
 **Problem**: Created a new `access_control` package with "helpful" fallback classes that always returned `True`, causing the real access control logic to be bypassed.
 
-**Root Cause**: 
+**Root Cause**:
 ```python
 # In access_control/__init__.py - WRONG!
 try:
@@ -22,7 +22,7 @@ except ImportError:
             return True  # 🚨 ALWAYS TRUE = SECURITY BYPASS!
 ```
 
-**Detection**: 
+**Detection**:
 - ABAC tests were passing when they should fail
 - IT users getting access to Finance data
 - Debug output showing condition evaluation but no actual evaluation logic
@@ -60,7 +60,7 @@ class EnhancedAccessControlManager(AccessControlManager):
 class AccessControlManager:
     def __init__(self, strategy="hybrid"):
         self.rule_evaluator = create_rule_evaluator(strategy)  # RBAC/ABAC/Hybrid
-    
+
     def check_node_access(self, ...):
         return self.rule_evaluator.evaluate_rules(...)  # Delegates to strategy
 ```
@@ -100,7 +100,7 @@ for cls in EnhancedAccessControlManager.__mro__:
 ```python
 # Clean, unified interface
 rbac_manager = AccessControlManager(strategy="rbac")
-abac_manager = AccessControlManager(strategy="abac") 
+abac_manager = AccessControlManager(strategy="abac")
 hybrid_manager = AccessControlManager(strategy="hybrid")
 ```
 
@@ -153,7 +153,7 @@ it_decision = manager.check_access(it_user, "financial_data")
 class AccessControlManager:
     def __init__(self, strategy: str):
         self.rule_evaluator = create_rule_evaluator(strategy)
-    
+
     def check_access(self, user, resource, permission):
         return self.rule_evaluator.evaluate_rules(...)
 ```
@@ -197,7 +197,7 @@ rule = PermissionRule(
             "operator": "and",
             "conditions": [{
                 "attribute_path": "user.attributes.department",
-                "operator": "equals", 
+                "operator": "equals",
                 "value": "Finance"
             }]
         }
@@ -219,7 +219,7 @@ rule = PermissionRule(
 1. **Start with unified interfaces** - Don't create parallel implementations
 2. **Test security scenarios thoroughly** - Especially deny cases
 3. **Use composition over inheritance** for complex behavior
-4. **Verify import chains explicitly** in complex packages  
+4. **Verify import chains explicitly** in complex packages
 5. **Add systematic debug output** during development
 6. **Remove fallback/compatibility code** that can mask issues
 7. **Document architecture decisions** as you make them

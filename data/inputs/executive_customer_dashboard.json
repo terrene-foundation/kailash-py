@@ -1,0 +1,17 @@
+{
+  "revenue_metrics": {
+    "total_customer_revenue": 50817689433.73069,
+    "high_value_customer_percentage": 90.8,
+    "revenue_concentration_risk": 99.99877939160548
+  },
+  "health_metrics": {
+    "overall_satisfaction_score": 3.770134103628615,
+    "average_engagement_score": 0.5756383354862473,
+    "revenue_at_risk_percentage": 95.9238420288616
+  },
+  "growth_metrics": {
+    "average_upsell_potential": 0.5001876203159927,
+    "referral_generation_rate": 5.606,
+    "expansion_opportunities": 124
+  }
+}

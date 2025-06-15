@@ -4,12 +4,20 @@ Examples Overview - Visual summary of all Kailash SDK examples
 """
 
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from examples.utils.data_paths import ensure_output_dir_exists, get_output_data_path
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from examples.utils.data_paths import (  # noqa: E402
+    ensure_output_dir_exists,
+    get_output_data_path,
+)
 
 # Define example categories and their descriptions
 examples = {

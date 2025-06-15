@@ -36,7 +36,7 @@ class TestNodeCommunication:
             # Execute workflow
             LocalRuntime()
             runner = WorkflowRunner()
-            result = runner.run(workflow)
+            result = runner.execute(workflow)
 
             # Verify workflow executed successfully
             assert result is not None

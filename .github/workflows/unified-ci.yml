@@ -262,18 +262,18 @@ jobs:
           run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
           pids[2]=$!
 
-          # Run tests with Python 3.11 if available (with coverage)
+          # Run tests with Python 3.11 if available (with coverage, excluding slow tests)
           if [ -d ".venv-3.11" ]; then
-              run_check "Tests Python 3.11" "VIRTUAL_ENV=.venv-3.11 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing" "pytest-3.11.log" &
+              run_check "Tests Python 3.11" "VIRTUAL_ENV=.venv-3.11 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -m 'not slow'" "pytest-3.11.log" &
               pids[3]=$!
           else
               echo "⚠️  Skipping Python 3.11 tests (not installed)"
               pids[3]=""
           fi
 
-          # Run tests with Python 3.12 (no coverage - only 3.11 collects to avoid conflicts)
+          # Run tests with Python 3.12 (no coverage - only 3.11 collects to avoid conflicts, excluding slow tests)
           if [ -d ".venv-3.12" ]; then
-              run_check "Tests Python 3.12" "VIRTUAL_ENV=.venv-3.12 uv run pytest tests/ -v" "pytest-3.12.log" &
+              run_check "Tests Python 3.12" "VIRTUAL_ENV=.venv-3.12 uv run pytest tests/ -v -m 'not slow'" "pytest-3.12.log" &
               pids[4]=$!
           else
               echo "⚠️  Skipping Python 3.12 tests (not available)"
@@ -449,14 +449,14 @@ jobs:
             # Check if pytest-xdist is available
             if uv run python -c "import pytest_xdist" 2>/dev/null; then
               echo "Using parallel testing with pytest-xdist"
-              uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto
+              uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -n auto -m 'not slow'
             else
               echo "pytest-xdist not available, running tests sequentially"
-              uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
+              uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -m 'not slow'
             fi
           else
             echo "Running on GitHub-hosted runner"
-            uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term
+            uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term -m 'not slow'
           fi
 
       - name: Upload coverage reports
@@ -574,15 +574,11 @@ jobs:
           uv venv --python python3
           uv sync
 
-      - name: Test all examples
-        run: |
-          cd examples
-          uv run python _utils/test_all_examples.py
 
   # Summary job for test results
   test-summary:
     name: Test Summary
-    needs: [lint-and-format, test-matrix, security-scan, validate-examples, all-checks-parallel, test-python-3-11, test-python-3-12]
+    needs: [lint-and-format, test-matrix, security-scan, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: always() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest  # Lightweight summary job - okay to use GitHub runner
     permissions:

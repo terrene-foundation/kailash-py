@@ -87,7 +87,7 @@ except Exception as e:
     for failed in dlq:
         print(f"Failed at {failed['timestamp']}: {failed['error']}")
         print(f"Node: {failed['node']}, Attempts: {failed['attempts']}")
-    
+
     # Clear after processing
     workflow.clear_dead_letter_queue()
 ```
@@ -141,7 +141,7 @@ workflow.configure_retry("node", strategy=RetryStrategy.IMMEDIATE)
 Fixed delay increase - use for rate limiting:
 ```python
 workflow.configure_retry(
-    "node", 
+    "node",
     strategy=RetryStrategy.LINEAR,
     base_delay=2.0  # 2s, 4s, 6s, 8s...
 )
@@ -187,7 +187,7 @@ for i, region in enumerate(regions):
         HTTPRequestNode,
         url=f"https://{region}.api.example.com/data"
     )
-    
+
     if i > 0:  # Add previous as fallback
         workflow.add_fallback(f"api_{regions[i-1]}", f"api_{region}")
 ```

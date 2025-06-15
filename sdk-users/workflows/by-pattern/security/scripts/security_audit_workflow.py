@@ -186,7 +186,7 @@ for db_config in databases:
 
         # 1. Check database version and configuration
         try:
-            version_result = sql_node.run(query="SELECT version()")
+            version_result = sql_node.execute(query="SELECT version()")
             version_info = version_result.get("data", [{}])[0] if version_result.get("data") else {}
             version_check = {
                 "check": "database_version",
@@ -223,7 +223,7 @@ for db_config in databases:
         # 3. Check database permissions and roles
         try:
             if service_type == "database":  # PostgreSQL
-                roles_result = sql_node.run(
+                roles_result = sql_node.execute(
                     query="SELECT rolname, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles"
                 )
                 roles_data = roles_result.get("data", [])
@@ -257,7 +257,7 @@ for db_config in databases:
         try:
             if service_type == "database":  # PostgreSQL
                 # Check for tables that might contain sensitive data
-                tables_result = sql_node.run(
+                tables_result = sql_node.execute(
                     query="SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
                 )
                 tables_data = tables_result.get("data", [])
@@ -404,7 +404,7 @@ for api_config in api_endpoints:
 
         # 1. Basic connectivity and response analysis
         try:
-            response = http_node.run(
+            response = http_node.execute(
                 url=api_url,
                 method="GET",
                 timeout=10,
@@ -475,7 +475,7 @@ for api_config in api_endpoints:
             for path in admin_paths:
                 test_url = f"{api_url}{path}"
                 try:
-                    admin_response = http_node.run(
+                    admin_response = http_node.execute(
                         url=test_url,
                         method="GET",
                         timeout=5,
@@ -514,7 +514,7 @@ for api_config in api_endpoints:
         # 4. Information disclosure testing
         try:
             # Test for information disclosure in error responses
-            error_response = http_node.run(
+            error_response = http_node.execute(
                 url=f"{api_url}/nonexistent-endpoint-12345",
                 method="GET",
                 timeout=5,
