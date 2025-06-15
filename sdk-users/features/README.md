@@ -5,10 +5,13 @@ This directory contains in-depth guides for key features and architectural patte
 ## 📚 Feature Index
 
 ### [Access Control](./access_control.md)
-**Security and permissions management for workflows and nodes**
-- Role-based access control (RBAC) implementation
-- Secure workflow execution patterns
-- API authentication and authorization
+**Unified security framework with RBAC/ABAC/Hybrid support**
+- Single interface for all access control strategies
+- Role-based access control (RBAC) for traditional permissions
+- Attribute-based access control (ABAC) with 16 operators
+- Hybrid mode combining RBAC and ABAC
+- Database integration with automatic permission checks
+- Data masking based on user attributes
 - Best practices for multi-tenant systems
 
 ### [Agent Coordination Patterns](./agent_coordination_patterns.md)

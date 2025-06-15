@@ -803,8 +803,8 @@ def main():
 
     # Clean up sample files
     for f in [
-        "data/customers.csv",
-        "data/employees.csv",
+        str(get_input_data_path("customers.csv")),
+        str(get_input_data_path("employees.csv")),
         str(get_output_data_path("access_control/customer_analysis_full.csv")),
         str(get_output_data_path("access_control/customer_analysis_summary.csv")),
         str(get_output_data_path("access_control/hr_report.json")),

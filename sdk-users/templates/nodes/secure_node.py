@@ -8,7 +8,7 @@ Usage:
     from kailash.nodes.custom.secure_node import SecureDataProcessorNode
 
     node = SecureDataProcessorNode()
-    result = node.run(input_data=[1, 2, 3])
+    result = node.execute(input_data=[1, 2, 3])
 """
 
 from typing import Any
@@ -204,13 +204,13 @@ if __name__ == "__main__":
     node = SecureDataProcessorNode()
 
     # Test with safe data
-    safe_result = node.run(
+    safe_result = node.execute(
         input_data=[1, 2, "hello", 4.5], max_items=10, filter_dangerous=True
     )
     print("Safe processing result:", safe_result)
 
     # Test with potentially dangerous data
-    dangerous_result = node.run(
+    dangerous_result = node.execute(
         input_data=["normal", "<script>alert('xss')</script>", "safe"],
         max_items=10,
         filter_dangerous=True,

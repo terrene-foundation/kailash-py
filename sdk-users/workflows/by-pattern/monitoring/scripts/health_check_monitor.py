@@ -214,7 +214,7 @@ for endpoint in endpoints:
 
         # Perform the health check
         start_time = time.time()
-        response = http_node.run(
+        response = http_node.execute(
             url=endpoint_url,
             method="GET",
             timeout=timeout,

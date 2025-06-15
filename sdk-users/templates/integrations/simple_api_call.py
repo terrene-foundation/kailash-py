@@ -77,7 +77,7 @@ def main():
 
     # Run workflow
     try:
-        results, run_id = workflow.run()
+        results, run_id = workflow.execute()
         print(f"API workflow completed! Run ID: {run_id}")
         print(f"Results saved to: {OUTPUT_FILE}")
 

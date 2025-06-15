@@ -21,7 +21,8 @@ Example usage:
     ...             "data": NodeParameter(name="data", type=list, required=True)
     ...         }
     ...
-    ...     def run(self, context, **kwargs):
+    ...     def run(self, **kwargs):
+    ...         context = kwargs.get("context", {})
     ...         iteration = self.get_iteration(context)
     ...         is_first = self.is_first_iteration(context)
     ...         prev_results = self.get_previous_state(context)
@@ -87,7 +88,8 @@ class CycleAwareNode(Node):
 
     Examples:
         >>> class QualityImproverNode(CycleAwareNode):
-        ...     def run(self, context, **kwargs):
+        ...     def run(self, **kwargs):
+        ...         context = kwargs.get("context", {})
         ...         iteration = self.get_iteration(context)
         ...         quality = kwargs.get("quality", 0.0)
         ...

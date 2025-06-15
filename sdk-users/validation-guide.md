@@ -415,7 +415,7 @@ builder.add_connection("source", "output", "target", "input")
 As of Session 061, the SDK has improved parameter handling with proper separation of concerns:
 
 1. **Configuration Parameters** - Set when adding the node to workflow (via `node.configure()`)
-2. **Runtime Parameters** - Passed during execution (via `node.run(**inputs)`)
+2. **Runtime Parameters** - Passed during execution (via `node.execute(**inputs)`)
 3. **Node Lifecycle**: Construction → Configuration → Execution
 
 ### Understanding get_parameters() Method
@@ -467,7 +467,7 @@ workflow.connect("reader", "filter", {"output": "data"})
 
 # UPDATED EXECUTION FLOW (Session 061 improvements):
 # 1. LocalRuntime calls node.configure(config) with node configuration
-# 2. LocalRuntime calls node.run(**inputs) with runtime data
+# 2. LocalRuntime calls node.execute(**inputs) with runtime data
 # 3. Runtime automatically merges configuration defaults with runtime inputs
 # 4. Node validation now happens at execution time, not construction time
 ```
@@ -754,7 +754,7 @@ node = KafkaConsumerNode()  # ERROR: Required parameter 'bootstrap_servers' not 
 # 1. Configure the node
 node.configure({"provider": "openai", "model": "gpt-4"})
 # 2. Execute with runtime data
-results = node.run(input_text="Hello world")
+results = node.execute(input_text="Hello world")
 
 # ❌ OLD BEHAVIOR - Mixed execution patterns
 results = node.execute({"provider": "openai", "input_text": "Hello"})  # Confusion

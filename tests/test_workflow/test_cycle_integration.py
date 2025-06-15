@@ -557,7 +557,7 @@ result = {
         coordinator = A2ACoordinatorNode()
         for i in range(3):
             coordinator.run(
-                {"cycle": {"iteration": 0}},
+                context={"cycle": {"iteration": 0}},
                 action="register",
                 agent_info={
                     "id": f"worker_{i}",

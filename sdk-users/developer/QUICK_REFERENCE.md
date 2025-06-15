@@ -4,12 +4,20 @@
 1. **Node names**: ALL end with "Node" (`CSVReaderNode` ✓, `CSVReader` ✗)
 2. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
 3. **Never use generics**: No `List[T]`, `Dict[K,V]`, `Optional[T]`, `Union[A,B]`
-4. **PythonCodeNode**: Input variables EXCLUDED from outputs!
-   - `mapping={"result": "input_data"}` ✓
-   - `mapping={"result": "result"}` ✗
+4. **PythonCodeNode**: Input variables EXCLUDED from outputs! + **Dot Notation**
+   - `mapping={"result": "input_data"}` ✓ (simple mapping)
+   - `mapping={"result.data": "input_data"}` ✓ (nested access)
+   - `mapping={"result": "result"}` ✗ (self-reference)
 5. **Always include name**: `PythonCodeNode(name="processor", code="...")`
 6. **Node Creation**: Can create without required params (validated at execution)
-7. **Data Files**: Use centralized `/data/` with `examples/utils/data_paths.py`
+7. **Auto-Mapping**: NodeParameter supports automatic connection discovery:
+   - `auto_map_primary=True` → Maps primary input automatically
+   - `auto_map_from=["alt1", "alt2"]` → Maps from alternative names
+   - `workflow_alias="name"` → Maps from workflow-level parameter
+8. **Data Files**: Use centralized `/data/` with `examples/utils/data_paths.py`
+9. **Workflow Resilience**: Built into standard Workflow (no separate class needed)
+10. **Credentials**: Always use CredentialManagerNode (never hardcode)
+11. **SharePoint Auth**: Use SharePointGraphReaderEnhanced for multi-auth
 
 ## 📋 Quick Node Selection
 | Task | Use | Don't Use |
@@ -19,6 +27,14 @@
 | Run Python | `PythonCodeNode(name="x")` | Missing `name` parameter |
 | HTTP calls | `HTTPRequestNode` | `HTTPClientNode` (deprecated) |
 | Transform data | `DataTransformer` | Complex PythonCodeNode |
+| Async operations | `LocalRuntime(enable_async=True)` | `AsyncLocalRuntime` (deprecated) |
+| Enterprise features | `LocalRuntime` with enterprise params | Custom implementations |
+
+## 🧪 Tests vs Examples
+| Purpose | Location | Content | Audience |
+|---------|----------|---------|----------|
+| **Validate SDK** | `tests/` | Assertions, edge cases, mocks | Contributors, CI/CD |
+| **Learn SDK** | `examples/` | Working solutions, tutorials | Users, documentation |
 
 ## 📁 Guide Structure
 - **[01-node-basics.md](01-node-basics.md)** - Creating nodes, base classes
@@ -28,9 +44,101 @@
 - **[05-directory-reader.md](05-directory-reader.md)** - File discovery patterns
 - **[06-document-processing.md](06-document-processing.md)** - Multi-file workflows
 - **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and fixes
+- **[08-async-database-patterns.md](08-async-database-patterns.md)** - High-performance async DB
+- **[09-workflow-resilience.md](09-workflow-resilience.md)** - 🆕 Retry, fallback, circuit breakers
+- **[10-credential-management.md](10-credential-management.md)** - 🆕 Secure credential handling
+- **[11-sharepoint-multi-auth.md](11-sharepoint-multi-auth.md)** - 🆕 Multi-auth SharePoint
+- **[12-session-067-enhancements.md](12-session-067-enhancements.md)** - ⭐ NEW: Enterprise workflow templates & data lineage
+- **[15-middleware-integration.md](15-middleware-integration.md)** - 🌉 NEW: Middleware layer for frontend integration
 - **[examples/](examples/)** - Working code examples
 
 ## ⚡ Quick Fix Templates
+
+### WorkflowBuilder (Current API)
+```python
+# ✅ CORRECT: String-based node creation
+from kailash.workflow.builder import WorkflowBuilder
+
+builder = WorkflowBuilder()
+
+# Create nodes using string types
+reader_id = builder.add_node(
+    "CSVReaderNode",           # Node type as string
+    node_id="csv_reader",      # Optional custom ID
+    config={                   # Configuration dictionary
+        "name": "csv_reader",
+        "file_path": "/data/inputs/customers.csv"
+    }
+)
+
+processor_id = builder.add_node(
+    "PythonCodeNode",
+    node_id="data_processor",
+    config={
+        "name": "data_processor",
+        "code": "result = {'processed': len(input_data)}"
+    }
+)
+
+# Connect using add_connection (4 parameters required)
+builder.add_connection(reader_id, "output", processor_id, "input")
+```
+
+### Unified Runtime (Enterprise Features)
+```python
+# ✅ CORRECT: Unified runtime with enterprise capabilities
+from kailash.runtime.local import LocalRuntime
+from kailash.access_control import UserContext
+
+# Basic usage (backward compatible)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow)
+
+# With enterprise features
+user_context = UserContext(
+    user_id="analyst_01",
+    tenant_id="acme_corp",
+    email="analyst@acme.com",
+    roles=["data_analyst", "viewer"]
+)
+
+runtime = LocalRuntime(
+    enable_monitoring=True,      # Auto performance tracking
+    enable_audit=True,          # Auto compliance logging
+    enable_security=True,       # Auto access control
+    enable_async=True,          # Auto async node detection
+    max_concurrency=20,         # Parallel execution limit
+    user_context=user_context,  # Multi-tenant isolation
+    resource_limits={           # Resource constraints
+        "memory_mb": 4096,
+        "cpu_cores": 4
+    }
+)
+
+# Execute with automatic enterprise integration
+results, run_id = runtime.execute(workflow, task_manager, parameters)
+```
+
+### Middleware Integration
+```python
+# ✅ CORRECT: Middleware imports and usage
+from kailash.middleware import (
+    AgentUIMiddleware,
+    RealtimeMiddleware,
+    APIGateway,
+    create_gateway
+)
+
+# Create gateway with middleware
+gateway = create_gateway(
+    title="My Application",
+    cors_origins=["http://localhost:3000"],
+    enable_docs=True
+)
+
+# Access integrated components
+agent_ui = gateway.agent_ui
+```
 
 ### Basic Custom Node
 ```python
@@ -90,6 +198,62 @@ node = PythonCodeNode(name="filter", code=code)
 workflow.connect("discovery", "processor", mapping={"result": "input_data"})
 ```
 
+### Resilient Workflow (NEW)
+```python
+from kailash.workflow import Workflow, RetryStrategy
+
+workflow = Workflow(workflow_id="resilient", name="Resilient Pipeline")
+
+# Add retry policy
+workflow.configure_retry(
+    "api_call",
+    max_retries=3,
+    strategy=RetryStrategy.EXPONENTIAL
+)
+
+# Add fallback
+workflow.add_fallback("primary_service", "backup_service")
+
+# Add circuit breaker
+workflow.configure_circuit_breaker("api_call", failure_threshold=5)
+```
+
+### Credential Management (NEW)
+```python
+from kailash.nodes.security import CredentialManagerNode
+
+# Never hardcode credentials!
+cred_node = CredentialManagerNode(
+    credential_name="api_service",
+    credential_type="api_key",
+    credential_sources=["vault", "env"],  # Try vault first
+    cache_duration_seconds=3600
+)
+```
+
+### SharePoint Multi-Auth (NEW)
+```python
+from kailash.nodes.data import SharePointGraphReaderEnhanced
+
+# Certificate auth (production)
+sp_node = SharePointGraphReaderEnhanced()
+result = await sp_node.execute(
+    auth_method="certificate",
+    certificate_path="/secure/cert.pem",
+    tenant_id="tenant-id",
+    client_id="app-id",
+    site_url="https://company.sharepoint.com/sites/data",
+    operation="list_files"
+)
+
+# Managed Identity (Azure)
+result = await sp_node.execute(
+    auth_method="managed_identity",
+    site_url="https://company.sharepoint.com/sites/data",
+    operation="list_files"
+)
+```
+
 ### DirectoryReaderNode (Best Practice)
 ```python
 from kailash.nodes.data import DirectoryReaderNode
@@ -125,4 +289,4 @@ reader = CSVReaderNode(name="reader", file_path="examples/data/customers.csv")
 4. **Missing PythonCodeNode name**: `PythonCodeNode(code=...)` → `PythonCodeNode(name="x", code=...)`
 5. **Manual file operations**: Use `DirectoryReaderNode` not `os.listdir`
 6. **Hardcoded data paths**: `"examples/data/file.csv"` → Use `get_input_data_path("file.csv")`
-7. **Old execution pattern**: `node.run()` → Use `node.execute()` for complete lifecycle
+7. **Old execution pattern**: `node.execute()` → Use `node.execute()` for complete lifecycle

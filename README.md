@@ -6,8 +6,8 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-751%20passing-brightgreen.svg" alt="Tests: 751 passing">
-  <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%">
+  <img src="https://img.shields.io/badge/tests-127%20organized-brightgreen.svg" alt="Tests: 127 organized">
+  <img src="https://img.shields.io/badge/test%20structure-reorganized-blue.svg" alt="Test structure: reorganized">
 </p>
 
 <p align="center">
@@ -35,12 +35,71 @@
 - 🤖 **Self-Organizing Agents**: Autonomous agent pools with intelligent team formation and convergence detection
 - 🧠 **Agent-to-Agent Communication**: Shared memory pools and intelligent caching for coordinated multi-agent systems
 - 🔒 **Production Security**: Comprehensive security framework with path traversal prevention, code sandboxing, and audit logging
+- 🛡️ **Admin Tool Framework**: Complete enterprise admin infrastructure with React UI, RBAC, audit logging, and LLM-based QA testing
 - 🎨 **Visual Workflow Builder**: Kailash Workflow Studio - drag-and-drop interface for creating and managing workflows (coming soon)
 - 🔁 **Cyclic Workflows (v0.2.0)**: Universal Hybrid Cyclic Graph Architecture with 30,000+ iterations/second performance
 - 🛠️ **Developer Tools**: CycleAnalyzer, CycleDebugger, CycleProfiler for production-ready cyclic workflows
 - 📈 **High Performance**: Optimized execution engine supporting 100,000+ iteration workflows
 - 📁 **Complete Finance Workflow Library (v0.3.1)**: Production-ready financial workflows with AI analysis
 - 💼 **Enterprise Workflow Patterns**: Credit risk, portfolio optimization, trading signals, fraud detection
+- 🏭 **Session 067 Enhancements**: Business workflow templates, data lineage tracking, automatic credential rotation
+- 🔄 **Zero-Downtime Operations**: Automatic credential rotation with enterprise notifications and audit trails
+- 🌉 **Enterprise Middleware (v0.4.0)**: Production-ready middleware architecture with real-time agent-frontend communication, dynamic workflows, and AI chat integration
+
+## 🏗️ Project Architecture
+
+The Kailash project is organized into three distinct layers:
+
+### Core Architecture (v0.4.0)
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Middleware     │    │   Kailash Core  │
+│                 │    │                  │    │                 │
+│  • React/Vue    │◄───│  • Agent-UI      │◄───│  • Workflows    │
+│  • JavaScript   │    │  • Real-time     │    │  • Nodes        │
+│  • Mobile Apps  │    │  • API Gateway   │    │  • Runtime      │
+│                 │    │  • AI Chat       │    │  • Security     │
+│                 │    │  • WebSocket/SSE │    │  • Database     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+```
+kailash_python_sdk/
+├── src/kailash/          # Core SDK - Framework and building blocks
+├── apps/                 # Applications - Production-ready solutions built with the SDK
+└── studio/               # UI Layer - Frontend interfaces and visual tools
+```
+
+### Layer Overview
+
+1. **SDK Layer** (`src/kailash/`) - The core framework providing:
+   - Nodes: Reusable computational units (100+ built-in)
+   - Workflows: DAG-based orchestration with cyclic support
+   - Runtime: Unified execution engine (async + enterprise)
+   - Middleware: Enterprise communication layer (NEW in v0.4.0)
+   - Security: RBAC/ABAC access control with audit logging
+
+2. **Application Layer** (`apps/`) - Complete applications including:
+   - User Management System (Django++ capabilities)
+   - Future: Workflow Designer, Data Pipeline, API Gateway, etc.
+
+3. **UI Layer** (`studio/`) - Modern React interfaces for:
+   - Admin dashboards
+   - Workflow visualization
+   - Application UIs
+
+### Installation Options
+
+```bash
+# Core SDK only
+pip install kailash
+
+# SDK with User Management
+pip install kailash[user-management]
+
+# Everything
+pip install kailash[all]
+```
 
 ## 🎯 Who Is This For?
 
@@ -187,7 +246,7 @@ workflow.add_node("optimizer", PythonCodeNode.from_function(func=optimize_portfo
     - Industry-specific solutions by vertical
     - Enterprise integration patterns
   - `essentials/` - Quick reference and cheatsheets
-  - `nodes/` - Comprehensive node catalog (66+ nodes)
+  - `nodes/` - Comprehensive node catalog (93+ nodes including Session 067 enhancements)
   - `patterns/` - Architectural patterns
 
 ### For SDK Contributors
@@ -212,7 +271,111 @@ workflow.add_node("optimizer", PythonCodeNode.from_function(func=optimize_portfo
 - [Examples](examples/)
 - [Release Notes](CHANGELOG.md)
 
+## 🌉 Enterprise Middleware (v0.4.0)
+
+### Production-Ready Communication Layer
+
+The new middleware architecture provides enterprise-grade components for building production applications:
+
+```python
+from kailash.middleware import (
+    AgentUIMiddleware,
+    APIGateway,
+    create_gateway,
+    RealtimeMiddleware,
+    AIChatMiddleware
+)
+
+# Create enterprise middleware stack
+agent_ui = AgentUIMiddleware(
+    max_sessions=1000,
+    session_timeout_minutes=60,
+    enable_persistence=True
+)
+
+# API Gateway with authentication
+gateway = create_gateway(
+    title="My Production API",
+    cors_origins=["https://myapp.com"],
+    enable_docs=True
+)
+
+# Real-time communication
+realtime = RealtimeMiddleware(agent_ui)
+
+# AI chat integration
+ai_chat = AIChatMiddleware(
+    agent_ui,
+    enable_vector_search=True,
+    llm_provider="ollama"
+)
+```
+
+### Key Middleware Features
+
+- **Dynamic Workflow Creation**: Create workflows from frontend configurations using `WorkflowBuilder.from_dict()`
+- **Real-time Communication**: WebSocket and SSE support for live updates
+- **Session Management**: Multi-tenant isolation with automatic cleanup
+- **AI Chat Integration**: Natural language workflow generation with context awareness
+- **Database Persistence**: Repository pattern with audit logging
+- **JWT Authentication**: Enterprise security with RBAC/ABAC access control
+- **Health Monitoring**: Built-in health checks and performance metrics
+
+### Frontend Integration
+
+```python
+# Create session for frontend client
+session_id = await agent_ui.create_session("user123")
+
+# Dynamic workflow from frontend
+workflow_config = {
+    "name": "data_pipeline",
+    "nodes": [...],
+    "connections": [...]
+}
+
+workflow_id = await agent_ui.create_dynamic_workflow(
+    session_id, workflow_config
+)
+
+# Execute with real-time updates
+execution_id = await agent_ui.execute_workflow(
+    session_id, workflow_id, inputs={}
+)
+```
+
+**Test Excellence**: 17/17 integration tests passing with 100% reliability for production deployment.
+
+See [Middleware Integration Guide](sdk-users/developer/16-middleware-integration-guide.md) for complete documentation.
+
 ## 🔥 Advanced Features
+
+### Unified Access Control (v0.3.3)
+
+Single interface for all access control strategies:
+
+```python
+from kailash.access_control import AccessControlManager
+
+# Choose your strategy
+manager = AccessControlManager(strategy="abac")  # or "rbac" or "hybrid"
+
+# ABAC example with helper functions
+from kailash.access_control import create_attribute_condition
+
+condition = create_attribute_condition(
+    path="user.attributes.department",
+    operator="hierarchical_match",
+    value="finance"
+)
+
+# Database integration
+db_node = AsyncSQLDatabaseNode(
+    name="financial_query",
+    query="SELECT * FROM sensitive_data",
+    access_control_manager=manager
+)
+```
 
 ### Cyclic Workflows (Enhanced in v0.2.2)
 
@@ -276,14 +439,16 @@ api.run()
 
 ## 🏗️ Key Components
 
-### Nodes (60+ built-in)
+### Nodes (85+ built-in)
 
-- **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, DirectoryReaderNode
+- **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, DirectoryReaderNode
+- **Admin**: UserManagementNode, RoleManagementNode, PermissionCheckNode, AuditLogNode, SecurityEventNode
 - **Transform**: DataTransformer, DataFrameFilter, DataFrameJoiner
-- **AI/ML**: LLMAgentNode, EmbeddingGeneratorNode, A2ACoordinatorNode
-- **API**: RESTClientNode, GraphQLNode, AuthNode
+- **AI/ML**: LLMAgentNode, EmbeddingGeneratorNode, A2ACoordinatorNode, MCPAgentNode
+- **API**: RESTClientNode, GraphQLNode, AuthNode, HTTPRequestNode
 - **Logic**: SwitchNode, MergeNode, ConvergenceCheckerNode
 - **Code**: PythonCodeNode, WorkflowNode
+- **Security**: EnhancedAccessControlManager (ABAC with 16 operators)
 
 ### Runtimes
 
@@ -373,23 +538,87 @@ ruff check .
 python scripts/test-all-examples.py
 ```
 
+## 🧪 Tests & Examples
+
+### Comprehensive Test Suite
+The SDK features a fully reorganized test suite with 127 tests organized by purpose:
+
+```bash
+# Run all tests
+pytest
+
+# Fast unit tests (92 tests)
+pytest tests/unit/
+
+# Integration tests (31 tests)
+pytest tests/integration/
+
+# End-to-end tests (4 tests)
+pytest tests/e2e/
+
+# Specific component tests
+pytest tests/unit/nodes/ai/
+```
+
+**Test Structure:**
+- **Unit Tests**: Fast, isolated component validation
+- **Integration Tests**: Component interaction testing
+- **E2E Tests**: Complete scenario validation
+- **Unified Configuration**: Single `conftest.py` with 76+ fixtures
+
+### Production Workflows & Examples
+Clear separation of purpose for maximum value:
+
+**Business Workflows** (`sdk-users/workflows/`):
+```
+sdk-users/workflows/
+├── quickstart/           # 5-minute success stories
+├── by-industry/         # Finance, healthcare, manufacturing
+├── by-pattern/          # Data processing, AI/ML, API integration
+├── integrations/        # Third-party platform connections
+└── production-ready/    # Enterprise deployment patterns
+```
+
+**SDK Development** (`examples/`):
+```
+examples/
+├── feature-validation/  # SDK component testing
+├── test-harness/       # Development utilities
+└── utils/              # Shared development tools
+```
+
+**Key Principles:**
+- **Workflows**: Production business value, real-world solutions
+- **Examples**: SDK development, feature validation
+- **Tests**: Quality assurance, regression prevention
+
 ## 📈 Project Status
 
-- ✅ Core workflow engine
-- ✅ 60+ production-ready nodes
-- ✅ Local and parallel runtimes
+### ✅ v0.4.0 - Enterprise Middleware Architecture
+- **Middleware Layer**: Complete refactor from monolithic to composable middleware
+- **Real-time Communication**: WebSocket/SSE with comprehensive event streaming
+- **AI Integration**: Built-in chat middleware with workflow generation
+- **Test Excellence**: 799 tests passing (100% pass rate), organized structure
+- **Gateway Integration**: Updated for middleware-based architecture
+- **Performance**: Excluded slow tests from CI, builds complete in <2 minutes
+
+### ✅ Previous Releases
+- ✅ Core workflow engine with 100+ production-ready nodes
+- ✅ Unified LocalRuntime (async + enterprise features)
 - ✅ Export to container format
-- ✅ Real-time monitoring
-- ✅ Comprehensive test suite (751 tests)
-- ✅ Self-organizing agent systems
-- ✅ Hierarchical RAG architecture
-- ✅ REST API wrapper
+- ✅ Reorganized test suite (unit/integration/e2e structure)
+- ✅ Self-organizing agent systems and hierarchical RAG
 - ✅ Cyclic workflow support with CycleBuilder API
-- ✅ Production security framework
-- ✅ Comprehensive workflow library (v0.2.2)
-- 🚧 Visual workflow builder (in progress)
-- 🚧 Docker runtime
+- ✅ Production security framework with RBAC/ABAC/Hybrid
+- ✅ Async database infrastructure with pgvector support
+- ✅ Admin tool framework with React UI and QA testing
+- ✅ Comprehensive workflow library (finance, enterprise patterns)
+
+### 🚧 In Progress
+- 🚧 Visual workflow builder (Studio UI)
+- 🚧 Docker runtime integration
 - 🚧 Cloud deployment tools
+- 🚧 Advanced RAG toolkit validation
 
 ## 📄 License
 

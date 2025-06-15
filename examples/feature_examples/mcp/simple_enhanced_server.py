@@ -3,12 +3,16 @@ Simple example of Enhanced MCP Server usage.
 
 This demonstrates how users can create production-ready MCP servers
 with caching, metrics, and configuration out of the box.
+
+Purpose: SDK Feature Validation
+SDK Features: Enhanced MCP Server from middleware
+Testing Focus: Production-ready MCP server features
 """
 
 import asyncio
 import time
 
-from kailash.mcp import MCPServer, SimpleMCPServer
+from kailash.middleware.mcp import MiddlewareMCPServer as MCPServer
 
 
 def weather_service_example():
@@ -80,6 +84,8 @@ def simple_calculator_example():
     print("\n=== Simple Calculator MCP Server ===")
 
     # Simple server with minimal features
+    from kailash.mcp.server_enhanced import SimpleMCPServer
+
     server = SimpleMCPServer("calculator", "Basic math operations")
 
     @server.tool()
@@ -184,13 +190,13 @@ async def main():
 
         print("\n🎉 All examples completed successfully!")
         print("\nTo run these servers:")
-        print("1. Uncomment the server.run() lines below")
+        print("1. Uncomment the server.execute() lines below")
         print("2. Use MCP clients to connect via stdio transport")
         print("3. Call tools and see caching/metrics in action")
 
         # Uncomment to run servers (they run indefinitely)
         # print("\nStarting weather server...")
-        # weather_server.run()
+        # weather_server.execute()
 
     except Exception as e:
         print(f"❌ Example failed: {e}")

@@ -80,11 +80,24 @@ Example Workflows:
     workflow.connect('process', 'publish')
 """
 
+from kailash.nodes.data.async_connection import (
+    AsyncConnectionManager,
+    get_connection_manager,
+)
+
+# Async nodes
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
 from kailash.nodes.data.directory import DirectoryReaderNode
 from kailash.nodes.data.event_generation import EventGeneratorNode
 from kailash.nodes.data.file_discovery import FileDiscoveryNode
-from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode, TextReaderNode
-from kailash.nodes.data.retrieval import RelevanceScorerNode
+from kailash.nodes.data.readers import (
+    CSVReaderNode,
+    DocumentProcessorNode,
+    JSONReaderNode,
+    TextReaderNode,
+)
+from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNode
 from kailash.nodes.data.sharepoint_graph import (
     SharePointGraphReader,
     SharePointGraphWriter,
@@ -113,6 +126,7 @@ __all__ = [
     "FileDiscoveryNode",
     # Readers
     "CSVReaderNode",
+    "DocumentProcessorNode",
     "JSONReaderNode",
     "TextReaderNode",
     "SharePointGraphReader",
@@ -126,6 +140,7 @@ __all__ = [
     "QuerySourceNode",
     # Retrieval
     "RelevanceScorerNode",
+    "HybridRetrieverNode",
     # SQL
     "SQLDatabaseNode",
     # Vector DB
@@ -137,4 +152,9 @@ __all__ = [
     "StreamPublisherNode",
     "WebSocketNode",
     "EventStreamNode",
+    # Async
+    "AsyncSQLDatabaseNode",
+    "AsyncConnectionManager",
+    "get_connection_manager",
+    "AsyncPostgreSQLVectorNode",
 ]

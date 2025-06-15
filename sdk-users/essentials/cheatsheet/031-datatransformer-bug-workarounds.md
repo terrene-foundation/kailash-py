@@ -12,8 +12,16 @@ data = {"files": [...], "count": 5}
 data = ["files", "count"]  # List of keys only!
 ```
 
-## ✅ **STATUS: FIXED in Base SDK**
-The core bug has been **fixed** in DataTransformer's `validate_inputs()` method, but existing workflows may still encounter it due to backwards compatibility. Workarounds remain useful for resilient code.
+## ✅ **STATUS: FULLY RESOLVED**
+The bug has been **completely fixed** as of Session 070:
+1. **DataTransformer** now correctly accepts arbitrary parameters via `validate_inputs()`
+2. **LocalRuntime** now supports nested path mapping (e.g., `"result.files": "files"`)
+3. All test scenarios pass successfully
+
+### What Was Fixed
+- **LocalRuntime** `_prepare_node_inputs()` method now handles nested path navigation
+- Supports dot notation for mapping nested fields: `mapping={"result.files": "files"}`
+- Maintains backwards compatibility with direct key mapping
 
 ## 🔧 Workaround Patterns
 

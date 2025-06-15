@@ -201,7 +201,7 @@ def main():
     # Execute node
     logger.info(f"Executing node with inputs: {list(runtime_inputs.keys())}")
     try:
-        result = node.run(**runtime_inputs)
+        result = node.execute(**runtime_inputs)
         logger.info("Node execution completed successfully")
     except Exception as e:
         logger.error(f"Node execution failed: {e}")

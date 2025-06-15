@@ -132,13 +132,28 @@ class IntelligentCacheNode(Node):
         >>> assert "hit_rate" in stats["stats"]
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.cache = {}
         self.semantic_index = defaultdict(list)
         self.access_patterns = defaultdict(int)
         self.cost_metrics = {}
         self.query_abstractions = {}
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -482,11 +497,26 @@ class MCPAgentNode(SelfOrganizingAgentNode):
         >>> assert "task" in params
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.mcp_clients = {}
         self.tool_registry = {}
         self.call_history = deque(maxlen=100)
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         params = super().get_parameters()
@@ -789,8 +819,20 @@ class QueryAnalysisNode(Node):
         >>> assert simple["analysis"]["team_suggestion"]["suggested_size"] >= 1
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.query_patterns = {
             "data_retrieval": {
                 "keywords": ["what is", "get", "fetch", "retrieve", "show me"],
@@ -823,6 +865,9 @@ class QueryAnalysisNode(Node):
                 "complexity": 0.9,
             },
         }
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -1148,10 +1193,25 @@ class OrchestrationManagerNode(Node):
         >>> assert "max_iterations" in params
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.session_id = str(uuid.uuid4())
         self.orchestration_history = deque(maxlen=50)
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -1304,9 +1364,22 @@ class OrchestrationManagerNode(Node):
 
         # Phase 5: Final Processing
         print("📊 Phase 5: Finalizing results...")
+
+        # Handle case where solution_history is empty (time limit reached early)
+        if final_solution:
+            solution_to_use = final_solution
+        elif solution_history:
+            solution_to_use = solution_history[-1]["solution"]
+        else:
+            solution_to_use = {
+                "content": "No solution generated due to time constraints.",
+                "confidence": 0.0,
+                "reasoning": "Time limit reached before any solution could be generated.",
+            }
+
         final_result = self._finalize_results(
             query,
-            final_solution or solution_history[-1]["solution"],
+            solution_to_use,
             solution_history,
             time.time() - start_time,
             infrastructure,
@@ -1825,9 +1898,24 @@ class ConvergenceDetectorNode(Node):
         >>> assert "Diminishing returns" in result2["reason"]
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name: str = None, id: str = None, **kwargs):
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self.convergence_history = deque(maxlen=100)
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {

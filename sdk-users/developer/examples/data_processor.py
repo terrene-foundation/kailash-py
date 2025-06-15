@@ -124,7 +124,7 @@ if __name__ == "__main__":
     ]
 
     # Process with filters and transformations
-    result = node.run(
+    result = node.execute(
         data=test_data,
         filters={"city": "NYC"},
         transform={"name": "uppercase", "age": "number"},

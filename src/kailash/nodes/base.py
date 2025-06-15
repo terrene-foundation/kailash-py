@@ -18,6 +18,7 @@ Key Components:
 - NodeRegistry: Global registry for node discovery
 """
 
+import inspect
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -67,7 +68,7 @@ class NodeMetadata(BaseModel):
 
 
 class NodeParameter(BaseModel):
-    """Definition of a node parameter.
+    """Definition of a node parameter with enhanced auto-mapping capabilities.
 
     This class defines the schema for node inputs and outputs, providing:
 
@@ -75,12 +76,20 @@ class NodeParameter(BaseModel):
     2. Default values for optional parameters
     3. Documentation for users
     4. Requirements specification
+    5. Auto-mapping from workflow connections (NEW)
+
+    Enhanced Features (v0.2.0):
+    - auto_map_from: Alternative parameter names for flexible mapping
+    - auto_map_primary: Designates primary input for automatic data routing
+    - workflow_alias: Preferred name in workflow connections
+    - These features enable robust parameter resolution across all node types
 
     Design Purpose:
     - Enables static analysis of workflow connections
     - Provides runtime validation of data types
     - Supports automatic UI generation for node configuration
     - Facilitates workflow validation before execution
+    - Resolves parameter mapping issues between workflow data and node inputs
 
     Upstream usage:
     - Node.get_parameters(): Returns dict of parameters
@@ -88,7 +97,7 @@ class NodeParameter(BaseModel):
 
     Downstream consumers:
     - Node._validate_config(): Validates configuration against parameters
-    - Node.validate_inputs(): Validates runtime inputs
+    - Node.validate_inputs(): Validates runtime inputs with auto-mapping
     - Workflow.connect(): Validates connections between nodes
     - WorkflowExporter: Exports parameter schemas
     """
@@ -98,6 +107,17 @@ class NodeParameter(BaseModel):
     required: bool = True
     default: Any = None
     description: str = ""
+
+    # Enhanced auto-mapping capabilities
+    auto_map_from: list[str] = Field(
+        default_factory=list, description="Alternative parameter names for auto-mapping"
+    )
+    auto_map_primary: bool = Field(
+        default=False, description="Use as primary input for automatic data routing"
+    )
+    workflow_alias: str = Field(
+        default="", description="Preferred name in workflow connections"
+    )
 
 
 class Node(ABC):
@@ -311,7 +331,6 @@ class Node(ABC):
         """
         return {}
 
-    @abstractmethod
     def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic.
 
@@ -360,6 +379,63 @@ class Node(ABC):
             - LocalRuntime: During workflow execution
             - TestRunner: During unit testing
         """
+        # Check if this node has implemented async_run
+        import inspect
+
+        # Get the actual async_run method from the instance's class
+        async_run_method = getattr(self.__class__, "async_run", None)
+        base_async_run = getattr(Node, "async_run", None)
+
+        # Check if async_run has been overridden
+        if async_run_method and async_run_method != base_async_run:
+            # This node has a custom async_run implementation
+            # Run it synchronously
+            import asyncio
+
+            try:
+                # Check if we're already in an event loop
+                loop = asyncio.get_running_loop()
+
+                # We're in an event loop - use nest_asyncio
+                import nest_asyncio
+
+                nest_asyncio.apply()
+                return asyncio.run(self.async_run(**kwargs))
+
+            except RuntimeError:
+                # No event loop running, we can use asyncio.run() directly
+                return asyncio.run(self.async_run(**kwargs))
+        else:
+            # This is a regular synchronous node - subclass should override this method
+            raise NotImplementedError(
+                f"Node '{self.__class__.__name__}' must implement either run() or async_run() method"
+            )
+
+    async def async_run(self, **kwargs) -> dict[str, Any]:
+        """Asynchronous execution method for the node.
+
+        This method provides async execution support. By default, it calls
+        the synchronous run() method. Nodes can override this for true
+        async behavior.
+
+        Design Philosophy:
+        - Maintain backward compatibility with synchronous nodes
+        - Support both sync and async execution methods
+        - Provide clear error handling for async operations
+        - Enable efficient parallel execution in workflows
+
+        Args:
+            **kwargs: Validated input parameters matching get_parameters()
+
+        Returns:
+            Dictionary of outputs that will be validated and passed
+            to downstream nodes
+
+        Raises:
+            NodeExecutionError: If execution fails
+        """
+        # Default implementation calls the synchronous run() method
+        return self.run(**kwargs)
 
     def _validate_config(self):
         """Validate node configuration against defined parameters.
@@ -479,6 +555,7 @@ class Node(ABC):
             - execute(): Before passing inputs to run()
             - Workflow validation: During connection checks
         """
+        # Enhanced parameter resolution with auto-mapping
         try:
             params = self.get_parameters()
         except Exception as e:
@@ -486,20 +563,123 @@ class Node(ABC):
                 f"Failed to get node parameters for validation: {e}"
             ) from e
 
+        # Phase 1: Resolve parameters using enhanced mapping
+        resolved = self._resolve_parameters(kwargs, params)
+
+        # Phase 2: Validate resolved parameters
+        validated = self._validate_resolved_parameters(resolved, params)
+
+        # Preserve special runtime parameters that are not in schema
+        special_params = ["context"]
+        for special_param in special_params:
+            if special_param in kwargs:
+                validated[special_param] = kwargs[special_param]
+
+        return validated
+
+    def _resolve_parameters(self, runtime_inputs: dict, params: dict) -> dict:
+        """Enhanced parameter resolution with auto-mapping.
+
+        This method implements the core parameter mapping logic that resolves
+        workflow inputs to node parameters using multiple strategies:
+
+        1. Direct parameter matches (existing behavior)
+        2. Workflow alias mapping
+        3. Auto-mapping from alternative names
+        4. Primary input auto-detection
+
+        Args:
+            runtime_inputs: Inputs provided by workflow runtime
+            params: Node parameter definitions from get_parameters()
+
+        Returns:
+            Dict mapping parameter names to resolved values
+        """
+        resolved = {}
+        used_inputs = set()
+
+        # Phase 1: Direct parameter matches (preserves existing behavior)
+        for param_name, param_def in params.items():
+            if param_name in runtime_inputs:
+                resolved[param_name] = runtime_inputs[param_name]
+                used_inputs.add(param_name)
+                if self.logger:
+                    self.logger.debug(f"Direct match: {param_name}")
+
+        # Phase 2: Workflow alias resolution
+        for param_name, param_def in params.items():
+            if param_name in resolved:
+                continue
+
+            if param_def.workflow_alias and param_def.workflow_alias in runtime_inputs:
+                resolved[param_name] = runtime_inputs[param_def.workflow_alias]
+                used_inputs.add(param_def.workflow_alias)
+                if self.logger:
+                    self.logger.debug(
+                        f"Workflow alias match: {param_name} <- {param_def.workflow_alias}"
+                    )
+                continue
+
+        # Phase 3: Auto-mapping from alternative names
+        for param_name, param_def in params.items():
+            if param_name in resolved:
+                continue
+
+            if param_def.auto_map_from:
+                for alt_name in param_def.auto_map_from:
+                    if alt_name in runtime_inputs and alt_name not in used_inputs:
+                        resolved[param_name] = runtime_inputs[alt_name]
+                        used_inputs.add(alt_name)
+                        if self.logger:
+                            self.logger.debug(
+                                f"Auto-map match: {param_name} <- {alt_name}"
+                            )
+                        break
+
+        # Phase 4: Primary input auto-mapping (for nodes like SwitchNode)
+        primary_params = [p for p in params.values() if p.auto_map_primary]
+        if primary_params and len(primary_params) == 1:
+            primary_param = primary_params[0]
+            if primary_param.name not in resolved:
+                # Find the main data input (usually the largest unused input)
+                remaining_inputs = {
+                    k: v
+                    for k, v in runtime_inputs.items()
+                    if k not in used_inputs and not k.startswith("_")
+                }
+                if remaining_inputs:
+                    # Use the input with the most substantial data as primary
+                    main_input = max(
+                        remaining_inputs.items(),
+                        key=lambda x: len(str(x[1])) if x[1] is not None else 0,
+                    )
+                    resolved[primary_param.name] = main_input[1]
+                    used_inputs.add(main_input[0])
+                    if self.logger:
+                        self.logger.debug(
+                            f"Primary auto-map: {primary_param.name} <- {main_input[0]}"
+                        )
+
+        return resolved
+
+    def _validate_resolved_parameters(self, resolved: dict, params: dict) -> dict:
+        """Validate resolved parameters against their definitions.
+
+        Args:
+            resolved: Parameters resolved by _resolve_parameters
+            params: Node parameter definitions
+
+        Returns:
+            Dict of validated parameters with type conversions applied
+
+        Raises:
+            NodeValidationError: If validation fails
+        """
         validated = {}
 
         for param_name, param_def in params.items():
-            if param_def.required and param_name not in kwargs:
-                if param_def.default is not None:
-                    validated[param_name] = param_def.default
-                else:
-                    raise NodeValidationError(
-                        f"Required input '{param_name}' not provided. "
-                        f"Description: {param_def.description or 'No description available'}"
-                    )
-
-            if param_name in kwargs:
-                value = kwargs[param_name]
+            if param_name in resolved:
+                value = resolved[param_name]
                 if value is None and not param_def.required:
                     continue
 
@@ -517,7 +697,48 @@ class Node(ABC):
                 else:
                     validated[param_name] = value
 
+            elif param_def.required:
+                if param_def.default is not None:
+                    validated[param_name] = param_def.default
+                else:
+                    # Enhanced error message with suggestions
+                    available = list(resolved.keys()) if resolved else ["none"]
+                    suggestions = self._suggest_parameter_mapping(
+                        param_name, list(resolved.keys())
+                    )
+                    raise NodeValidationError(
+                        f"Required parameter '{param_name}' not provided. "
+                        f"Available resolved inputs: {available}. "
+                        f"Mapping suggestions: {suggestions}. "
+                        f"Description: {param_def.description or 'No description available'}"
+                    )
+
         return validated
+
+    def _suggest_parameter_mapping(
+        self, param_name: str, available: list[str]
+    ) -> list[str]:
+        """Suggest likely parameter mappings based on name similarity.
+
+        Args:
+            param_name: The parameter name we're trying to map
+            available: List of available input names
+
+        Returns:
+            List of suggested parameter names
+        """
+        try:
+            import difflib
+
+            return difflib.get_close_matches(param_name, available, n=3, cutoff=0.3)
+        except ImportError:
+            # Fallback if difflib is not available
+            return [
+                name
+                for name in available
+                if param_name.lower() in name.lower()
+                or name.lower() in param_name.lower()
+            ]
 
     def validate_outputs(self, outputs: dict[str, Any]) -> dict[str, Any]:
         """Validate outputs against schema and JSON-serializability.
@@ -752,6 +973,67 @@ class Node(ABC):
                 f"Node '{self.id}' execution failed: {type(e).__name__}: {e}"
             ) from e
 
+    async def execute_async(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute the node asynchronously with validation and error handling.
+
+        This is the async version of execute() that provides the same
+        validation and error handling but allows for async execution.
+
+        Execution flow:
+        1. Logs execution start
+        2. Validates inputs against parameter schema
+        3. Calls async_run() with validated inputs
+        4. Validates outputs are JSON-serializable
+        5. Logs execution time
+        6. Returns validated outputs
+
+        Returns:
+            Dictionary of validated outputs from async_run()
+
+        Raises:
+            NodeExecutionError: If execution fails
+            NodeValidationError: If input/output validation fails
+        """
+        from datetime import UTC, datetime
+
+        start_time = datetime.now(UTC)
+        self.logger.info(f"Starting async execution of node {self.id}")
+
+        try:
+            # Merge config and runtime inputs
+            merged_inputs = {**self.config, **runtime_inputs}
+
+            # Validate inputs
+            validated_inputs = self.validate_inputs(**merged_inputs)
+            self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
+
+            # Execute node logic asynchronously
+            outputs = await self.async_run(**validated_inputs)
+
+            # Validate outputs
+            validated_outputs = self.validate_outputs(outputs)
+
+            execution_time = (datetime.now(UTC) - start_time).total_seconds()
+            self.logger.info(
+                f"Node {self.id} executed successfully (async) in {execution_time:.3f}s"
+            )
+            return validated_outputs
+
+        except NodeValidationError:
+            # Re-raise validation errors as-is
+            raise
+        except NodeExecutionError:
+            # Re-raise execution errors as-is
+            raise
+        except Exception as e:
+            # Wrap unexpected errors
+            self.logger.error(
+                f"Node {self.id} async execution failed: {e}", exc_info=True
+            )
+            raise NodeExecutionError(
+                f"Node '{self.id}' async execution failed: {type(e).__name__}: {e}"
+            ) from e
+
     def to_dict(self) -> dict[str, Any]:
         """Convert node to dictionary representation.
 
@@ -929,6 +1211,9 @@ class NodeRegistry:
                 f"Cannot register {node_class.__name__}: must be a subclass of Node"
             )
 
+        # Validate constructor signature (Core SDK improvement)
+        cls._validate_node_constructor(node_class)
+
         node_name = alias or node_class.__name__
 
         if node_name in cls._nodes:
@@ -936,6 +1221,52 @@ class NodeRegistry:
 
         cls._nodes[node_name] = node_class
         logging.info(f"Registered node '{node_name}'")
+
+    @classmethod
+    def _validate_node_constructor(cls, node_class: type[Node]):
+        """Validate that node constructor follows SDK patterns.
+
+        This is a core SDK improvement to ensure all nodes have consistent
+        constructor signatures that work with WorkflowBuilder.from_dict().
+
+        Validates that the node constructor either:
+        1. Accepts 'name' parameter (like PythonCodeNode)
+        2. Accepts 'id' parameter (traditional pattern)
+        3. Uses **kwargs to accept both
+
+        Args:
+            node_class: Node class to validate
+
+        Raises:
+            NodeConfigurationError: If constructor signature is incompatible
+        """
+        try:
+            sig = inspect.signature(node_class.__init__)
+            params = list(sig.parameters.keys())
+
+            # Skip 'self' parameter
+            if "self" in params:
+                params.remove("self")
+
+            # Check if constructor accepts required parameters
+            has_name = "name" in params
+            has_id = "id" in params
+            has_kwargs = any(
+                param.kind == param.VAR_KEYWORD for param in sig.parameters.values()
+            )
+
+            if not (has_name or has_id or has_kwargs):
+                logging.warning(
+                    f"Node {node_class.__name__} constructor may not work with WorkflowBuilder.from_dict(). "
+                    f"Constructor should accept 'name', 'id', or **kwargs parameter. "
+                    f"Current parameters: {params}"
+                )
+
+        except Exception as e:
+            # Don't fail registration for signature inspection issues
+            logging.warning(
+                f"Could not validate constructor for {node_class.__name__}: {e}"
+            )
 
     @classmethod
     def get(cls, node_name: str) -> type[Node]:

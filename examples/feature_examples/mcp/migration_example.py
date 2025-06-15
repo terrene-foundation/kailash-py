@@ -1,12 +1,18 @@
 """
 Migration example from basic to enhanced MCP server.
 
-This shows how existing MCP servers can benefit from enhanced features
-with minimal code changes.
+This example demonstrates the middleware MCP server features
+and how to use them effectively.
+
+Purpose: SDK Feature Validation
+SDK Features: Enhanced MCP Server from middleware
+Testing Focus: MCP server functionality with caching and metrics
 """
 
 import asyncio
 import time
+
+from kailash.middleware.mcp import MiddlewareMCPServer as MCPServer
 
 
 def old_basic_server_example():
@@ -49,8 +55,7 @@ def new_enhanced_server_example():
     """Example of enhanced server with same functionality."""
     print("=== New Enhanced Server Pattern ===")
 
-    # Import the enhanced server
-    from kailash.mcp import MCPServer
+    # Enhanced server is already imported at top of file
 
     # Create server with all enhancements enabled by default
     server = MCPServer("enhanced-server")
