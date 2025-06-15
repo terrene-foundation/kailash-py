@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from kailash.nodes.data import AsyncSQLDatabaseNode, get_connection_manager
 from kailash.nodes.data.async_connection import PoolConfig
-from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
 
 # Optimal pool sizes for 500+ concurrent users
@@ -239,7 +239,7 @@ async def demonstrate_concurrent_execution():
     # Simulate execution pattern from migration guide
     async def simulate_concurrent_load():
         # Create runtime with high concurrency
-        runtime = AsyncLocalRuntime(max_concurrency=50)
+        runtime = LocalRuntime(max_concurrency=50, enable_async=True)
 
         # Simulate portfolio IDs
         portfolio_ids = [f"PORT{i:04d}" for i in range(100)]  # Reduced for demo
@@ -299,8 +299,8 @@ def demonstrate_caching_strategy():
 
 if __name__ == "__main__":
     # Run all demonstrations
-    asyncio.run(demonstrate_pool_usage())
-    asyncio.run(demonstrate_concurrent_execution())
+    asyncio.execute(demonstrate_pool_usage())
+    asyncio.execute(demonstrate_concurrent_execution())
     demonstrate_caching_strategy()
 
     print("\n\n=== Demo Complete ===")
