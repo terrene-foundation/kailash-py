@@ -7,6 +7,7 @@ that might conflict with PythonCodeNode security restrictions.
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -80,7 +81,6 @@ def clean_text(data=None, iteration=None, quality_score=None, **kwargs):
 
 def validate_text(data=None, iteration=None, quality_score=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
-    import re
 
     # Get cleaned text and metadata
     try:
