@@ -280,8 +280,9 @@ jobs:
               pids[4]=""
           fi
 
-          run_check "Example validation" "cd examples && uv run python utils/test_runner.py" "examples.log" &
-          pids[5]=$!
+          # Example validation removed from CI - examples are for SDK development only
+          # run_check "Example validation" "cd examples && uv run python utils/test_runner.py" "examples.log" &
+          # pids[5]=$!
 
           # Wait for all jobs and collect results
           failed=0
@@ -604,8 +605,7 @@ jobs:
               jobs = [
                 { name: 'Lint and Format', status: '${{ needs.lint-and-format.result }}' },
                 { name: 'Tests', status: '${{ needs.test-matrix.result }}' },
-                { name: 'Security', status: '${{ needs.security-scan.result }}' },
-                { name: 'Examples', status: '${{ needs.validate-examples.result }}' }
+                { name: 'Security', status: '${{ needs.security-scan.result }}' }
               ];
             }
 
