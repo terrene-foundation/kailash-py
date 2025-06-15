@@ -1,6 +1,6 @@
-====================
+=====================
 Middleware Components
-====================
+=====================
 
 .. currentmodule:: kailash.middleware
 
