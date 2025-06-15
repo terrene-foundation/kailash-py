@@ -248,8 +248,8 @@ result = {
         await asyncio.sleep(0.5)
 
         # Get results
-        results1 = await agent_ui.get_execution_results(session_id, exec1_id)
-        results2 = await agent_ui.get_execution_results(session_id, exec2_id)
+        results1 = await agent_ui.get_execution_status(exec1_id, session_id)
+        results2 = await agent_ui.get_execution_status(exec2_id, session_id)
 
         # Verify isolation and correct execution
         if results1 and "validate" in results1:
@@ -276,8 +276,8 @@ result = {
         async def event_handler(event):
             received_events.append(event)
 
-        # Subscribe to workflow events
-        await realtime.event_stream.subscribe("test_listener", event_handler)
+        # Subscribe to workflow events through the agent_ui
+        await agent_ui.event_stream.subscribe("test_listener", event_handler)
 
         # Create session and workflow
         session_id = await agent_ui.create_session("realtime_user")
@@ -314,7 +314,7 @@ result = {
         assert isinstance(received_events, list)
 
         # Cleanup
-        await realtime.event_stream.unsubscribe("test_listener")
+        await agent_ui.event_stream.unsubscribe("test_listener")
         await agent_ui.close_session(session_id)
 
     @pytest.mark.asyncio
@@ -368,8 +368,8 @@ result = {
         await asyncio.sleep(0.5)
 
         # Get results and verify isolation
-        results1 = await agent_ui.get_execution_results(session1_id, exec1_id)
-        results2 = await agent_ui.get_execution_results(session2_id, exec2_id)
+        results1 = await agent_ui.get_execution_status(exec1_id, session1_id)
+        results2 = await agent_ui.get_execution_status(exec2_id, session2_id)
 
         # Verify sessions are isolated
         if results1 and "identifier" in results1:
@@ -385,7 +385,7 @@ result = {
         # Verify sessions are cleaned up
         # Attempting to get results from cleaned up session should handle gracefully
         try:
-            await agent_ui.get_execution_results(session1_id, exec1_id)
+            await agent_ui.get_execution_status(exec1_id, session1_id)
         except Exception:
             # Expected - session cleaned up
             pass
@@ -549,11 +549,11 @@ result = {
             await asyncio.sleep(0.5)
 
             # Get results
-            error_results = await agent_ui.get_execution_results(
-                session_id, error_execution_id
+            error_results = await agent_ui.get_execution_status(
+                error_execution_id, session_id
             )
-            success_results = await agent_ui.get_execution_results(
-                session_id, success_execution_id
+            success_results = await agent_ui.get_execution_status(
+                success_execution_id, session_id
             )
 
             # Verify error handling (should not crash the system)
