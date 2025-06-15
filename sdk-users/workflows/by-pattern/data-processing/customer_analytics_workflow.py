@@ -6,7 +6,7 @@ A comprehensive customer analysis workflow demonstrating:
 1. Multi-source data integration (CSV customer data + JSON transactions)
 2. Data validation and cleansing
 3. Customer segmentation by value
-4. Transaction analysis with segment correlation  
+4. Transaction analysis with segment correlation
 5. Comprehensive reporting with multiple output formats
 
 Business Value:
@@ -33,7 +33,6 @@ examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
 from examples.utils.paths import get_data_dir
-
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
@@ -109,7 +108,7 @@ def create_customer_segmenter():
 
     return PythonCodeNode.from_function(
         func=segment_customers,
-        name="customer_segmenter", 
+        name="customer_segmenter",
         description="Segment customers by value",
     )
 
@@ -270,7 +269,9 @@ def main():
 
         # Report generation
         workflow.connect("segmenter", "reporter", {"result.data": "customer_data"})
-        workflow.connect("analyzer", "reporter", {"result.metrics": "transaction_metrics"})
+        workflow.connect(
+            "analyzer", "reporter", {"result.metrics": "transaction_metrics"}
+        )
 
         # Output branches
         workflow.connect("segmenter", "segment_writer", {"result.data": "data"})

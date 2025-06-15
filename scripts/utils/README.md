@@ -25,7 +25,7 @@ Miscellaneous utility scripts for the Kailash SDK development environment.
 
 **Features**:
 - **Model Discovery** - Find available AI models
-- **Registry API** - REST API for model management  
+- **Registry API** - REST API for model management
 - **Health Monitoring** - Model status and availability
 - **Configuration Management** - Model parameters and settings
 
@@ -58,7 +58,7 @@ registry:
   port: 8765
   host: "0.0.0.0"
   models_dir: "/models"
-  
+
 logging:
   level: "INFO"
   format: "%(asctime)s - %(levelname)s - %(message)s"
@@ -178,6 +178,6 @@ curl http://localhost:8765/models/custom-llm
 
 ---
 
-**Dependencies**: Python 3.8+, FastAPI (for AI registry)  
-**Integration**: SDK development environment  
+**Dependencies**: Python 3.8+, FastAPI (for AI registry)
+**Integration**: SDK development environment
 **Last Updated**: Scripts directory reorganization

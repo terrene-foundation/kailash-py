@@ -164,23 +164,23 @@ advanced_processor = BatchProcessorNode(
     name="rate_limited_processor",
     operation="process_data_batches",
     data_source="api_data",
-    
+
     # Batch optimization
     batch_size=500,
     adaptive_batch_sizing=True,
     min_batch_size=100,
     max_batch_size=2000,
-    
+
     # Concurrency control
     processing_strategy="adaptive_parallel",
     max_concurrent_batches=15,
     rate_limit_per_second=50,
-    
+
     # Error handling
     error_handling="continue_with_logging",
     max_retry_attempts=3,
     retry_delay_seconds=5,
-    
+
     # Performance monitoring
     enable_performance_monitoring=True,
     performance_threshold_ms=5000
@@ -239,12 +239,12 @@ enterprise_rotator = RotatingCredentialNode(
     name="enterprise_rotator",
     operation="start_rotation",
     credential_name="production_api_key",
-    
+
     # Rotation policy
     check_interval=1800,  # Check every 30 minutes
     expiration_threshold=172800,  # Rotate 48 hours before expiry
     rotation_policy="proactive",  # proactive, reactive, scheduled
-    
+
     # Refresh sources (tried in order)
     refresh_sources=["vault", "aws_secrets", "azure_key_vault"],
     refresh_config={
@@ -252,15 +252,15 @@ enterprise_rotator = RotatingCredentialNode(
         "aws_secrets": {"region": "us-east-1"},
         "azure_key_vault": {"vault_url": "https://company-kv.vault.azure.net/"}
     },
-    
+
     # Zero-downtime rotation
     zero_downtime=True,
     rollback_on_failure=True,
-    
+
     # Notifications
     notification_webhooks=["https://alerts.company.com/webhook"],
     notification_emails=["devops@company.com", "security@company.com"],
-    
+
     # Audit
     audit_log_enabled=True
 )

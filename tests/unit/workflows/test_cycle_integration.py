@@ -16,7 +16,12 @@ import pytest
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode
+from kailash.nodes.data import (
+    CSVReaderNode,
+    CSVWriterNode,
+    JSONReaderNode,
+    JSONWriterNode,
+)
 from kailash.nodes.logic import WorkflowNode
 from kailash.runtime.local import LocalRuntime
 
@@ -52,7 +57,7 @@ class TestCyclicWorkflowPatterns:
             """Improve data quality iteratively."""
             if not data:
                 return {"data": [], "quality": 0.0, "converged": False, "iteration": 0}
-            
+
             # Clean data - remove empty rows
             cleaned_data = []
             for record in data:
@@ -70,24 +75,25 @@ class TestCyclicWorkflowPatterns:
                         if not record.get("category"):
                             record["category"] = "general"
                         cleaned_data.append(record)
-            
+
             # Calculate quality (ratio of complete records)
             complete_records = sum(
-                1 for r in cleaned_data 
+                1
+                for r in cleaned_data
                 if all(r.get(f) for f in ["id", "name", "value", "category"])
             )
             quality = complete_records / len(data) if data else 0.0
-            
+
             # Additional improvement on later iterations
             if iteration > 0 and quality < quality_threshold:
                 quality = min(1.0, quality + 0.1)
-            
+
             return {
                 "data": cleaned_data,
                 "quality": quality,
                 "converged": quality >= quality_threshold,
                 "iteration": iteration + 1,
-                "records_cleaned": len(data) - len(cleaned_data)
+                "records_cleaned": len(data) - len(cleaned_data),
             }
 
         improver = PythonCodeNode.from_function(
@@ -95,9 +101,13 @@ class TestCyclicWorkflowPatterns:
             name="improver",
             input_schema={
                 "data": NodeParameter(name="data", type=list, required=False),
-                "quality_threshold": NodeParameter(name="quality_threshold", type=float, required=False, default=0.8),
-                "iteration": NodeParameter(name="iteration", type=int, required=False, default=0)
-            }
+                "quality_threshold": NodeParameter(
+                    name="quality_threshold", type=float, required=False, default=0.8
+                ),
+                "iteration": NodeParameter(
+                    name="iteration", type=int, required=False, default=0
+                ),
+            },
         )
         workflow.add_node("improver", improver)
 
@@ -106,27 +116,24 @@ class TestCyclicWorkflowPatterns:
 
         # Connect workflow
         workflow.connect("reader", "improver", mapping={"data": "data"})
-        
+
         # Create improvement cycle
         workflow.connect(
-            "improver", "improver",
-            mapping={
-                "result.data": "data",
-                "result.iteration": "iteration"
-            },
+            "improver",
+            "improver",
+            mapping={"result.data": "data", "result.iteration": "iteration"},
             cycle=True,
             max_iterations=5,
             convergence_check="converged == True",
-            cycle_id="quality_cycle"
+            cycle_id="quality_cycle",
         )
-        
+
         workflow.connect("improver", "writer", mapping={"result.data": "data"})
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
-            workflow,
-            parameters={"improver": {"quality_threshold": 0.8}}
+            workflow, parameters={"improver": {"quality_threshold": 0.8}}
         )
 
         # Verify results
@@ -143,21 +150,23 @@ class TestCyclicWorkflowPatterns:
         workflow = Workflow("optimization", "Iterative Optimization")
 
         # Optimization function (simulated ML training)
-        def optimize_model(accuracy=0.5, loss=1.0, learning_rate=0.01, epoch=0, target_accuracy=0.95):
+        def optimize_model(
+            accuracy=0.5, loss=1.0, learning_rate=0.01, epoch=0, target_accuracy=0.95
+        ):
             """Simulate model optimization iteration."""
             # Simulate training progress with faster convergence
             improvement = learning_rate * (1 - accuracy)
             # Faster convergence: don't decay improvement as quickly
             new_accuracy = min(0.99, accuracy + improvement)
             new_loss = max(0.01, loss * 0.95)
-            
+
             # Check if plateauing
             is_plateauing = improvement < 0.001
             if is_plateauing and new_accuracy < target_accuracy:
                 learning_rate *= 0.5
-            
+
             converged = new_accuracy >= target_accuracy
-            
+
             return {
                 "accuracy": new_accuracy,
                 "loss": new_loss,
@@ -168,44 +177,55 @@ class TestCyclicWorkflowPatterns:
                 "metrics": {
                     "accuracy": new_accuracy,
                     "loss": new_loss,
-                    "improvement": improvement
-                }
+                    "improvement": improvement,
+                },
             }
 
         optimizer = PythonCodeNode.from_function(
             func=optimize_model,
             name="optimizer",
             input_schema={
-                "accuracy": NodeParameter(name="accuracy", type=float, required=False, default=0.5),
-                "loss": NodeParameter(name="loss", type=float, required=False, default=1.0),
-                "learning_rate": NodeParameter(name="learning_rate", type=float, required=False, default=0.01),
-                "epoch": NodeParameter(name="epoch", type=int, required=False, default=0),
-                "target_accuracy": NodeParameter(name="target_accuracy", type=float, required=False, default=0.95)
-            }
+                "accuracy": NodeParameter(
+                    name="accuracy", type=float, required=False, default=0.5
+                ),
+                "loss": NodeParameter(
+                    name="loss", type=float, required=False, default=1.0
+                ),
+                "learning_rate": NodeParameter(
+                    name="learning_rate", type=float, required=False, default=0.01
+                ),
+                "epoch": NodeParameter(
+                    name="epoch", type=int, required=False, default=0
+                ),
+                "target_accuracy": NodeParameter(
+                    name="target_accuracy", type=float, required=False, default=0.95
+                ),
+            },
         )
         workflow.add_node("optimizer", optimizer)
 
         # Create optimization cycle
         workflow.connect(
-            "optimizer", "optimizer",
+            "optimizer",
+            "optimizer",
             mapping={
                 "result.accuracy": "accuracy",
                 "result.loss": "loss",
                 "result.learning_rate": "learning_rate",
                 "result.epoch": "epoch",
-                "result.target_accuracy": "target_accuracy"
+                "result.target_accuracy": "target_accuracy",
             },
             cycle=True,
             max_iterations=50,
             convergence_check="converged == True",
-            cycle_id="optimization_cycle"
+            cycle_id="optimization_cycle",
         )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
         results, run_id = runtime.execute(
             workflow,
-            parameters={"optimizer": {"target_accuracy": 0.9, "learning_rate": 0.1}}
+            parameters={"optimizer": {"target_accuracy": 0.9, "learning_rate": 0.1}},
         )
 
         # Verify optimization
@@ -228,32 +248,36 @@ class TestCyclicWorkflowPatterns:
 
         # Stream processor function
         def process_stream_window(
-            stream_data=None, 
-            window_size=10, 
+            stream_data=None,
+            window_size=10,
             window_start=0,
             anomaly_threshold=50.0,
             anomalies=None,
-            results_history=None
+            results_history=None,
         ):
             """Process stream data in windows."""
             if not stream_data:
                 return {"window_result": None, "converged": True}
-            
+
             if anomalies is None:
                 anomalies = []
             if results_history is None:
                 results_history = []
-            
+
             # Process current window
             window_end = min(window_start + window_size, len(stream_data))
-            window_data = stream_data[window_start:window_end] if window_start < len(stream_data) else []
-            
+            window_data = (
+                stream_data[window_start:window_end]
+                if window_start < len(stream_data)
+                else []
+            )
+
             window_result = None
             if window_data:
                 # Calculate window average
                 window_result = sum(window_data) / len(window_data)
                 results_history.append(window_result)
-                
+
                 # Detect anomalies in window
                 for i, val in enumerate(window_data):
                     # Only count the specific anomalies we added
@@ -261,15 +285,17 @@ class TestCyclicWorkflowPatterns:
                         # Check if we already detected this anomaly
                         idx = window_start + i
                         if not any(a["index"] == idx for a in anomalies):
-                            anomalies.append({
-                                "index": idx,
-                                "value": val,
-                                "severity": abs(val - 20) / anomaly_threshold
-                            })
-            
+                            anomalies.append(
+                                {
+                                    "index": idx,
+                                    "value": val,
+                                    "severity": abs(val - 20) / anomaly_threshold,
+                                }
+                            )
+
             # Check if more data to process
             more_data = window_end < len(stream_data)
-            
+
             return {
                 "window_result": window_result,
                 "window_start": window_end,  # Next window start
@@ -280,38 +306,49 @@ class TestCyclicWorkflowPatterns:
                 "converged": not more_data,
                 "stream_data": stream_data,  # Pass through
                 "window_size": window_size,  # Pass through
-                "anomaly_threshold": anomaly_threshold  # Pass through
+                "anomaly_threshold": anomaly_threshold,  # Pass through
             }
 
         processor = PythonCodeNode.from_function(
             func=process_stream_window,
             name="processor",
             input_schema={
-                "stream_data": NodeParameter(name="stream_data", type=list, required=False),
-                "window_size": NodeParameter(name="window_size", type=int, required=False, default=10),
-                "window_start": NodeParameter(name="window_start", type=int, required=False, default=0),
-                "anomaly_threshold": NodeParameter(name="anomaly_threshold", type=float, required=False, default=50.0),
+                "stream_data": NodeParameter(
+                    name="stream_data", type=list, required=False
+                ),
+                "window_size": NodeParameter(
+                    name="window_size", type=int, required=False, default=10
+                ),
+                "window_start": NodeParameter(
+                    name="window_start", type=int, required=False, default=0
+                ),
+                "anomaly_threshold": NodeParameter(
+                    name="anomaly_threshold", type=float, required=False, default=50.0
+                ),
                 "anomalies": NodeParameter(name="anomalies", type=list, required=False),
-                "results_history": NodeParameter(name="results_history", type=list, required=False)
-            }
+                "results_history": NodeParameter(
+                    name="results_history", type=list, required=False
+                ),
+            },
         )
         workflow.add_node("processor", processor)
 
         # Create processing cycle
         workflow.connect(
-            "processor", "processor",
+            "processor",
+            "processor",
             mapping={
                 "result.stream_data": "stream_data",
                 "result.window_size": "window_size",
                 "result.window_start": "window_start",
                 "result.anomaly_threshold": "anomaly_threshold",
                 "result.anomalies": "anomalies",
-                "result.results_history": "results_history"
+                "result.results_history": "results_history",
             },
             cycle=True,
             max_iterations=20,
             convergence_check="converged == True",
-            cycle_id="stream_cycle"
+            cycle_id="stream_cycle",
         )
 
         # Execute
@@ -322,30 +359,30 @@ class TestCyclicWorkflowPatterns:
                 "processor": {
                     "stream_data": stream_data,
                     "window_size": 10,
-                    "anomaly_threshold": 50.0
+                    "anomaly_threshold": 50.0,
                 }
-            }
+            },
         )
 
         # Verify stream processing
         processor_result = results["processor"]["result"]
         assert processor_result["total_processed"] == 100
         assert processor_result["window_number"] >= 9
-        
+
         # Check anomaly detection
         anomalies = processor_result["anomalies"]
         # Debug: print anomalies to see what was detected
         for a in anomalies:
             print(f"Anomaly at index {a['index']}: value={a['value']}")
-        
+
         # The stream data formula: 10 + i + (i % 10) * 2
         # At i=90: 10 + 90 + (90 % 10) * 2 = 10 + 90 + 0 = 100
         # So there's a natural 100 value at index 90!
-        
+
         # We should only have our 3 specific anomalies
         unique_anomalies = {(a["index"], a["value"]) for a in anomalies}
         assert len(unique_anomalies) >= 3  # At least our 3 anomalies
-        
+
         # Verify specific anomalies were found
         anomaly_indices = [a["index"] for a in anomalies]
         assert 25 in anomaly_indices
@@ -362,12 +399,12 @@ class TestCyclicWorkflowPatterns:
             """Validate and correct data iteratively."""
             if not data or not rules:
                 return {"data": [], "validation_score": 0.0, "converged": False}
-            
+
             valid_data = []
-            
+
             for record in data:
                 is_valid = True
-                
+
                 # Check required fields
                 if "required_fields" in rules:
                     for field in rules["required_fields"]:
@@ -377,27 +414,27 @@ class TestCyclicWorkflowPatterns:
                                 record[field] = 0
                             else:
                                 record[field] = "default"
-                
+
                 # Check value ranges
                 if "value_ranges" in rules:
                     for field, (min_val, max_val) in rules["value_ranges"].items():
                         if field in record and isinstance(record[field], (int, float)):
                             # Clamp to range
                             record[field] = max(min_val, min(max_val, record[field]))
-                
+
                 valid_data.append(record)
-            
+
             validation_score = len(valid_data) / len(data) if data else 0.0
-            
+
             # Improve score on subsequent iterations
             if iteration > 0:
                 validation_score = min(1.0, validation_score + 0.05)
-            
+
             return {
                 "data": valid_data,
                 "validation_score": validation_score,
                 "converged": validation_score >= 0.95,
-                "iteration": iteration + 1
+                "iteration": iteration + 1,
             }
 
         validator = PythonCodeNode.from_function(
@@ -406,22 +443,22 @@ class TestCyclicWorkflowPatterns:
             input_schema={
                 "data": NodeParameter(name="data", type=list, required=False),
                 "rules": NodeParameter(name="rules", type=dict, required=False),
-                "iteration": NodeParameter(name="iteration", type=int, required=False, default=0)
-            }
+                "iteration": NodeParameter(
+                    name="iteration", type=int, required=False, default=0
+                ),
+            },
         )
         inner_workflow.add_node("validator", validator)
 
         # Create validation cycle
         inner_workflow.connect(
-            "validator", "validator",
-            mapping={
-                "result.data": "data",
-                "result.iteration": "iteration"
-            },
+            "validator",
+            "validator",
+            mapping={"result.data": "data", "result.iteration": "iteration"},
             cycle=True,
             max_iterations=5,
             convergence_check="converged == True",
-            cycle_id="validation_cycle"
+            cycle_id="validation_cycle",
         )
 
         # Create outer workflow
@@ -442,14 +479,16 @@ class TestCyclicWorkflowPatterns:
 
         # Add nodes to outer workflow
         outer_workflow.add_node("loader", JSONReaderNode(file_path=str(data_file)))
-        outer_workflow.add_node("validation_workflow", WorkflowNode(workflow=inner_workflow))
-        
+        outer_workflow.add_node(
+            "validation_workflow", WorkflowNode(workflow=inner_workflow)
+        )
+
         # Final processor to extract validated data
         def process_final(workflow_results=None):
             """Extract data from workflow results."""
             if not workflow_results:
                 return []
-            
+
             # WorkflowNode returns results dict
             if isinstance(workflow_results, dict) and "validator" in workflow_results:
                 validator_result = workflow_results["validator"]
@@ -457,29 +496,32 @@ class TestCyclicWorkflowPatterns:
                     return validator_result["result"].get("data", [])
                 elif isinstance(validator_result, dict) and "data" in validator_result:
                     return validator_result["data"]
-            
+
             return []
 
         final_processor = PythonCodeNode.from_function(
             func=process_final,
             name="final_processor",
             input_schema={
-                "workflow_results": NodeParameter(name="workflow_results", type=dict, required=False)
-            }
+                "workflow_results": NodeParameter(
+                    name="workflow_results", type=dict, required=False
+                )
+            },
         )
         outer_workflow.add_node("final_processor", final_processor)
-        
+
         outer_workflow.add_node(
-            "saver", 
-            JSONWriterNode(file_path=str(tmp_path / "validated_data.json"))
+            "saver", JSONWriterNode(file_path=str(tmp_path / "validated_data.json"))
         )
 
         # Connect outer workflow
-        outer_workflow.connect("loader", "validation_workflow", mapping={"data": "data"})
         outer_workflow.connect(
-            "validation_workflow", 
-            "final_processor", 
-            mapping={"results": "workflow_results"}
+            "loader", "validation_workflow", mapping={"data": "data"}
+        )
+        outer_workflow.connect(
+            "validation_workflow",
+            "final_processor",
+            mapping={"results": "workflow_results"},
         )
         outer_workflow.connect("final_processor", "saver", mapping={"result": "data"})
 
@@ -492,16 +534,16 @@ class TestCyclicWorkflowPatterns:
                     "validator": {
                         "rules": {
                             "required_fields": ["id", "value", "status"],
-                            "value_ranges": {"value": (0, 1000)}
+                            "value_ranges": {"value": (0, 1000)},
                         }
                     }
                 }
-            }
+            },
         )
 
         # Verify execution
         assert (tmp_path / "validated_data.json").exists()
-        
+
         # Check validation results
         validation_result = results.get("validation_workflow", {})
         if "validator" in validation_result:

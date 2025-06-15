@@ -94,17 +94,17 @@ class EmbeddingGeneratorNode(Node):
         ...     similarity_metric="cosine"
         ... )
 
-        Cached embedding with MCP integration:
+        Cached embedding with MCP integration::
 
-        mcp_embedder = EmbeddingGeneratorNode()
-        result = mcp_embedder.run(
-            provider="azure",
-            model="text-embedding-3-small",
-            mcp_resource_uri="data://documents/knowledge_base.json",
-            operation="embed_mcp_resource",
-            cache_ttl=3600,
-            chunk_size=512
-        )
+            mcp_embedder = EmbeddingGeneratorNode()
+            result = mcp_embedder.run(
+                provider="azure",
+                model="text-embedding-3-small",
+                mcp_resource_uri="data://documents/knowledge_base.json",
+                operation="embed_mcp_resource",
+                cache_ttl=3600,
+                chunk_size=512
+            )
     """
 
     def get_parameters(self) -> dict[str, NodeParameter]:

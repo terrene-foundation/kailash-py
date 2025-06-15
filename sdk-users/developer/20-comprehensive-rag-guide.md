@@ -967,13 +967,13 @@ private = PrivacyPreservingRAGNode(
 # Compose pipeline
 builder = WorkflowBuilder()
 
-privacy_id = builder.add_node("PrivacyPreservingRAGNode", "privacy", 
+privacy_id = builder.add_node("PrivacyPreservingRAGNode", "privacy",
     config={"redact_pii": True})
-    
+
 federated_id = builder.add_node("FederatedRAGNode", "federated",
     config={"min_participating_nodes": 2})
 
-builder.add_connection(privacy_id, "privacy_preserving_results", 
+builder.add_connection(privacy_id, "privacy_preserving_results",
                       federated_id, "query")
 
 # Execute with privacy and federation

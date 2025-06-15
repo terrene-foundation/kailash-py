@@ -2,7 +2,7 @@
 
 import asyncio
 import unittest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -463,24 +463,26 @@ class TestRESTClient(unittest.TestCase):
 # Async tests for 070-upgrade-components
 class TestRESTClientAsyncUpgrade:
     """Test async upgrades for RESTClientNode (070-upgrade-components)."""
-    
+
     def setup_method(self):
         """Set up test fixtures."""
         self.client = RESTClientNode(name="rest_client_async")
-    
+
     @pytest.mark.asyncio
     async def test_rest_client_async_run_exists(self):
         """Test that RESTClientNode has async_run method."""
-        assert hasattr(self.client, 'async_run'), "RESTClientNode missing async_run method"
-    
+        assert hasattr(
+            self.client, "async_run"
+        ), "RESTClientNode missing async_run method"
+
     @pytest.mark.asyncio
     async def test_rest_client_async_get_request(self):
         """Test async GET request execution."""
         # Mock the AsyncHTTPRequestNode that RESTClientNode uses internally
-        with patch('kailash.nodes.api.http.AsyncHTTPRequestNode') as mock_async_http:
+        with patch("kailash.nodes.api.http.AsyncHTTPRequestNode") as mock_async_http:
             mock_instance = AsyncMock()
             mock_async_http.return_value = mock_instance
-            
+
             # Mock async_run return value (match AsyncHTTPRequestNode response format)
             mock_instance.async_run.return_value = {
                 "success": True,
@@ -488,28 +490,28 @@ class TestRESTClientAsyncUpgrade:
                 "content": {"id": 123, "name": "Test User"},
                 "headers": {"content-type": "application/json"},
                 "response_time_ms": 150,
-                "url": "https://api.example.com/users/123"
+                "url": "https://api.example.com/users/123",
             }
-            
+
             # Execute async_run
             result = await self.client.async_run(
                 base_url="https://api.example.com",
                 resource="users/{id}",
                 path_params={"id": "123"},
-                method="GET"
+                method="GET",
             )
-            
+
             # Verify results
             assert result["success"] is True
             assert result["status_code"] == 200
             assert result["data"] == {"id": 123, "name": "Test User"}
-            
+
             # Verify async HTTP was called
             mock_instance.async_run.assert_called_once()
             call_args = mock_instance.async_run.call_args[1]
             assert call_args["method"] == "GET"
             assert call_args["url"] == "https://api.example.com/users/123"
-    
+
     @pytest.mark.asyncio
     async def test_rest_client_async_runtime_integration(self):
         """Test RESTClientNode with LocalRuntime async detection."""
@@ -517,47 +519,50 @@ class TestRESTClientAsyncUpgrade:
         workflow = Workflow(workflow_id="rest_async_test", name="REST Async Test")
         rest_client = RESTClientNode(name="client")
         workflow.add_node("client", rest_client)
-        
+
         # Mock the async HTTP request
-        with patch('kailash.nodes.api.http.AsyncHTTPRequestNode') as mock_async_http:
+        with patch("kailash.nodes.api.http.AsyncHTTPRequestNode") as mock_async_http:
             mock_instance = AsyncMock()
             mock_async_http.return_value = mock_instance
-            
+
             mock_instance.async_run.return_value = {
                 "success": True,
                 "status_code": 200,
                 "content": [{"id": 1, "name": "User 1"}, {"id": 2, "name": "User 2"}],
                 "headers": {"content-type": "application/json"},
                 "response_time_ms": 300,
-                "url": "https://api.example.com/users"
+                "url": "https://api.example.com/users",
             }
-            
+
             # Test with async-enabled runtime
             runtime = LocalRuntime(enable_async=True, debug=True)
-            
+
             # Use execute_async which returns a tuple (results, run_id)
-            results, run_id = await runtime.execute_async(workflow, parameters={
-                "client": {
-                    "base_url": "https://api.example.com",
-                    "resource": "users",
-                    "method": "GET"
-                }
-            })
-            
+            results, run_id = await runtime.execute_async(
+                workflow,
+                parameters={
+                    "client": {
+                        "base_url": "https://api.example.com",
+                        "resource": "users",
+                        "method": "GET",
+                    }
+                },
+            )
+
             # Verify results
             assert "client" in results
             assert results["client"]["success"] is True
             assert len(results["client"]["data"]) == 2
             assert results["client"]["data"][0]["name"] == "User 1"
-    
+
     @pytest.mark.asyncio
     async def test_rest_client_async_graceful_fallback(self):
         """Test graceful fallback when network request fails."""
         # Mock the async HTTP request to simulate network failure that should still return success=False gracefully
-        with patch('kailash.nodes.api.http.AsyncHTTPRequestNode') as mock_async_http:
+        with patch("kailash.nodes.api.http.AsyncHTTPRequestNode") as mock_async_http:
             mock_instance = AsyncMock()
             mock_async_http.return_value = mock_instance
-            
+
             # Mock network failure with graceful error response
             mock_instance.async_run.return_value = {
                 "success": False,
@@ -566,15 +571,13 @@ class TestRESTClientAsyncUpgrade:
                 "content": None,
                 "headers": {},
                 "response_time_ms": 0,
-                "url": "https://api.example.com/test"
+                "url": "https://api.example.com/test",
             }
-            
+
             result = await self.client.async_run(
-                base_url="https://api.example.com",
-                resource="test",
-                method="GET"
+                base_url="https://api.example.com", resource="test", method="GET"
             )
-            
+
             # Should handle network failure gracefully
             assert result["success"] is False
             assert result["status_code"] == 0

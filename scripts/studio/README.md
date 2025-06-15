@@ -245,6 +245,6 @@ curl http://localhost:3000/health
 
 ---
 
-**Dependencies**: Node.js 16+, npm, development environment  
-**Ports Used**: 3000 (Studio), 3001 (Studio Dev), 8080 (Runner)  
+**Dependencies**: Node.js 16+, npm, development environment
+**Ports Used**: 3000 (Studio), 3001 (Studio Dev), 8080 (Runner)
 **Last Updated**: Scripts directory reorganization

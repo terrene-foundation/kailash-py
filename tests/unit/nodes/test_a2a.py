@@ -3,8 +3,9 @@
 import time
 from unittest.mock import patch
 
-from kailash.nodes.ai.a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 import pytest
+
+from kailash.nodes.ai.a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 
 
 class TestSharedMemoryPoolNode:
@@ -96,7 +97,9 @@ class TestSharedMemoryPoolNode:
         )
 
         # Query for machine learning
-        result = pool.execute(action="query", agent_id="searcher", query="machine learning")
+        result = pool.execute(
+            action="query", agent_id="searcher", query="machine learning"
+        )
 
         assert result["success"] is True
         assert len(result["results"]) >= 1
@@ -440,7 +443,9 @@ class TestA2ACoordinatorNode:
             ],
         }
 
-        result = coordinator.execute(context=context, action="coordinate", task=workflow)
+        result = coordinator.execute(
+            context=context, action="coordinate", task=workflow
+        )
 
         assert result["success"] is True
         assert result["total_steps"] == 4

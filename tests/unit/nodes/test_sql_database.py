@@ -403,7 +403,9 @@ class TestSQLDatabaseNodeSQLite:
 
         # Test with reasonable timeout - should work
         start_time = time.time()
-        result = node.execute(query="SELECT COUNT(*) as count FROM test_users", timeout=5)
+        result = node.execute(
+            query="SELECT COUNT(*) as count FROM test_users", timeout=5
+        )
         duration = time.time() - start_time
 
         assert result["row_count"] == 1

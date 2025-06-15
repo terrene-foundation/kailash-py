@@ -39,7 +39,6 @@ examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
 from examples.utils.paths import get_data_dir
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.local import LocalRuntime
@@ -47,8 +46,7 @@ from kailash.workflow.graph import Workflow
 
 # Configure business-focused logging
 logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -58,19 +56,21 @@ def create_transaction_classifier():
 
     def classify_transactions(transaction_count: int = 15) -> Dict[str, Any]:
         """Generate and classify business transactions."""
-        
+
         # Generate realistic transaction data
         transactions = []
         for i in range(transaction_count):
             amount = round(random.uniform(100, 10000), 2)
             customer_type = random.choice(["enterprise", "business", "individual"])
-            
+
             transaction = {
                 "id": f"TXN_{1000 + i}",
                 "amount": amount,
                 "customer_type": customer_type,
-                "submitted_at": (datetime.now() - timedelta(minutes=random.randint(0, 120))).isoformat(),
-                "requires_approval": amount > 5000
+                "submitted_at": (
+                    datetime.now() - timedelta(minutes=random.randint(0, 120))
+                ).isoformat(),
+                "requires_approval": amount > 5000,
             }
             transactions.append(transaction)
 
@@ -78,11 +78,13 @@ def create_transaction_classifier():
         urgent_count = 0
         standard_count = 0
         batch_count = 0
-        
+
         for transaction in transactions:
-            if (transaction["customer_type"] == "enterprise" or 
-                transaction["requires_approval"] or 
-                transaction["amount"] > 5000):
+            if (
+                transaction["customer_type"] == "enterprise"
+                or transaction["requires_approval"]
+                or transaction["amount"] > 5000
+            ):
                 urgent_count += 1
             elif transaction["amount"] > 1000:
                 standard_count += 1
@@ -92,7 +94,13 @@ def create_transaction_classifier():
         # Determine routing based on transaction mix
         if urgent_count > 0:
             routing_decision = "urgent"
-            priority_data = [t for t in transactions if t["customer_type"] == "enterprise" or t["requires_approval"] or t["amount"] > 5000]
+            priority_data = [
+                t
+                for t in transactions
+                if t["customer_type"] == "enterprise"
+                or t["requires_approval"]
+                or t["amount"] > 5000
+            ]
         elif standard_count > 0:
             routing_decision = "standard"
             priority_data = [t for t in transactions if 1000 < t["amount"] <= 5000]
@@ -107,8 +115,8 @@ def create_transaction_classifier():
                 "urgent_count": urgent_count,
                 "standard_count": standard_count,
                 "batch_count": batch_count,
-                "total_transactions": len(transactions)
-            }
+                "total_transactions": len(transactions),
+            },
         }
 
     return PythonCodeNode.from_function(
@@ -123,19 +131,19 @@ def create_urgent_processor():
 
     def process_urgent(transactions: List[Dict]) -> Dict[str, Any]:
         """Process urgent transactions with priority handling."""
-        
+
         processed = []
         total_value = 0
-        
+
         for transaction in transactions:
             processed_transaction = transaction.copy()
             processed_transaction["priority"] = "URGENT"
             processed_transaction["processed_at"] = datetime.now().isoformat()
             processed_transaction["sla_status"] = "PRIORITY"
-            
+
             if transaction.get("requires_approval"):
                 processed_transaction["approval_status"] = "ESCALATED"
-            
+
             processed.append(processed_transaction)
             total_value += transaction.get("amount", 0)
 
@@ -144,7 +152,7 @@ def create_urgent_processor():
             "processor_type": "urgent",
             "total_value": round(total_value, 2),
             "processing_time": "< 1 minute",
-            "sla_compliance": "GUARANTEED"
+            "sla_compliance": "GUARANTEED",
         }
 
     return PythonCodeNode.from_function(
@@ -159,16 +167,16 @@ def create_standard_processor():
 
     def process_standard(transactions: List[Dict]) -> Dict[str, Any]:
         """Process standard transactions with normal handling."""
-        
+
         processed = []
         total_value = 0
-        
+
         for transaction in transactions:
             processed_transaction = transaction.copy()
             processed_transaction["priority"] = "STANDARD"
             processed_transaction["processed_at"] = datetime.now().isoformat()
             processed_transaction["sla_status"] = "NORMAL"
-            
+
             processed.append(processed_transaction)
             total_value += transaction.get("amount", 0)
 
@@ -177,7 +185,7 @@ def create_standard_processor():
             "processor_type": "standard",
             "total_value": round(total_value, 2),
             "processing_time": "< 5 minutes",
-            "sla_compliance": "ON_TRACK"
+            "sla_compliance": "ON_TRACK",
         }
 
     return PythonCodeNode.from_function(
@@ -192,16 +200,16 @@ def create_batch_processor():
 
     def process_batch(transactions: List[Dict]) -> Dict[str, Any]:
         """Process batch transactions with efficient handling."""
-        
+
         processed = []
         total_value = 0
-        
+
         for transaction in transactions:
             processed_transaction = transaction.copy()
             processed_transaction["priority"] = "BATCH"
             processed_transaction["processed_at"] = datetime.now().isoformat()
             processed_transaction["sla_status"] = "BATCH_QUEUE"
-            
+
             processed.append(processed_transaction)
             total_value += transaction.get("amount", 0)
 
@@ -210,7 +218,7 @@ def create_batch_processor():
             "processor_type": "batch",
             "total_value": round(total_value, 2),
             "processing_time": "< 30 minutes",
-            "sla_compliance": "BATCH_SCHEDULE"
+            "sla_compliance": "BATCH_SCHEDULE",
         }
 
     return PythonCodeNode.from_function(
@@ -234,13 +242,13 @@ def main():
     print("📋 Creating conditional routing workflow...")
     workflow = Workflow(
         workflow_id="simple_conditional_routing",
-        name="simple_conditional_routing", 
+        name="simple_conditional_routing",
         description="Simple conditional routing patterns for business transactions",
     )
 
     # Create nodes
     print("🔧 Creating routing nodes...")
-    
+
     classifier = create_transaction_classifier()
     urgent_processor = create_urgent_processor()
     standard_processor = create_standard_processor()
@@ -248,32 +256,38 @@ def main():
 
     # Add nodes to workflow
     workflow.add_node(node_id="classifier", node_or_type=classifier)
-    
+
     # Create switch node for routing
     router = SwitchNode(
         condition_field="routing_decision",
         cases={
             "urgent": "urgent_processor",
             "standard": "standard_processor",
-            "batch": "batch_processor"
-        }
+            "batch": "batch_processor",
+        },
     )
     workflow.add_node(node_id="router", node_or_type=router)
-    
+
     workflow.add_node(node_id="urgent_processor", node_or_type=urgent_processor)
     workflow.add_node(node_id="standard_processor", node_or_type=standard_processor)
     workflow.add_node(node_id="batch_processor", node_or_type=batch_processor)
 
     # Connect nodes
     print("🔗 Connecting routing pipeline...")
-    
+
     # Classifier to router
     workflow.connect("classifier", "router", {"result": "input_data"})
-    
+
     # Router to processors
-    workflow.connect("router", "urgent_processor", {"case_urgent.transactions": "transactions"})
-    workflow.connect("router", "standard_processor", {"case_standard.transactions": "transactions"})
-    workflow.connect("router", "batch_processor", {"case_batch.transactions": "transactions"})
+    workflow.connect(
+        "router", "urgent_processor", {"case_urgent.transactions": "transactions"}
+    )
+    workflow.connect(
+        "router", "standard_processor", {"case_standard.transactions": "transactions"}
+    )
+    workflow.connect(
+        "router", "batch_processor", {"case_batch.transactions": "transactions"}
+    )
 
     # Validate workflow with sample parameters
     print("✅ Validating routing workflow...")
@@ -287,26 +301,35 @@ def main():
 
     # Execute with multiple scenarios
     print("🚀 Executing conditional routing patterns...")
-    
+
     test_scenarios = [
-        {"name": "High Volume Test", "parameters": {"classifier": {"transaction_count": 20}}},
-        {"name": "Medium Volume Test", "parameters": {"classifier": {"transaction_count": 10}}},
-        {"name": "Low Volume Test", "parameters": {"classifier": {"transaction_count": 5}}}
+        {
+            "name": "High Volume Test",
+            "parameters": {"classifier": {"transaction_count": 20}},
+        },
+        {
+            "name": "Medium Volume Test",
+            "parameters": {"classifier": {"transaction_count": 10}},
+        },
+        {
+            "name": "Low Volume Test",
+            "parameters": {"classifier": {"transaction_count": 5}},
+        },
     ]
-    
+
     for i, scenario in enumerate(test_scenarios):
         print(f"\\n📊 Test {i + 1}/3: {scenario['name']}")
         print("-" * 50)
-        
+
         try:
             # Use enterprise runtime with monitoring
             runner = LocalRuntime(
-                debug=True,
-                enable_monitoring=True,
-                enable_audit=False
+                debug=True, enable_monitoring=True, enable_audit=False
             )
-            
-            results, run_id = runner.execute(workflow, parameters=scenario["parameters"])
+
+            results, run_id = runner.execute(
+                workflow, parameters=scenario["parameters"]
+            )
 
             print("✓ Conditional routing completed successfully!")
             print(f"  📊 Run ID: {run_id}")
@@ -314,34 +337,56 @@ def main():
             # Show routing decision
             if "classifier" in results:
                 classifier_result = results["classifier"]
-                if isinstance(classifier_result, dict) and "result" in classifier_result:
+                if (
+                    isinstance(classifier_result, dict)
+                    and "result" in classifier_result
+                ):
                     routing_data = classifier_result["result"]
                     routing_decision = routing_data.get("routing_decision", "unknown")
                     stats = routing_data.get("classification_stats", {})
-                    
+
                     print(f"  🚦 Routing Decision: {routing_decision.upper()}")
-                    print(f"  📈 Classification Stats:")
-                    print(f"    • Total Transactions: {stats.get('total_transactions', 0)}")
+                    print("  📈 Classification Stats:")
+                    print(
+                        f"    • Total Transactions: {stats.get('total_transactions', 0)}"
+                    )
                     print(f"    • Urgent: {stats.get('urgent_count', 0)}")
                     print(f"    • Standard: {stats.get('standard_count', 0)}")
                     print(f"    • Batch: {stats.get('batch_count', 0)}")
 
             # Show processing results
             processor_found = False
-            for processor_name in ["urgent_processor", "standard_processor", "batch_processor"]:
+            for processor_name in [
+                "urgent_processor",
+                "standard_processor",
+                "batch_processor",
+            ]:
                 if processor_name in results:
                     processor_result = results[processor_name]
-                    if isinstance(processor_result, dict) and "result" in processor_result:
+                    if (
+                        isinstance(processor_result, dict)
+                        and "result" in processor_result
+                    ):
                         processing_data = processor_result["result"]
-                        
-                        print(f"  🔧 Processed by: {processing_data.get('processor_type', 'unknown').upper()}")
-                        print(f"  💰 Total Value: ${processing_data.get('total_value', 0):,.2f}")
-                        print(f"  ⏱️  Processing Time: {processing_data.get('processing_time', 'unknown')}")
-                        print(f"  📋 SLA Status: {processing_data.get('sla_compliance', 'unknown')}")
-                        print(f"  📊 Transactions Processed: {len(processing_data.get('processed_transactions', []))}")
+
+                        print(
+                            f"  🔧 Processed by: {processing_data.get('processor_type', 'unknown').upper()}"
+                        )
+                        print(
+                            f"  💰 Total Value: ${processing_data.get('total_value', 0):,.2f}"
+                        )
+                        print(
+                            f"  ⏱️  Processing Time: {processing_data.get('processing_time', 'unknown')}"
+                        )
+                        print(
+                            f"  📋 SLA Status: {processing_data.get('sla_compliance', 'unknown')}"
+                        )
+                        print(
+                            f"  📊 Transactions Processed: {len(processing_data.get('processed_transactions', []))}"
+                        )
                         processor_found = True
                         break
-            
+
             if not processor_found:
                 print("  ⚠️  No processor output found")
 
@@ -355,7 +400,7 @@ def main():
     print("  • Business priority classification")
     print("  • SLA-aware processing routing")
     print("  • Real-time business intelligence")
-    
+
     return 0
 
 

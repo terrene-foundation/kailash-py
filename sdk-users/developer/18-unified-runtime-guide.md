@@ -41,12 +41,12 @@ runtime = LocalRuntime(
     enable_async=True,           # Auto-detect and run async nodes
     max_concurrency=20,          # Parallel execution limit
     enable_monitoring=True,      # Automatic performance tracking
-    
-    # Security & Compliance  
+
+    # Security & Compliance
     enable_security=True,        # Access control enforcement
     enable_audit=True,           # Compliance audit logging
     user_context=user_context,   # Multi-tenant isolation
-    
+
     # Resource Management
     resource_limits={
         "memory_mb": 4096,       # Memory limit

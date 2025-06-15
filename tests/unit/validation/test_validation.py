@@ -1,8 +1,9 @@
 """Test the base class validation behavior with PythonCodeNode."""
 
+import pytest
+
 from kailash.nodes.code import PythonCodeNode
 from kailash.sdk_exceptions import NodeValidationError
-import pytest
 
 
 def test_validation():

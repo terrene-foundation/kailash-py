@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
+from apps.studio.core.database import StudioDatabase
 from apps.studio.workflows.custom_node_templates import (
     data_validator_template,
     geocoding_api_template,
@@ -18,7 +19,6 @@ from apps.studio.workflows.custom_node_templates import (
 
 # Use middleware database components instead of deleted kailash.api
 from kailash.middleware.database import MiddlewareDatabaseManager
-from apps.studio.core.database import StudioDatabase
 
 
 def test_custom_node_creation():
@@ -37,7 +37,7 @@ def test_custom_node_creation():
         assert "implementation_type" in template
         assert template["name"]
         assert template["implementation_type"]
-        
+
         # Verify basic structure
         if "parameters" in template:
             assert isinstance(template["parameters"], list)
@@ -47,12 +47,12 @@ def test_template_validation():
     """Test that all templates have required structure"""
     templates = [
         sentiment_analyzer_template,
-        data_validator_template, 
+        data_validator_template,
         geocoding_api_template,
     ]
-    
+
     required_fields = ["name", "implementation_type"]
-    
+
     for template in templates:
         for field in required_fields:
             assert field in template, f"Template missing required field: {field}"
@@ -66,18 +66,18 @@ def test_template_content():
         data_validator_template,
         geocoding_api_template,
     ]
-    
+
     for template in templates:
         # Check name is not empty
         assert len(template["name"]) > 0
-        
+
         # Check implementation type is valid
         assert template["implementation_type"] in ["python", "api", "workflow"]
-        
+
         # If it has parameters, they should be a list
         if "parameters" in template:
             assert isinstance(template["parameters"], list)
-        
+
         # If it has a description, it should be a string
         if "description" in template:
             assert isinstance(template["description"], str)

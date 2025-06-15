@@ -10,18 +10,19 @@ Implements high-performance RAG patterns:
 All implementations use existing Kailash components and WorkflowBuilder patterns.
 """
 
-from typing import Dict, Any, List, Optional, Union
+import hashlib
 import json
 import logging
-import hashlib
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
 
+from ...runtime.async_local import AsyncLocalRuntime
+from ...workflow.builder import WorkflowBuilder
 from ..base import Node, NodeParameter, register_node
-from ..logic.workflow import WorkflowNode
+
 # from ..data.cache import CacheNode  # TODO: Implement CacheNode
 from ..code.python import PythonCodeNode
-from ...workflow.builder import WorkflowBuilder
-from ...runtime.async_local import AsyncLocalRuntime
+from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 
@@ -30,65 +31,69 @@ logger = logging.getLogger(__name__)
 class CacheOptimizedRAGNode(WorkflowNode):
     """
     Cache-Optimized RAG with Multi-Level Caching
-    
+
     Implements sophisticated caching strategies:
     - Semantic similarity caching for near-duplicate queries
     - Result caching with TTL management
     - Embedding caching to avoid recomputation
     - Incremental cache updates
-    
+
     When to use:
     - Best for: High-traffic applications, repeated queries, cost optimization
     - Not ideal for: Constantly changing data, unique queries
     - Performance: 10-50ms for cache hits (95% faster)
     - Cache hit rate: 40-60% with semantic matching
-    
+
     Key features:
     - Exact match caching
     - Semantic similarity caching (finds similar past queries)
     - Multi-level cache hierarchy
     - Automatic cache invalidation
-    
+
     Example:
         cached_rag = CacheOptimizedRAGNode(
             cache_ttl=3600,  # 1 hour
             similarity_threshold=0.95
         )
-        
+
         # First query: ~500ms (goes to retrieval)
         result1 = await cached_rag.run(query="What is deep learning?")
-        
+
         # Exact match: ~10ms (from cache)
         result2 = await cached_rag.run(query="What is deep learning?")
-        
+
         # Similar query: ~15ms (semantic cache)
         result3 = await cached_rag.run(query="Explain deep learning")
-    
+
     Parameters:
         cache_ttl: Time-to-live in seconds
         similarity_threshold: Minimum similarity for semantic cache
         cache_backend: Storage backend (redis, memory, disk)
         max_cache_size: Maximum cache entries
-    
+
     Returns:
         results: Retrieved documents
         metadata: Cache hit/miss, latency, similarity score
         cache_key: Key used for caching
     """
-    
-    def __init__(self, name: str = "cache_optimized_rag",
-                 cache_ttl: int = 3600,
-                 similarity_threshold: float = 0.95):
+
+    def __init__(
+        self,
+        name: str = "cache_optimized_rag",
+        cache_ttl: int = 3600,
+        similarity_threshold: float = 0.95,
+    ):
         self.cache_ttl = cache_ttl
         self.similarity_threshold = similarity_threshold
         super().__init__(name, self._create_workflow())
-    
+
     def _create_workflow(self) -> WorkflowNode:
         """Create cache-optimized RAG workflow"""
         builder = WorkflowBuilder()
-        
+
         # Add cache key generator
-        cache_key_gen_id = builder.add_node("PythonCodeNode",
+        cache_key_gen_id = builder.add_node(
+            "PythonCodeNode",
             node_id="cache_key_generator",
             config={
                 "code": f"""
@@ -99,7 +104,7 @@ def generate_cache_key(query, params=None):
     key_parts = [query]
     if params:
         key_parts.extend([f"{{k}}={{v}}" for k, v in sorted(params.items())])
-    
+
     key_string = "|".join(key_parts)
     return hashlib.sha256(key_string.encode()).hexdigest()[:16]
 
@@ -109,18 +114,18 @@ def check_semantic_similarity(query, cached_queries, threshold={self.similarity_
     # In production, would use actual embeddings
     query_lower = query.lower()
     query_words = set(query_lower.split())
-    
+
     for cached_query, cache_data in cached_queries.items():
         cached_words = set(cached_query.lower().split())
-        
+
         # Jaccard similarity
         intersection = len(query_words & cached_words)
         union = len(query_words | cached_words)
         similarity = intersection / union if union > 0 else 0
-        
+
         if similarity >= threshold:
             return cached_query, similarity
-    
+
     return None, 0
 
 # Generate cache keys
@@ -134,20 +139,19 @@ result = {{
     }}
 }}
 """
-            }
+            },
         )
-        
+
         # Add cache checker
-        cache_checker_id = builder.add_node("CacheNode",
+        cache_checker_id = builder.add_node(
+            "CacheNode",
             node_id="cache_checker",
-            config={
-                "operation": "get",
-                "ttl": self.cache_ttl
-            }
+            config={"operation": "get", "ttl": self.cache_ttl},
         )
-        
+
         # Add semantic cache manager
-        semantic_cache_id = builder.add_node("PythonCodeNode",
+        semantic_cache_id = builder.add_node(
+            "PythonCodeNode",
             node_id="semantic_cache_manager",
             config={
                 "code": f"""
@@ -167,20 +171,20 @@ else:
     # Check semantic similarity
     best_match = None
     best_similarity = 0
-    
+
     for cached_query, cache_entry in semantic_candidates.items():
         # Simple similarity check (would use embeddings in production)
         query_words = set(query.lower().split())
         cached_words = set(cached_query.lower().split())
-        
+
         intersection = len(query_words & cached_words)
         union = len(query_words | cached_words)
         similarity = intersection / union if union > 0 else 0
-        
+
         if similarity > best_similarity and similarity >= {self.similarity_threshold}:
             best_similarity = similarity
             best_match = cache_entry
-    
+
     if best_match:
         result = {{
             "use_cache": True,
@@ -194,26 +198,26 @@ else:
             "cache_type": None
         }}
 """
-            }
+            },
         )
-        
+
         # Add main RAG processor (only runs if cache miss)
-        rag_processor_id = builder.add_node("HybridRAGNode",
+        rag_processor_id = builder.add_node(
+            "HybridRAGNode",
             node_id="rag_processor",
-            config={"config": {"retrieval_k": 5}}
+            config={"config": {"retrieval_k": 5}},
         )
-        
+
         # Add cache updater
-        cache_updater_id = builder.add_node("CacheNode",
+        cache_updater_id = builder.add_node(
+            "CacheNode",
             node_id="cache_updater",
-            config={
-                "operation": "set",
-                "ttl": self.cache_ttl
-            }
+            config={"operation": "set", "ttl": self.cache_ttl},
         )
-        
+
         # Add result aggregator
-        result_aggregator_id = builder.add_node("PythonCodeNode",
+        result_aggregator_id = builder.add_node(
+            "PythonCodeNode",
             node_id="result_aggregator",
             config={
                 "code": """
@@ -249,22 +253,30 @@ result = {
     }
 }
 """
-            }
+            },
         )
-        
+
         # Connect workflow with conditional execution
         builder.add_connection(cache_key_gen_id, "cache_keys", cache_checker_id, "keys")
-        builder.add_connection(cache_checker_id, "result", semantic_cache_id, "cache_check_result")
-        
+        builder.add_connection(
+            cache_checker_id, "result", semantic_cache_id, "cache_check_result"
+        )
+
         # Only run RAG if cache miss
-        builder.add_connection(semantic_cache_id, "use_cache", rag_processor_id, "_skip_if_true")
+        builder.add_connection(
+            semantic_cache_id, "use_cache", rag_processor_id, "_skip_if_true"
+        )
         builder.add_connection(rag_processor_id, "output", cache_updater_id, "value")
         builder.add_connection(cache_key_gen_id, "cache_keys", cache_updater_id, "key")
-        
+
         # Aggregate results
-        builder.add_connection(semantic_cache_id, "result", result_aggregator_id, "cache_decision")
-        builder.add_connection(rag_processor_id, "output", result_aggregator_id, "fresh_results")
-        
+        builder.add_connection(
+            semantic_cache_id, "result", result_aggregator_id, "cache_decision"
+        )
+        builder.add_connection(
+            rag_processor_id, "output", result_aggregator_id, "fresh_results"
+        )
+
         return builder.build(name="cache_optimized_rag_workflow")
 
 
@@ -272,57 +284,57 @@ result = {
 class AsyncParallelRAGNode(WorkflowNode):
     """
     Async Parallel RAG Execution
-    
+
     Runs multiple RAG strategies in parallel and combines results.
     Optimizes for minimum latency through concurrent execution.
-    
+
     When to use:
     - Best for: Maximum quality, ensemble approaches, latency tolerance
     - Not ideal for: Simple queries, strict latency requirements
     - Performance: ~600ms (parallel execution of multiple strategies)
     - Quality improvement: 20-30% over single strategy
-    
+
     Key features:
     - Concurrent strategy execution
     - Automatic result fusion
     - Fallback handling
     - Load balancing
-    
+
     Example:
         parallel_rag = AsyncParallelRAGNode(
             strategies=["semantic", "sparse", "hyde", "colbert"]
         )
-        
+
         # Runs all 4 strategies in parallel, takes time of slowest
         result = await parallel_rag.run(
             documents=documents,
             query="Complex technical question requiring precision"
         )
         # Returns best combined results from all strategies
-    
+
     Parameters:
         strategies: List of RAG strategies to run
         fusion_method: How to combine results (voting, rrf, weighted)
         timeout_per_strategy: Maximum time per strategy
         min_strategies: Minimum successful strategies required
-    
+
     Returns:
         results: Fused results from all strategies
         metadata: Execution times, strategy contributions
         strategy_results: Individual results per strategy
     """
-    
-    def __init__(self, name: str = "async_parallel_rag",
-                 strategies: List[str] = None):
+
+    def __init__(self, name: str = "async_parallel_rag", strategies: List[str] = None):
         self.strategies = strategies or ["semantic", "sparse", "hybrid"]
         super().__init__(name, self._create_workflow())
-    
+
     def _create_workflow(self) -> WorkflowNode:
         """Create async parallel RAG workflow"""
         builder = WorkflowBuilder()
-        
+
         # Add parallel executor
-        parallel_executor_id = builder.add_node("PythonCodeNode",
+        parallel_executor_id = builder.add_node(
+            "PythonCodeNode",
             node_id="parallel_executor",
             config={
                 "code": f"""
@@ -357,38 +369,43 @@ result = {{
     }}
 }}
 """
-            }
+            },
         )
-        
+
         # Add strategy nodes dynamically
         strategy_nodes = {}
         for strategy in self.strategies:
             if strategy == "semantic":
-                node_id = builder.add_node("SemanticRAGNode",
+                node_id = builder.add_node(
+                    "SemanticRAGNode",
                     node_id=f"{strategy}_rag",
-                    config={"config": {"retrieval_k": 5}}
+                    config={"config": {"retrieval_k": 5}},
                 )
             elif strategy == "sparse":
-                node_id = builder.add_node("SparseRetrievalNode",
+                node_id = builder.add_node(
+                    "SparseRetrievalNode",
                     node_id=f"{strategy}_rag",
-                    config={"method": "bm25"}
+                    config={"method": "bm25"},
                 )
             elif strategy == "hybrid":
-                node_id = builder.add_node("HybridRAGNode",
+                node_id = builder.add_node(
+                    "HybridRAGNode",
                     node_id=f"{strategy}_rag",
-                    config={"config": {"retrieval_k": 5}}
+                    config={"config": {"retrieval_k": 5}},
                 )
             else:
                 # Default to semantic
-                node_id = builder.add_node("SemanticRAGNode",
+                node_id = builder.add_node(
+                    "SemanticRAGNode",
                     node_id=f"{strategy}_rag",
-                    config={"config": {"retrieval_k": 5}}
+                    config={"config": {"retrieval_k": 5}},
                 )
-            
+
             strategy_nodes[strategy] = node_id
-        
+
         # Add result combiner
-        result_combiner_id = builder.add_node("PythonCodeNode",
+        result_combiner_id = builder.add_node(
+            "PythonCodeNode",
             node_id="result_combiner",
             config={
                 "code": f"""
@@ -418,11 +435,11 @@ for strategy, results in strategy_results.items():
     if results and "results" in results:
         for i, (doc, score) in enumerate(zip(results["results"], results.get("scores", []))):
             doc_id = doc.get("id", str(hash(doc.get("content", ""))))
-            
+
             if doc_id not in all_results:
                 all_results[doc_id] = doc
                 all_scores[doc_id] = {{}}
-            
+
             all_scores[doc_id][strategy] = score
 
 # Aggregate scores (average)
@@ -453,16 +470,20 @@ result = {{
     }}
 }}
 """
-            }
+            },
         )
-        
+
         # Connect parallel execution
-        builder.add_connection(parallel_executor_id, "execution_plan", result_combiner_id, "execution_plan")
-        
+        builder.add_connection(
+            parallel_executor_id, "execution_plan", result_combiner_id, "execution_plan"
+        )
+
         # Connect each strategy to combiner
         for strategy, node_id in strategy_nodes.items():
-            builder.add_connection(node_id, "output", result_combiner_id, f"{strategy}_results")
-        
+            builder.add_connection(
+                node_id, "output", result_combiner_id, f"{strategy}_results"
+            )
+
         return builder.build(name="async_parallel_rag_workflow")
 
 
@@ -470,25 +491,25 @@ result = {{
 class StreamingRAGNode(WorkflowNode):
     """
     Streaming RAG for Real-Time Responses
-    
+
     Implements streaming retrieval and generation for low-latency
     interactive applications.
-    
+
     When to use:
     - Best for: Interactive UIs, chat applications, real-time feedback
     - Not ideal for: Batch processing, when complete results needed upfront
     - Performance: First results in ~100ms, complete in ~1000ms
     - User experience: Immediate feedback, progressive enhancement
-    
+
     Key features:
     - Progressive result delivery
     - Chunked response streaming
     - Backpressure handling
     - Quality improvements over time
-    
+
     Example:
         streaming_rag = StreamingRAGNode(chunk_size=100)
-        
+
         # Stream results as they become available
         async for chunk in streaming_rag.stream(
             documents=documents,
@@ -498,30 +519,30 @@ class StreamingRAGNode(WorkflowNode):
                 print(f"New result: {chunk['content']['title']}")
             elif chunk['type'] == 'progress':
                 print(f"Progress: {chunk['percentage']}%")
-    
+
     Parameters:
         chunk_size: Results per chunk
         initial_k: Fast initial results count
         refinement_stages: Number of quality improvements
         stream_timeout: Maximum streaming duration
-    
+
     Returns (streaming):
         chunks: Stream of result chunks
         metadata: Progress indicators, quality metrics
         control: Backpressure and cancellation support
     """
-    
-    def __init__(self, name: str = "streaming_rag",
-                 chunk_size: int = 100):
+
+    def __init__(self, name: str = "streaming_rag", chunk_size: int = 100):
         self.chunk_size = chunk_size
         super().__init__(name, self._create_workflow())
-    
+
     def _create_workflow(self) -> WorkflowNode:
         """Create streaming RAG workflow"""
         builder = WorkflowBuilder()
-        
+
         # Add streaming controller
-        stream_controller_id = builder.add_node("PythonCodeNode",
+        stream_controller_id = builder.add_node(
+            "PythonCodeNode",
             node_id="stream_controller",
             config={
                 "code": f"""
@@ -543,11 +564,12 @@ streaming_plan = {{
 
 result = {{"streaming_plan": streaming_plan}}
 """
-            }
+            },
         )
-        
+
         # Add progressive retriever
-        progressive_retriever_id = builder.add_node("PythonCodeNode",
+        progressive_retriever_id = builder.add_node(
+            "PythonCodeNode",
             node_id="progressive_retriever",
             config={
                 "code": """
@@ -586,11 +608,12 @@ result = {
     }
 }
 """
-            }
+            },
         )
-        
+
         # Add stream formatter
-        stream_formatter_id = builder.add_node("PythonCodeNode",
+        stream_formatter_id = builder.add_node(
+            "PythonCodeNode",
             node_id="stream_formatter",
             config={
                 "code": """
@@ -631,13 +654,23 @@ result = {
     }
 }
 """
-            }
+            },
         )
-        
+
         # Connect workflow
-        builder.add_connection(stream_controller_id, "streaming_plan", progressive_retriever_id, "streaming_plan")
-        builder.add_connection(progressive_retriever_id, "progressive_results", stream_formatter_id, "progressive_results")
-        
+        builder.add_connection(
+            stream_controller_id,
+            "streaming_plan",
+            progressive_retriever_id,
+            "streaming_plan",
+        )
+        builder.add_connection(
+            progressive_retriever_id,
+            "progressive_results",
+            stream_formatter_id,
+            "progressive_results",
+        )
+
         return builder.build(name="streaming_rag_workflow")
 
 
@@ -645,57 +678,57 @@ result = {
 class BatchOptimizedRAGNode(WorkflowNode):
     """
     Batch-Optimized RAG for High Throughput
-    
+
     Processes multiple queries efficiently in batches,
     optimizing for throughput over latency.
-    
+
     When to use:
     - Best for: Bulk processing, offline analysis, high-volume applications
     - Not ideal for: Real-time queries, interactive applications
     - Performance: 10-50 queries/second throughput
     - Efficiency: 3-5x better resource utilization
-    
+
     Key features:
     - Intelligent query batching
     - Shared computation optimization
     - GPU batching support
     - Result caching across batch
-    
+
     Example:
         batch_rag = BatchOptimizedRAGNode(batch_size=32)
-        
+
         # Process 100 queries efficiently
         queries = ["query1", "query2", ..., "query100"]
-        
+
         results = await batch_rag.run(
             queries=queries,
             documents=documents
         )
         # Processes in optimal batches, shares embeddings computation
-    
+
     Parameters:
         batch_size: Queries per batch
         optimize_by_similarity: Group similar queries
         share_embeddings: Reuse document embeddings
         max_batch_time: Maximum batch collection time
-    
+
     Returns:
         query_results: Dict mapping query->results
         batch_statistics: Performance metrics
         optimization_report: Efficiency gains achieved
     """
-    
-    def __init__(self, name: str = "batch_optimized_rag",
-                 batch_size: int = 32):
+
+    def __init__(self, name: str = "batch_optimized_rag", batch_size: int = 32):
         self.batch_size = batch_size
         super().__init__(name, self._create_workflow())
-    
+
     def _create_workflow(self) -> WorkflowNode:
         """Create batch-optimized RAG workflow"""
         builder = WorkflowBuilder()
-        
+
         # Add batch organizer
-        batch_organizer_id = builder.add_node("PythonCodeNode",
+        batch_organizer_id = builder.add_node(
+            "PythonCodeNode",
             node_id="batch_organizer",
             config={
                 "code": f"""
@@ -723,11 +756,11 @@ if len(queries) > 1:
         if key_words not in query_groups:
             query_groups[key_words] = []
         query_groups[key_words].append(q)
-    
+
     # Reorganize batches by similarity
     optimized_batches = []
     current_batch = []
-    
+
     for group in query_groups.values():
         for q in group:
             current_batch.append(q)
@@ -739,7 +772,7 @@ if len(queries) > 1:
                     "optimized": True
                 }})
                 current_batch = []
-    
+
     if current_batch:
         optimized_batches.append({{
             "batch_id": len(optimized_batches),
@@ -747,7 +780,7 @@ if len(queries) > 1:
             "size": len(current_batch),
             "optimized": True
         }})
-    
+
     batches = optimized_batches
 
 result = {{
@@ -760,11 +793,12 @@ result = {{
     }}
 }}
 """
-            }
+            },
         )
-        
+
         # Add batch processor
-        batch_processor_id = builder.add_node("PythonCodeNode",
+        batch_processor_id = builder.add_node(
+            "PythonCodeNode",
             node_id="batch_processor",
             config={
                 "code": """
@@ -789,22 +823,22 @@ batch_results = []
 for batch in batch_plan["batches"]:
     batch_queries = batch["queries"]
     batch_scores = []
-    
+
     # Score all documents for all queries in batch
     for query in batch_queries:
         query_words = set(query.lower().split())
         doc_scores = []
-        
+
         for doc_id, doc_rep in doc_representations.items():
             # Compute similarity once
             overlap = len(query_words & doc_rep["words"])
             score = overlap / len(query_words) if query_words else 0
             doc_scores.append((doc_id, score))
-        
+
         # Sort and take top k
         doc_scores.sort(key=lambda x: x[1], reverse=True)
         batch_scores.append(doc_scores[:10])
-    
+
     batch_results.append({
         "batch_id": batch["batch_id"],
         "query_results": batch_scores,
@@ -827,11 +861,12 @@ result = {
     }
 }
 """
-            }
+            },
         )
-        
+
         # Add result formatter
-        result_formatter_id = builder.add_node("PythonCodeNode",
+        result_formatter_id = builder.add_node(
+            "PythonCodeNode",
             node_id="result_formatter",
             config={
                 "code": """
@@ -846,16 +881,16 @@ formatted_results = {}
 query_idx = 0
 for batch_result in batch_results["results"]:
     batch_queries = batch_plan["batches"][batch_result["batch_id"]]["queries"]
-    
+
     for i, (query, query_scores) in enumerate(zip(batch_queries, batch_result["query_results"])):
         results = []
         scores = []
-        
+
         for doc_id, score in query_scores:
             if score > 0:
                 results.append(documents[doc_id])
                 scores.append(score)
-        
+
         formatted_results[query] = {
             "results": results,
             "scores": scores,
@@ -872,14 +907,20 @@ result = {
     }
 }
 """
-            }
+            },
         )
-        
+
         # Connect workflow
-        builder.add_connection(batch_organizer_id, "batch_plan", batch_processor_id, "batch_plan")
-        builder.add_connection(batch_processor_id, "batch_results", result_formatter_id, "batch_results")
-        builder.add_connection(batch_organizer_id, "batch_plan", result_formatter_id, "batch_plan")
-        
+        builder.add_connection(
+            batch_organizer_id, "batch_plan", batch_processor_id, "batch_plan"
+        )
+        builder.add_connection(
+            batch_processor_id, "batch_results", result_formatter_id, "batch_results"
+        )
+        builder.add_connection(
+            batch_organizer_id, "batch_plan", result_formatter_id, "batch_plan"
+        )
+
         return builder.build(name="batch_optimized_rag_workflow")
 
 
@@ -888,5 +929,5 @@ __all__ = [
     "CacheOptimizedRAGNode",
     "AsyncParallelRAGNode",
     "StreamingRAGNode",
-    "BatchOptimizedRAGNode"
+    "BatchOptimizedRAGNode",
 ]

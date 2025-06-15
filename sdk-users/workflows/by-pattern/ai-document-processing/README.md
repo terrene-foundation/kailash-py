@@ -4,7 +4,7 @@ Advanced AI workflows for document processing, RAG systems, and agent coordinati
 
 ## RAG & Document Processing
 - `rag_toolkit_comprehensive_example.py` - Complete RAG system
-- `advanced_rag_techniques_example.py` - Advanced RAG techniques  
+- `advanced_rag_techniques_example.py` - Advanced RAG techniques
 - `comprehensive_rag_enhanced_example.py` - Enhanced RAG workflows
 
 ## Agent Coordination

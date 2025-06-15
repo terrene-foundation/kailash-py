@@ -1,9 +1,9 @@
 # Middleware Integration Guide
 ## Building Production Applications with Kailash Middleware
 
-**Target Audience**: SDK Users building production applications  
-**Prerequisites**: Basic Kailash SDK knowledge, Python async/await  
-**Complexity**: Intermediate to Advanced  
+**Target Audience**: SDK Users building production applications
+**Prerequisites**: Basic Kailash SDK knowledge, Python async/await
+**Complexity**: Intermediate to Advanced
 
 ## Overview
 
@@ -21,7 +21,7 @@ import asyncio
 
 async def create_basic_middleware():
     """Create a basic middleware stack for development."""
-    
+
     # Create agent-UI middleware with session management
     agent_ui = AgentUIMiddleware(
         enable_dynamic_workflows=True,
@@ -29,7 +29,7 @@ async def create_basic_middleware():
         session_timeout_minutes=30,
         enable_persistence=False  # For development
     )
-    
+
     # Create API gateway with basic configuration
     gateway = create_gateway(
         title="My Kailash Application",
@@ -37,16 +37,16 @@ async def create_basic_middleware():
         cors_origins=["http://localhost:3000"],  # Your frontend URL
         enable_docs=True
     )
-    
+
     # Connect components
     gateway.agent_ui = agent_ui
-    
+
     return agent_ui, gateway
 
 # Usage
 async def main():
     agent_ui, gateway = await create_basic_middleware()
-    
+
     # Start the API server
     import uvicorn
     uvicorn.run(gateway.app, host="0.0.0.0", port=8000)
@@ -62,7 +62,7 @@ Establish sessions for frontend clients:
 ```python
 async def handle_frontend_connection():
     """Handle new frontend client connection."""
-    
+
     # Create session for frontend client
     session_id = await agent_ui.create_session(
         user_id="user123",
@@ -73,7 +73,7 @@ async def handle_frontend_connection():
             "ip_address": "192.168.1.100"
         }
     )
-    
+
     print(f"Created session: {session_id}")
     return session_id
 
@@ -93,7 +93,7 @@ Create workflows dynamically from frontend configurations:
 ```python
 async def create_data_processing_workflow(session_id: str):
     """Create a data processing workflow from frontend configuration."""
-    
+
     # Frontend sends workflow configuration
     workflow_config = {
         "name": "customer_data_pipeline",
@@ -110,7 +110,7 @@ async def create_data_processing_workflow(session_id: str):
             },
             {
                 "id": "data_validator",
-                "type": "PythonCodeNode", 
+                "type": "PythonCodeNode",
                 "config": {
                     "name": "data_validator",
                     "code": """
@@ -144,7 +144,7 @@ result = {
                 "id": "insights_generator",
                 "type": "PythonCodeNode",
                 "config": {
-                    "name": "insights_generator", 
+                    "name": "insights_generator",
                     "code": """
 # Generate customer insights
 import pandas as pd
@@ -170,14 +170,14 @@ result = {
         "connections": [
             {
                 "from_node": "csv_reader",
-                "from_output": "data", 
+                "from_output": "data",
                 "to_node": "data_validator",
                 "to_input": "data"
             },
             {
                 "from_node": "data_validator",
                 "from_output": "cleaned_data",
-                "to_node": "insights_generator", 
+                "to_node": "insights_generator",
                 "to_input": "cleaned_data"
             },
             {
@@ -188,13 +188,13 @@ result = {
             }
         ]
     }
-    
+
     # Create workflow using middleware
     workflow_id = await agent_ui.create_dynamic_workflow(
         session_id=session_id,
         workflow_config=workflow_config
     )
-    
+
     print(f"Created workflow: {workflow_id}")
     return workflow_id
 
@@ -202,24 +202,24 @@ result = {
 async def process_customer_data():
     session_id = await agent_ui.create_session("data_analyst")
     workflow_id = await create_data_processing_workflow(session_id)
-    
+
     # Execute workflow
     execution_id = await agent_ui.execute_workflow(
         session_id=session_id,
         workflow_id=workflow_id,
         inputs={}  # CSV file path is in configuration
     )
-    
+
     # Monitor execution
     while True:
         status = await agent_ui.get_execution_status(execution_id, session_id)
         print(f"Status: {status['status']}, Progress: {status['progress']}%")
-        
+
         if status['status'] in ['completed', 'failed']:
             break
-            
+
         await asyncio.sleep(1)
-    
+
     if status['status'] == 'completed':
         print("Results:", status['outputs'])
     else:
@@ -233,7 +233,7 @@ Create reusable workflow templates:
 ```python
 class WorkflowTemplates:
     """Collection of reusable workflow templates."""
-    
+
     @staticmethod
     def data_processing_template(input_file: str, output_format: str = "json"):
         """Template for data processing workflows."""
@@ -284,7 +284,7 @@ else:
                 {
                     "from_node": "file_reader",
                     "from_output": "data",
-                    "to_node": "data_processor", 
+                    "to_node": "data_processor",
                     "to_input": "data"
                 },
                 {
@@ -295,7 +295,7 @@ else:
                 }
             ]
         }
-    
+
     @staticmethod
     def ai_chat_template(model_provider: str = "ollama", model_name: str = "llama3.2:3b"):
         """Template for AI chat workflows."""
@@ -372,24 +372,24 @@ result = {"chat_response": formatted_response}
 # Usage
 async def create_template_workflow(session_id: str, template_name: str, **kwargs):
     """Create workflow from template."""
-    
+
     templates = {
         "data_processing": WorkflowTemplates.data_processing_template,
         "ai_chat": WorkflowTemplates.ai_chat_template
     }
-    
+
     if template_name not in templates:
         raise ValueError(f"Unknown template: {template_name}")
-    
+
     # Generate workflow config from template
     workflow_config = templates[template_name](**kwargs)
-    
+
     # Create workflow
     workflow_id = await agent_ui.create_dynamic_workflow(
         session_id=session_id,
         workflow_config=workflow_config
     )
-    
+
     return workflow_id
 ```
 
@@ -410,16 +410,16 @@ realtime_middleware = RealtimeMiddleware(agent_ui)
 async def websocket_endpoint(websocket: WebSocket):
     """Handle WebSocket connections for real-time communication."""
     await websocket.accept()
-    
+
     # Create session for this WebSocket connection
     session_id = await agent_ui.create_session(
         user_id="websocket_user",
         metadata={"connection_type": "websocket"}
     )
-    
+
     # Subscribe to events for this session
     events_received = []
-    
+
     async def event_handler(event):
         # Send events to frontend via WebSocket
         event_data = {
@@ -427,50 +427,50 @@ async def websocket_endpoint(websocket: WebSocket):
             "data": event.to_dict()
         }
         await websocket.send_text(json.dumps(event_data))
-    
+
     subscriber_id = await agent_ui.subscribe_to_events(
         f"websocket_{session_id}",
         event_handler,
         session_id=session_id
     )
-    
+
     try:
         while True:
             # Receive messages from frontend
             data = await websocket.receive_text()
             message = json.loads(data)
-            
+
             if message["type"] == "execute_workflow":
                 # Execute workflow based on frontend request
                 workflow_config = message["workflow_config"]
-                
+
                 workflow_id = await agent_ui.create_dynamic_workflow(
                     session_id=session_id,
                     workflow_config=workflow_config
                 )
-                
+
                 execution_id = await agent_ui.execute_workflow(
                     session_id=session_id,
                     workflow_id=workflow_id,
                     inputs=message.get("inputs", {})
                 )
-                
+
                 # Send execution ID back to frontend
                 await websocket.send_text(json.dumps({
                     "type": "execution_started",
                     "execution_id": execution_id
                 }))
-                
+
             elif message["type"] == "get_status":
                 # Send current execution status
                 execution_id = message["execution_id"]
                 status = await agent_ui.get_execution_status(execution_id, session_id)
-                
+
                 await websocket.send_text(json.dumps({
                     "type": "status_update",
                     "status": status
                 }))
-                
+
     except WebSocketDisconnect:
         # Clean up on disconnect
         await agent_ui.unsubscribe_from_events(subscriber_id)
@@ -487,14 +487,14 @@ from typing import AsyncGenerator
 
 async def create_sse_stream(session_id: str) -> AsyncGenerator[str, None]:
     """Create SSE stream for real-time updates."""
-    
+
     import asyncio
     import json
     from collections import deque
-    
+
     # Event queue for this session
     event_queue = deque()
-    
+
     async def event_handler(event):
         event_data = {
             "id": event.id,
@@ -502,14 +502,14 @@ async def create_sse_stream(session_id: str) -> AsyncGenerator[str, None]:
             "data": json.dumps(event.to_dict())
         }
         event_queue.append(event_data)
-    
+
     # Subscribe to events
     subscriber_id = await agent_ui.subscribe_to_events(
         f"sse_{session_id}",
         event_handler,
         session_id=session_id
     )
-    
+
     try:
         while True:
             if event_queue:
@@ -521,9 +521,9 @@ async def create_sse_stream(session_id: str) -> AsyncGenerator[str, None]:
                 # Send heartbeat
                 yield f"event: heartbeat\\n"
                 yield f"data: {json.dumps({'timestamp': time.time()})}\\n\\n"
-            
+
             await asyncio.sleep(1)
-            
+
     finally:
         await agent_ui.unsubscribe_from_events(subscriber_id)
 
@@ -561,10 +561,10 @@ ai_chat = AIChatMiddleware(
 
 async def handle_chat_message(session_id: str, user_message: str):
     """Handle incoming chat message with context."""
-    
+
     # Start or continue chat session
     chat_session_id = await ai_chat.start_chat_session(session_id)
-    
+
     # Send message with context
     response = await ai_chat.send_message(
         chat_session_id,
@@ -575,7 +575,7 @@ async def handle_chat_message(session_id: str, user_message: str):
             "current_session_data": await get_session_context(session_id)
         }
     )
-    
+
     # Check if AI suggests workflow creation
     if response.get("intent") == "create_workflow":
         workflow_config = response.get("workflow_config")
@@ -584,13 +584,13 @@ async def handle_chat_message(session_id: str, user_message: str):
             workflow_id = await agent_ui.create_dynamic_workflow(
                 session_id, workflow_config
             )
-            
+
             # Add workflow info to response
             response["created_workflow"] = {
                 "workflow_id": workflow_id,
                 "message": f"I've created a workflow '{workflow_config['name']}' for you. Would you like to execute it?"
             }
-    
+
     return response
 
 async def get_available_workflows(session_id: str) -> list:
@@ -626,10 +626,10 @@ Convert natural language descriptions to workflows:
 ```python
 async def create_workflow_from_description(session_id: str, description: str):
     """Create workflow from natural language description."""
-    
+
     # Use AI chat to analyze description
     chat_session_id = await ai_chat.start_chat_session(session_id)
-    
+
     # Send structured prompt for workflow generation
     workflow_prompt = f"""
 Based on this description, create a Kailash workflow configuration:
@@ -643,7 +643,7 @@ Please analyze the requirements and create a workflow with:
 
 Available node types:
 - CSVReaderNode: Read CSV files
-- JSONReaderNode: Read JSON files  
+- JSONReaderNode: Read JSON files
 - PythonCodeNode: Custom Python processing
 - DataTransformer: Data transformation operations
 - LLMAgentNode: AI/LLM interactions
@@ -652,7 +652,7 @@ Available node types:
 
 Return only a valid JSON workflow configuration.
 """
-    
+
     response = await ai_chat.send_message(
         chat_session_id,
         workflow_prompt,
@@ -661,22 +661,22 @@ Return only a valid JSON workflow configuration.
             "response_format": "json"
         }
     )
-    
+
     # Parse workflow configuration from AI response
     try:
         import json
         import re
-        
+
         # Extract JSON from response
         json_match = re.search(r'{.*}', response["message"], re.DOTALL)
         if json_match:
             workflow_config = json.loads(json_match.group())
-            
+
             # Validate and create workflow
             workflow_id = await agent_ui.create_dynamic_workflow(
                 session_id, workflow_config
             )
-            
+
             return {
                 "success": True,
                 "workflow_id": workflow_id,
@@ -689,7 +689,7 @@ Return only a valid JSON workflow configuration.
                 "error": "Could not parse workflow configuration from AI response",
                 "ai_response": response["message"]
             }
-            
+
     except json.JSONDecodeError as e:
         return {
             "success": False,
@@ -700,20 +700,20 @@ Return only a valid JSON workflow configuration.
 # Usage example
 async def demo_nlp_workflow_creation():
     """Demo natural language workflow creation."""
-    
+
     session_id = await agent_ui.create_session("nlp_demo_user")
-    
+
     descriptions = [
         "Read a CSV file of sales data, calculate monthly totals, and generate a summary report",
         "Process customer feedback text, analyze sentiment, and store results in a database",
         "Call a weather API, process the data, and send notifications if temperature exceeds 30°C"
     ]
-    
+
     for desc in descriptions:
         print(f"\\nProcessing: {desc}")
-        
+
         result = await create_workflow_from_description(session_id, desc)
-        
+
         if result["success"]:
             print(f"✅ Created workflow: {result['workflow_id']}")
             print(f"   Workflow name: {result['config']['name']}")
@@ -742,21 +742,21 @@ middleware_with_db = AgentUIMiddleware(
 DATABASE_CONFIG = {
     "host": "localhost",
     "port": 5432,
-    "database": "kailash_app", 
+    "database": "kailash_app",
     "user": "kailash_user",
     "password": "secure_password"
 }
 
 async def setup_database_tables():
     """Set up database tables for middleware persistence."""
-    
+
     from kailash.middleware.database import MiddlewareDatabaseManager
-    
+
     db_manager = MiddlewareDatabaseManager(
         f"postgresql://{DATABASE_CONFIG['user']}:{DATABASE_CONFIG['password']}@"
         f"{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{DATABASE_CONFIG['database']}"
     )
-    
+
     # Create tables
     await db_manager.create_tables()
     print("Database tables created successfully")
@@ -764,9 +764,9 @@ async def setup_database_tables():
 # Workflow persistence example
 async def create_and_persist_workflow():
     """Create workflow with automatic persistence."""
-    
+
     session_id = await middleware_with_db.create_session("persistent_user")
-    
+
     workflow_config = {
         "name": "persistent_data_pipeline",
         "description": "A workflow that will be saved to database",
@@ -783,7 +783,7 @@ async def create_and_persist_workflow():
                 "id": "data_processor",
                 "type": "PythonCodeNode",
                 "config": {
-                    "name": "data_processor", 
+                    "name": "data_processor",
                     "code": "result = {'processed': True, 'row_count': len(data)}"
                 }
             }
@@ -797,36 +797,36 @@ async def create_and_persist_workflow():
             }
         ]
     }
-    
+
     # Create workflow (automatically persisted)
     workflow_id = await middleware_with_db.create_dynamic_workflow(
         session_id, workflow_config
     )
-    
+
     # Execute workflow (execution history persisted)
     execution_id = await middleware_with_db.execute_workflow(
         session_id, workflow_id, inputs={}
     )
-    
+
     print(f"Created persistent workflow: {workflow_id}")
     print(f"Started execution: {execution_id}")
-    
+
     return workflow_id, execution_id
 
 # Query execution history
 async def get_execution_history(user_id: str, limit: int = 10):
     """Get execution history for a user."""
-    
+
     # Access middleware repository directly
     if middleware_with_db.enable_persistence:
         execution_repo = middleware_with_db.execution_repo
-        
+
         # Query executions for user
         executions = await execution_repo.get_user_executions(
             user_id=user_id,
             limit=limit
         )
-        
+
         return [
             {
                 "execution_id": exec["id"],
@@ -837,7 +837,7 @@ async def get_execution_history(user_id: str, limit: int = 10):
             }
             for exec in executions
         ]
-    
+
     return []
 ```
 
@@ -867,10 +867,10 @@ access_control = MiddlewareAccessControlManager(
 
 async def authenticate_user(username: str, password: str):
     """Authenticate user and create JWT token."""
-    
+
     # Verify credentials (integrate with your user system)
     user_data = await verify_user_credentials(username, password)
-    
+
     if user_data:
         # Create JWT token
         token_data = {
@@ -879,38 +879,38 @@ async def authenticate_user(username: str, password: str):
             "roles": user_data.get("roles", ["user"]),
             "permissions": user_data.get("permissions", [])
         }
-        
+
         access_token = await jwt_auth.create_access_token(token_data)
         refresh_token = await jwt_auth.create_refresh_token(token_data)
-        
+
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "user_data": user_data
         }
-    
+
     return None
 
 async def secure_session_creation(user_token: str):
     """Create session with authentication and authorization."""
-    
+
     # Verify JWT token
     token_data = await jwt_auth.verify_token(user_token)
-    
+
     if not token_data:
         raise ValueError("Invalid or expired token")
-    
+
     # Check permission for session creation
     can_create_session = await access_control.check_permission(
         user_id=token_data["user_id"],
         resource="session:create",
         context={"roles": token_data.get("roles", [])}
     )
-    
+
     if not can_create_session:
         raise ValueError("Insufficient permissions to create session")
-    
+
     # Create authenticated session
     session_id = await agent_ui.create_session(
         user_id=token_data["user_id"],
@@ -922,24 +922,24 @@ async def secure_session_creation(user_token: str):
             "auth_method": "jwt"
         }
     )
-    
+
     return session_id
 
 async def secure_workflow_execution(session_id: str, workflow_config: dict, user_token: str):
     """Execute workflow with security checks."""
-    
+
     # Verify token
     token_data = await jwt_auth.verify_token(user_token)
-    
+
     if not token_data:
         raise ValueError("Invalid or expired token")
-    
+
     # Get session and verify ownership
     session = await agent_ui.get_session(session_id)
-    
+
     if not session or session.user_id != token_data["user_id"]:
         raise ValueError("Session not found or access denied")
-    
+
     # Check workflow execution permission
     can_execute = await access_control.check_permission(
         user_id=token_data["user_id"],
@@ -949,22 +949,22 @@ async def secure_workflow_execution(session_id: str, workflow_config: dict, user
             "workflow_type": workflow_config.get("name", "unknown")
         }
     )
-    
+
     if not can_execute:
         raise ValueError("Insufficient permissions to execute workflows")
-    
+
     # Create and execute workflow
     workflow_id = await agent_ui.create_dynamic_workflow(
         session_id, workflow_config
     )
-    
+
     execution_id = await agent_ui.execute_workflow(
         session_id, workflow_id, inputs={}
     )
-    
+
     # Log security event
     from kailash.nodes.security import SecurityEventNode
-    
+
     security_event = SecurityEventNode(name="workflow_execution_audit")
     await security_event.run(
         event_type="workflow_executed",
@@ -977,14 +977,14 @@ async def secure_workflow_execution(session_id: str, workflow_config: dict, user
             "workflow_name": workflow_config.get("name", "unknown")
         }
     )
-    
+
     return execution_id
 
 async def verify_user_credentials(username: str, password: str):
     """Verify user credentials against your user system."""
     # Implement your user authentication logic here
     # This is a placeholder implementation
-    
+
     # Example: database lookup, LDAP check, etc.
     if username == "demo" and password == "password":
         return {
@@ -994,7 +994,7 @@ async def verify_user_credentials(username: str, password: str):
             "roles": ["user", "developer"],
             "permissions": ["workflow:read", "workflow:execute", "session:create"]
         }
-    
+
     return None
 ```
 
@@ -1009,7 +1009,7 @@ import logging
 from typing import Optional, Dict, Any
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
-    WorkflowValidationError, 
+    WorkflowValidationError,
     RuntimeExecutionError
 )
 
@@ -1023,47 +1023,47 @@ logger = logging.getLogger(__name__)
 
 class MiddlewareErrorHandler:
     """Centralized error handling for middleware operations."""
-    
+
     @staticmethod
     async def handle_session_error(error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
         """Handle session-related errors."""
-        
+
         error_response = {
             "error_type": type(error).__name__,
             "message": str(error),
             "context": context,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
         if isinstance(error, ValueError):
             # Session not found or invalid parameters
             error_response["status_code"] = 404
             error_response["user_message"] = "Session not found or invalid"
-            
+
         elif isinstance(error, PermissionError):
             # Access denied
             error_response["status_code"] = 403
             error_response["user_message"] = "Access denied"
-            
+
         else:
             # Unexpected error
             error_response["status_code"] = 500
             error_response["user_message"] = "Internal server error"
             logger.error(f"Unexpected session error: {error}", exc_info=True)
-        
+
         return error_response
-    
+
     @staticmethod
     async def handle_workflow_error(error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
         """Handle workflow-related errors."""
-        
+
         error_response = {
             "error_type": type(error).__name__,
             "message": str(error),
             "context": context,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
         if isinstance(error, NodeConfigurationError):
             # Invalid node configuration
             error_response["status_code"] = 400
@@ -1073,17 +1073,17 @@ class MiddlewareErrorHandler:
                 "Verify all required fields are provided",
                 "Ensure node connections are valid"
             ]
-            
+
         elif isinstance(error, WorkflowValidationError):
             # Workflow validation failed
-            error_response["status_code"] = 400 
+            error_response["status_code"] = 400
             error_response["user_message"] = "Workflow validation failed"
             error_response["suggestions"] = [
                 "Check workflow structure",
                 "Verify node connections",
                 "Ensure all required inputs are connected"
             ]
-            
+
         elif isinstance(error, RuntimeExecutionError):
             # Runtime execution failed
             error_response["status_code"] = 500
@@ -1093,31 +1093,31 @@ class MiddlewareErrorHandler:
                 "Verify data formats",
                 "Review node configurations"
             ]
-            
+
         else:
             # Unexpected error
             error_response["status_code"] = 500
             error_response["user_message"] = "Workflow operation failed"
             logger.error(f"Unexpected workflow error: {error}", exc_info=True)
-        
+
         return error_response
 
 # Usage in middleware operations
 async def safe_session_creation(user_id: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
     """Create session with comprehensive error handling."""
-    
+
     try:
         session_id = await agent_ui.create_session(
             user_id=user_id,
             metadata=metadata
         )
-        
+
         return {
             "success": True,
             "session_id": session_id,
             "message": "Session created successfully"
         }
-        
+
     except Exception as error:
         error_response = await MiddlewareErrorHandler.handle_session_error(
             error,
@@ -1127,7 +1127,7 @@ async def safe_session_creation(user_id: str, metadata: Dict[str, Any] = None) -
                 "metadata": metadata
             }
         )
-        
+
         return {
             "success": False,
             **error_response
@@ -1139,43 +1139,43 @@ async def safe_workflow_execution(
     inputs: Dict[str, Any] = None
 ) -> Dict[str, Any]:
     """Execute workflow with comprehensive error handling."""
-    
+
     execution_context = {
         "operation": "execute_workflow",
         "session_id": session_id,
         "workflow_name": workflow_config.get("name", "unknown"),
         "node_count": len(workflow_config.get("nodes", []))
     }
-    
+
     try:
         # Create workflow
         workflow_id = await agent_ui.create_dynamic_workflow(
             session_id=session_id,
             workflow_config=workflow_config
         )
-        
+
         execution_context["workflow_id"] = workflow_id
-        
+
         # Execute workflow
         execution_id = await agent_ui.execute_workflow(
             session_id=session_id,
             workflow_id=workflow_id,
             inputs=inputs or {}
         )
-        
+
         return {
             "success": True,
             "workflow_id": workflow_id,
             "execution_id": execution_id,
             "message": "Workflow execution started successfully"
         }
-        
+
     except Exception as error:
         error_response = await MiddlewareErrorHandler.handle_workflow_error(
             error,
             context=execution_context
         )
-        
+
         return {
             "success": False,
             **error_response
@@ -1201,21 +1201,21 @@ class HealthCheck:
 
 class MiddlewareHealthMonitor:
     """Health monitoring for middleware components."""
-    
+
     def __init__(self, agent_ui: AgentUIMiddleware):
         self.agent_ui = agent_ui
         self.start_time = time.time()
-    
+
     async def get_health_status(self) -> Dict[str, Any]:
         """Get comprehensive health status."""
-        
+
         checks = [
             await self._check_middleware_health(),
             await self._check_database_health(),
             await self._check_system_resources(),
             await self._check_session_health()
         ]
-        
+
         # Determine overall status
         if any(check.status == "critical" for check in checks):
             overall_status = "critical"
@@ -1223,7 +1223,7 @@ class MiddlewareHealthMonitor:
             overall_status = "warning"
         else:
             overall_status = "healthy"
-        
+
         return {
             "status": overall_status,
             "timestamp": datetime.utcnow().isoformat(),
@@ -1238,17 +1238,17 @@ class MiddlewareHealthMonitor:
                 for check in checks
             ]
         }
-    
+
     async def _check_middleware_health(self) -> HealthCheck:
         """Check middleware component health."""
-        
+
         try:
             stats = self.agent_ui.get_stats()
-            
+
             active_sessions = stats["active_sessions"]
             max_sessions = self.agent_ui.max_sessions
             session_usage = active_sessions / max_sessions
-            
+
             if session_usage > 0.9:
                 status = "critical"
                 message = f"Session usage critical: {session_usage:.1%}"
@@ -1258,80 +1258,80 @@ class MiddlewareHealthMonitor:
             else:
                 status = "healthy"
                 message = f"Middleware healthy: {active_sessions}/{max_sessions} sessions"
-            
+
             return HealthCheck(
                 name="middleware",
                 status=status,
                 message=message,
                 details=stats
             )
-            
+
         except Exception as e:
             return HealthCheck(
                 name="middleware",
                 status="critical",
                 message=f"Middleware check failed: {e}"
             )
-    
+
     async def _check_database_health(self) -> HealthCheck:
         """Check database connectivity and performance."""
-        
+
         if not self.agent_ui.enable_persistence:
             return HealthCheck(
                 name="database",
                 status="healthy",
                 message="Database persistence disabled"
             )
-        
+
         try:
             # Test database connection
             start_time = time.time()
-            
+
             # Simple connectivity test
             db_node = self.agent_ui.workflow_repo.db_node
             result = await db_node.execute_async(
                 query="SELECT 1 as test",
                 parameters={}
             )
-            
+
             response_time = (time.time() - start_time) * 1000  # ms
-            
+
             if response_time > 1000:  # 1 second
                 status = "warning"
                 message = f"Database slow: {response_time:.1f}ms"
             else:
                 status = "healthy"
                 message = f"Database healthy: {response_time:.1f}ms"
-            
+
             return HealthCheck(
                 name="database",
                 status=status,
                 message=message,
                 details={"response_time_ms": response_time}
             )
-            
+
         except Exception as e:
             return HealthCheck(
                 name="database",
                 status="critical",
                 message=f"Database connection failed: {e}"
             )
-    
+
     async def _check_system_resources(self) -> HealthCheck:
         """Check system resource usage."""
-        
+
         try:
             # CPU usage
             cpu_percent = psutil.cpu_percent(interval=1)
-            
+
             # Memory usage
             memory = psutil.virtual_memory()
             memory_percent = memory.percent
-            
+
             # Disk usage
             disk = psutil.disk_usage('/')
             disk_percent = disk.percent
-            
+
             # Determine status based on resource usage
             if cpu_percent > 90 or memory_percent > 90 or disk_percent > 90:
                 status = "critical"
@@ -1342,7 +1342,7 @@ class MiddlewareHealthMonitor:
             else:
                 status = "healthy"
                 message = "System resources normal"
-            
+
             return HealthCheck(
                 name="system_resources",
                 status=status,
@@ -1354,38 +1354,38 @@ class MiddlewareHealthMonitor:
                     "memory_available_gb": memory.available / (1024**3)
                 }
             )
-            
+
         except Exception as e:
             return HealthCheck(
                 name="system_resources",
                 status="warning",
                 message=f"Resource check failed: {e}"
             )
-    
+
     async def _check_session_health(self) -> HealthCheck:
         """Check session health and cleanup status."""
-        
+
         try:
             current_time = datetime.utcnow()
             timeout_minutes = self.agent_ui.session_timeout_minutes
-            
+
             # Count sessions by age
             sessions_by_age = {
                 "active": 0,
                 "near_timeout": 0,
                 "stale": 0
             }
-            
+
             for session in self.agent_ui.sessions.values():
                 age_minutes = (current_time - session.created_at).total_seconds() / 60
-                
+
                 if age_minutes > timeout_minutes:
                     sessions_by_age["stale"] += 1
                 elif age_minutes > timeout_minutes * 0.8:
                     sessions_by_age["near_timeout"] += 1
                 else:
                     sessions_by_age["active"] += 1
-            
+
             # Determine status
             if sessions_by_age["stale"] > 0:
                 status = "warning"
@@ -1393,14 +1393,14 @@ class MiddlewareHealthMonitor:
             else:
                 status = "healthy"
                 message = f"Session health good: {sessions_by_age['active']} active"
-            
+
             return HealthCheck(
                 name="sessions",
                 status=status,
                 message=message,
                 details=sessions_by_age
             )
-            
+
         except Exception as e:
             return HealthCheck(
                 name="sessions",
@@ -1422,7 +1422,7 @@ async def health_check():
 async def detailed_health():
     """Detailed health information."""
     health_status = await health_monitor.get_health_status()
-    
+
     # Add additional system information
     health_status["system_info"] = {
         "python_version": sys.version,
@@ -1430,7 +1430,7 @@ async def detailed_health():
         "architecture": platform.architecture()[0],
         "processor": platform.processor()
     }
-    
+
     return health_status
 ```
 
@@ -1447,45 +1447,45 @@ from typing import List, Optional
 
 class MiddlewareConfig(BaseSettings):
     """Middleware configuration with environment variable support."""
-    
+
     # Core settings
     debug: bool = Field(False, env="DEBUG")
     log_level: str = Field("INFO", env="LOG_LEVEL")
-    
+
     # Database settings
     database_url: str = Field(..., env="DATABASE_URL")
     enable_persistence: bool = Field(True, env="ENABLE_PERSISTENCE")
-    
+
     # Session settings
     max_sessions: int = Field(1000, env="MAX_SESSIONS")
     session_timeout_minutes: int = Field(60, env="SESSION_TIMEOUT_MINUTES")
-    
+
     # Authentication settings
     jwt_secret_key: str = Field(..., env="JWT_SECRET_KEY")
     jwt_algorithm: str = Field("HS256", env="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
-    
+
     # API settings
     api_title: str = Field("Kailash Middleware API", env="API_TITLE")
     api_version: str = Field("1.0.0", env="API_VERSION")
     cors_origins: List[str] = Field(["*"], env="CORS_ORIGINS")
     enable_docs: bool = Field(True, env="ENABLE_DOCS")
-    
+
     # Real-time settings
     websocket_heartbeat_interval: int = Field(30, env="WEBSOCKET_HEARTBEAT_INTERVAL")
     sse_retry_timeout: int = Field(5000, env="SSE_RETRY_TIMEOUT")
-    
+
     # AI Chat settings
     default_llm_provider: str = Field("ollama", env="DEFAULT_LLM_PROVIDER")
     default_llm_model: str = Field("llama3.2:3b", env="DEFAULT_LLM_MODEL")
     enable_vector_search: bool = Field(False, env="ENABLE_VECTOR_SEARCH")
     vector_database_url: Optional[str] = Field(None, env="VECTOR_DATABASE_URL")
-    
+
     # Performance settings
     max_concurrent_executions: int = Field(50, env="MAX_CONCURRENT_EXECUTIONS")
     event_batch_size: int = Field(100, env="EVENT_BATCH_SIZE")
     event_batch_timeout: float = Field(1.0, env="EVENT_BATCH_TIMEOUT")
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -1493,16 +1493,16 @@ class MiddlewareConfig(BaseSettings):
 # Production application factory
 async def create_production_app(config: MiddlewareConfig = None):
     """Create production-ready middleware application."""
-    
+
     if config is None:
         config = MiddlewareConfig()
-    
+
     # Configure logging
     logging.basicConfig(
         level=getattr(logging, config.log_level),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     # Create middleware with production settings
     agent_ui = AgentUIMiddleware(
         enable_dynamic_workflows=True,
@@ -1512,14 +1512,14 @@ async def create_production_app(config: MiddlewareConfig = None):
         enable_persistence=config.enable_persistence,
         database_url=config.database_url
     )
-    
+
     # Create real-time middleware
     realtime = RealtimeMiddleware(
         agent_ui,
         websocket_heartbeat_interval=config.websocket_heartbeat_interval,
         sse_retry_timeout=config.sse_retry_timeout
     )
-    
+
     # Create AI chat if enabled
     ai_chat = None
     if config.enable_vector_search and config.vector_database_url:
@@ -1530,7 +1530,7 @@ async def create_production_app(config: MiddlewareConfig = None):
             default_model_provider=config.default_llm_provider,
             default_model=config.default_llm_model
         )
-    
+
     # Create API gateway
     gateway = create_gateway(
         title=config.api_title,
@@ -1538,53 +1538,53 @@ async def create_production_app(config: MiddlewareConfig = None):
         cors_origins=config.cors_origins,
         enable_docs=config.enable_docs
     )
-    
+
     # Connect components
     gateway.agent_ui = agent_ui
     gateway.realtime = realtime
     if ai_chat:
         gateway.ai_chat = ai_chat
-    
+
     # Set up authentication
     from kailash.middleware.auth import KailashJWTAuthManager
-    
+
     jwt_auth = KailashJWTAuthManager(
         secret_key=config.jwt_secret_key,
         algorithm=config.jwt_algorithm,
         access_token_expire_minutes=config.access_token_expire_minutes
     )
-    
+
     gateway.auth = jwt_auth
-    
+
     return gateway, agent_ui, realtime, ai_chat
 
 # Production startup
 async def startup_production():
     """Production startup sequence."""
-    
+
     config = MiddlewareConfig()
-    
+
     # Create application
     gateway, agent_ui, realtime, ai_chat = await create_production_app(config)
-    
+
     # Health monitoring
     health_monitor = MiddlewareHealthMonitor(agent_ui)
-    
+
     # Log startup information
     logger.info(f"Starting {config.api_title} v{config.api_version}")
     logger.info(f"Max sessions: {config.max_sessions}")
     logger.info(f"Database persistence: {config.enable_persistence}")
     logger.info(f"Vector search: {config.enable_vector_search}")
     logger.info(f"Debug mode: {config.debug}")
-    
+
     return gateway
 
 # Run production server
 if __name__ == "__main__":
     import uvicorn
-    
+
     config = MiddlewareConfig()
-    
+
     uvicorn.run(
         "main:startup_production",
         host="0.0.0.0",
@@ -1603,7 +1603,7 @@ This guide provides comprehensive patterns for integrating Kailash Middleware in
 ### Core Benefits
 - **Enterprise-Ready**: 17/17 integration tests passing for production reliability
 - **Real-time Communication**: WebSocket, SSE, and webhook support
-- **Dynamic Workflows**: Runtime workflow creation from frontend configurations  
+- **Dynamic Workflows**: Runtime workflow creation from frontend configurations
 - **Comprehensive Security**: JWT authentication, RBAC/ABAC access control
 - **Database Integration**: Persistent storage with audit trails
 - **AI Integration**: Natural language workflow creation and chat interfaces

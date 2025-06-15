@@ -1,7 +1,8 @@
 """Tests for template utilities module."""
 
-from kailash.utils.templates import NodeTemplate, TemplateManager
 import pytest
+
+from kailash.utils.templates import NodeTemplate, TemplateManager
 
 
 class TestNodeTemplate:

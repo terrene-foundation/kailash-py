@@ -14,13 +14,14 @@ import os
 import tempfile
 from typing import Any
 
+import pytest
+
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
 from kailash.nodes.data.writers import CSVWriterNode
 from kailash.runtime.local import LocalRuntime
-import pytest
 
 
 class MockDataTransformerNode(CycleAwareNode):

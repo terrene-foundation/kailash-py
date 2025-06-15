@@ -12,18 +12,27 @@ Features:
 - AI agent integration patterns
 """
 
-from .enhanced_server import MiddlewareMCPServer, MCPServerConfig, MCPToolNode, MCPResourceNode
-from .client_integration import MiddlewareMCPClient, MCPClientConfig, MCPServerConnection
+from .client_integration import (
+    MCPClientConfig,
+    MCPServerConnection,
+    MiddlewareMCPClient,
+)
+from .enhanced_server import (
+    MCPResourceNode,
+    MCPServerConfig,
+    MCPToolNode,
+    MiddlewareMCPServer,
+)
 
 # Legacy MCP imports removed - all MCP functionality is now in middleware
 
 __all__ = [
     # Middleware MCP components
     "MiddlewareMCPServer",
-    "MCPServerConfig", 
+    "MCPServerConfig",
     "MCPToolNode",
     "MCPResourceNode",
-    "MiddlewareMCPClient", 
+    "MiddlewareMCPClient",
     "MCPClientConfig",
     "MCPServerConnection",
 ]

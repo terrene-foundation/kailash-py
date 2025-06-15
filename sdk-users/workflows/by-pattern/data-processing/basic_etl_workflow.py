@@ -10,7 +10,7 @@ A foundational Extract, Transform, Load pattern demonstrating:
 
 Business Value:
 - Foundation for all data processing workflows
-- Customer tier calculation for marketing segmentation  
+- Customer tier calculation for marketing segmentation
 - Reusable pattern for business data transformation
 - Production-ready error handling and monitoring
 
@@ -37,7 +37,6 @@ examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
 from examples.utils.paths import get_data_dir
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode
 from kailash.nodes.data.writers import CSVWriterNode
@@ -56,25 +55,29 @@ def create_customer_tier_calculator():
         # Business logic: Customer tier calculation
         if "purchase_total" in df.columns:
             df["purchase_total"] = pd.to_numeric(df["purchase_total"], errors="coerce")
-            
+
             # Business tier rules
             df["customer_tier"] = pd.cut(
                 df["purchase_total"],
                 bins=[0, 100, 500, 1000, float("inf")],
                 labels=["Bronze", "Silver", "Gold", "Platinum"],
             )
-            
+
             # Add tier benefits (business logic)
             tier_benefits = {
                 "Bronze": {"discount": 0.05, "support": "standard"},
                 "Silver": {"discount": 0.10, "support": "priority"},
                 "Gold": {"discount": 0.15, "support": "premium"},
-                "Platinum": {"discount": 0.20, "support": "concierge"}
+                "Platinum": {"discount": 0.20, "support": "concierge"},
             }
-            
-            df["discount_rate"] = df["customer_tier"].map(lambda x: tier_benefits.get(str(x), {}).get("discount", 0))
-            df["support_level"] = df["customer_tier"].map(lambda x: tier_benefits.get(str(x), {}).get("support", "standard"))
-            
+
+            df["discount_rate"] = df["customer_tier"].map(
+                lambda x: tier_benefits.get(str(x), {}).get("discount", 0)
+            )
+            df["support_level"] = df["customer_tier"].map(
+                lambda x: tier_benefits.get(str(x), {}).get("support", "standard")
+            )
+
         elif "tier" in df.columns:
             # If tier already exists, standardize format
             df["customer_tier"] = df["tier"].str.title()
@@ -84,9 +87,17 @@ def create_customer_tier_calculator():
             "customers": df.to_dict(orient="records"),
             "summary": {
                 "total_customers": len(df),
-                "tier_distribution": df["customer_tier"].value_counts().to_dict() if "customer_tier" in df.columns else {},
-                "average_purchase": float(df["purchase_total"].mean()) if "purchase_total" in df.columns else 0,
-            }
+                "tier_distribution": (
+                    df["customer_tier"].value_counts().to_dict()
+                    if "customer_tier" in df.columns
+                    else {}
+                ),
+                "average_purchase": (
+                    float(df["purchase_total"].mean())
+                    if "purchase_total" in df.columns
+                    else 0
+                ),
+            },
         }
 
     return PythonCodeNode.from_function(
@@ -102,7 +113,7 @@ def main():
     # Create data directories
     data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
-    output_dir = data_dir / "outputs" 
+    output_dir = data_dir / "outputs"
     output_dir.mkdir(exist_ok=True)
 
     print("🏭 Starting Basic ETL Workflow")
@@ -112,7 +123,7 @@ def main():
     print("📋 Creating ETL workflow...")
     workflow = Workflow(
         workflow_id="basic_customer_etl",
-        name="basic_customer_etl", 
+        name="basic_customer_etl",
         description="Basic ETL for customer tier analysis and business intelligence",
     )
 
@@ -120,18 +131,13 @@ def main():
     print("🔧 Creating workflow nodes...")
 
     # Data ingestion
-    csv_reader = CSVReaderNode(
-        file_path=str(data_dir / "customers.csv"), 
-        headers=True
-    )
+    csv_reader = CSVReaderNode(file_path=str(data_dir / "customers.csv"), headers=True)
 
     # Business transformation
     tier_calculator = create_customer_tier_calculator()
 
     # Data persistence
-    csv_writer = CSVWriterNode(
-        file_path=str(output_dir / "customer_tiers.csv")
-    )
+    csv_writer = CSVWriterNode(file_path=str(output_dir / "customer_tiers.csv"))
 
     # Add nodes to workflow
     workflow.add_node(node_id="data_ingestion", node_or_type=csv_reader)
@@ -140,10 +146,10 @@ def main():
 
     # Step 3: Connect nodes using dot notation for nested data
     print("🔗 Connecting workflow nodes...")
-    
+
     # Simple connection: CSV reader to tier calculator
     workflow.connect("data_ingestion", "tier_calculation", {"data": "data"})
-    
+
     # Dot notation: Extract customers array from nested result
     workflow.connect("tier_calculation", "data_output", {"result.customers": "data"})
 
@@ -160,12 +166,8 @@ def main():
     print("🚀 Executing workflow...")
     try:
         # Use enterprise runtime with monitoring
-        runner = LocalRuntime(
-            debug=True,
-            enable_monitoring=True,
-            enable_async=True
-        )
-        
+        runner = LocalRuntime(debug=True, enable_monitoring=True, enable_async=True)
+
         results, run_id = runner.execute(workflow)
 
         print("✓ ETL workflow completed successfully!")
@@ -179,9 +181,11 @@ def main():
                 summary = tier_result["result"].get("summary", {})
                 print("\n📊 Business Intelligence Summary:")
                 print(f"  • Total Customers: {summary.get('total_customers', 0)}")
-                print(f"  • Average Purchase: ${summary.get('average_purchase', 0):.2f}")
-                
-                tier_dist = summary.get('tier_distribution', {})
+                print(
+                    f"  • Average Purchase: ${summary.get('average_purchase', 0):.2f}"
+                )
+
+                tier_dist = summary.get("tier_distribution", {})
                 if tier_dist:
                     print("  • Tier Distribution:")
                     for tier, count in tier_dist.items():
@@ -190,12 +194,13 @@ def main():
     except Exception as e:
         print(f"✗ ETL workflow execution failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
     # Step 6: Create business artifacts
     print("\n📁 Creating business artifacts...")
-    
+
     # Workflow visualization
     try:
         visualizer = WorkflowVisualizer(workflow)
@@ -207,8 +212,7 @@ def main():
     # Workflow export for reuse
     try:
         workflow.export_to_kailash(
-            output_path=str(output_dir / "etl_workflow.yaml"), 
-            format="yaml"
+            output_path=str(output_dir / "etl_workflow.yaml"), format="yaml"
         )
         print(f"✓ Workflow definition: {output_dir / 'etl_workflow.yaml'}")
     except Exception as e:
@@ -216,7 +220,7 @@ def main():
 
     print("\n🎉 Basic ETL workflow completed!")
     print("📁 Check output directory for results and artifacts")
-    
+
     return 0
 
 
@@ -225,22 +229,40 @@ if __name__ == "__main__":
     sample_data_file = get_data_dir() / "customers.csv"
     if not sample_data_file.exists():
         print("📝 Creating sample customer data...")
-        
+
         # Realistic business sample data
-        sample_data = pd.DataFrame({
-            "customer_id": range(1, 21),
-            "name": [f"Customer {i}" for i in range(1, 21)],
-            "email": [f"customer{i}@business.com" for i in range(1, 21)],
-            "purchase_total": [
-                150.50, 750.25, 50.75, 1200.00, 450.80,
-                2500.00, 75.30, 950.60, 1800.40, 320.15,
-                125.90, 680.70, 45.25, 1450.80, 890.35,
-                3200.00, 180.60, 720.40, 2100.25, 95.85
-            ],
-            "registration_date": pd.date_range("2023-01-01", periods=20, freq="D"),
-            "region": ["North", "South", "East", "West"] * 5,
-        })
-        
+        sample_data = pd.DataFrame(
+            {
+                "customer_id": range(1, 21),
+                "name": [f"Customer {i}" for i in range(1, 21)],
+                "email": [f"customer{i}@business.com" for i in range(1, 21)],
+                "purchase_total": [
+                    150.50,
+                    750.25,
+                    50.75,
+                    1200.00,
+                    450.80,
+                    2500.00,
+                    75.30,
+                    950.60,
+                    1800.40,
+                    320.15,
+                    125.90,
+                    680.70,
+                    45.25,
+                    1450.80,
+                    890.35,
+                    3200.00,
+                    180.60,
+                    720.40,
+                    2100.25,
+                    95.85,
+                ],
+                "registration_date": pd.date_range("2023-01-01", periods=20, freq="D"),
+                "region": ["North", "South", "East", "West"] * 5,
+            }
+        )
+
         sample_data.to_csv(sample_data_file, index=False)
         print(f"✓ Created sample data: {sample_data_file}")
 

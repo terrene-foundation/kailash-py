@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from test_config import TEST_DB_CONFIG, VECTOR_DB_CONFIG
 
 from kailash.access_control import (
+    AccessControlManager,
     NodePermission,
     PermissionEffect,
     PermissionRule,
@@ -24,7 +25,6 @@ from kailash.access_control_abac import (
     AttributeOperator,
     LogicalOperator,
 )
-from kailash.access_control import AccessControlManager
 from kailash.nodes.data import (
     AsyncConnectionManager,
     AsyncPostgreSQLVectorNode,
@@ -75,7 +75,7 @@ class TestAsyncDatabaseIntegrationReal:
             assert "row_count" in result["result"]
             assert result["result"]["row_count"] >= 0
             assert result["result"]["database_type"] == "postgresql"
-            
+
             # Check data structure if we have results
             if result["result"]["data"]:
                 first_row = result["result"]["data"][0]
@@ -149,7 +149,7 @@ class TestAsyncDatabaseIntegrationReal:
     async def test_connection_manager_pooling(self, connection_manager):
         """Test connection manager pool management with real database."""
         tenant_id = "test_tenant"
-        
+
         # Use consistent config for pool reuse testing
         db_config = TEST_DB_CONFIG["postgresql"]
 
@@ -163,7 +163,7 @@ class TestAsyncDatabaseIntegrationReal:
         # Check metrics - there should be at least one pool
         metrics = connection_manager.get_metrics(tenant_id)
         assert len(metrics) >= 1
-        
+
         # Test actual query execution
         async with connection_manager.get_connection(tenant_id, db_config) as conn:
             result = await conn.fetch("SELECT 1 as test")
@@ -206,7 +206,7 @@ class TestAsyncDatabaseIntegrationReal:
                         )
                     ],
                 ),
-            )
+            ),
         )
 
         # Create node with access control
@@ -282,7 +282,7 @@ class TestAsyncDatabaseIntegrationReal:
 
         assert "fetch_users" in results
         assert "count_active" in results
-        
+
         # Verify results exist
         if "fetch_users" in results and "result" in results["fetch_users"]:
             user_count = len(results["fetch_users"]["result"]["data"])
@@ -307,9 +307,12 @@ class TestAsyncDatabaseIntegrationReal:
 
         with pytest.raises(Exception) as exc_info:
             await node.execute_async()
-        
+
         # Should get a database error about missing table
-        assert "non_existent_table" in str(exc_info.value).lower() or "does not exist" in str(exc_info.value).lower()
+        assert (
+            "non_existent_table" in str(exc_info.value).lower()
+            or "does not exist" in str(exc_info.value).lower()
+        )
 
         await node.cleanup()
 
@@ -335,12 +338,12 @@ class TestAsyncDatabaseIntegrationReal:
             # Verify insertion
             verify_node = AsyncSQLDatabaseNode(
                 name="verify",
-                database_type="postgresql", 
+                database_type="postgresql",
                 connection_string=TEST_DB_CONFIG["connection_string"],
                 query="SELECT * FROM test_users WHERE email = :email",
                 params={"email": "tx2@test.com"},
             )
-            
+
             verify_result = await verify_node.execute_async()
             assert len(verify_result["result"]["data"]) == 1
 
@@ -353,7 +356,7 @@ class TestAsyncDatabaseIntegrationReal:
                 params={"email": "tx2@test.com"},
             )
             await cleanup_node.execute_async()
-            
+
         finally:
             await node.cleanup()
 

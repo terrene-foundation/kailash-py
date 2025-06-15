@@ -250,12 +250,18 @@ class TestLLMAgentNode:
 
         # All parameters have defaults, so execution should work
         # Missing provider - should use default (mock)
-        result = node.execute(model="llama3.2:3b", messages=[{"role": "user", "content": "test"}])
+        result = node.execute(
+            model="llama3.2:3b", messages=[{"role": "user", "content": "test"}]
+        )
         assert result["success"] is True
 
-        # Missing model - should use default but use ollama provider  
-        result = node.execute(provider="ollama", messages=[{"role": "user", "content": "test"}])
-        assert result["success"] is True or "error" in result  # Ollama might not be available
+        # Missing model - should use default but use ollama provider
+        result = node.execute(
+            provider="ollama", messages=[{"role": "user", "content": "test"}]
+        )
+        assert (
+            result["success"] is True or "error" in result
+        )  # Ollama might not be available
 
         # Missing messages - should use default empty list
         result = node.execute(provider="ollama", model="llama3.2:3b")

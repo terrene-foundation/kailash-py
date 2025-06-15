@@ -4,7 +4,7 @@ Comprehensive Example Testing - Kailash SDK
 
 This script provides comprehensive validation of all SDK examples including:
 1. Syntax validation - Python syntax correctness
-2. Import testing - Module imports without errors  
+2. Import testing - Module imports without errors
 3. Data path validation - Proper use of data utilities
 4. Execution testing - Examples run without runtime errors
 5. Performance tracking - Execution time analysis
@@ -15,10 +15,10 @@ Usage:
 Examples:
     # Run all tests
     python test-all-examples.py
-    
+
     # Verbose output with detailed error information
     python test-all-examples.py --verbose
-    
+
     # Test specific category only
     python test-all-examples.py --category ai
 
@@ -35,15 +35,17 @@ Output:
     - Performance statistics and timing data
 """
 
+import os
 import subprocess
 import sys
 import time
-import os
 from pathlib import Path
-from typing import Tuple, List, Dict, Any
+from typing import Any, Dict, List, Tuple
 
 # Add project root to path
-project_root = Path(__file__).parent.parent.parent  # Go up 3 levels from scripts/testing/
+project_root = Path(
+    __file__
+).parent.parent.parent  # Go up 3 levels from scripts/testing/
 sys.path.insert(0, str(project_root))
 
 
@@ -176,16 +178,16 @@ def check_data_paths(file_path: Path) -> tuple[bool, list[str]]:
 
 def run_example(file_path: Path, timeout: int = 10) -> Tuple[bool, str, float]:
     """Actually run an example file and check if it executes successfully.
-    
+
     Returns:
         tuple: (success, output/error, execution_time)
     """
     start_time = time.time()
-    
+
     # Set up environment
     env = os.environ.copy()
-    env['PYTHONPATH'] = str(project_root)
-    
+    env["PYTHONPATH"] = str(project_root)
+
     try:
         # Run the example with a timeout
         result = subprocess.run(
@@ -194,11 +196,11 @@ def run_example(file_path: Path, timeout: int = 10) -> Tuple[bool, str, float]:
             text=True,
             timeout=timeout,
             cwd=str(file_path.parent),
-            env=env
+            env=env,
         )
-        
+
         execution_time = time.time() - start_time
-        
+
         if result.returncode == 0:
             # Check if output contains error indicators
             output = result.stdout + result.stderr
@@ -211,18 +213,18 @@ def run_example(file_path: Path, timeout: int = 10) -> Tuple[bool, str, float]:
                 "KeyError",
                 "ValueError",
                 "TypeError",
-                "AttributeError"
+                "AttributeError",
             ]
-            
+
             # Some errors are expected in examples (e.g., showing error handling)
             allowed_errors = [
                 "❌",  # Used in output messages
                 "error handling",
                 "Expected error",
                 "This is expected",
-                "demonstrates error"
+                "demonstrates error",
             ]
-            
+
             has_real_error = False
             for indicator in error_indicators:
                 if indicator in output:
@@ -230,15 +232,27 @@ def run_example(file_path: Path, timeout: int = 10) -> Tuple[bool, str, float]:
                     if not any(allowed in output for allowed in allowed_errors):
                         has_real_error = True
                         break
-            
+
             if has_real_error:
-                return False, f"Output contains error indicators:\n{output[-1000:]}", execution_time
+                return (
+                    False,
+                    f"Output contains error indicators:\n{output[-1000:]}",
+                    execution_time,
+                )
             else:
-                return True, f"Executed successfully in {execution_time:.2f}s", execution_time
+                return (
+                    True,
+                    f"Executed successfully in {execution_time:.2f}s",
+                    execution_time,
+                )
         else:
             error_output = result.stderr if result.stderr else result.stdout
-            return False, f"Exit code {result.returncode}:\n{error_output[-1000:]}", execution_time
-            
+            return (
+                False,
+                f"Exit code {result.returncode}:\n{error_output[-1000:]}",
+                execution_time,
+            )
+
     except subprocess.TimeoutExpired:
         return False, f"Timeout after {timeout}s", timeout
     except Exception as e:
@@ -250,7 +264,7 @@ def categorize_example(file_path: Path) -> str:
     """Categorize an example by its directory structure."""
     relative = file_path.relative_to(project_root / "examples")
     parts = relative.parts
-    
+
     if "feature_examples" in parts:
         if len(parts) > 2:
             return parts[1]  # e.g., 'ai', 'security', 'validation'
@@ -293,7 +307,7 @@ def main():
 
     # Track execution times
     execution_times = []
-    
+
     # Examples that require special setup (skip execution)
     skip_execution = {
         "ollama_rag_example.py",  # Requires Ollama
@@ -312,7 +326,7 @@ def main():
         print(f"\n{'=' * 50}")
         print(f"Category: {category.upper()} ({len(files)} files)")
         print(f"{'=' * 50}")
-        
+
         for example in files:
             relative_path = example.relative_to(project_root)
             print(f"\n📄 Testing: {relative_path}")
@@ -349,7 +363,7 @@ def main():
                 print("  ✗ Data path issues:")
                 for issue in path_issues:
                     print(f"    - {issue}")
-            
+
             # Run the example (NEW)
             if example.name in skip_execution:
                 results["execution"]["skipped"] += 1
@@ -358,16 +372,16 @@ def main():
                 print("  🔄 Running example...")
                 run_ok, run_output, exec_time = run_example(example)
                 execution_times.append((relative_path, exec_time))
-                
+
                 if run_ok:
                     results["execution"]["passed"] += 1
                     print(f"  ✓ Execution OK ({exec_time:.2f}s)")
                 else:
                     results["execution"]["failed"] += 1
                     results["execution"]["errors"].append((relative_path, run_output))
-                    print(f"  ✗ Execution Failed:")
+                    print("  ✗ Execution Failed:")
                     # Print first few lines of error
-                    error_lines = run_output.split('\n')
+                    error_lines = run_output.split("\n")
                     for line in error_lines[:5]:
                         if line.strip():
                             print(f"    {line}")
@@ -385,13 +399,13 @@ def main():
             total = result["passed"] + result["failed"] + result["skipped"]
         else:
             total = result["passed"] + result["failed"]
-            
+
         print(f"\n{test_type.replace('_', ' ').title()}:")
         print(f"  Passed: {result['passed']}/{total}")
-        
+
         if test_type == "execution" and result["skipped"] > 0:
             print(f"  Skipped: {result['skipped']} (require special setup)")
-            
+
         if result["failed"] > 0:
             all_passed = False
             print(f"  Failed: {result['failed']}")
@@ -402,7 +416,7 @@ def main():
                     for e in error:
                         print(f"      {e}")
                 else:
-                    error_lines = str(error).strip().split('\n')
+                    error_lines = str(error).strip().split("\n")
                     for line in error_lines[:3]:  # First 3 lines of each error
                         if line.strip():
                             print(f"      {line}")
@@ -414,13 +428,13 @@ def main():
         print("\n" + "=" * 70)
         print("EXECUTION TIME STATISTICS")
         print("=" * 70)
-        
+
         execution_times.sort(key=lambda x: x[1], reverse=True)
         total_time = sum(t[1] for t in execution_times)
-        
+
         print(f"\nTotal execution time: {total_time:.2f}s")
         print(f"Average per example: {total_time / len(execution_times):.2f}s")
-        
+
         print("\nSlowest examples:")
         for path, exec_time in execution_times[:5]:
             print(f"  {exec_time:6.2f}s - {path}")
@@ -435,8 +449,12 @@ def main():
     # Print helpful tips for common issues
     if not all_passed:
         print("\n💡 Common fixes:")
-        print("  - LocalWorkflowRunner import: Use 'from kailash.runtime.local import LocalRuntime'")
-        print("  - Execution method: Use 'LocalRuntime().execute(workflow)' not '.run()'")
+        print(
+            "  - LocalWorkflowRunner import: Use 'from kailash.runtime.local import LocalRuntime'"
+        )
+        print(
+            "  - Execution method: Use 'LocalRuntime().execute(workflow)' not '.run()'"
+        )
         print("  - Missing imports: Ensure all required nodes are imported")
         print("  - Data paths: Use get_input_data_path() / get_output_data_path()")
         print("  - Timeout issues: Some examples may need longer execution times")

@@ -90,43 +90,43 @@ scripts/
 ## 📋 Script Categories
 
 ### 🔧 Development Scripts
-**Purpose**: Setup and manage development environment  
-**Location**: `development/`  
+**Purpose**: Setup and manage development environment
+**Location**: `development/`
 **Key Scripts**: `setup-environment.sh`, `start-development.sh`
 
-### 🧪 Testing Scripts  
-**Purpose**: Test validation and performance analysis  
-**Location**: `testing/`  
+### 🧪 Testing Scripts
+**Purpose**: Test validation and performance analysis
+**Location**: `testing/`
 **Key Scripts**: `test-all-examples.py`, `profile-tests.py`
 
 ### 🛠️ Maintenance Scripts
-**Purpose**: Code quality and cleanup  
-**Location**: `maintenance/`  
+**Purpose**: Code quality and cleanup
+**Location**: `maintenance/`
 **Key Scripts**: `fix-imports.py`, `refactor-pythoncode.py`
 
 ### 📊 Metrics Scripts
-**Purpose**: Development metrics and reporting  
-**Location**: `metrics/`  
+**Purpose**: Development metrics and reporting
+**Location**: `metrics/`
 **Key Scripts**: `daily-metrics.sh`, `github-metrics.sh`
 
 ### 🚀 Deployment Scripts
-**Purpose**: Infrastructure and deployment  
-**Location**: `deployment/`  
+**Purpose**: Infrastructure and deployment
+**Location**: `deployment/`
 **Key Scripts**: `deploy-tenant.sh`, `setup-github-projects.sh`
 
 ### 🎨 Studio Scripts
-**Purpose**: Kailash Studio management  
-**Location**: `studio/`  
+**Purpose**: Kailash Studio management
+**Location**: `studio/`
 **Key Scripts**: `start-studio.sh`, `start-runner-service.sh`
 
 ### 🤝 Collaboration Scripts
-**Purpose**: Team coordination and workflow  
-**Location**: `collaboration/`  
+**Purpose**: Team coordination and workflow
+**Location**: `collaboration/`
 **Key Scripts**: `sync-tools.py`, `team-status.py`
 
 ### ⚙️ Utility Scripts
-**Purpose**: Miscellaneous utilities  
-**Location**: `utils/`  
+**Purpose**: Miscellaneous utilities
+**Location**: `utils/`
 **Key Scripts**: `start-ai-registry.py`
 
 ## 🔧 Prerequisites
@@ -246,6 +246,6 @@ gh auth login
 
 ---
 
-**Last Updated**: Created during scripts directory reorganization  
-**Maintainer**: Kailash SDK Team  
+**Last Updated**: Created during scripts directory reorganization
+**Maintainer**: Kailash SDK Team
 **Next Review**: When new script categories are added

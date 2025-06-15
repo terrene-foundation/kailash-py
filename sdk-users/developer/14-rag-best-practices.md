@@ -48,17 +48,17 @@ hybrid_retriever = HybridRetrieverNode(
 ```python
 def choose_best_strategy(document: str, test_queries: List[str]):
     """Always compare strategies with your specific content."""
-    
+
     semantic = SemanticChunkerNode(chunk_size=1000)
     statistical = StatisticalChunkerNode(chunk_size=1000)
-    
+
     sem_result = semantic.run(text=document)
     stat_result = statistical.run(text=document)
-    
+
     # Evaluate with your queries
     sem_quality = evaluate_chunks(sem_result["chunks"], test_queries)
     stat_quality = evaluate_chunks(stat_result["chunks"], test_queries)
-    
+
     return "semantic" if sem_quality > stat_quality else "statistical"
 ```
 
@@ -102,7 +102,7 @@ chunks = chunker.run(text=text)["chunks"]
 # Validate chunk quality
 if not chunks:
     raise ValueError("No chunks generated")
-    
+
 avg_size = sum(len(c["content"]) for c in chunks) / len(chunks)
 if avg_size < 100:
     print("Warning: Very small chunks detected")
@@ -145,7 +145,7 @@ def batch_process(documents: List[Dict], batch_size: int = 50):
 def process_with_memory_limit(documents: List[Dict], max_memory_mb: int = 1000):
     """Process with memory monitoring."""
     import psutil
-    
+
     processed = []
     for doc in documents:
         # Check memory before processing
@@ -153,10 +153,10 @@ def process_with_memory_limit(documents: List[Dict], max_memory_mb: int = 1000):
         if memory_mb > max_memory_mb:
             # Clear caches or process in smaller batches
             gc.collect()
-        
+
         result = chunker.run(text=doc["content"])
         processed.extend(result["chunks"])
-    
+
     return processed
 ```
 
@@ -173,16 +173,16 @@ class RobustRAGPipeline:
                 chunker = SemanticChunkerNode()
             else:
                 chunker = StatisticalChunkerNode()
-            
+
             result = chunker.run(text=text)
             return result["chunks"], None
-            
+
         except Exception as e:
             # Fallback to simple sentence splitting
             sentences = [s.strip() + '.' for s in text.split('.') if s.strip()]
             chunks = []
             current_chunk = ""
-            
+
             for sentence in sentences:
                 if len(current_chunk) + len(sentence) > 1000:
                     if current_chunk:
@@ -194,14 +194,14 @@ class RobustRAGPipeline:
                     current_chunk = sentence
                 else:
                     current_chunk += " " + sentence if current_chunk else sentence
-            
+
             if current_chunk:
                 chunks.append({
                     "chunk_id": f"fallback_{len(chunks)}",
                     "content": current_chunk.strip(),
                     "chunking_method": "fallback"
                 })
-            
+
             return chunks, str(e)
 ```
 
@@ -212,34 +212,34 @@ def robust_processing(documents: List[Dict]):
     """Handle edge cases gracefully."""
     results = []
     errors = []
-    
+
     for doc in documents:
         try:
             content = doc.get("content", "").strip()
-            
+
             # Skip empty documents
             if not content:
                 errors.append(f"Empty content in {doc.get('id', 'unknown')}")
                 continue
-            
+
             # Skip very short documents
             if len(content) < 50:
                 errors.append(f"Document {doc.get('id')} too short")
                 continue
-            
+
             result = chunker.run(text=content)
             chunks = result["chunks"]
-            
+
             # Verify chunks were created
             if not chunks:
                 errors.append(f"No chunks for {doc.get('id')}")
                 continue
-            
+
             results.extend(chunks)
-            
+
         except Exception as e:
             errors.append(f"Error processing {doc.get('id', 'unknown')}: {e}")
-    
+
     return results, errors
 ```
 
@@ -252,28 +252,28 @@ def quality_check(chunks: List[Dict]) -> Dict[str, Any]:
     """Comprehensive quality validation."""
     if not chunks:
         return {"status": "failed", "reason": "No chunks generated"}
-    
+
     # Size analysis
     sizes = [len(chunk["content"]) for chunk in chunks]
     avg_size = sum(sizes) / len(sizes)
     size_variance = sum((s - avg_size) ** 2 for s in sizes) / len(sizes)
-    
+
     issues = []
-    
+
     # Check size consistency
     if size_variance > avg_size:
         issues.append(f"High size variance: {size_variance:.0f}")
-    
+
     # Check for empty chunks
     empty_chunks = [c for c in chunks if len(c["content"]) < 10]
     if empty_chunks:
         issues.append(f"{len(empty_chunks)} empty/tiny chunks")
-    
+
     # Check for overly large chunks
     large_chunks = [c for c in chunks if len(c["content"]) > 5000]
     if large_chunks:
         issues.append(f"{len(large_chunks)} overly large chunks")
-    
+
     return {
         "status": "passed" if not issues else "warning",
         "chunk_count": len(chunks),
@@ -288,21 +288,21 @@ def quality_check(chunks: List[Dict]) -> Dict[str, Any]:
 def test_retrieval_quality(chunks: List[Dict], test_queries: List[str]) -> float:
     """Test how well chunks work for retrieval."""
     scores = []
-    
+
     for query in test_queries:
         query_words = set(query.lower().split())
         chunk_scores = []
-        
+
         for chunk in chunks:
             chunk_words = set(chunk["content"].lower().split())
             overlap = len(query_words & chunk_words)
             relevance = overlap / len(query_words) if query_words else 0
             chunk_scores.append(relevance)
-        
+
         # Best score for this query
         best_score = max(chunk_scores) if chunk_scores else 0
         scores.append(best_score)
-    
+
     return sum(scores) / len(scores) if scores else 0
 ```
 
@@ -315,11 +315,11 @@ class RAGHealthMonitor:
     def __init__(self, pipeline):
         self.pipeline = pipeline
         self.health_history = []
-    
+
     def health_check(self) -> Dict[str, Any]:
         """Run comprehensive health check."""
         status = {"timestamp": datetime.now().isoformat(), "issues": []}
-        
+
         # Test chunking
         try:
             test_text = "Test sentence one. Test sentence two."
@@ -328,7 +328,7 @@ class RAGHealthMonitor:
                 status["issues"].append("Chunking returned no results")
         except Exception as e:
             status["issues"].append(f"Chunking failed: {e}")
-        
+
         # Test retrieval
         try:
             test_results = [{"id": "test", "content": "test", "similarity_score": 0.8}]
@@ -339,10 +339,10 @@ class RAGHealthMonitor:
                 status["issues"].append("Retrieval returned no results")
         except Exception as e:
             status["issues"].append(f"Retrieval failed: {e}")
-        
+
         status["overall"] = "healthy" if not status["issues"] else "degraded"
         self.health_history.append(status)
-        
+
         return status
 ```
 
@@ -352,13 +352,13 @@ class RAGHealthMonitor:
 class PerformanceTracker:
     def __init__(self):
         self.metrics = {"chunking_time": [], "retrieval_time": [], "quality_scores": []}
-    
+
     def track_operation(self, operation: str, duration: float, quality: float = None):
         """Track operation performance."""
         self.metrics[f"{operation}_time"].append(duration)
         if quality is not None:
             self.metrics["quality_scores"].append(quality)
-    
+
     def get_summary(self) -> Dict[str, float]:
         """Get performance summary."""
         return {
@@ -382,7 +382,7 @@ chunking:
   statistical:
     chunk_size: 1000
     variance_threshold: 0.6
-    
+
 retrieval:
   fusion_strategy: "rrf"
   top_k: 5
@@ -405,14 +405,14 @@ from pathlib import Path
 def load_rag_config(environment: str = "production") -> Dict:
     """Load environment-specific configuration."""
     config_path = Path(f"config/{environment}.yaml")
-    
+
     if not config_path.exists():
         # Fallback to defaults
         return {
             "chunking": {"semantic": {"chunk_size": 1000}},
             "retrieval": {"fusion_strategy": "rrf"}
         }
-    
+
     with open(config_path) as f:
         return yaml.safe_load(f)
 
@@ -426,7 +426,7 @@ chunker = SemanticChunkerNode(**config["chunking"]["semantic"])
 ### Before Production
 
 - [ ] **Strategy Selection**: Tested both semantic and statistical on your content
-- [ ] **Parameter Tuning**: Optimized for your specific documents and queries  
+- [ ] **Parameter Tuning**: Optimized for your specific documents and queries
 - [ ] **Quality Validation**: Implemented automated quality checks
 - [ ] **Error Handling**: Graceful degradation and fallback strategies
 - [ ] **Performance Testing**: Verified latency and throughput requirements

@@ -25,11 +25,11 @@ from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
 @register_node()
 class DataLineageNode(Node):
     """Node for tracking data lineage and generating audit trails.
-    
+
     This node automatically tracks data transformations, maintains audit trails,
     and generates compliance reports for regulatory requirements. It provides
     comprehensive data lineage tracking for enterprise workflows.
-    
+
     Key capabilities:
     1. Data transformation tracking
     2. Source and destination recording
@@ -37,7 +37,7 @@ class DataLineageNode(Node):
     4. Data quality metrics
     5. Audit trail maintenance
     6. Data flow visualization
-    
+
     Example:
         >>> lineage = DataLineageNode()
         >>> result = lineage.execute(
@@ -49,7 +49,7 @@ class DataLineageNode(Node):
         ...     data_classifications=["PII", "financial"]
         ... )
     """
-    
+
     def get_metadata(self) -> NodeMetadata:
         """Get node metadata for discovery and orchestration."""
         return NodeMetadata(
@@ -59,7 +59,7 @@ class DataLineageNode(Node):
             version="1.0.0",
             author="Kailash SDK",
         )
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define input parameters for data lineage operations."""
         return {
@@ -154,7 +154,7 @@ class DataLineageNode(Node):
                 description="Storage backend configuration",
             ),
         }
-    
+
     def __init__(self, **kwargs):
         """Initialize the DataLineageNode."""
         super().__init__(**kwargs)
@@ -181,11 +181,11 @@ class DataLineageNode(Node):
                 "encryption_required": True,
             },
         }
-    
+
     def _generate_lineage_id(self) -> str:
         """Generate unique lineage tracking ID."""
         return f"lineage_{uuid.uuid4().hex[:12]}"
-    
+
     def _track_transformation(
         self,
         data_source: str,
@@ -200,7 +200,7 @@ class DataLineageNode(Node):
         """Track a data transformation operation."""
         lineage_id = self._generate_lineage_id()
         timestamp = datetime.now().isoformat()
-        
+
         # Create lineage record
         lineage_record = {
             "lineage_id": lineage_id,
@@ -232,14 +232,14 @@ class DataLineageNode(Node):
                 },
             },
         }
-        
+
         # Perform compliance checks
         compliance_results = self._check_compliance(lineage_record)
         lineage_record["compliance_check"] = compliance_results
-        
+
         # Store lineage record
         self._lineage_storage[lineage_id] = lineage_record
-        
+
         return {
             "lineage_id": lineage_id,
             "status": "tracked",
@@ -248,27 +248,29 @@ class DataLineageNode(Node):
             "audit_trail_created": True,
             "record": lineage_record,
         }
-    
+
     def _check_compliance(self, lineage_record: Dict[str, Any]) -> Dict[str, Any]:
         """Check compliance requirements for a lineage record."""
         compliance_tags = lineage_record.get("compliance_tags", [])
         data_classifications = lineage_record.get("data_classifications", [])
-        
+
         compliance_results = {
             "overall_status": "compliant",
             "warnings": [],
             "requirements_met": [],
             "requirements_failed": [],
         }
-        
+
         for tag in compliance_tags:
             if tag in self._compliance_rules:
                 rule = self._compliance_rules[tag]
-                
+
                 # Check required classifications
                 required_classifications = rule.get("required_classifications", [])
                 if required_classifications:
-                    missing_classifications = set(required_classifications) - set(data_classifications)
+                    missing_classifications = set(required_classifications) - set(
+                        data_classifications
+                    )
                     if missing_classifications:
                         compliance_results["requirements_failed"].append(
                             f"{tag}: Missing required classifications: {list(missing_classifications)}"
@@ -278,26 +280,29 @@ class DataLineageNode(Node):
                         compliance_results["requirements_met"].append(
                             f"{tag}: Required classifications present"
                         )
-                
+
                 # Check transformation requirements
                 transformation_type = lineage_record.get("transformation_type", "")
-                if rule.get("anonymization_required") and "anonymization" not in transformation_type.lower():
+                if (
+                    rule.get("anonymization_required")
+                    and "anonymization" not in transformation_type.lower()
+                ):
                     compliance_results["warnings"].append(
                         f"{tag}: Anonymization may be required for this data"
                     )
-                
+
                 if rule.get("encryption_required"):
                     compliance_results["warnings"].append(
                         f"{tag}: Ensure data encryption is applied"
                     )
-                
+
                 if rule.get("audit_trail_required"):
                     compliance_results["requirements_met"].append(
                         f"{tag}: Audit trail automatically maintained"
                     )
-        
+
         return compliance_results
-    
+
     def _generate_report(
         self,
         start_date: Optional[str] = None,
@@ -308,9 +313,13 @@ class DataLineageNode(Node):
     ) -> Dict[str, Any]:
         """Generate a compliance and lineage report."""
         # Parse date filters
-        start_dt = datetime.fromisoformat(start_date) if start_date else datetime.now() - timedelta(days=30)
+        start_dt = (
+            datetime.fromisoformat(start_date)
+            if start_date
+            else datetime.now() - timedelta(days=30)
+        )
         end_dt = datetime.fromisoformat(end_date) if end_date else datetime.now()
-        
+
         # Filter lineage records
         filtered_records = []
         for record in self._lineage_storage.values():
@@ -318,15 +327,21 @@ class DataLineageNode(Node):
             if start_dt <= record_time <= end_dt:
                 # Apply tag and classification filters
                 if compliance_tags:
-                    if not any(tag in record.get("compliance_tags", []) for tag in compliance_tags):
+                    if not any(
+                        tag in record.get("compliance_tags", [])
+                        for tag in compliance_tags
+                    ):
                         continue
-                
+
                 if data_classifications:
-                    if not any(cls in record.get("data_classifications", []) for cls in data_classifications):
+                    if not any(
+                        cls in record.get("data_classifications", [])
+                        for cls in data_classifications
+                    ):
                         continue
-                
+
                 filtered_records.append(record)
-        
+
         # Generate summary statistics
         summary = {
             "total_operations": len(filtered_records),
@@ -340,26 +355,28 @@ class DataLineageNode(Node):
             "destinations": {},
             "compliance_violations": 0,
         }
-        
+
         # Analyze records
         for record in filtered_records:
             # Count transformation types
             transform_type = record.get("transformation_type", "unknown")
-            summary["transformation_types"][transform_type] = summary["transformation_types"].get(transform_type, 0) + 1
-            
+            summary["transformation_types"][transform_type] = (
+                summary["transformation_types"].get(transform_type, 0) + 1
+            )
+
             # Count data sources
             source = record.get("data_source", "unknown")
             summary["data_sources"][source] = summary["data_sources"].get(source, 0) + 1
-            
+
             # Count destinations
             dest = record.get("output_destination", "unknown")
             summary["destinations"][dest] = summary["destinations"].get(dest, 0) + 1
-            
+
             # Analyze compliance
             compliance_check = record.get("compliance_check", {})
             if compliance_check.get("overall_status") == "non_compliant":
                 summary["compliance_violations"] += 1
-            
+
             for tag in record.get("compliance_tags", []):
                 if tag not in summary["compliance_summary"]:
                     summary["compliance_summary"][tag] = {
@@ -372,17 +389,19 @@ class DataLineageNode(Node):
                     summary["compliance_summary"][tag]["compliant"] += 1
                 else:
                     summary["compliance_summary"][tag]["non_compliant"] += 1
-        
+
         report = {
             "report_id": f"report_{uuid.uuid4().hex[:12]}",
             "generated_at": datetime.now().isoformat(),
             "report_format": report_format,
             "summary": summary,
-            "detailed_records": filtered_records if report_format == "json" else len(filtered_records),
+            "detailed_records": (
+                filtered_records if report_format == "json" else len(filtered_records)
+            ),
         }
-        
+
         return report
-    
+
     def _query_lineage(
         self,
         data_source: Optional[str] = None,
@@ -392,39 +411,44 @@ class DataLineageNode(Node):
     ) -> Dict[str, Any]:
         """Query lineage records based on criteria."""
         matching_records = []
-        
+
         for record in self._lineage_storage.values():
             matches = True
-            
+
             if data_source and record.get("data_source") != data_source:
                 matches = False
-            if output_destination and record.get("output_destination") != output_destination:
+            if (
+                output_destination
+                and record.get("output_destination") != output_destination
+            ):
                 matches = False
             if workflow_id and record.get("workflow_id") != workflow_id:
                 matches = False
             if user_id and record.get("user_id") != user_id:
                 matches = False
-            
+
             if matches:
                 matching_records.append(record)
-        
+
         return {
             "query_results": matching_records,
             "total_matches": len(matching_records),
             "query_timestamp": datetime.now().isoformat(),
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute data lineage operation."""
         operation = kwargs.get("operation", "track_transformation")
-        
+
         if operation == "track_transformation":
             data_source = kwargs.get("data_source")
             output_destination = kwargs.get("output_destination")
-            
+
             if not data_source or not output_destination:
-                raise NodeConfigurationError("data_source and output_destination are required for track_transformation")
-            
+                raise NodeConfigurationError(
+                    "data_source and output_destination are required for track_transformation"
+                )
+
             return self._track_transformation(
                 data_source=data_source,
                 output_destination=output_destination,
@@ -435,7 +459,7 @@ class DataLineageNode(Node):
                 user_id=kwargs.get("user_id"),
                 workflow_id=kwargs.get("workflow_id"),
             )
-        
+
         elif operation == "generate_report":
             return self._generate_report(
                 start_date=kwargs.get("start_date"),
@@ -444,7 +468,7 @@ class DataLineageNode(Node):
                 compliance_tags=kwargs.get("compliance_tags"),
                 data_classifications=kwargs.get("data_classifications"),
             )
-        
+
         elif operation == "query_lineage":
             return self._query_lineage(
                 data_source=kwargs.get("data_source"),
@@ -452,7 +476,7 @@ class DataLineageNode(Node):
                 workflow_id=kwargs.get("workflow_id"),
                 user_id=kwargs.get("user_id"),
             )
-        
+
         elif operation == "compliance_check":
             # Perform standalone compliance check
             mock_record = {
@@ -464,7 +488,7 @@ class DataLineageNode(Node):
                 "compliance_check": self._check_compliance(mock_record),
                 "timestamp": datetime.now().isoformat(),
             }
-        
+
         else:
             raise NodeConfigurationError(f"Invalid operation: {operation}")
 

@@ -11,13 +11,14 @@ Covers:
 
 from typing import Any
 
+import pytest
+
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.logic.convergence import ConvergenceCheckerNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
-import pytest
 
 
 class MockDataProcessorNode(CycleAwareNode):
@@ -527,13 +528,13 @@ class TestConvergenceCheckerCycles:
         workflow.add_node("generator", ValueGeneratorNode())
         workflow.add_node(
             "convergence_checker",
-            ConvergenceCheckerNode(
-                threshold=1.0, mode="threshold"
-            ),
+            ConvergenceCheckerNode(threshold=1.0, mode="threshold"),
         )
 
         # Connect generator to convergence checker with mapping
-        workflow.connect("generator", "convergence_checker", mapping={"difference": "value"})
+        workflow.connect(
+            "generator", "convergence_checker", mapping={"difference": "value"}
+        )
 
         # Cycle back if not converged
         workflow.connect(

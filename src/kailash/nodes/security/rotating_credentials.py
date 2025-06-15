@@ -14,10 +14,10 @@ Key Features:
 """
 
 import json
-import time
 import threading
+import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.nodes.security.credential_manager import CredentialManagerNode
@@ -27,11 +27,11 @@ from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
 @register_node()
 class RotatingCredentialNode(Node):
     """Node for automatic credential rotation with expiration detection and refresh.
-    
+
     This node automatically manages credential lifecycles, detecting expiration,
     refreshing from configured sources, and providing zero-downtime rotation
     for enterprise applications.
-    
+
     Key capabilities:
     1. Automatic expiration detection
     2. Multi-source credential refresh
@@ -39,7 +39,7 @@ class RotatingCredentialNode(Node):
     4. Notification system
     5. Configurable rotation policies
     6. Audit trail maintenance
-    
+
     Example:
         >>> rotator = RotatingCredentialNode()
         >>> result = rotator.execute(
@@ -51,7 +51,7 @@ class RotatingCredentialNode(Node):
         ...     notification_webhooks=["https://alerts.company.com/webhook"]
         ... )
     """
-    
+
     def get_metadata(self) -> NodeMetadata:
         """Get node metadata for discovery and orchestration."""
         return NodeMetadata(
@@ -61,7 +61,7 @@ class RotatingCredentialNode(Node):
             version="1.0.0",
             author="Kailash SDK",
         )
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define input parameters for credential rotation operations."""
         return {
@@ -155,7 +155,7 @@ class RotatingCredentialNode(Node):
                 description="Whether to maintain audit log of rotation activities",
             ),
         }
-    
+
     def __init__(self, **kwargs):
         """Initialize the RotatingCredentialNode."""
         super().__init__(**kwargs)
@@ -165,10 +165,10 @@ class RotatingCredentialNode(Node):
         self._credential_manager = CredentialManagerNode(
             credential_name="rotating_credentials",
             credential_type="custom",
-            name="rotation_credential_manager"
+            name="rotation_credential_manager",
         )
         self._rotation_status = {}
-    
+
     def _log_audit_event(
         self,
         credential_name: str,
@@ -185,11 +185,11 @@ class RotatingCredentialNode(Node):
             "details": details,
         }
         self._audit_log.append(audit_entry)
-        
+
         # Keep only last 1000 entries to prevent memory growth
         if len(self._audit_log) > 1000:
             self._audit_log = self._audit_log[-1000:]
-    
+
     def _send_notification(
         self,
         credential_name: str,
@@ -205,47 +205,48 @@ class RotatingCredentialNode(Node):
             "event_type": event_type,
             "message": message,
         }
-        
+
         # Send webhook notifications
         for webhook_url in webhook_urls:
             try:
                 import requests
+
                 response = requests.post(
                     webhook_url,
                     json=notification_data,
                     timeout=10,
-                    headers={"Content-Type": "application/json"}
+                    headers={"Content-Type": "application/json"},
                 )
                 if response.status_code == 200:
                     self._log_audit_event(
                         credential_name,
                         "notification_sent",
-                        {"webhook": webhook_url, "status": "success"}
+                        {"webhook": webhook_url, "status": "success"},
                     )
                 else:
                     self._log_audit_event(
                         credential_name,
                         "notification_failed",
                         {"webhook": webhook_url, "status_code": response.status_code},
-                        success=False
+                        success=False,
                     )
             except Exception as e:
                 self._log_audit_event(
                     credential_name,
                     "notification_error",
                     {"webhook": webhook_url, "error": str(e)},
-                    success=False
+                    success=False,
                 )
-        
+
         # Email notifications would be implemented here
         # For this example, we'll just log them
         for email in email_addresses:
             self._log_audit_event(
                 credential_name,
                 "email_notification",
-                {"email": email, "message": message}
+                {"email": email, "message": message},
             )
-    
+
     def _check_credential_expiration(
         self,
         credential_name: str,
@@ -255,36 +256,39 @@ class RotatingCredentialNode(Node):
         try:
             # Get current credential
             credential_result = self._credential_manager.run(
-                operation="get_credential",
-                credential_name=credential_name
+                operation="get_credential", credential_name=credential_name
             )
-            
+
             if not credential_result.get("success"):
                 return {
                     "needs_rotation": False,
                     "error": "Failed to retrieve credential",
                 }
-            
+
             credential_data = credential_result.get("credential", {})
             expires_at = credential_data.get("expires_at")
-            
+
             if not expires_at:
                 return {
                     "needs_rotation": False,
                     "reason": "No expiration date set",
                 }
-            
+
             # Parse expiration time
             if isinstance(expires_at, str):
-                expiry_time = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                expiry_time = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
             else:
                 expiry_time = expires_at
-            
-            current_time = datetime.now(expiry_time.tzinfo) if expiry_time.tzinfo else datetime.now()
+
+            current_time = (
+                datetime.now(expiry_time.tzinfo)
+                if expiry_time.tzinfo
+                else datetime.now()
+            )
             time_until_expiry = (expiry_time - current_time).total_seconds()
-            
+
             needs_rotation = time_until_expiry <= expiration_threshold
-            
+
             return {
                 "needs_rotation": needs_rotation,
                 "expires_at": expires_at,
@@ -292,13 +296,13 @@ class RotatingCredentialNode(Node):
                 "threshold": expiration_threshold,
                 "current_time": current_time.isoformat(),
             }
-        
+
         except Exception as e:
             return {
                 "needs_rotation": False,
                 "error": str(e),
             }
-    
+
     def _refresh_credential(
         self,
         credential_name: str,
@@ -314,36 +318,36 @@ class RotatingCredentialNode(Node):
                         operation="get_credential",
                         credential_name=credential_name,
                         credential_sources=[source],
-                        **refresh_config.get(source, {})
+                        **refresh_config.get(source, {}),
                     )
-                    
+
                     if refresh_result.get("success"):
                         return {
                             "success": True,
                             "source": source,
                             "credential": refresh_result["credential"],
                         }
-                
+
                 except Exception as e:
                     self._log_audit_event(
                         credential_name,
                         "refresh_source_failed",
                         {"source": source, "error": str(e)},
-                        success=False
+                        success=False,
                     )
                     continue
-            
+
             return {
                 "success": False,
                 "error": "All refresh sources failed",
             }
-        
+
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
             }
-    
+
     def _perform_rotation(
         self,
         credential_name: str,
@@ -354,58 +358,60 @@ class RotatingCredentialNode(Node):
     ) -> Dict[str, Any]:
         """Perform credential rotation with optional zero-downtime strategy."""
         rotation_start = datetime.now()
-        
+
         try:
             # Step 1: Get current credential (for rollback if needed)
             current_credential = None
             if rollback_on_failure:
                 current_result = self._credential_manager.run(
-                    operation="get_credential",
-                    credential_name=credential_name
+                    operation="get_credential", credential_name=credential_name
                 )
                 if current_result.get("success"):
                     current_credential = current_result["credential"]
-            
+
             # Step 2: Refresh credential from sources
             refresh_result = self._refresh_credential(
                 credential_name, refresh_sources, refresh_config
             )
-            
+
             if not refresh_result.get("success"):
                 self._log_audit_event(
                     credential_name,
                     "rotation_failed",
                     {"stage": "refresh", "error": refresh_result.get("error")},
-                    success=False
+                    success=False,
                 )
                 return {
                     "success": False,
                     "error": f"Failed to refresh credential: {refresh_result.get('error')}",
                     "stage": "refresh",
                 }
-            
+
             new_credential = refresh_result["credential"]
-            
+
             # Step 3: Validate new credential
             validation_result = self._credential_manager.run(
                 operation="validate_credential",
                 credential_name=credential_name,
-                credential_data=new_credential
+                credential_data=new_credential,
             )
-            
+
             if not validation_result.get("valid", True):
                 self._log_audit_event(
                     credential_name,
                     "rotation_failed",
-                    {"stage": "validation", "error": "New credential validation failed"},
-                    success=False
+                    {
+                        "stage": "validation",
+                        "error": "New credential validation failed",
+                    },
+                    success=False,
                 )
                 return {
                     "success": False,
                     "error": "New credential validation failed",
                     "stage": "validation",
                 }
-            
+
             # Step 4: Store new credential
             if zero_downtime:
                 # In zero-downtime mode, we would typically:
@@ -413,97 +419,99 @@ class RotatingCredentialNode(Node):
                 # 2. Test it in parallel with current credential
                 # 3. Atomically switch to new credential
                 # 4. Remove old credential
-                
+
                 temp_credential_name = f"{credential_name}_rotating_{int(time.time())}"
-                
+
                 store_result = self._credential_manager.run(
                     operation="store_credential",
                     credential_name=temp_credential_name,
-                    credential_data=new_credential
+                    credential_data=new_credential,
                 )
-                
+
                 if not store_result.get("success"):
                     self._log_audit_event(
                         credential_name,
                         "rotation_failed",
                         {"stage": "temp_store", "error": store_result.get("error")},
-                        success=False
+                        success=False,
                     )
                     return {
                         "success": False,
                         "error": f"Failed to store temporary credential: {store_result.get('error')}",
                         "stage": "temp_store",
                     }
-                
+
                 # Test new credential (this would be application-specific)
                 # For this example, we'll assume it passes
-                
+
                 # Atomic switch
                 final_store_result = self._credential_manager.run(
                     operation="store_credential",
                     credential_name=credential_name,
-                    credential_data=new_credential
+                    credential_data=new_credential,
                 )
-                
+
                 if not final_store_result.get("success"):
                     # Rollback if requested
                     if rollback_on_failure and current_credential:
                         self._credential_manager.run(
                             operation="store_credential",
                             credential_name=credential_name,
-                            credential_data=current_credential
+                            credential_data=current_credential,
                         )
-                    
+
                     self._log_audit_event(
                         credential_name,
                         "rotation_failed",
-                        {"stage": "final_store", "error": final_store_result.get("error")},
-                        success=False
+                        {
+                            "stage": "final_store",
+                            "error": final_store_result.get("error"),
+                        },
+                        success=False,
                     )
                     return {
                         "success": False,
                         "error": f"Failed to store final credential: {final_store_result.get('error')}",
                         "stage": "final_store",
                     }
-                
+
                 # Clean up temporary credential
                 self._credential_manager.run(
-                    operation="delete_credential",
-                    credential_name=temp_credential_name
+                    operation="delete_credential", credential_name=temp_credential_name
                 )
-            
+
             else:
                 # Direct replacement
                 store_result = self._credential_manager.run(
                     operation="store_credential",
                     credential_name=credential_name,
-                    credential_data=new_credential
+                    credential_data=new_credential,
                 )
-                
+
                 if not store_result.get("success"):
                     # Rollback if requested
                     if rollback_on_failure and current_credential:
                         self._credential_manager.run(
                             operation="store_credential",
                             credential_name=credential_name,
-                            credential_data=current_credential
+                            credential_data=current_credential,
                         )
-                    
+
                     self._log_audit_event(
                         credential_name,
                         "rotation_failed",
                         {"stage": "store", "error": store_result.get("error")},
-                        success=False
+                        success=False,
                     )
                     return {
                         "success": False,
                         "error": f"Failed to store credential: {store_result.get('error')}",
                         "stage": "store",
                     }
-            
+
             rotation_end = datetime.now()
             rotation_duration = (rotation_end - rotation_start).total_seconds()
-            
+
             # Log successful rotation
             self._log_audit_event(
                 credential_name,
@@ -512,29 +520,26 @@ class RotatingCredentialNode(Node):
                     "source": refresh_result["source"],
                     "duration_seconds": rotation_duration,
                     "zero_downtime": zero_downtime,
-                }
+                },
             )
-            
+
             return {
                 "success": True,
                 "source": refresh_result["source"],
                 "rotation_duration": rotation_duration,
                 "rotated_at": rotation_end.isoformat(),
             }
-        
+
         except Exception as e:
             self._log_audit_event(
-                credential_name,
-                "rotation_error",
-                {"error": str(e)},
-                success=False
+                credential_name, "rotation_error", {"error": str(e)}, success=False
             )
             return {
                 "success": False,
                 "error": str(e),
                 "stage": "exception",
             }
-    
+
     def _rotation_worker(
         self,
         credential_name: str,
@@ -554,51 +559,55 @@ class RotatingCredentialNode(Node):
             "last_rotation": None,
             "next_check": datetime.now() + timedelta(seconds=check_interval),
         }
-        
+
         while self._rotation_status[credential_name]["active"]:
             try:
                 # Check if credential needs rotation
                 check_result = self._check_credential_expiration(
                     credential_name, expiration_threshold
                 )
-                
-                self._rotation_status[credential_name]["last_check"] = datetime.now().isoformat()
-                
+
+                self._rotation_status[credential_name][
+                    "last_check"
+                ] = datetime.now().isoformat()
+
                 if check_result.get("needs_rotation"):
                     self._log_audit_event(
                         credential_name,
                         "rotation_triggered",
-                        {"reason": "expiration_threshold", "details": check_result}
+                        {"reason": "expiration_threshold", "details": check_result},
                     )
-                    
+
                     # Send notification about rotation start
                     self._send_notification(
                         credential_name,
                         "rotation_started",
                         f"Credential rotation started for {credential_name}",
                         notification_webhooks,
-                        notification_emails
+                        notification_emails,
                     )
-                    
+
                     # Perform rotation
                     rotation_result = self._perform_rotation(
                         credential_name,
                         refresh_sources,
                         refresh_config,
                         zero_downtime,
-                        rollback_on_failure
+                        rollback_on_failure,
                     )
-                    
+
                     if rotation_result["success"]:
-                        self._rotation_status[credential_name]["last_rotation"] = datetime.now().isoformat()
-                        
+                        self._rotation_status[credential_name][
+                            "last_rotation"
+                        ] = datetime.now().isoformat()
+
                         # Send success notification
                         self._send_notification(
                             credential_name,
                             "rotation_completed",
                             f"Credential rotation completed successfully for {credential_name}",
                             notification_webhooks,
-                            notification_emails
+                            notification_emails,
                         )
                     else:
                         # Send failure notification
@@ -607,40 +616,42 @@ class RotatingCredentialNode(Node):
                             "rotation_failed",
                             f"Credential rotation failed for {credential_name}: {rotation_result.get('error')}",
                             notification_webhooks,
-                            notification_emails
+                            notification_emails,
                         )
-                
+
                 # Update next check time
                 self._rotation_status[credential_name]["next_check"] = (
                     datetime.now() + timedelta(seconds=check_interval)
                 ).isoformat()
-                
+
                 # Sleep until next check
                 time.sleep(check_interval)
-            
+
             except Exception as e:
                 self._log_audit_event(
                     credential_name,
                     "rotation_worker_error",
                     {"error": str(e)},
-                    success=False
+                    success=False,
                 )
                 time.sleep(min(check_interval, 300))  # Sleep at most 5 minutes on error
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute credential rotation operation."""
         operation = kwargs.get("operation", "start_rotation")
-        
+
         if operation == "start_rotation":
             credential_name = kwargs.get("credential_name")
             if not credential_name:
-                raise NodeConfigurationError("credential_name is required for start_rotation")
-            
+                raise NodeConfigurationError(
+                    "credential_name is required for start_rotation"
+                )
+
             # Stop existing rotation if running
             if credential_name in self._rotation_threads:
                 self._rotation_status[credential_name]["active"] = False
                 self._rotation_threads[credential_name].join(timeout=5)
-            
+
             # Start new rotation worker
             rotation_thread = threading.Thread(
                 target=self._rotation_worker,
@@ -655,12 +666,12 @@ class RotatingCredentialNode(Node):
                     kwargs.get("zero_downtime", True),
                     kwargs.get("rollback_on_failure", True),
                 ),
-                daemon=True
+                daemon=True,
             )
-            
+
             rotation_thread.start()
             self._rotation_threads[credential_name] = rotation_thread
-            
+
             return {
                 "success": True,
                 "message": f"Rotation started for credential: {credential_name}",
@@ -668,28 +679,30 @@ class RotatingCredentialNode(Node):
                 "check_interval": kwargs.get("check_interval", 3600),
                 "expiration_threshold": kwargs.get("expiration_threshold", 86400),
             }
-        
+
         elif operation == "stop_rotation":
             credential_name = kwargs.get("credential_name")
             if not credential_name:
-                raise NodeConfigurationError("credential_name is required for stop_rotation")
-            
+                raise NodeConfigurationError(
+                    "credential_name is required for stop_rotation"
+                )
+
             if credential_name in self._rotation_status:
                 self._rotation_status[credential_name]["active"] = False
-            
+
             if credential_name in self._rotation_threads:
                 self._rotation_threads[credential_name].join(timeout=5)
                 del self._rotation_threads[credential_name]
-            
+
             return {
                 "success": True,
                 "message": f"Rotation stopped for credential: {credential_name}",
                 "credential_name": credential_name,
             }
-        
+
         elif operation == "check_status":
             credential_name = kwargs.get("credential_name")
-            
+
             if credential_name:
                 status = self._rotation_status.get(credential_name, {})
                 return {
@@ -702,12 +715,14 @@ class RotatingCredentialNode(Node):
                     "all_credentials": self._rotation_status,
                     "active_threads": list(self._rotation_threads.keys()),
                 }
-        
+
         elif operation == "rotate_now":
             credential_name = kwargs.get("credential_name")
             if not credential_name:
-                raise NodeConfigurationError("credential_name is required for rotate_now")
-            
+                raise NodeConfigurationError(
+                    "credential_name is required for rotate_now"
+                )
+
             return self._perform_rotation(
                 credential_name,
                 kwargs.get("refresh_sources", ["env", "file"]),
@@ -715,14 +730,15 @@ class RotatingCredentialNode(Node):
                 kwargs.get("zero_downtime", True),
                 kwargs.get("rollback_on_failure", True),
             )
-        
+
         elif operation == "get_audit_log":
             credential_name = kwargs.get("credential_name")
-            
+
             if credential_name:
                 # Filter audit log for specific credential
                 filtered_log = [
-                    entry for entry in self._audit_log
+                    entry
+                    for entry in self._audit_log
                     if entry["credential_name"] == credential_name
                 ]
                 return {
@@ -735,7 +751,7 @@ class RotatingCredentialNode(Node):
                     "audit_log": self._audit_log,
                     "total_entries": len(self._audit_log),
                 }
-        
+
         else:
             raise NodeConfigurationError(f"Invalid operation: {operation}")
 

@@ -389,6 +389,6 @@ df -h
 
 ---
 
-**Dependencies**: Python 3.8+, pytest, psutil, development environment  
-**Execution Time**: 1-15 minutes depending on script and scope  
+**Dependencies**: Python 3.8+, pytest, psutil, development environment
+**Execution Time**: 1-15 minutes depending on script and scope
 **Last Updated**: Scripts directory reorganization

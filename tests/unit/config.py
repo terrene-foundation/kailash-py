@@ -13,8 +13,7 @@ TEST_DB_CONFIG = {
         "password": os.getenv("TEST_DB_PASSWORD", "admin"),
     },
     "connection_string": os.getenv(
-        "TEST_DATABASE_URL",
-        "postgresql://admin:admin@localhost:5433/kailash_admin"
+        "TEST_DATABASE_URL", "postgresql://admin:admin@localhost:5433/kailash_admin"
     ),
 }
 
@@ -27,8 +26,7 @@ OLLAMA_CONFIG = {
 # Vector database configuration
 VECTOR_DB_CONFIG = {
     "connection_string": os.getenv(
-        "TEST_VECTOR_DB_URL",
-        "postgresql://admin:admin@localhost:5433/kailash_admin"
+        "TEST_VECTOR_DB_URL", "postgresql://admin:admin@localhost:5433/kailash_admin"
     ),
     "embedding_dimension": 384,  # For all-MiniLM-L6-v2
 }

@@ -6,7 +6,7 @@ This directory contains complete RAG workflow examples using Kailash SDK's advan
 
 ### 1. Complete RAG Pipeline (`complete_rag_pipeline.py`)
 - **Purpose**: Production-ready RAG system with all advanced features
-- **Features**: 
+- **Features**:
   - Semantic and statistical chunking strategies
   - Hybrid retrieval with multiple fusion methods (RRF, Linear, Weighted)
   - Advanced relevance scoring and ranking

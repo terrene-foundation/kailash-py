@@ -15,7 +15,6 @@ Key features:
 """
 
 import argparse
-import pytest
 import json
 import os
 import shutil
@@ -24,6 +23,8 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from examples.utils.paths import get_data_dir, get_output_dir
 

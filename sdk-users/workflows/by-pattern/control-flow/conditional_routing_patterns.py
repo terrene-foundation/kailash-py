@@ -45,7 +45,6 @@ examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
 from examples.utils.paths import get_data_dir
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.local import LocalRuntime
@@ -54,43 +53,48 @@ from kailash.workflow.graph import Workflow
 
 # Configure business-focused logging
 logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 def create_business_data_classifier():
     """Create a node that classifies business data by priority and complexity."""
 
     def classify_business_data(
-        transactions: List[Dict] = None, 
-        sla_threshold_hours: int = 4
+        transactions: List[Dict] = None, sla_threshold_hours: int = 4
     ) -> Dict[str, Any]:
         """Classify business transactions for optimal routing."""
-        
+
         if transactions is None:
             # Generate realistic business transaction data
             customer_types = ["enterprise", "business", "individual"]
-            transaction_types = ["purchase", "refund", "subscription", "service", "upgrade"]
+            transaction_types = [
+                "purchase",
+                "refund",
+                "subscription",
+                "service",
+                "upgrade",
+            ]
             regions = ["north_america", "europe", "asia_pacific", "latin_america"]
-            
+
             transactions = []
             for i in range(random.randint(10, 25)):
                 amount = round(random.uniform(50, 50000), 2)
                 customer_type = random.choice(customer_types)
-                
+
                 # Business rules for priority
                 priority_score = 0
                 if customer_type == "enterprise":
                     priority_score += 3
                 elif customer_type == "business":
                     priority_score += 2
-                
+
                 if amount > 10000:
                     priority_score += 2
                 elif amount > 1000:
                     priority_score += 1
-                
+
                 # Create realistic transaction
                 transaction = {
                     "transaction_id": f"TXN_{2000 + i}",
@@ -101,9 +105,15 @@ def create_business_data_classifier():
                     "currency": "USD",
                     "region": random.choice(regions),
                     "priority_score": priority_score,
-                    "submitted_at": (datetime.now() - timedelta(minutes=random.randint(0, 480))).isoformat(),
+                    "submitted_at": (
+                        datetime.now() - timedelta(minutes=random.randint(0, 480))
+                    ).isoformat(),
                     "requires_approval": amount > 25000,
-                    "complexity": "high" if amount > 20000 or customer_type == "enterprise" else "medium" if amount > 5000 else "low"
+                    "complexity": (
+                        "high"
+                        if amount > 20000 or customer_type == "enterprise"
+                        else "medium" if amount > 5000 else "low"
+                    ),
                 }
                 transactions.append(transaction)
 
@@ -111,53 +121,59 @@ def create_business_data_classifier():
         urgent_transactions = []
         standard_transactions = []
         batch_transactions = []
-        
+
         processing_stats = {
             "total_value": 0,
             "urgent_count": 0,
             "standard_count": 0,
             "batch_count": 0,
             "enterprise_count": 0,
-            "approval_required_count": 0
+            "approval_required_count": 0,
         }
 
         current_time = datetime.now()
-        
+
         for transaction in transactions:
             processing_stats["total_value"] += transaction.get("amount", 0)
-            
+
             # Business priority rules
-            submitted_time = datetime.fromisoformat(transaction.get("submitted_at", current_time.isoformat()))
+            submitted_time = datetime.fromisoformat(
+                transaction.get("submitted_at", current_time.isoformat())
+            )
             hours_pending = (current_time - submitted_time).total_seconds() / 3600
-            
+
             # Classification logic
             priority_score = transaction.get("priority_score", 0)
             requires_approval = transaction.get("requires_approval", False)
             customer_type = transaction.get("customer_type", "individual")
             amount = transaction.get("amount", 0)
-            
+
             # Count special cases
             if customer_type == "enterprise":
                 processing_stats["enterprise_count"] += 1
             if requires_approval:
                 processing_stats["approval_required_count"] += 1
-            
+
             # Business routing logic
-            if (hours_pending > sla_threshold_hours or 
-                priority_score >= 4 or 
-                requires_approval or 
-                customer_type == "enterprise"):
-                
+            if (
+                hours_pending > sla_threshold_hours
+                or priority_score >= 4
+                or requires_approval
+                or customer_type == "enterprise"
+            ):
+
                 urgent_transactions.append(transaction)
                 processing_stats["urgent_count"] += 1
-                
-            elif (priority_score >= 2 or 
-                  amount > 1000 or 
-                  hours_pending > sla_threshold_hours / 2):
-                
+
+            elif (
+                priority_score >= 2
+                or amount > 1000
+                or hours_pending > sla_threshold_hours / 2
+            ):
+
                 standard_transactions.append(transaction)
                 processing_stats["standard_count"] += 1
-                
+
             else:
                 batch_transactions.append(transaction)
                 processing_stats["batch_count"] += 1
@@ -174,7 +190,9 @@ def create_business_data_classifier():
         else:
             route_decision = "batch_processing"
             primary_data = batch_transactions
-            route_reason = f"Batch processing {len(batch_transactions)} low priority transactions"
+            route_reason = (
+                f"Batch processing {len(batch_transactions)} low priority transactions"
+            )
 
         # Business intelligence summary
         return {
@@ -183,17 +201,30 @@ def create_business_data_classifier():
             "all_transactions": {
                 "urgent": urgent_transactions,
                 "standard": standard_transactions,
-                "batch": batch_transactions
+                "batch": batch_transactions,
             },
             "processing_stats": processing_stats,
             "route_reason": route_reason,
             "sla_compliance": {
-                "within_sla": processing_stats["urgent_count"] + processing_stats["standard_count"],
-                "approaching_sla": len([t for t in transactions 
-                                      if (current_time - datetime.fromisoformat(t.get("submitted_at", current_time.isoformat()))).total_seconds() / 3600 > sla_threshold_hours * 0.75]),
-                "sla_threshold_hours": sla_threshold_hours
+                "within_sla": processing_stats["urgent_count"]
+                + processing_stats["standard_count"],
+                "approaching_sla": len(
+                    [
+                        t
+                        for t in transactions
+                        if (
+                            current_time
+                            - datetime.fromisoformat(
+                                t.get("submitted_at", current_time.isoformat())
+                            )
+                        ).total_seconds()
+                        / 3600
+                        > sla_threshold_hours * 0.75
+                    ]
+                ),
+                "sla_threshold_hours": sla_threshold_hours,
             },
-            "classification_timestamp": current_time.isoformat()
+            "classification_timestamp": current_time.isoformat(),
         }
 
     return PythonCodeNode.from_function(
@@ -278,7 +309,7 @@ class QualityCheckerNode(Node):
         quality = kwargs.get("quality", 0.0)
         threshold = kwargs.get("threshold", 0.8)
 
-        # Get iteration info from kwargs if available  
+        # Get iteration info from kwargs if available
         iteration = kwargs.get("iteration", 0)
 
         # Decision logic
@@ -490,18 +521,26 @@ def example1_simple_boolean_routing():
     class DataPrepNode(Node):
         def get_parameters(self):
             return {
-                "data": NodeParameter(name="data", type=list, required=False, default=[]),
-                "quality": NodeParameter(name="quality", type=float, required=False, default=0.0),
-                "is_valid": NodeParameter(name="is_valid", type=bool, required=False, default=False)
+                "data": NodeParameter(
+                    name="data", type=list, required=False, default=[]
+                ),
+                "quality": NodeParameter(
+                    name="quality", type=float, required=False, default=0.0
+                ),
+                "is_valid": NodeParameter(
+                    name="is_valid", type=bool, required=False, default=False
+                ),
             }
-        
+
         def run(self, **kwargs):
             # Package all inputs as a single dict for SwitchNode's input_data
-            return {"input_data": {
-                "data": kwargs.get("data", []),
-                "quality": kwargs.get("quality", 0.0),
-                "is_valid": kwargs.get("is_valid", False)
-            }}
+            return {
+                "input_data": {
+                    "data": kwargs.get("data", []),
+                    "quality": kwargs.get("quality", 0.0),
+                    "is_valid": kwargs.get("is_valid", False),
+                }
+            }
 
     workflow = Workflow("boolean-routing", "Simple Boolean Routing Example")
 
@@ -510,11 +549,7 @@ def example1_simple_boolean_routing():
     workflow.add_node("prep", DataPrepNode())  # Prep data for switch
     workflow.add_node(
         "switch",
-        SwitchNode(
-            condition_field="is_valid",
-            operator="==",
-            value=True
-        ),
+        SwitchNode(condition_field="is_valid", operator="==", value=True),
     )
     workflow.add_node("success_handler", SuccessHandlerNode())
     workflow.add_node("retry_handler", RetryHandlerNode())
@@ -586,12 +621,17 @@ def example2_multi_case_routing():
     class DataPrepNode(Node):
         def get_parameters(self):
             return {
-                "data": NodeParameter(name="data", type=list, required=False, default=[]),
-                "status": NodeParameter(name="status", type=str, required=False, default="")
+                "data": NodeParameter(
+                    name="data", type=list, required=False, default=[]
+                ),
+                "status": NodeParameter(
+                    name="status", type=str, required=False, default=""
+                ),
             }
+
         def run(self, **kwargs):
             return {"input_data": kwargs}
-    
+
     workflow.add_node("prep", DataPrepNode())
     workflow.connect("checker", "prep")
     workflow.connect("prep", "router", mapping={"input_data": "input_data"})
@@ -666,19 +706,31 @@ def example3_conditional_retry_loops():
     workflow.connect(
         "transformer", "checker", mapping={"data": "data", "quality": "quality"}
     )
+
     # Create prep node for switch input
     class DataPrepNode2(Node):
         def get_parameters(self):
             return {
-                "data": NodeParameter(name="data", type=Any, required=False, default={}),
-                "quality": NodeParameter(name="quality", type=float, required=False, default=0.0),
-                "route_decision": NodeParameter(name="route_decision", type=str, required=False, default=""),
-                "should_continue": NodeParameter(name="should_continue", type=bool, required=False, default=True),
-                "reason": NodeParameter(name="reason", type=str, required=False, default="")
+                "data": NodeParameter(
+                    name="data", type=Any, required=False, default={}
+                ),
+                "quality": NodeParameter(
+                    name="quality", type=float, required=False, default=0.0
+                ),
+                "route_decision": NodeParameter(
+                    name="route_decision", type=str, required=False, default=""
+                ),
+                "should_continue": NodeParameter(
+                    name="should_continue", type=bool, required=False, default=True
+                ),
+                "reason": NodeParameter(
+                    name="reason", type=str, required=False, default=""
+                ),
             }
+
         def run(self, **kwargs):
             return {"input_data": kwargs}
-    
+
     workflow.add_node("prep2", DataPrepNode2())
     workflow.connect("checker", "prep2")
     workflow.connect("prep2", "switch", mapping={"input_data": "input_data"})
@@ -809,18 +861,29 @@ def example4_error_handling():
     class DataPrepNode3(Node):
         def get_parameters(self):
             return {
-                "data": NodeParameter(name="data", type=list, required=False, default=[]),
-                "status": NodeParameter(name="status", type=str, required=False, default=""),
-                "error": NodeParameter(name="error", type=str, required=False, default="")
+                "data": NodeParameter(
+                    name="data", type=list, required=False, default=[]
+                ),
+                "status": NodeParameter(
+                    name="status", type=str, required=False, default=""
+                ),
+                "error": NodeParameter(
+                    name="error", type=str, required=False, default=""
+                ),
             }
+
         def run(self, **kwargs):
             return {"input_data": kwargs}
-    
+
     workflow.add_node("prep3", DataPrepNode3())
     workflow.connect("processor", "prep3")
     workflow.connect("prep3", "status_check", mapping={"input_data": "input_data"})
     workflow.connect("status_check", "success_path", mapping={"case_success": "data"})
-    workflow.connect("status_check", "error_recovery", mapping={"case_fallback": "data", "error": "error"})
+    workflow.connect(
+        "status_check",
+        "error_recovery",
+        mapping={"case_fallback": "data", "error": "error"},
+    )
 
     # Test both success and fallback scenarios
     runtime = LocalRuntime()
@@ -959,19 +1022,32 @@ def example5_data_filtering_and_merging():
     class DataPrepNode4(Node):
         def get_parameters(self):
             return {
-                "data": NodeParameter(name="data", type=list, required=False, default=[]),
-                "route": NodeParameter(name="route", type=str, required=False, default=""),
-                "item_count": NodeParameter(name="item_count", type=int, required=False, default=0)
+                "data": NodeParameter(
+                    name="data", type=list, required=False, default=[]
+                ),
+                "route": NodeParameter(
+                    name="route", type=str, required=False, default=""
+                ),
+                "item_count": NodeParameter(
+                    name="item_count", type=int, required=False, default=0
+                ),
             }
+
         def run(self, **kwargs):
             return {"input_data": kwargs}
-    
+
     workflow.add_node("prep4", DataPrepNode4())
     workflow.connect("filter", "prep4")
     workflow.connect("prep4", "router", mapping={"input_data": "input_data"})
-    workflow.connect("router", "urgent_handler", mapping={"case_urgent_processing": "data"})
-    workflow.connect("router", "standard_handler", mapping={"case_standard_processing": "data"})
-    workflow.connect("router", "batch_handler", mapping={"case_batch_processing": "data"})
+    workflow.connect(
+        "router", "urgent_handler", mapping={"case_urgent_processing": "data"}
+    )
+    workflow.connect(
+        "router", "standard_handler", mapping={"case_standard_processing": "data"}
+    )
+    workflow.connect(
+        "router", "batch_handler", mapping={"case_batch_processing": "data"}
+    )
 
     # Test different priority distributions
     runtime = LocalRuntime()
@@ -1029,8 +1105,12 @@ def main():
         print()
         print("💡 Key Patterns Demonstrated:")
         print("• SwitchNode for dynamic routing based on conditions")
-        print("• Boolean routing: condition_field + operator + value → true_output/false_output")
-        print("• Multi-case routing: condition_field + cases dictionary → case_X outputs")
+        print(
+            "• Boolean routing: condition_field + operator + value → true_output/false_output"
+        )
+        print(
+            "• Multi-case routing: condition_field + cases dictionary → case_X outputs"
+        )
         print("• **CRITICAL**: A → B → C → D → Switch → (B if retry | E if finish)")
         print("• Error handling with graceful fallback paths")
         print("• Data-driven routing for processing optimization")

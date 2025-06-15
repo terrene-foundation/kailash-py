@@ -11,7 +11,8 @@ Overview
 The API wrapper transforms workflows into production-ready REST APIs with minimal
 configuration::
 
-    from kailash.api.workflow_api import WorkflowAPI
+    # This import is deprecated - use middleware instead
+    # from kailash.middleware import create_gateway
 
     # Any workflow becomes an API in 3 lines
     api = WorkflowAPI(workflow)
@@ -23,10 +24,9 @@ Core Components
 WorkflowAPI Class
 ~~~~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.api.workflow_api.WorkflowAPI
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   This functionality has been replaced by the middleware architecture.
+   See :doc:`middleware` for current API implementation.
 
    The main API wrapper class that provides REST endpoints for workflow execution.
 
@@ -41,17 +41,16 @@ WorkflowAPI Class
 HierarchicalRAGAPI Class
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.api.workflow_api.HierarchicalRAGAPI
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   This functionality has been replaced by the middleware architecture.
 
    Specialized API wrapper for Hierarchical RAG workflows with domain-specific endpoints.
 
 Factory Functions
 ~~~~~~~~~~~~~~~~~
 
-.. autofunction:: kailash.api.workflow_api.create_workflow_api
+.. note::
+   This functionality has been replaced by the middleware architecture.
 
    Factory function to create appropriate API wrappers based on workflow type.
 
@@ -61,26 +60,20 @@ Request/Response Models
 WorkflowRequest
 ~~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.api.workflow_api.WorkflowRequest
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   This functionality has been replaced by the middleware architecture.
 
 WorkflowResponse
 ~~~~~~~~~~~~~~~~
 
-.. autoclass:: kailash.api.workflow_api.WorkflowResponse
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   This functionality has been replaced by the middleware architecture.
 
 ExecutionMode
 ~~~~~~~~~~~~~
 
-.. autoclass:: kailash.api.workflow_api.ExecutionMode
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. note::
+   This functionality has been replaced by the middleware architecture.
 
 Usage Examples
 --------------
@@ -91,7 +84,8 @@ Basic Usage
 Expose a simple workflow as an API::
 
     from kailash.workflow.graph import Workflow
-    from kailash.api.workflow_api import WorkflowAPI
+    # This import is deprecated - use middleware instead
+    # from kailash.middleware import create_gateway
 
     # Create your workflow
     workflow = Workflow("my_workflow", name="My Workflow")
@@ -294,7 +288,8 @@ RAG API Example
 
 Create a specialized API for RAG workflows::
 
-    from kailash.api.workflow_api import create_workflow_api
+    # This import is deprecated - use middleware instead
+    # from kailash.middleware import create_gateway
 
     # Create RAG-specific API
     api = create_workflow_api(

@@ -118,7 +118,7 @@ Rationale: Performance is the primary constraint
 
 ### From Direct to MCP
 1. Create MCP tools wrapping services
-2. Update API/CLI to call MCP tools  
+2. Update API/CLI to call MCP tools
 3. Measure performance impact
 4. Optimize if needed
 

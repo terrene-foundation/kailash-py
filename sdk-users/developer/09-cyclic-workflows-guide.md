@@ -33,9 +33,9 @@ class OptimizationNode(CycleAwareNode):
         iteration = self.get_iteration(context)
         is_first = self.is_first_iteration(context)
         prev_state = self.get_previous_state(context)
-        
+
         # Your optimization logic here
-        
+
         # Save state for next iteration
         return {
             "metrics": optimized_metrics,
@@ -69,17 +69,17 @@ class EnterpriseOptimizerNode(CycleAwareNode):
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Get previous state
         prev_state = self.get_previous_state(context)
-        
+
         # Get parameters with state preservation
         targets = kwargs.get("targets", {})
         constraints = kwargs.get("constraints", {})
-        
+
         # CRITICAL: Restore from state if not provided
         if not targets and prev_state.get("targets"):
             targets = prev_state["targets"]
         if not constraints and prev_state.get("constraints"):
             constraints = prev_state["constraints"]
-        
+
         # Initialize on first iteration
         if self.is_first_iteration(context):
             if not targets:
@@ -87,10 +87,10 @@ class EnterpriseOptimizerNode(CycleAwareNode):
             metrics = self._initialize_metrics(targets)
         else:
             metrics = kwargs.get("metrics", {})
-        
+
         # Optimize
         optimized = self._optimize(metrics, targets, constraints)
-        
+
         # Return with preserved state
         return {
             "metrics": optimized,
@@ -112,11 +112,11 @@ When using multiple nodes in a cycle with a SwitchNode, use a packager to prepar
 ```python
 def create_cyclic_workflow() -> Workflow:
     workflow = Workflow("cyclic_optimization", "Multi-node cycle")
-    
+
     # Nodes
     optimizer = OptimizerNode(name="optimizer")
     analyzer = AnalyzerNode(name="analyzer")
-    
+
     # Packager for switch
     def package_for_switch(
         metrics: Dict = None,
@@ -125,7 +125,7 @@ def create_cyclic_workflow() -> Workflow:
         iteration: int = 0
     ) -> Dict[str, Any]:
         converged = score >= 0.95 or iteration >= 20
-        
+
         return {
             "switch_data": {
                 "converged": converged,
@@ -135,39 +135,39 @@ def create_cyclic_workflow() -> Workflow:
                 "analysis": analysis or {}
             }
         }
-    
+
     packager = PythonCodeNode.from_function(
         name="packager",
         func=package_for_switch
     )
-    
+
     switch = SwitchNode(
         name="switch",
         condition_field="converged",
         operator="==",
         value=True
     )
-    
+
     # Connect with explicit mapping
     workflow.connect("optimizer", "analyzer", {
         "metrics": "metrics",
         "score": "score"
     })
-    
+
     workflow.connect("optimizer", "packager", {
         "metrics": "metrics",
         "score": "score",
         "iteration": "iteration"
     })
-    
+
     workflow.connect("analyzer", "packager", {
         "analysis": "analysis"
     })
-    
+
     workflow.connect("packager", "switch", {
         "result.switch_data": "input_data"
     })
-    
+
     # Create cycle
     workflow.connect(
         "switch",
@@ -178,7 +178,7 @@ def create_cyclic_workflow() -> Workflow:
         max_iterations=30,
         convergence_check="score >= 0.95"
     )
-    
+
     return workflow
 ```
 
@@ -208,17 +208,17 @@ def check_convergence(score: float, iteration: int, improvement: float) -> bool:
 class AdaptiveConvergenceNode(CycleAwareNode):
     def run(self, context, **kwargs):
         history = self.accumulate_values(context, "scores", score)
-        
+
         # Check trend
         if len(history) > 5:
             recent_improvement = max(history[-5:]) - min(history[-5:])
             if recent_improvement < 0.001:
                 return {"converged": True, "reason": "stagnation"}
-        
+
         # Check target
         if score >= self.target:
             return {"converged": True, "reason": "target_reached"}
-        
+
         return {"converged": False}
 ```
 
@@ -239,7 +239,7 @@ def run(self, context, **kwargs):
 def run(self, context, **kwargs):
     prev_state = self.get_previous_state(context)
     targets = kwargs.get("targets", {})
-    
+
     # Restore from state if not provided
     if not targets and prev_state.get("targets"):
         targets = prev_state["targets"]

@@ -6,17 +6,15 @@ of the middleware layer.
 """
 
 from .agent_ui import AgentUIMiddleware
+from .schema import DynamicSchemaRegistry, NodeSchemaGenerator
 from .workflows import MiddlewareWorkflows, WorkflowBasedMiddleware
-from .schema import NodeSchemaGenerator, DynamicSchemaRegistry
 
 __all__ = [
     # Core orchestration
     "AgentUIMiddleware",
-    
     # Workflow patterns
     "MiddlewareWorkflows",
     "WorkflowBasedMiddleware",
-    
     # Schema management
     "NodeSchemaGenerator",
     "DynamicSchemaRegistry",

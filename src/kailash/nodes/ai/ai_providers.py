@@ -399,6 +399,7 @@ class OllamaProvider(UnifiedAIProvider):
             **kwargs: Additional arguments including:
                 model (str): Ollama model name (default: "llama3.1:8b-instruct-q8_0")
                 generation_config (dict): Generation parameters including:
+
                     * temperature, max_tokens, top_p, top_k, repeat_penalty
                     * seed, stop, num_ctx, num_batch, num_thread
                     * tfs_z, typical_p, mirostat, mirostat_tau, mirostat_eta

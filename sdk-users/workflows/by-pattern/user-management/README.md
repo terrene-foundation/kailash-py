@@ -1,4 +1,4 @@
-# User Management Workflows  
+# User Management Workflows
 
 Complete user lifecycle and management workflows for enterprise applications.
 

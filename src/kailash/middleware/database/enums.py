@@ -9,6 +9,7 @@ from enum import Enum
 
 class WorkflowStatus(Enum):
     """Workflow lifecycle status."""
+
     DRAFT = "draft"
     ACTIVE = "active"
     ARCHIVED = "archived"
@@ -19,6 +20,7 @@ class WorkflowStatus(Enum):
 
 class ExecutionStatus(Enum):
     """Workflow execution status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -30,6 +32,7 @@ class ExecutionStatus(Enum):
 
 class NodeType(Enum):
     """Node category types from comprehensive catalog."""
+
     AI_ML = "ai_ml"
     DATA_PROCESSING = "data_processing"
     API_INTEGRATION = "api_integration"
@@ -43,6 +46,7 @@ class NodeType(Enum):
 
 class TemplateCategory(Enum):
     """Template categories for organization."""
+
     BUSINESS = "business"
     DATA_PROCESSING = "data_processing"
     AI_ORCHESTRATION = "ai_orchestration"
@@ -55,6 +59,7 @@ class TemplateCategory(Enum):
 
 class SecurityEventType(Enum):
     """Security event types for comprehensive monitoring."""
+
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
     DATA_ACCESS = "data_access"
@@ -69,6 +74,7 @@ class SecurityEventType(Enum):
 
 class ComplianceFramework(Enum):
     """Supported compliance frameworks."""
+
     GDPR = "gdpr"
     SOC2 = "soc2"
     ISO27001 = "iso27001"
@@ -78,6 +84,7 @@ class ComplianceFramework(Enum):
 
 class SecurityClassification(Enum):
     """Data security classification levels."""
+
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
@@ -86,6 +93,7 @@ class SecurityClassification(Enum):
 
 class AuditAction(Enum):
     """Audit log action types."""
+
     CREATE = "create"
     READ = "read"
     UPDATE = "update"

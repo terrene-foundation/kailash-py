@@ -10,10 +10,11 @@ Covers:
 import os
 import tempfile
 
+import pytest
+
 from kailash import Workflow
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
-import pytest
 
 
 class TestPythonCodeNodeCycles:
