@@ -198,10 +198,10 @@ jobs:
             PY311=$(pyenv versions --bare | grep "^3\.11\." | head -1)
             echo "Using pyenv Python $PY311"
             PYENV_VERSION=$PY311 uv venv .venv-3.11 --python python
-            VIRTUAL_ENV=.venv-3.11 uv sync
+            uv sync --python .venv-3.11/bin/python
           elif command -v python3.11 &> /dev/null; then
             uv venv .venv-3.11 --python python3.11
-            VIRTUAL_ENV=.venv-3.11 uv sync
+            uv sync --python .venv-3.11/bin/python
           else
             echo "⚠️  Python 3.11 not found, skipping"
           fi
@@ -212,15 +212,15 @@ jobs:
             PY312=$(pyenv versions --bare | grep "^3\.12\." | head -1)
             echo "Using pyenv Python $PY312"
             PYENV_VERSION=$PY312 uv venv .venv-3.12 --python python
-            VIRTUAL_ENV=.venv-3.12 uv sync
+            uv sync --python .venv-3.12/bin/python
           elif command -v python3.12 &> /dev/null; then
             uv venv .venv-3.12 --python python3.12
-            VIRTUAL_ENV=.venv-3.12 uv sync
+            uv sync --python .venv-3.12/bin/python
           else
             # Fallback to system python3
             echo "Using system Python for 3.12"
             uv venv .venv-3.12 --python python3
-            VIRTUAL_ENV=.venv-3.12 uv sync
+            uv sync --python .venv-3.12/bin/python
           fi
 
       - name: Run all checks in parallel
@@ -264,7 +264,7 @@ jobs:
 
           # Run tests with Python 3.11 if available (with coverage, excluding slow tests)
           if [ -d ".venv-3.11" ]; then
-              run_check "Tests Python 3.11" "VIRTUAL_ENV=.venv-3.11 uv run pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -m 'not slow'" "pytest-3.11.log" &
+              run_check "Tests Python 3.11" "source .venv-3.11/bin/activate && python -m pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -m 'not slow'" "pytest-3.11.log" &
               pids[3]=$!
           else
               echo "⚠️  Skipping Python 3.11 tests (not installed)"
@@ -273,7 +273,7 @@ jobs:
 
           # Run tests with Python 3.12 (no coverage - only 3.11 collects to avoid conflicts, excluding slow tests)
           if [ -d ".venv-3.12" ]; then
-              run_check "Tests Python 3.12" "VIRTUAL_ENV=.venv-3.12 uv run pytest tests/ -v -m 'not slow'" "pytest-3.12.log" &
+              run_check "Tests Python 3.12" "source .venv-3.12/bin/activate && python -m pytest tests/ -v -m 'not slow'" "pytest-3.12.log" &
               pids[4]=$!
           else
               echo "⚠️  Skipping Python 3.12 tests (not available)"
