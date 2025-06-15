@@ -262,10 +262,18 @@ def main():
     print("\nRunning workflow with correct patterns...")
     result = runtime.execute(workflow, parameters=parameters)
 
+    # Extract outputs from tuple result
+    outputs, error = result if isinstance(result, tuple) else (result, None)
+
     print("\nResults:")
-    for node_id, node_result in result.items():
+    for node_id, node_result in outputs.items():
         print(f"\n{node_id}:")
         print(f"  {node_result}")
+
+    if error:
+        print(f"\nErrors: {error}")
+    else:
+        print("\n✅ All patterns executed successfully!")
 
     # Show common mistakes (commented out to avoid errors)
     # demonstrate_common_mistakes()

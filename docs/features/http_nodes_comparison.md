@@ -50,7 +50,7 @@ from kailash.nodes.api import HTTPRequestNode
 
 # Simple GET request with retry
 node = HTTPRequestNode()
-result = node.run(
+result = node.execute(
     url="https://api.example.com/data",
     method="GET",
     headers={"Authorization": "Bearer token"},
@@ -65,7 +65,7 @@ from kailash.nodes.api import HTTPClientNode
 
 # GET request with built-in auth and rate limiting
 node = HTTPClientNode()
-result = node.run(
+result = node.execute(
     url="https://api.example.com/data",
     method="GET",
     auth_type="bearer",

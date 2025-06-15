@@ -698,10 +698,9 @@ class CyclicWorkflowExecutor:
                 "iteration": cycle_state.iteration,
                 "elapsed_time": cycle_state.elapsed_time,
             }
-            # Only add node_state if it's not None to avoid security validation errors
+            # Always include node_state in context, defaulting to empty dict
             node_state = cycle_state.get_node_state(node_id)
-            if node_state is not None:
-                cycle_context["node_state"] = node_state
+            cycle_context["node_state"] = node_state if node_state is not None else {}
             context["cycle"] = cycle_context
 
         # Recursively filter None values from context to avoid security validation errors
@@ -778,7 +777,7 @@ class CyclicWorkflowExecutor:
 
         try:
             with collector.collect(node_id=node_id) as metrics_context:
-                result = node.run(context=context, **merged_inputs)
+                result = node.execute(context=context, **merged_inputs)
 
             # Get performance metrics
             performance_metrics = metrics_context.result()

@@ -1,15 +1,17 @@
 # Access Control Examples for Kailash SDK
 
-This directory contains comprehensive examples demonstrating the access control features of the Kailash Python SDK.
+This directory contains comprehensive examples demonstrating the unified access control features of the Kailash Python SDK.
 
-## Overview
+## Overview (Updated Session 066)
 
-The Kailash SDK provides fine-grained access control at both the node and workflow levels, enabling:
-- **Role-Based Access Control (RBAC)** - Different permissions for admin, analyst, viewer roles
+The Kailash SDK provides a **unified access control interface** supporting multiple strategies:
+- **Role-Based Access Control (RBAC)** - Traditional role-based permissions
+- **Attribute-Based Access Control (ABAC)** - Fine-grained attribute conditions
+- **Hybrid Mode** - Combine RBAC and ABAC for maximum flexibility
+- **Single Interface** - Use `AccessControlManager(strategy="abac")` for any mode
 - **Node-Level Permissions** - Control who can execute specific nodes
-- **Output Masking** - Hide sensitive fields from unauthorized users
+- **Output Masking** - Hide sensitive fields based on user attributes
 - **Multi-Tenant Isolation** - Complete data separation between organizations
-- **Permission-Based Routing** - Different execution paths based on user permissions
 - **Backward Compatibility** - Access control is completely optional
 
 ## Key Features
@@ -78,6 +80,65 @@ Role-based access control testing:
 - Permission inheritance
 - Cross-tenant access prevention
 
+## NEW: Unified Access Control Interface (Session 066)
+
+The SDK now provides a single, unified `AccessControlManager` class that supports all access control strategies:
+
+### Strategy Selection
+```python
+from kailash.access_control import AccessControlManager
+
+# RBAC - Role-based access control
+rbac_manager = AccessControlManager(strategy="rbac")
+
+# ABAC - Attribute-based access control
+abac_manager = AccessControlManager(strategy="abac")
+
+# Hybrid - Combine RBAC and ABAC
+hybrid_manager = AccessControlManager(strategy="hybrid")  # Default
+```
+
+### ABAC Example with Helper Functions
+```python
+from kailash.access_control import (
+    AccessControlManager,
+    create_attribute_condition,
+    create_complex_condition,
+    UserContext
+)
+
+# Create manager with ABAC strategy
+manager = AccessControlManager(strategy="abac")
+
+# Simple attribute condition
+dept_condition = create_attribute_condition(
+    path="user.attributes.department",
+    operator="hierarchical_match",
+    value="finance"
+)
+
+# Complex condition with AND/OR logic
+complex_condition = create_complex_condition(
+    operator="and",
+    conditions=[
+        create_attribute_condition("user.attributes.security_clearance", "security_level_meets", "secret"),
+        create_attribute_condition("user.attributes.region", "in", ["US", "EU"])
+    ]
+)
+```
+
+### Database Integration with Access Control
+```python
+from kailash.nodes.data import AsyncSQLDatabaseNode
+
+# Create database node with access control
+db_node = AsyncSQLDatabaseNode(
+    name="sensitive_query",
+    query="SELECT * FROM financial_data",
+    access_control_manager=manager  # Pass the unified manager
+)
+```
+
 ## Quick Start
 
 ### Basic Usage (No Access Control)
@@ -95,18 +156,26 @@ result = runtime.execute(workflow)
 ### With Access Control
 ```python
 from kailash.runtime.access_controlled import AccessControlledRuntime
-from kailash.access_control import UserContext
+from kailash.access_control import UserContext, AccessControlManager
 
 # Create user context
 user = UserContext(
     user_id="user-001",
     tenant_id="tenant-001",
     email="user@example.com",
-    roles=["analyst"]
+    roles=["analyst"],
+    attributes={
+        "department": "finance.trading",
+        "security_clearance": "secret",
+        "region": "US"
+    }
 )
 
+# Create unified access control manager
+manager = AccessControlManager(strategy="abac")
+
 # Use access-controlled runtime
-runtime = AccessControlledRuntime(user)
+runtime = AccessControlledRuntime(user, access_control_manager=manager)
 result = runtime.execute(workflow)  # Same API!
 ```
 

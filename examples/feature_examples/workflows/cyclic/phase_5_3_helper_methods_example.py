@@ -12,7 +12,9 @@ implemented in Phase 5.3:
 Run this example to see all Phase 5.3 features in action.
 """
 
+import math
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -57,7 +59,6 @@ def clean_data(data=None, iteration=None, quality_score=None, **kwargs):
 
 def validate_quality(data=None, iteration=None, quality_score=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
-    import random
 
     # Validate data quality
     quality_score = data.get("quality_score", 0.0) if isinstance(data, dict) else 0.0
@@ -86,7 +87,6 @@ def validate_quality(data=None, iteration=None, quality_score=None, **kwargs):
 def train_model(model=None, epoch=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
     import math
-    import random
 
     try:
         accuracy = accuracy
@@ -120,7 +120,6 @@ def train_model(model=None, epoch=None, **kwargs):
 
 def evaluate_model(data=None, model=None, epoch=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
-    import random
 
     # Evaluate model performance
     accuracy = data.get("accuracy", 0.0) if isinstance(data, dict) else 0.0
@@ -142,7 +141,6 @@ def evaluate_model(data=None, model=None, epoch=None, **kwargs):
 
 def numerical_solver(iteration=None, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
-    import math
 
     try:
         value = value
@@ -224,7 +222,6 @@ def demonstrate_cycle_templates():
     # Define optimizer function (better IDE support)
     def optimize_solution(quality=None, iteration=None, **kwargs):
         """Simulate optimization improvement."""
-        import random
 
         if quality is None:
             quality = 0.0
@@ -258,7 +255,6 @@ def demonstrate_cycle_templates():
     # Define evaluator function (better IDE support)
     def evaluate_solution(data=None, **kwargs):
         """Evaluate the optimized solution."""
-        import random
 
         # In a real scenario, 'data' would come from the optimizer node
         # For demo, handle missing data gracefully
@@ -309,7 +305,6 @@ def demonstrate_cycle_templates():
     # Define unreliable API function (better IDE support)
     def simulate_unreliable_api(attempt=None, **kwargs):
         """Simulate API that fails 70% of the time initially, improves with retries."""
-        import random
 
         # Get retry attempt info
         if attempt is None:

@@ -2,11 +2,11 @@
 
 This module provides nodes for connecting to SharePoint using Microsoft Graph API.
 It supports modern authentication with MSAL and provides better compatibility
-with Azure AD app registrations.
+with Azure AD app registrations. Supports multiple authentication methods.
 
 Design purpose:
 - Enable seamless integration with SharePoint via Graph API
-- Support app-only authentication with client credentials
+- Support multiple authentication methods (client credentials, certificate, username/password, managed identity, device code)
 - Provide operations for file management and search
 - Align with database persistence requirements for orchestration
 
@@ -21,9 +21,11 @@ Downstream consumers:
 - Long-running workflows with state persistence
 """
 
+import base64
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import requests
 
@@ -44,7 +46,7 @@ class SharePointGraphReader(Node):
     to the legacy SharePoint REST API.
 
     Key features:
-    1. Modern authentication with MSAL
+    1. Multiple authentication methods (client credentials, certificate, username/password, managed identity, device code)
     2. Support for listing, downloading, and searching files
     3. Folder navigation and library support
     4. Stateless design for orchestration compatibility
@@ -56,9 +58,10 @@ class SharePointGraphReader(Node):
     3. Search for files by name
     4. Navigate folder structures
 
-    Example:
+    Example (Client Credentials):
         >>> reader = SharePointGraphReader()
         >>> result = reader.execute(
+        ...     auth_method="client_credentials",
         ...     tenant_id="your-tenant-id",
         ...     client_id="your-client-id",
         ...     client_secret="your-secret",
@@ -67,21 +70,41 @@ class SharePointGraphReader(Node):
         ...     library_name="Documents",
         ...     folder_path="Reports/2024"
         ... )
+
+    Example (Certificate):
+        >>> reader = SharePointGraphReader()
+        >>> result = reader.execute(
+        ...     auth_method="certificate",
+        ...     tenant_id="your-tenant-id",
+        ...     client_id="your-client-id",
+        ...     certificate_path="/path/to/cert.pem",
+        ...     site_url="https://company.sharepoint.com/sites/project",
+        ...     operation="list_files"
+        ... )
     """
 
     def get_metadata(self) -> NodeMetadata:
         """Get node metadata for discovery and orchestration."""
         return NodeMetadata(
             name="SharePoint Graph Reader",
-            description="Read files from SharePoint using Microsoft Graph API",
-            tags={"sharepoint", "graph", "reader", "cloud", "microsoft"},
-            version="2.0.0",
+            description="Read files from SharePoint using Microsoft Graph API with multiple authentication methods",
+            tags={"sharepoint", "graph", "reader", "cloud", "microsoft", "multi-auth"},
+            version="3.0.0",
             author="Kailash SDK",
         )
 
     def get_parameters(self) -> dict[str, NodeParameter]:
-        """Define input parameters for SharePoint Graph operations."""
+        """Define input parameters for SharePoint Graph operations with multiple auth methods."""
         return {
+            # Authentication method selection
+            "auth_method": NodeParameter(
+                name="auth_method",
+                type=str,
+                required=False,
+                default="client_credentials",
+                description="Authentication method: client_credentials, certificate, username_password, managed_identity, device_code",
+            ),
+            # Common auth parameters
             "tenant_id": NodeParameter(
                 name="tenant_id",
                 type=str,
@@ -98,8 +121,62 @@ class SharePointGraphReader(Node):
                 name="client_secret",
                 type=str,
                 required=False,
-                description="Azure AD app client secret",
+                description="Azure AD app client secret (for client_credentials auth)",
             ),
+            # Certificate auth parameters
+            "certificate_path": NodeParameter(
+                name="certificate_path",
+                type=str,
+                required=False,
+                description="Path to certificate file for certificate authentication",
+            ),
+            "certificate_password": NodeParameter(
+                name="certificate_password",
+                type=str,
+                required=False,
+                description="Password for certificate file (if encrypted)",
+            ),
+            "certificate_thumbprint": NodeParameter(
+                name="certificate_thumbprint",
+                type=str,
+                required=False,
+                description="Certificate thumbprint (alternative to file path)",
+            ),
+            # Username/password auth parameters
+            "username": NodeParameter(
+                name="username",
+                type=str,
+                required=False,
+                description="Username for resource owner password flow",
+            ),
+            "password": NodeParameter(
+                name="password",
+                type=str,
+                required=False,
+                description="Password for resource owner password flow",
+            ),
+            # Managed identity parameters
+            "use_system_identity": NodeParameter(
+                name="use_system_identity",
+                type=bool,
+                required=False,
+                default=True,
+                description="Use system-assigned managed identity (vs user-assigned)",
+            ),
+            "managed_identity_client_id": NodeParameter(
+                name="managed_identity_client_id",
+                type=str,
+                required=False,
+                description="Client ID for user-assigned managed identity",
+            ),
+            # Device code parameters
+            "device_code_callback": NodeParameter(
+                name="device_code_callback",
+                type=str,
+                required=False,
+                description="Callback function name for device code display",
+            ),
+            # SharePoint operation parameters
             "site_url": NodeParameter(
                 name="site_url",
                 type=str,
@@ -174,6 +251,235 @@ class SharePointGraphReader(Node):
         if "access_token" not in result:
             error_msg = result.get("error_description", "Unknown authentication error")
             raise NodeExecutionError(f"Authentication failed: {error_msg}")
+
+        return {
+            "token": result["access_token"],
+            "headers": {
+                "Authorization": f"Bearer {result['access_token']}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+        }
+
+    def _authenticate_certificate(
+        self,
+        tenant_id: str,
+        client_id: str,
+        certificate_path: Optional[str] = None,
+        certificate_password: Optional[str] = None,
+        certificate_thumbprint: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Authenticate using certificate-based authentication."""
+        try:
+            import msal
+        except ImportError:
+            raise NodeConfigurationError(
+                "MSAL library not installed. Install with: pip install msal"
+            )
+
+        # Load certificate
+        if certificate_path:
+            with open(certificate_path, "rb") as f:
+                cert_data = f.read()
+
+            # Try to load as PEM or DER
+            try:
+                if certificate_password:
+                    from cryptography import x509
+                    from cryptography.hazmat.primitives import hashes, serialization
+                    from cryptography.hazmat.primitives.serialization import pkcs12
+
+                    private_key, certificate, _ = pkcs12.load_key_and_certificates(
+                        cert_data,
+                        certificate_password.encode() if certificate_password else None,
+                    )
+                else:
+                    from cryptography import x509
+                    from cryptography.hazmat.primitives import hashes, serialization
+
+                    # Load PEM certificate
+                    certificate = x509.load_pem_x509_certificate(cert_data)
+                    private_key = serialization.load_pem_private_key(
+                        cert_data, password=None
+                    )
+            except Exception as e:
+                raise NodeConfigurationError(f"Failed to load certificate: {e}")
+
+            # Get thumbprint
+            thumbprint = (
+                base64.urlsafe_b64encode(certificate.fingerprint(hashes.SHA1()))
+                .decode("utf-8")
+                .rstrip("=")
+            )
+
+            # Create client credential from certificate
+            client_credential = {
+                "private_key": private_key,
+                "thumbprint": thumbprint,
+                "public_certificate": certificate.public_bytes(
+                    serialization.Encoding.PEM
+                ).decode(),
+            }
+        elif certificate_thumbprint:
+            # Use provided thumbprint (assumes cert is already registered in Azure AD)
+            client_credential = {"thumbprint": certificate_thumbprint}
+        else:
+            raise NodeConfigurationError(
+                "Either certificate_path or certificate_thumbprint must be provided"
+            )
+
+        app = msal.ConfidentialClientApplication(
+            client_id=client_id,
+            client_credential=client_credential,
+            authority=f"https://login.microsoftonline.com/{tenant_id}",
+        )
+
+        result = app.acquire_token_for_client(
+            scopes=["https://graph.microsoft.com/.default"]
+        )
+
+        if "access_token" not in result:
+            error_msg = result.get("error_description", "Unknown authentication error")
+            raise NodeExecutionError(f"Certificate authentication failed: {error_msg}")
+
+        return {
+            "token": result["access_token"],
+            "headers": {
+                "Authorization": f"Bearer {result['access_token']}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+        }
+
+    def _authenticate_username_password(
+        self, tenant_id: str, client_id: str, username: str, password: str
+    ) -> dict[str, Any]:
+        """Authenticate using username/password (Resource Owner Password Credentials)."""
+        try:
+            import msal
+        except ImportError:
+            raise NodeConfigurationError(
+                "MSAL library not installed. Install with: pip install msal"
+            )
+
+        app = msal.PublicClientApplication(
+            client_id=client_id,
+            authority=f"https://login.microsoftonline.com/{tenant_id}",
+        )
+
+        result = app.acquire_token_by_username_password(
+            username=username,
+            password=password,
+            scopes=["https://graph.microsoft.com/.default"],
+        )
+
+        if "access_token" not in result:
+            error_msg = result.get("error_description", "Unknown authentication error")
+            raise NodeExecutionError(
+                f"Username/password authentication failed: {error_msg}"
+            )
+
+        return {
+            "token": result["access_token"],
+            "headers": {
+                "Authorization": f"Bearer {result['access_token']}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+        }
+
+    def _authenticate_managed_identity(
+        self,
+        use_system_identity: bool = True,
+        managed_identity_client_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Authenticate using Azure Managed Identity."""
+        # Managed Identity endpoint
+        msi_endpoint = os.environ.get(
+            "MSI_ENDPOINT", "http://169.254.169.254/metadata/identity/oauth2/token"
+        )
+
+        params = {
+            "api-version": "2019-08-01",
+            "resource": "https://graph.microsoft.com",
+        }
+
+        headers = {"Metadata": "true"}
+
+        # Add secret if using App Service
+        msi_secret = os.environ.get("MSI_SECRET")
+        if msi_secret:
+            headers["X-IDENTITY-HEADER"] = msi_secret
+
+        # Use user-assigned identity if specified
+        if not use_system_identity and managed_identity_client_id:
+            params["client_id"] = managed_identity_client_id
+
+        try:
+            response = requests.get(msi_endpoint, params=params, headers=headers)
+            response.raise_for_status()
+
+            token_data = response.json()
+            access_token = token_data["access_token"]
+
+            return {
+                "token": access_token,
+                "headers": {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            }
+        except Exception as e:
+            raise NodeExecutionError(
+                f"Managed Identity authentication failed: {e}. "
+                "Ensure this code is running in an Azure environment with Managed Identity enabled."
+            )
+
+    def _authenticate_device_code(
+        self, tenant_id: str, client_id: str, device_code_callback: Optional[str] = None
+    ) -> dict[str, Any]:
+        """Authenticate using device code flow."""
+        try:
+            import msal
+        except ImportError:
+            raise NodeConfigurationError(
+                "MSAL library not installed. Install with: pip install msal"
+            )
+
+        app = msal.PublicClientApplication(
+            client_id=client_id,
+            authority=f"https://login.microsoftonline.com/{tenant_id}",
+        )
+
+        flow = app.initiate_device_flow(scopes=["https://graph.microsoft.com/.default"])
+
+        if "user_code" not in flow:
+            raise NodeExecutionError("Failed to initiate device flow")
+
+        # Display the code to user
+        print(f"\nTo authenticate, visit: {flow['verification_uri']}")
+        print(f"Enter code: {flow['user_code']}\n")
+
+        # If callback provided, call it with the flow info
+        if device_code_callback:
+            try:
+                # Use importlib to safely import callback function instead of eval
+                import importlib
+
+                module_name, func_name = device_code_callback.rsplit(".", 1)
+                module = importlib.import_module(module_name)
+                callback_func = getattr(module, func_name)
+                callback_func(flow)
+            except:
+                pass
+
+        # Wait for user to authenticate
+        result = app.acquire_token_by_device_flow(flow)
+
+        if "access_token" not in result:
+            error_msg = result.get("error_description", "Unknown authentication error")
+            raise NodeExecutionError(f"Device code authentication failed: {error_msg}")
 
         return {
             "token": result["access_token"],
@@ -384,21 +690,16 @@ class SharePointGraphReader(Node):
             )
 
     def run(self, **kwargs) -> dict[str, Any]:
-        """Execute SharePoint Graph operation.
+        """Execute SharePoint Graph operation with selected authentication method.
 
         This method is stateless and returns JSON-serializable results
         suitable for database persistence and orchestration.
         """
-        # Validate required parameters
-        tenant_id = kwargs.get("tenant_id")
-        client_id = kwargs.get("client_id")
-        client_secret = kwargs.get("client_secret")
+        auth_method = kwargs.get("auth_method", "client_credentials")
         site_url = kwargs.get("site_url")
 
-        if not all([tenant_id, client_id, client_secret, site_url]):
-            raise NodeValidationError(
-                "tenant_id, client_id, client_secret, and site_url are required"
-            )
+        if not site_url:
+            raise NodeValidationError("site_url is required")
 
         # Get operation
         operation = kwargs.get("operation", "list_files")
@@ -413,8 +714,83 @@ class SharePointGraphReader(Node):
                 f"Invalid operation '{operation}'. Must be one of: {', '.join(valid_operations)}"
             )
 
-        # Authenticate and get site data
-        auth_data = self._authenticate(tenant_id, client_id, client_secret)
+        # Authenticate based on method
+        if auth_method == "client_credentials":
+            tenant_id = kwargs.get("tenant_id")
+            client_id = kwargs.get("client_id")
+            client_secret = kwargs.get("client_secret")
+
+            if not all([tenant_id, client_id, client_secret]):
+                raise NodeValidationError(
+                    "tenant_id, client_id, and client_secret are required for client_credentials auth"
+                )
+
+            auth_data = self._authenticate(tenant_id, client_id, client_secret)
+
+        elif auth_method == "certificate":
+            tenant_id = kwargs.get("tenant_id")
+            client_id = kwargs.get("client_id")
+
+            if not all([tenant_id, client_id]):
+                raise NodeValidationError(
+                    "tenant_id and client_id are required for certificate auth"
+                )
+
+            auth_data = self._authenticate_certificate(
+                tenant_id=tenant_id,
+                client_id=client_id,
+                certificate_path=kwargs.get("certificate_path"),
+                certificate_password=kwargs.get("certificate_password"),
+                certificate_thumbprint=kwargs.get("certificate_thumbprint"),
+            )
+
+        elif auth_method == "username_password":
+            tenant_id = kwargs.get("tenant_id")
+            client_id = kwargs.get("client_id")
+            username = kwargs.get("username")
+            password = kwargs.get("password")
+
+            if not all([tenant_id, client_id, username, password]):
+                raise NodeValidationError(
+                    "tenant_id, client_id, username, and password are required for username_password auth"
+                )
+
+            auth_data = self._authenticate_username_password(
+                tenant_id=tenant_id,
+                client_id=client_id,
+                username=username,
+                password=password,
+            )
+
+        elif auth_method == "managed_identity":
+            auth_data = self._authenticate_managed_identity(
+                use_system_identity=kwargs.get("use_system_identity", True),
+                managed_identity_client_id=kwargs.get("managed_identity_client_id"),
+            )
+
+        elif auth_method == "device_code":
+            tenant_id = kwargs.get("tenant_id")
+            client_id = kwargs.get("client_id")
+
+            if not all([tenant_id, client_id]):
+                raise NodeValidationError(
+                    "tenant_id and client_id are required for device_code auth"
+                )
+
+            auth_data = self._authenticate_device_code(
+                tenant_id=tenant_id,
+                client_id=client_id,
+                device_code_callback=kwargs.get("device_code_callback"),
+            )
+
+        else:
+            raise NodeValidationError(
+                f"Invalid auth_method: {auth_method}. "
+                "Must be one of: client_credentials, certificate, username_password, "
+                "managed_identity, device_code"
+            )
+
+        # Get site data and execute operation
         headers = auth_data["headers"]
         site_data = self._get_site_data(site_url, headers)
         site_id = site_data["id"]

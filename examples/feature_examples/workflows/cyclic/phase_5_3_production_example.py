@@ -12,16 +12,22 @@ All implementations use real logic without mock data.
 
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 import time
 
+import numpy as np
+import pandas as pd
+from sklearn.datasets import make_classification
+
 from examples.utils.data_paths import get_input_data_path
-from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
 from kailash.workflow.migration import DAGToCycleConverter
 from kailash.workflow.validation import CycleLinter, IssueSeverity
 
@@ -178,7 +184,6 @@ def create_data_cleaning_workflow():
     # Define quality validation function (better IDE support)
     def validate_quality(data=None, **kwargs):
         """Validate data quality after cleaning."""
-        import pandas as pd
 
         # Get cleaned data and metrics - handle missing data
         try:
@@ -373,7 +378,6 @@ def create_model_training_workflow():
     ):
         """Train machine learning model iteratively."""
 
-        import numpy as np
         from sklearn.linear_model import SGDClassifier
         from sklearn.preprocessing import StandardScaler
 
@@ -385,14 +389,12 @@ def create_model_training_workflow():
             except:
                 # First iteration or missing data - create dummy data
                 # In real scenario, this would come from data_loader
-                from sklearn.datasets import make_classification
 
                 X_train, y_train = make_classification(
                     n_samples=100, n_features=20, random_state=42
                 )
         else:
             # No data provided - create dummy data
-            from sklearn.datasets import make_classification
 
             X_train, y_train = make_classification(
                 n_samples=100, n_features=20, random_state=42
@@ -591,7 +593,6 @@ def create_api_retry_workflow():
     def simulate_api_call(attempt=None, last_error=None, **kwargs):
         """Simulate API call with realistic failure patterns."""
         import random
-        import time
 
         # Get retry context
         if attempt is None:

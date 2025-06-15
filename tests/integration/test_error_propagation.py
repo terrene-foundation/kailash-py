@@ -80,15 +80,17 @@ class TestErrorPropagation:
         # Execute workflow
         runtime = LocalRuntime()
 
-        # Check what actually happens
-        try:
-            results, run_id = runtime.execute(workflow)
-            # If we get here, check if the error is in the results
-            assert "error" in results, f"Expected error result, got: {results}"
-            assert "Expected failure" in str(results.get("error", results))
-        except NodeExecutionError as e:
-            # This is the expected behavior
-            assert "Expected failure" in str(e)
+        # With unified runtime, errors for nodes without dependents are captured in results
+        results, run_id = runtime.execute(workflow)
+
+        # Check error is captured in results
+        assert "error" in results, f"Expected error result, got: {results}"
+        error_result = results["error"]
+        assert error_result["failed"] is True
+        assert error_result["error_type"] == "NodeExecutionError"
+        assert (
+            error_result["error"] == "Expected failure"
+        )  # Config param now properly passed
 
     def test_error_in_chain(self, temp_data_dir: Path):
         """Test error propagation in a chain of nodes."""
@@ -123,8 +125,9 @@ class TestErrorPropagation:
         runtime = LocalRuntime()
 
         with pytest.raises(RuntimeExecutionError) as exc_info:
-            results, run_id = runtime.execute(workflow)
+            runtime.execute(workflow)
 
+        # Error message should now include the configured message
         assert "Processing failed" in str(exc_info.value)
 
     def test_conditional_error_handling(self):

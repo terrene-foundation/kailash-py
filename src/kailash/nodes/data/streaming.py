@@ -138,15 +138,30 @@ class KafkaConsumerNode(Node):
         tags={"streaming", "kafka", "consumer"},
     )
 
-    def __init__(self):
+    def __init__(self, name: str = None, id: str = None, **kwargs):
         """Initialize the Kafka consumer node.
 
         Sets up the node and prepares for consumer initialization.
         The actual consumer is created during configuration.
         """
-        super().__init__()
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self._consumer = None
         self._topic = None
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the Kafka consumer node."""
@@ -411,14 +426,29 @@ class StreamPublisherNode(Node):
         tags={"streaming", "publisher", "messaging"},
     )
 
-    def __init__(self):
+    def __init__(self, name: str = None, id: str = None, **kwargs):
         """Initialize the stream publisher node.
 
         Sets up the node and prepares for publisher initialization.
         """
-        super().__init__()
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self._publisher = None
         self._protocol = None
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the stream publisher node."""
@@ -673,15 +703,30 @@ class WebSocketNode(Node):
         tags={"streaming", "websocket", "data"},
     )
 
-    def __init__(self):
+    def __init__(self, name: str = None, id: str = None, **kwargs):
         """Initialize the WebSocket node.
 
         Sets up the node and prepares for WebSocket connection.
         """
-        super().__init__()
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self._ws = None
         self._connected = False
         self._message_queue = []
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Get the parameters for this node.
@@ -984,15 +1029,30 @@ class EventStreamNode(Node):
         tags={"streaming", "sse", "data"},
     )
 
-    def __init__(self):
+    def __init__(self, name: str = None, id: str = None, **kwargs):
         """Initialize the EventStream node.
 
         Sets up the node and prepares for SSE connection.
         """
-        super().__init__()
+        # Set name from parameters
+        if name:
+            self.name = name
+        elif id:
+            self.name = id
+        elif "name" in kwargs:
+            self.name = kwargs.pop("name")
+        elif "id" in kwargs:
+            self.name = kwargs.pop("id")
+        else:
+            self.name = self.__class__.__name__
+
+        # Initialize node attributes
         self._stream = None
         self._connected = False
         self._last_event_id = None
+
+        # Call parent constructor
+        super().__init__(name=self.name)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Get the parameters for this node.

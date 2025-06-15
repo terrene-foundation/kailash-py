@@ -1,0 +1,13 @@
+{
+  "access_token": "tok_2eee901395644010_1749964553",
+  "refresh_token": "tok_669b0272ca4b4d50_1749964553",
+  "session_encryption_key": "key_5cb859756db148a2868f8d7b3dffaf08",
+  "mfa_required": true,
+  "session_timeout_minutes": 120,
+  "concurrent_session_limit": 10,
+  "ip_restrictions": [
+    "office_network",
+    "vpn_only",
+    "geo_restricted"
+  ]
+}

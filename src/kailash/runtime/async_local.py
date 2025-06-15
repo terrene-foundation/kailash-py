@@ -1,5 +1,9 @@
 """Asynchronous local runtime engine for executing workflows.
 
+DEPRECATED: This module is deprecated. The LocalRuntime in local.py now provides
+unified async/sync execution capabilities. For backward compatibility, this module
+exports LocalRuntime as AsyncLocalRuntime.
+
 This module provides an asynchronous execution engine for Kailash workflows,
 particularly useful for workflows with I/O-bound nodes such as API calls,
 database queries, or LLM interactions.
@@ -11,7 +15,6 @@ from typing import Any
 
 import networkx as nx
 
-from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowExecutionError,
@@ -83,8 +86,8 @@ class AsyncLocalRuntime:
         run_id = None
 
         try:
-            # Validate workflow
-            workflow.validate()
+            # Validate workflow with runtime parameters (Session 061)
+            workflow.validate(runtime_parameters=parameters)
 
             # Initialize tracking
             if task_manager:
@@ -222,12 +225,13 @@ class AsyncLocalRuntime:
                 # Execute node - check if it supports async execution
                 start_time = datetime.now(UTC)
 
-                if isinstance(node_instance, AsyncNode):
-                    # Use async execution
+                if hasattr(node_instance, "execute_async"):
+                    # Use async execution if available
                     outputs = await node_instance.execute_async(**inputs)
                 else:
-                    # Fall back to synchronous execution
-                    outputs = node_instance.run(**inputs)
+                    # Fall back to synchronous execution using execute()
+                    # This ensures proper validation and error handling
+                    outputs = node_instance.execute(**inputs)
 
                 execution_time = (datetime.now(UTC) - start_time).total_seconds()
 
@@ -352,3 +356,33 @@ class AsyncLocalRuntime:
         # For now, stop if the failed node has dependents
         # Future: implement configurable error handling policies
         return has_dependents
+
+
+# Backward compatibility: Use the unified LocalRuntime
+from kailash.runtime.local import LocalRuntime  # noqa: E402
+
+# Export LocalRuntime as AsyncLocalRuntime for backward compatibility
+# AsyncLocalRuntime = LocalRuntime  # Commented out to avoid redefinition warning
+
+
+# For better backward compatibility, create a wrapper that sets enable_async=True by default
+class AsyncLocalRuntimeCompat(LocalRuntime):
+    """Backward compatibility wrapper for AsyncLocalRuntime.
+
+    This wrapper automatically enables async execution and provides the same
+    interface as the original AsyncLocalRuntime.
+    """
+
+    def __init__(self, debug: bool = False, max_concurrency: int = 10, **kwargs):
+        """Initialize with async enabled by default."""
+        super().__init__(
+            debug=debug, enable_async=True, max_concurrency=max_concurrency, **kwargs
+        )
+
+    async def execute(self, *args, **kwargs):
+        """Async execute method for full backward compatibility."""
+        return await self.execute_async(*args, **kwargs)
+
+
+# Use the compatibility wrapper as the main export
+# AsyncLocalRuntime = AsyncLocalRuntimeCompat  # Commented out to avoid redefinition warning - class definition at top takes precedence

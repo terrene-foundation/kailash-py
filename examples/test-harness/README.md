@@ -42,7 +42,7 @@ config = get_test_config("basic_workflow")
 from examples.test_harness.validators import validate_output_schema
 
 # Validate node output
-result = node.run()
+result = node.execute()
 is_valid, errors = validate_output_schema(result, expected_schema)
 ```
 

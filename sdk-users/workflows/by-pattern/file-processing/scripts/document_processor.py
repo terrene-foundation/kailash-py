@@ -224,7 +224,7 @@ for csv_file_info in csv_files:
     try:
         # Create and execute CSVReaderNode for this file
         csv_reader = CSVReaderNode(name=f"csv_reader_{csv_file_info['file_name']}")
-        csv_result = csv_reader.run(file_path=file_path, headers=True)
+        csv_result = csv_reader.execute(file_path=file_path, headers=True)
 
         # Extract the actual data
         csv_data = csv_result.get("data", [])
@@ -314,7 +314,7 @@ for json_file_info in json_files:
     try:
         # Create and execute JSONReaderNode for this file
         json_reader = JSONReaderNode(name=f"json_reader_{json_file_info['file_name']}")
-        json_result = json_reader.run(file_path=file_path)
+        json_result = json_reader.execute(file_path=file_path)
 
         # Extract the actual data
         json_data = json_result.get("data", {})
@@ -425,7 +425,7 @@ for text_file_info in text_files:
     try:
         # Create and execute TextReaderNode for this file
         text_reader = TextReaderNode(name=f"text_reader_{text_file_info['file_name']}")
-        text_result = text_reader.run(file_path=file_path, encoding="utf-8")
+        text_result = text_reader.execute(file_path=file_path, encoding="utf-8")
 
         # Extract the actual text content
         text_content = text_result.get("text", "")

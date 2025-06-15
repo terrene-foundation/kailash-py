@@ -94,7 +94,6 @@ def _ensure_data_files(temp_data_dir):
     # Create sample customer_value.csv if needed
     customer_value_file = temp_data_dir / "customer_value.csv"
     if not customer_value_file.exists():
-        import pandas as pd
 
         value_data = pd.DataFrame(
             {
@@ -127,7 +126,6 @@ def _ensure_data_files(temp_data_dir):
     # Create sample_reviews.csv if needed
     reviews_file = temp_data_dir / "sample_reviews.csv"
     if not reviews_file.exists():
-        import pandas as pd
 
         reviews_data = pd.DataFrame(
             {

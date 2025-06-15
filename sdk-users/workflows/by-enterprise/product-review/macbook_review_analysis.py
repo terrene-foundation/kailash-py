@@ -182,14 +182,14 @@ def run_iterative_analysis(workflow, initial_task, review_data_dir, max_iteratio
     ]
 
     for agent_info in agents:
-        result = coordinator.run(action="register", agent_info=agent_info)
+        result = coordinator.execute(action="register", agent_info=agent_info)
         if result["success"]:
             print(
                 f"  ✓ Registered {agent_info['id']} with skills: {', '.join(agent_info['skills'])}"
             )
 
     # Initialize memory with task
-    memory_pool.run(
+    memory_pool.execute(
         action="write",
         agent_id="system",
         segment="context",
@@ -233,7 +233,7 @@ def run_iterative_analysis(workflow, initial_task, review_data_dir, max_iteratio
 
         task_assignments = {}
         for task in iteration_tasks:
-            result = coordinator.run(
+            result = coordinator.execute(
                 action="delegate", task=task, coordination_strategy="best_match"
             )
             if result["success"]:
@@ -242,7 +242,7 @@ def run_iterative_analysis(workflow, initial_task, review_data_dir, max_iteratio
 
         # Step 3: Broadcast iteration start
         print("\nBroadcasting iteration start...")
-        broadcast_result = coordinator.run(
+        broadcast_result = coordinator.execute(
             action="broadcast",
             message={
                 "content": f"Starting iteration {iteration + 1}. Check shared memory for context and previous feedback.",
@@ -435,7 +435,7 @@ Output ONLY this JSON:
                                     )
 
                                     # Store results in memory for synthesis
-                                    memory_pool.run(
+                                    memory_pool.execute(
                                         action="write",
                                         agent_id="search_tool",
                                         segment="search_results",
@@ -544,7 +544,7 @@ Output ONLY this JSON:
                     print("\nBuilding consensus on quality achievement...")
 
                     # Create consensus proposal
-                    coordinator.run(
+                    coordinator.execute(
                         action="consensus",
                         consensus_proposal={
                             "session_id": f"quality_check_iteration_{iteration}",
@@ -557,7 +557,7 @@ Output ONLY this JSON:
                     print("  Collecting agent votes...")
 
                     # Strategist votes based on search completeness
-                    coordinator.run(
+                    coordinator.execute(
                         action="consensus",
                         consensus_proposal={
                             "session_id": f"quality_check_iteration_{iteration}"
@@ -568,7 +568,7 @@ Output ONLY this JSON:
                     print("    • Search strategist: ✓ Approved")
 
                     # Synthesizer votes based on synthesis quality
-                    coordinator.run(
+                    coordinator.execute(
                         action="consensus",
                         consensus_proposal={
                             "session_id": f"quality_check_iteration_{iteration}"
@@ -579,7 +579,7 @@ Output ONLY this JSON:
                     print("    • Synthesis expert: ✓ Approved")
 
                     # Validator already gave high score
-                    coordinator.run(
+                    coordinator.execute(
                         action="consensus",
                         consensus_proposal={
                             "session_id": f"quality_check_iteration_{iteration}"
@@ -590,7 +590,7 @@ Output ONLY this JSON:
                     print("    • Quality validator: ✓ Approved")
 
                     # Check final consensus
-                    final_consensus = coordinator.run(
+                    final_consensus = coordinator.execute(
                         action="consensus",
                         consensus_proposal={
                             "session_id": f"quality_check_iteration_{iteration}"
@@ -602,7 +602,7 @@ Output ONLY this JSON:
                         quality_achieved = True
 
                         # Broadcast success
-                        coordinator.run(
+                        coordinator.execute(
                             action="broadcast",
                             message={
                                 "content": f"Quality threshold achieved with score {quality_score}/100. Analysis complete!",
@@ -620,7 +620,7 @@ Output ONLY this JSON:
                     print(f"  ❌ Below threshold - Feedback: {feedback}")
 
                     # Broadcast feedback to all agents
-                    coordinator.run(
+                    coordinator.execute(
                         action="broadcast",
                         message={
                             "content": f"Quality score {quality_score}/100 below threshold. Feedback: {feedback}",
@@ -631,7 +631,7 @@ Output ONLY this JSON:
                     )
 
                     # Write feedback to memory for next iteration
-                    memory_pool.run(
+                    memory_pool.execute(
                         action="write",
                         agent_id="validator_001",
                         segment="feedback",
@@ -653,7 +653,7 @@ Output ONLY this JSON:
 
 def get_agent_insights(memory_pool, agent_id, limit=5):
     """Get recent insights from a specific agent."""
-    result = memory_pool.run(
+    result = memory_pool.execute(
         action="read",
         agent_id="system",
         attention_filter={"preferred_agents": [agent_id], "window_size": 100},
@@ -664,14 +664,14 @@ def get_agent_insights(memory_pool, agent_id, limit=5):
 
 def show_memory_stats(memory_pool):
     """Display memory pool statistics."""
-    metrics = memory_pool.run(action="metrics")
+    metrics = memory_pool.execute(action="metrics")
     print("\n  Memory Pool Stats:")
     print(f"    Total memories: {metrics.get('total_memories', 0)}")
     print(f"    Segments: {', '.join(metrics.get('segments', []))}")
 
     # Show recent memories
     try:
-        recent = memory_pool.run(
+        recent = memory_pool.execute(
             action="read", agent_id="system", segment="general", limit=5
         )
         if recent.get("memories"):
@@ -687,7 +687,7 @@ def display_top_insights(memory_pool, limit=10):
     print("=" * 70)
 
     # Read all memories with high importance
-    all_insights = memory_pool.run(
+    all_insights = memory_pool.execute(
         action="read",
         agent_id="system",
         attention_filter={"importance_threshold": 0.6, "window_size": 100},
@@ -803,7 +803,7 @@ def main():
     coordinator = workflow._node_instances["coordinator"]
 
     print("\nFinal Memory Pool State:")
-    all_memories = memory_pool.run(action="read", agent_id="system", limit=100)
+    all_memories = memory_pool.execute(action="read", agent_id="system", limit=100)
 
     # Group by agent
     agent_contributions = {}
@@ -851,7 +851,7 @@ def main():
         ],
     }
 
-    plan_result = coordinator.run(action="coordinate", task=workflow_spec)
+    plan_result = coordinator.execute(action="coordinate", task=workflow_spec)
 
     if plan_result["success"]:
         print(f"\nWorkflow Plan: {plan_result['workflow']}")
