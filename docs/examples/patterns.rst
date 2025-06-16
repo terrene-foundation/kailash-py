@@ -266,5 +266,148 @@ Best Practices for Cyclic Workflows
 6. **Log Progress**: Use log_cycle_info() for debugging
 7. **Optimize Performance**: Cycles add ~0.03ms overhead per iteration
 
+Alert and Notification Patterns
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from kailash import Workflow
+   from kailash.nodes.alerts import DiscordAlertNode
+   from kailash.nodes.logic import SwitchNode
+   from kailash.nodes.code import PythonCodeNode
+
+   # Error Alert Pattern
+   def create_error_alert_workflow():
+       workflow = Workflow("error_alerts")
+
+       # Process data (might fail)
+       processor = PythonCodeNode.from_function(
+           func=process_data_with_errors,
+           name="processor"
+       )
+       workflow.add_node("process", processor)
+
+       # Route based on success/failure
+       router = SwitchNode(
+           condition_mapping={
+               "error": "status == 'error'",
+               "success": "status == 'success'"
+           }
+       )
+       workflow.add_node("router", router)
+
+       # Critical error alert
+       error_alert = DiscordAlertNode()
+       workflow.add_node("error_alert", error_alert)
+
+       # Success notification
+       success_alert = DiscordAlertNode()
+       workflow.add_node("success_alert", success_alert)
+
+       # Connect the workflow
+       workflow.connect("process", "router")
+       workflow.connect("router", "error_alert", output_key="error")
+       workflow.connect("router", "success_alert", output_key="success")
+
+       return workflow
+
+   # Health Dashboard Pattern
+   def create_health_dashboard():
+       workflow = Workflow("health_dashboard")
+
+       # System health check
+       health_checker = PythonCodeNode.from_function(
+           func=check_system_health,
+           name="health_checker"
+       )
+       workflow.add_node("health_check", health_checker)
+
+       # Dashboard alert
+       dashboard = DiscordAlertNode()
+       workflow.add_node("dashboard", dashboard)
+
+       workflow.connect("health_check", "dashboard")
+
+       return workflow
+
+   # Business KPI Alert Pattern
+   def create_kpi_alerts():
+       workflow = Workflow("kpi_alerts")
+
+       # Calculate KPIs
+       kpi_calculator = PythonCodeNode.from_function(
+           func=calculate_business_kpis,
+           name="kpi_calculator"
+       )
+       workflow.add_node("calculate", kpi_calculator)
+
+       # Check thresholds
+       threshold_checker = SwitchNode(
+           condition_mapping={
+               "critical": "revenue < target_revenue * 0.8",
+               "warning": "revenue < target_revenue * 0.9",
+               "normal": "default"
+           }
+       )
+       workflow.add_node("threshold_check", threshold_checker)
+
+       # Different alert types
+       critical_alert = DiscordAlertNode()
+       warning_alert = DiscordAlertNode()
+       normal_report = DiscordAlertNode()
+
+       workflow.add_node("critical_alert", critical_alert)
+       workflow.add_node("warning_alert", warning_alert)
+       workflow.add_node("normal_report", normal_report)
+
+       # Connect workflow
+       workflow.connect("calculate", "threshold_check")
+       workflow.connect("threshold_check", "critical_alert", output_key="critical")
+       workflow.connect("threshold_check", "warning_alert", output_key="warning")
+       workflow.connect("threshold_check", "normal_report", output_key="normal")
+
+       return workflow
+
+   # Execute with parameters
+   def execute_alert_workflows():
+       # Error alert execution
+       error_workflow = create_error_alert_workflow()
+       runtime.execute(error_workflow, parameters={
+           "error_alert": {
+               "webhook_url": "${DISCORD_WEBHOOK}",
+               "title": "🚨 Processing Error",
+               "alert_type": "critical",
+               "mentions": ["@here"]
+           },
+           "success_alert": {
+               "webhook_url": "${DISCORD_WEBHOOK}",
+               "title": "✅ Processing Complete",
+               "alert_type": "success"
+           }
+       })
+
+       # Health dashboard execution
+       health_workflow = create_health_dashboard()
+       runtime.execute(health_workflow, parameters={
+           "dashboard": {
+               "webhook_url": "${DISCORD_WEBHOOK}",
+               "title": "📊 System Health Dashboard",
+               "alert_type": "info",
+               "username": "Health Monitor",
+               "fields": [
+                   {"name": "CPU", "value": "{cpu_usage:.1f}%", "inline": True},
+                   {"name": "Memory", "value": "{memory_usage:.1f}%", "inline": True},
+                   {"name": "Disk", "value": "{disk_usage:.1f}%", "inline": True}
+               ]
+           }
+       })
+
+**Alert Pattern Benefits:**
+
+- **Real-time Notifications**: Immediate alerts on failures or thresholds
+- **Rich Formatting**: Color-coded embeds with structured data
+- **Escalation Support**: Different alert types for different severity levels
+- **Integration Ready**: Works with existing monitoring and error handling
+
 For more patterns, see the `workflow examples
 <https://github.com/terrene-foundation/kailash-py/tree/main/examples/workflow_examples>`_.

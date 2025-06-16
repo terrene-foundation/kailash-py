@@ -3,6 +3,7 @@
 # Import all node modules to ensure registration
 from kailash.nodes import (
     ai,
+    alerts,
     api,
     auth,
     code,
@@ -33,6 +34,7 @@ __all__ = [
     "PythonCodeNode",
     # Node modules
     "ai",
+    "alerts",
     "api",
     "auth",
     "code",

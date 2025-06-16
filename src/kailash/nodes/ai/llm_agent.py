@@ -1412,13 +1412,28 @@ class LLMAgentNode(Node):
     ) -> dict[str, Any]:
         """Generate mock LLM response for testing."""
         last_user_message = ""
+        has_images = False
+
         for msg in reversed(messages):
             if msg.get("role") == "user":
-                last_user_message = msg.get("content", "")
+                content = msg.get("content", "")
+                # Handle complex content with images
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                        elif item.get("type") == "image":
+                            has_images = True
+                    last_user_message = " ".join(text_parts)
+                else:
+                    last_user_message = content
                 break
 
         # Generate contextual mock response
-        if "analyze" in last_user_message.lower():
+        if has_images:
+            response_content = "I can see the image(s) you've provided. Based on my analysis, [Mock vision response for testing]"
+        elif "analyze" in last_user_message.lower():
             response_content = "Based on the provided data and context, I can see several key patterns: 1) Customer engagement has increased by 15% this quarter, 2) Product A shows the highest conversion rate, and 3) There are opportunities for improvement in the onboarding process."
         elif (
             "create" in last_user_message.lower()
@@ -1458,7 +1473,18 @@ class LLMAgentNode(Node):
             "finish_reason": "stop" if not tool_calls else "tool_calls",
             "usage": {
                 "prompt_tokens": len(
-                    " ".join(msg.get("content", "") for msg in messages)
+                    " ".join(
+                        (
+                            msg.get("content", "")
+                            if isinstance(msg.get("content"), str)
+                            else " ".join(
+                                item.get("text", "")
+                                for item in msg.get("content", [])
+                                if item.get("type") == "text"
+                            )
+                        )
+                        for msg in messages
+                    )
                 )
                 // 4,
                 "completion_tokens": len(response_content) // 4,

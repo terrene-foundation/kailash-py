@@ -667,7 +667,7 @@ def sanitize_input(
         try:
             import statsmodels.api as sm
 
-            allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS, sm.RegressionResults])
+            allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS])
         except ImportError:
             pass
 

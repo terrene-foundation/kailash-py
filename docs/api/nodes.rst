@@ -1265,6 +1265,99 @@ MCPClient
        }
    )
 
+Alert Nodes
+============
+
+Nodes for notifications and alerting systems.
+
+DiscordAlertNode
+----------------
+
+.. autoclass:: kailash.nodes.alerts.discord.DiscordAlertNode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+**Example Usage:**
+
+.. code-block:: python
+
+   from kailash.nodes.alerts import DiscordAlertNode
+
+   # Basic alert
+   alert = DiscordAlertNode()
+   result = alert.run(
+       webhook_url="https://discord.com/api/webhooks/...",
+       title="System Alert",
+       message="Service is running normally",
+       alert_type="info"
+   )
+
+   # Rich alert with formatting
+   result = alert.run(
+       webhook_url="${DISCORD_WEBHOOK}",
+       title="🚨 Critical Error",
+       message="Database connection failed",
+       alert_type="critical",
+       username="System Monitor",
+       mentions=["@here"],
+       fields=[
+           {"name": "Service", "value": "Database", "inline": True},
+           {"name": "Status", "value": "Down", "inline": True},
+           {"name": "Error", "value": "Connection timeout", "inline": False}
+       ],
+       footer_text="Automated alert from monitoring system"
+   )
+
+   # Business metrics alert
+   result = alert.run(
+       webhook_url="${DISCORD_WEBHOOK}",
+       title="📊 Daily KPI Report",
+       message="Daily performance metrics",
+       alert_type="info",
+       fields=[
+           {"name": "Revenue", "value": "$45,231", "inline": True},
+           {"name": "Orders", "value": "127", "inline": True},
+           {"name": "Conversion", "value": "3.4%", "inline": True}
+       ]
+   )
+
+**Key Features:**
+
+- **Rich Discord Embeds**: Automatic color coding, custom fields, mentions
+- **Rate Limiting**: Built-in 30 requests/minute sliding window protection
+- **Retry Logic**: Exponential backoff with configurable attempts
+- **Environment Variables**: Secure webhook URL substitution
+- **Production Ready**: Comprehensive error handling and logging
+
+**Alert Types and Colors:**
+
+- ``info`` - Blue (0x3498db)
+- ``success`` - Green (0x2ecc71)
+- ``warning`` - Orange (0xf39c12)
+- ``error`` - Red (0xe74c3c)
+- ``critical`` - Dark red (0xc0392b)
+
+**Runtime Parameters:**
+
+- **webhook_url** (str, required): Discord webhook URL (supports ${DISCORD_WEBHOOK})
+- **title** (str, required): Alert title
+- **message** (str, optional): Alert message/description
+- **alert_type** (str, optional): Alert severity - 'info', 'success', 'warning', 'error', 'critical'
+- **username** (str, optional): Custom username for the bot
+- **mentions** (list, optional): List of mentions (@everyone, @here, <@user_id>)
+- **fields** (list, optional): List of embed fields with name, value, inline properties
+- **footer_text** (str, optional): Footer text for the embed
+- **retry_attempts** (int, optional): Number of retry attempts (default: 3)
+- **retry_delay** (float, optional): Base retry delay in seconds (default: 1.0)
+
+**Error Handling:**
+
+- Automatic retry on rate limits and temporary failures
+- Graceful degradation on webhook validation errors
+- Comprehensive logging for debugging and monitoring
+- Non-blocking execution - alerts won't crash workflows
+
 Code Nodes
 ==========
 

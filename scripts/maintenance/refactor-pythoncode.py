@@ -227,9 +227,8 @@ def refactor_file(file_path: Path) -> bool:
                 replacement += "\n    )"
 
                 replacements.append((match.start(), match.end(), replacement))
-                print(
-                    f"  Found: {name} with {len(code.strip().split('\\n'))} lines of code"
-                )
+                newline_count = len(code.strip().split("\n"))
+                print(f"  Found: {name} with {newline_count} lines of code")
 
         if not replacements:
             print("  No multi-line (>3) PythonCodeNode strings found.")

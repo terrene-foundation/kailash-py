@@ -560,6 +560,165 @@ os.makedirs("outputs", exist_ok=True)
 # results = run_workflow(workflow, your_parameters)
 ```
 
+## 🔔 Alert & Notification Workflows
+
+### Instant Error Alerts
+```python
+from kailash.nodes.alerts import DiscordAlertNode
+from kailash.nodes.logic import SwitchNode
+
+workflow = Workflow("error_alerts")
+workflow.add_node("processor", PythonCodeNode(
+    name="processor",
+    code='''
+# Simulate data processing that might fail
+try:
+    # Your processing logic here
+    processed_count = len(input_data.get("items", []))
+    if processed_count == 0:
+        raise ValueError("No data to process")
+
+    result = {
+        "status": "success",
+        "processed": processed_count,
+        "message": f"Successfully processed {processed_count} items"
+    }
+except Exception as e:
+    result = {
+        "status": "error",
+        "error": str(e),
+        "message": f"Processing failed: {str(e)}"
+    }
+'''
+))
+workflow.add_node("status_check", SwitchNode())
+workflow.add_node("error_alert", DiscordAlertNode())
+
+workflow.connect("processor", "status_check", mapping={"status": "switch_value"})
+workflow.connect("status_check", "error_alert", output_key="error")
+
+# Execute with Discord webhook
+runtime.execute(workflow, parameters={
+    "processor": {"input_data": {"items": []}},  # Empty data triggers error
+    "error_alert": {
+        "webhook_url": "${DISCORD_WEBHOOK}",
+        "title": "🚨 Processing Error",
+        "alert_type": "error",
+        "mentions": ["@here"]
+    }
+})
+```
+
+### System Health Dashboard
+```python
+workflow = Workflow("health_dashboard")
+workflow.add_node("health_check", PythonCodeNode(
+    name="health_check",
+    code='''
+import random
+import psutil  # pip install psutil
+
+# Simulate system health metrics
+health_data = {
+    "cpu_usage": psutil.cpu_percent() if 'psutil' in globals() else random.uniform(20, 90),
+    "memory_usage": psutil.virtual_memory().percent if 'psutil' in globals() else random.uniform(30, 85),
+    "disk_usage": psutil.disk_usage('/').percent if 'psutil' in globals() else random.uniform(40, 80),
+    "active_processes": len(psutil.pids()) if 'psutil' in globals() else random.randint(100, 300),
+    "status": "healthy"
+}
+
+# Determine overall status
+if health_data["cpu_usage"] > 80 or health_data["memory_usage"] > 85:
+    health_data["status"] = "warning"
+if health_data["cpu_usage"] > 90 or health_data["memory_usage"] > 95:
+    health_data["status"] = "critical"
+
+result = health_data
+'''
+))
+workflow.add_node("dashboard_alert", DiscordAlertNode())
+
+workflow.connect("health_check", "dashboard_alert")
+
+# Send health dashboard to Discord
+runtime.execute(workflow, parameters={
+    "dashboard_alert": {
+        "webhook_url": "${DISCORD_WEBHOOK}",
+        "title": "📊 System Health Dashboard",
+        "alert_type": "info",
+        "username": "Health Monitor",
+        "fields": [
+            {"name": "💻 CPU", "value": "{cpu_usage:.1f}%", "inline": True},
+            {"name": "🧠 Memory", "value": "{memory_usage:.1f}%", "inline": True},
+            {"name": "💾 Disk", "value": "{disk_usage:.1f}%", "inline": True},
+            {"name": "⚙️ Processes", "value": "{active_processes}", "inline": True}
+        ],
+        "footer_text": "Updated every 5 minutes"
+    }
+})
+```
+
+### Business KPI Alerts
+```python
+workflow = Workflow("kpi_alerts")
+workflow.add_node("kpi_calculator", PythonCodeNode(
+    name="kpi_calculator",
+    code='''
+import random
+from datetime import datetime
+
+# Calculate business KPIs (simulate with random data)
+kpis = {
+    "daily_revenue": random.uniform(10000, 50000),
+    "new_signups": random.randint(50, 200),
+    "churn_rate": random.uniform(1, 5),
+    "conversion_rate": random.uniform(2, 8),
+    "avg_order_value": random.uniform(75, 150),
+    "timestamp": datetime.now().isoformat()
+}
+
+# Check against targets
+targets = {
+    "daily_revenue": 30000,
+    "new_signups": 100,
+    "churn_rate": 3,
+    "conversion_rate": 5
+}
+
+alerts = []
+if kpis["daily_revenue"] < targets["daily_revenue"]:
+    alerts.append(f"Revenue below target: ${kpis['daily_revenue']:,.0f} < ${targets['daily_revenue']:,.0f}")
+if kpis["churn_rate"] > targets["churn_rate"]:
+    alerts.append(f"High churn rate: {kpis['churn_rate']:.1f}% > {targets['churn_rate']}%")
+
+result = {
+    **kpis,
+    "alerts": alerts,
+    "status": "warning" if alerts else "success"
+}
+'''
+))
+workflow.add_node("kpi_alert", DiscordAlertNode())
+
+workflow.connect("kpi_calculator", "kpi_alert")
+
+# Send KPI report
+runtime.execute(workflow, parameters={
+    "kpi_alert": {
+        "webhook_url": "${DISCORD_WEBHOOK}",
+        "title": "📈 Daily KPI Report",
+        "alert_type": "info",
+        "fields": [
+            {"name": "💰 Revenue", "value": "${daily_revenue:,.0f}", "inline": True},
+            {"name": "👥 Signups", "value": "{new_signups}", "inline": True},
+            {"name": "📉 Churn", "value": "{churn_rate:.1f}%", "inline": True},
+            {"name": "🔄 Conversion", "value": "{conversion_rate:.1f}%", "inline": True},
+            {"name": "🛒 AOV", "value": "${avg_order_value:.0f}", "inline": True}
+        ]
+    }
+})
+```
+
 ---
 
 *Each workflow is production-ready and can be executed immediately. Modify parameters to match your data sources and requirements.*
