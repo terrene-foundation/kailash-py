@@ -41,7 +41,7 @@
 |---------|-----------|------------|----------|
 | [Health Checks](monitoring/health-checks.md) | System monitoring | Beginner-Advanced | Multi-service health monitoring, dependency-aware checks, performance tracking |
 | [Performance Tracking](monitoring/performance-tracking.md) | Metrics collection | Intermediate-Advanced | Real-time metrics, threshold alerting, system monitoring dashboards |
-| [Alerting Systems](monitoring/alerting-systems.md) | Incident response | Intermediate-Advanced | Intelligent alert routing, multi-channel notifications, escalation policies |
+| [Alerting Systems](monitoring/alerting-systems.md) | Incident response | Intermediate-Advanced | Production Discord alerts, multi-channel notifications, escalation policies |
 | [Log Aggregation](monitoring/log-aggregation.md) | Log analysis | Intermediate | Pattern-based analysis, anomaly detection, service health correlation |
 
 ### 🔐 Security & Compliance

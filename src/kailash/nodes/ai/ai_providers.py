@@ -8,7 +8,11 @@ separation between LLM and embedding capabilities.
 
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Dict, List, Union
+
+# Type definitions for flexible message content
+MessageContent = Union[str, List[Dict[str, Any]]]
+Message = Dict[str, Union[str, MessageContent]]
 
 
 class BaseAIProvider(ABC):
@@ -205,12 +209,14 @@ class LLMProvider(BaseAIProvider):
         self._capabilities["chat"] = True
 
     @abstractmethod
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
+    def chat(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """
         Generate a chat completion using the provider's LLM.
 
         Args:
             messages: Conversation messages in OpenAI format
+                     Can be simple: [{"role": "user", "content": "text"}]
+                     Or complex: [{"role": "user", "content": [{"type": "text", "text": "..."}, {"type": "image", "path": "..."}]}]
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -391,7 +397,7 @@ class OllamaProvider(UnifiedAIProvider):
 
         return self._available
 
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
+    def chat(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """Generate a chat completion using Ollama.
 
         Args:
@@ -435,8 +441,50 @@ class OllamaProvider(UnifiedAIProvider):
             # Remove None values
             options = {k: v for k, v in options.items() if v is not None}
 
+            # Process messages for vision content
+            processed_messages = []
+
+            for msg in messages:
+                if isinstance(msg.get("content"), list):
+                    # Complex content with potential images
+                    text_parts = []
+                    images = []
+
+                    for item in msg["content"]:
+                        if item["type"] == "text":
+                            text_parts.append(item["text"])
+                        elif item["type"] == "image":
+                            # Lazy load vision utilities
+                            from .vision_utils import encode_image
+
+                            if "path" in item:
+                                # For file paths, read the file directly
+                                with open(item["path"], "rb") as f:
+                                    images.append(f.read())
+                            else:
+                                # For base64, decode it to bytes
+                                import base64
+
+                                base64_data = item.get("base64", "")
+                                images.append(base64.b64decode(base64_data))
+
+                    # Ollama expects images as part of the message
+                    message_dict = {
+                        "role": msg["role"],
+                        "content": " ".join(text_parts),
+                    }
+                    if images:
+                        message_dict["images"] = images
+
+                    processed_messages.append(message_dict)
+                else:
+                    # Simple string content (backward compatible)
+                    processed_messages.append(msg)
+
             # Call Ollama
-            response = ollama.chat(model=model, messages=messages, options=options)
+            response = ollama.chat(
+                model=model, messages=processed_messages, options=options
+            )
 
             # Format response to match standard structure
             return {
@@ -545,11 +593,18 @@ class OpenAIProvider(UnifiedAIProvider):
     - Install openai package: `pip install openai`
 
     Supported LLM models:
-    - gpt-4-turbo (latest GPT-4 Turbo)
-    - gpt-4 (standard GPT-4)
-    - gpt-4-32k (32k context window)
-    - gpt-3.5-turbo (latest GPT-3.5)
-    - gpt-3.5-turbo-16k (16k context window)
+    - o4-mini (latest, vision support, recommended)
+    - o3 (reasoning model)
+
+    Note: This provider uses max_completion_tokens parameter compatible with
+    latest OpenAI models. Older models (gpt-4, gpt-3.5-turbo) are not supported.
+
+    Generation Config Parameters:
+    - max_completion_tokens (int): Maximum tokens to generate (recommended)
+    - max_tokens (int): Deprecated, use max_completion_tokens instead
+    - temperature (float): Sampling temperature (0-2)
+    - top_p (float): Nucleus sampling probability
+    - Other standard OpenAI parameters
 
     Supported embedding models:
     - text-embedding-3-large (3072 dimensions, configurable)
@@ -572,19 +627,22 @@ class OpenAIProvider(UnifiedAIProvider):
 
         return self._available
 
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
+    def chat(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """
         Generate a chat completion using OpenAI.
 
         Supported kwargs:
-        - model (str): OpenAI model name (default: "gpt-4")
-        - generation_config (dict): Generation parameters
+        - model (str): OpenAI model name (default: "o4-mini")
+        - generation_config (dict): Generation parameters including:
+            - max_completion_tokens (int): Max tokens to generate (recommended)
+            - max_tokens (int): Deprecated, use max_completion_tokens
+            - temperature, top_p, frequency_penalty, presence_penalty, etc.
         - tools (List[Dict]): Function/tool definitions for function calling
         """
         try:
             import openai
 
-            model = kwargs.get("model", "gpt-4")
+            model = kwargs.get("model", "o4-mini")
             generation_config = kwargs.get("generation_config", {})
             tools = kwargs.get("tools", [])
 
@@ -592,13 +650,86 @@ class OpenAIProvider(UnifiedAIProvider):
             if self._client is None:
                 self._client = openai.OpenAI()
 
+            # Process messages for vision content
+            processed_messages = []
+            for msg in messages:
+                if isinstance(msg.get("content"), list):
+                    # Complex content with potential images
+                    processed_content = []
+                    for item in msg["content"]:
+                        if item.get("type") == "text":
+                            processed_content.append(
+                                {"type": "text", "text": item.get("text", "")}
+                            )
+                        elif item.get("type") == "image":
+                            # Lazy load vision utilities
+                            from .vision_utils import (
+                                encode_image,
+                                get_media_type,
+                                validate_image_size,
+                            )
+
+                            if "path" in item:
+                                # Validate image size
+                                is_valid, error_msg = validate_image_size(item["path"])
+                                if not is_valid:
+                                    raise ValueError(
+                                        f"Image validation failed: {error_msg}"
+                                    )
+
+                                base64_image = encode_image(item["path"])
+                                media_type = get_media_type(item["path"])
+                            elif "base64" in item:
+                                base64_image = item["base64"]
+                                media_type = item.get("media_type", "image/jpeg")
+                            else:
+                                raise ValueError(
+                                    "Image item must have either 'path' or 'base64' field"
+                                )
+
+                            processed_content.append(
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{media_type};base64,{base64_image}"
+                                    },
+                                }
+                            )
+
+                    processed_messages.append(
+                        {"role": msg.get("role", "user"), "content": processed_content}
+                    )
+                else:
+                    # Simple string content (backward compatible)
+                    processed_messages.append(msg)
+
+            # Handle max tokens parameter - support both old and new names
+            max_completion = generation_config.get(
+                "max_completion_tokens"
+            ) or generation_config.get("max_tokens", 500)
+
+            # Show deprecation warning if using old parameter
+            # TODO: remove the max_tokens in the future.
+            if (
+                "max_tokens" in generation_config
+                and "max_completion_tokens" not in generation_config
+            ):
+                import warnings
+
+                warnings.warn(
+                    "'max_tokens' is deprecated and will be removed in v0.5.0. "
+                    "Please use 'max_completion_tokens' instead.",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
+
             # Prepare request
             request_params = {
                 "model": model,
-                "messages": messages,
-                "temperature": generation_config.get("temperature", 0.7),
-                "max_tokens": generation_config.get("max_tokens", 500),
-                "top_p": generation_config.get("top_p", 0.9),
+                "messages": processed_messages,
+                "temperature": generation_config.get("temperature", 1.0),
+                "max_completion_tokens": max_completion,  # Always use new parameter
+                "top_p": generation_config.get("top_p", 1.0),
                 "frequency_penalty": generation_config.get("frequency_penalty"),
                 "presence_penalty": generation_config.get("presence_penalty"),
                 "stop": generation_config.get("stop"),
@@ -649,6 +780,15 @@ class OpenAIProvider(UnifiedAIProvider):
             raise RuntimeError(
                 "OpenAI library not installed. Install with: pip install openai"
             )
+        except openai.BadRequestError as e:
+            # Provide helpful error message for unsupported models or parameters
+            if "max_tokens" in str(e):
+                raise RuntimeError(
+                    "This OpenAI provider requires models that support max_completion_tokens. "
+                    "Please use o4-mini, o3 "
+                    "Older models like gpt-4o or gpt-3.5-turbo are not supported."
+                )
+            raise RuntimeError(f"OpenAI API error: {str(e)}")
         except Exception as e:
             raise RuntimeError(f"OpenAI error: {str(e)}")
 
@@ -772,7 +912,7 @@ class AnthropicProvider(LLMProvider):
 
         return self._available
 
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
+    def chat(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """Generate a chat completion using Anthropic."""
         try:
             import anthropic
@@ -790,22 +930,75 @@ class AnthropicProvider(LLMProvider):
 
             for msg in messages:
                 if msg["role"] == "system":
-                    system_message = msg["content"]
+                    # System messages are always text
+                    system_message = (
+                        msg["content"]
+                        if isinstance(msg["content"], str)
+                        else str(msg["content"])
+                    )
                 else:
-                    user_messages.append(msg)
+                    # Process potentially complex content
+                    if isinstance(msg.get("content"), list):
+                        # Complex content with potential images
+                        content_parts = []
 
-            # Call Anthropic
-            response = self._client.messages.create(
-                model=model,
-                messages=user_messages,
-                system=system_message,
-                max_tokens=generation_config.get("max_tokens", 500),
-                temperature=generation_config.get("temperature", 0.7),
-                top_p=generation_config.get("top_p"),
-                top_k=generation_config.get("top_k"),
-                stop_sequences=generation_config.get("stop_sequences"),
-                metadata=generation_config.get("metadata"),
-            )
+                        for item in msg["content"]:
+                            if item["type"] == "text":
+                                content_parts.append(
+                                    {"type": "text", "text": item["text"]}
+                                )
+                            elif item["type"] == "image":
+                                # Lazy load vision utilities
+                                from .vision_utils import encode_image, get_media_type
+
+                                if "path" in item:
+                                    base64_image = encode_image(item["path"])
+                                    media_type = get_media_type(item["path"])
+                                else:
+                                    base64_image = item.get("base64", "")
+                                    media_type = item.get("media_type", "image/jpeg")
+
+                                content_parts.append(
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": media_type,
+                                            "data": base64_image,
+                                        },
+                                    }
+                                )
+
+                        user_messages.append(
+                            {"role": msg["role"], "content": content_parts}
+                        )
+                    else:
+                        # Simple string content (backward compatible)
+                        user_messages.append(msg)
+
+            # Call Anthropic - build kwargs to avoid passing None values
+            create_kwargs = {
+                "model": model,
+                "messages": user_messages,
+                "max_tokens": generation_config.get("max_tokens", 500),
+                "temperature": generation_config.get("temperature", 0.7),
+            }
+
+            # Only add optional parameters if they have valid values
+            if system_message is not None:
+                create_kwargs["system"] = system_message
+            if generation_config.get("top_p") is not None:
+                create_kwargs["top_p"] = generation_config.get("top_p")
+            if generation_config.get("top_k") is not None:
+                create_kwargs["top_k"] = generation_config.get("top_k")
+            if generation_config.get("stop_sequences") is not None:
+                create_kwargs["stop_sequences"] = generation_config.get(
+                    "stop_sequences"
+                )
+            if generation_config.get("metadata") is not None:
+                create_kwargs["metadata"] = generation_config.get("metadata")
+
+            response = self._client.messages.create(**create_kwargs)
 
             # Format response
             return {
@@ -1232,16 +1425,33 @@ class MockProvider(UnifiedAIProvider):
         """Mock provider is always available."""
         return True
 
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, Any]:
+    def chat(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """Generate mock LLM response."""
         last_user_message = ""
+        has_images = False
+
         for msg in reversed(messages):
             if msg.get("role") == "user":
-                last_user_message = msg.get("content", "")
+                content = msg.get("content", "")
+                # Handle complex content with images
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                        elif item.get("type") == "image":
+                            has_images = True
+                    last_user_message = " ".join(text_parts)
+                else:
+                    last_user_message = content
                 break
 
         # Generate contextual mock response
-        if "analyze" in last_user_message.lower():
+        if has_images:
+            response_content = (
+                "I can see the image(s) you've provided. [Mock vision response]"
+            )
+        elif "analyze" in last_user_message.lower():
             response_content = "Based on the provided data and context, I can see several key patterns..."
         elif "create" in last_user_message.lower():
             response_content = "I'll help you create that. Based on the requirements..."
@@ -1259,10 +1469,7 @@ class MockProvider(UnifiedAIProvider):
             "tool_calls": [],
             "finish_reason": "stop",
             "usage": {
-                "prompt_tokens": len(
-                    " ".join(msg.get("content", "") for msg in messages)
-                )
-                // 4,
+                "prompt_tokens": 100,  # Mock value
                 "completion_tokens": len(response_content) // 4,
                 "total_tokens": 0,  # Will be calculated
             },

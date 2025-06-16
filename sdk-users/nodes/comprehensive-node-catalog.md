@@ -19,6 +19,7 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 - [Data Processing Nodes](#data-processing-nodes) - 23+ nodes for files, databases, streaming, advanced retrieval
 - [RAG Toolkit Nodes](#rag-toolkit-nodes) - ⭐ NEW: 47+ nodes for comprehensive RAG implementations
 - [API Integration Nodes](#api-integration-nodes) - 15+ nodes for HTTP, REST, GraphQL, rate limiting
+- [Alert Nodes](#alert-nodes) - ⭐ NEW: Discord alerts with rich embeds and rate limiting
 - [Logic & Control Nodes](#logic--control-nodes) - 10+ nodes for routing, merging, loops, async operations
 - [Transform Nodes](#transform-nodes) - 15+ nodes for data transformation, advanced chunking, intelligent compression
 - [Admin & Security Nodes](#admin--security-nodes) - 15+ nodes for user management, permissions, audit, security monitoring
@@ -316,6 +317,39 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 - **AsyncRateLimitedAPINode**: Async rate-limited API client
 - **HealthCheckNode**: API health monitoring
 - **SecurityScannerNode**: Security scanning for APIs
+
+## Alert Nodes
+
+### Notifications & Alerts ✅ Production Ready
+- **DiscordAlertNode**: Send rich alerts to Discord channels via webhooks
+  ```python
+  # Use instead of PythonCodeNode with webhook requests
+  node = DiscordAlertNode(
+      webhook_url="${DISCORD_WEBHOOK}",  # Environment variable support
+      title="Database Connection Failed",
+      message="Primary database is unreachable",
+      alert_type="error",  # success, warning, error, critical, info
+      embed=True,  # Rich embed with automatic color coding
+      mentions=["@here"],  # User/role mentions
+      context={"Server": "db-01", "Attempts": 3}  # Additional data
+  )
+  ```
+
+**Key Features:**
+- 🎨 **Rich embeds** with automatic color coding by severity
+- 🔔 **Mentions** support (@everyone, @here, user/role IDs)
+- 🔄 **Rate limiting** (30 requests/minute) with retry logic
+- 🧵 **Thread support** for organized discussions
+- 🔒 **Environment variable** substitution for secure webhook URLs
+- 📊 **Context data** formatting as embed fields
+- ⚙️ **Plain text mode** option
+
+### Coming Soon
+- **SlackAlertNode**: Slack webhook/API integration
+- **EmailAlertNode**: SMTP email notifications
+- **WebhookAlertNode**: Generic webhook support
+- **PagerDutyAlertNode**: Incident management
+- **TeamsAlertNode**: Microsoft Teams notifications
 
 ## Logic & Control Nodes
 

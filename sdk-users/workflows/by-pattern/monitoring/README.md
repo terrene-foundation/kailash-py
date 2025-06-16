@@ -94,6 +94,28 @@ db_health_check = HTTPRequestNode(
 )
 ```
 
+### Alert Integration with Discord
+```python
+# Real-time Discord alerts for critical issues
+critical_alert = DiscordAlertNode(
+    name="critical_alert",
+    webhook_url="${DISCORD_WEBHOOK}",
+    alert_type="critical",
+    title="🚨 Critical Service Failure",
+    mentions=["@everyone"]
+)
+
+# System health dashboard updates
+health_dashboard = DiscordAlertNode(
+    name="health_dashboard",
+    webhook_url="${DISCORD_WEBHOOK}",
+    alert_type="info",
+    title="📊 System Health Report",
+    username="Health Monitor",
+    footer_text="Updated every 5 minutes"
+)
+```
+
 ### Results Analysis and Alerting
 ```python
 # Analyze health check results and generate alerts

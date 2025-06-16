@@ -72,18 +72,32 @@ def main():
     print("\n3. OpenAI Provider:")
     if os.getenv("OPENAI_API_KEY"):
         try:
+            # Show both old and new parameter usage
+            print("   Testing with new parameter (recommended):")
             openai_result = LLMAgentNode().run(
                 provider="openai",
-                model="gpt-3.5-turbo",
+                model="o4-mini",  # Using newer model
                 messages=[{"role": "user", "content": test_message}],
-                generation_config={"temperature": 0.7, "max_tokens": 200},
+                # generation_config={"temperature": 1, "max_completion_tokens": 200, "top_p": 1},
             )
-
             if openai_result["success"]:
                 print(f"   Response: {openai_result['response']['content'][:150]}...")
                 print(f"   Model: {openai_result['response']['model']}")
                 print(f"   Tokens: {openai_result['usage']['total_tokens']}")
                 print(f"   Cost: ${openai_result['usage']['estimated_cost_usd']:.6f}")
+
+            # Also demonstrate old parameter (will show deprecation warning)
+            print("\n   Testing with old parameter (deprecated):")
+            old_style_result = LLMAgentNode().run(
+                provider="openai",
+                model="gpt-4o-mini",  # Vision-capable model that supports new param
+                messages=[{"role": "user", "content": "What is 2+2?"}],
+                generation_config={"temperature": 0, "max_tokens": 50},  # Old parameter
+            )
+            if old_style_result["success"]:
+                print(f"   Response: {old_style_result['response']['content']}")
+                print("   ⚠️  Check console for deprecation warning!")
+
         except Exception as e:
             print(f"   Error: {e}")
     else:
@@ -122,6 +136,26 @@ def main():
     print("   3. Add to PROVIDERS registry")
     print("   4. Use with: LLMAgentNode().run(provider='your_provider', ...)")
 
+    # 6. Vision Capabilities Demo
+    print("\n6. Vision Capabilities (NEW!):")
+    print("   All providers now support vision/image inputs!")
+    print("\n   Example - Analyzing an image:")
+    print("   vision_result = LLMAgentNode().run(")
+    print('       provider="openai",')
+    print('       model="gpt-4o-mini",')
+    print("       messages=[{")
+    print('           "role": "user",')
+    print('           "content": [')
+    print('               {"type": "text", "text": "What\'s in this image?"},')
+    print('               {"type": "image", "path": "photo.jpg"}')
+    print("           ]")
+    print("       }]")
+    print("   )")
+    print("\n   ✅ Backward compatible - existing text-only code still works")
+    print("   ✅ Supports file paths and base64 images")
+    print("   ✅ Multi-image support")
+    print("   ✅ Automatic format conversion per provider")
+
     print("\n" + "=" * 50)
     print("🎯 Architecture Benefits:")
     print("   ✅ Clean separation of concerns")
@@ -130,6 +164,7 @@ def main():
     print("   ✅ Each provider manages its own dependencies")
     print("   ✅ Consistent interface across all providers")
     print("   ✅ Graceful fallbacks when providers unavailable")
+    print("   ✅ Vision support with lazy loading (NEW!)")
 
 
 if __name__ == "__main__":

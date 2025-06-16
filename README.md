@@ -42,6 +42,7 @@
 - 📈 **High Performance**: Optimized execution engine supporting 100,000+ iteration workflows
 - 📁 **Complete Finance Workflow Library (v0.3.1)**: Production-ready financial workflows with AI analysis
 - 💼 **Enterprise Workflow Patterns**: Credit risk, portfolio optimization, trading signals, fraud detection
+- 🔔 **Production Alert System**: Rich Discord alerts with rate limiting, retry logic, and rich embed support
 - 🏭 **Session 067 Enhancements**: Business workflow templates, data lineage tracking, automatic credential rotation
 - 🔄 **Zero-Downtime Operations**: Automatic credential rotation with enterprise notifications and audit trails
 - 🌉 **Enterprise Middleware (v0.4.0)**: Production-ready middleware architecture with real-time agent-frontend communication, dynamic workflows, and AI chat integration
@@ -100,6 +101,7 @@ pip install kailash[user-management]
 # Everything
 pip install kailash[all]
 ```
+>>>>>>> origin/main
 
 ## 🎯 Who Is This For?
 
@@ -448,6 +450,7 @@ api.run()
 - **API**: RESTClientNode, GraphQLNode, AuthNode, HTTPRequestNode
 - **Logic**: SwitchNode, MergeNode, ConvergenceCheckerNode
 - **Code**: PythonCodeNode, WorkflowNode
+- **Alerts**: DiscordAlertNode with rich embeds and rate limiting
 - **Security**: EnhancedAccessControlManager (ABAC with 16 operators)
 
 ### Runtimes

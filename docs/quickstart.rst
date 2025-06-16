@@ -38,14 +38,38 @@ Save this as ``quickstart.py``:
    # Run it!
    w.run()
 
-3. Run the Workflow
+3. Add Notifications (Optional)
+-------------------------------
+
+Get instant alerts when your workflow completes:
+
+.. code-block:: python
+
+   # Add Discord alerts to any workflow
+   from kailash.nodes.alerts import DiscordAlertNode
+
+   # Add success notification
+   w.add_node("DiscordAlertNode", "notify", config={
+       "webhook_url": "${DISCORD_WEBHOOK}",
+       "title": "✅ Workflow Complete",
+       "message": "Data processing finished successfully",
+       "alert_type": "success"
+   })
+
+   # Connect after processing
+   w.connect("write", "notify")
+
+4. Run the Workflow
 -------------------
 
 .. code-block:: bash
 
+   # Set your Discord webhook (optional)
+   export DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
+
    python quickstart.py
 
-That's it! You've just built a data processing pipeline.
+That's it! You've just built a data processing pipeline with notifications.
 
 Common Use Cases
 ================

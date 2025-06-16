@@ -26,6 +26,7 @@
 | Find files | `DirectoryReaderNode` | `PythonCodeNode` with `os.listdir` |
 | Run Python | `PythonCodeNode(name="x")` | Missing `name` parameter |
 | HTTP calls | `HTTPRequestNode` | `HTTPClientNode` (deprecated) |
+| Send alerts | `DiscordAlertNode` | Manual webhook requests |
 | Transform data | `DataTransformer` | Complex PythonCodeNode |
 | Async operations | `LocalRuntime(enable_async=True)` | `AsyncLocalRuntime` (deprecated) |
 | Enterprise features | `LocalRuntime` with enterprise params | Custom implementations |

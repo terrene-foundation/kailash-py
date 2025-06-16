@@ -2,11 +2,11 @@
 
 ## Current Release: v0.3.1
 
-**Release Date**: June 11, 2025  
-**Status**: ✅ Released  
-**Type**: Minor Feature Release  
-**PR**: #122  
-**PyPI**: https://pypi.org/project/kailash/0.3.1/  
+**Release Date**: June 11, 2025
+**Status**: ✅ Released
+**Type**: Minor Feature Release
+**PR**: #122
+**PyPI**: https://pypi.org/project/kailash/0.3.1/
 **GitHub**: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.3.1
 
 ### Release Theme
@@ -46,11 +46,11 @@ Finance Industry Workflows & Enhanced MCP Server - Production-ready finance patt
 
 ## Previous Release: v0.3.0
 
-**Release Date**: June 10, 2025  
-**Status**: ✅ Released  
-**Type**: Major Release (Architecture & Consolidation)  
-**PR**: #112  
-**PyPI**: https://pypi.org/project/kailash/0.3.0/  
+**Release Date**: June 10, 2025
+**Status**: ✅ Released
+**Type**: Major Release (Architecture & Consolidation)
+**PR**: #112
+**PyPI**: https://pypi.org/project/kailash/0.3.0/
 **GitHub**: https://github.com/terrene-foundation/kailash-py/releases/tag/v0.3.0
 
 ### Release Theme
@@ -74,8 +74,8 @@ Parameter Lifecycle Architecture & Workflow Library Consolidation
 
 ## Next Release: v0.4.0
 
-**Planned Date**: TBD  
-**Status**: 🔵 Planning  
+**Planned Date**: TBD
+**Status**: 🔵 Planning
 **Type**: Minor Feature Release
 
 ### Planned Features
