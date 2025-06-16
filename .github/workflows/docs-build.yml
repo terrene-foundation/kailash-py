@@ -11,13 +11,18 @@ on:
       - '.github/workflows/docs-build.yml'
       - '.github/workflows/docs-deploy.yml'
   push:
-    branches-ignore: [ main ]  # Run on all branches except main
+    branches: [ feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-* ]
     paths:
       - 'docs/**'
       - 'README.md'
       - 'CHANGELOG.md'
       - 'mkdocs.yml'
       - '.github/workflows/docs-build.yml'
+
+concurrency:
+  # Prevent duplicate runs: Use branch name for both push and PR events
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

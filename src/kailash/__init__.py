@@ -3,9 +3,9 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.4.0: Enterprise middleware architecture with real-time agent-frontend
-communication, dynamic workflows, AI chat integration, and production-ready
-session management. Complete refactor from monolithic to composable middleware.
+New in v0.4.1: Production-ready Alert Nodes with Discord integration and
+AI Provider Vision Support. Rich Discord alerts with embeds, rate limiting,
+and universal vision capabilities across OpenAI, Anthropic, and Ollama providers.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
@@ -34,7 +34,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 __all__ = [
     # Core workflow components
