@@ -3,8 +3,8 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.4.1: Production-ready Alert Nodes with Discord integration and 
-AI Provider Vision Support. Rich Discord alerts with embeds, rate limiting, 
+New in v0.4.1: Production-ready Alert Nodes with Discord integration and
+AI Provider Vision Support. Rich Discord alerts with embeds, rate limiting,
 and universal vision capabilities across OpenAI, Anthropic, and Ollama providers.
 """
 
