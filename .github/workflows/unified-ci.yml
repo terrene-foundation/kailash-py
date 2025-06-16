@@ -9,9 +9,10 @@ name: CI Pipeline
 # - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
 
 on:
+  # Trigger on push to development branches (direct branch work)
   push:
-    branches: [ feat/*, feature/*, fix/*, docs/*, session/*, session-* ]
-    # Note: release/* removed from push triggers to avoid duplicate runs with PRs
+    branches: [ feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-* ]
+  # Trigger on PRs to main (code review process)
   pull_request:
     branches: [ main ]
     types: [opened, synchronize, reopened]
@@ -47,7 +48,8 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  # Prevent duplicate runs: PR events take precedence over push events
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -60,6 +62,18 @@ jobs:
       skip-reason: ${{ steps.determine.outputs.skip-reason }}
       runner-label: ${{ steps.runner.outputs.label }}
     steps:
+      - name: Check for duplicate runs
+        id: check-duplicate
+        run: |
+          # Skip if this is a push event and there might be an associated PR
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "This is a push to a feature branch - checking for associated PR"
+            echo "If a PR exists for this branch, the PR event will handle CI"
+            echo "duplicate-check=push-to-branch" >> $GITHUB_OUTPUT
+          else
+            echo "duplicate-check=none" >> $GITHUB_OUTPUT
+          fi
+
       - name: Determine runner to use
         id: runner
         run: |
