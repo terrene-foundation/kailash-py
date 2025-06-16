@@ -9,9 +9,10 @@ name: CI Pipeline
 # - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
 
 on:
-  # Trigger on push to development branches (direct branch work)
+  # Trigger on push to development branches (direct branch work only)
   push:
-    branches: [ feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-* ]
+    branches: [ feat/*, feature/*, fix/*, docs/*, session/*, session-* ]
+    # Note: release/* excluded to prevent duplicates with release PRs
   # Trigger on PRs to main (code review process)
   pull_request:
     branches: [ main ]
@@ -62,18 +63,6 @@ jobs:
       skip-reason: ${{ steps.determine.outputs.skip-reason }}
       runner-label: ${{ steps.runner.outputs.label }}
     steps:
-      - name: Check for duplicate runs
-        id: check-duplicate
-        run: |
-          # Skip if this is a push event and there might be an associated PR
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "This is a push to a feature branch - checking for associated PR"
-            echo "If a PR exists for this branch, the PR event will handle CI"
-            echo "duplicate-check=push-to-branch" >> $GITHUB_OUTPUT
-          else
-            echo "duplicate-check=none" >> $GITHUB_OUTPUT
-          fi
-
       - name: Determine runner to use
         id: runner
         run: |
@@ -336,7 +325,7 @@ jobs:
   lint-and-format:
     name: Lint and Format Check
     needs: determine-context
-    if: false # Disabled - we only use self-hosted runners now
+    if: needs.determine-context.outputs.test-level == 'full' && !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
@@ -384,7 +373,7 @@ jobs:
   test-matrix:
     name: Test Python ${{ matrix.python-version }}
     needs: determine-context
-    if: false # Disabled - we only use self-hosted runners now
+    if: needs.determine-context.outputs.test-level == 'full' && !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     strategy:
       fail-fast: false
       matrix:
@@ -522,7 +511,7 @@ jobs:
   validate-examples:
     name: Validate Examples
     needs: determine-context
-    if: false # Disabled - we only use self-hosted runners now
+    if: needs.determine-context.outputs.test-level == 'full' && !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
@@ -557,8 +546,11 @@ jobs:
   # Summary job for test results
   test-summary:
     name: Test Summary
-    needs: [lint-and-format, test-matrix, security-scan, all-checks-parallel, test-python-3-11, test-python-3-12]
-    if: always() && github.event_name == 'workflow_dispatch'
+    needs: [security-scan, all-checks-parallel, test-python-3-11, test-python-3-12]
+    if: |
+      always() && 
+      github.event_name == 'workflow_dispatch' &&
+      (contains(needs.all-checks-parallel.result, 'success') || contains(needs.all-checks-parallel.result, 'skipped'))
     runs-on: ubuntu-latest  # Lightweight summary job - okay to use GitHub runner
     permissions:
       pull-requests: write
