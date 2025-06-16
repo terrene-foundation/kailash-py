@@ -48,8 +48,8 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Prevent duplicate runs: PR events take precedence over push events
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Prevent duplicate runs: Use branch name for both push and PR events
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
