@@ -24,7 +24,11 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from kailash.access_control import UserContext
-from kailash.nodes.admin.audit_log import AuditEventType, AuditLogNode, AuditSeverity
+from kailash.nodes.admin.audit_log import (
+    AuditEventType,
+    AuditSeverity,
+    EnterpriseAuditLogNode,
+)
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import AsyncSQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -169,7 +173,7 @@ class SecurityIncident:
 
 
 @register_node()
-class SecurityEventNode(Node):
+class EnterpriseSecurityEventNode(Node):
     """Enterprise security event monitoring and incident response node.
 
     This node provides comprehensive security event processing including:
@@ -412,7 +416,7 @@ class SecurityEventNode(Node):
         self._db_node = AsyncSQLDatabaseNode(name="security_event_db", **db_config)
 
         # Initialize audit logging node
-        self._audit_node = AuditLogNode(database_config=db_config)
+        self._audit_node = EnterpriseAuditLogNode(database_config=db_config)
 
     def _create_event(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new security event with risk scoring."""

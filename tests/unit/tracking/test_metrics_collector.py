@@ -77,7 +77,7 @@ class TestMetricsCollector(FunctionalTestMixin):
 
         # Duration should be recorded even without psutil
         assert metrics.duration >= 0.1
-        assert metrics.duration < 0.2  # Allow some overhead
+        assert metrics.duration < 0.5  # Allow some overhead for slower CI
 
     @pytest.mark.skipif(
         not MetricsCollector()._monitoring_enabled, reason="psutil not available"

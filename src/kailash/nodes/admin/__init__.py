@@ -19,17 +19,24 @@ Core Components:
 - SecurityEventNode: Security incident tracking
 """
 
-from .audit_log import AuditLogNode
+from .audit_log import EnterpriseAuditLogNode
 from .permission_check import PermissionCheckNode
 from .role_management import RoleManagementNode
-from .security_event import SecurityEventNode
+from .security_event import EnterpriseSecurityEventNode
 from .user_management import UserManagementNode
+
+# For backward compatibility, expose both old and new names
+AuditLogNode = EnterpriseAuditLogNode
+SecurityEventNode = EnterpriseSecurityEventNode
 
 __all__ = [
     # Core admin nodes
     "UserManagementNode",
     "RoleManagementNode",
     "PermissionCheckNode",
+    "EnterpriseAuditLogNode",
+    "EnterpriseSecurityEventNode",
+    # Backward compatibility aliases
     "AuditLogNode",
     "SecurityEventNode",
 ]

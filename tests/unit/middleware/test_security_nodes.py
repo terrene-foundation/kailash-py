@@ -22,18 +22,22 @@ def test_audit_log_node():
 
     # Test parameters
     params = audit_node.get_parameters()
-    assert "action" in params
+    assert "event_data" in params
+    assert "event_type" in params
     assert "user_id" in params
-    assert "details" in params
+    assert "message" in params
 
     # Test sync run method
     result = audit_node.execute(
-        action="test_action", user_id="test_user", details={"test": True}
+        event_type="test_action",
+        user_id="test_user",
+        event_data={"test": True},
+        message="Test audit log entry",
     )
 
-    assert result["audit_logged"] is True
-    assert "entry" in result
-    assert result["entry"]["action"] == "test_action"
+    assert result["logged"] is True
+    assert "audit_entry" in result
+    assert result["audit_entry"]["event_type"] == "test_action"
 
     print("✅ AuditLogNode working correctly")
 
@@ -43,24 +47,29 @@ def test_security_event_node():
     print("🧪 Testing SecurityEventNode...")
 
     security_node = SecurityEventNode(
-        name="test_security", severity_threshold="INFO", enable_alerting=False
+        name="test_security", alert_threshold="INFO", enable_real_time=False
     )
 
     # Test parameters
     params = security_node.get_parameters()
     assert "event_type" in params
     assert "severity" in params
-    assert "details" in params
+    assert "message" in params
+    assert "user_id" in params
+    assert "metadata" in params
 
     # Test sync run method
     result = security_node.execute(
-        event_type="test_security_event", severity="HIGH", details={"source": "test"}
+        event_type="test_security_event",
+        severity="HIGH",
+        metadata={"source": "test"},
+        message="Test security event",
     )
 
-    assert result["event_processed"] is True
-    assert "event" in result
-    assert result["event"]["event_type"] == "test_security_event"
-    assert result["event"]["severity"] == "HIGH"
+    assert result["logged"] is True
+    assert "security_event" in result
+    assert result["security_event"]["event_type"] == "test_security_event"
+    assert result["security_event"]["severity"] == "HIGH"
 
     print("✅ SecurityEventNode working correctly")
 

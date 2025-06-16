@@ -2,8 +2,8 @@ name: CI Pipeline
 
 # Runner Selection:
 # - All CI runs use self-hosted runners (NO GitHub runners to save costs)
-# - Default runners: self-hosted-secondary or self-hosted-primary (auto-detected)
-# - For push/PR events: Automatically uses available self-hosted runners
+# - Default runner: self-hosted-primary (preferred), falls back to self-hosted-secondary or any self-hosted
+# - For push/PR events: Automatically prefers self-hosted-primary runner
 # - For manual runs: Can choose specific runner via workflow_dispatch
 # - Maintainers can use their own runner names
 # - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
@@ -70,15 +70,15 @@ jobs:
                 echo "Using local runner (forced)"
                 ;;
               local-mac)
-                echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
+                echo 'label=[self-hosted, macOS, ARM64]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner (forced)"
                 ;;
               self-hosted-secondary)
-                echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
+                echo 'label=[self-hosted, self-hosted-secondary]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted-secondary runner (forced)"
                 ;;
               self-hosted-primary)
-                echo 'label=["self-hosted", "self-hosted-primary"]' >> $GITHUB_OUTPUT
+                echo 'label=self-hosted-primary' >> $GITHUB_OUTPUT
                 echo "Using self-hosted-primary runner (forced)"
                 ;;
               github)
@@ -94,19 +94,19 @@ jobs:
                 echo "Using local runner"
                 ;;
               local-mac)
-                echo 'label=["self-hosted", "macOS", "ARM64"]' >> $GITHUB_OUTPUT
+                echo 'label=[self-hosted, macOS, ARM64]' >> $GITHUB_OUTPUT
                 echo "Using local Mac runner"
                 ;;
               self-hosted-secondary)
-                echo 'label=["self-hosted", "self-hosted-secondary"]' >> $GITHUB_OUTPUT
+                echo 'label=[self-hosted, self-hosted-secondary]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted-secondary runner"
                 ;;
               self-hosted-primary)
-                echo 'label=["self-hosted", "self-hosted-primary"]' >> $GITHUB_OUTPUT
+                echo 'label=[self-hosted, self-hosted-primary]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted-primary runner"
                 ;;
               self-hosted)
-                echo 'label=["self-hosted", "linux", "x64"]' >> $GITHUB_OUTPUT
+                echo 'label=[self-hosted, linux, x64]' >> $GITHUB_OUTPUT
                 echo "Using self-hosted Linux runner"
                 ;;
               *)
@@ -115,7 +115,7 @@ jobs:
                 ;;
             esac
           else
-            # For automatic runs (push/PR), use any available self-hosted runner
+            # For automatic runs (push/PR), use any self-hosted runner
             echo 'label=self-hosted' >> $GITHUB_OUTPUT
             echo "Using any available self-hosted runner"
           fi
@@ -137,7 +137,7 @@ jobs:
   all-checks-parallel:
     name: All Checks (Parallel)
     needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && contains(needs.determine-context.outputs.runner-label, 'self-hosted')
+    if: needs.determine-context.outputs.test-level == 'full' && (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
@@ -191,39 +191,11 @@ jobs:
             eval "$(pyenv init -)"
           fi
 
-          # Create venvs for both Python versions
-          echo "Setting up Python 3.11 environment"
-          if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.11"; then
-            # Get the exact 3.11 version from pyenv
-            PY311=$(pyenv versions --bare | grep "^3\.11\." | head -1)
-            echo "Using pyenv Python $PY311"
-            PYENV_VERSION=$PY311 uv venv .venv-3.11 --python python
-            # Activate and sync dependencies in the correct venv
-            source .venv-3.11/bin/activate && uv sync
-          elif command -v python3.11 &> /dev/null; then
-            uv venv .venv-3.11 --python python3.11
-            source .venv-3.11/bin/activate && uv sync
-          else
-            echo "⚠️  Python 3.11 not found, skipping"
-          fi
-
-          echo "Setting up Python 3.12 environment"
-          if command -v pyenv &> /dev/null && pyenv versions | grep -q "3.12"; then
-            # Get the exact 3.12 version from pyenv
-            PY312=$(pyenv versions --bare | grep "^3\.12\." | head -1)
-            echo "Using pyenv Python $PY312"
-            PYENV_VERSION=$PY312 uv venv .venv-3.12 --python python
-            # Activate and sync dependencies in the correct venv
-            source .venv-3.12/bin/activate && uv sync
-          elif command -v python3.12 &> /dev/null; then
-            uv venv .venv-3.12 --python python3.12
-            source .venv-3.12/bin/activate && uv sync
-          else
-            # Fallback to system python3
-            echo "Using system Python for 3.12"
-            uv venv .venv-3.12 --python python3
-            source .venv-3.12/bin/activate && uv sync
-          fi
+          # Create a single venv and install dependencies
+          echo "Setting up Python environment"
+          # Use the default Python (should be 3.12 on this system)
+          uv venv .venv
+          uv sync
 
       - name: Run all checks in parallel
         run: |
@@ -264,22 +236,13 @@ jobs:
           run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
           pids[2]=$!
 
-          # Run tests with Python 3.11 if available (with coverage, excluding slow tests)
-          if [ -d ".venv-3.11" ]; then
-              run_check "Tests Python 3.11" "source .venv-3.11/bin/activate && python -m pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -m 'not slow'" "pytest-3.11.log" &
+          # Run tests with the venv Python (with coverage, excluding slow tests)
+          if [ -d ".venv" ]; then
+              run_check "Tests" ".venv/bin/python -m pytest tests/ -v --cov=kailash --cov-report=xml --cov-report=term-missing -m 'not slow'" "pytest.log" &
               pids[3]=$!
           else
-              echo "⚠️  Skipping Python 3.11 tests (not installed)"
+              echo "⚠️  No .venv found, skipping tests"
               pids[3]=""
-          fi
-
-          # Run tests with Python 3.12 (no coverage - only 3.11 collects to avoid conflicts, excluding slow tests)
-          if [ -d ".venv-3.12" ]; then
-              run_check "Tests Python 3.12" "source .venv-3.12/bin/activate && python -m pytest tests/ -v -m 'not slow'" "pytest-3.12.log" &
-              pids[4]=$!
-          else
-              echo "⚠️  Skipping Python 3.12 tests (not available)"
-              pids[4]=""
           fi
 
           # Example validation removed from CI - examples are for SDK development only
@@ -309,9 +272,7 @@ jobs:
           fi
 
           echo -e "\n✅ All checks passed!"
-          echo "Tests run with:"
-          [ -d ".venv-3.11" ] && echo "  - Python 3.11 ✓"
-          [ -d ".venv-3.12" ] && echo "  - Python 3.12 ✓"
+          echo "Tests run successfully!"
           EOF
 
           chmod +x run-all-checks.sh
@@ -332,7 +293,7 @@ jobs:
     if: |
       always() &&
       needs.determine-context.outputs.test-level == 'full' &&
-      contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
+      (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted')) &&
       needs.all-checks-parallel.result == 'success'
     runs-on: ubuntu-latest  # Use GitHub runner for placeholder job
     steps:
@@ -347,7 +308,7 @@ jobs:
     if: |
       always() &&
       needs.determine-context.outputs.test-level == 'full' &&
-      contains(needs.determine-context.outputs.runner-label, 'self-hosted') &&
+      (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted')) &&
       needs.all-checks-parallel.result == 'success'
     runs-on: ubuntu-latest  # Use GitHub runner for placeholder job
     steps:

@@ -127,7 +127,7 @@ class AuditEvent:
 
 
 @register_node()
-class AuditLogNode(Node):
+class EnterpriseAuditLogNode(Node):
     """Enterprise audit logging node with comprehensive compliance features.
 
     This node provides comprehensive audit logging capabilities including:
