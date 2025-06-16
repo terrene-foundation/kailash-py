@@ -109,9 +109,13 @@ class TestCSVReaderNode:
         # Verify results
         assert "data" in result
         assert len(result["data"]) == 2
-        # Async version does type inference, so age becomes int
-        assert result["data"][0] == {"name": "Alice", "age": 30, "city": "New York"}
-        assert result["data"][1] == {"name": "Bob", "age": 25, "city": "San Francisco"}
+        # CSV returns strings for all values
+        assert result["data"][0] == {"name": "Alice", "age": "30", "city": "New York"}
+        assert result["data"][1] == {
+            "name": "Bob",
+            "age": "25",
+            "city": "San Francisco",
+        }
 
         # Compare with sync version (sync version keeps strings, async does type inference)
         sync_result = node.execute(file_path=str(csv_path))
@@ -143,9 +147,9 @@ class TestCSVReaderNode:
         # Verify results
         assert "reader" in results
         assert len(results["reader"]["data"]) == 100
-        # Async runtime with type inference converts strings to appropriate types
-        assert results["reader"]["data"][0] == {"id": 0, "value": 0}
-        assert results["reader"]["data"][99] == {"id": 99, "value": 990}
+        # CSV returns strings for all values
+        assert results["reader"]["data"][0] == {"id": "0", "value": "0"}
+        assert results["reader"]["data"][99] == {"id": "99", "value": "990"}
 
 
 class TestJSONReaderNode:

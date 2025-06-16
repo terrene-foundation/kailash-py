@@ -160,8 +160,8 @@ class KafkaConsumerNode(Node):
         self._consumer = None
         self._topic = None
 
-        # Call parent constructor
-        super().__init__(name=self.name)
+        # Call parent constructor with all kwargs
+        super().__init__(name=self.name, **kwargs)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the Kafka consumer node."""
@@ -447,8 +447,8 @@ class StreamPublisherNode(Node):
         self._publisher = None
         self._protocol = None
 
-        # Call parent constructor
-        super().__init__(name=self.name)
+        # Call parent constructor with all kwargs
+        super().__init__(name=self.name, **kwargs)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define parameters for the stream publisher node."""
@@ -725,8 +725,8 @@ class WebSocketNode(Node):
         self._connected = False
         self._message_queue = []
 
-        # Call parent constructor
-        super().__init__(name=self.name)
+        # Call parent constructor with all kwargs
+        super().__init__(name=self.name, **kwargs)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Get the parameters for this node.
@@ -1051,8 +1051,8 @@ class EventStreamNode(Node):
         self._connected = False
         self._last_event_id = None
 
-        # Call parent constructor
-        super().__init__(name=self.name)
+        # Call parent constructor with all kwargs
+        super().__init__(name=self.name, **kwargs)
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Get the parameters for this node.

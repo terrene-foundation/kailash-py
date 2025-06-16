@@ -33,59 +33,71 @@ class AuditLogNode(Node):
         self.logger.setLevel(level)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
+        """Define parameters for audit logging."""
         return {
-            "action": NodeParameter(
-                name="action",
+            "event_data": NodeParameter(
+                name="event_data",
+                type=dict,
+                description="Event data to log",
+                default=None,
+            ),
+            "event_type": NodeParameter(
+                name="event_type",
                 type=str,
-                required=True,
-                description="The action being audited",
+                description="Type of event being logged",
+                default="info",
             ),
             "user_id": NodeParameter(
                 name="user_id",
                 type=str,
-                required=False,
-                description="User performing the action",
+                description="ID of user associated with event",
+                default=None,
             ),
-            "details": NodeParameter(
-                name="details",
-                type=dict,
-                required=False,
-                description="Additional audit details",
+            "message": NodeParameter(
+                name="message",
+                type=str,
+                description="Log message",
+                default="",
             ),
         }
 
-    def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Process audit log entry."""
+    def execute(self, **inputs) -> Dict[str, Any]:
+        """Execute audit logging."""
+        event_data = inputs.get("event_data", {})
+        event_type = inputs.get("event_type", "info")
+        user_id = inputs.get("user_id")
+        message = inputs.get("message", "")
 
+        # Create audit entry
         audit_entry = {
-            "action": inputs.get("action"),
-            "user_id": inputs.get("user_id"),
-            "details": inputs.get("details", {}),
+            "event_type": event_type,
+            "message": message,
+            "user_id": user_id,
+            "data": event_data,
         }
 
         if self.include_timestamp:
             audit_entry["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-        # Log the audit entry
+        # Log the event
         if self.output_format == "json":
-            self.logger.info(json.dumps(audit_entry))
+            log_message = json.dumps(audit_entry)
         else:
-            self.logger.info(f"AUDIT: {audit_entry}")
+            log_message = (
+                f"[{event_type}] {message} - User: {user_id} - Data: {event_data}"
+            )
 
-        return {"audit_logged": True, "entry": audit_entry}
+        # Use appropriate log level
+        if event_type in ["error", "critical"]:
+            self.logger.error(log_message)
+        elif event_type == "warning":
+            self.logger.warning(log_message)
+        else:
+            self.logger.info(log_message)
 
-    async def aprocess(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Async version that just calls the sync version."""
-        return self.process(inputs)
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Alias for process method."""
-        return self.process(kwargs)
-
-    def execute(self, **kwargs) -> Dict[str, Any]:
-        """Alias for process method."""
-        return self.process(kwargs)
-
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
-        """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return {
+            "audit_entry": audit_entry,
+            "logged": True,
+            "log_level": event_type,
+            "timestamp": audit_entry.get("timestamp"),
+        }

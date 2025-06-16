@@ -1,12 +1,13 @@
 """
-SecurityEventNode - Security event monitoring and alerting
+SecurityEventNode - Security event processing and monitoring
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -21,16 +22,14 @@ class SeverityLevel(str, Enum):
 
 @dataclass
 class SecurityEvent:
-    """Represents a security event."""
-
     event_type: str
     severity: SeverityLevel
-    timestamp: datetime
-    source: str
-    description: str
-    details: Dict[str, Any]
+    message: str
     user_id: Optional[str] = None
-    ip_address: Optional[str] = None
+    resource_id: Optional[str] = None
+    timestamp: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    source: Optional[str] = None
     session_id: Optional[str] = None
     correlation_id: Optional[str] = None
 
@@ -42,91 +41,93 @@ class SecurityEventNode(Node):
     def __init__(
         self,
         name: str,
-        severity_threshold: str = "INFO",
-        enable_alerting: bool = False,
+        alert_threshold: str = "HIGH",
+        enable_real_time: bool = True,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
-        self.severity_threshold = SeverityLevel(severity_threshold)
-        self.enable_alerting = enable_alerting
+        self.alert_threshold = SeverityLevel(alert_threshold)
+        self.enable_real_time = enable_real_time
         self.logger = logging.getLogger(f"security.{name}")
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
+        """Define parameters for security event processing."""
         return {
             "event_type": NodeParameter(
                 name="event_type",
                 type=str,
-                required=True,
                 description="Type of security event",
+                default="security_check",
             ),
             "severity": NodeParameter(
                 name="severity",
                 type=str,
-                required=True,
                 description="Event severity level",
+                default="INFO",
             ),
-            "details": NodeParameter(
-                name="details",
+            "message": NodeParameter(
+                name="message",
+                type=str,
+                description="Security event message",
+                default="",
+            ),
+            "user_id": NodeParameter(
+                name="user_id",
+                type=str,
+                description="User ID associated with event",
+                default=None,
+            ),
+            "metadata": NodeParameter(
+                name="metadata",
                 type=dict,
-                required=False,
-                description="Security event details",
+                description="Additional event metadata",
+                default=None,
             ),
         }
 
-    def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Process security event."""
-
-        event_type = inputs.get("event_type")
+    def execute(self, **inputs) -> Dict[str, Any]:
+        """Execute security event processing."""
+        event_type = inputs.get("event_type", "security_check")
         severity = SeverityLevel(inputs.get("severity", "INFO"))
-        details = inputs.get("details", {})
+        message = inputs.get("message", "")
+        user_id = inputs.get("user_id")
+        metadata = inputs.get("metadata", {})
 
-        security_event = {
-            "event_type": event_type,
-            "severity": severity.value,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": details,
-        }
+        # Create security event
+        security_event = SecurityEvent(
+            event_type=event_type,
+            severity=severity,
+            message=message,
+            user_id=user_id,
+            metadata=metadata,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
 
-        # Log security event
-        self.logger.warning(f"SECURITY: {event_type} [{severity.value}] - {details}")
+        # Log the event
+        log_message = f"[{severity.value}] {event_type}: {message}"
+        if user_id:
+            log_message += f" (User: {user_id})"
 
-        # Trigger alerts if needed
-        alert_triggered = False
-        if self.enable_alerting and self._should_alert(severity):
-            alert_triggered = self._trigger_alert(security_event)
+        # Use appropriate log level based on severity
+        if severity in [SeverityLevel.CRITICAL, SeverityLevel.HIGH]:
+            self.logger.error(log_message)
+        elif severity == SeverityLevel.MEDIUM:
+            self.logger.warning(log_message)
+        else:
+            self.logger.info(log_message)
+
+        # Check for alerting
+        should_alert = severity.value >= self.alert_threshold.value
 
         return {
-            "event_processed": True,
-            "event": security_event,
-            "alert_triggered": alert_triggered,
+            "security_event": {
+                "event_type": security_event.event_type,
+                "severity": security_event.severity.value,
+                "message": security_event.message,
+                "user_id": security_event.user_id,
+                "timestamp": security_event.timestamp,
+                "metadata": security_event.metadata,
+            },
+            "alert_triggered": should_alert,
+            "logged": True,
         }
-
-    def _should_alert(self, severity: SeverityLevel) -> bool:
-        """Determine if alert should be triggered."""
-        severity_order = {
-            SeverityLevel.INFO: 0,
-            SeverityLevel.LOW: 1,
-            SeverityLevel.MEDIUM: 2,
-            SeverityLevel.HIGH: 3,
-            SeverityLevel.CRITICAL: 4,
-        }
-
-        return severity_order[severity] >= severity_order[self.severity_threshold]
-
-    def _trigger_alert(self, event: Dict[str, Any]) -> bool:
-        """Trigger security alert (placeholder)."""
-        # In production, this would integrate with alerting systems
-        self.logger.critical(f"SECURITY ALERT: {event}")
-        return True
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Alias for process method."""
-        return self.process(kwargs)
-
-    def execute(self, **kwargs) -> Dict[str, Any]:
-        """Alias for process method."""
-        return self.process(kwargs)
-
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
-        """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
