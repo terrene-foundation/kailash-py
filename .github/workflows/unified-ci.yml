@@ -10,7 +10,8 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-* ]
+    branches: [ feat/*, feature/*, fix/*, docs/*, session/*, session-* ]
+    # Note: release/* removed from push triggers to avoid duplicate runs with PRs
   pull_request:
     branches: [ main ]
     types: [opened, synchronize, reopened]

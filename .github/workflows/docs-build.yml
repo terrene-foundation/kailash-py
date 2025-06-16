@@ -11,7 +11,7 @@ on:
       - '.github/workflows/docs-build.yml'
       - '.github/workflows/docs-deploy.yml'
   push:
-    branches-ignore: [ main ]  # Run on all branches except main
+    branches: [ feat/*, feature/*, fix/*, docs/*, session/*, session-* ]  # Specific branches only, not release/*
     paths:
       - 'docs/**'
       - 'README.md'
