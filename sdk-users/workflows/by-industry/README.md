@@ -206,23 +206,49 @@ by-industry/
    from kailash_workflows.investment import create_portfolio_analysis_workflow
 
    workflow = create_portfolio_analysis_workflow()
+
    ```
 
 2. **Configure for Your Needs**
    ```python
-   workflow.configure({
-       "database": "your_connection",
-       "ai_model": "gpt-4",
-       "security": {"rbac": True, "abac": True}
-   })
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
    ```
 
 3. **Execute with Your Data**
    ```python
-   results = await workflow.execute({
-       "portfolio_id": "PORT123",
-       "analysis_type": "comprehensive"
-   })
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
    ```
 
 ## Best Practices

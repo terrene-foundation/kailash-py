@@ -102,6 +102,7 @@ result, run_id = runtime.execute(workflow, parameters=parameters)
 
 print(f"ETL Pipeline completed successfully!")
 print(f"Processed {result.get('summary_stats', {}).get('total_processed', 0)} records")
+
 ```
 
 ### Enterprise Database ETL with Real-time Processing
@@ -417,6 +418,7 @@ data_warehouse = SQLDatabaseNode(
 )
 enterprise_etl.add_node("data_warehouse", data_warehouse)
 enterprise_etl.connect("premium_processor", "data_warehouse", mapping={"premium_processed": "data"})
+
 ```
 
 ## 📊 Data Processing Patterns
@@ -564,6 +566,7 @@ runtime.execute(workflow, parameters={
         "if_exists": "replace"
     }
 })
+
 ```
 
 ### Multi-Source Data Integration
@@ -679,16 +682,32 @@ workflow.connect("extract_api", "merge_sources", mapping={"response": "api_respo
 workflow.connect("extract_files", "merge_sources", mapping={"data": "file_data"})
 workflow.connect("merge_sources", "transform_unified", mapping={"merged": "input"})
 workflow.connect("transform_unified", "load_unified", mapping={"unified_records": "data"})
+
 ```
 
 ## 🔄 Real-Time ETL Patterns
 
 ### Streaming ETL with Change Detection
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("streaming_etl")
 
 # Continuous data extraction
-workflow.add_node("stream_extractor", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("stream_extractor", PythonCodeNode(
     name="stream_extractor",
     code='''
 import time
@@ -731,7 +750,8 @@ result = {
 ))
 
 # Real-time transformation
-workflow.add_node("stream_transformer", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("stream_transformer", PythonCodeNode(
     name="stream_transformer",
     code='''
 import json
@@ -790,7 +810,8 @@ result = {
 ))
 
 # Incremental loading with conflict resolution
-workflow.add_node("incremental_loader", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("incremental_loader", PythonCodeNode(
     name="incremental_loader",
     code='''
 import sqlite3
@@ -843,28 +864,36 @@ result = {
 ))
 
 # Connect streaming pipeline
-workflow.connect("stream_extractor", "stream_transformer", mapping={"result": "extraction_data"})
-workflow.connect("stream_transformer", "incremental_loader", mapping={"result": "stream_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 📈 Advanced ETL Patterns
 
 ### Data Lake ETL with Partitioning
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("data_lake_etl")
 
 # Extract with metadata
-workflow.add_node("extract_with_metadata", PythonCodeNode(
-    name="extract_with_metadata",
-    code='''
-import os
-from datetime import datetime, timedelta
-import glob
-
-class DataLakeExtractor:
-    """Extract data with partitioning and metadata management."""
-
-    def __init__(self, data_lake_path="/data/lake"):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.data_lake_path = data_lake_path
         self.extraction_metadata = {}
 
@@ -942,16 +971,8 @@ result = {
 ))
 
 # Transform with schema evolution
-workflow.add_node("transform_with_schema", PythonCodeNode(
-    name="transform_with_schema",
-    code='''
-import pandas as pd
-from datetime import datetime
-
-class SchemaEvolutionTransformer:
-    """Handle schema evolution and data format changes."""
-
-    def __init__(self):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.schema_versions = {
             'v1.0': ['id', 'event_timestamp', 'data_value'],
             'v2.0': ['id', 'event_timestamp', 'data_value', 'partition_year', 'partition_month'],
@@ -1041,16 +1062,8 @@ result = {
 ))
 
 # Load to data warehouse with partitioning
-workflow.add_node("load_partitioned", PythonCodeNode(
-    name="load_partitioned",
-    code='''
-from datetime import datetime
-import os
-
-class PartitionedDataWarehouseLoader:
-    """Load data to warehouse with intelligent partitioning."""
-
-    def __init__(self, warehouse_path="/warehouse"):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.warehouse_path = warehouse_path
         self.partition_strategy = "date_based"
 
@@ -1134,27 +1147,36 @@ result = {
 ))
 
 # Connect data lake pipeline
-workflow.connect("extract_with_metadata", "transform_with_schema", mapping={"result": "extraction_result"})
-workflow.connect("transform_with_schema", "load_partitioned", mapping={"result": "transformation_result"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🎯 Production ETL Best Practices
 
 ### Error Handling and Data Quality
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("production_etl")
 
 # Data quality validation node
-workflow.add_node("data_quality_check", PythonCodeNode(
-    name="data_quality_check",
-    code='''
-import pandas as pd
-from datetime import datetime
-
-class DataQualityValidator:
-    """Comprehensive data quality validation."""
-
-    def __init__(self):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.quality_rules = {
             'completeness_threshold': 0.95,  # 95% of fields must be complete
             'uniqueness_threshold': 0.98,    # 98% of IDs must be unique
@@ -1293,16 +1315,8 @@ result = quality_results
 ))
 
 # Error handling and recovery
-workflow.add_node("error_handler", PythonCodeNode(
-    name="error_handler",
-    code='''
-from datetime import datetime
-import logging
-
-class ETLErrorHandler:
-    """Handle ETL errors with recovery strategies."""
-
-    def __init__(self):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.error_strategies = {
             'data_quality_failure': 'quarantine_and_alert',
             'transformation_error': 'retry_with_fallback',
@@ -1490,6 +1504,7 @@ else:
     }
 '''
 ))
+
 ```
 
 ## 🔗 Integration Patterns
@@ -1547,6 +1562,7 @@ parameters = {
         "if_exists": "append"
     }
 }
+
 ```
 
 ## 📋 ETL Best Practices Checklist

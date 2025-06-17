@@ -8,7 +8,11 @@ This directory contains the complete node catalog for the Kailash Python SDK, or
 
 ## 🎯 Quick Start
 
-**[comprehensive-node-catalog.md](comprehensive-node-catalog.md)** - Complete reference with all nodes and their use cases. **Start here to find the right node for your task!**
+**🌟 New!** Enhanced node selection guidance:
+- **[comprehensive-node-catalog.md](comprehensive-node-catalog.md)** - Complete catalog with decision trees and selection guidance
+- **[node-selection-guide.md](node-selection-guide.md)** - Quick node finder and decision framework
+
+**Start here to find the right node for your task!**
 
 ## 📁 Node Catalog Files
 
@@ -60,8 +64,14 @@ All node classes in the Kailash SDK follow a consistent naming convention:
 
 ## 🔍 Finding Nodes
 
+### **🎯 Smart Node Selection (Recommended)**
+1. **Not sure which node?** → Use [node-selection-guide.md](node-selection-guide.md) Quick Node Finder
+2. **Complex decision?** → Follow the decision trees in [comprehensive-node-catalog.md](comprehensive-node-catalog.md)
+3. **Common patterns?** → Check the use case patterns and anti-patterns sections
+
+### **📚 Traditional Browsing**
 1. **Know the category?** → Check the corresponding file number
-2. **Know the use case?** → Use Quick Navigation above
+2. **Know the use case?** → Use Quick Navigation above  
 3. **Searching for a class?** → Check the table for the right category
 4. **Need examples?** → Each node includes usage examples
 

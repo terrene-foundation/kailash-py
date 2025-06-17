@@ -85,29 +85,83 @@ These workflows typically deliver:
 
 ### Financial Services
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Real-time transaction monitoring
 workflow = create_financial_processor()
-workflow.add_fraud_detection()
-workflow.add_compliance_checks()
-workflow.add_real_time_reporting()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_fraud_detection()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_compliance_checks()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_real_time_reporting()
+
 ```
 
 ### E-commerce
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Customer behavior analytics
 workflow = create_customer_analytics()
-workflow.add_clickstream_analysis()
-workflow.add_purchase_patterns()
-workflow.add_recommendation_engine()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_clickstream_analysis()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_purchase_patterns()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_recommendation_engine()
+
 ```
 
 ### Healthcare
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Patient data processing
 workflow = create_healthcare_processor()
-workflow.add_privacy_compliance()
-workflow.add_quality_checks()
-workflow.add_analytics_pipeline()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_privacy_compliance()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_quality_checks()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_analytics_pipeline()
+
 ```
 
 ## 🚦 Getting Started

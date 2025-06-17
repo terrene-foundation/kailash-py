@@ -23,7 +23,21 @@ The PythonCodeNode supports three main ways to create custom nodes:
 Convert any Python function into a Kailash node:
 
 ```python
-def process_data(data: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+def workflow.()  # Type signature example -> pd.DataFrame:
     """Filter data based on threshold."""
     return data[data['value'] > threshold]
 
@@ -35,7 +49,9 @@ node = PythonCodeNode.from_function(
 )
 
 # Use in workflow
-workflow.add_node(node)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(node)
+
 ```
 
 ## Class-Based Nodes
@@ -43,6 +59,20 @@ workflow.add_node(node)
 Create stateful nodes that maintain state between executions:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 class MovingAverage:
     def __init__(self, window_size: int = 3):
         self.window_size = window_size
@@ -61,6 +91,7 @@ node = PythonCodeNode.from_class(
     name="moving_avg",
     description="Calculate moving average"
 )
+
 ```
 
 ## Code String Nodes
@@ -88,6 +119,7 @@ node = PythonCodeNode(
     output_type=pd.DataFrame,
     description="Custom data aggregation"
 )
+
 ```
 
 ## Loading from Files
@@ -95,6 +127,20 @@ node = PythonCodeNode(
 Load Python code from external files:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Load a function from file
 node = PythonCodeNode.from_file(
     file_path="custom_processor.py",
@@ -108,6 +154,7 @@ node = PythonCodeNode.from_file(
     class_name="DataProcessor",
     name="file_class_processor"
 )
+
 ```
 
 ## Security and Safety
@@ -159,6 +206,20 @@ See the `examples/python_code_node_example.py` file for comprehensive examples o
 PythonCodeNodes integrate seamlessly with other Kailash nodes:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Create workflow
 workflow = Workflow(name="data_pipeline")
 
@@ -171,12 +232,15 @@ custom_processor = PythonCodeNode.from_function(
 writer = CSVWriterNode(name="writer")
 
 # Connect nodes
-workflow.add_edge(reader, custom_processor)
-workflow.add_edge(custom_processor, writer)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_edge(reader, custom_processor)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_edge(custom_processor, writer)
 
 # Execute workflow
 runner = LocalRunner()
 results = runner.run(workflow)
+
 ```
 
 ## Validation Behavior
@@ -184,12 +248,27 @@ results = runner.run(workflow)
 PythonCodeNode leverages the base Node class validation system:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Using the standard execute() method enforces validation
 node = PythonCodeNode.from_function(func, name="processor")
 result = node.execute(x=5, y=10)  # Validates inputs
 
 # Using execute_code() bypasses validation for direct execution
 result = node.execute_code({'x': 5, 'y': 10})  # No validation
+
 ```
 
 ## Advanced Usage
@@ -200,12 +279,27 @@ result = node.execute_code({'x': 5, 'y': 10})  # No validation
 # Create executor with custom allowed modules
 executor = CodeExecutor(allowed_modules=['scipy', 'sklearn'])
 node.executor = executor
+
 ```
 
 ### Dynamic Parameter Types
 
 ```python
-def create_dynamic_node(input_types: Dict[str, Type]):
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+def workflow.()  # Type signature example:
     """Create a node with dynamic input types."""
     return PythonCodeNode(
         name="dynamic_processor",
@@ -213,6 +307,7 @@ def create_dynamic_node(input_types: Dict[str, Type]):
         input_types=input_types,
         output_type=float
     )
+
 ```
 
 ## Limitations

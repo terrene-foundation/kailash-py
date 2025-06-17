@@ -55,6 +55,20 @@ python sdk-users/workflows/by-pattern/file-processing/scripts/document_processor
 
 ### File Discovery
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Use DirectoryReaderNode for real file discovery
 file_discovery = DirectoryReaderNode(
     name="file_discovery",
@@ -62,10 +76,25 @@ file_discovery = DirectoryReaderNode(
     include_patterns=["*.csv", "*.json", "*.txt"],
     recursive=True
 )
+
 ```
 
 ### Multi-Format Processing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # CSV processing for structured data
 csv_processor = CSVReaderNode(
     name="csv_processor",
@@ -83,15 +112,31 @@ text_processor = TextReaderNode(
     name="text_processor",
     file_path=""  # Set at runtime
 )
+
 ```
 
 ### Results Aggregation
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Merge processing results
 results_merger = MergeNode(
     name="results_merger",
     merge_strategy="union"
 )
+
 ```
 
 ## Integration with Enterprise Systems
@@ -166,23 +211,55 @@ file_router = SwitchNode(
         "text_files": "file_extension == 'txt'"
     }
 )
+
 ```
 
 ### Parallel Processing
 Use multiple processors for different file types simultaneously:
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Process different file types in parallel
-workflow.connect("file_discovery", ["csv_processor", "json_processor", "text_processor"])
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("file_discovery", ["csv_processor", "json_processor", "text_processor"])
+
 ```
 
 ### Results Transformation
 Transform and enrich file processing results:
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Enhance results with additional analysis
 enhancer = PythonCodeNode.from_function(
     func=enhance_file_analysis,
     name="file_enhancer"
 )
+
 ```
 
 ## Related Patterns

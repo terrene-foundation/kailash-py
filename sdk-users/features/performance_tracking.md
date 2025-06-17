@@ -42,8 +42,8 @@ from kailash.runtime import LocalRuntime
 from kailash.tracking import TaskManager
 
 # Create workflow
-workflow = Workflow(workflow_id="my_workflow", name="My Workflow")
-# ... add nodes and connections ...
+workflow = Workflow("example", name="Example")
+workflow.# ... add nodes and connections ...
 
 # Execute with tracking
 task_manager = TaskManager()
@@ -56,6 +56,7 @@ results, _ = runtime.execute(
 )
 
 # Metrics are automatically collected and stored
+
 ```
 
 ### Generating Performance Visualizations
@@ -76,6 +77,7 @@ outputs = perf_viz.create_run_performance_summary(run_id)
 # - io_analysis: I/O operations breakdown
 # - performance_heatmap: Normalized metrics heatmap
 # - report: Markdown report with insights
+
 ```
 
 ### Integrated Performance Dashboard
@@ -91,20 +93,38 @@ dashboard = workflow_viz.create_performance_dashboard(
 )
 
 # Opens HTML dashboard with all visualizations
+
 ```
 
 ### Comparing Multiple Runs
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Execute workflow multiple times
 run_ids = []
 for i in range(3):
-    run_id = task_manager.create_run(workflow_name=workflow.name)
-    runtime.execute(workflow, task_manager)
+workflow = Workflow("example", name="Example")
+workflow.workflow.name)
+runtime = LocalRuntime()
+workflow.execute(workflow, task_manager)
     run_ids.append(run_id)
 
 # Compare performance
 comparison = perf_viz.compare_runs(run_ids)
+
 ```
 
 ## Metrics Collected
@@ -127,7 +147,7 @@ comparison = perf_viz.compare_runs(run_ids)
 Nodes can report custom metrics through the context:
 
 ```python
-def my_node(data: list) -> Dict[str, Any]:
+def workflow.()  # Type signature example -> Dict[str, Any]:
     # Process data
     processed_count = len(data)
     error_count = sum(1 for item in data if item.get("error"))
@@ -141,6 +161,7 @@ def my_node(data: list) -> Dict[str, Any]:
             "success_rate": (processed_count - error_count) / processed_count
         }
     }
+
 ```
 
 ## Visualization Types

@@ -12,8 +12,8 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Complete CSV analysis in 30 seconds
-workflow = Workflow("csv_analysis")
-workflow.add_node("reader", CSVReaderNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("reader", CSVReaderNode())
 workflow.add_node("analyzer", PythonCodeNode(
     name="analyzer",
     code='''
@@ -42,13 +42,30 @@ results, run_id = runtime.execute(workflow, parameters={
     "reader": {"file_path": "your_data.csv"},
     "writer": {"file_path": "analysis_results.csv"}
 })
+
 ```
 
 ### Data Validation & Cleaning
 ```python
-workflow = Workflow("data_cleaning")
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
 workflow.add_node("reader", CSVReaderNode())
-workflow.add_node("cleaner", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("cleaner", PythonCodeNode(
     name="cleaner",
     code='''
 import pandas as pd
@@ -85,10 +102,14 @@ result = {
 }
 '''
 ))
-workflow.add_node("writer", CSVWriterNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("writer", CSVWriterNode())
 
-workflow.connect("reader", "cleaner", mapping={"data": "data"})
-workflow.connect("cleaner", "writer", mapping={"cleaned_data": "data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🌐 API Integration Workflows
@@ -97,8 +118,8 @@ workflow.connect("cleaner", "writer", mapping={"cleaned_data": "data"})
 ```python
 from kailash.nodes.api import RestClientNode
 
-workflow = Workflow("api_pipeline")
-workflow.add_node("api_call", RestClientNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("api_call", RestClientNode())
 workflow.add_node("transformer", PythonCodeNode(
     name="transformer",
     code='''
@@ -131,14 +152,15 @@ runtime.execute(workflow, parameters={
     },
     "writer": {"file_path": "api_results.csv"}
 })
+
 ```
 
 ### Multi-API Aggregation
 ```python
 from kailash.nodes.logic import MergeNode
 
-workflow = Workflow("multi_api")
-workflow.add_node("api1", RestClientNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("api1", RestClientNode())
 workflow.add_node("api2", RestClientNode())
 workflow.add_node("merger", MergeNode())
 workflow.add_node("aggregator", PythonCodeNode(
@@ -162,6 +184,7 @@ result = {
 workflow.connect("api1", "merger", mapping={"response": "api1_response"})
 workflow.connect("api2", "merger", mapping={"response": "api2_response"})
 workflow.connect("merger", "aggregator", mapping={"merged": "input"})
+
 ```
 
 ## 🤖 AI-Powered Workflows
@@ -170,8 +193,8 @@ workflow.connect("merger", "aggregator", mapping={"merged": "input"})
 ```python
 from kailash.nodes.ai import LLMAgentNode
 
-workflow = Workflow("document_analysis")
-workflow.add_node("reader", CSVReaderNode())  # Or TextReaderNode
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("reader", CSVReaderNode())  # Or TextReaderNode
 workflow.add_node("ai_analyzer", LLMAgentNode())
 workflow.add_node("formatter", PythonCodeNode(
     name="formatter",
@@ -199,14 +222,15 @@ runtime.execute(workflow, parameters={
         "messages": [{"role": "user", "content": "Analyze these documents and provide key insights"}]
     }
 })
+
 ```
 
 ### AI Strategy Consultation (Using AI Registry MCP)
 ```python
 from kailash.nodes.ai import IterativeLLMAgentNode
 
-workflow = Workflow("ai_consultation")
-workflow.add_node("consultant", IterativeLLMAgentNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("consultant", IterativeLLMAgentNode())
 workflow.add_node("report_generator", PythonCodeNode(
     name="report_generator",
     code='''
@@ -244,13 +268,29 @@ runtime.execute(workflow, parameters={
         "max_iterations": 3
     }
 })
+
 ```
 
 ## 🔄 Real-Time Processing Workflows
 
 ### Stream Processing Simulation
 ```python
-workflow = Workflow("stream_processing")
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
 workflow.add_node("data_generator", PythonCodeNode(
     name="data_generator",
     code='''
@@ -271,7 +311,8 @@ for i in range(100):
 result = {"stream": stream_data}
 '''
 ))
-workflow.add_node("anomaly_detector", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("anomaly_detector", PythonCodeNode(
     name="anomaly_detector",
     code='''
 import numpy as np
@@ -295,12 +336,29 @@ result = {
 '''
 ))
 
-workflow.connect("data_generator", "anomaly_detector", mapping={"result": "stream_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Event-Driven Workflow
 ```python
-workflow = Workflow("event_driven")
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
 workflow.add_node("event_processor", PythonCodeNode(
     name="event_processor",
     code='''
@@ -335,7 +393,9 @@ result = {
 ))
 
 # Can connect to any data source
-runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+# Parameters setup
+workflow.{
     "event_processor": {
         "event_data": [
             {"id": 1, "type": "alert", "value": 75, "urgent": True},
@@ -343,15 +403,32 @@ runtime.execute(workflow, parameters={
         ]
     }
 })
+
 ```
 
 ## 📈 Business Intelligence Workflows
 
 ### Sales Analytics Dashboard
 ```python
-workflow = Workflow("sales_analytics")
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
 workflow.add_node("sales_data", CSVReaderNode())
-workflow.add_node("analytics", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("analytics", PythonCodeNode(
     name="analytics",
     code='''
 import pandas as pd
@@ -390,14 +467,32 @@ result = {
 '''
 ))
 
-workflow.connect("sales_data", "analytics", mapping={"data": "data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Customer Segmentation
 ```python
-workflow = Workflow("customer_segmentation")
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
 workflow.add_node("customer_data", CSVReaderNode())
-workflow.add_node("segmentation", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("segmentation", PythonCodeNode(
     name="segmentation",
     code='''
 import pandas as pd
@@ -435,7 +530,9 @@ result = {
 '''
 ))
 
-workflow.connect("customer_data", "segmentation", mapping={"data": "data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🔧 System Integration Workflows
@@ -444,8 +541,8 @@ workflow.connect("customer_data", "segmentation", mapping={"data": "data"})
 ```python
 from kailash.nodes.data import SQLReaderNode
 
-workflow = Workflow("db_to_api")
-workflow.add_node("db_reader", SQLReaderNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("db_reader", SQLReaderNode())
 workflow.add_node("formatter", PythonCodeNode(
     name="formatter",
     code='''
@@ -482,14 +579,15 @@ runtime.execute(workflow, parameters={
         "headers": {"Authorization": "Bearer your_token"}
     }
 })
+
 ```
 
 ### File Processing Automation
 ```python
 from kailash.nodes.data import FileReaderNode, FileWriterNode
 
-workflow = Workflow("file_automation")
-workflow.add_node("file_reader", FileReaderNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("file_reader", FileReaderNode())
 workflow.add_node("processor", PythonCodeNode(
     name="processor",
     code='''
@@ -524,6 +622,7 @@ workflow.add_node("file_writer", FileWriterNode())
 
 workflow.connect("file_reader", "processor", mapping={"content": "file_content"})
 workflow.connect("processor", "file_writer", mapping={"processed_content": "content"})
+
 ```
 
 ## 🚀 Quick Execution Template
@@ -558,6 +657,7 @@ os.makedirs("outputs", exist_ok=True)
 
 # Execute any workflow from above
 # results = run_workflow(workflow, your_parameters)
+
 ```
 
 ## 🔔 Alert & Notification Workflows
@@ -567,8 +667,8 @@ os.makedirs("outputs", exist_ok=True)
 from kailash.nodes.alerts import DiscordAlertNode
 from kailash.nodes.logic import SwitchNode
 
-workflow = Workflow("error_alerts")
-workflow.add_node("processor", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("processor", PythonCodeNode(
     name="processor",
     code='''
 # Simulate data processing that might fail
@@ -607,20 +707,28 @@ runtime.execute(workflow, parameters={
         "mentions": ["@here"]
     }
 })
+
 ```
 
 ### System Health Dashboard
 ```python
-workflow = Workflow("health_dashboard")
-workflow.add_node("health_check", PythonCodeNode(
-    name="health_check",
-    code='''
-import random
-import psutil  # pip install psutil
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
 
-# Simulate system health metrics
-health_data = {
-    "cpu_usage": psutil.cpu_percent() if 'psutil' in globals() else random.uniform(20, 90),
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
+  # Method signature if 'psutil' in globals() else random.uniform(20, 90),
     "memory_usage": psutil.virtual_memory().percent if 'psutil' in globals() else random.uniform(30, 85),
     "disk_usage": psutil.disk_usage('/').percent if 'psutil' in globals() else random.uniform(40, 80),
     "active_processes": len(psutil.pids()) if 'psutil' in globals() else random.randint(100, 300),
@@ -636,12 +744,16 @@ if health_data["cpu_usage"] > 90 or health_data["memory_usage"] > 95:
 result = health_data
 '''
 ))
-workflow.add_node("dashboard_alert", DiscordAlertNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("dashboard_alert", DiscordAlertNode())
 
-workflow.connect("health_check", "dashboard_alert")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("health_check", "dashboard_alert")
 
 # Send health dashboard to Discord
-runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+# Parameters setup
+workflow.{
     "dashboard_alert": {
         "webhook_url": "${DISCORD_WEBHOOK}",
         "title": "📊 System Health Dashboard",
@@ -656,11 +768,27 @@ runtime.execute(workflow, parameters={
         "footer_text": "Updated every 5 minutes"
     }
 })
+
 ```
 
 ### Business KPI Alerts
 ```python
-workflow = Workflow("kpi_alerts")
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
 workflow.add_node("kpi_calculator", PythonCodeNode(
     name="kpi_calculator",
     code='''
@@ -698,12 +826,16 @@ result = {
 }
 '''
 ))
-workflow.add_node("kpi_alert", DiscordAlertNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("kpi_alert", DiscordAlertNode())
 
-workflow.connect("kpi_calculator", "kpi_alert")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("kpi_calculator", "kpi_alert")
 
 # Send KPI report
-runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+# Parameters setup
+workflow.{
     "kpi_alert": {
         "webhook_url": "${DISCORD_WEBHOOK}",
         "title": "📈 Daily KPI Report",
@@ -717,6 +849,7 @@ runtime.execute(workflow, parameters={
         ]
     }
 })
+
 ```
 
 ---

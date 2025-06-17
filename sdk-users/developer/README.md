@@ -71,11 +71,28 @@ Critical rules, common patterns, and quick-fix templates for immediate use.
 ### PythonCodeNode Input Exclusion
 Variables passed as inputs are EXCLUDED from outputs!
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # WRONG
-workflow.connect("n1", "n2", mapping={"result": "result"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # CORRECT
-workflow.connect("n1", "n2", mapping={"result": "input_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Node Naming Convention
@@ -90,7 +107,7 @@ Only use basic types: `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
 ## 📖 Related Documentation
 
 - [API Reference](../reference/api/)
-- [Workflow Patterns](../reference/pattern-library/)
+- [Workflow Patterns](../patterns/)
 - [Testing Guidelines](../instructions/testing-guidelines.md)
 - [Coding Standards](../instructions/coding-standards.md)
 - [Mistakes Archive](../mistakes/)

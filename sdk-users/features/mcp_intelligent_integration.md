@@ -24,6 +24,7 @@ workflow.add_node("ai_agent", LLMAgentNode(),
     mcp_servers=["http://localhost:8080/ai-registry"],
     auto_discover_tools=True
 )
+
 ```
 
 ### 2. Automatic Tool Discovery
@@ -38,6 +39,7 @@ Agents automatically discover available tools from MCP servers at initialization
 # - recommend_similar(use_case_id, similarity_factors)
 
 # Tools appear as LLM functions - agent decides when to use them
+
 ```
 
 ### 3. Intelligent MCP Servers
@@ -45,14 +47,30 @@ Agents automatically discover available tools from MCP servers at initialization
 MCP servers can now have built-in AI for handling complex queries:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Intelligent server with AI capabilities
-workflow.add_node("intelligent_registry", IntelligentAIRegistryMCPServerNode(),
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("intelligent_registry", IntelligentAIRegistryMCPServerNode(),
     llm_provider="ollama",
     llm_model="llama3.2",
     registry_file="research/combined_ai_registry.json"
 )
 
 # Provides intelligent analysis tools that combine multiple data sources
+
 ```
 
 ### 4. Delegation Pattern
@@ -67,6 +85,7 @@ workflow.add_node("consultant", LLMAgentNode(),
     }],
     delegation_mode=True
 )
+
 ```
 
 ## Usage Patterns
@@ -80,6 +99,7 @@ workflow.add_node("consultant", LLMAgentNode(),
 # 2. Calls search_use_cases(domain="Education")
 # 3. Analyzes results
 # 4. Provides comprehensive response
+
 ```
 
 ### Pattern 2: Multi-Tool Orchestration
@@ -91,6 +111,7 @@ workflow.add_node("consultant", LLMAgentNode(),
 # 2. analyze_domain_trends(domain="Healthcare")
 # 3. estimate_complexity(use_case_id=..., organization_context={...})
 # 4. Synthesizes all data into strategic recommendations
+
 ```
 
 ### Pattern 3: Intelligent Server Delegation
@@ -103,6 +124,7 @@ workflow.add_node("consultant", LLMAgentNode(),
 # 2. Combines multiple data sources
 # 3. Performs deep analysis
 # 4. Returns synthesized insights
+
 ```
 
 ## Configuration Options
@@ -125,6 +147,7 @@ workflow.add_node("consultant", LLMAgentNode(),
     "delegation_mode": False,     # Prefer delegation to intelligent servers
     "cache_discoveries": True     # Cache tool discoveries
 }
+
 ```
 
 ### Intelligent Server Configuration
@@ -138,6 +161,7 @@ workflow.add_node("consultant", LLMAgentNode(),
     "combine_sources": True,      # Combine multiple data sources
     "cache_analysis": True        # Cache complex analysis
 }
+
 ```
 
 ## Tool Discovery Protocol
@@ -160,6 +184,7 @@ if function_call.name.startswith("mcp_"):
         tool_name=function_call.tool,
         arguments=function_call.arguments
     )
+
 ```
 
 ## Benefits
@@ -184,6 +209,7 @@ workflow.connect("client", "agent")
 workflow.add_node("agent", LLMAgentNode(),
     mcp_servers=["..."]  # Just add server URL
 )
+
 ```
 
 ### From Manual Tool Orchestration
@@ -202,6 +228,7 @@ workflow.add_node("agent", LLMAgentNode(),
     mcp_servers=["..."],
     auto_discover_tools=True
 )
+
 ```
 
 ## Best Practices

@@ -26,6 +26,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `operation`: Operation type (qa, conversation, tool_calling)
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   node = LLMAgentNode()
   result = node.execute(
       provider="openai",
@@ -34,6 +48,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       temperature=0.7,
       max_tokens=1000
   )
+
   ```
 
 ### EmbeddingGeneratorNode
@@ -48,6 +63,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `cache_enabled`: Enable caching of embeddings
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   node = EmbeddingGeneratorNode()
   result = node.execute(
       provider="openai",
@@ -55,6 +84,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       input_text="This is a sample document",
       operation="embed_text"
   )
+
   ```
 
 ### ChatAgent & RetrievalAgent
@@ -75,6 +105,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `attention_filter`: Filter criteria for reading memories
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   memory_pool = SharedMemoryPoolNode()
   result = memory_pool.run(
       action="write",
@@ -83,6 +127,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       tags=["research", "correlation"],
       importance=0.8
   )
+
   ```
 
 ### A2AAgentNode
@@ -95,6 +140,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `attention_filter`: Criteria for filtering relevant information
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   agent = A2AAgentNode()
   result = agent.run(
       agent_id="researcher_001",
@@ -104,6 +163,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       memory_pool=memory_pool,
       attention_filter={"tags": ["data", "analysis"]}
   )
+
   ```
 
 ### A2ACoordinatorNode
@@ -116,6 +176,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `coordination_strategy`: Strategy (best_match, round_robin, auction)
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   coordinator = A2ACoordinatorNode()
   result = coordinator.run(
       action="delegate",
@@ -123,6 +197,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       available_agents=[{"id": "agent1", "skills": ["research"]}],
       coordination_strategy="best_match"
   )
+
   ```
 
 ## Self-Organizing Agent Nodes
@@ -142,6 +217,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - Real-time availability monitoring
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   pool_manager = AgentPoolManagerNode()
   result = pool_manager.run(
       action="register",
@@ -149,6 +238,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       capabilities=["data_analysis", "research"],
       metadata={"experience_level": "senior"}
   )
+
   ```
 
 ### ProblemAnalyzerNode
@@ -165,11 +255,26 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - Resource estimation and planning
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   analyzer = ProblemAnalyzerNode()
   result = analyzer.run(
       problem_description="Predict customer churn",
       context={"domain": "business", "urgency": "high"}
   )
+
   ```
 
 ### TeamFormationNode
@@ -187,12 +292,27 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `hierarchical`: Structured teams with clear roles
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   formation_engine = TeamFormationNode()
   result = formation_engine.run(
       problem_analysis=analysis,
       available_agents=agents,
       formation_strategy="capability_matching"
   )
+
   ```
 
 ### SelfOrganizingAgentNode
@@ -210,6 +330,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - Performance-based specialization
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   agent = SelfOrganizingAgentNode()
   result = agent.run(
       agent_id="adaptive_agent_001",
@@ -217,6 +351,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       team_context={"team_id": "research_team_1"},
       task="Perform clustering analysis"
   )
+
   ```
 
 ### SolutionEvaluatorNode
@@ -234,12 +369,27 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - Team performance correlation analysis
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   evaluator = SolutionEvaluatorNode()
   result = evaluator.run(
       solution={"approach": "ML model", "confidence": 0.85},
       problem_requirements={"quality_threshold": 0.8},
       team_performance={"collaboration_score": 0.9}
   )
+
   ```
 
 ## Intelligent Orchestration Nodes
@@ -261,6 +411,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `similarity_threshold`: Threshold for semantic matching
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   cache = IntelligentCacheNode()
   result = cache.run(
       action="cache",
@@ -273,6 +437,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       },
       ttl=3600
   )
+
   ```
 
 ### MCPAgentNode
@@ -290,6 +455,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `cost_awareness`: How cost-conscious the agent is (0-1)
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   agent = MCPAgentNode()
   result = agent.run(
       agent_id="mcp_agent_001",
@@ -301,6 +480,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       }],
       task="Get weather for NYC and analyze trends"
   )
+
   ```
 
 ### QueryAnalysisNode
@@ -318,12 +498,27 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `mcp_servers`: Available MCP servers
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   analyzer = QueryAnalysisNode()
   result = analyzer.run(
       query="Research renewable energy trends and create strategic plan",
       context={"domain": "strategic_planning", "urgency": "high"},
       mcp_servers=[{"name": "research_server", "type": "web_research"}]
   )
+
   ```
 
 ### OrchestrationManagerNode
@@ -345,6 +540,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `enable_caching`: Enable intelligent caching
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   orchestrator = OrchestrationManagerNode()
   result = orchestrator.run(
       query="Analyze market trends and develop strategy",
@@ -353,6 +562,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       max_iterations=3,
       quality_threshold=0.85
   )
+
   ```
 
 ### ConvergenceDetectorNode
@@ -372,6 +582,20 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   - `time_limit_seconds`: Maximum time allowed
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   detector = ConvergenceDetectorNode()
   result = detector.run(
       solution_history=solution_iterations,
@@ -379,6 +603,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
       improvement_threshold=0.02,
       current_iteration=3
   )
+
   ```
 
 ## Unified AI Provider Architecture
@@ -398,6 +623,7 @@ The SDK features a unified provider architecture supporting multiple AI provider
 from kailash.nodes.ai.ai_providers import get_available_providers
 providers = get_available_providers()
 # Returns: {"ollama": {"available": True, "chat": True, "embeddings": True}, ...}
+
 ```
 
 ## See Also

@@ -36,6 +36,7 @@ result = runtime.execute(
         "environment": {"LOG_LEVEL": "INFO"}
     }
 )
+
 ```
 
 ## Multi-Service Workflow
@@ -98,6 +99,7 @@ services:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
 """
+
 ```
 
 ## Production Deployment Pattern
@@ -156,6 +158,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Run workflow API
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 """
+
 ```
 
 ## Kubernetes Job Pattern
@@ -165,8 +168,8 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 from kailash.workflow import Workflow
 from kailash.runtime.kubernetes import KubernetesRuntime
 
-workflow = Workflow("batch-processor", "Batch Processing Job")
-# ... add nodes ...
+workflow = Workflow("example", name="Example")
+workflow.# ... add nodes ...
 
 # Kubernetes Job manifest
 k8s_job = {
@@ -207,6 +210,7 @@ k8s_job = {
 # Deploy to Kubernetes
 runtime = KubernetesRuntime()
 runtime.deploy_job(workflow, k8s_job)
+
 ```
 
 ## Environment-Based Configuration
@@ -246,6 +250,7 @@ docker_configs = {
 
 runtime = DockerRuntime()
 runtime.execute(workflow, docker_config=docker_configs[env])
+
 ```
 
 ## Infrastructure as Code
@@ -353,6 +358,7 @@ docker compose exec minio mc mb local/workflows
 
 echo "Infrastructure ready! Access API at http://localhost:8000"
 """
+
 ```
 
 ## Best Practices

@@ -170,7 +170,21 @@ All workflows generate structured JSON reports in `data/outputs/json/`:
 
 ### 1. Using from_function Pattern
 ```python
-def process_data(input_data: dict) -> dict:
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+def workflow.()  # Type signature example -> dict:
     """Process with full IDE support."""
     # Your complex logic here
     return {'result': processed_data}
@@ -179,6 +193,7 @@ node = PythonCodeNode.from_function(
     name="processor",
     func=process_data
 )
+
 ```
 
 ### 2. Data Integration
@@ -190,6 +205,7 @@ data_file = get_input_data_path("customer_value.csv")
 
 # Output to /data/outputs/
 report_file = get_output_data_path("risk_report.json", "json")
+
 ```
 
 ### 3. Risk Scoring
@@ -199,6 +215,7 @@ risk_score = (
     financial_score * 0.3 +
     history_score * 0.2
 )
+
 ```
 
 ### 4. AI Integration
@@ -208,6 +225,7 @@ analyzer = LLMAgentNode(
     system_prompt="You are a financial risk expert...",
     prompt="Analyze: {{data}}"
 )
+
 ```
 
 ## Customization

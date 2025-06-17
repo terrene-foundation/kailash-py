@@ -80,6 +80,7 @@ api_poster = HTTPRequestNode(
     data={"key": "value"},
     headers={"Content-Type": "application/json"}
 )
+
 ```
 
 ### Authenticated API Calls
@@ -94,10 +95,25 @@ authenticated_api = HTTPRequestNode(
         "Accept": "application/vnd.github.v3+json"
     }
 )
+
 ```
 
 ### Response Processing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Process API responses
 response_processor = PythonCodeNode.from_function(
     func=process_api_response,
@@ -109,6 +125,7 @@ data_analyzer = PythonCodeNode.from_function(
     func=analyze_api_data,
     name="data_analyzer"
 )
+
 ```
 
 ## API Integration Patterns
@@ -127,13 +144,31 @@ def process_user_posts(users_data):
         return {"user_ids": user_ids}
 
     return {"user_ids": [], "error": "Invalid user data format"}
+
 ```
 
 ### Parallel API Calls
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Execute multiple API calls simultaneously
-workflow.connect("data_source", ["api_call_1", "api_call_2", "api_call_3"])
-workflow.connect(["api_call_1", "api_call_2", "api_call_3"], "results_aggregator")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("data_source", ["api_call_1", "api_call_2", "api_call_3"])
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(["api_call_1", "api_call_2", "api_call_3"], "results_aggregator")
+
 ```
 
 ### Conditional API Routing
@@ -147,6 +182,7 @@ api_router = SwitchNode(
         "error_path": "status_code >= 400"
     }
 )
+
 ```
 
 ## Authentication Strategies
@@ -161,6 +197,7 @@ headers = {
 
 # API key in query parameter
 url = "https://api.example.com/data?api_key=your-api-key-here"
+
 ```
 
 ### Bearer Token Authentication
@@ -170,6 +207,7 @@ headers = {
     "Authorization": "Bearer your-jwt-token-here",
     "Accept": "application/json"
 }
+
 ```
 
 ### OAuth 2.0 Flow
@@ -189,6 +227,7 @@ def get_oauth_token(client_id, client_secret):
     token_data = token_response.json()
 
     return token_data.get("access_token")
+
 ```
 
 ## Error Handling and Resilience
@@ -208,6 +247,7 @@ def handle_rate_limiting(response_data):
         }
 
     return {"should_retry": False}
+
 ```
 
 ### Timeout and Retry Logic
@@ -226,6 +266,7 @@ def api_call_with_retry(url, max_retries=3):
             time.sleep(2 ** attempt)  # Exponential backoff
 
     raise Exception(f"API call failed after {max_retries} attempts")
+
 ```
 
 ### Circuit Breaker Pattern
@@ -262,6 +303,7 @@ class APICircuitBreaker:
                 self.state = "OPEN"
 
             raise e
+
 ```
 
 ## Integration with Enterprise Systems
@@ -311,6 +353,7 @@ def create_session_with_pooling():
     session.mount("https://", adapter)
 
     return session
+
 ```
 
 ### Response Caching
@@ -332,6 +375,7 @@ def cached_api_call(url, cache_duration=300):
         cache.set(cache_key, response, timeout=cache_duration)
 
     return response
+
 ```
 
 ### Parallel Processing
@@ -356,6 +400,7 @@ def process_api_calls_parallel(api_endpoints):
                 results[url] = {"error": str(e)}
 
         return results
+
 ```
 
 ## Common Use Cases
@@ -399,6 +444,7 @@ def compose_user_profile(user_id):
         "activity": user_activity["data"],
         "profile_completeness": calculate_completeness(user_basic, user_posts, user_activity)
     }
+
 ```
 
 ### Event-Driven API Integration
@@ -412,6 +458,7 @@ event_processor = SwitchNode(
         "payment_received": "event_type == 'payment.received'"
     }
 )
+
 ```
 
 ### API Versioning Management
@@ -433,6 +480,7 @@ def handle_api_versioning(api_version="v1"):
     }
 
     return version_configs.get(api_version, version_configs["v1"])
+
 ```
 
 ## Related Patterns

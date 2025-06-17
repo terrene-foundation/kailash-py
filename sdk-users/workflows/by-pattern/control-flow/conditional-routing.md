@@ -58,6 +58,7 @@ def create_basic_routing_workflow():
                     output_key="false_output", mapping={"data": "data"})
 
     return workflow
+
 ```
 
 ### Multi-Way Routing with Business Rules
@@ -159,6 +160,7 @@ result = {'processed_urgent_orders': processed_orders}
     workflow.add_node("urgent_processor", urgent_processor)
 
     return workflow
+
 ```
 
 ### Conditional Routing with Fallbacks
@@ -243,69 +245,138 @@ result = {
                     output_key="false_output")
 
     return workflow
+
 ```
 
 ## 🎯 Common Use Cases
 
 ### 1. Customer Journey Routing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Route customers through different experiences
 journey_router = SwitchNode(
     condition="customer_segment == 'vip' and visit_count > 5"
 )
 
 # VIP experience
-workflow.connect(journey_router, "personalized_homepage",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(journey_router, "personalized_homepage",
                 output_key="true_output")
 
 # Standard experience
-workflow.connect(journey_router, "default_homepage",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(journey_router, "default_homepage",
                 output_key="false_output")
+
 ```
 
 ### 2. Data Quality Gating
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Only process high-quality data
 quality_gate = SwitchNode(
     condition="data_quality_score >= 0.85"
 )
 
 # Good data continues
-workflow.connect(quality_gate, "ml_processing",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(quality_gate, "ml_processing",
                 output_key="true_output")
 
 # Poor data goes to cleaning
-workflow.connect(quality_gate, "data_cleaning",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(quality_gate, "data_cleaning",
                 output_key="false_output")
+
 ```
 
 ### 3. Approval Workflows
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Multi-level approval based on amount
 approval_router = SwitchNode(
     condition="expense_amount > 10000"
 )
 
 # High amounts need VP approval
-workflow.connect(approval_router, "vp_approval_queue",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(approval_router, "vp_approval_queue",
                 output_key="true_output")
 
 # Standard amounts need manager approval
-workflow.connect(approval_router, "manager_approval_queue",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(approval_router, "manager_approval_queue",
                 output_key="false_output")
+
 ```
 
 ### 4. A/B Testing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Route users to different variants
 ab_test_router = SwitchNode(
     condition="hash(user_id) % 100 < 20"  # 20% to variant B
 )
 
-workflow.connect(ab_test_router, "variant_b_experience",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(ab_test_router, "variant_b_experience",
                 output_key="true_output")
-workflow.connect(ab_test_router, "variant_a_experience",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(ab_test_router, "variant_a_experience",
                 output_key="false_output")
+
 ```
 
 ## 📊 Best Practices
@@ -317,17 +388,36 @@ condition="order_total > 100 and customer_type == 'premium'"
 
 # BAD: Complex, hard to test
 condition="(a > b and c < d) or (e == f and g != h) or i > j"
+
 ```
 
 ### 2. **Always Handle Both Paths**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Both outputs connected
-workflow.connect(router, "path_a", output_key="true_output")
-workflow.connect(router, "path_b", output_key="false_output")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(router, "path_a", output_key="true_output")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(router, "path_b", output_key="false_output")
 
 # BAD: Missing false path - data gets lost!
-workflow.connect(router, "path_a", output_key="true_output")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(router, "path_a", output_key="true_output")
 # No false_output connection
+
 ```
 
 ### 3. **Avoid Deep Nesting**
@@ -351,6 +441,7 @@ else:
         # upgrade path
     else:
         # basic path
+
 ```
 
 ### 4. **Document Routing Logic**
@@ -361,6 +452,7 @@ value_router = SwitchNode(
     condition="lifetime_value > 10000",
     description="Routes customers based on lifetime value threshold. Premium: >$10k"
 )
+
 ```
 
 ## 🔗 Related Examples

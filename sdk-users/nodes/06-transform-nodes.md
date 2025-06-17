@@ -24,9 +24,24 @@ This document covers data transformation and processing nodes including chunkers
 - **Best For**: Narrative text, general documents, content with flowing topics
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   chunker = SemanticChunkerNode(chunk_size=1000, similarity_threshold=0.75)
   result = chunker.run(text="Your long document text here...")
   chunks = result["chunks"]  # List of semantically coherent chunks
+
   ```
 
 ### StatisticalChunkerNode ⭐ **NEW**
@@ -42,9 +57,24 @@ This document covers data transformation and processing nodes including chunkers
 - **Best For**: Technical documents, structured content, academic papers
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   chunker = StatisticalChunkerNode(chunk_size=800, variance_threshold=0.6)
   result = chunker.run(text="Your technical document here...")
   chunks = result["chunks"]  # List of variance-based chunks
+
   ```
 
 ### HierarchicalChunkerNode
@@ -91,12 +121,27 @@ This document covers data transformation and processing nodes including chunkers
   - `value`: Value to compare against
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   filter_node = FilterNode()
   result = filter_node.execute(
       data=[1, 2, 3, 4, 5],
       operator=">",
       value=3
   )  # Returns: {"filtered_data": [4, 5]}
+
   ```
 
 ### DataTransformerNode
@@ -110,6 +155,20 @@ This document covers data transformation and processing nodes including chunkers
   - `group`: Group data by field
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   transformer = DataTransformerNode()
   result = transformer.run(
       data=[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}],
@@ -118,6 +177,7 @@ This document covers data transformation and processing nodes including chunkers
           {"type": "sort", "key": "age", "reverse": True}
       ]
   )
+
   ```
 
 ### ContextualCompressorNode ⭐ **NEW**
@@ -147,6 +207,20 @@ This document covers data transformation and processing nodes including chunkers
 - **Performance**: Typically achieves 50-70% token reduction while preserving relevance
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   compressor = ContextualCompressorNode(
       compression_target=2000,
       relevance_threshold=0.75,
@@ -161,6 +235,7 @@ This document covers data transformation and processing nodes including chunkers
   )
   compressed_text = result["compressed_context"]
   metadata = result["compression_metadata"]  # Detailed compression stats
+
   ```
 - **Output Structure**:
   ```python
@@ -175,6 +250,7 @@ This document covers data transformation and processing nodes including chunkers
       "num_input_docs": 10,
       "compression_success": True
   }
+
   ```
 
 ## See Also

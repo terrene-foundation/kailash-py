@@ -13,6 +13,20 @@ The Kailash SDK supports two execution modes:
 In direct execution, you create nodes with all parameters and call `execute()` immediately.
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Create reader with file path
 reader = CSVReaderNode(file_path='input.csv')
 result = reader.execute()
@@ -23,6 +37,7 @@ writer = CSVWriterNode(
     data=result['data']  # Data provided at creation
 )
 writer_result = writer.execute()
+
 ```
 
 ### When to Use Direct Execution
@@ -36,6 +51,20 @@ writer_result = writer.execute()
 In workflow execution, nodes are connected and data flows through the graph.
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Create workflow
 workflow = Workflow(name="Data Pipeline")
 
@@ -44,19 +73,20 @@ reader = CSVReaderNode(file_path='input.csv')
 writer = CSVWriterNode(file_path='output.csv')  # No data parameter
 
 # Add nodes to workflow
-workflow.add_node(reader, node_id='reader')
-workflow.add_node(writer, node_id='writer')
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(reader, node_id='reader')
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(writer, node_id='writer')
 
 # Connect nodes - data flows from reader to writer
-workflow.connect(
-    source_node='reader',
-    target_node='writer',
-    mapping={'data': 'data'}  # Map outputs to inputs
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # Execute workflow
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+runtime = LocalRuntime()
+workflow.execute(workflow)
+
 ```
 
 ### When to Use Workflow Execution
@@ -127,6 +157,7 @@ runtime = LocalRuntime(debug=True)
 results, run_id = runtime.execute(workflow)
 
 print(f"Filtered {results['filter']['count']} customers")
+
 ```
 
 ## Common Patterns
@@ -134,23 +165,75 @@ print(f"Filtered {results['filter']['count']} customers")
 ### 1. Fork Pattern
 One node output feeds multiple downstream nodes:
 ```python
-workflow.connect('reader', 'filter1', mapping={'data': 'data'})
-workflow.connect('reader', 'filter2', mapping={'data': 'data'})
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### 2. Join Pattern
 Multiple nodes feed into one downstream node:
 ```python
-workflow.connect('process1', 'merger', mapping={'output': 'input1'})
-workflow.connect('process2', 'merger', mapping={'output': 'input2'})
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### 3. Sequential Pipeline
 Data flows through multiple processing steps:
 ```python
-workflow.connect('reader', 'transform', mapping={'data': 'data'})
-workflow.connect('transform', 'validate', mapping={'result': 'data'})
-workflow.connect('validate', 'writer', mapping={'valid_data': 'data'})
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## Best Practices

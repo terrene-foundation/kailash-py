@@ -157,28 +157,32 @@ results, run_id = runtime.execute(workflow, parameters={
         "auth_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
     }
 })
+
 ```
 
 ## 🔐 Advanced Authentication Patterns
 
 ### Multi-Factor Authentication (MFA) Workflow
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("mfa_authentication")
 
 # MFA orchestrator
-workflow.add_node("mfa_orchestrator", PythonCodeNode(
-    name="mfa_orchestrator",
-    code='''
-import secrets
-import hashlib
-import pyotp
-import qrcode
-from datetime import datetime, timedelta
-
-class MultiFactorAuthenticator:
-    """Enterprise multi-factor authentication system."""
-
-    def __init__(self):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.mfa_methods = {
             'totp': self.validate_totp,
             'sms': self.validate_sms,
@@ -518,28 +522,32 @@ mfa_result = mfa_system.initiate_mfa_flow(user_data, mfa_preferences)
 result = mfa_result
 '''
 ))
+
 ```
 
 ## 🛡️ Data Privacy & Protection Patterns
 
 ### GDPR/HIPAA Compliance Workflow
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("privacy_compliance")
 
 # Data privacy processor
-workflow.add_node("privacy_processor", PythonCodeNode(
-    name="privacy_processor",
-    code='''
-import re
-import hashlib
-import secrets
-from datetime import datetime, timedelta
-from cryptography.fernet import Fernet
-
-class PrivacyComplianceProcessor:
-    """GDPR/HIPAA compliant data processing system."""
-
-    def __init__(self, encryption_key=None):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.encryption_key = encryption_key or Fernet.generate_key()
         self.cipher_suite = Fernet(self.encryption_key)
 
@@ -905,25 +913,32 @@ privacy_result = processor.process_data_request(
 result = privacy_result
 '''
 ))
+
 ```
 
 ## 🔒 Access Control & Authorization
 
 ### Role-Based Access Control (RBAC)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("rbac_authorization")
 
 # RBAC engine
-workflow.add_node("rbac_engine", PythonCodeNode(
-    name="rbac_engine",
-    code='''
-from datetime import datetime, timedelta
-import json
-
-class RBACAuthorizationEngine:
-    """Enterprise Role-Based Access Control system."""
-
-    def __init__(self):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.roles_hierarchy = {
             'admin': ['manager', 'user', 'viewer'],
             'manager': ['user', 'viewer'],
@@ -1306,26 +1321,32 @@ authorization_result = rbac_engine.authorize_request(
 result = authorization_result
 '''
 ))
+
 ```
 
 ## 🔍 Security Audit & Compliance
 
 ### Comprehensive Audit Trail System
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("security_audit")
 
 # Audit system
-workflow.add_node("audit_system", PythonCodeNode(
-    name="audit_system",
-    code='''
-import hashlib
-import json
-from datetime import datetime, timedelta
-
-class SecurityAuditSystem:
-    """Enterprise security audit and compliance system."""
-
-    def __init__(self):
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature:
         self.audit_categories = {
             'authentication': 'User authentication events',
             'authorization': 'Access control decisions',
@@ -1727,6 +1748,7 @@ result = {
 }
 '''
 ))
+
 ```
 
 ## 🔗 Security Best Practices

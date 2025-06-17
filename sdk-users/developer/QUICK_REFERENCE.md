@@ -38,19 +38,10 @@
 | **Learn SDK** | `examples/` | Working solutions, tutorials | Users, documentation |
 
 ## 📁 Guide Structure
-- **[01-node-basics.md](01-node-basics.md)** - Creating nodes, base classes
-- **[02-parameter-types.md](02-parameter-types.md)** - ⚠️ Type constraints (CRITICAL)
-- **[03-common-patterns.md](03-common-patterns.md)** - Data processing, API, transform
-- **[04-pythoncode-node.md](04-pythoncode-node.md)** - ⚠️ Input exclusion, serialization
-- **[05-directory-reader.md](05-directory-reader.md)** - File discovery patterns
-- **[06-document-processing.md](06-document-processing.md)** - Multi-file workflows
-- **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and fixes
-- **[08-async-database-patterns.md](08-async-database-patterns.md)** - High-performance async DB
-- **[09-workflow-resilience.md](09-workflow-resilience.md)** - 🆕 Retry, fallback, circuit breakers
-- **[10-credential-management.md](10-credential-management.md)** - 🆕 Secure credential handling
-- **[11-sharepoint-multi-auth.md](11-sharepoint-multi-auth.md)** - 🆕 Multi-auth SharePoint
-- **[12-session-067-enhancements.md](12-session-067-enhancements.md)** - ⭐ NEW: Enterprise workflow templates & data lineage
-- **[15-middleware-integration.md](15-middleware-integration.md)** - 🌉 NEW: Middleware layer for frontend integration
+- **[01-fundamentals.md](01-fundamentals.md)** - ⭐ START HERE: Core SDK concepts and patterns
+- **[02-workflows.md](02-workflows.md)** - ⭐ Workflow creation, connections, and execution
+- **[03-advanced-features.md](03-advanced-features.md)** - Enterprise patterns and async operations
+- **[Node Catalog](../nodes/comprehensive-node-catalog.md)** - ⭐ Complete reference of all 110+ nodes
 - **[examples/](examples/)** - Working code examples
 
 ## ⚡ Quick Fix Templates
@@ -83,6 +74,7 @@ processor_id = builder.add_node(
 
 # Connect using add_connection (4 parameters required)
 builder.add_connection(reader_id, "output", processor_id, "input")
+
 ```
 
 ### Unified Runtime (Enterprise Features)
@@ -118,6 +110,7 @@ runtime = LocalRuntime(
 
 # Execute with automatic enterprise integration
 results, run_id = runtime.execute(workflow, task_manager, parameters)
+
 ```
 
 ### Middleware Integration
@@ -139,6 +132,7 @@ gateway = create_gateway(
 
 # Access integrated components
 agent_ui = gateway.agent_ui
+
 ```
 
 ### Basic Custom Node
@@ -159,6 +153,7 @@ class YourNode(Node):
 
     def run(self, **kwargs) -> Dict[str, Any]:
         return {'result': kwargs['param']}
+
 ```
 
 ### PythonCodeNode (Best Practices)
@@ -168,8 +163,22 @@ class YourNode(Node):
 
 **🚀 MANDATORY: Use `.from_function()` for code > 3 lines**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ✅ ALWAYS use from_function for complex logic:
-def process_files(input_data: dict) -> dict:
+def workflow.()  # Type signature example -> dict:
     """Full IDE support: highlighting, completion, debugging!"""
     files = input_data.get("files", [])
     # Complex processing with IDE support
@@ -181,22 +190,54 @@ processor = PythonCodeNode.from_function(
     name="processor",
     description="Process file data"
 )
+
 ```
 
 **String code only for: dynamic generation, user input, templates, one-liners**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # OK for simple one-liner
 node = PythonCodeNode(name="calc", code="result = value * 1.1")
 
 # OK for dynamic generation
 code = f"result = data['{user_field}'] > {threshold}"
 node = PythonCodeNode(name="filter", code=code)
+
 ```
 
 **⚠️ Remember: Input variables EXCLUDED from outputs**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # CORRECT: Different variable names for mapping
-workflow.connect("discovery", "processor", mapping={"result": "input_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Resilient Workflow (NEW)
@@ -217,6 +258,7 @@ workflow.add_fallback("primary_service", "backup_service")
 
 # Add circuit breaker
 workflow.configure_circuit_breaker("api_call", failure_threshold=5)
+
 ```
 
 ### Credential Management (NEW)
@@ -230,6 +272,7 @@ cred_node = CredentialManagerNode(
     credential_sources=["vault", "env"],  # Try vault first
     cache_duration_seconds=3600
 )
+
 ```
 
 ### SharePoint Multi-Auth (NEW)
@@ -253,6 +296,7 @@ result = await sp_node.execute(
     site_url="https://company.sharepoint.com/sites/data",
     operation="list_files"
 )
+
 ```
 
 ### DirectoryReaderNode (Best Practice)
@@ -267,6 +311,7 @@ file_discoverer = DirectoryReaderNode(
     file_patterns=["*.csv", "*.json", "*.txt"],
     include_metadata=True
 )
+
 ```
 
 ### MCP Gateway Integration
@@ -285,7 +330,7 @@ gateway = create_gateway(
 mcp = MCPIntegration("tools")
 
 # Add tools (sync or async)
-async def search_web(query: str, limit: int = 10):
+async def search_web('query', limit: int = 10):
     return {"results": ["result1", "result2"]}
 
 mcp.add_tool("search", search_web, "Search web", {
@@ -310,10 +355,25 @@ builder.add_node("search", search_node)
 await gateway.agent_ui.register_workflow(
     "mcp_workflow", builder.build(), make_shared=True
 )
+
 ```
 
 ### Centralized Data Access
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 from examples.utils.data_paths import get_input_data_path, get_output_data_path
 
 # CORRECT: Use centralized data utilities
@@ -324,6 +384,7 @@ reader = CSVReaderNode(name="reader", file_path=str(customer_file))
 
 # WRONG: Hardcoded paths
 reader = CSVReaderNode(name="reader", file_path="examples/data/customers.csv")
+
 ```
 
 ## 🔴 Common Mistakes
@@ -334,3 +395,13 @@ reader = CSVReaderNode(name="reader", file_path="examples/data/customers.csv")
 5. **Manual file operations**: Use `DirectoryReaderNode` not `os.listdir`
 6. **Hardcoded data paths**: `"examples/data/file.csv"` → Use `get_input_data_path("file.csv")`
 7. **Old execution pattern**: `node.execute()` → Use `node.execute()` for complete lifecycle
+
+## 🎯 **Find What You Need**
+
+| **I want to...** | **Go to...** |
+|-------------------|--------------|
+| Learn the basics | **[Fundamentals](01-fundamentals.md)** |
+| Build workflows | **[Workflows](02-workflows.md)** |
+| Find the right node | **[Node Catalog](../nodes/comprehensive-node-catalog.md)** |
+| Use enterprise features | **[Advanced Features](03-advanced-features.md)** |
+| Fix errors | **[Troubleshooting](05-troubleshooting.md)** |

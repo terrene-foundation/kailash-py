@@ -36,10 +36,25 @@ session_id = await agent_ui.create_session(
     user_id="user123",
     metadata={"role": "analyst", "department": "data"}
 )
+
 ```
 
 ### Dynamic Workflow Creation
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Workflow configuration from frontend
 workflow_config = {
     "nodes": [
@@ -83,10 +98,25 @@ workflow_id = await agent_ui.create_dynamic_workflow(
     workflow_config=workflow_config,
     workflow_id="data_analysis"
 )
+
 ```
 
 ### Workflow Execution
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Execute workflow with monitoring
 execution_id = await agent_ui.execute_workflow(
     session_id=session_id,
@@ -104,6 +134,7 @@ if status['status'] == 'completed':
     print(f"Results: {status['outputs']}")
 elif status['status'] == 'failed':
     print(f"Error: {status['error']}")
+
 ```
 
 ## Session Management
@@ -130,10 +161,25 @@ session_id = await agent_ui.create_session(
     session_id="custom-session-id",
     metadata={"source": "mobile_app"}
 )
+
 ```
 
 ### Session Information
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Get session details
 session = await agent_ui.get_session(session_id)
 print(f"Created: {session.created_at}")
@@ -144,11 +190,13 @@ print(f"Executions: {len(session.executions)}")
 
 # List all workflows in session
 for workflow_id, workflow in session.workflows.items():
-    print(f"Workflow: {workflow_id} - {workflow.name}")
+workflow = Workflow("example", name="Example")
+workflow.workflow.name}")
 
 # List executions
 for execution_id, execution in session.executions.items():
     print(f"Execution: {execution_id} - {execution['status']}")
+
 ```
 
 ### Session Cleanup
@@ -160,6 +208,7 @@ await agent_ui.close_session(session_id)
 # - session_timeout_minutes setting
 # - max_sessions limit reached
 # - Session inactivity
+
 ```
 
 ## Workflow Registration
@@ -194,6 +243,7 @@ await agent_ui.register_workflow(
     workflow=builder,
     session_id=session_id
 )
+
 ```
 
 ### Template Workflows
@@ -219,6 +269,7 @@ workflow_id = await agent_ui.create_dynamic_workflow(
         }
     }
 )
+
 ```
 
 ## Event Subscription
@@ -250,10 +301,25 @@ await agent_ui.subscribe_to_events(
         EventType.WORKFLOW_PROGRESS
     ]
 )
+
 ```
 
 ### Filtering Events
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Session-specific events only
 await agent_ui.subscribe_to_events(
     subscriber_id="session_monitor",
@@ -273,18 +339,34 @@ await agent_ui.subscribe_to_events(
     subscriber_id="global_monitor",
     callback=global_event_handler
 )
+
 ```
 
 ### Unsubscribing
 ```python
 # Remove event subscription
 await agent_ui.unsubscribe_from_events("my_app")
+
 ```
 
 ## Execution Management
 
 ### Execution Control
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Start execution
 execution_id = await agent_ui.execute_workflow(
     session_id=session_id,
@@ -304,6 +386,7 @@ print(f"Current Node: {status['current_node']}")
 
 if status['outputs']:
     print(f"Results: {status['outputs']}")
+
 ```
 
 ### Execution Monitoring
@@ -331,12 +414,27 @@ async def monitor_execution(execution_id, session_id):
 
 # Start monitoring
 await monitor_execution(execution_id, session_id)
+
 ```
 
 ## Statistics and Monitoring
 
 ### Middleware Statistics
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Get comprehensive stats
 stats = agent_ui.get_stats()
 
@@ -352,6 +450,7 @@ print(f"Shared Workflows: {stats['shared_workflows']}")
 event_stats = stats['event_stream_stats']
 print(f"Events Processed: {event_stats['events_processed']}")
 print(f"Subscribers: {event_stats['subscribers']}")
+
 ```
 
 ### Performance Monitoring
@@ -374,12 +473,27 @@ while True:
 
 execution_time = time.time() - start_time
 print(f"Execution completed in {execution_time:.2f} seconds")
+
 ```
 
 ## Error Handling
 
 ### Common Error Patterns
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 try:
     # Session operations
     session_id = await agent_ui.create_session(user_id="user123")
@@ -407,10 +521,25 @@ except Exception as e:
     # Cleanup on error
     if 'session_id' in locals():
         await agent_ui.close_session(session_id)
+
 ```
 
 ### Validation Errors
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Handle workflow validation errors
 try:
     workflow_id = await agent_ui.create_dynamic_workflow(
@@ -429,6 +558,7 @@ try:
     )
 except ValueError as e:
     print(f"Workflow not found: {e}")
+
 ```
 
 ## Integration Patterns
@@ -448,6 +578,7 @@ agent_ui = gateway.agent_ui
 
 # Use as normal
 session_id = await agent_ui.create_session(user_id="user123")
+
 ```
 
 ### With Real-time Middleware
@@ -461,6 +592,7 @@ realtime = RealtimeMiddleware(agent_ui)
 # Events automatically flow to real-time layer
 session_id = await agent_ui.create_session(user_id="user123")
 # Real-time clients receive session creation event
+
 ```
 
 ### With AI Chat
@@ -486,6 +618,7 @@ if response.get("workflow_config"):
         session_id=session_id,
         workflow_config=response["workflow_config"]
     )
+
 ```
 
 ## Best Practices
@@ -493,7 +626,7 @@ if response.get("workflow_config"):
 ### 1. Session Management
 ```python
 # Use context managers for automatic cleanup
-async def with_session(user_id: str):
+async def with_session('user_id'):
     session_id = await agent_ui.create_session(user_id=user_id)
     try:
         yield session_id
@@ -505,6 +638,7 @@ async with with_session("user123") as session_id:
     # Use session
     workflow_id = await agent_ui.create_dynamic_workflow(...)
     # Automatic cleanup when done
+
 ```
 
 ### 2. Error Recovery
@@ -523,10 +657,25 @@ async def robust_execution(session_id, workflow_id, max_retries=3):
                 raise
             print(f"Attempt {attempt + 1} failed: {e}, retrying...")
             await asyncio.sleep(2 ** attempt)  # Exponential backoff
+
 ```
 
 ### 3. Performance Optimization
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Batch workflow creations
 workflows_to_create = [config1, config2, config3]
 workflow_ids = []
@@ -544,6 +693,7 @@ execution_tasks = [
     for wf_id in workflow_ids
 ]
 execution_ids = await asyncio.gather(*execution_tasks)
+
 ```
 
 ## Related Documentation

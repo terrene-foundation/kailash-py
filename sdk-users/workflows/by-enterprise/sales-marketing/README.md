@@ -85,29 +85,83 @@ These workflows typically deliver:
 
 ### B2B Sales
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Lead scoring and routing
 workflow = create_lead_scoring_engine()
-workflow.add_firmographic_scoring()
-workflow.add_behavioral_tracking()
-workflow.add_sales_routing()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_firmographic_scoring()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_behavioral_tracking()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_sales_routing()
+
 ```
 
 ### E-commerce Marketing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Personalized campaigns
 workflow = create_campaign_automation()
-workflow.add_product_recommendations()
-workflow.add_abandoned_cart_recovery()
-workflow.add_loyalty_programs()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_product_recommendations()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_abandoned_cart_recovery()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_loyalty_programs()
+
 ```
 
 ### SaaS Growth
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Customer journey optimization
 workflow = create_journey_optimizer()
-workflow.add_onboarding_flow()
-workflow.add_feature_adoption()
-workflow.add_retention_campaigns()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_onboarding_flow()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_feature_adoption()
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_retention_campaigns()
+
 ```
 
 ## 🚦 Getting Started

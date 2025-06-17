@@ -22,12 +22,27 @@ This document covers code execution nodes including Python code execution and MC
 - **Security**: Sandboxed execution environment
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   node = PythonCodeNode(
       config={
           "code": "result = sum(data)",
           "imports": []
       }
   )
+
   ```
 
 ## PythonCodeNode Usage Guide
@@ -50,6 +65,7 @@ node = PythonCodeNode(
 
 # ❌ WRONG: Missing name parameter
 node = PythonCodeNode(code="result = value * 2")  # TypeError!
+
 ```
 
 #### With Type Hints
@@ -60,6 +76,7 @@ node = PythonCodeNode(
     input_types={"a": int, "b": int},  # Helps with validation
     output_type=int
 )
+
 ```
 
 ### Code Format Patterns
@@ -81,6 +98,7 @@ result = {
 '''
 
 node = PythonCodeNode(name="processor", code=python_code)
+
 ```
 
 #### ❌ Wrong: Function Definitions
@@ -90,6 +108,7 @@ python_code = '''
 def main(**kwargs):
     return {"result": kwargs.get("value", 0) * 2}
 '''
+
 ```
 
 ### Variable Access Patterns
@@ -105,6 +124,7 @@ except NameError:
 
 result = {"doubled": value * 2}
 '''
+
 ```
 
 #### ❌ Wrong: kwargs Access
@@ -113,6 +133,7 @@ result = {"doubled": value * 2}
 python_code = '''
 value = kwargs.get("value", 0)  # NameError: name 'kwargs' is not defined
 '''
+
 ```
 
 ### Cycle Usage Patterns
@@ -168,6 +189,7 @@ results, run_id = runtime.execute(workflow, parameters={
     "current_value": 10,
     "target": 50
 })
+
 ```
 
 #### Complex State Management
@@ -203,6 +225,7 @@ result = {
     "converged": converged
 }
 '''
+
 ```
 
 ### Result Structure Patterns
@@ -216,17 +239,35 @@ result = {"value": 42, "status": "complete"}
 
 # Output will be: {"value": 42, "status": "complete"}
 # Access as: final_output["value"], final_output["status"]
+
 ```
 
 #### Convergence Check Format
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ✅ CORRECT: Use direct field names from result
-workflow.connect("node", "node",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("node", "node",
     convergence_check="converged == True")      # Direct access
 
 # ❌ WRONG: Nested path access
-workflow.connect("node", "node",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("node", "node",
     convergence_check="result.converged == True")  # Will fail
+
 ```
 
 ### Common Mistakes and Solutions
@@ -238,6 +279,7 @@ node = PythonCodeNode(code="result = 42")
 
 # ✅ FIX: Include name parameter
 node = PythonCodeNode(name="calculator", code="result = 42")
+
 ```
 
 #### 2. Variable Scope Error
@@ -254,17 +296,33 @@ try:
 except NameError:
     value = 0
 '''
+
 ```
 
 #### 3. Cycle Not Iterating
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ ERROR: Cycle runs only once, no data flow
-workflow.connect("node", "node", cycle=True, max_iterations=5)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("node", "node", cycle=True, max_iterations=5)
 
 # ✅ FIX: Include mapping for data flow
-workflow.connect("node", "node",
-    mapping={"output_field": "input_field"},
-    cycle=True, max_iterations=5)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 #### 4. Convergence Check Failure
@@ -274,16 +332,33 @@ convergence_check="result.converged == True"
 
 # ✅ FIX: Use direct field names
 convergence_check="converged == True"
+
 ```
 
 ### Testing Patterns
 
 #### Debug Result Structure
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Always debug the actual result structure first
-results, run_id = runtime.execute(workflow)
+runtime = LocalRuntime()
+workflow.execute(workflow)
 print(f"Result keys: {list(results['node_name'].keys())}")
 print(f"Sample values: {results['node_name']}")
+
 ```
 
 #### Relaxed Cycle Assertions
@@ -293,6 +368,7 @@ assert final_output["iteration_count"] >= 1
 
 # ❌ RIGID: May fail if cycle converges early
 assert final_output["iteration_count"] == 5
+
 ```
 
 ### Best Practices
@@ -322,12 +398,28 @@ assert final_output["iteration_count"] == 5
   - `parameters`: Tool parameters
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   mcp_tool = MCPToolNode()
   result = mcp_tool.run(
       mcp_server="ai_tools",
       tool_name="analyze",
-      parameters={"method": "regression", "data": input_data}
+# Parameters setup
+workflow.{"method": "regression", "data": input_data}
   )
+
   ```
 
 ### MCPClientNode

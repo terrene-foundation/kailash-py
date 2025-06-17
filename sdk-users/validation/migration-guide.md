@@ -1,0 +1,484 @@
+# Migration Guide - Updates & Breaking Changes
+
+*Stay current with Kailash SDK architecture improvements*
+
+## 📦 **Required Imports**
+
+All examples in this guide assume these imports:
+
+```python
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
+from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
+from kailash.nodes.api import HTTPRequestNode, RESTClientNode
+from kailash.nodes.logic import SwitchNode, MergeNode, WorkflowNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.transform import DataTransformerNode
+from kailash.nodes.base import Node, NodeParameter
+```
+
+## 🚀 **Latest Architecture (Session 061+)**
+
+### **Core SDK Improvements**
+The Kailash SDK has undergone significant architecture improvements focusing on:
+- **Clear separation** between configuration and runtime
+- **Improved parameter flow** from configuration through runtime to execution
+- **Better validation** and error handling
+- **Enhanced performance** and memory management
+
+## 📋 **Breaking Changes & Migration**
+
+### **1. Node Construction vs Runtime Validation**
+
+#### ❌ **Old Pattern (Pre-061)**
+```python
+# Old: Required parameters at construction time
+try:
+    node = CSVReaderNode(file_path="required.csv")  # Would fail if file missing
+except Exception:
+    print("Construction failed")
+
+```
+
+#### ✅ **New Pattern (061+)**
+```python
+
+# New: Validation happens at execution time
+node = CSVReaderNode()  # Always succeeds
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("reader", node, file_path="required.csv")
+
+# Validation happens here
+try:
+runtime = LocalRuntime()
+workflow.execute(workflow)
+except ValidationError:
+    print("Execution failed due to validation")
+
+```
+
+### **2. Parameter Flow Architecture**
+
+#### ❌ **Old Pattern**
+```python
+# Old: Mixed parameter handling
+node = PythonCodeNode(
+    name="processor",
+    code="result = data",
+    required_param="value"  # Mixed with node config
+)
+
+```
+
+#### ✅ **New Pattern**
+```python
+
+# New: Clear separation
+node = PythonCodeNode(
+    name="processor",  # Node configuration
+    code="result = data",  # Node configuration
+    input_types={"data": list, "required_param": str}  # Parameter definition
+)
+
+# Runtime parameter injection
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("processor", node)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "processor": {"required_param": "value"}  # Runtime injection
+})
+
+```
+
+### **3. Enhanced Method Calls**
+
+#### ❌ **Old Patterns**
+```python
+
+# Old: Inconsistent parameter handling
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.connect("from_node", "to_node", mapping={"output": "input"})  # Old parameter name
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("id", node_class)    # Missing configuration
+
+```
+
+#### ✅ **New Patterns**
+```python
+
+# New: Consistent parameter naming
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={"node_id": {"param": "value"}})
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("id", node_instance, **configuration)
+
+```
+
+## 🔄 **Migration Steps**
+
+### **Step 1: Update Node Creation Patterns**
+
+**Before:**
+```python
+# Old way - validation at construction
+try:
+    reader = CSVReaderNode(file_path="data.csv", has_header=True)
+    workflow.add_node("reader", reader)
+except Exception as e:
+    print(f"Node creation failed: {e}")
+
+```
+
+**After:**
+```python
+
+# New way - validation at execution
+reader = CSVReaderNode()  # Always succeeds
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("reader", reader,
+    file_path="data.csv",     # Configuration parameters
+    has_header=True           # Configuration parameters
+)
+
+# Validation happens during execution
+try:
+runtime = LocalRuntime()
+workflow.execute(workflow)
+except ValidationError as e:
+    print(f"Execution validation failed: {e}")
+
+```
+
+### **Step 2: Update Parameter Handling**
+
+**Before:**
+```python
+# Old: Mixed parameter sources
+node = PythonCodeNode(
+    name="proc",
+    code="result = process(data, param1, param2)",
+    param1="static_value",  # Mixed with config
+    param2=42               # Mixed with config
+)
+
+```
+
+**After:**
+```python
+
+# New: Clear parameter definition
+node = PythonCodeNode(
+    name="proc",
+    code='''
+# Parameters injected at runtime
+result = process(data, param1, param2)
+''',
+    input_types={
+        "data": list,      # From connected nodes
+        "param1": str,     # From configuration or runtime
+        "param2": int      # From configuration or runtime
+    }
+)
+
+# Configuration parameters
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("proc", node,
+    param1="default_value",  # Static configuration
+    param2=42                # Static configuration
+)
+
+# Runtime parameter overrides
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "proc": {
+        "param1": "runtime_override",  # Override config
+        "param2": 100                  # Override config
+    }
+})
+
+```
+
+### **Step 3: Update Error Handling**
+
+**Before:**
+```python
+# Old: Construction-time error handling
+try:
+    workflow.add_node("reader", CSVReaderNode(file_path="missing.csv"))
+    workflow.execute()
+except Exception as e:
+    print(f"Error: {e}")
+
+```
+
+**After:**
+```python
+
+# New: Execution-time validation
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("reader", CSVReaderNode(), file_path="missing.csv")
+
+try:
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.validate()  # Pre-execution validation
+runtime = LocalRuntime()
+workflow.execute(workflow)
+except ValidationError as e:
+    print(f"Validation error: {e}")
+except FileNotFoundError as e:
+    print(f"File error: {e}")
+except Exception as e:
+    print(f"Execution error: {e}")
+
+```
+
+## 📊 **Parameter Flow Updates**
+
+### **New Parameter Flow Model**
+```python
+
+# 1. Node Definition (what parameters are accepted)
+class MyNode(Node):
+    def get_parameters(self):
+        return {
+            "required_param": NodeParameter(str, "Required parameter", required=True),
+            "optional_param": NodeParameter(int, "Optional parameter", default=42),
+            "runtime_data": NodeParameter(list, "Runtime data injection")
+        }
+
+# 2. Configuration (static values)
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("my_node", MyNode(),
+    required_param="configured_value",  # Static configuration
+    optional_param=100                  # Override default
+)
+
+# 3. Runtime (dynamic values and overrides)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "my_node": {
+        "runtime_data": [1, 2, 3],      # Dynamic data
+        "optional_param": 200           # Runtime override
+    }
+})
+
+# 4. Execution (all parameters merged and injected)
+def run(self, context, **kwargs):
+    # kwargs contains merged parameters:
+    # required_param = "configured_value" (from config)
+    # optional_param = 200 (runtime override)
+    # runtime_data = [1, 2, 3] (from runtime)
+    pass
+
+```
+
+### **Parameter Priority Order**
+1. **Runtime parameters** (highest priority)
+2. **Configuration parameters** 
+3. **Default values** (lowest priority)
+
+```python
+
+# Example of parameter resolution
+node = MyNode()
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.connect("from_node", "to_node", mapping={"output": "input"})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow, parameters={
+    "test": {
+        "param": "runtime_value",  # Runtime: priority 1 (wins)
+        "new_param": "runtime_new" # Runtime: priority 1
+    }
+})
+
+# Final parameters in node.run():
+# param = "runtime_value" (runtime override)
+# other = "config_other" (from config)
+# new_param = "runtime_new" (from runtime)
+
+```
+
+## 🔧 **Common Migration Issues**
+
+### **Issue 1: Missing input_types in PythonCodeNode**
+
+**Problem:**
+```python
+# Old: Works but parameter mapping unclear
+node = PythonCodeNode(name="proc", code="result = data + extra")
+
+```
+
+**Solution:**
+```python
+# New: Explicit parameter types
+node = PythonCodeNode(
+    name="proc",
+    code="result = data + extra",
+    input_types={"data": list, "extra": int}  # CRITICAL for mapping
+)
+
+```
+
+### **Issue 2: Construction-time validation expectations**
+
+**Problem:**
+```python
+# Old: Expected immediate validation
+try:
+    node = CSVReaderNode(file_path="missing.csv")
+except FileNotFoundError:
+    print("File not found")  # This won't trigger anymore
+
+```
+
+**Solution:**
+```python
+
+# New: Validation at execution
+node = CSVReaderNode()
+workflow = Workflow("migration_demo", name="Migration Demo")
+workflow.add_node("reader", node, file_path="missing.csv")
+
+try:
+runtime = LocalRuntime()
+workflow.execute(workflow)
+except FileNotFoundError:
+    print("File not found")  # This will trigger here
+
+```
+
+### **Issue 3: Parameter name confusion**
+
+**Problem:**
+```python
+# Old: Multiple parameter names used inconsistently
+runtime.execute(workflow, inputs={...})     # Wrong
+runtime.execute(workflow, config={...})     # Wrong
+runtime.execute(workflow, overrides={...})  # Wrong
+
+```
+
+**Solution:**
+```python
+# New: Consistent parameter naming
+runtime.execute(workflow, parameters={...})  # Always use 'parameters'
+
+```
+
+## 📋 **Migration Checklist**
+
+### **For Existing Code:**
+- [ ] ✅ **Node construction**: Remove required parameters from constructor
+- [ ] ✅ **Configuration**: Move parameters to `workflow.add_node()` call
+- [ ] ✅ **Runtime parameters**: Use `parameters={}` consistently  
+- [ ] ✅ **PythonCodeNode**: Add `input_types={}` for all custom nodes
+- [ ] ✅ **Error handling**: Move validation to execution time
+- [ ] ✅ **Parameter names**: Use `parameters` not `inputs`/`config`/`overrides`
+
+### **For New Code:**
+- [ ] ✅ **Start with new patterns**: Use 061+ architecture from beginning
+- [ ] ✅ **Clear separation**: Keep configuration and runtime parameters separate
+- [ ] ✅ **Explicit types**: Always define `input_types` for PythonCodeNode
+- [ ] ✅ **Validation first**: Call `workflow.validate()` before execution
+- [ ] ✅ **Consistent naming**: Always use `parameters={}` for runtime injection
+
+## 🆕 **New Features Available**
+
+### **Enhanced Runtime Capabilities**
+```python
+# New runtime features
+runtime = LocalRuntime(
+    max_workers=8,           # Parallel execution
+    timeout=600.0,           # Extended timeouts
+    enable_logging=True,     # Enhanced logging
+    memory_monitoring=True   # Memory usage tracking
+)
+
+# Enhanced execution with monitoring
+results, run_id = runtime.execute(workflow,
+    parameters={...},
+    timeout=300.0,           # Per-execution timeout
+    enable_profiling=True    # Performance profiling
+)
+
+```
+
+### **Improved Error Messages**
+```python
+
+# Better error context
+try:
+runtime = LocalRuntime()
+workflow.execute(workflow)
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+    print(f"Failed node: {e.node_id}")      # New: specific node
+    print(f"Parameter: {e.parameter}")      # New: specific parameter
+    print(f"Expected: {e.expected_type}")   # New: type information
+
+```
+
+### **Advanced Parameter Features**
+```python
+class AdvancedNode(Node):
+    def get_parameters(self):
+        return {
+            "param1": NodeParameter(str, "Description",
+                auto_map_primary=True,           # New: automatic mapping
+                auto_map_from=["alt1", "alt2"],  # New: alternative sources
+                workflow_alias="global_param"    # New: workflow-level params
+            )
+        }
+
+```
+
+## 🔗 **Resources for Migration**
+
+### **Documentation Updates**
+- **[Critical Rules](critical-rules.md)** - Updated for 061+ architecture
+- **[API Reference](api-reference.md)** - Current method signatures
+- **[Common Mistakes](common-mistakes.md)** - Updated error patterns
+
+### **Migration Tools**
+```python
+# Validation helper for migration
+def validate_061_compatibility(workflow_code) -> List[str]:
+    """Check code for 061+ compatibility"""
+    issues = []
+
+    # Check for old patterns
+    if "workflow.execute(inputs=" in workflow_code:
+        issues.append("Use 'parameters=' instead of 'inputs='")
+
+    if "Node(" in workflow_code and "input_types=" not in workflow_code:
+        issues.append("Add 'input_types={}' to PythonCodeNode")
+
+    # Check for new patterns
+    if "workflow.validate()" not in workflow_code:
+        issues.append("Add 'workflow.validate()' before execution")
+
+    return issues
+
+# Usage
+issues = validate_061_compatibility(your_code)
+if issues:
+    print("Migration needed:")
+    for issue in issues:
+        print(f"- {issue}")
+
+```
+
+## 🎯 **Next Steps After Migration**
+
+1. **Test thoroughly** - Validate all workflows with new architecture
+2. **Update error handling** - Use execution-time validation patterns  
+3. **Leverage new features** - Take advantage of enhanced capabilities
+4. **Monitor performance** - Use new profiling and monitoring features
+5. **Update documentation** - Reflect new patterns in your code docs
+
+---
+
+**The 061+ architecture provides better separation of concerns and improved performance!**

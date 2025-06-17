@@ -38,11 +38,26 @@ node = AsyncSQLDatabaseNode(
 workflow = Workflow()
 workflow.add_node("users", node)
 results = await runtime.execute_workflow(workflow)
+
 ```
 
 ### Connection String Support
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Using connection string
 node = AsyncSQLDatabaseNode(
     name="query_db",
@@ -51,11 +66,26 @@ node = AsyncSQLDatabaseNode(
     query="SELECT COUNT(*) as total FROM orders",
     fetch_mode="one"
 )
+
 ```
 
 ### Fetch Modes
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Fetch single row
 single_node = AsyncSQLDatabaseNode(
     name="get_user",
@@ -81,6 +111,7 @@ batch_node = AsyncSQLDatabaseNode(
     fetch_mode="many",
     fetch_size=100  # Returns first 100 rows
 )
+
 ```
 
 ## AsyncConnectionManager
@@ -116,6 +147,7 @@ async with manager.get_connection(
 ) as conn:
     # Use connection
     rows = await conn.fetch("SELECT * FROM users")
+
 ```
 
 ### Pool Configuration
@@ -141,6 +173,7 @@ node = AsyncSQLDatabaseNode(
     max_pool_size=pool_config.max_size,
     timeout=pool_config.command_timeout
 )
+
 ```
 
 ### Monitoring
@@ -154,6 +187,7 @@ for pool_key, pool_metrics in metrics.items():
     print(f"  Total requests: {pool_metrics['total_requests']}")
     print(f"  Average wait time: {pool_metrics['avg_wait_time']:.2f}s")
     print(f"  Health: {'Healthy' if pool_metrics['is_healthy'] else 'Unhealthy'}")
+
 ```
 
 ## AsyncPostgreSQLVectorNode
@@ -185,6 +219,7 @@ index_node = AsyncPostgreSQLVectorNode(
     m=16,  # HNSW parameter
     ef_construction=64
 )
+
 ```
 
 ### Inserting Vectors
@@ -213,6 +248,7 @@ batch_insert = AsyncPostgreSQLVectorNode(
         # ... metadata for each vector
     ]
 )
+
 ```
 
 ### Similarity Search
@@ -252,6 +288,7 @@ optimized_search = AsyncPostgreSQLVectorNode(
     ef_search=40,  # Higher = more accurate but slower
     limit=20
 )
+
 ```
 
 ## ABAC (Attribute-Based Access Control)
@@ -283,6 +320,7 @@ acm.add_rule(PermissionRule(
         }
     }
 ))
+
 ```
 
 ### Complex Attribute Conditions
@@ -317,6 +355,7 @@ complex_rule = PermissionRule(
         }
     ])
 )
+
 ```
 
 ### Attribute-Based Data Masking
@@ -362,6 +401,7 @@ acm.add_masking_rule(
         )
     )
 )
+
 ```
 
 ### User Context with Attributes
@@ -384,6 +424,7 @@ user = UserContext(
         "years_experience": 5
     }
 )
+
 ```
 
 ## Migration Framework
@@ -418,6 +459,7 @@ class CreateUserProfileTable(Migration):
 
     async def backward(self, connection):
         await connection.execute("DROP TABLE IF EXISTS user_profiles CASCADE")
+
 ```
 
 ### Running Migrations
@@ -445,6 +487,7 @@ runner.register_migration(CreateUserProfileTable)
 # Create and execute plan
 plan = await runner.create_plan()
 history = await runner.execute_plan(plan, user="admin")
+
 ```
 
 ### Migration Generator
@@ -462,6 +505,7 @@ migration_file = generator.create_migration(
     migration_type="schema",
     dependencies=["001_create_user_profile"]
 )
+
 ```
 
 ## Complete Example: Secure Data Pipeline
@@ -547,6 +591,7 @@ async def secure_data_pipeline():
 
 # Run the pipeline
 results = asyncio.run(secure_data_pipeline())
+
 ```
 
 ## Performance Considerations
@@ -596,6 +641,7 @@ except NodeExecutionError as e:
     elif "timeout" in str(e):
         # Query took too long
         pass
+
 ```
 
 ## Security Considerations
@@ -628,6 +674,7 @@ async_node = AsyncSQLDatabaseNode(
     query="SELECT * FROM users",
     pool_size=10
 )
+
 ```
 
 The async version provides:

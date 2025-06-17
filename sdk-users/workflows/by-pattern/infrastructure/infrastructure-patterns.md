@@ -49,6 +49,7 @@ else:
 
 # Load workflow with environment config
 workflow = Workflow.from_yaml("workflow.yaml", config=config)
+
 ```
 
 ## Cloud Deployment Patterns
@@ -130,6 +131,7 @@ deployment.deploy_workflow(
     cpu_threshold=70,
     memory_threshold=80
 )
+
 ```
 
 ### Google Cloud Platform
@@ -199,6 +201,7 @@ resource "google_cloud_scheduler_job" "workflow_batch" {
   }
 }
 """
+
 ```
 
 ### Azure Container Instances
@@ -242,6 +245,7 @@ azure_infrastructure = {
         }
     }]
 }
+
 ```
 
 ## Hybrid Infrastructure Patterns
@@ -282,6 +286,7 @@ deployment.deploy_with_failover(
     health_check_interval=30,
     failover_threshold=3
 )
+
 ```
 
 ### Edge Computing Pattern
@@ -313,6 +318,7 @@ for location in locations:
         config=edge_config,
         sync_interval=300  # Sync with cloud every 5 minutes
     )
+
 ```
 
 ## Security Patterns
@@ -349,6 +355,7 @@ workflow.add_policy("data-access", {
         "IpAddress": {"aws:SourceIp": ["10.0.0.0/8"]}
     }
 })
+
 ```
 
 ### Secrets Management
@@ -379,6 +386,7 @@ secrets.enable_auto_rotation(
     rotation_days=30,
     rotation_function="arn:aws:lambda:us-east-1:123456789:function:rotate-db-secret"
 )
+
 ```
 
 ## Cost Optimization Patterns
@@ -426,6 +434,7 @@ spec:
                 - m5.large
                 - m5.xlarge
 """
+
 ```
 
 ### Serverless Pattern
@@ -458,6 +467,7 @@ serverless_workflow.deploy_with_api_gateway(
     throttle_burst=2000,
     api_key_required=True
 )
+
 ```
 
 ## Monitoring and Maintenance
@@ -497,6 +507,7 @@ scheduler.add_task(
     """,
     target="backup-node"
 )
+
 ```
 
 ## Best Practices Summary

@@ -44,6 +44,7 @@ gateway = create_gateway(
 
 # Start the server
 gateway.run(port=8000)
+
 ```
 
 ### 2. Frontend Integration
@@ -114,6 +115,7 @@ async def create_dynamic_workflow():
         session_id=session_id,
         workflow_id=workflow_id
     )
+
 ```
 
 ## Key Features
@@ -153,6 +155,7 @@ from kailash.mcp.server import MCPServer
 
 gateway = WorkflowAPIGateway(title="App")
 mcp = MCPServer(name="tools")
+
 ```
 
 ### New Pattern (Current)
@@ -162,6 +165,7 @@ from kailash.middleware import create_gateway, MiddlewareMCPServer
 
 gateway = create_gateway(title="App")
 mcp = MiddlewareMCPServer(name="tools", agent_ui=gateway.agent_ui)
+
 ```
 
 ## Component Guides
@@ -208,6 +212,7 @@ logging.getLogger("kailash.middleware").setLevel(logging.DEBUG)
 
 # Enable debug output for troubleshooting
 gateway = create_gateway(debug=True)
+
 ```
 
 ## Next Steps

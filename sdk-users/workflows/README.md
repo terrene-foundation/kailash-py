@@ -90,7 +90,7 @@ This library consolidates content from:
 |-------------|--------------|--------|
 | `guide/mistakes/` | `quick-start/error-lookup.md` + advanced guides | ✅ Consolidated |
 | `guide/reference/cheatsheet/` | `quick-start/` + `advanced/` | ✅ Streamlined |
-| `guide/reference/pattern-library/` | `advanced/` + `production-ready/` | ✅ Enhanced |
+| `guide/reference/pattern-library/` | `patterns/` + `production-ready/` | ✅ Enhanced |
 | `examples/` | `by-industry/` workflows | ✅ Business-focused |
 
 ## 🚨 Critical Success Factors

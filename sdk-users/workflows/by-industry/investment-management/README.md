@@ -124,6 +124,7 @@ results = await runtime.execute(workflow, {
 # - performance_metrics: returns, attribution
 # - ai_insights: recommendations and observations
 # - report_url: generated report location
+
 ```
 
 ### Deal Sourcing Example
@@ -148,6 +149,7 @@ results = await workflow.execute({
 # - similar_deals: comparable transactions
 # - risk_factors: identified risks
 # - due_diligence_items: checklist
+
 ```
 
 ## Architecture Patterns
@@ -205,6 +207,7 @@ CONNECTION_POOLS = {
         "timeout": 30
     }
 }
+
 ```
 
 ### AI Model Selection
@@ -215,6 +218,7 @@ AI_MODELS = {
     "embedding": "text-embedding-3-large",
     "classification": "claude-3-opus"
 }
+
 ```
 
 ### Caching Strategy
@@ -225,6 +229,7 @@ CACHE_CONFIG = {
     "research": {"ttl": 3600},           # 1 hour
     "compliance": {"ttl": 86400}         # 24 hours
 }
+
 ```
 
 ## Integration Points

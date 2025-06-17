@@ -27,6 +27,7 @@ result = runtime.execute_node(http_node, method="GET")
 # Async version for better performance
 async_http = AsyncHTTPRequestNode(node_id="async_call", url="https://api.example.com/data")
 result = await async_runtime.execute_node_async(async_http, method="GET")
+
 ```
 
 ### 2. REST API Client
@@ -48,6 +49,7 @@ result = runtime.execute_node(
     path_params={"id": 123},
     method="GET"
 )
+
 ```
 
 ### 3. Authentication
@@ -63,6 +65,7 @@ auth_result = runtime.execute_node(auth_node, username="myuser", password="mypas
 
 # Use auth headers in API calls
 api_headers = auth_result["headers"]
+
 ```
 
 #### API Key Authentication
@@ -77,6 +80,7 @@ auth_result = runtime.execute_node(
     location="header",
     param_name="X-API-Key"
 )
+
 ```
 
 #### OAuth 2.0
@@ -91,6 +95,7 @@ auth_result = runtime.execute_node(
     client_secret="your-secret",
     grant_type="client_credentials"
 )
+
 ```
 
 ### 4. Rate Limiting
@@ -119,6 +124,7 @@ rate_limited = RateLimitedAPINode(
 
 # API calls will automatically respect rate limits
 result = runtime.execute_node(rate_limited)
+
 ```
 
 #### Rate Limiting Strategies
@@ -150,6 +156,7 @@ result = runtime.execute_node(
     query=query,
     variables={"limit": 10}
 )
+
 ```
 
 ## Advanced Examples
@@ -196,6 +203,7 @@ RateLimitConfig(
     burst_limit=120,  # Allow occasional bursts
     backoff_factor=1.5
 )
+
 ```
 
 ### Sliding Window Strategy
@@ -206,6 +214,7 @@ RateLimitConfig(
     strategy="sliding_window",
     backoff_factor=2.0  # More aggressive backoff
 )
+
 ```
 
 ## Error Handling
@@ -227,6 +236,7 @@ if result["success"]:
 else:
     error_code = result["status_code"]
     # Handle error appropriately
+
 ```
 
 ## Best Practices
@@ -240,34 +250,68 @@ rate_limited_api = RateLimitedAPINode(
     wrapped_node=your_api_node,
     rate_limit_config=appropriate_config
 )
+
 ```
 
 ### 2. Handle Authentication Properly
 Separate authentication from API calls for reusability:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Step 1: Get authentication
-auth_result = runtime.execute_node(auth_node, ...)
+runtime = LocalRuntime()
+workflow.execute_node(auth_node, ...)
 
 # Step 2: Use auth in API calls
-api_result = runtime.execute_node(
+runtime = LocalRuntime()
+workflow.execute_node(
     api_node,
     headers=auth_result["headers"],
-    ...
+    # ... (example continues)
 )
+
 ```
 
 ### 3. Use Async for High Throughput
 For concurrent API calls, use async nodes:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Multiple concurrent API calls
 tasks = []
 for item in items:
-    task = async_runtime.execute_node_async(api_node, data=item)
+runtime = LocalRuntime()
+workflow.execute_node_async(api_node, data=item)
     tasks.append(task)
 
 results = await asyncio.gather(*tasks)
+
 ```
 
 ### 4. Implement Proper Error Handling
@@ -284,6 +328,7 @@ if not result["success"]:
     else:  # Client error
         # Log and handle appropriately
         pass
+
 ```
 
 ## Configuration Examples
@@ -297,6 +342,7 @@ dev_config = RateLimitConfig(
     strategy="token_bucket",
     burst_limit=1500
 )
+
 ```
 
 ### Production Environment
@@ -309,6 +355,7 @@ prod_config = RateLimitConfig(
     backoff_factor=2.0,
     max_backoff=300.0
 )
+
 ```
 
 ### High-Frequency Trading
@@ -321,6 +368,7 @@ hft_config = RateLimitConfig(
     burst_limit=1200,
     backoff_factor=1.1  # Quick recovery
 )
+
 ```
 
 ## Testing Your Integration
@@ -351,6 +399,7 @@ Enable detailed logging:
 ```python
 import logging
 logging.basicConfig(level=logging.DEBUG)
+
 ```
 
 ## Next Steps

@@ -118,7 +118,7 @@ This directory contains in-depth guides for key features and architectural patte
 
 - **API Reference**: `../reference/api-registry.yaml` - Complete API documentation
 - **Node Catalog**: `../reference/node-catalog.md` - All available nodes
-- **Pattern Library**: `../reference/pattern-library/` - Workflow patterns organized by category
+- **Pattern Library**: `../patterns/` - Workflow patterns organized by category
 - **Examples**: `../../examples/` - Working code examples
 - **Architecture Decisions**: `../adr/` - Design rationale
 

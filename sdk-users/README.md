@@ -5,7 +5,25 @@
 ## 🚨 Start Here: [CLAUDE.md](CLAUDE.md)
 Quick reference with critical rules, common patterns, and navigation guide.
 
+## 🎯 **Critical for Claude Code Users**
+- **[cheatsheet/000-claude-code-guide.md](cheatsheet/000-claude-code-guide.md)** - **START HERE** Essential success patterns
+- **[cheatsheet/038-integration-mastery.md](cheatsheet/038-integration-mastery.md)** - Complete integration guide
+- **[cheatsheet/039-workflow-composition.md](cheatsheet/039-workflow-composition.md)** - Advanced workflow patterns
+
 ## 📁 Contents
+
+### **Enterprise & Production**
+- **[enterprise/](enterprise/)** - Enterprise-grade patterns and architecture
+  - Advanced middleware patterns
+  - Multi-tenant session management  
+  - Production security and monitoring
+  - High-scale deployment patterns
+
+- **[production-patterns/](production-patterns/)** - Real app implementations & deployment
+  - Proven patterns from actual production apps
+  - 15.9x performance optimizations
+  - Production deployment configurations
+  - Real-world security and monitoring
 
 ### **Build from Scratch or Modify**
 - **[developer/](developer/)** - Node creation, patterns, troubleshooting
@@ -23,7 +41,9 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Production-ready scripts with real data
 
 ### **Quick Reference**
-- **[essentials/](essentials/)** - Copy-paste code snippets (streamlined cheatsheet)
+- **[essentials/](essentials/)** - Essential patterns and guides
+- **[cheatsheet/](cheatsheet/)** - Copy-paste code snippets
+  - **NEW: Claude Code specific guides**
   - Installation and basic setup
   - Common node patterns
   - Connection patterns
@@ -90,11 +110,28 @@ Quick reference with critical rules, common patterns, and navigation guide.
 ### **PythonCodeNode Input Exclusion**
 Variables passed as inputs are EXCLUDED from outputs!
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # WRONG
-workflow.connect("n1", "n2", mapping={"result": "result"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # CORRECT
-workflow.connect("n1", "n2", mapping={"result": "input_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### **Node Naming Convention**

@@ -30,8 +30,23 @@ This document covers control flow and logic nodes including conditional routing,
   - `pass_condition_result`: Whether to include condition result in outputs (default: True)
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   # Simple boolean condition
   switch_node = SwitchNode(condition_field="status", operator="==", value="success")
+
   ```
 
 ### AsyncSwitchNode
@@ -44,11 +59,26 @@ This document covers control flow and logic nodes including conditional routing,
 - **Parameters**: Same as SwitchNode
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   import asyncio
   async_switch = AsyncSwitchNode(condition_field="status", operator="==", value="active")
   result = asyncio.run(async_switch.execute_async(
       input_data={"status": "active", "data": "test"}
   ))
+
   ```
 
 ## Data Merging
@@ -70,10 +100,25 @@ This document covers control flow and logic nodes including conditional routing,
   - `skip_none`: Skip None values when merging (default: True)
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   # Simple list concatenation
   merge_node = MergeNode(merge_type="concat")
   result = merge_node.execute(data1=[1, 2], data2=[3, 4])
   # result['merged_data'] = [1, 2, 3, 4]
+
   ```
 
 ### AsyncMergeNode
@@ -87,9 +132,24 @@ This document covers control flow and logic nodes including conditional routing,
   - `chunk_size`: Chunk size for processing large datasets (default: 1000)
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   import asyncio
   async_merge = AsyncMergeNode(merge_type="concat")
   result = asyncio.run(async_merge.execute_async(data1=[1, 2], data2=[3, 4]))
+
   ```
 
 ## Workflow Composition
@@ -111,10 +171,26 @@ This document covers control flow and logic nodes including conditional routing,
   - `inputs`: Additional input overrides for workflow nodes
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   # Direct workflow wrapping
-  from kailash.workflow.graph import Workflow
-  inner_workflow = Workflow("wf-001", "data_processing")
-  node = WorkflowNode(workflow=inner_workflow)
+workflow = Workflow("example", name="Example")
+workflow.workflow.graph import Workflow
+  inner_workflow = Workflow("example", name="Example")
+workflow.  node = WorkflowNode(workflow=inner_workflow)
+
   ```
 
 ## See Also

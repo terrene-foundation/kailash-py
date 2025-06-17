@@ -81,6 +81,7 @@ service_health_check = HTTPRequestNode(
     url="http://localhost:8080/health",
     expected_status=200
 )
+
 ```
 
 ### Database Connectivity Monitoring
@@ -92,10 +93,25 @@ db_health_check = HTTPRequestNode(
     url="http://localhost:5432/health",  # PostgreSQL health check
     timeout=5.0
 )
+
 ```
 
 ### Alert Integration with Discord
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Real-time Discord alerts for critical issues
 critical_alert = DiscordAlertNode(
     name="critical_alert",
@@ -114,10 +130,25 @@ health_dashboard = DiscordAlertNode(
     username="Health Monitor",
     footer_text="Updated every 5 minutes"
 )
+
 ```
 
 ### Results Analysis and Alerting
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Analyze health check results and generate alerts
 health_analyzer = PythonCodeNode.from_function(
     func=analyze_health_results,
@@ -129,6 +160,7 @@ report_generator = PythonCodeNode.from_function(
     func=generate_monitoring_report,
     name="report_generator"
 )
+
 ```
 
 ## Monitoring Strategies
@@ -147,6 +179,7 @@ def check_service_health(response_data):
             return {"status": "critical", "score": 25}
     else:
         return {"status": "down", "score": 0}
+
 ```
 
 ### Alert Generation
@@ -162,6 +195,7 @@ def generate_alerts(health_results):
                 "message": f"Service {service} health score: {result['score']}"
             })
     return alerts
+
 ```
 
 ## Integration with Enterprise Systems
@@ -198,6 +232,7 @@ MONITORED_SERVICES = {
         {"name": "Mock API", "url": "http://localhost:8888/health"}
     ]
 }
+
 ```
 
 ### Alert Thresholds
@@ -216,6 +251,7 @@ ALERT_THRESHOLDS = {
         "critical": 90    # percentage
     }
 }
+
 ```
 
 ## Best Practices
@@ -262,9 +298,26 @@ ALERT_THRESHOLDS = {
 
 ### Cascading Health Checks
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Check dependent services in sequence
-workflow.connect("database_check", "api_check")  # API depends on DB
-workflow.connect("api_check", "frontend_check")  # Frontend depends on API
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("database_check", "api_check")  # API depends on DB
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("api_check", "frontend_check")  # Frontend depends on API
+
 ```
 
 ### Conditional Alerting
@@ -277,15 +330,31 @@ alert_filter = SwitchNode(
         "continue_monitoring": "consecutive_failures < 3"
     }
 )
+
 ```
 
 ### Health Score Aggregation
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Calculate overall system health from individual service scores
 health_aggregator = PythonCodeNode.from_function(
     func=calculate_system_health,
     name="health_aggregator"
 )
+
 ```
 
 ## Dashboards and Reporting

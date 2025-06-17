@@ -157,6 +157,7 @@ await registry.register_server("my-mcp", {
     "args": ["--config", "config.json"],
     "transport": "stdio"
 })
+
 ```
 
 ### Creating Workflow Templates
@@ -171,6 +172,7 @@ template = {
         {"source": "reader", "target": "processor"}
     ]
 }
+
 ```
 
 ## Troubleshooting
