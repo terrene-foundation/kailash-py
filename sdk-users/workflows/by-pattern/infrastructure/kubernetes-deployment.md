@@ -90,6 +90,7 @@ spec:
     targetPort: 8000
   type: LoadBalancer
 """
+
 ```
 
 ## Kubernetes Job for Batch Processing
@@ -150,6 +151,7 @@ spec:
       backoffLimit: 3
       activeDeadlineSeconds: 7200  # 2 hour timeout
 """
+
 ```
 
 ## Horizontal Pod Autoscaling
@@ -213,8 +215,8 @@ spec:
 from kailash.workflow import Workflow
 from kailash.tracking import MetricsCollector
 
-workflow = Workflow("scalable-api", "Auto-scaling API")
-metrics = MetricsCollector()
+workflow = Workflow("example", name="Example")
+workflow.metrics = MetricsCollector()
 
 # Add metrics endpoint for HPA
 @workflow.metrics_endpoint("/metrics")
@@ -224,6 +226,7 @@ def get_metrics():
         "processing_rate": metrics.get_processing_rate(),
         "error_rate": metrics.get_error_rate()
     }
+
 ```
 
 ## StatefulSet for Stateful Workflows
@@ -295,6 +298,7 @@ workflow.add_stateful_node("accumulator", AccumulatorNode(
     checkpoint_interval=100,
     recovery_mode="continue"
 ))
+
 ```
 
 ## Service Mesh Integration
@@ -362,11 +366,12 @@ spec:
 from kailash.workflow import Workflow
 from kailash.observability import TracingMiddleware
 
-workflow = Workflow("traced-workflow", "Distributed Traced Workflow")
-workflow.add_middleware(TracingMiddleware(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_middleware(TracingMiddleware(
     service_name="workflow-api",
     jaeger_endpoint="http://jaeger-collector:14268/api/traces"
 ))
+
 ```
 
 ## Multi-Environment Configuration
@@ -435,6 +440,7 @@ config = KubernetesConfig(
 )
 
 workflow = Workflow.from_kubernetes_config(config)
+
 ```
 
 ## Production Helm Chart
@@ -577,6 +583,7 @@ dashboard.add_panel(
 )
 
 dashboard.export_to_k8s_configmap("grafana-dashboards")
+
 ```
 
 ## Best Practices

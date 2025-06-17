@@ -48,10 +48,25 @@ export OPENAI_API_KEY=your-key-here
 
 ### ✓ DO: Use Specialized Nodes
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Good - use existing nodes
 csv_reader = CSVReaderNode(file_path="data.csv")
 filter_node = FilterNode()
 api_client = RESTClientNode()
+
 ```
 
 ### ❌ DON'T: Overuse PythonCodeNode
@@ -63,6 +78,7 @@ import csv
 with open('data.csv') as f:
     data = list(csv.DictReader(f))
 """)
+
 ```
 
 ## Running Order

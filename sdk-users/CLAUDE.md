@@ -41,98 +41,51 @@ The decision matrix provides fast answers to:
 |--------------|-------|---------|
 | **Make architecture decisions** | [decision-matrix.md](decision-matrix.md) | Choose workflow patterns, routing |
 | **Build complete app** | [../apps/ARCHITECTURAL_GUIDE.md](../apps/ARCHITECTURAL_GUIDE.md) | App implementation guide |
-| Build from scratch | [developer/](developer/) | Technical guides, patterns |
-| Lift working example | [workflows/](workflows/) | Industry & enterprise solutions |
-| Quick code snippet | [essentials/cheatsheet/](essentials/cheatsheet/) | Copy-paste patterns |
-| Choose right node | [nodes/](nodes/comprehensive-node-catalog.md) | Node selection guide |
-| Fix an error | [developer/07-troubleshooting.md](developer/07-troubleshooting.md) | Error resolution |
-| Frontend integration | [middleware/](middleware/) | Real-time agent-UI communication |
-| Learn features | [features/](features/) | Feature documentation |
+| **Choose right node** | [nodes/node-selection-guide.md](nodes/node-selection-guide.md) | Smart node finder with decision trees |
+| Build from scratch | [developer/](developer/) | 6 focused technical guides |
+| Quick code snippet | [cheatsheet/](cheatsheet/) | 37 standardized copy-paste patterns |
+| Fix an error | [developer/05-troubleshooting.md](developer/05-troubleshooting.md) | Comprehensive error resolution |
+| Frontend integration | [frontend-integration/](frontend-integration/) | React/Vue + middleware patterns |
+| Production deployment | [developer/04-production.md](developer/04-production.md) | Security, monitoring, performance |
+| **Enterprise features** | [enterprise/](enterprise/) | Advanced patterns, security, compliance |
 | **Production workflows** | [workflows/](workflows/) | Business-focused solutions |
-| **Run tests** | [../tests/README.md](../tests/README.md) | Test suite guide |
-| **SDK development** | [../examples/](../examples/) | Feature validation & testing |
+| **Performance tuning** | [monitoring/](monitoring/) | Observability and optimization |
 
 ## 📁 Navigation Guide
 
-### **Build from Scratch or Modify**
-- **[developer/](developer/)** - Node creation, patterns, troubleshooting
-  - Critical PythonCodeNode patterns
-  - Directory reader best practices
-  - Document processing workflows
-  - Custom node development
-  - Middleware integration patterns
-  - Unified runtime with enterprise capabilities
-  - **[20-comprehensive-rag-guide.md](developer/20-comprehensive-rag-guide.md)** - Complete RAG toolkit with 30+ specialized nodes
+### **Core Development**
+- **[developer/](developer/)** - 6 focused guides: fundamentals → workflows → advanced → production → troubleshooting → custom development
+- **[nodes/](nodes/)** - Enhanced with decision trees and smart selection
+- **[cheatsheet/](cheatsheet/)** - 37 standardized patterns (200-800 tokens each)
 
-### **Frontend Integration**
-- **[middleware/](middleware/)** - Enterprise middleware layer
-  - Agent-UI communication patterns
-  - Real-time event streaming
-  - Dynamic workflow creation
-  - AI chat integration
+### **Enterprise & Production**
+- **[enterprise/](enterprise/)** - Advanced middleware, security, compliance patterns
+- **[frontend-integration/](frontend-integration/)** - React/Vue + real-time communication
+- **[monitoring/](monitoring/)** - Performance, observability, alerting
+- **[production-patterns/](production-patterns/)** - Real app implementations
+- **[architecture/](architecture/)** - Simplified ADR guidance
 
-### **Production Workflows**
-- **[workflows/](workflows/)** - Business-focused, production-ready solutions
-  - **One-line principle**: Single source for all production workflows → [workflows/README.md](workflows/README.md)
+### **Business Solutions**
+- **[workflows/](workflows/)** - Production-ready industry solutions
 
-### **Quick Reference**
-- **[essentials/](essentials/)** - Copy-paste patterns (streamlined cheatsheet)
-- **[api/](api/)** - API documentation and signatures
-- **[nodes/](nodes/)** - Complete node catalog with examples
-- **[patterns/](patterns/)** - Architectural workflow patterns
-- **[templates/](templates/)** - Boilerplate code templates
+## 🎯 Essential References
 
-### **User Features**
-- **[features/](features/)** - Feature guides and when to use them
-- **[validation-guide.md](validation-guide.md)** - Critical rules to prevent errors
+**Start Here:**
+- [decision-matrix.md](decision-matrix.md) - Architecture decisions
+- [nodes/node-selection-guide.md](nodes/node-selection-guide.md) - Smart node selection  
+- [developer/05-troubleshooting.md](developer/05-troubleshooting.md) - Error fixes
 
-## 📚 Resource Categories
-
-### **Development Guides**
-- **[developer/](developer/)** - In-depth technical documentation
-  - Node creation and patterns
-  - Parameter types and validation
-  - Common patterns and anti-patterns
-  - Workflow design process (Session 064)
-  - Data integration patterns (Session 064)
-  - Production readiness checklist (Session 064)
-  - Troubleshooting guide
-
-### **Working Examples**
-- **[workflows/](workflows/)** - Complete production workflows
-  - **by-industry/** - Finance, healthcare, manufacturing, retail
-  - **by-enterprise/** - HR, marketing, operations, analytics
-  - **by-pattern/** - ETL, real-time, batch, event-driven
-
-### **Quick Reference**
-- **[essentials/cheatsheet/](essentials/cheatsheet/)** - Copy-paste code snippets
-  - Installation and setup
-  - Common node patterns
-  - Connection patterns
-  - Workflow design process (Session 064)
-  - Data integration patterns (Session 064)
-  - Production readiness checklist (Session 064)
-  - Best practices summary
-
-### **Node Catalog**
-- **[nodes/](nodes/)** - Complete node reference
-  - Comprehensive catalog with examples
-  - Node selection guide
-  - Input/output specifications
-
-### **Features**
-- **[features/](features/)** - Advanced SDK capabilities
-  - Access control and security
-  - API integration patterns
-  - Performance optimization
-  - Cyclic workflows
+**Quick Access:**
+- [cheatsheet/](cheatsheet/) - 37 copy-paste patterns
+- [workflows/](workflows/) - Industry solutions  
+- [enterprise/](enterprise/) - Advanced patterns
 
 ## ⚠️ Critical Rules Reference
 For validation rules and common mistakes, see:
 - **Root CLAUDE.md** - Critical validation rules
 - **[decision-matrix.md](decision-matrix.md)** - Architecture decision guidelines
-- **[developer/07-troubleshooting.md](developer/07-troubleshooting.md)** - Error fixes
-- **[shared/mistakes/](../shared/mistakes/)** - Comprehensive mistake database
+- **[developer/05-troubleshooting.md](developer/05-troubleshooting.md)** - Error fixes
+- **[validation/common-mistakes.md](validation/common-mistakes.md)** - Common mistake database
 
 ## 🤖 Critical Workflow
 
@@ -174,6 +127,5 @@ Proceed with this approach?
 
 ---
 
-**Building workflows?** Start with [developer/](developer/) or [workflows/](workflows/)
-**Need help?** Check [developer/07-troubleshooting.md](developer/07-troubleshooting.md)
+**Building workflows?** Start with [developer/](developer/) or [workflows/](workflows/)**Need help?** Check [developer/05-troubleshooting.md](developer/05-troubleshooting.md)
 **For SDK development**: See [../# contrib (removed)/CLAUDE.md](../# contrib (removed)/CLAUDE.md)

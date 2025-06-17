@@ -98,6 +98,7 @@ results, run_id = runtime.execute(workflow, parameters={
 })
 
 print("Critical Alerts:", results['alert_processor']['critical_alerts'])
+
 ```
 
 ## 🔧 Core Healthcare Patterns
@@ -115,8 +116,8 @@ class HIPAACompliantProcessor(HealthcareSecurityMixin, PythonCodeNode):
         self.enable_phi_detection = True
         self.enable_audit_logging = True
 
-workflow = Workflow("hipaa_workflow")
-workflow.add_node("secure_reader", SecureCSVReaderNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("secure_reader", SecureCSVReaderNode(
     encryption_enabled=True,
     audit_trail=True
 ))
@@ -147,92 +148,81 @@ result = {
 }
 '''
 ))
+
 ```
 
 ### Clinical Decision Tree Integration
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("clinical_decision_tree")
 
 # AI-powered clinical analysis
-workflow.add_node("clinical_analyzer", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    mcp_servers=[{
-        "name": "ai-registry",
-        "transport": "stdio",
-        "command": "python",
-        "args": ["scripts/start-ai-registry-server.py"]
-    }],
-    system_prompt="""You are a clinical AI assistant. Use the AI registry to find relevant
-    healthcare AI use cases for diagnosis and treatment recommendations. Focus on evidence-based
-    medical decision making."""
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
 # Clinical decision router
-workflow.add_node("decision_router", SwitchNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("decision_router", SwitchNode(
     condition_field="severity_level",
     condition_type="string"
 ))
 
 # Emergency pathway
-workflow.add_node("emergency_protocol", PythonCodeNode(
-    name="emergency_protocol",
-    code='''
-# Immediate emergency response
-emergency_actions = [
-    "Contact emergency physician immediately",
-    "Initiate cardiac monitoring",
-    "Prepare for emergency intervention",
-    "Alert emergency team"
-]
-
-result = {
-    "actions": emergency_actions,
-    "priority": "STAT",
-    "notification_sent": True,
-    "response_time_target": "< 5 minutes"
-}
-'''
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
 # Routine care pathway
-workflow.add_node("routine_protocol", PythonCodeNode(
-    name="routine_protocol",
-    code='''
-# Standard care protocol
-routine_actions = [
-    "Schedule follow-up appointment",
-    "Order additional tests if needed",
-    "Provide patient education materials",
-    "Monitor symptoms"
-]
-
-result = {
-    "actions": routine_actions,
-    "priority": "routine",
-    "follow_up_required": True,
-    "response_time_target": "< 24 hours"
-}
-'''
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
 # Connect decision tree
-workflow.connect("clinical_analyzer", "decision_router",
-    mapping={"final_response": "clinical_assessment"})
-workflow.connect("decision_router", "emergency_protocol",
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("decision_router", "emergency_protocol",
     condition="emergency")
-workflow.connect("decision_router", "routine_protocol",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("decision_router", "routine_protocol",
     condition="routine")
+
 ```
 
 ## 📊 Healthcare Analytics Patterns
 
 ### Patient Outcome Tracking
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("outcome_tracking")
 
 # Data aggregation across multiple sources
-workflow.add_node("data_aggregator", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("data_aggregator", PythonCodeNode(
     name="data_aggregator",
     code='''
 import pandas as pd
@@ -299,31 +289,37 @@ def calculate_quality_indicators(profiles):
 ))
 
 # Outcome analysis with AI insights
-workflow.add_node("outcome_analyzer", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    mcp_servers=[{
-        "name": "ai-registry",
-        "transport": "stdio",
-        "command": "python",
-        "args": ["scripts/start-ai-registry-server.py"]
-    }],
-    system_prompt="""Analyze patient outcome data using healthcare AI use cases from the registry.
-    Focus on identifying patterns, risk factors, and opportunities for quality improvement."""
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
-workflow.connect("data_aggregator", "outcome_analyzer",
-    mapping={"outcome_metrics": "outcome_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🔬 Research Workflow Patterns
 
 ### Clinical Trial Data Pipeline
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("clinical_trial_pipeline")
 
 # Data collection and validation
-workflow.add_node("trial_data_validator", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("trial_data_validator", PythonCodeNode(
     name="trial_data_validator",
     code='''
 import pandas as pd
@@ -377,45 +373,41 @@ result = validation_results
 ))
 
 # Statistical analysis with AI insights
-workflow.add_node("statistical_analyzer", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    mcp_servers=[{
-        "name": "ai-registry",
-        "transport": "stdio",
-        "command": "python",
-        "args": ["scripts/start-ai-registry-server.py"]
-    }],
-    system_prompt="""You are a clinical research AI analyst. Use healthcare AI use cases
-    to analyze clinical trial data and provide statistical insights for regulatory submissions."""
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
-workflow.connect("trial_data_validator", "statistical_analyzer",
-    mapping={"validated_data": "trial_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 💊 Drug Development Workflows
 
 ### Compound Analysis Pipeline
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("compound_analysis")
 
 # Molecular analysis with AI
-workflow.add_node("compound_analyzer", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    mcp_servers=[{
-        "name": "ai-registry",
-        "transport": "stdio",
-        "command": "python",
-        "args": ["scripts/start-ai-registry-server.py"]
-    }],
-    system_prompt="""Analyze pharmaceutical compounds using AI drug discovery use cases.
-    Focus on molecular properties, drug-drug interactions, and therapeutic potential."""
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
 # Safety assessment processor
-workflow.add_node("safety_assessor", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("safety_assessor", PythonCodeNode(
     name="safety_assessor",
     code='''
 # Safety assessment based on compound properties
@@ -449,39 +441,34 @@ result = {
 '''
 ))
 
-workflow.connect("compound_analyzer", "safety_assessor",
-    mapping={"final_response": "compound_analysis"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🎯 Business Value Examples
 
 ### ROI Metrics for Healthcare AI
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("healthcare_ai_roi")
 
 # Cost-benefit analysis
-workflow.add_node("roi_calculator", PythonCodeNode(
-    name="roi_calculator",
-    code='''
-# Healthcare AI ROI calculation
-implementation_costs = {
-    "software_licenses": 50000,
-    "hardware_infrastructure": 25000,
-    "staff_training": 15000,
-    "integration_costs": 20000,
-    "ongoing_maintenance": 10000
-}
-
-# Benefits from AI implementation
-ai_benefits = {
-    "reduced_diagnostic_errors": 150000,  # $150K annually
-    "faster_diagnosis_time": 75000,       # $75K in efficiency gains
-    "improved_patient_outcomes": 200000,  # $200K in avoided complications
-    "reduced_staff_workload": 100000,     # $100K in productivity gains
-    "compliance_automation": 25000        # $25K in compliance costs avoided
-}
-
-total_costs = sum(implementation_costs.values())
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 total_benefits = sum(ai_benefits.values())
 annual_roi = (total_benefits - total_costs) / total_costs * 100
 payback_period = total_costs / total_benefits
@@ -504,15 +491,17 @@ result = {
 ))
 
 # Business case generator
-workflow.add_node("business_case", IterativeLLMAgentNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("business_case", IterativeLLMAgentNode(
     provider="ollama",
     model="llama3.2",
     system_prompt="""Generate executive-level business case for healthcare AI implementation.
     Focus on clinical outcomes, operational efficiency, and financial returns."""
 ))
 
-workflow.connect("roi_calculator", "business_case",
-    mapping={"result": "roi_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🔗 Integration Resources

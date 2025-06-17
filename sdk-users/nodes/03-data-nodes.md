@@ -86,6 +86,20 @@ This document covers all data input/output nodes including file operations, data
   - Metadata-driven applications
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   processor = DocumentProcessorNode(
       extract_metadata=True,
       preserve_structure=True
@@ -96,6 +110,7 @@ This document covers all data input/output nodes including file operations, data
   metadata = result["metadata"]         # Document properties
   sections = result["sections"]         # Structural elements
   doc_format = result["document_format"] # Detected format
+
   ```
 - **Output Structure**:
   ```python
@@ -121,6 +136,7 @@ This document covers all data input/output nodes including file operations, data
       ],
       "document_format": "pdf"
   }
+
   ```
 
 ### TextWriterNode
@@ -234,6 +250,20 @@ This document covers all data input/output nodes including file operations, data
 - **Best For**: Production RAG systems, enterprise search, multi-modal retrieval
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   retriever = HybridRetrieverNode(fusion_strategy="rrf", top_k=5)
   result = retriever.run(
       query="machine learning algorithms",
@@ -241,6 +271,7 @@ This document covers all data input/output nodes including file operations, data
       sparse_results=keyword_search_results  # From BM25/keyword search
   )
   hybrid_results = result["hybrid_results"]  # Best of both methods
+
   ```
 
 ### RelevanceScorerNode
@@ -252,6 +283,20 @@ This document covers all data input/output nodes including file operations, data
 - **Enhanced Features**: Works with embeddings for precise relevance scoring
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   scorer = RelevanceScorerNode(similarity_method="cosine", top_k=3)
   result = scorer.run(
       chunks=retrieved_chunks,
@@ -259,6 +304,7 @@ This document covers all data input/output nodes including file operations, data
       chunk_embeddings=chunk_embeddings
   )
   relevant_chunks = result["relevant_chunks"]  # Top ranked results
+
   ```
 
 ## SharePoint Integration Nodes
@@ -284,6 +330,7 @@ This document covers all data input/output nodes including file operations, data
       operation="list_files",
       library_name="Documents"
   )
+
   ```
 
 ### SharePointGraphWriter

@@ -101,6 +101,7 @@ result = {'waited': wait_time, 'ready_to_retry': True}
                                      mapping={"result": "wait_result"})
 
     return workflow
+
 ```
 
 ### Optimization Loop Pattern
@@ -149,7 +150,6 @@ result = {
     gradient_computer = PythonCodeNode(
         name="gradient_computer",
         code='''
-import numpy as np
 
 # Simulated loss function (quadratic)
 params = np.array(current_state['parameters'])
@@ -175,7 +175,6 @@ result = {
     parameter_updater = PythonCodeNode(
         name="parameter_updater",
         code='''
-import numpy as np
 
 # Update parameters using gradient descent
 params = np.array(gradient_result['parameters'])
@@ -236,6 +235,7 @@ result = {
     cycle_builder.set_max_iterations(1000)
 
     return workflow
+
 ```
 
 ### State Machine Pattern
@@ -395,6 +395,7 @@ result = {
     cycle_builder.set_max_iterations(20)
 
     return workflow
+
 ```
 
 ### Feedback Loop with Learning
@@ -480,7 +481,6 @@ result = {
     model_updater = PythonCodeNode(
         name="model_updater",
         code='''
-import numpy as np
 
 # Update model weights based on feedback
 model_weights = np.array(recommendation_data['model_weights'])
@@ -549,6 +549,7 @@ result = {
                                      mapping={"updated_model": "learning_state"})
 
     return workflow
+
 ```
 
 ## 🎯 Common Use Cases
@@ -589,6 +590,7 @@ cycle_builder.set_cycle_exit_condition(
 
 # GOOD: Maximum iteration limit
 cycle_builder.set_max_iterations(1000)
+
 ```
 
 ### 2. **Track Cycle State**
@@ -599,15 +601,31 @@ state = {
     'best_result': best_result,
     'history': history[-100:]  # Keep bounded history
 }
+
 ```
 
 ### 3. **Monitor Progress**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Log cycle metrics
 cycle_profiler = CycleProfiler()
 profiler_data = cycle_profiler.profile_workflow(workflow)
 print(f"Iterations: {profiler_data['total_iterations']}")
 print(f"Avg iteration time: {profiler_data['avg_iteration_time']}")
+
 ```
 
 ### 4. **Handle Infinite Loops**
@@ -619,6 +637,7 @@ iteration >= max_iterations or
 time_elapsed > max_time or
 no_improvement_count > patience
 """
+
 ```
 
 ## 🔗 Related Examples

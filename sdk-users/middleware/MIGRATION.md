@@ -19,11 +19,26 @@ from kailash.mcp.server import MCPServer
 # ✅ NEW - Current
 from kailash.middleware import create_gateway, MiddlewareMCPServer
 from kailash.middleware import AgentUIMiddleware, RealtimeMiddleware
+
 ```
 
 ### Gateway Creation
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ OLD - Deprecated
 gateway = WorkflowAPIGateway(
     title="My App",
@@ -39,6 +54,7 @@ gateway = create_gateway(
     max_sessions=100
 )
 # Workflows created dynamically via API
+
 ```
 
 ### MCP Integration
@@ -59,6 +75,7 @@ mcp = MiddlewareMCPServer(name="tools", agent_ui=gateway.agent_ui)
 @mcp.tool
 def my_tool():
     return "result"
+
 ```
 
 ## Detailed Migration Steps
@@ -78,6 +95,20 @@ Replace all `kailash.api` and `kailash.mcp` imports:
 
 #### Before (Legacy API)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Static workflow registration
 gateway = WorkflowAPIGateway(title="App")
 gateway.register_workflow("process", data_workflow)
@@ -85,10 +116,25 @@ gateway.register_workflow("analyze", analysis_workflow)
 
 # Start server
 gateway.run(port=8000)
+
 ```
 
 #### After (Middleware)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Dynamic workflow creation via API
 gateway = create_gateway(title="App")
 
@@ -98,6 +144,7 @@ gateway = create_gateway(title="App")
 # Session-based isolation
 
 gateway.run(port=8000)
+
 ```
 
 ### 3. Workflow Definition Changes
@@ -106,11 +153,12 @@ gateway.run(port=8000)
 ```python
 # Workflows defined at startup
 def create_data_workflow():
-    workflow = Workflow("data_processing")
-    # ... add nodes and connections
+    workflow = Workflow("example", name="Example")
+workflow.    # ... add nodes and connections
     return workflow
 
 gateway.register_workflow("data_processing", create_data_workflow())
+
 ```
 
 #### After (Dynamic Creation)
@@ -130,6 +178,7 @@ workflow_config = {
 # Created via API call:
 # POST /api/workflows
 # { "workflow_config": workflow_config }
+
 ```
 
 ### 4. MCP Server Changes
@@ -141,11 +190,12 @@ from kailash.mcp.server import MCPServer
 mcp = MCPServer(name="tools")
 
 @mcp.tool
-def analyze_data(data: str) -> str:
+def analyze_data('data') -> str:
     return f"Analysis: {data}"
 
 # Separate from API gateway
 mcp.run(port=9000)
+
 ```
 
 #### After (Integrated MCP)
@@ -158,11 +208,12 @@ gateway = create_gateway(title="App")
 mcp = gateway.mcp_server  # Built-in MCP server
 
 @mcp.tool
-def analyze_data(data: str) -> str:
+def analyze_data('data') -> str:
     return f"Analysis: {data}"
 
 # Single server for API + MCP + Real-time
 gateway.run(port=8000)
+
 ```
 
 ### 5. Authentication Changes
@@ -173,6 +224,7 @@ from kailash.api.auth import JWTAuthManager
 
 auth = JWTAuthManager(secret_key="secret")
 gateway = WorkflowAPIGateway(auth_manager=auth)
+
 ```
 
 #### After (Enterprise Auth)
@@ -181,6 +233,7 @@ from kailash.middleware.auth import KailashJWTAuthManager
 
 auth = KailashJWTAuthManager(secret_key="secret")
 gateway = create_gateway(auth_manager=auth, enable_auth=True)
+
 ```
 
 ## New Features Available
@@ -200,6 +253,7 @@ POST /api/workflows
     "session_id": "session-uuid",
     "workflow_config": {...}
 }
+
 ```
 
 ### 2. Real-Time Communication
@@ -220,6 +274,20 @@ events.onmessage = (event) => {
 
 ### 3. AI Chat Integration
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # AI-powered workflow creation
 POST /api/chat/message
 {
@@ -229,10 +297,25 @@ POST /api/chat/message
 }
 
 # AI generates workflow configuration automatically
+
 ```
 
 ### 4. Dynamic Schema Generation
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Get available node types with schemas
 GET /api/nodes
 
@@ -250,6 +333,7 @@ GET /api/nodes
         }
     ]
 }
+
 ```
 
 ## Breaking Changes
@@ -309,8 +393,8 @@ from kailash.mcp.server import MCPServer
 from kailash.workflow import Workflow
 
 # Create workflows
-data_workflow = Workflow("data_processing")
-# ... build workflow
+data_workflow = Workflow("example", name="Example")
+workflow.# ... build workflow
 
 # Create gateway
 gateway = WorkflowAPIGateway(title="My Platform")
@@ -325,6 +409,7 @@ def analyze():
 # Run separately
 gateway.run(port=8000)
 mcp.run(port=9000)
+
 ```
 
 #### After (Middleware)
@@ -350,6 +435,7 @@ def analyze():
 
 # Single server for everything
 gateway.run(port=8000)
+
 ```
 
 ### Frontend Integration

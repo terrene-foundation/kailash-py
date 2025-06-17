@@ -173,6 +173,7 @@ result = fallback_data
                     output_key="false_output", mapping={"error_check_result": "data"})
 
     return workflow
+
 ```
 
 ### Retry with Exponential Backoff
@@ -305,6 +306,7 @@ result = {
                     mapping={"response": "operation_response"})
 
     return workflow
+
 ```
 
 ### Circuit Breaker Pattern
@@ -501,6 +503,7 @@ def get_cached_response():
                     mapping={"response": "response_data"})
 
     return workflow
+
 ```
 
 ### Error Aggregation and Reporting
@@ -671,6 +674,7 @@ def get_recommended_response(health):
                         mapping={"result": f"{op}_error_report"})
 
     return workflow
+
 ```
 
 ## 🎯 Common Use Cases
@@ -683,6 +687,7 @@ retry_config = {
     'backoff_multiplier': 2,
     'retry_on': [429, 500, 502, 503, 504]
 }
+
 ```
 
 ### 2. Data Pipeline Recovery
@@ -693,6 +698,7 @@ error_handler = ErrorHandler(
     log_errors=True,
     error_threshold=0.1  # Fail if >10% errors
 )
+
 ```
 
 ### 3. Service Degradation
@@ -704,6 +710,7 @@ fallback_chain = [
     'cache_lookup',
     'default_response'
 ]
+
 ```
 
 ### 4. Batch Processing
@@ -714,6 +721,7 @@ batch_processor = BatchProcessor(
     max_failed_items=100,
     error_file='failed_items.json'
 )
+
 ```
 
 ## 📊 Best Practices
@@ -727,15 +735,31 @@ elif status_code >= 500:
     handle_server_error()
 elif status_code >= 400:
     handle_client_error()
+
 ```
 
 ### 2. **Implement Timeouts**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Always set timeouts
 api_call = RestClientNode(
     timeout=5000,  # 5 seconds
     connect_timeout=1000  # 1 second
 )
+
 ```
 
 ### 3. **Log Comprehensively**
@@ -748,6 +772,7 @@ error_log = {
     'stack_trace': traceback.format_exc(),
     'context': {'user_id': user_id, 'request_id': request_id}
 }
+
 ```
 
 ### 4. **Plan Recovery Strategies**
@@ -759,6 +784,7 @@ recovery_strategies = {
     'auth_error': 'refresh_token',
     'unknown_error': 'fail_gracefully'
 }
+
 ```
 
 ## 🔗 Related Examples

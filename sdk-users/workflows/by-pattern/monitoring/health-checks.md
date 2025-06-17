@@ -261,6 +261,7 @@ runtime = LocalRuntime()
 workflow = create_health_check_workflow()
 results = runtime.execute(workflow)
 print(json.dumps(results["results_merger"], indent=2))
+
 ```
 
 ### Advanced API Health Check with Dependencies
@@ -421,6 +422,7 @@ loop.close()
     workflow.connect("dependency_config", "dep_health_checker")
 
     return workflow
+
 ```
 
 ## Performance Tracking
@@ -720,6 +722,7 @@ result = {
     workflow.connect("metrics_collector", "performance_analyzer")
 
     return workflow
+
 ```
 
 ## Alerting Systems
@@ -1007,6 +1010,7 @@ result = {
     workflow.connect("alert_processor", "notification_dispatcher")
 
     return workflow
+
 ```
 
 ## System Monitoring
@@ -1375,6 +1379,7 @@ result = {
     workflow.connect("resource_collector", "capacity_analyzer")
 
     return workflow
+
 ```
 
 ## Log Aggregation
@@ -1750,6 +1755,7 @@ result = {
     workflow.connect("log_collector", "log_analyzer")
 
     return workflow
+
 ```
 
 ## Uptime Monitoring
@@ -2079,6 +2085,7 @@ result = {
     workflow.connect("uptime_checker", "sla_analyzer")
 
     return workflow
+
 ```
 
 ## Production Dashboards
@@ -2086,6 +2093,20 @@ result = {
 ### Comprehensive Production Monitoring Dashboard
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 def create_production_dashboard_workflow():
     """
     Unified dashboard workflow that combines all monitoring data into actionable insights.
@@ -2149,7 +2170,8 @@ result = {
 }
 """
     )
-    workflow.add_node(dashboard_config)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(dashboard_config)
 
     # Collect all monitoring data (would run sub-workflows in production)
     data_collector = PythonCodeNode(
@@ -2239,8 +2261,10 @@ result = {
 }
 """
     )
-    workflow.add_node(data_collector)
-    workflow.connect("dashboard_config", "data_collector")
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(data_collector)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("dashboard_config", "data_collector")
 
     # Dashboard analyzer and formatter
     dashboard_analyzer = PythonCodeNode(
@@ -2408,8 +2432,10 @@ result = {
 }
 """
     )
-    workflow.add_node(dashboard_analyzer)
-    workflow.connect("data_collector", "dashboard_analyzer")
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(dashboard_analyzer)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("data_collector", "dashboard_analyzer")
 
     # Dashboard publisher
     dashboard_publisher = PythonCodeNode(
@@ -2497,8 +2523,10 @@ result = {
 }
 """
     )
-    workflow.add_node(dashboard_publisher)
-    workflow.connect("dashboard_analyzer", "dashboard_publisher")
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(dashboard_publisher)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("dashboard_analyzer", "dashboard_publisher")
 
     return workflow
 
@@ -2509,20 +2537,24 @@ if __name__ == "__main__":
     # Run health check
     print("=== HEALTH CHECK ===")
     health_workflow = create_health_check_workflow()
-    health_results = runtime.execute(health_workflow)
+runtime = LocalRuntime()
+workflow.execute(health_workflow)
     print(json.dumps(health_results["results_merger"], indent=2))
 
     # Run performance monitoring
     print("\\n=== PERFORMANCE MONITORING ===")
     perf_workflow = create_performance_tracking_workflow()
-    perf_results = runtime.execute(perf_workflow)
+runtime = LocalRuntime()
+workflow.execute(perf_workflow)
     print(json.dumps(perf_results["performance_analyzer"]["analysis"], indent=2))
 
     # Run production dashboard
     print("\\n=== PRODUCTION DASHBOARD ===")
     dashboard_workflow = create_production_dashboard_workflow()
-    dashboard_results = runtime.execute(dashboard_workflow)
+runtime = LocalRuntime()
+workflow.execute(dashboard_workflow)
     print(json.dumps(dashboard_results["dashboard_publisher"]["dashboard_url"], indent=2))
+
 ```
 
 ## Best Practices and Implementation Notes

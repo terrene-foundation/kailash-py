@@ -109,8 +109,6 @@ else:
 event_replay = PythonCodeNode(
     name="event_replay",
     code="""
-import json
-from datetime import datetime
 
 # Initialize state
 state = initial_state if initial_state else {}
@@ -166,14 +164,15 @@ result = {
 )
 
 # Build Event Sourcing Workflow
-es_workflow = Workflow(name="event_sourcing_workflow")
-es_workflow.add_node(event_store_writer)
+es_workflow = Workflow("example", name="Example")
+workflow.es_workflow.add_node(event_store_writer)
 es_workflow.add_node(snapshot_manager)
 es_workflow.add_node(event_replay)
 
 # Connect for event processing
 es_workflow.connect("event_store_writer", "snapshot_manager", mapping={"result": "events"})
 es_workflow.connect("snapshot_manager", "event_replay", mapping={"snapshot": "initial_state"})
+
 ```
 
 ### Advanced Event Projection
@@ -282,6 +281,7 @@ result = {
         "query_aggregates": list
     }
 )
+
 ```
 
 ## Pub/Sub Messaging with Queuing Systems
@@ -517,6 +517,7 @@ result = {
         "dequeue_requests": dict
     }
 )
+
 ```
 
 ## CQRS Patterns
@@ -524,6 +525,20 @@ result = {
 ### Command and Query Separation
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Command Handler
 command_handler = PythonCodeNode(
     name="command_handler",
@@ -795,14 +810,18 @@ result = {
 )
 
 # Build CQRS Workflow
-cqrs_workflow = Workflow(name="cqrs_workflow")
-cqrs_workflow.add_node(command_handler)
-cqrs_workflow.add_node(read_model_updater)
-cqrs_workflow.add_node(query_handler)
+cqrs_workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
+workflow.add_node(command_handler)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(read_model_updater)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(query_handler)
 
 # Connect command flow
-cqrs_workflow.connect("command_handler", "read_model_updater",
-                     mapping={"events": "events"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## Saga Patterns for Distributed Transactions
@@ -977,8 +996,6 @@ result = {
 choreography_handler = PythonCodeNode(
     name="choreography_handler",
     code="""
-import uuid
-from datetime import datetime
 
 # Event to command mapping
 event_command_map = {
@@ -1050,6 +1067,7 @@ result = {
 """,
     input_types={"events": list}
 )
+
 ```
 
 ## Event Streaming and Real-Time Processing
@@ -1361,6 +1379,7 @@ result = {
         "join_config": dict
     }
 )
+
 ```
 
 ## Domain Event Patterns
@@ -1624,6 +1643,7 @@ result = {
 """,
     input_types={"events": list}
 )
+
 ```
 
 ## Production-Ready Event Handling
@@ -1631,6 +1651,20 @@ result = {
 ### Resilient Event Processing
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Circuit Breaker Pattern
 circuit_breaker = PythonCodeNode(
     name="circuit_breaker",
@@ -1751,7 +1785,6 @@ result = {
 dlq_handler = PythonCodeNode(
     name="dlq_handler",
     code="""
-from datetime import datetime, timedelta
 
 # DLQ configuration
 MAX_AGE_DAYS = 7
@@ -1848,7 +1881,6 @@ result = {
 event_compaction = PythonCodeNode(
     name="event_compaction",
     code="""
-from datetime import datetime, timedelta
 
 # Compaction configuration
 SNAPSHOT_INTERVAL = 100  # Create snapshot every N events
@@ -1953,14 +1985,18 @@ result = {
 )
 
 # Build Production Event Handling Workflow
-production_workflow = Workflow(name="production_event_handling")
-production_workflow.add_node(circuit_breaker)
-production_workflow.add_node(dlq_handler)
-production_workflow.add_node(event_compaction)
+production_workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
+workflow.add_node(circuit_breaker)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(dlq_handler)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(event_compaction)
 
 # Connect for resilient processing
-production_workflow.connect("circuit_breaker", "dlq_handler",
-                          mapping={"rejected": "dead_letter_messages"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## Best Practices and Guidelines

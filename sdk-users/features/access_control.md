@@ -28,6 +28,20 @@ The Kailash SDK provides a **unified access control interface** supporting multi
 
 ### 3. Fine-Grained Control
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Node-level permissions
 NodePermission.EXECUTE      # Can run the node
 NodePermission.READ_OUTPUT  # Can see outputs
@@ -42,6 +56,7 @@ WorkflowPermission.MODIFY   # Can edit workflow
 WorkflowPermission.DELETE   # Can delete workflow
 WorkflowPermission.SHARE    # Can share with others
 WorkflowPermission.ADMIN    # Full control
+
 ```
 
 ## Example Files
@@ -96,6 +111,7 @@ abac_manager = AccessControlManager(strategy="abac")
 
 # Hybrid - Combine RBAC and ABAC
 hybrid_manager = AccessControlManager(strategy="hybrid")  # Default
+
 ```
 
 ### ABAC Example with Helper Functions
@@ -125,6 +141,7 @@ complex_condition = create_complex_condition(
         create_attribute_condition("user.attributes.region", "in", ["US", "EU"])
     ]
 )
+
 ```
 
 ### Database Integration with Access Control
@@ -137,6 +154,7 @@ db_node = AsyncSQLDatabaseNode(
     query="SELECT * FROM financial_data",
     access_control_manager=manager  # Pass the unified manager
 )
+
 ```
 
 ## Quick Start
@@ -151,6 +169,7 @@ workflow = Workflow()
 # ... add nodes ...
 runtime = LocalRuntime()
 result = runtime.execute(workflow)
+
 ```
 
 ### With Access Control
@@ -177,6 +196,7 @@ manager = AccessControlManager(strategy="abac")
 # Use access-controlled runtime
 runtime = AccessControlledRuntime(user, access_control_manager=manager)
 result = runtime.execute(workflow)  # Same API!
+
 ```
 
 ### Adding Access Control to a Node
@@ -193,6 +213,7 @@ secure_node = add_access_control(
     required_permission=NodePermission.EXECUTE,
     mask_output_fields=["ssn", "credit_card"]
 )
+
 ```
 
 ## Access Control Architecture
@@ -228,10 +249,25 @@ processor = add_access_control(
     data_processor_node,
     mask_output_fields=["ssn", "credit_card", "bank_account"]
 )
+
 ```
 
 ### 2. Admin-Only Operations
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Only admins can export data
 exporter = add_access_control(
     csv_writer_node,
@@ -245,6 +281,7 @@ acm.add_rule(PermissionRule(
     permission=NodePermission.EXECUTE,
     roles=["admin"]
 ))
+
 ```
 
 ### 3. Conditional Execution Paths
@@ -254,6 +291,7 @@ detailed_analysis = add_access_control(
     complex_ml_node,
     fallback_node="simple_analysis"  # Redirect low-privilege users
 )
+
 ```
 
 ## Testing Access Control

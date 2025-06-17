@@ -98,6 +98,20 @@ python lead_scoring_minimal.py
 Some examples need modification to work without Docker:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Replace KafkaConsumerNode with file reading
 # Instead of:
 kafka_consumer = KafkaConsumerNode()
@@ -111,6 +125,7 @@ mongo_writer = MongoDBWriterNode()
 
 # Use:
 json_writer = JSONWriterNode(file_path="output.json")
+
 ```
 
 ### 5. Testing with Limited Infrastructure
@@ -132,6 +147,20 @@ DATABASE_URL=sqlite:///test.db pytest
 
 ### 1. Streaming Data (No Kafka)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Use file watching instead
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -140,6 +169,7 @@ class FileStreamNode(Node):
     def run(self, **kwargs):
         # Watch directory for new files
         # Process them as they arrive
+
 ```
 
 ### 2. Vector Search (No Qdrant)
@@ -161,6 +191,7 @@ class SimpleVectorSearch:
         similarities = cosine_similarity([query_vector], self.vectors)[0]
         top_k = np.argsort(similarities)[-k:][::-1]
         return [(self.metadata[i], similarities[i]) for i in top_k]
+
 ```
 
 ### 3. Document Storage (No MongoDB)
@@ -185,6 +216,7 @@ class FileDocumentStore:
             with open(path) as f:
                 return json.load(f)
         return None
+
 ```
 
 ## Gradual Migration Path

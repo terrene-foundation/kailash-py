@@ -46,6 +46,20 @@ This document covers the foundational base classes that all nodes inherit from.
   - Multi-stage processing pipelines
 - **Example**:
   ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
   class OptimizerNode(CycleAwareNode):
       def run(self, context, **kwargs):
           iteration = self.get_iteration(context)
@@ -63,6 +77,7 @@ This document covers the foundational base classes that all nodes inherit from.
               "value": value,
               "converged": value > 0.95 or trend["converging"]
           }
+
   ```
 
 ## Node Development Guide
@@ -95,6 +110,7 @@ class MyCustomNode(Node):
             },
             "required": ["result"]
         }
+
 ```
 
 ### Best Practices

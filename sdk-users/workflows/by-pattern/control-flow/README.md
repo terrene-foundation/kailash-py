@@ -57,6 +57,7 @@ runtime = LocalRuntime()
 result = runtime.execute(workflow, parameters={
     "reader": {"file_path": "customers.csv"}
 })
+
 ```
 
 ### Parallel Execution for Performance
@@ -87,6 +88,7 @@ result = runtime.execute(workflow, parameters={
     "traffic_api": {"url": "https://api.traffic.com/conditions"},
     "events_api": {"url": "https://api.events.com/today"}
 })
+
 ```
 
 ## 🔀 Control Flow Patterns
@@ -159,52 +161,87 @@ result = runtime.execute(workflow, parameters={
 
 ### Advanced Decision Trees
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Multi-level conditional routing
 workflow = Workflow("decision_tree", "Complex Routing")
 
 # First level: Check data quality
 quality_check = SwitchNode(id="quality_check", condition="quality_score > 0.8")
-workflow.add_node("quality_check", quality_check)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("quality_check", quality_check)
 
 # Second level: Check customer type (for good quality data)
 customer_type = SwitchNode(id="customer_type", condition="type == 'enterprise'")
-workflow.add_node("customer_type", customer_type)
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("customer_type", customer_type)
 
 # Connect decision tree
-workflow.connect("quality_check", "customer_type",
-                output_key="true_output", mapping={"data": "data"})
-workflow.connect("quality_check", "data_cleansing",
-                output_key="false_output", mapping={"data": "data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Parallel with Error Handling
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Parallel execution with individual error handling
 workflow = Workflow("resilient_parallel", "Fault-Tolerant Aggregation")
 
 # Each parallel branch has its own error handling
 for service in ["service_a", "service_b", "service_c"]:
     # API call
-    workflow.add_node(f"{service}_api", RestClientNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(f"{service}_api", RestClientNode())
 
     # Error handler for this service
-    workflow.add_node(f"{service}_error_handler", SwitchNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(f"{service}_error_handler", SwitchNode(
         condition="status_code == 200"
     ))
 
     # Fallback for failed calls
-    workflow.add_node(f"{service}_fallback", DataTransformer(
-        transformations=["lambda x: {'data': 'default', 'source': 'fallback'}"]
-    ))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
     # Connect with error handling
-    workflow.connect(f"{service}_api", f"{service}_error_handler")
-    workflow.connect(f"{service}_error_handler", "merger",
-                    output_key="true_output", mapping={"response": f"{service}_data"})
-    workflow.connect(f"{service}_error_handler", f"{service}_fallback",
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(f"{service}_api", f"{service}_error_handler")
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(f"{service}_error_handler", f"{service}_fallback",
                     output_key="false_output")
-    workflow.connect(f"{service}_fallback", "merger",
-                    mapping={"result": f"{service}_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Cyclic Optimization with Conditions
@@ -243,6 +280,7 @@ cycle_builder.set_cycle_exit_condition(
 
 # Set maximum iterations
 cycle_builder.set_max_iterations(100)
+
 ```
 
 ## 📊 Best Practices

@@ -95,6 +95,7 @@ user_permissions_check = SQLDatabaseNode(
     """,
     return_type="dataframe"
 )
+
 ```
 
 ### Web Security Assessment
@@ -115,10 +116,25 @@ ssl_security_check = HTTPRequestNode(
     verify_ssl=True,
     timeout=10.0
 )
+
 ```
 
 ### Vulnerability Analysis
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Analyze security scan results
 vulnerability_analyzer = PythonCodeNode.from_function(
     func=analyze_security_findings,
@@ -130,6 +146,7 @@ compliance_reporter = PythonCodeNode.from_function(
     func=generate_compliance_report,
     name="compliance_reporter"
 )
+
 ```
 
 ## Security Assessment Framework
@@ -162,6 +179,7 @@ def assess_database_security(db_results):
             })
 
     return vulnerabilities
+
 ```
 
 ### Web Security Assessment
@@ -189,6 +207,7 @@ def assess_web_security(http_response):
             })
 
     return security_findings
+
 ```
 
 ## Compliance Framework Integration
@@ -212,6 +231,7 @@ OWASP_MAPPING = {
         "LDAP_INJECTION"
     ]
 }
+
 ```
 
 ### CIS Controls Mapping
@@ -230,6 +250,7 @@ CIS_CONTROLS = {
         "checks": ["MISSING_ANTIVIRUS", "OUTDATED_SIGNATURES"]
     }
 }
+
 ```
 
 ## Integration with Security Tools
@@ -264,6 +285,7 @@ DATABASE_SECURITY_CHECKS = {
         {"name": "SSL Status", "command": "db.runCommand({getParameter: 1, sslMode: 1})"}
     ]
 }
+
 ```
 
 ### Web Security Headers
@@ -276,6 +298,7 @@ SECURITY_HEADERS_CHECKLIST = {
     "Content-Security-Policy": "default-src 'self'",
     "Referrer-Policy": "strict-origin-when-cross-origin"
 }
+
 ```
 
 ## Risk Assessment and Scoring
@@ -297,6 +320,7 @@ def calculate_cvss_score(vulnerability):
 
     # CVSS calculation logic here
     return calculate_cvss_base_score(base_metrics)
+
 ```
 
 ### Risk Prioritization
@@ -313,6 +337,7 @@ def prioritize_vulnerabilities(vulnerabilities):
         vuln["priority"] = get_priority_level(risk_score)
 
     return sorted(vulnerabilities, key=lambda x: x["risk_score"], reverse=True)
+
 ```
 
 ## Best Practices
@@ -357,18 +382,49 @@ def prioritize_vulnerabilities(vulnerabilities):
 
 ### Multi-Layer Security Assessment
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Scan multiple layers simultaneously
-workflow.connect("network_scan", ["database_scan", "web_scan", "os_scan"])
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("network_scan", ["database_scan", "web_scan", "os_scan"])
+
 ```
 
 ### Continuous Security Monitoring
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Schedule regular security scans
 security_scheduler = CronNode(
     name="security_scheduler",
     schedule="0 2 * * *",  # Daily at 2 AM
     workflow_id="security_audit"
 )
+
 ```
 
 ### Automated Remediation
@@ -381,6 +437,7 @@ auto_remediation = SwitchNode(
         "manual_review": "severity in ['MEDIUM', 'HIGH', 'CRITICAL']"
     }
 )
+
 ```
 
 ## Related Patterns

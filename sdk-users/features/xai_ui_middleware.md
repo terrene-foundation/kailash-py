@@ -38,6 +38,7 @@ XAIEventType.MEDIA_FRAME
 XAIEventType.GENERATIVE_UI
 XAIEventType.APPROVAL_REQUEST
 XAIEventType.USER_RESPONSE
+
 ```
 
 ### 2. Transport Agnostic
@@ -56,6 +57,7 @@ Efficient state updates using JSON Patch (RFC 6902):
 # Only send changes, not full state
 state_manager.update_state(session_id, {"progress": 50})
 # Generates: [{"op": "replace", "path": "/progress", "value": 50}]
+
 ```
 
 ### 4. Human-in-the-Loop Workflows
@@ -63,7 +65,7 @@ state_manager.update_state(session_id, {"progress": 50})
 Enable user approval and feedback:
 
 ```python
-async def execute_with_approval(self, tool_name: str, args: dict):
+async def execute_with_approval(self, 'tool_name', args: dict):
     # Request approval
     event = XAIEvent(
         type=XAIEventType.APPROVAL_REQUEST,
@@ -76,6 +78,7 @@ async def execute_with_approval(self, tool_name: str, args: dict):
     response = await self.wait_for_response()
     if response.approved:
         return await self.execute_tool(tool_name, args)
+
 ```
 
 ### 5. Generative UI
@@ -96,6 +99,7 @@ ui_event = XAIEvent(
         }
     }
 )
+
 ```
 
 ## Usage Examples
@@ -127,6 +131,7 @@ runtime = LocalRuntime()
 await runtime.execute(workflow, parameters={
     "agent": {"query": "Explain quantum computing"}
 })
+
 ```
 
 ### React Frontend Integration
@@ -169,12 +174,26 @@ function ChatInterface() {
 ### Streaming Text Generation
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 class StreamingAgentNode(AsyncNode):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.bridge = XAIUIBridgeNode(session_id=self.id)
 
-    async def async_run(self, prompt: str) -> Dict[str, Any]:
+    async def async_run(self, 'prompt') -> Dict[str, Any]:
         # Start text stream
         await self.bridge.emit(XAIEvent(
             type=XAIEventType.TEXT_MESSAGE_START,
@@ -192,11 +211,26 @@ class StreamingAgentNode(AsyncNode):
         await self.bridge.emit(XAIEvent(
             type=XAIEventType.TEXT_MESSAGE_END
         ))
+
 ```
 
 ### Tool Execution with Approval
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 class ToolAgentNode(AsyncNode):
     async def async_run(self, **inputs) -> Dict[str, Any]:
         # Execute tool with approval
@@ -210,6 +244,7 @@ class ToolAgentNode(AsyncNode):
             return {"status": "cancelled"}
 
         return {"result": result}
+
 ```
 
 ## Architecture Patterns
@@ -232,6 +267,7 @@ router.add_transport("ws", WebSocketTransport())
 
 # Start routing
 await router.start()
+
 ```
 
 ### 2. State Management Pattern
@@ -251,6 +287,7 @@ for i in range(100):
         {"progress": i + 1}
     )
     # Only sends the change, not full state
+
 ```
 
 ### 3. Middleware Pattern
@@ -258,17 +295,18 @@ for i in range(100):
 ```python
 # Add authentication
 @router.middleware
-async def auth_middleware(event: XAIEvent, next):
+async def workflow.()  # Type signature example:
     if not event.metadata.get("auth_token"):
         raise AuthenticationError()
     return await next(event)
 
 # Add rate limiting
 @router.middleware
-async def rate_limit_middleware(event: XAIEvent, next):
+async def workflow.()  # Type signature example:
     if not rate_limiter.check(event.session_id):
         raise RateLimitError()
     return await next(event)
+
 ```
 
 ## Performance Considerations
@@ -292,9 +330,23 @@ async def rate_limit_middleware(event: XAIEvent, next):
 ### From Basic REST API
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Before: Simple REST
 @app.post("/api/chat")
-async def chat(message: str):
+async def workflow.()  # Type signature example:
     response = agent.process(message)
     return {"response": response}
 
@@ -306,11 +358,12 @@ async def create_session():
     return {"session_id": session_id}
 
 @app.get("/api/xai-ui/sessions/{session_id}/events")
-async def stream_events(session_id: str):
+async def workflow.()  # Type signature example:
     return StreamingResponse(
         bridge.stream_events(session_id),
         media_type="text/event-stream"
     )
+
 ```
 
 ### From WebSocket Only
@@ -318,7 +371,7 @@ async def stream_events(session_id: str):
 ```python
 # Before: Raw WebSocket
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def workflow.()  # Type signature example:
     await websocket.accept()
     while True:
         data = await websocket.receive_text()
@@ -329,6 +382,7 @@ async def websocket_endpoint(websocket: WebSocket):
 transport = WebSocketTransport()
 router.add_transport("websocket", transport)
 await router.handle_websocket(websocket, session_id)
+
 ```
 
 ## Troubleshooting
@@ -349,11 +403,12 @@ logging.getLogger("kailash.xai_ui").setLevel(logging.DEBUG)
 
 # Event inspection
 @router.middleware
-async def debug_middleware(event: XAIEvent, next):
+async def workflow.()  # Type signature example:
     logger.debug(f"Event: {event.type} - {event.id}")
     result = await next(event)
     logger.debug(f"Result: {result}")
     return result
+
 ```
 
 ## Related Documentation
