@@ -11,14 +11,28 @@ Runtime parameters were not propagating correctly through cycle iterations. This
 2. **Initial parameters fix**: The CyclicWorkflowExecutor was treating initial parameters as outputs, causing DAG nodes to be skipped. Fixed by storing initial parameters separately.
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Example of the issue:
-workflow.connect("processor", "processor",
-                mapping={"quality": "quality"},  # Should pass quality to next iteration
-                cycle=True)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # Iteration 0: quality = 0.3 (from initial input)
 # Iteration 1: quality = 0.0 (reverted to default!)  ❌
 # Expected: quality = 0.5 (from previous output)     ✅
+
 ```
 
 ### Root Cause Analysis
@@ -62,19 +76,47 @@ The issue appears to be in how `CyclicWorkflowExecutor` handles parameter passin
 
 #### Working Example (Simplified)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 class CounterNode(Node):
     def run(self, context, **kwargs):
         count = kwargs.get("count", 0)
         return {"count": count + 1}
 
 # Self-loop works because it's simple
-workflow.connect("counter", "counter",
-                mapping={"count": "count"},
-                cycle=True)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 #### Failing Example (Parameter Issue)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 class ProcessorNode(Node):
     def run(self, context, **kwargs):
         quality = kwargs.get("quality", 0.0)  # Always gets 0.0 after iteration 0!
@@ -82,9 +124,9 @@ class ProcessorNode(Node):
         return {"quality": quality + 0.2}
 
 # Mapping doesn't preserve quality value
-workflow.connect("processor", "processor",
-                mapping={"quality": "quality"},
-                cycle=True)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Debugging Approach
@@ -116,6 +158,7 @@ workflow.connect("processor", "processor",
 
    # Retrieve in next iteration
    saved = cycle_info.get("node_state", {}).get("saved_quality", default)
+
    ```
 
 2. **External State Management**
@@ -146,8 +189,8 @@ def test_cycle_parameter_propagation():
             # Should accumulate: 0 → 10 → 20 → 30
             return {"value": value + 10, "iteration": iteration}
 
-    workflow = Workflow("test", "param_propagation")
-    workflow.add_node("acc", AccumulatorNode())
+    workflow = Workflow("example", name="Example")
+workflow.    workflow.add_node("acc", AccumulatorNode())
     workflow.connect("acc", "acc",
                     mapping={"value": "value"},
                     cycle=True,
@@ -159,6 +202,7 @@ def test_cycle_parameter_propagation():
 
     # This should pass but currently fails!
     assert results["acc"]["value"] == 30  # 0 + 10 + 10 + 10
+
 ```
 
 ### The Fix (Implemented)
@@ -178,6 +222,7 @@ Two critical fixes were applied:
        "mapping": mapping,  # Complete mapping dictionary
    }
    self.graph.add_edge(source_node, target_node, **edge_data)  # ✅ Preserves all!
+
    ```
 
 2. **Fixed CyclicWorkflowExecutor initial parameters handling**:
@@ -188,7 +233,9 @@ Two critical fixes were applied:
            state.node_outputs[node_id] = node_params  # ❌ Skips execution!
 
    # After: Initial params stored separately
-   state.initial_parameters = parameters or {}  # ✅ Allows execution!
+# Parameters setup
+workflow. parameters or {}  # ✅ Allows execution!
+
    ```
 
 ### Verification

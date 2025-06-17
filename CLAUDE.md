@@ -3,13 +3,13 @@
 ## 📁 Quick Access
 | **SDK Users** | **SDK Contributors** | **Shared** |
 |---------------|---------------------|-----------|
-| [sdk-users/developer/](sdk-users/developer/) | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) | [shared/mistakes/](shared/mistakes/) |
-| [sdk-users/workflows/](sdk-users/workflows/) | [# contrib (removed)/training/](# contrib (removed)/training/) | [tests/](tests/) |
-| [examples/](examples/) | [# contrib (removed)/research/](# contrib (removed)/research/) | |
+| [sdk-users/](sdk-users/) | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) | [shared/mistakes/](shared/mistakes/) |
+| [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) | [# contrib (removed)/training/](# contrib (removed)/training/) | [tests/](tests/) |
+| [sdk-users/cheatsheet/](sdk-users/cheatsheet/) | [# contrib (removed)/research/](# contrib (removed)/research/) | [examples/](examples/) |
 
 ## ⚠️ MUST FOLLOW
 1. **SDK-First Development**: Use SDK components, NO custom orchestration
-    - ✅ Check [node catalog](sdk-users/nodes/comprehensive-node-catalog.md) before PythonCodeNode
+    - ✅ Check [node selection guide](sdk-users/nodes/node-selection-guide.md) before PythonCodeNode
     - ✅ Use `LocalRuntime` (includes async + enterprise features)
     - ✅ Use `WorkflowBuilder.from_dict()` for dynamic workflows
     - 🚨 **NEVER** manual database/FastAPI - use `create_gateway()` from middleware
@@ -41,14 +41,14 @@
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
 
 ## 🔧 Core Nodes (110+ available)
+**Choose Smart**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - Decision trees + quick finder
 **AI**: LLMAgentNode, MonitoredLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, SelfOrganizingAgentNode
 **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, DirectoryReaderNode
-**RAG**: 47+ specialized nodes - see [comprehensive guide](sdk-users/developer/20-comprehensive-rag-guide.md)
+**RAG**: 47+ specialized nodes - see [RAG Guide](sdk-users/developer/07-comprehensive-rag-guide.md)
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
-**Auth/Security**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
-**Middleware**: AgentUIMiddleware, RealtimeMiddleware, APIGateway, AIChatMiddleware
-**Full catalog**: [sdk-users/nodes/comprehensive-node-catalog.md](sdk-users/nodes/comprehensive-node-catalog.md)
+**Enterprise**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
+**Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md)
 
 ## 📂 Directory Navigation Convention
 **File Naming Standard**:
@@ -71,9 +71,9 @@
 |-------------------|--------------|---------------------|
 | **Build a workflow** | [sdk-users/workflows/](sdk-users/workflows/) | - |
 | **Build an app** | [apps/APP_DEVELOPMENT_GUIDE.md](apps/APP_DEVELOPMENT_GUIDE.md) | - |
-| **Make arch decisions** | [Architecture ADRs](# contrib (removed)/architecture/adr/) | [Architecture ADRs](# contrib (removed)/architecture/adr/) |
-| **Fix an error** | [sdk-users/developer/07-troubleshooting.md](sdk-users/developer/07-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) |
-| **Find patterns** | [sdk-users/essentials/](sdk-users/essentials/) | - |
+| **Make arch decisions** | [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md) | [Architecture ADRs](# contrib (removed)/architecture/adr/) |
+| **Fix an error** | [sdk-users/developer/05-troubleshooting.md](sdk-users/developer/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) |
+| **Find patterns** | [sdk-users/patterns/](sdk-users/patterns/) | - |
 | **Learn from workflows** | [sdk-users/workflows/](sdk-users/workflows/) - Production workflows | - |
 | **Run tests** | [tests/README.md](tests/README.md) - Test guide | [tests/](tests/) - Full test suite |
 | **SDK development** | [examples/](examples/) - Feature validation | - |
@@ -88,16 +88,20 @@
 - **Quality validation** → `tests/` (unit/integration/e2e)
 - **Training data** → `# contrib (removed)/training/` (LLM patterns)
 
-## 🎯 Development Workflow
-1. **Check todos**: `# contrib (removed)/project/todos/000-master.md`
-2. **Plan**: Check ADRs, use `sdk-users/essentials/` for patterns
-3. **Implement**: Use node catalog, create tests in `examples/`
-4. **Document**: Update todos, add to workflows, align docs
+## 🎯 Quick Start Guide
 
----
+**Building Apps/Workflows:**
+- **Start**: [sdk-users/](sdk-users/) - Complete solution guide with decision matrix
+- **Node Selection**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - Smart finder
+- **Quick Patterns**: [Cheatsheet](sdk-users/cheatsheet/) - 37 copy-paste patterns
+- **Enterprise**: [Enterprise Patterns](sdk-users/enterprise/) - Advanced features
 
-**Quick Start**:
-- **Building solutions?** → [sdk-users/CLAUDE.md](sdk-users/CLAUDE.md)
-- **Developing SDK?** → [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md)
-- **Need error help?** → [shared/mistakes/CLAUDE.md](shared/mistakes/CLAUDE.md)
-- **New team member?** → [NEW_TEAM_MEMBER.md](NEW_TEAM_MEMBER.md)
+**SDK Development:**
+- **Contributing**: [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md)
+- **Architecture**: [# contrib (removed)/architecture/](# contrib (removed)/architecture/)
+- **Examples**: [examples/](examples/) - Feature validation
+
+**Need Help:**
+- **Errors**: [Troubleshooting](sdk-users/developer/05-troubleshooting.md)
+- **Common Mistakes**: [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+- **New Team**: [NEW_TEAM_MEMBER.md](NEW_TEAM_MEMBER.md)

@@ -64,93 +64,111 @@ results, run_id = runtime.execute(workflow, parameters={
 })
 
 print(f"Final count: {results['checker']['count']}")
+
 ```
 
 ## 🔧 Core Cycle Concepts
 
 ### 1. Cycle Edge Marking
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ✅ CRITICAL: Only mark the CLOSING edge as cycle=True
-workflow.connect("node_a", "node_b")           # Normal connection
-workflow.connect("node_b", "node_c")           # Normal connection
-workflow.connect("node_c", "node_a",           # ✅ CLOSING edge
-    cycle=True,                                 # Mark as cycle
-    mapping={"output_field": "input_field"}    # Specific mapping
-)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("node_a", "node_b")           # Normal connection
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("node_b", "node_c")           # Normal connection
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### 2. Parameter Mapping in Cycles (Most Critical)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ NEVER: Generic mapping (causes data loss)
-workflow.connect("a", "b", cycle=True, mapping={"output": "output"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # ✅ ALWAYS: Specific field mapping
-workflow.connect("a", "b", cycle=True, mapping={"result.count": "count"})
-workflow.connect("a", "b", cycle=True, mapping={"final.value": "input_value"})
-workflow.connect("a", "b", cycle=True, mapping={"data.processed": "raw_data"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### 3. Safe Parameter Access Pattern
 ```python
-workflow.add_node("cycle_processor", PythonCodeNode(
-    name="cycle_processor",
-    code='''
-# ✅ ALWAYS: Use try/except for cycle parameters
-try:
-    count = count        # Try to access previous iteration
-except:
-    count = 0           # Default for first iteration
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
 
-try:
-    prev_results = prev_results
-except:
-    prev_results = []   # Default empty list
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
 
-try:
-    accumulated_value = accumulated_value
-except:
-    accumulated_value = 0
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
-# Now process safely
-new_count = count + 1
-updated_results = prev_results + [{"iteration": new_count}]
-new_accumulated = accumulated_value + new_count
-
-result = {
-    "count": new_count,
-    "results": updated_results,
-    "accumulated": new_accumulated,
-    "converged": new_count >= 10  # Convergence condition
-}
-'''
-))
 ```
 
 ## 🔀 Advanced Cycle Patterns
 
 ### Multi-Path Conditional Cycles
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("multi_path_cycle")
 
 # Main processor
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code='''
-try:
-    data = data
-    iteration = iteration
-except:
-    data = []
-    iteration = 0
-
-# Process data
-processed = [x * 2 for x in data] if data else [1, 2, 3]
-iteration += 1
-
-# Determine next path
-if iteration < 3:
-    next_action = "continue"
-elif len(processed) < 10:
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature < 10:
     next_action = "expand"
 else:
     next_action = "finalize"
@@ -167,22 +185,19 @@ result = {
 ))
 
 # Multi-path router
-workflow.add_node("router", SwitchNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("router", SwitchNode(
     condition_field="action",
     condition_type="string"
 ))
 
 # Path 1: Continue processing
-workflow.add_node("enhancer", PythonCodeNode(
-    name="enhancer",
-    code='''
-enhanced_data = [x + 1 for x in data]
-result = {"data": enhanced_data, "iteration": iteration, "enhanced": True}
-'''
-))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
 # Path 2: Expand data
-workflow.add_node("expander", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("expander", PythonCodeNode(
     name="expander",
     code='''
 expanded_data = data + [max(data) + i for i in range(1, 4)]
@@ -191,62 +206,57 @@ result = {"data": expanded_data, "iteration": iteration, "expanded": True}
 ))
 
 # Path 3: Finalize
-workflow.add_node("finalizer", PythonCodeNode(
-    name="finalizer",
-    code='''
-result = {
-    "final_data": data,
-    "total_iterations": iteration,
-    "final_count": len(data),
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature,
     "completed": True
 }
 '''
 ))
 
 # Connect main flow
-workflow.connect("processor", "router", mapping={"result": "input"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # Connect conditional paths
-workflow.connect("router", "enhancer",
-    condition="continue",
-    mapping={"data": "data", "iteration": "iteration"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
-workflow.connect("router", "expander",
-    condition="expand",
-    mapping={"data": "data", "iteration": "iteration"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
-workflow.connect("router", "finalizer",
-    condition="finalize",
-    mapping={"data": "data", "iteration": "iteration"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # Cycle back connections (specific field mapping)
-workflow.connect("enhancer", "processor",
-    cycle=True,
-    mapping={"data": "data", "iteration": "iteration"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
-workflow.connect("expander", "processor",
-    cycle=True,
-    mapping={"data": "data", "iteration": "iteration"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Convergence-Based Cycles
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("convergence_cycle")
 
 # Optimization processor
-workflow.add_node("optimizer", PythonCodeNode(
-    name="optimizer",
-    code='''
-import random
-
-# Safe parameter access
-try:
-    current_value = current_value
-    error = error
-    iteration = iteration
-except:
-    current_value = 50.0  # Starting point
-    error = float('inf')
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
     iteration = 0
 
 # Simple optimization step (gradient descent simulation)
@@ -276,27 +286,25 @@ result = {
 ))
 
 # Convergence checker
-workflow.add_node("convergence_check", SwitchNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("convergence_check", SwitchNode(
     condition_field="continue_optimization",
     condition_type="boolean"
 ))
 
 # Connect with convergence cycle
-workflow.connect("optimizer", "convergence_check", mapping={"result": "input"})
-workflow.connect("convergence_check", "optimizer",
-    condition=True,  # Continue if not converged
-    cycle=True,
-    mapping={
-        "current_value": "current_value",
-        "error": "error",
-        "iteration": "iteration"
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # Execute convergence optimization
-runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+# Parameters setup
+workflow.{
     "optimizer": {"current_value": 50.0}
 })
+
 ```
 
 ## 🧠 Cycle-Aware Nodes
@@ -348,6 +356,7 @@ workflow.connect("convergence", "processor",
     cycle=True,
     mapping={"quality_score": "quality_score", "data_count": "data_count"}
 )
+
 ```
 
 ### Custom Cycle-Aware Node
@@ -389,6 +398,7 @@ class AccumulatorNode(CycleAwareNode):
 workflow.add_node("accumulator", AccumulatorNode(
     accumulation_field="score"
 ))
+
 ```
 
 ## 🐛 Debugging & Testing Cycles
@@ -420,6 +430,7 @@ results, run_id = runtime.execute(workflow, parameters=params)
 report = debugger.generate_report(trace)
 print(f"Cycle completed in {report['statistics']['total_iterations']} iterations")
 print(f"Efficiency score: {report['performance']['efficiency_score']:.3f}")
+
 ```
 
 ### Testing Patterns for Cycles
@@ -465,14 +476,30 @@ class TestCyclicWorkflow(WorkflowTestCase):
             self.logger.warning("State persistence limited to single iteration")
         else:
             assert accumulated[0] == 10, "First value should be preserved"
+
 ```
 
 ## 🚨 Critical Mistakes to Avoid
 
 ### Mistake #1: Generic Output Mapping (Most Common)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ DEADLY: Generic mapping causes complete data loss in cycles
-workflow.connect("a", "b", cycle=True, mapping={"output": "output"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # Symptoms:
 # - assert 1 >= 3 (iteration count failures)
@@ -480,26 +507,41 @@ workflow.connect("a", "b", cycle=True, mapping={"output": "output"})
 # - assert 10 == 45 (accumulation completely failing)
 
 # ✅ SOLUTION: Always use specific field mapping
-workflow.connect("a", "b", cycle=True, mapping={"result.count": "count"})
-workflow.connect("a", "b", cycle=True, mapping={"quality.score": "quality_score"})
-workflow.connect("a", "b", cycle=True, mapping={"accumulated.value": "accumulator"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Mistake #2: Incomplete Parameter Mapping with input_types
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ WRONG: When using input_types, ALL parameters must be mapped
-workflow.add_node("cycle_node", SomeNode(
-    input_types={"value": int, "constant": str}
-))
-workflow.connect("a", "cycle_node", cycle=True, mapping={
-    "result.value": "value"  # ❌ Missing "constant" mapping
-})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 
 # ✅ CORRECT: Map ALL parameters including constants
-workflow.connect("a", "cycle_node", cycle=True, mapping={
-    "result.value": "value",      # Data from previous iteration
-    "result.constant": "constant" # Constants must also be mapped
-})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Mistake #3: Unsafe State Access
@@ -512,6 +554,7 @@ results = cycle_state["results"]        # KeyError if not exists
 cycle_info = cycle_info or {}
 prev_state = cycle_info.get("node_state") or {}
 results = prev_state.get("results", [])
+
 ```
 
 ### Mistake #4: Wrong Convergence Check Format
@@ -523,19 +566,41 @@ convergence_check="result.converged == True"  # Fails in evaluation
 convergence_check="converged == True"
 convergence_check="error < 0.01"
 convergence_check="count >= target_count"
+
 ```
 
 ### Mistake #5: Multiple Cycle Edges
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ WRONG: Marking multiple edges as cycles
-workflow.connect("a", "b", cycle=True)  # ❌
-workflow.connect("b", "c", cycle=True)  # ❌
-workflow.connect("c", "a", cycle=True)  # ❌ Multiple cycle marks
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("a", "b", cycle=True)  # ❌
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("b", "c", cycle=True)  # ❌
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("c", "a", cycle=True)  # ❌ Multiple cycle marks
 
 # ✅ CORRECT: Only mark closing edge
-workflow.connect("a", "b")              # Normal
-workflow.connect("b", "c")              # Normal
-workflow.connect("c", "a", cycle=True)  # ✅ Only closing edge
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("a", "b")              # Normal
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("b", "c")              # Normal
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("c", "a", cycle=True)  # ✅ Only closing edge
+
 ```
 
 ## 📋 Production Cycle Checklist
@@ -557,22 +622,24 @@ Before deploying cyclic workflows:
 
 ### ETL with Retry Logic
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("etl_with_retry")
 
-workflow.add_node("etl_processor", PythonCodeNode(
-    name="etl_processor",
-    code='''
-import random
-
-try:
-    retry_count = retry_count
-    failed_records = failed_records
-except:
-    retry_count = 0
-    failed_records = []
-
-# Simulate ETL processing
-success_rate = 0.7 + (retry_count * 0.1)  # Improve with retries
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature  # Improve with retries
 total_records = 100
 failed_this_round = []
 
@@ -598,43 +665,39 @@ result = {
 '''
 ))
 
-workflow.add_node("retry_decision", SwitchNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("retry_decision", SwitchNode(
     condition_field="should_retry",
     condition_type="boolean"
 ))
 
-workflow.connect("etl_processor", "retry_decision", mapping={"result": "input"})
-workflow.connect("retry_decision", "etl_processor",
-    condition=True,
-    cycle=True,
-    mapping={
-        "retry_count": "retry_count",
-        "failed_records": "failed_records"
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Batch Processing with Quality Gates
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 workflow = Workflow("quality_controlled_batch")
 
-workflow.add_node("batch_processor", PythonCodeNode(
-    name="batch_processor",
-    code='''
-import random
-
-try:
-    batch_number = batch_number
-    quality_scores = quality_scores
-    processed_items = processed_items
-except:
-    batch_number = 1
-    quality_scores = []
-    processed_items = 0
-
-# Process current batch
-batch_size = 50
-current_quality = random.uniform(0.6, 0.95)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
 quality_scores.append(current_quality)
 processed_items += batch_size
 batch_number += 1
@@ -659,21 +722,17 @@ result = {
 '''
 ))
 
-workflow.add_node("quality_gate", SwitchNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("quality_gate", SwitchNode(
     condition_field="continue_processing",
     condition_type="boolean"
 ))
 
-workflow.connect("batch_processor", "quality_gate", mapping={"result": "input"})
-workflow.connect("quality_gate", "batch_processor",
-    condition=True,
-    cycle=True,
-    mapping={
-        "batch_number": "batch_number",
-        "quality_scores": "quality_scores",
-        "processed_items": "processed_items"
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## 🔗 Advanced Topics

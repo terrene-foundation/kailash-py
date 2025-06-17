@@ -44,6 +44,7 @@ final_results = result["final_results"]
 for chunk in final_results:
     print(f"Score: {chunk['relevance_score']:.4f}")
     print(f"Content: {chunk['content'][:100]}...")
+
 ```
 
 ### Advanced Configuration
@@ -67,6 +68,7 @@ config = {
 }
 
 pipeline = AdvancedRAGPipeline(config)
+
 ```
 
 ## Node Overview
@@ -134,6 +136,7 @@ enterprise_config = {
         "top_k": 8
     }
 }
+
 ```
 
 ### Customer Support
@@ -149,6 +152,7 @@ support_config = {
         "sparse_weight": 0.3
     }
 }
+
 ```
 
 ### Technical Documentation
@@ -163,6 +167,7 @@ technical_config = {
         }
     }
 }
+
 ```
 
 ## Testing Your Implementation
@@ -181,6 +186,7 @@ semantic_result = pipeline.process_documents(documents, "semantic")
 statistical_result = pipeline.process_documents(documents, "statistical")
 
 # Evaluate which works better for your content
+
 ```
 
 ### Performance Testing
@@ -196,6 +202,7 @@ processing_time = time.time() - start_time
 
 print(f"Processed {len(large_document_set)} documents in {processing_time:.2f}s")
 print(f"Created {len(result['final_results'])} final results")
+
 ```
 
 ## Related Documentation

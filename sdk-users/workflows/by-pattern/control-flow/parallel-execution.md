@@ -61,6 +61,7 @@ result = runtime.execute(workflow, parameters={
     "stocks_api": {"headers": {"API-Key": "stocks-key"}},
     "traffic_api": {"headers": {"API-Key": "traffic-key"}}
 })
+
 ```
 
 ### Parallel Data Processing
@@ -170,6 +171,7 @@ result = {
     workflow.add_node("result_aggregator", result_aggregator)
 
     return workflow
+
 ```
 
 ### Parallel Workflow with Error Isolation
@@ -253,6 +255,7 @@ result = fallback_data
                         mapping={"result": f"{service['name']}_result"})
 
     return workflow
+
 ```
 
 ### Parallel Map-Reduce Pattern
@@ -368,24 +371,57 @@ result = {
                     mapping={"result": "reducer_1_results"})
 
     return workflow
+
 ```
 
 ## 🎯 Common Use Cases
 
 ### 1. Multi-Source Data Aggregation
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Gather data from multiple databases simultaneously
 for db_name in ["users_db", "orders_db", "inventory_db"]:
-    workflow.add_node(f"{db_name}_reader", SQLReaderNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(f"{db_name}_reader", SQLReaderNode())
 
 # All queries execute in parallel
-workflow.add_node("data_joiner", MergeNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("data_joiner", MergeNode())
 for db_name in ["users_db", "orders_db", "inventory_db"]:
-    workflow.connect(f"{db_name}_reader", "data_joiner")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(f"{db_name}_reader", "data_joiner")
+
 ```
 
 ### 2. Parallel Validation
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Run multiple validation checks concurrently
 validators = [
     "schema_validator",
@@ -395,72 +431,175 @@ validators = [
 ]
 
 for validator in validators:
-    workflow.add_node(validator, ValidationNode())
-    workflow.connect("input_data", validator)
-    workflow.connect(validator, "validation_aggregator")
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(validator, ValidationNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("input_data", validator)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(validator, "validation_aggregator")
+
 ```
 
 ### 3. Fan-Out Notifications
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Send notifications through multiple channels
 channels = ["email", "sms", "push", "webhook"]
 
 for channel in channels:
-    workflow.add_node(f"{channel}_sender", NotificationNode())
-    workflow.connect("notification_trigger", f"{channel}_sender")
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(f"{channel}_sender", NotificationNode())
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("notification_trigger", f"{channel}_sender")
+
 ```
 
 ### 4. Parallel File Processing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Process multiple files concurrently
 file_processors = []
 for i in range(num_workers):
     processor = FileProcessorNode(id=f"processor_{i}")
-    workflow.add_node(f"processor_{i}", processor)
-    workflow.connect("file_queue", f"processor_{i}")
-    workflow.connect(f"processor_{i}", "results_collector")
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(f"processor_{i}", processor)
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect("file_queue", f"processor_{i}")
+workflow = Workflow("example", name="Example")
+workflow.workflow.connect(f"processor_{i}", "results_collector")
+
 ```
 
 ## 📊 Best Practices
 
 ### 1. **Ensure Independence**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Independent parallel paths
-workflow.add_node("api_1", RestClientNode(url="https://api1.com"))
-workflow.add_node("api_2", RestClientNode(url="https://api2.com"))
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature)
 
 # BAD: Shared state causes race conditions
 shared_state = {}
-workflow.add_node("processor_1", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("processor_1", PythonCodeNode(
     code="shared_state['key'] = value"  # Race condition!
 ))
+
 ```
 
 ### 2. **Set Appropriate Timeouts**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Different timeouts for different services
 fast_api = RestClientNode(timeout=2000)    # 2 seconds
 slow_api = RestClientNode(timeout=10000)   # 10 seconds
+
 ```
 
 ### 3. **Handle Partial Failures**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Continue even if some parallel tasks fail
 aggregator = MergeNode(
     id="aggregator",
     merge_strategy="collect_available",  # Skip failed branches
     required_inputs=2  # Need at least 2 of 5 to succeed
 )
+
 ```
 
 ### 4. **Monitor Resource Usage**
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # GOOD: Limit parallelism for resource-intensive tasks
-workflow.runtime_config = {
+workflow = Workflow("example", name="Example")
+workflow.workflow.runtime_config = {
     "max_parallel_tasks": 10,  # Limit concurrent execution
     "task_timeout": 30000,     # 30 second timeout
     "memory_limit": "2GB"      # Per-task memory limit
 }
+
 ```
 
 ## 🔗 Related Examples

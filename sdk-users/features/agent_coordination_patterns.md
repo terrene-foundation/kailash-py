@@ -64,6 +64,7 @@ coordinator.run(
         "require_unanimous": False
     }
 )
+
 ```
 
 ### When to Use A2ACoordinatorNode
@@ -123,6 +124,7 @@ pool_manager.run(
     action="get_metrics",
     agent_id="ml_expert_007"
 )
+
 ```
 
 ### When to Use AgentPoolManagerNode
@@ -157,6 +159,20 @@ pool_manager.run(
 The most powerful multi-agent systems combine both approaches:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Step 1: Maintain the talent pool
 pool_manager.run(
     action="register",
@@ -208,6 +224,7 @@ for agent in team["selected_agents"]:
             "success_score": 0.95
         }
     )
+
 ```
 
 ## Decision Tree: Which Pattern to Use?
@@ -261,6 +278,7 @@ coordinator.run(action="register", agent_info=analyst_1)
 coordinator.run(action="register", agent_info=analyst_2)
 coordinator.run(action="register", agent_info=analyst_3)
 # Delegate report sections, broadcast deadlines, build consensus on findings
+
 ```
 
 ### Scenario 2: Dynamic Research Platform
@@ -271,6 +289,7 @@ coordinator.run(action="register", agent_info=analyst_3)
 pool.run(action="register", agent_id="quantum_researcher_42", capabilities=["quantum", "physics"])
 # When new research project arrives, find and form optimal team
 team = formation.run(problem_analysis={"required": ["quantum", "ml"]})
+
 ```
 
 ### Scenario 3: Enterprise AI Operations
@@ -280,6 +299,7 @@ team = formation.run(problem_analysis={"required": ["quantum", "ml"]})
 # Different projects need different teams
 # Track long-term performance and specializations
 # Coordinate specific projects while maintaining the talent pool
+
 ```
 
 ## Conclusion

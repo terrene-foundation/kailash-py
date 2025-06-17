@@ -28,6 +28,20 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 
 ### 📁 Data I/O (15+ nodes)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # File operations
 CSVReaderNode, CSVWriterNode
 JSONReaderNode, JSONWriterNode
@@ -43,10 +57,25 @@ SharePointGraphReader, SharePointGraphWriter
 # Streaming
 KafkaConsumerNode, StreamPublisherNode
 WebSocketNode, EventStreamNode
+
 ```
 
 ### 🔄 Transform (8+ nodes)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Data processing
 FilterNode      # Filter by condition
 Map             # Transform each item
@@ -58,10 +87,25 @@ HierarchicalChunkerNode
 ChunkTextExtractorNode
 QueryTextWrapperNode
 ContextFormatterNode
+
 ```
 
 ### 🤖 AI/ML (20+ nodes)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # LLM Agents
 LLMAgentNode, IterativeLLMAgentNode
 ChatAgent, RetrievalAgent
@@ -80,10 +124,25 @@ TeamFormationNode
 TextClassifier, SentimentAnalyzer
 NamedEntityRecognizer, TextSummarizer
 EmbeddingGeneratorNode
+
 ```
 
 ### 🌐 API (10+ nodes)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # HTTP
 HTTPRequestNode, AsyncHTTPRequestNode
 
@@ -98,10 +157,25 @@ BasicAuthNode, OAuth2Node, APIKeyNode
 
 # Rate limiting
 RateLimitedAPINode
+
 ```
 
 ### 🔀 Logic (8+ nodes)
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Control flow
 SwitchNode      # Conditional routing
 MergeNode       # Merge streams
@@ -113,6 +187,7 @@ MultiCriteriaConvergenceNode
 
 # Composition
 WorkflowNode    # Nested workflows
+
 ```
 
 ## Common Anti-Patterns
@@ -130,6 +205,7 @@ result = {"data": df.to_dict('records')}
 
 # ✅ RIGHT - Use specialized node
 node = CSVReaderNode(file_path="data.csv")
+
 ```
 
 ### 2. API Calls
@@ -149,10 +225,25 @@ node = HTTPRequestNode(
     method="GET",
     headers={"Authorization": "Bearer token"}
 )
+
 ```
 
 ### 3. Data Filtering
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # ❌ WRONG - Using PythonCodeNode for filtering
 def filter_node():
     code = '''
@@ -164,6 +255,7 @@ result = {"data": filtered.to_dict('records')}
 
 # ✅ RIGHT - Use FilterNode
 node = FilterNode(condition="age > 30")
+
 ```
 
 ### 4. LLM Integration
@@ -186,6 +278,7 @@ node = LLMAgentNode(
     model="gpt-4",
     system_prompt="You are a helpful assistant"
 )
+
 ```
 
 ## When to Use PythonCodeNode
@@ -211,6 +304,7 @@ final_price = apply_regional_pricing(base_price * (1 - discount))
 result = {"final_price": final_price, "discount": discount}
 '''
 )
+
 ```
 
 ### 2. Scientific Computing
@@ -236,6 +330,7 @@ result = {
 }
 '''
 )
+
 ```
 
 ### 3. Data Science Workflows
@@ -259,6 +354,7 @@ customer_features = df.groupby('customer_id').agg({
 result = {"features": customer_features.to_dict('records')}
 '''
 )
+
 ```
 
 ## Best Practices
@@ -284,14 +380,31 @@ result = {"features": customer_features.to_dict('records')}
 
 ### Example 1: CSV Processing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Before: PythonCodeNode
-workflow.add_node("reader", PythonCodeNode(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("reader", PythonCodeNode(
     name="csv_reader",
     code="df = pd.read_csv(file_path); result = {'data': df.to_dict('records')}"
 ))
 
 # After: Specialized nodes
-workflow.add_node("reader", CSVReaderNode(file_path="data.csv"))
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node("reader", CSVReaderNode(file_path="data.csv"))
+
 ```
 
 ### Example 2: API Integration
@@ -308,6 +421,7 @@ workflow.add_node("api", RESTClientNode(
     endpoint="/data",
     method="POST"
 ))
+
 ```
 
 ## Conclusion

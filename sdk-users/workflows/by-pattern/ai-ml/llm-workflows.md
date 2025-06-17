@@ -70,6 +70,7 @@ result, run_id = runtime.execute(workflow, parameters={
     "chunker": {"chunk_size": 500, "chunk_overlap": 50},
     "scorer": {"top_k": 3, "similarity_method": "cosine"}
 })
+
 ```
 
 ## 🔬 Advanced LLM Patterns
@@ -134,6 +135,7 @@ result, run_id = runtime.execute(workflow, parameters={
         "temperature": 0.5
     }
 })
+
 ```
 
 ### Enterprise RAG System with Advanced Document Processing
@@ -321,8 +323,6 @@ query_processor = DataTransformer(
     transformations=[
         """
 # Advanced query processing and intent detection
-import re
-from datetime import datetime
 
 query_text = data.get("query", "")
 if not query_text:
@@ -546,8 +546,6 @@ answer_validator = DataTransformer(
     transformations=[
         """
 # Validate and assess answer quality
-import re
-from datetime import datetime
 
 answer = data.get("answer", "")
 context_chunks = data.get("context_chunks", [])
@@ -658,6 +656,7 @@ enterprise_rag.connect("primary_embedder", "vector_store", mapping={"embeddings"
 enterprise_rag.connect("query_processor", "enhanced_scorer", mapping={"result": "query_info"})
 enterprise_rag.connect("enhanced_scorer", "answer_generator", mapping={"result": "context"})
 enterprise_rag.connect("answer_generator", "answer_validator", mapping={"response": "answer"})
+
 ```
 
 ### Simple Content Processing (when specialized nodes don't exist)
@@ -680,6 +679,7 @@ result = enhanced_content
 """
     ]
 )
+
 ```
 
 ## 📝 Content Generation with LLM Nodes
@@ -729,6 +729,7 @@ writer = JSONWriterNode(
 )
 workflow.add_node("writer", writer)
 workflow.connect("report_gen", "writer", mapping={"response": "data"})
+
 ```
 
 ## 🎨 Multi-Modal Content Creation
@@ -773,6 +774,7 @@ result = adaptations
 )
 
 workflow.connect("generator", "adapter", mapping={"response": "data"})
+
 ```
 
 ## 🔗 LLM Best Practices
@@ -809,6 +811,7 @@ llm_node = LLMAgentNode(
     model="gpt-3.5-turbo",
     system_prompt="Your instructions here"
 )
+
 ```
 
 ### Don't Implement Embedding Generation Manually
@@ -822,10 +825,25 @@ embed_node = PythonCodeNode(
 embed_node = EmbeddingGeneratorNode(
     model="text-embedding-3-small"
 )
+
 ```
 
 ### Don't Implement Document Chunking Manually
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # WRONG: Manual text splitting
 chunk_node = PythonCodeNode(
     code="chunks = text.split('\\n\\n')"
@@ -836,6 +854,7 @@ chunk_node = HierarchicalChunkerNode(
     chunk_size=500,
     chunk_overlap=50
 )
+
 ```
 
 ---

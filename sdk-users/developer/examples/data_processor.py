@@ -8,7 +8,7 @@ This example demonstrates:
 - Processing lists and dictionaries
 """
 
-from typing import Any
+from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter
 
@@ -16,7 +16,14 @@ from kailash.nodes.base import Node, NodeParameter
 class DataProcessorNode(Node):
     """Process structured data with filtering and transformation."""
 
-    def get_parameters(self) -> dict[str, NodeParameter]:
+    def __init__(self, name: str, **kwargs):
+        # CRITICAL: Set ALL attributes BEFORE super().__init__()
+        self.filters = kwargs.get("filters", {})
+        self.transform = kwargs.get("transform", {})
+        self.output_fields = kwargs.get("output_fields")
+        super().__init__(name=name, **kwargs)
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define parameters using Any for complex types."""
         return {
             "data": NodeParameter(
@@ -48,7 +55,7 @@ class DataProcessorNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> dict[str, Any]:
+    def run(self, **kwargs) -> Dict[str, Any]:
         """Process the data with validation."""
         data = kwargs["data"]
         filters = kwargs.get("filters", {})

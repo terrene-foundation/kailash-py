@@ -90,6 +90,7 @@ result = await user_node.execute_async({
         }
     }
 })
+
 ```
 
 **Supported Operations:**
@@ -153,6 +154,7 @@ result = await role_node.execute_async({
 #     ├── senior_analyst (analyst + additional)
 #     │   └── lead_analyst (senior + management)
 #     └── junior_analyst (analyst with restrictions)
+
 ```
 
 ### 3. PermissionCheckNode
@@ -198,6 +200,7 @@ result = await permission_node.execute_async({
 #     ],
 #     "decision_time_ms": 12
 # }
+
 ```
 
 ### 4. AuditLogNode
@@ -249,6 +252,7 @@ result = await audit_node.execute_async({
 # Security: violation, threat_detected, incident_created
 # System: config_changed, maintenance, backup, restore
 # Compliance: audit_event, policy_violation, consent_updated
+
 ```
 
 ### 5. SecurityEventNode
@@ -313,6 +317,7 @@ result = await security_node.execute_async({
 #     ],
 #     "investigation_url": "/security/incidents/SEC-2024-001234"
 # }
+
 ```
 
 ## 🔄 Admin Workflows
@@ -439,6 +444,7 @@ result = await workflow.run({
         "start_date": "2024-07-01"
     }
 })
+
 ```
 
 ### Example 2: Security Incident Response Workflow
@@ -511,6 +517,7 @@ def create_incident_response_workflow():
     workflow.connect_sequence()
 
     return workflow
+
 ```
 
 ### Example 3: Compliance Audit Workflow
@@ -563,6 +570,7 @@ def create_compliance_audit_workflow():
     workflow.connect_sequence()
 
     return workflow
+
 ```
 
 ## 🏗️ Production Architecture
@@ -719,6 +727,7 @@ access_manager.add_policy({
 # 9. security_level_meets / security_level_below - Clearance levels
 # 10. matches_data_region - Geographic compliance
 # 11. contains_any / contains_all - List operations
+
 ```
 
 ## 🚀 Complete Enterprise Admin Setup
@@ -906,10 +915,25 @@ user_data = {
         "clearance": 3
     }
 }
+
 ```
 
 ### Step 2: Permission Migration
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Django
 user.groups.add(finance_group)
 user.user_permissions.add(can_export)
@@ -920,27 +944,40 @@ await RoleManagementNode(
     user_id=user_id,
     role_id="financial_analyst"
 ).execute_async()
+
 ```
 
 ### Step 3: Admin Action Migration
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Django
 @admin.action(description='Bulk approve')
 def bulk_approve(modeladmin, request, queryset):
     queryset.update(status='approved')
 
 # Kailash
-workflow = Workflow("bulk_approve")
-workflow.add_nodes([
-    UserManagementNode(
-        operation="bulk_update",
-        update_data={"status": "approved"}
-    ),
+workflow = Workflow("example", name="Example")
+workflow.workflow = Workflow("example", name="Example")
+  # Method signature,
     AuditLogNode(
         operation="log_event",
         event_type="bulk_approval"
     )
 ])
+
 ```
 
 ## ✅ Conclusion: Battle-Ready and Beyond

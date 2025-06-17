@@ -43,6 +43,7 @@ mentions: list = []  # User/role mentions
 thread_id: str = None  # Thread ID to post in
 footer_text: str = None  # Footer text for embeds
 timestamp: bool = True  # Include timestamp
+
 ```
 
 ## Basic Usage
@@ -69,31 +70,37 @@ results = workflow.run(
         "alert_type": "success"
     }
 )
+
 ```
 
 ### Alert with Context Data
 
 ```python
-alert = workflow.add_node(
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(
     DiscordAlertNode(
         id="error_alert",
         webhook_url="${DISCORD_WEBHOOK}"
     )
 )
 
-results = workflow.run(
-    error_alert={
-        "title": "Processing Error",
-        "message": "Failed to process customer data",
-        "alert_type": "error",
-        "context": {
-            "File": "customers.csv",
-            "Line": 42,
-            "Error": "Invalid date format",
-            "Time": "2024-01-15 10:30:00"
-        }
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## Alert Severity Levels
@@ -113,7 +120,22 @@ Alert nodes support five standard severity levels, each with associated colors:
 ### Rich Embeds with Custom Fields
 
 ```python
-alert = workflow.add_node(
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(
     DiscordAlertNode(
         id="metrics_alert",
         webhook_url="${DISCORD_WEBHOOK}",
@@ -123,49 +145,60 @@ alert = workflow.add_node(
     )
 )
 
-results = workflow.run(
-    metrics_alert={
-        "title": "System Metrics",
-        "alert_type": "info",
-        "fields": [
-            {"name": "CPU Usage", "value": "67%", "inline": True},
-            {"name": "Memory", "value": "4.2GB / 8GB", "inline": True},
-            {"name": "Active Users", "value": "1,234", "inline": True},
-            {"name": "Response Time", "value": "125ms avg", "inline": False}
-        ]
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Mentions and Notifications
 
 ```python
-alert = workflow.add_node(
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(
     DiscordAlertNode(
         id="critical_alert",
         webhook_url="${DISCORD_WEBHOOK}"
     )
 )
 
-results = workflow.run(
-    critical_alert={
-        "title": "Database Connection Lost",
-        "message": "Primary database is unreachable",
-        "alert_type": "critical",
-        "mentions": ["@everyone"],  # Notify everyone
-        "context": {
-            "Database": "prod-db-01",
-            "Last Seen": "10:45:00",
-            "Attempts": 5
-        }
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ### Thread Posting
 
 ```python
-alert = workflow.add_node(
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(
     DiscordAlertNode(
         id="thread_update",
         webhook_url="${DISCORD_WEBHOOK}",
@@ -173,13 +206,9 @@ alert = workflow.add_node(
     )
 )
 
-results = workflow.run(
-    thread_update={
-        "title": "Bug Fix Update",
-        "message": "Issue has been resolved in latest commit",
-        "alert_type": "success"
-    }
-)
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## Integration Patterns
@@ -223,20 +252,29 @@ workflow.connect(
     output_key="error",
     mapping={"outputs.error": "input"}
 )
+
 ```
 
 ### Scheduled Status Reports
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Generate daily report
-report_gen = workflow.add_node(
-    PythonCodeNode.from_function(
-        id="generate_report",
-        func=lambda: {
-            "title": "Daily Status Report",
-            "alert_type": "info",
-            "context": {
-                "Date": datetime.now().strftime("%Y-%m-%d"),
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature.strftime("%Y-%m-%d"),
                 "Uptime": "99.9%",
                 "Requests": "45,231",
                 "Errors": "12"
@@ -246,7 +284,8 @@ report_gen = workflow.add_node(
 )
 
 # Send report
-alert = workflow.add_node(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(
     DiscordAlertNode(
         id="daily_report",
         webhook_url="${DISCORD_WEBHOOK}",
@@ -254,7 +293,9 @@ alert = workflow.add_node(
     )
 )
 
-workflow.connect(report_gen, alert, mapping={"output": "input"})
+workflow = Workflow("example", name="Example")
+workflow.  # Method signature
+
 ```
 
 ## Security Best Practices
@@ -269,6 +310,7 @@ workflow.connect(report_gen, alert, mapping={"output": "input"})
 3. **Use configuration management** for different environments:
    ```python
    webhook_url = os.getenv(f"DISCORD_{ENVIRONMENT}_WEBHOOK")
+
    ```
 
 ### Sensitive Data
@@ -282,14 +324,30 @@ workflow.connect(report_gen, alert, mapping={"output": "input"})
 Discord webhooks are limited to 30 requests per minute. The DiscordAlertNode handles this automatically:
 
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Send multiple alerts - rate limiting applied automatically
 for i in range(50):
-    alert = workflow.add_node(
+workflow = Workflow("example", name="Example")
+workflow.workflow.add_node(
         DiscordAlertNode(
             id=f"alert_{i}",
             webhook_url="${DISCORD_WEBHOOK}"
         )
     )
+
 ```
 
 ## Error Handling
@@ -306,6 +364,7 @@ try:
         print("Alert sent successfully")
 except NodeExecutionError as e:
     print(f"Failed to send alert: {e}")
+
 ```
 
 ## Upcoming Alert Nodes

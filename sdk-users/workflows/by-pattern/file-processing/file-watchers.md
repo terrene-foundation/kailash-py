@@ -165,6 +165,7 @@ result = runner.execute(
         "file_watcher.cycle_info": {}
     }
 )
+
 ```
 
 ### Advanced File Watcher with Filters
@@ -264,6 +265,7 @@ advanced_watcher = PythonCodeNode(
         "cycle_info": dict
     }
 )
+
 ```
 
 ## Document Parsing {#document-parsing}
@@ -624,6 +626,7 @@ ocr_extractor = PythonCodeNode(
         "apply_deskew": bool
     }
 )
+
 ```
 
 ## Image Processing with Computer Vision {#image-processing}
@@ -1596,7 +1599,6 @@ from pathlib import Path
 import json
 
 def process_with_retry(file_path, max_retries=3, backoff_factor=2):
-    \"\"\"Process file with exponential backoff retry\"\"\"
     last_error = None
 
     for attempt in range(max_retries):
@@ -1619,7 +1621,6 @@ def process_with_retry(file_path, max_retries=3, backoff_factor=2):
     }
 
 def process_single_file(file_path):
-    \"\"\"Process individual file with comprehensive error handling\"\"\"
     path = Path(file_path)
 
     # Validate file exists and is accessible
@@ -1729,6 +1730,7 @@ robust_processor = PythonCodeNode(
         "min_success_rate": float
     }
 )
+
 ```
 
 ### Performance Optimization
@@ -1747,7 +1749,6 @@ cpu_count = multiprocessing.cpu_count()
 optimal_workers = min(max_workers, cpu_count * 2)  # IO-bound tasks benefit from more workers
 
 def process_file_batch(batch):
-    \"\"\"Process a batch of files\"\"\"
     results = []
     for file_info in batch:
         try:
@@ -1845,6 +1846,7 @@ parallel_processor = PythonCodeNode(
         "max_workers": int
     }
 )
+
 ```
 
 ## Integration Patterns {#integration-patterns}
@@ -1921,6 +1923,7 @@ result = runner.execute(
         "change_processor.apply_common_actions": True
     }
 )
+
 ```
 
 ### Integration with External Systems
@@ -2017,6 +2020,7 @@ s3_uploader = PythonCodeNode(
         "delete_after_upload": bool
     }
 )
+
 ```
 
 ## Best Practices

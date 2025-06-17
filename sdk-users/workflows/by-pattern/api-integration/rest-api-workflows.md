@@ -76,6 +76,7 @@ result, run_id = runtime.execute(workflow, parameters={
         "headers": {"Authorization": "Bearer YOUR_TOKEN"}
     }
 })
+
 ```
 
 ### Enterprise API Integration with Full Error Handling
@@ -320,6 +321,7 @@ workflow.add_node("result_merger", result_merger)
 workflow.connect("success_processor", "result_merger", mapping={"result": "data1"})
 workflow.connect("error_handler", "result_merger", mapping={"result": "data2"})
 workflow.connect("result_merger", "csv_backup", mapping={"merged_data": "data"})
+
 ```
 
 ## 🔄 Authentication Patterns
@@ -350,6 +352,7 @@ api_request = HTTPRequestNode(
 )
 workflow.add_node("api_request", api_request)
 workflow.connect("oauth", "api_request", mapping={"access_token": "auth_token"})
+
 ```
 
 ### API Key Authentication
@@ -372,6 +375,7 @@ http_request = HTTPRequestNode(
 )
 workflow.add_node("request", http_request)
 workflow.connect("api_key", "request", mapping={"headers": "auth_headers"})
+
 ```
 
 ## 📊 Data Processing Patterns
@@ -405,6 +409,7 @@ else:
 """
     ]
 )
+
 ```
 
 ### Advanced Data Aggregation and Analytics
@@ -562,6 +567,7 @@ result = analytics
 """
     ]
 )
+
 ```
 
 ### Error Handling and Validation
@@ -594,6 +600,7 @@ result = {
 """
     ]
 )
+
 ```
 
 ### Real-time Data Streaming Integration
@@ -697,6 +704,7 @@ streaming_workflow.add_node("event_queue", event_queue)
 # Connect streaming pipeline
 streaming_workflow.connect("stream_source", "stream_processor", mapping={"stream_data": "data"})
 streaming_workflow.connect("stream_processor", "event_queue", mapping={"result": "items"})
+
 ```
 
 ## 🔗 GraphQL Integration
@@ -732,6 +740,7 @@ runtime.execute(workflow, parameters={
         "headers": {"Authorization": "Bearer ${TOKEN}"}
     }
 })
+
 ```
 
 ## 🚀 Production Patterns
@@ -771,10 +780,25 @@ result = {
     ]
 )
 workflow.connect("webhook", "processor", mapping={"request": "data"})
+
 ```
 
 ### Batch API Processing
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Process multiple API calls
 batch_processor = DataTransformer(
     id="batch_processor",
@@ -802,6 +826,7 @@ batch_api = RateLimitedAPINode(
     requests_per_minute=120,  # Higher limit for batch processing
     max_retries=2
 )
+
 ```
 
 ## ⚡ Performance Optimization
@@ -814,16 +839,32 @@ pooled_client = HTTPRequestNode(
     connection_pool_size=10,
     keep_alive=True
 )
+
 ```
 
 ### Response Caching
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # Cache API responses
 cached_api = RateLimitedAPINode(
     id="cached_api",
     cache_responses=True,
     cache_ttl=300  # 5 minutes
 )
+
 ```
 
 ## 🔗 Best Practices
@@ -860,10 +901,25 @@ api_node = HTTPRequestNode(
     method="GET",
     url="https://api.example.com"
 )
+
 ```
 
 ### Don't Implement Rate Limiting Manually
 ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
 # WRONG: Manual rate limiting
 rate_limiter = PythonCodeNode(
     code="time.sleep(1); requests.get(url)"
@@ -873,6 +929,7 @@ rate_limiter = PythonCodeNode(
 rate_limiter = RateLimitedAPINode(
     requests_per_minute=60
 )
+
 ```
 
 ### Don't Hardcode API Keys
@@ -886,6 +943,7 @@ api_call = HTTPRequestNode(
 api_call = HTTPRequestNode(
     headers={"Authorization": "Bearer ${API_TOKEN}"}
 )
+
 ```
 
 ---
