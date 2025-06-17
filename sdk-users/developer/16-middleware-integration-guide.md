@@ -1596,6 +1596,216 @@ if __name__ == "__main__":
     )
 ```
 
+## MCP Server Integration
+
+### Registering MCP Servers with Gateway
+
+The gateway supports MCP (Model Context Protocol) server integration for external tool access:
+
+```python
+from kailash.api.mcp_integration import MCPIntegration
+
+# Create MCP integration
+mcp = MCPIntegration("tools_server", "External tools and utilities")
+
+# Add async tools
+async def web_search(query: str, max_results: int = 10):
+    """Search the web for information."""
+    results = await search_api.search(query, limit=max_results)
+    return {"results": results}
+
+async def analyze_text(text: str, analysis_type: str = "sentiment"):
+    """Analyze text using AI."""
+    result = await ai_service.analyze(text, type=analysis_type)
+    return {"analysis": result}
+
+# Register tools with schemas
+mcp.add_tool("search", web_search, "Search the web", {
+    "query": {"type": "string", "required": True},
+    "max_results": {"type": "integer", "default": 10}
+})
+
+mcp.add_tool("analyze", analyze_text, "Analyze text", {
+    "text": {"type": "string", "required": True},
+    "analysis_type": {"type": "string", "default": "sentiment"}
+})
+
+# For WorkflowAPIGateway
+gateway.register_mcp_server("tools", mcp)
+
+# For create_gateway() - use middleware MCP
+from kailash.middleware.mcp import MiddlewareMCPServer, MCPServerConfig
+
+config = MCPServerConfig()
+config.name = "tools"
+config.enable_caching = True
+
+mcp_server = MiddlewareMCPServer(
+    config=config,
+    agent_ui=gateway.agent_ui
+)
+
+# Register same tools
+mcp_server.register_tool("search", web_search, "Search the web", {...})
+```
+
+### Using MCP Tools in Workflows
+
+Once registered, use MCP tools in workflows via MCPToolNode:
+
+```python
+from kailash.api.mcp_integration import MCPToolNode
+from kailash.workflow.builder import WorkflowBuilder
+
+# Create workflow using MCP tools
+builder = WorkflowBuilder("mcp_analysis_workflow")
+
+# Add search node
+search_node = MCPToolNode(
+    mcp_server="tools",
+    tool_name="search",
+    parameter_mapping={
+        "search_term": "query"  # Map workflow input to tool param
+    }
+)
+builder.add_node("search", search_node)
+
+# Add analysis node
+analyze_node = MCPToolNode(
+    mcp_server="tools",
+    tool_name="analyze"
+)
+builder.add_node("analyze", analyze_node)
+
+# Connect nodes - search results feed to analyzer
+builder.add_connection("search", "results", "analyze", "text")
+
+# Register workflow
+await gateway.agent_ui.register_workflow(
+    "mcp_analysis",
+    builder.build(),
+    make_shared=True
+)
+
+# Execute via API
+execution_id = await gateway.agent_ui.execute_workflow(
+    session_id=session_id,
+    workflow_id="mcp_analysis",
+    inputs={"search_term": "Kailash SDK middleware"}
+)
+```
+
+### Complete MCP Integration Example
+
+```python
+async def create_mcp_enabled_gateway():
+    """Create gateway with comprehensive MCP integration."""
+    
+    # 1. Create gateway
+    gateway = create_gateway(
+        title="MCP-Enabled Application",
+        cors_origins=["http://localhost:3000"],
+        enable_docs=True
+    )
+    
+    # 2. Create MCP server with multiple tool categories
+    mcp = MCPIntegration("enterprise_tools")
+    
+    # Data tools
+    async def query_database(query: str, database: str = "main"):
+        # Database query tool
+        return {"results": await db.query(query, database)}
+    
+    # AI tools
+    async def generate_content(prompt: str, style: str = "professional"):
+        llm_node = LLMAgentNode("generator", model="gpt-4")
+        result = await llm_node.async_run(
+            prompt=f"Generate {style} content: {prompt}"
+        )
+        return {"content": result["response"]}
+    
+    # External API tools
+    async def call_api(endpoint: str, method: str = "GET", data: dict = None):
+        http_node = HTTPRequestNode(name="api_caller")
+        result = await http_node.execute({
+            "url": endpoint,
+            "method": method,
+            "json": data
+        })
+        return result
+    
+    # Register all tools
+    mcp.add_tool("query_db", query_database, "Query database", {
+        "query": {"type": "string", "required": True},
+        "database": {"type": "string", "default": "main"}
+    })
+    
+    mcp.add_tool("generate", generate_content, "Generate content", {
+        "prompt": {"type": "string", "required": True},
+        "style": {"type": "string", "default": "professional"}
+    })
+    
+    mcp.add_tool("api_call", call_api, "Call external API", {
+        "endpoint": {"type": "string", "required": True},
+        "method": {"type": "string", "default": "GET"},
+        "data": {"type": "object", "required": False}
+    })
+    
+    # 3. Create workflow template using MCP tools
+    template_config = {
+        "name": "data_enrichment_pipeline",
+        "description": "Query data, enrich with AI, and call APIs",
+        "nodes": [
+            {
+                "id": "query",
+                "type": "MCPToolNode",
+                "config": {
+                    "mcp_server": "enterprise_tools",
+                    "tool_name": "query_db"
+                }
+            },
+            {
+                "id": "enrich",
+                "type": "MCPToolNode",
+                "config": {
+                    "mcp_server": "enterprise_tools",
+                    "tool_name": "generate"
+                }
+            },
+            {
+                "id": "notify",
+                "type": "MCPToolNode",
+                "config": {
+                    "mcp_server": "enterprise_tools",
+                    "tool_name": "api_call"
+                }
+            }
+        ],
+        "connections": [
+            {"from_node": "query", "from_output": "results", 
+             "to_node": "enrich", "to_input": "prompt"},
+            {"from_node": "enrich", "from_output": "content", 
+             "to_node": "notify", "to_input": "data"}
+        ]
+    }
+    
+    # Register as shared workflow
+    workflow_id = await gateway.agent_ui.create_dynamic_workflow(
+        session_id=None,  # Shared workflow
+        workflow_config=template_config,
+        workflow_id="data_enrichment_template"
+    )
+    
+    return gateway
+
+# Run the MCP-enabled gateway
+if __name__ == "__main__":
+    gateway = asyncio.run(create_mcp_enabled_gateway())
+    gateway.run(port=8000)
+```
+
+For more detailed MCP integration patterns, see [19-mcp-gateway-integration.md](19-mcp-gateway-integration.md).
+
 ## Summary
 
 This guide provides comprehensive patterns for integrating Kailash Middleware into production applications. Key takeaways:
@@ -1607,6 +1817,7 @@ This guide provides comprehensive patterns for integrating Kailash Middleware in
 - **Comprehensive Security**: JWT authentication, RBAC/ABAC access control
 - **Database Integration**: Persistent storage with audit trails
 - **AI Integration**: Natural language workflow creation and chat interfaces
+- **MCP Integration**: External tool access through unified interface
 
 ### Best Practices
 1. **Use SDK Components**: Leverage authentic SDK nodes for all operations
@@ -1614,8 +1825,10 @@ This guide provides comprehensive patterns for integrating Kailash Middleware in
 3. **Security First**: Always validate permissions and authenticate requests
 4. **Monitor Health**: Implement health checks and performance monitoring
 5. **Configure for Environment**: Use environment-based configuration for deployment
+6. **MCP Tools**: Register external tools as MCP servers for workflow integration
 
 ### Next Steps
+- Review the [MCP Gateway Integration Guide](19-mcp-gateway-integration.md) for detailed MCP patterns
 - Review the [Middleware Architecture Documentation](../../# contrib (removed)/architecture/middleware-architecture.md)
 - Explore production deployment patterns in [Production Deployment Guide](../deployment/)
 - Check out complete examples in [examples/feature_examples/middleware/](../../examples/feature_examples/middleware/)
