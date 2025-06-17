@@ -54,9 +54,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Check if this is a duplicate run (push to a branch with an open PR)
+  check-duplicate:
+    name: Check for Duplicate Run
+    runs-on: ubuntu-latest  # Lightweight job - okay to use GitHub runner
+    outputs:
+      should-skip: ${{ steps.check.outputs.skip }}
+      skip-reason: ${{ steps.check.outputs.reason }}
+    steps:
+      - name: Check if push event should be skipped
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Only check for duplicates on push events
+            if (context.eventName !== 'push') {
+              core.setOutput('skip', 'false');
+              core.setOutput('reason', 'Not a push event');
+              return;
+            }
+            
+            // Get the branch name from the push event
+            const branch = context.ref.replace('refs/heads/', '');
+            console.log(`Checking for open PRs on branch: ${branch}`);
+            
+            try {
+              // List all open PRs for this branch
+              const { data: prs } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${branch}`
+              });
+              
+              if (prs.length > 0) {
+                console.log(`Found ${prs.length} open PR(s) for branch ${branch}`);
+                console.log(`PR #${prs[0].number}: ${prs[0].title}`);
+                core.setOutput('skip', 'true');
+                core.setOutput('reason', `Skipping push CI - PR #${prs[0].number} will handle CI`);
+              } else {
+                console.log(`No open PRs found for branch ${branch}`);
+                core.setOutput('skip', 'false');
+                core.setOutput('reason', 'No open PR found');
+              }
+            } catch (error) {
+              console.error('Error checking for PRs:', error);
+              // On error, don't skip to ensure CI runs
+              core.setOutput('skip', 'false');
+              core.setOutput('reason', 'Error checking PRs');
+            }
+
   # Determine what level of testing to run based on context
   determine-context:
     name: Determine Test Context
+    needs: check-duplicate
+    if: needs.check-duplicate.outputs.should-skip != 'true'
     runs-on: ubuntu-latest  # Lightweight job - okay to use GitHub runner
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
@@ -140,9 +192,19 @@ jobs:
   # Combined job for self-hosted runners to maximize parallelism
   all-checks-parallel:
     name: All Checks (Parallel)
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
-    runs-on: ${{ needs.determine-context.outputs.runner-label }}
+    needs: [check-duplicate, determine-context]
+    if: |
+      always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.determine-context.result == 'success' &&
+      needs.determine-context.outputs.test-level == 'full' && 
+      (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
+    # Runner selection options:
+    # - runs-on: [self-hosted, self-hosted-primary] - ONLY runs on self-hosted-primary (waits if unavailable)
+    # - runs-on: self-hosted - Runs on ANY available self-hosted runner (no preference)
+    # Currently using ANY self-hosted for availability. To enforce self-hosted-primary, change to: [self-hosted, self-hosted-primary]
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -293,9 +355,12 @@ jobs:
   # Placeholder jobs for branch protection when using self-hosted runners
   test-python-3-11:
     name: Test Python 3.11
-    needs: [determine-context, all-checks-parallel]
+    needs: [check-duplicate, determine-context, all-checks-parallel]
     if: |
       always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' &&
+      needs.determine-context.result == 'success' &&
       needs.determine-context.outputs.test-level == 'full' &&
       (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted')) &&
       needs.all-checks-parallel.result == 'success'
@@ -308,9 +373,12 @@ jobs:
 
   test-python-3-12:
     name: Test Python 3.12
-    needs: [determine-context, all-checks-parallel]
+    needs: [check-duplicate, determine-context, all-checks-parallel]
     if: |
       always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' &&
+      needs.determine-context.result == 'success' &&
       needs.determine-context.outputs.test-level == 'full' &&
       (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted')) &&
       needs.all-checks-parallel.result == 'success'
@@ -324,8 +392,14 @@ jobs:
   # Full test suite for PRs and manual triggers (GitHub-hosted runners)
   lint-and-format:
     name: Lint and Format Check
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
+    needs: [check-duplicate, determine-context]
+    if: |
+      always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.determine-context.result == 'success' &&
+      needs.determine-context.outputs.test-level == 'full' && 
+      !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
@@ -372,8 +446,14 @@ jobs:
 
   test-matrix:
     name: Test Python ${{ matrix.python-version }}
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
+    needs: [check-duplicate, determine-context]
+    if: |
+      always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.determine-context.result == 'success' &&
+      needs.determine-context.outputs.test-level == 'full' && 
+      !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     strategy:
       fail-fast: false
       matrix:
@@ -438,8 +518,13 @@ jobs:
 
   security-scan:
     name: Security Scan
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full'
+    needs: [check-duplicate, determine-context]
+    if: |
+      always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.determine-context.result == 'success' &&
+      needs.determine-context.outputs.test-level == 'full'
     runs-on: ubuntu-latest  # Security scan needs internet access for vulnerability DB
     outputs:
       critical-count: ${{ steps.scan-summary.outputs.critical }}
@@ -510,8 +595,14 @@ jobs:
 
   validate-examples:
     name: Validate Examples
-    needs: determine-context
-    if: needs.determine-context.outputs.test-level == 'full' && !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
+    needs: [check-duplicate, determine-context]
+    if: |
+      always() &&
+      needs.check-duplicate.result == 'success' &&
+      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.determine-context.result == 'success' &&
+      needs.determine-context.outputs.test-level == 'full' && 
+      !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4
@@ -546,9 +637,10 @@ jobs:
   # Summary job for test results
   test-summary:
     name: Test Summary
-    needs: [security-scan, all-checks-parallel, test-python-3-11, test-python-3-12]
+    needs: [check-duplicate, security-scan, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: |
       always() && 
+      needs.check-duplicate.outputs.should-skip != 'true' &&
       github.event_name == 'workflow_dispatch' &&
       (contains(needs.all-checks-parallel.result, 'success') || contains(needs.all-checks-parallel.result, 'skipped'))
     runs-on: ubuntu-latest  # Lightweight summary job - okay to use GitHub runner
@@ -626,3 +718,18 @@ jobs:
                 body: comment
               });
             }
+
+  # Job to notify when push CI is skipped due to open PR
+  skip-notification:
+    name: Skip Notification
+    needs: check-duplicate
+    if: needs.check-duplicate.outputs.should-skip == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report Skip
+        run: |
+          echo "🔄 CI Skipped for Push Event"
+          echo "Reason: ${{ needs.check-duplicate.outputs.skip-reason }}"
+          echo ""
+          echo "The CI pipeline was skipped for this push because there's already an open PR."
+          echo "The PR's CI run will handle all necessary checks."
