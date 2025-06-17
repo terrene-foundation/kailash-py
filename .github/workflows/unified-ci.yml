@@ -200,8 +200,11 @@ jobs:
       needs.determine-context.result == 'success' &&
       needs.determine-context.outputs.test-level == 'full' && 
       (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
-    # Prefer self-hosted-primary for this heavy workload job
-    runs-on: [self-hosted, self-hosted-primary]
+    # Runner selection options:
+    # - runs-on: [self-hosted, self-hosted-primary] - ONLY runs on self-hosted-primary (waits if unavailable)
+    # - runs-on: self-hosted - Runs on ANY available self-hosted runner (no preference)
+    # Currently using ANY self-hosted for availability. To enforce self-hosted-primary, change to: [self-hosted, self-hosted-primary]
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
