@@ -30,7 +30,10 @@ from .utils import generate_key_pair, generate_secret_key, parse_bearer_token
 
 # Import other components (check for circular deps)
 try:
-    from .access_control import MiddlewareAccessControlManager, MiddlewareAuthenticationMiddleware
+    from .access_control import (
+        MiddlewareAccessControlManager,
+        MiddlewareAuthenticationMiddleware,
+    )
     from .auth_manager import AuthLevel, MiddlewareAuthManager
 
     _has_access_control = True

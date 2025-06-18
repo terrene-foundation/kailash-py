@@ -155,7 +155,10 @@ from ..communication.events import (
     UIEvent,
     WorkflowEvent,
 )
-from ..database.repositories import MiddlewareExecutionRepository, MiddlewareWorkflowRepository
+from ..database.repositories import (
+    MiddlewareExecutionRepository,
+    MiddlewareWorkflowRepository,
+)
 
 logger = logging.getLogger(__name__)
 
