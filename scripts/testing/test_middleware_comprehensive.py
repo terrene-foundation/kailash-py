@@ -10,7 +10,6 @@ import tempfile
 from datetime import datetime, timezone
 
 import pytest
-
 from kailash.middleware.communication.events import EventStream
 from kailash.middleware.database.repositories import MiddlewareWorkflowRepository
 from kailash.nodes.api import HTTPRequestNode
@@ -391,7 +390,7 @@ async def run_comprehensive_tests():
     print("✅ COMPLETED: Runtime delegation implemented")
     print("✅ COMPLETED: Security and audit logging")
     print("⚠️  PENDING: AsyncPostgreSQLVectorNode for AI features")
-    print("⚠️  PENDING: Auth module JWTConfigNode initialization")
+    print("✅ COMPLETED: Auth module uses JWTAuthManager with dependency injection")
 
 
 if __name__ == "__main__":

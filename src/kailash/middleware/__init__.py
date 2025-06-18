@@ -36,7 +36,7 @@ The middleware consists of these interconnected layers:
 
 **API Gateway Layer**:
 - RESTful API endpoints with OpenAPI documentation
-- JWT-based authentication using JWTConfigNode
+- JWT-based authentication using JWTAuthManager
 - Request/response middleware with comprehensive logging
 - Dynamic schema generation for node discovery
 
@@ -181,9 +181,11 @@ Usage Examples
     >>> workflow_id = await agent_ui.create_dynamic_workflow(
     ...     session_id, workflow_config
     ... )
-    >>> execution_id = await agent_ui.execute_workflow(
+    >>> # Use execute() for consistency with runtime API (preferred)
+    >>> execution_id = await agent_ui.execute(
     ...     session_id, workflow_id, inputs={}
     ... )
+    >>> # Note: execute_workflow() is deprecated and will be removed in v1.0.0
 
 Production Deployment
 --------------------
@@ -210,10 +212,7 @@ License: See LICENSE file
 Documentation: https://docs.kailash.ai/middleware/
 """
 
-from .auth.access_control import (
-    MiddlewareAccessControlManager,
-    MiddlewareAuthenticationMiddleware,
-)
+from .auth.access_control import MiddlewareAccessControlManager, MiddlewareAuthenticationMiddleware
 from .auth.auth_manager import AuthLevel, MiddlewareAuthManager
 
 # Authentication & Access Control
@@ -246,19 +245,10 @@ from .database import (
     WorkflowExecutionModel,
     WorkflowModel,
 )
-from .mcp.client_integration import (
-    MCPClientConfig,
-    MCPServerConnection,
-    MiddlewareMCPClient,
-)
+from .mcp.client_integration import MCPClientConfig, MCPServerConnection, MiddlewareMCPClient
 
 # MCP Integration
-from .mcp.enhanced_server import (
-    MCPResourceNode,
-    MCPServerConfig,
-    MCPToolNode,
-    MiddlewareMCPServer,
-)
+from .mcp.enhanced_server import MCPResourceNode, MCPServerConfig, MCPToolNode, MiddlewareMCPServer
 
 __all__ = [
     # Core Components

@@ -1,16 +1,14 @@
 """
 JWT Authentication Manager for Kailash Middleware
 
-Provides enterprise-grade JWT authentication built entirely with Kailash SDK components.
-Uses Kailash nodes, workflows, and patterns for all authentication operations.
+Provides enterprise-grade JWT authentication with support for both HS256 and RSA algorithms.
+This consolidates the functionality of both JWTAuthManager and KailashJWTAuthManager.
 """
 
-import json
 import logging
 import secrets
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
@@ -22,82 +20,18 @@ except ImportError:
     jwt = None
     rsa = None
 
-# Import Kailash SDK components
-from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import JSONReaderNode
-from kailash.nodes.logic import SwitchNode
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+from .exceptions import (
+    InvalidTokenError,
+    RefreshTokenError,
+    TokenBlacklistedError,
+    TokenExpiredError,
+)
+
+# Import models and utilities (no circular dependencies)
+from .models import JWTConfig, RefreshTokenData, TokenPair, TokenPayload
+from .utils import generate_secret_key, is_token_expired
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class JWTConfig:
-    """Configuration for JWT authentication using only Python standard library."""
-
-    # Signing configuration
-    algorithm: str = (
-        "HS256"  # Use HMAC instead of RSA to avoid external crypto dependencies
-    )
-    access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
-
-    # Security settings
-    issuer: str = "kailash-middleware"
-    audience: str = "kailash-api"
-
-    # Key management
-    auto_generate_keys: bool = True
-    key_rotation_days: int = 30
-
-    # Token settings
-    include_user_claims: bool = True
-    include_permissions: bool = True
-    max_refresh_count: int = 10
-
-
-@dataclass
-class TokenPayload:
-    """JWT token payload structure using standard Python."""
-
-    # Standard claims
-    sub: str  # Subject (user ID)
-    iss: str  # Issuer
-    aud: str  # Audience
-    exp: int  # Expiration time
-    iat: int  # Issued at
-    jti: str  # JWT ID
-
-    # Custom claims
-    tenant_id: Optional[str] = None
-    session_id: Optional[str] = None
-    user_type: str = "user"
-    permissions: List[str] = None
-    roles: List[str] = None
-
-    # Token metadata
-    token_type: str = "access"  # access, refresh
-    refresh_count: int = 0
-
-    def __post_init__(self):
-        if self.permissions is None:
-            self.permissions = []
-        if self.roles is None:
-            self.roles = []
-
-
-@dataclass
-class TokenPair:
-    """Access and refresh token pair using standard Python."""
-
-    access_token: str
-    refresh_token: str
-    token_type: str = "Bearer"
-    expires_in: int = 0
-    expires_at: Optional[datetime] = None
-    scope: Optional[str] = None
 
 
 class JWTAuthManager:
@@ -105,30 +39,111 @@ class JWTAuthManager:
     Enterprise JWT Authentication Manager.
 
     Provides comprehensive JWT token management with security best practices:
-    - RSA key pair generation and rotation
+    - Support for both HS256 (default) and RSA algorithms
+    - RSA key pair generation and rotation (when using RSA)
     - Refresh token management
     - Token blacklisting
     - Comprehensive audit logging
     - Rate limiting protection
+
+    This consolidates both JWTAuthManager and KailashJWTAuthManager functionality.
     """
 
-    def __init__(self, config: JWTConfig = None):
+    def __init__(
+        self,
+        config: JWTConfig = None,
+        secret_key: str = None,
+        algorithm: str = None,
+        use_rsa: bool = None,
+        **kwargs,
+    ):
+        """
+        Initialize JWT Auth Manager.
+
+        Args:
+            config: JWTConfig object with full configuration
+            secret_key: Secret key for HS256 (overrides config)
+            algorithm: Algorithm to use (overrides config)
+            use_rsa: Whether to use RSA (overrides config)
+            **kwargs: Additional config parameters
+        """
         self.config = config or JWTConfig()
+
+        # Override config with direct parameters for backward compatibility
+        if secret_key is not None:
+            self.config.secret_key = secret_key
+        if algorithm is not None:
+            self.config.algorithm = algorithm
+        if use_rsa is not None:
+            self.config.use_rsa = use_rsa
+            if use_rsa:
+                self.config.algorithm = "RS256"
+
+        # Apply any additional kwargs to config
+        for key, value in kwargs.items():
+            if hasattr(self.config, key):
+                setattr(self.config, key, value)
 
         # Key management
         self._private_key: Optional[rsa.RSAPrivateKey] = None
         self._public_key: Optional[rsa.RSAPublicKey] = None
+        self._secret_key: Optional[str] = self.config.secret_key
         self._key_id = str(uuid.uuid4())
         self._key_generated_at = datetime.now(timezone.utc)
 
         # Token tracking
-        self._blacklisted_tokens: set = set()
+        self._blacklisted_tokens: set = set() if self.config.enable_blacklist else None
         self._refresh_tokens: Dict[str, Dict[str, Any]] = {}
         self._failed_attempts: Dict[str, List[datetime]] = {}
 
-        # Initialize keys
-        if self.config.auto_generate_keys:
-            self._generate_key_pair()
+        # Initialize keys based on algorithm
+        self._initialize_keys()
+
+    def _initialize_keys(self):
+        """Initialize keys based on configured algorithm."""
+        if self.config.use_rsa or self.config.algorithm.startswith("RS"):
+            # RSA mode
+            if self.config.private_key and self.config.public_key:
+                # Load provided keys
+                self._load_rsa_keys()
+            elif self.config.auto_generate_keys:
+                # Generate new RSA keys
+                self._generate_key_pair()
+            else:
+                raise ValueError(
+                    "RSA mode requires either provided keys or auto_generate_keys=True"
+                )
+        else:
+            # HS256 mode
+            if not self._secret_key:
+                if self.config.auto_generate_keys:
+                    # Generate random secret
+                    self._secret_key = secrets.token_urlsafe(32)
+                    self.config.secret_key = self._secret_key
+                    logger.info("Generated new HS256 secret key")
+                else:
+                    raise ValueError(
+                        "HS256 mode requires secret_key or auto_generate_keys=True"
+                    )
+
+    def _load_rsa_keys(self):
+        """Load RSA keys from PEM strings."""
+        try:
+            from cryptography.hazmat.backends import default_backend
+            from cryptography.hazmat.primitives import serialization
+
+            self._private_key = serialization.load_pem_private_key(
+                self.config.private_key.encode(),
+                password=None,
+                backend=default_backend(),
+            )
+            self._public_key = serialization.load_pem_public_key(
+                self.config.public_key.encode(), backend=default_backend()
+            )
+            logger.info("Loaded RSA keys from configuration")
+        except Exception as e:
+            logger.error(f"Failed to load RSA keys: {e}")
+            raise
 
     def _generate_key_pair(self):
         """Generate new RSA key pair for token signing."""
@@ -193,7 +208,8 @@ class JWTAuthManager:
         **kwargs,
     ) -> str:
         """Create JWT access token."""
-        if self._should_rotate_keys():
+        # Only rotate keys in RSA mode
+        if self.config.use_rsa and self._should_rotate_keys():
             self._generate_key_pair()
 
         payload = self._create_token_payload(
@@ -206,16 +222,39 @@ class JWTAuthManager:
             **kwargs,
         )
 
-        # Add key ID to header
-        headers = {"kid": self._key_id}
+        # Convert payload to dict for encoding
+        payload_dict = {
+            "sub": payload.sub,
+            "iss": payload.iss,
+            "aud": payload.aud,
+            "exp": payload.exp,
+            "iat": payload.iat,
+            "jti": payload.jti,
+            "tenant_id": payload.tenant_id,
+            "session_id": payload.session_id,
+            "token_type": payload.token_type,
+            "permissions": payload.permissions,
+            "roles": payload.roles,
+        }
+        payload_dict.update(kwargs)
 
-        # Sign token
-        token = jwt.encode(
-            payload.dict(),
-            self._private_key,
-            algorithm=self.config.algorithm,
-            headers=headers,
-        )
+        # Sign token based on algorithm
+        if self.config.use_rsa or self.config.algorithm.startswith("RS"):
+            # RSA signing
+            headers = {"kid": self._key_id}
+            token = jwt.encode(
+                payload_dict,
+                self._private_key,
+                algorithm=self.config.algorithm,
+                headers=headers,
+            )
+        else:
+            # HS256 signing
+            token = jwt.encode(
+                payload_dict,
+                self._secret_key,
+                algorithm=self.config.algorithm,
+            )
 
         logger.debug(f"Created access token for user {user_id}")
         return token
@@ -232,14 +271,36 @@ class JWTAuthManager:
             **kwargs,
         )
 
-        headers = {"kid": self._key_id}
+        # Convert payload to dict
+        payload_dict = {
+            "sub": payload.sub,
+            "iss": payload.iss,
+            "aud": payload.aud,
+            "exp": payload.exp,
+            "iat": payload.iat,
+            "jti": payload.jti,
+            "tenant_id": payload.tenant_id,
+            "session_id": payload.session_id,
+            "token_type": payload.token_type,
+            "refresh_count": payload.refresh_count,
+        }
+        payload_dict.update(kwargs)
 
-        token = jwt.encode(
-            payload.dict(),
-            self._private_key,
-            algorithm=self.config.algorithm,
-            headers=headers,
-        )
+        # Sign token based on algorithm
+        if self.config.use_rsa or self.config.algorithm.startswith("RS"):
+            headers = {"kid": self._key_id}
+            token = jwt.encode(
+                payload_dict,
+                self._private_key,
+                algorithm=self.config.algorithm,
+                headers=headers,
+            )
+        else:
+            token = jwt.encode(
+                payload_dict,
+                self._secret_key,
+                algorithm=self.config.algorithm,
+            )
 
         # Store refresh token metadata
         self._refresh_tokens[payload.jti] = {
@@ -291,27 +352,39 @@ class JWTAuthManager:
         """
         try:
             # Check if token is blacklisted
-            if token in self._blacklisted_tokens:
+            if self._blacklisted_tokens and token in self._blacklisted_tokens:
                 raise jwt.InvalidTokenError("Token has been revoked")
 
-            # Decode without verification first to get header
-            unverified_header = jwt.get_unverified_header(token)
-            key_id = unverified_header.get("kid")
+            # Get verification key based on algorithm
+            if self.config.use_rsa or self.config.algorithm.startswith("RS"):
+                # RSA verification
+                # Decode without verification first to get header
+                unverified_header = jwt.get_unverified_header(token)
+                key_id = unverified_header.get("kid")
 
-            # Verify key ID matches current key
-            if key_id != self._key_id:
-                logger.warning(f"Token signed with unknown key ID: {key_id}")
-                # In production, you might want to support multiple keys
-                # for graceful key rotation
+                # Verify key ID matches current key (optional check)
+                if key_id and key_id != self._key_id:
+                    logger.warning(f"Token signed with unknown key ID: {key_id}")
+                    # In production, you might want to support multiple keys
+                    # for graceful key rotation
 
-            # Verify and decode token
-            payload = jwt.decode(
-                token,
-                self._public_key,
-                algorithms=[self.config.algorithm],
-                issuer=self.config.issuer,
-                audience=self.config.audience,
-            )
+                # Verify and decode token
+                payload = jwt.decode(
+                    token,
+                    self._public_key,
+                    algorithms=[self.config.algorithm],
+                    issuer=self.config.issuer,
+                    audience=self.config.audience,
+                )
+            else:
+                # HS256 verification
+                payload = jwt.decode(
+                    token,
+                    self._secret_key,
+                    algorithms=[self.config.algorithm],
+                    issuer=self.config.issuer,
+                    audience=self.config.audience,
+                )
 
             return payload
 
@@ -461,7 +534,9 @@ class JWTAuthManager:
         """Get authentication manager statistics."""
         return {
             "active_refresh_tokens": len(self._refresh_tokens),
-            "blacklisted_tokens": len(self._blacklisted_tokens),
+            "blacklisted_tokens": (
+                len(self._blacklisted_tokens) if self._blacklisted_tokens else 0
+            ),
             "key_id": self._key_id,
             "key_age_days": (
                 (datetime.now(timezone.utc) - self._key_generated_at).days
@@ -475,3 +550,70 @@ class JWTAuthManager:
                 "refresh_token_expire_days": self.config.refresh_token_expire_days,
             },
         }
+
+    # Backward compatibility methods for KailashJWTAuthManager
+    def generate_token(self, user_id: str, **claims) -> str:
+        """
+        Generate access token (backward compatibility).
+
+        .. deprecated:: 0.5.0
+            Use :meth:`create_access_token` instead. This method will be removed in version 1.0.0.
+
+        This method exists for compatibility with KailashJWTAuthManager.
+        """
+        import warnings
+
+        warnings.warn(
+            "generate_token() is deprecated and will be removed in version 1.0.0. "
+            "Use create_access_token() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.create_access_token(user_id, **claims)
+
+    def verify_and_decode_token(self, token: str) -> Dict[str, Any]:
+        """
+        Verify and decode token (backward compatibility).
+
+        .. deprecated:: 0.5.0
+            Use :meth:`verify_token` instead. This method will be removed in version 1.0.0.
+
+        This method exists for compatibility with KailashJWTAuthManager.
+        """
+        import warnings
+
+        warnings.warn(
+            "verify_and_decode_token() is deprecated and will be removed in version 1.0.0. "
+            "Use verify_token() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.verify_token(token)
+
+    def blacklist_token(self, token: str):
+        """
+        Blacklist token (backward compatibility).
+
+        This method exists for compatibility with KailashJWTAuthManager.
+        """
+        # Just call the main revoke_token method
+        self.revoke_token(token)
+
+    def generate_refresh_token(self, user_id: str, **claims) -> str:
+        """
+        Generate refresh token (backward compatibility).
+
+        .. deprecated:: 0.5.0
+            Use :meth:`create_refresh_token` instead. This method will be removed in version 1.0.0.
+
+        This method exists for compatibility with KailashJWTAuthManager.
+        """
+        import warnings
+
+        warnings.warn(
+            "generate_refresh_token() is deprecated and will be removed in version 1.0.0. "
+            "Use create_refresh_token() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.create_refresh_token(user_id, **claims)

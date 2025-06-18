@@ -15,14 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs
 
-from fastapi import (
-    Depends,
-    FastAPI,
-    HTTPException,
-    Request,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -33,7 +26,6 @@ from ...nodes.security import CredentialManagerNode
 from ...nodes.transform import DataTransformer
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
-from ..auth import KailashJWTAuthManager
 from ..core.agent_ui import AgentUIMiddleware
 from ..core.schema import DynamicSchemaRegistry
 from .events import EventFilter, EventType
@@ -41,8 +33,8 @@ from .realtime import RealtimeMiddleware
 
 logger = logging.getLogger(__name__)
 
-# Use SDK Auth Manager instead of manual security
-auth_manager = KailashJWTAuthManager()
+# Auth manager will be injected via dependency injection
+# This avoids circular imports and allows for flexible auth implementations
 
 
 # Pydantic Models
@@ -135,8 +127,23 @@ class APIGateway:
         enable_docs: bool = True,
         max_sessions: int = 1000,
         enable_auth: bool = True,
+        auth_manager=None,  # Dependency injection for auth
         database_url: str = None,
     ):
+        """
+        Initialize API Gateway with dependency injection support.
+
+        Args:
+            title: API title
+            description: API description
+            version: API version
+            cors_origins: Allowed CORS origins
+            enable_docs: Enable OpenAPI documentation
+            max_sessions: Maximum concurrent sessions
+            enable_auth: Enable authentication
+            auth_manager: Optional auth manager instance (creates default if None and auth enabled)
+            database_url: Optional database URL for persistence
+        """
         self.title = title
         self.version = version
         self.enable_docs = enable_docs
@@ -153,7 +160,21 @@ class APIGateway:
 
         # Initialize auth manager if enabled
         if enable_auth:
-            self.auth_manager = KailashJWTAuthManager(secret_key="api-gateway-secret")
+            if auth_manager is None:
+                # Create default auth manager if none provided
+                # Import here to avoid circular dependency
+                from ..auth import JWTAuthManager
+
+                self.auth_manager = JWTAuthManager(
+                    secret_key="api-gateway-secret",
+                    algorithm="HS256",
+                    issuer="kailash-gateway",
+                    audience="kailash-api",
+                )
+            else:
+                self.auth_manager = auth_manager
+        else:
+            self.auth_manager = None
 
         # Create FastAPI app with lifespan management
         @asynccontextmanager
@@ -774,25 +795,39 @@ class APIGateway:
 
 # Convenience function for quick setup
 def create_gateway(
-    agent_ui_middleware: AgentUIMiddleware = None, **kwargs
+    agent_ui_middleware: AgentUIMiddleware = None, auth_manager=None, **kwargs
 ) -> APIGateway:
     """
-    Create a configured API gateway instance.
+    Create a configured API gateway instance with dependency injection.
 
     Args:
         agent_ui_middleware: Optional existing AgentUIMiddleware instance
+        auth_manager: Optional auth manager instance (e.g., JWTAuthManager)
         **kwargs: Additional arguments for APIGateway initialization
 
     Returns:
         Configured APIGateway instance
 
     Example:
+        >>> from kailash.middleware.auth import JWTAuthManager
+        >>>
+        >>> # Create with custom auth
+        >>> auth = JWTAuthManager(use_rsa=True)
         >>> gateway = create_gateway(
         ...     title="My App Gateway",
-        ...     cors_origins=["http://localhost:3000"]
+        ...     cors_origins=["http://localhost:3000"],
+        ...     auth_manager=auth
         ... )
+        >>>
+        >>> # Or use default auth
+        >>> gateway = create_gateway(title="My App")
+        >>>
         >>> gateway.run(port=8000)
     """
+    # Pass auth_manager to APIGateway
+    if auth_manager is not None:
+        kwargs["auth_manager"] = auth_manager
+
     gateway = APIGateway(**kwargs)
 
     if agent_ui_middleware:

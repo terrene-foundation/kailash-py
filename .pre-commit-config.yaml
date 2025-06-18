@@ -84,6 +84,7 @@ repos:
         language: system
         args: [
           tests/,
+          -m, "not slow",  # Skip slow tests
           --tb=short,
           --maxfail=5,
           --durations=10,
