@@ -357,7 +357,7 @@ async def demonstrate_abac():
             )
 
             # Execute workflow
-            results = await runtime.execute_workflow(workflow)
+            results = runtime.execute(workflow)
 
             # Get node output
             if "sensitive_data" in results:

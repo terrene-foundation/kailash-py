@@ -36,7 +36,7 @@ The middleware consists of these interconnected layers:
 
 **API Gateway Layer**:
 - RESTful API endpoints with OpenAPI documentation
-- JWT-based authentication using JWTConfigNode
+- JWT-based authentication using JWTAuthManager
 - Request/response middleware with comprehensive logging
 - Dynamic schema generation for node discovery
 
@@ -181,9 +181,11 @@ Usage Examples
     >>> workflow_id = await agent_ui.create_dynamic_workflow(
     ...     session_id, workflow_config
     ... )
-    >>> execution_id = await agent_ui.execute_workflow(
+    >>> # Use execute() for consistency with runtime API (preferred)
+    >>> execution_id = await agent_ui.execute(
     ...     session_id, workflow_id, inputs={}
     ... )
+    >>> # Note: execute_workflow() is deprecated and will be removed in v1.0.0
 
 Production Deployment
 --------------------

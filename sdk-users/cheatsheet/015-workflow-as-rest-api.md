@@ -1,6 +1,8 @@
 # Workflow as REST API
 
-## Quick Start
+## Quick Start (Simple API)
+
+For simple single-workflow APIs, use `WorkflowAPI`:
 
 ```python
 from kailash import Workflow
@@ -318,6 +320,31 @@ async def webhook_handler(source: str, payload: dict):
 3. **Missing Error Handling**: Add exception handlers for production
 4. **No Rate Limiting**: Protect API from abuse
 
+## Enterprise Approach (Recommended)
+
+For production applications with multiple workflows, real-time updates, and enterprise features, use the middleware gateway:
+
+```python
+from kailash.middleware import create_gateway
+
+# Create full-featured gateway
+gateway = create_gateway(
+    title="My Enterprise API",
+    cors_origins=["http://localhost:3000"],
+    enable_auth=True
+)
+
+# Workflows are created dynamically via API
+# Real-time updates via WebSocket/SSE
+# Session-based multi-tenancy
+# Built-in auth, monitoring, and more
+
+gateway.run(port=8000)
+```
+
+See the [Middleware Migration Guide](../middleware/MIGRATION.md) for details on migrating from `WorkflowAPIGateway` to the new middleware approach.
+
 ## Next Steps
 - [Middleware patterns](../middleware/README.md)
 - [Production deployment](../enterprise/middleware-patterns.md)
+- [Migration guide](../middleware/MIGRATION.md)
