@@ -77,6 +77,33 @@ builder.add_connection(reader_id, "output", processor_id, "input")
 
 ```
 
+### ⚠️ IMPORTANT: Connection Syntax Difference
+```python
+# WorkflowBuilder uses add_connection() with 4 parameters:
+builder = WorkflowBuilder()
+builder.add_connection(
+    source_node_id,      # Source node ID
+    source_output,       # Source output parameter name
+    target_node_id,      # Target node ID
+    target_input         # Target input parameter name
+)
+
+# Workflow uses connect() with mapping dict:
+workflow = Workflow("my_workflow")
+workflow.connect(
+    source_node,         # Source node object or name
+    target_node,         # Target node object or name
+    mapping={"output": "input"}  # Output to input mapping
+)
+
+# ❌ WRONG: Don't mix the syntax!
+# This will fail on WorkflowBuilder:
+builder.connect(node1, node2, mapping={"output": "input"})
+
+# This will fail on Workflow:
+workflow.add_connection("node1", "output", "node2", "input")
+```
+
 ### Unified Runtime (Enterprise Features)
 ```python
 # ✅ CORRECT: Unified runtime with enterprise capabilities

@@ -248,8 +248,8 @@ else:
 
         self.tool_register_workflow.add_node(validator)
         self.tool_register_workflow.add_node(register_handler)
-        self.tool_register_workflow.connect(
-            validator, register_handler, mapping={"result": "validation_result"}
+        self.tool_register_workflow.add_connection(
+            "validate_tool", "result", "register_tool", "validation_result"
         )
 
         # Tool Execution Workflow
