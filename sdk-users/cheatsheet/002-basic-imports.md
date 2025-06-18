@@ -30,7 +30,7 @@ from kailash.access_control import UserContext, PermissionRule
 
 # API & Integration
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
-from kailash.api.gateway import WorkflowAPIGateway
+from kailash.middleware import create_gateway
 
 # AI Agent Distribution
 from kailash.nodes.ai.a2a import A2AAgentNode, A2ACoordinatorNode

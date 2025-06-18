@@ -8,7 +8,7 @@ Patterns for connecting Kailash workflows with external services, APIs, and syst
 
 ```python
 from kailash import Workflow
-from kailash.api.gateway import APIGateway
+from kailash.middleware import create_gateway
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode
 
@@ -26,62 +26,36 @@ workflow.# ... define ML workflow nodes ...
 report_workflow = Workflow("example", name="Example")
 workflow.# ... define report workflow nodes ...
 
-# Create API Gateway
-gateway = APIGateway(
-    host="0.0.0.0",
-    port=8000,
+# Create API Gateway with middleware
+gateway = create_gateway(
     title="Kailash Workflow API",
-    version="1.0.0"
+    version="1.0.0",
+    cors_origins=["http://localhost:3000"]
 )
 
-# Register workflows with custom endpoints
-gateway.register_workflow(
-    workflow=data_workflow,
-    endpoint="/process-data",
-    methods=["POST"],
-    description="Process CSV data",
-    request_schema={
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to CSV file"}
-        }
-    }
+# Note: With the new middleware approach, workflows are created
+# dynamically via API calls, not pre-registered. This provides
+# better flexibility and session-based isolation.
+# See middleware documentation for dynamic workflow creation patterns.
+# For simple single-workflow APIs, you can still use WorkflowAPI:
+from kailash.api.workflow_api import WorkflowAPI
+api = WorkflowAPI(data_workflow)
+api.run(port=8001)
+
+# For enterprise multi-workflow applications, use the middleware approach
+# which provides dynamic workflow creation, real-time updates, and more.
+
+# Authentication is built into the gateway
+from kailash.middleware.auth import JWTAuthManager
+auth = JWTAuthManager(secret_key="your-secret-key")
+gateway_with_auth = create_gateway(
+    title="Secured API",
+    auth_manager=auth,
+    enable_auth=True
 )
 
-gateway.register_workflow(
-    workflow=ml_workflow,
-    endpoint="/ml/predict",
-    methods=["POST"],
-    description="Run ML prediction pipeline"
-)
-
-gateway.register_workflow(
-    workflow=report_workflow,
-    endpoint="/reports/generate",
-    methods=["POST"],
-    description="Generate analytical reports"
-)
-
-# Add authentication middleware
-from kailash.api.auth import JWTAuthMiddleware
-gateway.add_middleware(JWTAuthMiddleware(
-    secret_key="your-secret-key",
-    algorithm="HS256"
-))
-
-# Add rate limiting
-from kailash.api.middleware import RateLimitMiddleware
-gateway.add_middleware(RateLimitMiddleware(
-    requests_per_minute=100,
-    burst_size=10
-))
-
-# Add CORS support
-gateway.add_cors(
-    origins=["https://app.example.com"],
-    methods=["GET", "POST"],
-    headers=["Authorization", "Content-Type"]
-)
+# CORS is configured during gateway creation
+# Rate limiting can be added via external middleware like slowapi
 
 # Start the gateway
 if __name__ == "__main__":
@@ -227,15 +201,12 @@ workflow.connect("api_switch", "error_handler",
 **Purpose**: Receive and process webhook events from external systems
 
 ```python
-from kailash.api.webhook import WebhookReceiver
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.api import HTTPServerNode
 
-# Create webhook receiver
-webhook = WebhookReceiver(
-    port=8080,
-    path="/webhooks"
-)
+# For webhooks, use the middleware gateway which supports
+# webhook endpoints natively, or use HTTPServerNode for simple cases
 
 # Define webhook processing workflow
 webhook_workflow = Workflow("webhook_processor", "Webhook Event Processor")

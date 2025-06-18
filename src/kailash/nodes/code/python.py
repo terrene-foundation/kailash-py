@@ -754,6 +754,24 @@ class PythonCodeNode(Node):
     - State management for class-based nodes
     - AST-based security validation
 
+    IMPORTANT - Variable Access Pattern:
+    When using PythonCodeNode with code strings, input parameters are directly
+    available as variables in the execution namespace. Do NOT try to access them
+    through an 'inputs' dictionary or use locals()/dir() to check for them.
+
+    Correct pattern:
+        # If 'query' is passed as an input parameter, it's directly available
+        result = {'processed': query.upper()}  # Direct access to 'query'
+
+    Incorrect patterns:
+        # These will NOT work:
+        query = inputs.get('query', '')  # 'inputs' dict doesn't exist
+        query = locals().get('query', '')  # locals() is restricted
+        if 'query' in dir():  # dir() is restricted
+
+    The node requires a 'result' variable to be set with the output data.
+    All outputs should be wrapped in a dictionary assigned to 'result'.
+
     Example:
         >>> # Function-based node
         >>> def custom_filter(data: pd.DataFrame, threshold: float) -> pd.DataFrame:

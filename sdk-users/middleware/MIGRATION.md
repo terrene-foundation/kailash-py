@@ -89,7 +89,7 @@ Replace all `kailash.api` and `kailash.mcp` imports:
 | `from kailash.api.gateway import WorkflowAPIGateway` | `from kailash.middleware import create_gateway` |
 | `from kailash.api.mcp_integration import MCPIntegration` | `from kailash.middleware import MiddlewareMCPServer` |
 | `from kailash.mcp.server import MCPServer` | `from kailash.middleware.mcp import MiddlewareMCPServer` |
-| `from kailash.api.auth import JWTAuthManager` | `from kailash.middleware.auth import KailashJWTAuthManager` |
+| `from kailash.api.auth import JWTAuthManager` | `from kailash.middleware.auth import JWTAuthManager` |
 
 ### 2. Gateway Architecture Changes
 
@@ -229,9 +229,9 @@ gateway = WorkflowAPIGateway(auth_manager=auth)
 
 #### After (Enterprise Auth)
 ```python
-from kailash.middleware.auth import KailashJWTAuthManager
+from kailash.middleware.auth import JWTAuthManager
 
-auth = KailashJWTAuthManager(secret_key="secret")
+auth = JWTAuthManager(secret_key="secret")
 gateway = create_gateway(auth_manager=auth, enable_auth=True)
 
 ```

@@ -540,7 +540,114 @@ class AgentUIMiddleware:
         inputs: Dict[str, Any] = None,
         config_overrides: Dict[str, Any] = None,
     ) -> str:
-        """Execute a workflow asynchronously."""
+        """Execute a workflow asynchronously.
+
+        .. deprecated:: 0.5.0
+            Use :meth:`execute` instead. This method will be removed in version 1.0.0.
+        """
+        import warnings
+
+        warnings.warn(
+            "execute_workflow() is deprecated and will be removed in version 1.0.0. "
+            "Use execute() instead for consistency with runtime API.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        # Get workflow
+        workflow = None
+        if workflow_id in session.workflows:
+            workflow = session.workflows[workflow_id]
+        elif workflow_id in self.shared_workflows:
+            workflow = self.shared_workflows[workflow_id]
+        else:
+            raise ValueError(f"Workflow {workflow_id} not found")
+
+        # Start execution
+        execution_id = session.start_execution(workflow_id, inputs)
+
+        # Track execution
+        self.active_executions[execution_id] = {
+            "session_id": session_id,
+            "workflow_id": workflow_id,
+            "workflow": workflow,
+            "inputs": inputs or {},
+            "config_overrides": config_overrides or {},
+            "start_time": time.time(),
+        }
+
+        # Persist execution if enabled
+        if self.enable_persistence:
+            try:
+                await self.execution_repo.create(
+                    {
+                        "id": execution_id,
+                        "workflow_id": workflow_id,
+                        "session_id": session_id,
+                        "user_id": session.user_id,
+                        "inputs": inputs,
+                        "metadata": config_overrides,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Failed to persist execution: {e}")
+
+        # Log execution start
+        logger.info(
+            f"Workflow execution started: {execution_id} for workflow {workflow_id}"
+        )
+
+        # Emit started event
+        await self.event_stream.emit_workflow_started(
+            workflow_id=workflow_id,
+            workflow_name=workflow.name,
+            execution_id=execution_id,
+            user_id=session.user_id,
+            session_id=session_id,
+        )
+
+        # Execute in background
+        asyncio.create_task(self._execute_workflow_async(execution_id))
+
+        self.workflows_executed += 1
+        return execution_id
+
+    async def execute(
+        self,
+        session_id: str,
+        workflow_id: str,
+        inputs: Dict[str, Any] = None,
+        config_overrides: Dict[str, Any] = None,
+    ) -> str:
+        """
+        Execute a workflow asynchronously.
+
+        This is the preferred method for workflow execution, providing consistency
+        with the runtime API.
+
+        Args:
+            session_id: Session identifier
+            workflow_id: Workflow identifier
+            inputs: Optional input parameters for the workflow
+            config_overrides: Optional configuration overrides
+
+        Returns:
+            str: Execution ID for tracking
+
+        Raises:
+            ValueError: If session or workflow not found
+            RuntimeError: If execution fails
+
+        Example:
+            >>> execution_id = await middleware.execute(
+            ...     session_id="sess_123",
+            ...     workflow_id="data_pipeline",
+            ...     inputs={"data": "input.csv"}
+            ... )
+        """
         session = await self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
