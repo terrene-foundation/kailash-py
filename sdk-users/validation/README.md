@@ -6,7 +6,7 @@
 - **[Critical Rules](critical-rules.md)** - Must-follow patterns for success
 - **[Common Mistakes](common-mistakes.md)** - What to avoid and how to fix
 - **[API Reference](api-reference.md)** - Method signatures and patterns
-- **[Migration Guide](migration-guide.md)** - Updates and breaking changes
+- **[Migration Guides](../migration-guides/)** - Version upgrades and breaking changes
 
 ## 📁 **Validation Sections**
 
@@ -38,10 +38,10 @@
    - WorkflowBuilder patterns
 
 ### **For Migration & Updates**
-5. **[Migration Guide](migration-guide.md)** - Breaking changes and updates
-   - Architecture improvements
-   - Migration notes
-   - Updated patterns
+5. **[Migration Guides](../migration-guides/)** - Version-specific migration guides
+   - Architecture improvements by version
+   - Step-by-step migration instructions
+   - Breaking changes documentation
    - Compatibility information
 
 ## 🚀 **Quick Validation**

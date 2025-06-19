@@ -49,8 +49,8 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Prevent duplicate runs: Use branch name for both push and PR events
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  # Improved concurrency: Group by PR number for PR events, unique run_id for push events
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -73,11 +73,11 @@ jobs:
               core.setOutput('reason', 'Not a push event');
               return;
             }
-            
+
             // Get the branch name from the push event
             const branch = context.ref.replace('refs/heads/', '');
             console.log(`Checking for open PRs on branch: ${branch}`);
-            
+
             try {
               // List all open PRs for this branch
               const { data: prs } = await github.rest.pulls.list({
@@ -86,7 +86,7 @@ jobs:
                 state: 'open',
                 head: `${context.repo.owner}:${branch}`
               });
-              
+
               if (prs.length > 0) {
                 console.log(`Found ${prs.length} open PR(s) for branch ${branch}`);
                 console.log(`PR #${prs[0].number}: ${prs[0].title}`);
@@ -196,9 +196,9 @@ jobs:
     if: |
       always() &&
       needs.check-duplicate.result == 'success' &&
-      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
-      needs.determine-context.outputs.test-level == 'full' && 
+      needs.determine-context.outputs.test-level == 'full' &&
       (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     # Runner selection options:
     # - runs-on: [self-hosted, self-hosted-primary] - ONLY runs on self-hosted-primary (waits if unavailable)
@@ -396,9 +396,9 @@ jobs:
     if: |
       always() &&
       needs.check-duplicate.result == 'success' &&
-      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
-      needs.determine-context.outputs.test-level == 'full' && 
+      needs.determine-context.outputs.test-level == 'full' &&
       !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
@@ -450,9 +450,9 @@ jobs:
     if: |
       always() &&
       needs.check-duplicate.result == 'success' &&
-      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
-      needs.determine-context.outputs.test-level == 'full' && 
+      needs.determine-context.outputs.test-level == 'full' &&
       !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     strategy:
       fail-fast: false
@@ -522,7 +522,7 @@ jobs:
     if: |
       always() &&
       needs.check-duplicate.result == 'success' &&
-      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
       needs.determine-context.outputs.test-level == 'full'
     runs-on: ubuntu-latest  # Security scan needs internet access for vulnerability DB
@@ -599,9 +599,9 @@ jobs:
     if: |
       always() &&
       needs.check-duplicate.result == 'success' &&
-      needs.check-duplicate.outputs.should-skip != 'true' && 
+      needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
-      needs.determine-context.outputs.test-level == 'full' && 
+      needs.determine-context.outputs.test-level == 'full' &&
       !(contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
@@ -639,7 +639,7 @@ jobs:
     name: Test Summary
     needs: [check-duplicate, security-scan, all-checks-parallel, test-python-3-11, test-python-3-12]
     if: |
-      always() && 
+      always() &&
       needs.check-duplicate.outputs.should-skip != 'true' &&
       github.event_name == 'workflow_dispatch' &&
       (contains(needs.all-checks-parallel.result, 'success') || contains(needs.all-checks-parallel.result, 'skipped'))

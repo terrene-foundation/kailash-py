@@ -8,10 +8,10 @@
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 
 class OptimizerNode(CycleAwareNode):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         # Get state
-        iteration = self.get_iteration(context)
-        prev_state = self.get_previous_state(context)
+        iteration = self.get_iteration()
+        prev_state = self.get_previous_state()
 
         # Preserve config
         targets = kwargs.get("targets", {})
@@ -118,8 +118,8 @@ class SelfOptimizingNode(CycleAwareNode):
             "target_quality": NodeParameter(name="target_quality", type=float, required=False, default=0.8)
         }
 
-    def run(self, context, **kwargs):
-        prev_state = self.get_previous_state(context)
+    def run(self, **kwargs):
+        prev_state = self.get_previous_state()
 
         # Preserve configuration
         target_quality = kwargs.get("target_quality", prev_state.get("target_quality", 0.8))
@@ -161,8 +161,8 @@ workflow.workflow.connect("self_optimizer", "self_optimizer",
 
 ### State-Based Preservation
 ```python
-def run(self, context, **kwargs):
-    prev_state = self.get_previous_state(context)
+def run(self, **kwargs):
+    prev_state = self.get_previous_state()
 
     # Restore configuration from state
     config = kwargs.get("config", prev_state.get("config", {}))
@@ -224,22 +224,22 @@ workflow.runtime = LocalRuntime()
 
 # Node 1: Data Processor
 class DataProcessorNode(CycleAwareNode):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", [])
         processed = [item * 1.1 for item in data]
         return {"processed_data": processed}
 
 # Node 2: Quality Analyzer
 class QualityAnalyzerNode(CycleAwareNode):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("processed_data", [])
         quality_score = sum(data) / len(data) if data else 0
         return {"quality_score": quality_score, "analyzed_data": data}
 
 # Node 3: Convergence Controller
 class ConvergenceControllerNode(CycleAwareNode):
-    def run(self, context, **kwargs):
-        prev_state = self.get_previous_state(context)
+    def run(self, **kwargs):
+        prev_state = self.get_previous_state()
 
         quality_score = kwargs.get("quality_score", 0)
         target = kwargs.get("target", prev_state.get("target", 100))
@@ -281,12 +281,12 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 class MonitoredCycleNode(CycleAwareNode):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         import time
         start_time = time.time()
 
-        iteration = self.get_iteration(context)
-        prev_state = self.get_previous_state(context)
+        iteration = self.get_iteration()
+        prev_state = self.get_previous_state()
 
         # Track performance history
         performance_history = prev_state.get("performance_history", [])
