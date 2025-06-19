@@ -651,6 +651,7 @@ class BatchProcessorNode(CycleAwareNode):
 class TestETLRetryPipeline:
     """Test ETL pipeline with retry capabilities."""
 
+    @pytest.mark.slow
     def test_etl_with_exponential_backoff(self, tmp_path):
         """Test ETL pipeline with connection failures and exponential backoff."""
         workflow = Workflow("etl-retry", "ETL Pipeline with Retry")
@@ -813,6 +814,7 @@ class TestETLRetryPipeline:
 class TestAPIPollingScenario:
     """Test API polling with rate limiting and backoff."""
 
+    @pytest.mark.slow
     def test_api_polling_with_rate_limits(self):
         """Test API polling that respects rate limits."""
         workflow = Workflow("api-polling", "API Polling with Rate Limits")
@@ -982,6 +984,7 @@ class TestAPIPollingScenario:
 class TestDataQualityImprovement:
     """Test iterative data quality improvement scenarios."""
 
+    @pytest.mark.slow
     def test_data_quality_optimization_cycle(self, tmp_path):
         """Test data quality improvement with multiple rules."""
         # Build quality improvement workflow
@@ -1255,6 +1258,7 @@ class TestDataQualityImprovement:
 class TestResourceOptimization:
     """Test resource optimization scenarios."""
 
+    @pytest.mark.slow
     def test_cloud_resource_optimization(self):
         """Test iterative cloud resource optimization."""
         workflow = Workflow("resource-optimization", "Cloud Resource Optimizer")
@@ -1318,6 +1322,7 @@ class TestResourceOptimization:
 class TestBatchProcessingCheckpoints:
     """Test batch processing with checkpoint recovery."""
 
+    @pytest.mark.slow
     def test_batch_processing_with_checkpoints(self, tmp_path):
         """Test batch processing that can recover from failures."""
         workflow = Workflow("batch-processing", "Batch Processing with Checkpoints")
