@@ -342,9 +342,9 @@ gateway = create_gateway(
 gateway.run(port=8000)
 ```
 
-See the [API to Middleware Migration Guide](../migration-guides/api-to-middleware-migration.md) for details on migrating from `WorkflowAPIGateway` to the new middleware approach.
+See the [Middleware Migration Guide](../middleware/MIGRATION.md) for details on migrating from `WorkflowAPIGateway` to the new middleware approach.
 
 ## Next Steps
 - [Middleware patterns](../middleware/README.md)
 - [Production deployment](../enterprise/middleware-patterns.md)
-- [Migration guide](../migration-guides/api-to-middleware-migration.md)
+- [Migration guide](../middleware/MIGRATION.md)
