@@ -181,13 +181,13 @@ def test_cycle_parameter_propagation():
     """Test that parameters propagate through cycle iterations."""
 
     class AccumulatorNode(Node):
-        def run(self, context, **kwargs):
+        def run(self, **kwargs):
             value = kwargs.get("value", 0)
-            cycle_info = context.get("cycle", {})
-            iteration = cycle_info.get("iteration", 0)
+            # In v0.5.0+, cycle info is accessed differently
+            # This example shows the old pattern for historical reference
 
             # Should accumulate: 0 → 10 → 20 → 30
-            return {"value": value + 10, "iteration": iteration}
+            return {"value": value + 10}
 
     workflow = Workflow("example", name="Example")
 workflow.    workflow.add_node("acc", AccumulatorNode())

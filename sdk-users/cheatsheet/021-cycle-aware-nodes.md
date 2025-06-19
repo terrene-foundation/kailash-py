@@ -16,10 +16,10 @@ class OptimizerNode(CycleAwareNode):
             "target": NodeParameter(name="target", type=float, required=False, default=0.8)
         }
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> Dict[str, Any]:
         # Get cycle info
-        iteration = self.get_iteration(context)
-        prev_state = self.get_previous_state(context)
+        iteration = self.get_iteration()
+        prev_state = self.get_previous_state()
 
         # Get parameters with state fallback
         quality = kwargs.get("quality", 0.0)
@@ -42,8 +42,8 @@ class OptimizerNode(CycleAwareNode):
 
 ### State Preservation Pattern
 ```python
-def run(self, context, **kwargs):
-    prev_state = self.get_previous_state(context)
+def run(self, **kwargs):
+    prev_state = self.get_previous_state()
 
     # Preserve config from first iteration
     targets = kwargs.get("targets", prev_state.get("targets", {}))
@@ -76,12 +76,12 @@ def run(self, context, **kwargs):
 
 ### Accumulation Pattern
 ```python
-def run(self, context, **kwargs):
+def run(self, **kwargs):
     current_value = calculate_metric(kwargs.get("data"))
 
     # Track history with size limit
     history = self.accumulate_values(
-        context, "metrics", current_value, max_history=10
+        "metrics", current_value, max_history=10
     )
 
     # Calculate trend
@@ -108,7 +108,7 @@ from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode
 
 class SelfConvergingNode(CycleAwareNode):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         quality = kwargs.get("quality", 0.0)
         target = kwargs.get("target", 0.8)
 
@@ -121,7 +121,7 @@ class SelfConvergingNode(CycleAwareNode):
         return {
             "quality": new_quality,
             "converged": converged,  # Self-determines convergence
-            "iteration": self.get_iteration(context)
+            "iteration": self.get_iteration()
         }
 
 # Usage
@@ -180,7 +180,7 @@ def get_parameters(self) -> Dict[str, NodeParameter]:
 
 ### Data Pass-Through
 ```python
-def run(self, context, **kwargs):
+def run(self, **kwargs):
     # Process main value
     result = process_value(kwargs.get("value", 0.0))
 
@@ -227,8 +227,8 @@ def run(self, context, **kwargs):
     return {"result": process()}
 
 # ✅ Solution: Use state preservation
-def run(self, context, **kwargs):
-    prev_state = self.get_previous_state(context)
+def run(self, **kwargs):
+    prev_state = self.get_previous_state()
     targets = kwargs.get("targets", prev_state.get("targets", {}))
 
     return {

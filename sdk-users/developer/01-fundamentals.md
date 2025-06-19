@@ -81,7 +81,7 @@ class MyNode(Node):
             "any_param": NodeParameter(Any, "Any type allowed")
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         # Access parameters safely
         text = kwargs.get("text_param", "default")
         number = kwargs.get("number_param", 0)
@@ -118,7 +118,7 @@ class ValidatedNode(Node):
                                        choices=["option1", "option2", "option3"])
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         # Parameters are already validated at this point
         text = kwargs["required_text"]  # Guaranteed to exist
         number = kwargs.get("bounded_number", 50)  # Guaranteed to be 1-100
@@ -485,7 +485,7 @@ class RobustNode(Node):
 
 **Next Steps:**
 - **[Workflows](02-workflows.md)** - Learn workflow creation and execution patterns
-- **[Advanced Features](03-advanced-features.md)** - Enterprise and advanced SDK features  
+- **[Advanced Features](03-advanced-features.md)** - Enterprise and advanced SDK features
 - **[Production](04-production.md)** - Production deployment and security
 
 ## 📚 Quick Reference

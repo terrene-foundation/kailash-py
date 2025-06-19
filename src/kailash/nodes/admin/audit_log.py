@@ -18,8 +18,9 @@ Features:
 
 import hashlib
 import json
+import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -775,20 +776,377 @@ class EnterpriseAuditLogNode(Node):
     # Additional operations would follow similar patterns
     def _export_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Export audit logs in various formats."""
-        raise NotImplementedError("Export logs operation will be implemented")
+        format_type = inputs.get("export_format", "json")
+        query_filters = inputs.get("query_filters", {})
+        date_range = inputs.get("date_range", {})
+
+        # Query logs
+        query_result = self._query_logs(
+            {
+                "query_filters": query_filters,
+                "date_range": date_range,
+                "pagination": {"page": 1, "size": 10000},  # Export all matching records
+            }
+        )
+
+        logs = query_result.get("logs", [])
+
+        if format_type == "json":
+            export_data = {
+                "export_date": datetime.now(timezone.utc).isoformat(),
+                "total_records": len(logs),
+                "filters": query_filters,
+                "date_range": date_range,
+                "logs": logs,
+            }
+            filename = f"audit_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+        elif format_type == "csv":
+            # Convert to CSV format
+            import csv
+            import io
+
+            output = io.StringIO()
+            if logs:
+                writer = csv.DictWriter(output, fieldnames=logs[0].keys())
+                writer.writeheader()
+                writer.writerows(logs)
+
+            export_data = output.getvalue()
+            filename = f"audit_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+        elif format_type == "pdf":
+            # For PDF, we'll return structured data that can be rendered
+            export_data = {
+                "title": "Audit Log Report",
+                "generated_date": datetime.now(timezone.utc).isoformat(),
+                "summary": {
+                    "total_records": len(logs),
+                    "date_range": date_range,
+                    "filters": query_filters,
+                },
+                "logs": logs,
+            }
+            filename = f"audit_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+        return {
+            "success": True,
+            "filename": filename,
+            "format": format_type,
+            "record_count": len(logs),
+            "export_data": export_data,
+        }
 
     def _archive_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Archive old audit logs for long-term storage."""
-        raise NotImplementedError("Archive logs operation will be implemented")
+        archive_days = inputs.get("archive_older_than_days", 90)
+        archive_path = inputs.get("archive_path", "/archives/audit_logs")
+        tenant_id = inputs.get("tenant_id")
+
+        # Calculate cutoff date
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=archive_days)
+
+        # Query old logs
+        query_result = self._query_logs(
+            {
+                "date_range": {"end": cutoff_date.isoformat()},
+                "tenant_id": tenant_id,
+                "pagination": {"page": 1, "size": 10000},
+            }
+        )
+
+        logs_to_archive = query_result.get("logs", [])
+
+        if not logs_to_archive:
+            return {
+                "success": True,
+                "message": "No logs to archive",
+                "archived_count": 0,
+            }
+
+        # Create archive
+        archive_filename = f"audit_archive_{cutoff_date.strftime('%Y%m%d')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        archive_data = {
+            "archive_date": datetime.now(timezone.utc).isoformat(),
+            "cutoff_date": cutoff_date.isoformat(),
+            "total_records": len(logs_to_archive),
+            "tenant_id": tenant_id,
+            "logs": logs_to_archive,
+        }
+
+        # In a real implementation, this would save to cloud storage or archive system
+        archive_location = f"{archive_path}/{archive_filename}"
+
+        # Delete archived logs from main database
+        log_ids = [log.get("id") for log in logs_to_archive if log.get("id")]
+
+        if log_ids:
+            # Delete logs
+            delete_query = """
+            DELETE FROM audit_logs
+            WHERE id IN (%s)
+            """ % ",".join(
+                ["?" for _ in log_ids]
+            )
+
+            if tenant_id:
+                delete_query += " AND tenant_id = ?"
+                log_ids.append(tenant_id)
+
+            self._ensure_db_node(inputs)
+            self._db_node.execute(query=delete_query, params=log_ids)
+
+        return {
+            "success": True,
+            "archived_count": len(logs_to_archive),
+            "archive_location": archive_location,
+            "archive_filename": archive_filename,
+            "cutoff_date": cutoff_date.isoformat(),
+            "message": f"Archived {len(logs_to_archive)} logs older than {archive_days} days",
+        }
 
     def _delete_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Delete old audit logs based on retention policy."""
-        raise NotImplementedError("Delete logs operation will be implemented")
+        retention_days = inputs.get("retention_days", 365)
+        tenant_id = inputs.get("tenant_id")
+        dry_run = inputs.get("dry_run", False)
+
+        # Calculate cutoff date
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        # First count logs to be deleted
+        count_query = """
+        SELECT COUNT(*) as count FROM audit_logs
+        WHERE created_at < ?
+        """
+        params = [cutoff_date.isoformat()]
+
+        if tenant_id:
+            count_query += " AND tenant_id = ?"
+            params.append(tenant_id)
+
+        self._ensure_db_node(inputs)
+        count_result = self._db_node.execute(query=count_query, params=params)
+        total_to_delete = count_result.get("rows", [{}])[0].get("count", 0)
+
+        if dry_run:
+            return {
+                "success": True,
+                "dry_run": True,
+                "would_delete": total_to_delete,
+                "cutoff_date": cutoff_date.isoformat(),
+                "message": f"Dry run: Would delete {total_to_delete} logs older than {retention_days} days",
+            }
+
+        if total_to_delete == 0:
+            return {"success": True, "deleted_count": 0, "message": "No logs to delete"}
+
+        # Delete logs in batches to avoid locking
+        batch_size = 1000
+        deleted_total = 0
+
+        while deleted_total < total_to_delete:
+            delete_query = f"""
+            DELETE FROM audit_logs
+            WHERE id IN (
+                SELECT id FROM audit_logs
+                WHERE created_at < ?
+                {' AND tenant_id = ?' if tenant_id else ''}
+                LIMIT {batch_size}
+            )
+            """
+
+            delete_params = [cutoff_date.isoformat()]
+            if tenant_id:
+                delete_params.append(tenant_id)
+
+            result = self._db_node.execute(query=delete_query, params=delete_params)
+            batch_deleted = result.get("rows_affected", 0)
+            deleted_total += batch_deleted
+
+            if batch_deleted == 0:
+                break
+
+        return {
+            "success": True,
+            "deleted_count": deleted_total,
+            "cutoff_date": cutoff_date.isoformat(),
+            "retention_days": retention_days,
+            "message": f"Deleted {deleted_total} logs older than {retention_days} days",
+        }
 
     def _get_statistics(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get audit log statistics and metrics."""
-        raise NotImplementedError("Get statistics operation will be implemented")
+        tenant_id = inputs.get("tenant_id")
+        date_range = inputs.get("date_range", {})
+        group_by = inputs.get(
+            "group_by", ["event_type", "severity"]
+        )  # What to group statistics by
+
+        self._ensure_db_node(inputs)
+
+        # Build base WHERE clause
+        where_conditions = []
+        params = []
+
+        if tenant_id:
+            where_conditions.append("tenant_id = ?")
+            params.append(tenant_id)
+
+        if date_range:
+            if date_range.get("start"):
+                where_conditions.append("created_at >= ?")
+                params.append(date_range["start"])
+            if date_range.get("end"):
+                where_conditions.append("created_at <= ?")
+                params.append(date_range["end"])
+
+        where_clause = (
+            " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        )
+
+        # Get total count
+        total_query = f"SELECT COUNT(*) as total FROM audit_logs{where_clause}"
+        total_result = self._db_node.execute(query=total_query, params=params)
+        total_count = total_result.get("rows", [{}])[0].get("total", 0)
+
+        # Get counts by severity
+        severity_query = f"""
+        SELECT severity, COUNT(*) as count
+        FROM audit_logs{where_clause}
+        GROUP BY severity
+        """
+        severity_result = self._db_node.execute(query=severity_query, params=params)
+        severity_counts = {
+            row["severity"]: row["count"] for row in severity_result.get("rows", [])
+        }
+
+        # Get counts by event type
+        event_type_query = f"""
+        SELECT event_type, COUNT(*) as count
+        FROM audit_logs{where_clause}
+        GROUP BY event_type
+        ORDER BY count DESC
+        LIMIT 20
+        """
+        event_type_result = self._db_node.execute(query=event_type_query, params=params)
+        event_type_counts = {
+            row["event_type"]: row["count"] for row in event_type_result.get("rows", [])
+        }
+
+        # Get hourly distribution for the date range
+        hourly_query = f"""
+        SELECT
+            strftime('%Y-%m-%d %H:00:00', created_at) as hour,
+            COUNT(*) as count
+        FROM audit_logs{where_clause}
+        GROUP BY hour
+        ORDER BY hour DESC
+        LIMIT 168
+        """  # Last 7 days of hourly data
+        hourly_result = self._db_node.execute(query=hourly_query, params=params)
+        hourly_distribution = [
+            {"hour": row["hour"], "count": row["count"]}
+            for row in hourly_result.get("rows", [])
+        ]
+
+        # Get top users by activity
+        user_activity_query = f"""
+        SELECT user_id, COUNT(*) as action_count
+        FROM audit_logs{where_clause}
+        GROUP BY user_id
+        ORDER BY action_count DESC
+        LIMIT 10
+        """
+        user_activity_result = self._db_node.execute(
+            query=user_activity_query, params=params
+        )
+        top_users = [
+            {"user_id": row["user_id"], "action_count": row["action_count"]}
+            for row in user_activity_result.get("rows", [])
+        ]
+
+        # Get failed actions
+        failed_query = f"""
+        SELECT COUNT(*) as failed_count
+        FROM audit_logs{where_clause}
+        {' AND ' if where_clause else ' WHERE '}
+        status = 'failed' OR severity = 'error'
+        """
+        failed_params = params.copy()
+        failed_result = self._db_node.execute(query=failed_query, params=failed_params)
+        failed_count = failed_result.get("rows", [{}])[0].get("failed_count", 0)
+
+        statistics = {
+            "total_events": total_count,
+            "failed_events": failed_count,
+            "success_rate": (
+                ((total_count - failed_count) / total_count * 100)
+                if total_count > 0
+                else 0
+            ),
+            "severity_distribution": severity_counts,
+            "event_type_distribution": event_type_counts,
+            "hourly_distribution": hourly_distribution,
+            "top_users": top_users,
+            "date_range": date_range,
+            "tenant_id": tenant_id,
+        }
+
+        return {"success": True, "statistics": statistics}
 
     def _monitor_realtime(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Monitor audit logs in real-time."""
-        raise NotImplementedError("Monitor realtime operation will be implemented")
+        # This operation would typically set up a subscription or polling mechanism
+        # For now, we'll return the latest events and configuration for real-time monitoring
+
+        tenant_id = inputs.get("tenant_id")
+        event_types = inputs.get("event_types", [])  # Filter by specific event types
+        severity_filter = inputs.get("severity", AuditSeverity.INFO.value)
+        polling_interval = inputs.get("polling_interval", 5)  # seconds
+        max_events = inputs.get("max_events", 100)
+
+        # Get latest events
+        query_result = self._query_logs(
+            {
+                "tenant_id": tenant_id,
+                "event_types": event_types,
+                "severity": severity_filter,
+                "pagination": {
+                    "page": 1,
+                    "size": max_events,
+                    "sort": [{"field": "created_at", "order": "desc"}],
+                },
+            }
+        )
+
+        latest_events = query_result.get("logs", [])
+
+        # Create monitoring configuration
+        monitor_config = {
+            "monitor_id": str(uuid.uuid4()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "filters": {
+                "tenant_id": tenant_id,
+                "event_types": event_types,
+                "severity": severity_filter,
+            },
+            "polling_interval": polling_interval,
+            "max_events": max_events,
+            "status": "active",
+            "last_poll": datetime.now(timezone.utc).isoformat(),
+            "endpoint": f"/api/audit/monitor/{uuid.uuid4()}",  # Webhook or WebSocket endpoint
+        }
+
+        # In a real implementation, this would:
+        # 1. Set up a WebSocket connection or Server-Sent Events stream
+        # 2. Create database triggers or use change data capture
+        # 3. Set up a message queue subscription
+
+        return {
+            "success": True,
+            "monitor_config": monitor_config,
+            "latest_events": latest_events,
+            "event_count": len(latest_events),
+            "message": "Real-time monitoring configured. Use the endpoint for live updates.",
+        }

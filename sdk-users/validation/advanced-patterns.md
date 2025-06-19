@@ -178,7 +178,7 @@ class NodeWithParameters:
             "runtime_data": NodeParameter(list, "Runtime data injection")
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         """Parameters are injected here at runtime"""
         required = kwargs.get("required_param")  # From config or runtime
         optional = kwargs.get("optional_param", 42)  # Default value
@@ -244,7 +244,7 @@ results, run_id = runtime.execute(workflow, parameters={
 # Multi-source parameter aggregation
 def create_complex_workflow():
     workflow = Workflow("complex_params", name="Complex Parameters")
-    
+
     # Node with multiple parameter sources
     aggregator_node = PythonCodeNode(
         name="aggregator",
@@ -263,7 +263,7 @@ result = {
             "external_input": dict     # From previous node output
         }
     )
-    
+
     workflow.add_node("aggregator", aggregator_node,
         config_setting="production_mode"  # Configuration parameter
     )
@@ -410,14 +410,14 @@ result = {{"processed": processed}}
 ''',
         input_types={"chunk_data": list}
     ))
-    
-    workflow.connect("splitter", f"processor_{i}", 
+
+    workflow.connect("splitter", f"processor_{i}",
                     mapping={f"chunk{i+1}": "chunk_data"})
 
 # Merge results
 workflow.add_node("merger", MergeNode(), strategy="combine")
 for i in range(3):
-    workflow.connect(f"processor_{i}", "merger", 
+    workflow.connect(f"processor_{i}", "merger",
                     mapping={"processed": f"input_{i}"})
 
 ```
@@ -427,7 +427,7 @@ for i in range(3):
 # Create sub-workflow for reusable logic
 def create_validation_workflow():
     sub_workflow = Workflow("validation", name="Validation Workflow")
-    
+
     sub_workflow.add_node("validator", PythonCodeNode(
         name="validator",
         code='''
@@ -573,7 +573,7 @@ result = {
 ## 🔗 **Next Steps**
 
 - **[Critical Rules](critical-rules.md)** - Review essential patterns
-- **[API Reference](api-reference.md)** - Complete method signatures  
+- **[API Reference](api-reference.md)** - Complete method signatures
 - **[Migration Guide](migration-guide.md)** - Updates and changes
 
 ---

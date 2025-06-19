@@ -18,8 +18,8 @@ class ProcessorNode(Node):
 
 # ✅ Solution: Use cycle state
 class ProcessorNodeFixed(CycleAwareNode):
-    def run(self, context, **kwargs):
-        prev_state = self.get_previous_state(context)
+    def run(self, **kwargs):
+        prev_state = self.get_previous_state()
         quality = kwargs.get("quality", prev_state.get("quality", 0.0))
 
         new_quality = quality + 0.2
@@ -68,7 +68,7 @@ workflow.connect("processor", "processor",
 
 # ✅ Solution: Debug convergence field
 class DebugNode(Node):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         done = kwargs.get("done", False)
         print(f"Convergence field 'done': {done} (type: {type(done)})")
         return kwargs  # Pass through
@@ -115,8 +115,8 @@ from kailash.nodes.base import Node
 from kailash.nodes.code import PythonCodeNode
 
 class CycleLoggerNode(Node):
-    def run(self, context, **kwargs):
-        cycle_info = context.get("cycle", {})
+    def run(self, **kwargs):
+        cycle_info = self.context.get("cycle", {})
         iteration = cycle_info.get("iteration", 0)
 
         print(f"=== Iteration {iteration} ===")
@@ -137,8 +137,8 @@ workflow.connect("logger", "processor", cycle=True)
 ### Parameter Monitoring
 ```python
 class ParameterMonitorNode(Node):
-    def run(self, context, **kwargs):
-        cycle_info = context.get("cycle", {})
+    def run(self, **kwargs):
+        cycle_info = self.context.get("cycle", {})
         iteration = cycle_info.get("iteration", 0)
 
         # Check which parameters are received
@@ -158,14 +158,14 @@ class ParameterMonitorNode(Node):
 ## ⚠️ Safe Context Access
 
 ```python
-def run(self, context, **kwargs):
+def run(self, **kwargs):
     # ✅ Always use .get() with defaults
-    cycle_info = context.get("cycle", {})
+    cycle_info = self.context.get("cycle", {})
     iteration = cycle_info.get("iteration", 0)
     node_state = cycle_info.get("node_state") or {}
 
     # ❌ Never access directly
-    # iteration = context["cycle"]["iteration"]  # KeyError!
+    # iteration = self.context["cycle"]["iteration"]  # KeyError!
 
 ```
 
@@ -177,9 +177,9 @@ def test_cycle_execution():
     from kailash import Workflow
     from kailash.runtime.local import LocalRuntime
     from kailash.nodes.code import PythonCodeNode
-    
+
     workflow = Workflow("test-cycle")
-    
+
     # Simple counter node
     workflow.add_node("counter", PythonCodeNode(
         code='''

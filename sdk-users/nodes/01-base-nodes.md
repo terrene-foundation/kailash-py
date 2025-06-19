@@ -32,12 +32,12 @@ This document covers the foundational base classes that all nodes inherit from.
 - **Module**: `kailash.nodes.base_cycle_aware`
 - **Description**: Base class for nodes that participate in cyclic workflows
 - **Key Methods**:
-  - `get_iteration(context)`: Get current iteration number (0-based)
-  - `get_previous_state(context)`: Access state from previous iteration
+  - `get_iteration()`: Get current iteration number (0-based)
+  - `get_previous_state()`: Access state from previous iteration
   - `set_cycle_state(state)`: Persist state for next iteration
-  - `accumulate_values(context, key, value)`: Build rolling window of values
-  - `detect_convergence_trend(context, metric_key)`: Analyze convergence patterns
-  - `log_cycle_info(context, message)`: Log structured cycle information
+  - `accumulate_values(key, value)`: Build rolling window of values
+  - `detect_convergence_trend(metric_key)`: Analyze convergence patterns
+  - `log_cycle_info(message)`: Log structured cycle information
 - **Use Cases**:
   - Retry patterns with exponential backoff
   - Iterative optimization algorithms
@@ -61,17 +61,17 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
   class OptimizerNode(CycleAwareNode):
-      def run(self, context, **kwargs):
-          iteration = self.get_iteration(context)
-          prev_state = self.get_previous_state(context)
+      def run(self, **kwargs):
+          iteration = self.get_iteration()
+          prev_state = self.get_previous_state()
 
           # Optimization logic
           value = prev_state.get("value", 0.5) + 0.1
           self.set_cycle_state({"value": value})
 
           # Track convergence
-          self.accumulate_values(context, "value", value)
-          trend = self.detect_convergence_trend(context, "value")
+          self.accumulate_values("value", value)
+          trend = self.detect_convergence_trend("value")
 
           return {
               "value": value,
