@@ -17,6 +17,11 @@ from pydantic import BaseModel
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.utils.resource_manager import (
+    AsyncResourcePool,
+    ResourcePool,
+    managed_resource,
+)
 
 
 class HTTPMethod(str, Enum):
@@ -53,6 +58,23 @@ class HTTPResponse(BaseModel):
     content: Any  # Can be dict, str, bytes depending on response format
     response_time_ms: float
     url: str
+
+
+# Global connection pool for HTTP sessions
+_http_session_pool = ResourcePool(
+    factory=lambda: requests.Session(),
+    max_size=20,
+    timeout=30.0,
+    cleanup=lambda session: session.close(),
+)
+
+# Global async connection pool for aiohttp sessions
+_async_http_session_pool = AsyncResourcePool(
+    factory=lambda: aiohttp.ClientSession(),
+    max_size=20,
+    timeout=30.0,
+    cleanup=lambda session: asyncio.create_task(session.close()),
+)
 
 
 @register_node()
@@ -520,8 +542,11 @@ class HTTPRequestNode(Node):
 
             try:
                 start_time = time.time()
-                response = self.session.request(method=method.value, **request_kwargs)
-                response_time = (time.time() - start_time) * 1000  # Convert to ms
+
+                # Use connection pool for efficient resource management
+                with _http_session_pool.acquire() as session:
+                    response = session.request(method=method.value, **request_kwargs)
+                    response_time = (time.time() - start_time) * 1000  # Convert to ms
 
                 # Log response if enabled
                 if log_requests:
@@ -681,7 +706,6 @@ class AsyncHTTPRequestNode(AsyncNode):
             Same as HTTPRequestNode
         """
         super().__init__(**kwargs)
-        self._session = None  # Will be created when needed
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.
@@ -829,10 +853,6 @@ class AsyncHTTPRequestNode(AsyncNode):
         if rate_limit_delay > 0:
             await asyncio.sleep(rate_limit_delay)
 
-        # Create session if needed
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-
         # Prepare request kwargs
         request_kwargs = {
             "url": url,
@@ -870,72 +890,76 @@ class AsyncHTTPRequestNode(AsyncNode):
             try:
                 start_time = time.time()
 
-                async with self._session.request(
-                    method=method.value, **request_kwargs
-                ) as response:
-                    response_time = (time.time() - start_time) * 1000  # Convert to ms
+                # Use connection pool for efficient resource management
+                async with _async_http_session_pool.acquire() as session:
+                    async with session.request(
+                        method=method.value, **request_kwargs
+                    ) as response:
+                        response_time = (
+                            time.time() - start_time
+                        ) * 1000  # Convert to ms
 
-                    # Get content type
-                    content_type = response.headers.get("Content-Type", "")
+                        # Get content type
+                        content_type = response.headers.get("Content-Type", "")
 
-                    # Log response if enabled
-                    if log_requests:
-                        self.logger.info(f"Response: {response.status}")
-                        self.logger.info(f"Headers: {dict(response.headers)}")
-                        text_preview = await response.text()
-                        self.logger.info(f"Body: {text_preview[:500]}...")
+                        # Log response if enabled
+                        if log_requests:
+                            self.logger.info(f"Response: {response.status}")
+                            self.logger.info(f"Headers: {dict(response.headers)}")
+                            text_preview = await response.text()
+                            self.logger.info(f"Body: {text_preview[:500]}...")
 
-                    # Determine response format
-                    actual_format = response_format
-                    if actual_format == ResponseFormat.AUTO:
-                        if "application/json" in content_type:
-                            actual_format = ResponseFormat.JSON
-                        elif "text/" in content_type:
-                            actual_format = ResponseFormat.TEXT
-                        else:
-                            actual_format = ResponseFormat.BINARY
+                        # Determine response format
+                        actual_format = response_format
+                        if actual_format == ResponseFormat.AUTO:
+                            if "application/json" in content_type:
+                                actual_format = ResponseFormat.JSON
+                            elif "text/" in content_type:
+                                actual_format = ResponseFormat.TEXT
+                            else:
+                                actual_format = ResponseFormat.BINARY
 
-                    # Parse response
-                    try:
-                        if actual_format == ResponseFormat.JSON:
-                            content = await response.json()
-                        elif actual_format == ResponseFormat.TEXT:
-                            content = await response.text()
-                        elif actual_format == ResponseFormat.BINARY:
-                            content = await response.read()
-                        else:
+                        # Parse response
+                        try:
+                            if actual_format == ResponseFormat.JSON:
+                                content = await response.json()
+                            elif actual_format == ResponseFormat.TEXT:
+                                content = await response.text()
+                            elif actual_format == ResponseFormat.BINARY:
+                                content = await response.read()
+                            else:
+                                content = await response.text()  # Fallback to text
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Failed to parse response as {actual_format}: {str(e)}"
+                            )
                             content = await response.text()  # Fallback to text
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Failed to parse response as {actual_format}: {str(e)}"
-                        )
-                        content = await response.text()  # Fallback to text
 
-                    # Create response object
-                    http_response = HTTPResponse(
-                        status_code=response.status,
-                        headers=dict(response.headers),
-                        content_type=content_type,
-                        content=content,
-                        response_time_ms=response_time,
-                        url=str(response.url),
-                    ).model_dump()
+                        # Create response object
+                        http_response = HTTPResponse(
+                            status_code=response.status,
+                            headers=dict(response.headers),
+                            content_type=content_type,
+                            content=content,
+                            response_time_ms=response_time,
+                            url=str(response.url),
+                        ).model_dump()
 
-                    # Return results
-                    success = 200 <= response.status < 300
+                        # Return results
+                        success = 200 <= response.status < 300
 
-                    result = {
-                        "response": http_response,
-                        "status_code": response.status,
-                        "success": success,
-                    }
+                        result = {
+                            "response": http_response,
+                            "status_code": response.status,
+                            "success": success,
+                        }
 
-                    if not success:
-                        result["recovery_suggestions"] = self._get_recovery_suggestions(
-                            response.status
-                        )
+                        if not success:
+                            result["recovery_suggestions"] = (
+                                self._get_recovery_suggestions(response.status)
+                            )
 
-                    return result
+                        return result
 
             except (TimeoutError, aiohttp.ClientError) as e:
                 self.logger.warning(f"Async request failed: {str(e)}")

@@ -15,7 +15,7 @@ Quick reference with critical rules, common patterns, and navigation guide.
 ### **Enterprise & Production**
 - **[enterprise/](enterprise/)** - Enterprise-grade patterns and architecture
   - Advanced middleware patterns
-  - Multi-tenant session management  
+  - Multi-tenant session management
   - Production security and monitoring
   - High-scale deployment patterns
 
@@ -48,6 +48,10 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Common node patterns
   - Connection patterns
   - Error handling
+- **[migration-guides/](migration-guides/)** - Version upgrade guides
+  - Architecture improvements by version
+  - Step-by-step migration instructions
+  - Breaking changes documentation
   - Security configuration
 
 - **[api/](api/)** - Complete API documentation

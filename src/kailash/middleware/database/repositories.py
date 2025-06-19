@@ -56,7 +56,9 @@ class BaseRepository:
         """Execute database query using SDK node."""
         try:
             if self.use_async:
-                result = await self.db_node.execute(query=query, params=params or {})
+                result = await self.db_node.execute_async(
+                    query=query, params=params or {}
+                )
             else:
                 result = self.db_node.execute(query=query, params=params or {})
 

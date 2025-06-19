@@ -6,6 +6,7 @@
 | [sdk-users/](sdk-users/) | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) | [shared/mistakes/](shared/mistakes/) |
 | [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) | [# contrib (removed)/training/](# contrib (removed)/training/) | [tests/](tests/) |
 | [sdk-users/cheatsheet/](sdk-users/cheatsheet/) | [# contrib (removed)/research/](# contrib (removed)/research/) | [examples/](examples/) |
+| [sdk-users/migration-guides/](sdk-users/migration-guides/) | [# contrib (removed)/architecture/migration-guides/](# contrib (removed)/architecture/migration-guides/) | |
 
 ## ⚠️ MUST FOLLOW
 1. **SDK-First Development**: Use SDK components, NO custom orchestration
@@ -41,6 +42,7 @@
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
 
 ## 🔧 Core Nodes (110+ available)
+**Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
 **Choose Smart**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - Decision trees + quick finder
 **AI**: LLMAgentNode, MonitoredLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, SelfOrganizingAgentNode
 **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, DirectoryReaderNode
@@ -48,7 +50,7 @@
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Enterprise**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
-**Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md)
+**Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md) (2194 lines - use sparingly)
 
 ## 📂 Directory Navigation Convention
 **File Naming Standard**:

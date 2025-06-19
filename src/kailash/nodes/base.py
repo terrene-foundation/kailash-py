@@ -21,8 +21,12 @@ Key Components:
 import inspect
 import json
 import logging
+import os
+import threading
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
@@ -158,6 +162,10 @@ class Node(ABC):
     - WorkflowExporter: Serializes nodes for export
     """
 
+    # Class-level configuration
+    _DEFAULT_CACHE_SIZE = 128
+    _SPECIAL_PARAMS = {"context"}  # Parameters excluded from cache key
+
     def __init__(self, **kwargs):
         """Initialize the node with configuration parameters.
 
@@ -218,6 +226,25 @@ class Node(ABC):
                 "metadata",
             }
             self.config = {k: v for k, v in kwargs.items() if k not in internal_fields}
+
+            # Parameter resolution cache - initialize before validation
+            cache_size = int(
+                os.environ.get("KAILASH_PARAM_CACHE_SIZE", self._DEFAULT_CACHE_SIZE)
+            )
+            self._cache_enabled = (
+                os.environ.get("KAILASH_DISABLE_PARAM_CACHE", "").lower() != "true"
+            )
+
+            # Use OrderedDict for LRU implementation
+            self._param_cache = OrderedDict()
+            self._param_cache_lock = threading.Lock()
+            self._cache_max_size = cache_size
+            self._cached_params = None
+
+            # Cache statistics
+            self._cache_hits = 0
+            self._cache_misses = 0
+            self._cache_evictions = 0
 
             self._validate_config()
         except ValidationError as e:
@@ -379,63 +406,10 @@ class Node(ABC):
             - LocalRuntime: During workflow execution
             - TestRunner: During unit testing
         """
-        # Check if this node has implemented async_run
-        import inspect
-
-        # Get the actual async_run method from the instance's class
-        async_run_method = getattr(self.__class__, "async_run", None)
-        base_async_run = getattr(Node, "async_run", None)
-
-        # Check if async_run has been overridden
-        if async_run_method and async_run_method != base_async_run:
-            # This node has a custom async_run implementation
-            # Run it synchronously
-            import asyncio
-
-            try:
-                # Check if we're already in an event loop
-                loop = asyncio.get_running_loop()
-
-                # We're in an event loop - use nest_asyncio
-                import nest_asyncio
-
-                nest_asyncio.apply()
-                return asyncio.run(self.async_run(**kwargs))
-
-            except RuntimeError:
-                # No event loop running, we can use asyncio.run() directly
-                return asyncio.run(self.async_run(**kwargs))
-        else:
-            # This is a regular synchronous node - subclass should override this method
-            raise NotImplementedError(
-                f"Node '{self.__class__.__name__}' must implement either run() or async_run() method"
-            )
-
-    async def async_run(self, **kwargs) -> dict[str, Any]:
-        """Asynchronous execution method for the node.
-
-        This method provides async execution support. By default, it calls
-        the synchronous run() method. Nodes can override this for true
-        async behavior.
-
-        Design Philosophy:
-        - Maintain backward compatibility with synchronous nodes
-        - Support both sync and async execution methods
-        - Provide clear error handling for async operations
-        - Enable efficient parallel execution in workflows
-
-        Args:
-            **kwargs: Validated input parameters matching get_parameters()
-
-        Returns:
-            Dictionary of outputs that will be validated and passed
-            to downstream nodes
-
-        Raises:
-            NodeExecutionError: If execution fails
-        """
-        # Default implementation calls the synchronous run() method
-        return self.run(**kwargs)
+        # This is a synchronous node - subclass must override this method
+        raise NotImplementedError(
+            f"Node '{self.__class__.__name__}' must implement run() method"
+        )
 
     def _validate_config(self):
         """Validate node configuration against defined parameters.
@@ -474,7 +448,7 @@ class Node(ABC):
                 - get_parameters() implementation errors
         """
         try:
-            params = self.get_parameters()
+            params = self._get_cached_parameters()
         except Exception as e:
             raise NodeConfigurationError(f"Failed to get node parameters: {e}") from e
 
@@ -501,6 +475,21 @@ class Node(ABC):
                             f"{param_def.type.__name__}, got {type(value).__name__}. "
                             f"Conversion failed: {e}"
                         ) from e
+
+    def _get_cached_parameters(self) -> dict[str, NodeParameter]:
+        """Get cached parameter definitions.
+
+        Returns:
+            Dictionary of parameter definitions, cached for performance
+        """
+        if self._cached_params is None:
+            try:
+                self._cached_params = self.get_parameters()
+            except Exception as e:
+                raise NodeValidationError(
+                    f"Failed to get node parameters for validation: {e}"
+                ) from e
+        return self._cached_params
 
     def validate_inputs(self, **kwargs) -> dict[str, Any]:
         r"""Validate runtime inputs against node requirements.
@@ -555,27 +544,177 @@ class Node(ABC):
             - execute(): Before passing inputs to run()
             - Workflow validation: During connection checks
         """
-        # Enhanced parameter resolution with auto-mapping
-        try:
-            params = self.get_parameters()
-        except Exception as e:
-            raise NodeValidationError(
-                f"Failed to get node parameters for validation: {e}"
-            ) from e
+        # Use cached parameters for better performance
+        params = self._get_cached_parameters()
 
-        # Phase 1: Resolve parameters using enhanced mapping
-        resolved = self._resolve_parameters(kwargs, params)
+        # Check if caching is enabled
+        if not self._cache_enabled:
+            resolved = self._resolve_parameters(kwargs, params)
+        else:
+            # Check if we have a cached resolution for this input pattern
+            cache_key = self._get_cache_key(kwargs)
+
+            with self._param_cache_lock:
+                if cache_key in self._param_cache:
+                    # Move to end for LRU
+                    self._param_cache.move_to_end(cache_key)
+                    self._cache_hits += 1
+
+                    # Use cached resolution and apply values
+                    cached_mapping = self._param_cache[cache_key]
+                    resolved = self._apply_cached_mapping(kwargs, cached_mapping)
+                else:
+                    self._cache_misses += 1
+
+                    # Phase 1: Resolve parameters using enhanced mapping
+                    resolved = self._resolve_parameters(kwargs, params)
+
+                    # Cache the mapping pattern for future use
+                    mapping = self._extract_mapping_pattern(kwargs, resolved)
+                    self._param_cache[cache_key] = mapping
+
+                    # Evict oldest if cache is full (LRU)
+                    if len(self._param_cache) > self._cache_max_size:
+                        self._param_cache.popitem(last=False)  # Remove oldest
+                        self._cache_evictions += 1
 
         # Phase 2: Validate resolved parameters
         validated = self._validate_resolved_parameters(resolved, params)
 
         # Preserve special runtime parameters that are not in schema
-        special_params = ["context"]
-        for special_param in special_params:
+        for special_param in self._SPECIAL_PARAMS:
             if special_param in kwargs:
                 validated[special_param] = kwargs[special_param]
 
         return validated
+
+    def _get_cached_parameters(self) -> dict[str, NodeParameter]:
+        """Get node parameters with caching for performance.
+
+        Returns:
+            Cached parameter definitions
+        """
+        if self._cached_params is None:
+            self._cached_params = self.get_parameters()
+        return self._cached_params
+
+    def _get_cache_key(self, inputs: dict) -> str:
+        """Generate a cache key based on input parameter names.
+
+        Args:
+            inputs: Runtime inputs dictionary
+
+        Returns:
+            Cache key string based on sorted parameter names
+        """
+        # Exclude special parameters from cache key
+        cache_params = [k for k in inputs.keys() if k not in self._SPECIAL_PARAMS]
+        return "|".join(sorted(cache_params))
+
+    def _apply_cached_mapping(self, inputs: dict, mapping: dict) -> dict:
+        """Apply cached mapping pattern to current inputs.
+
+        Args:
+            inputs: Current runtime inputs
+            mapping: Cached mapping pattern
+
+        Returns:
+            Resolved parameters dictionary
+        """
+        resolved = {}
+        for param_name, source_key in mapping.items():
+            if source_key in inputs:
+                resolved[param_name] = inputs[source_key]
+        return resolved
+
+    def _extract_mapping_pattern(self, inputs: dict, resolved: dict) -> dict:
+        """Extract the mapping pattern for caching.
+
+        The cache stores which input keys map to which parameter names,
+        allowing fast resolution for repeated input patterns.
+
+        Args:
+            inputs: Original runtime inputs
+            resolved: Resolved parameters
+
+        Returns:
+            Mapping pattern dictionary {param_name: input_key}
+        """
+        mapping = {}
+
+        # Build reverse mapping from resolved params to input keys
+        # This tracks the resolution decisions made by _resolve_parameters
+        for param_name in resolved:
+            # Direct match - parameter name exists in inputs
+            if param_name in inputs and self._safe_compare(
+                inputs[param_name], resolved[param_name]
+            ):
+                mapping[param_name] = param_name
+            else:
+                # Search for which input key provided this parameter value
+                # Must match exact resolution logic from _resolve_parameters
+                params = self._get_cached_parameters()
+                param_def = params.get(param_name)
+
+                if param_def:
+                    # Check workflow alias
+                    if param_def.workflow_alias and param_def.workflow_alias in inputs:
+                        if self._safe_compare(
+                            inputs[param_def.workflow_alias], resolved[param_name]
+                        ):
+                            mapping[param_name] = param_def.workflow_alias
+                            continue
+
+                    # Check auto_map_from alternatives
+                    if param_def.auto_map_from:
+                        for alt_name in param_def.auto_map_from:
+                            if alt_name in inputs and self._safe_compare(
+                                inputs[alt_name], resolved[param_name]
+                            ):
+                                mapping[param_name] = alt_name
+                                break
+
+        return mapping
+
+    def _safe_compare(self, value1: Any, value2: Any) -> bool:
+        """Safely compare two values, handling special cases like DataFrames.
+
+        Args:
+            value1: First value to compare
+            value2: Second value to compare
+
+        Returns:
+            True if values are equal, False otherwise
+        """
+        # Handle pandas DataFrame and Series
+        try:
+            import pandas as pd
+
+            if isinstance(value1, (pd.DataFrame, pd.Series)) or isinstance(
+                value2, (pd.DataFrame, pd.Series)
+            ):
+                # For DataFrames/Series, use identity comparison
+                # This is safe for caching since we're tracking object references
+                return value1 is value2
+        except ImportError:
+            pass
+
+        # Handle numpy arrays
+        try:
+            import numpy as np
+
+            if isinstance(value1, np.ndarray) or isinstance(value2, np.ndarray):
+                # For numpy arrays, use identity comparison
+                return value1 is value2
+        except ImportError:
+            pass
+
+        # For all other types, use standard equality
+        try:
+            return value1 == value2
+        except (ValueError, TypeError):
+            # If comparison fails, they're not equal
+            return False
 
     def _resolve_parameters(self, runtime_inputs: dict, params: dict) -> dict:
         """Enhanced parameter resolution with auto-mapping.
@@ -598,67 +737,54 @@ class Node(ABC):
         resolved = {}
         used_inputs = set()
 
-        # Phase 1: Direct parameter matches (preserves existing behavior)
+        # Optimized single-pass resolution combining all phases
         for param_name, param_def in params.items():
+            # Skip if already resolved
+            if param_name in resolved:
+                continue
+
+            # Phase 1: Direct match (highest priority)
             if param_name in runtime_inputs:
                 resolved[param_name] = runtime_inputs[param_name]
                 used_inputs.add(param_name)
-                if self.logger:
-                    self.logger.debug(f"Direct match: {param_name}")
-
-        # Phase 2: Workflow alias resolution
-        for param_name, param_def in params.items():
-            if param_name in resolved:
                 continue
 
+            # Phase 2: Workflow alias
             if param_def.workflow_alias and param_def.workflow_alias in runtime_inputs:
                 resolved[param_name] = runtime_inputs[param_def.workflow_alias]
                 used_inputs.add(param_def.workflow_alias)
-                if self.logger:
-                    self.logger.debug(
-                        f"Workflow alias match: {param_name} <- {param_def.workflow_alias}"
-                    )
                 continue
 
-        # Phase 3: Auto-mapping from alternative names
-        for param_name, param_def in params.items():
-            if param_name in resolved:
-                continue
-
+            # Phase 3: Auto-mapping alternatives
             if param_def.auto_map_from:
                 for alt_name in param_def.auto_map_from:
                     if alt_name in runtime_inputs and alt_name not in used_inputs:
                         resolved[param_name] = runtime_inputs[alt_name]
                         used_inputs.add(alt_name)
-                        if self.logger:
-                            self.logger.debug(
-                                f"Auto-map match: {param_name} <- {alt_name}"
-                            )
                         break
 
-        # Phase 4: Primary input auto-mapping (for nodes like SwitchNode)
-        primary_params = [p for p in params.values() if p.auto_map_primary]
-        if primary_params and len(primary_params) == 1:
-            primary_param = primary_params[0]
-            if primary_param.name not in resolved:
-                # Find the main data input (usually the largest unused input)
-                remaining_inputs = {
-                    k: v
-                    for k, v in runtime_inputs.items()
-                    if k not in used_inputs and not k.startswith("_")
-                }
-                if remaining_inputs:
-                    # Use the input with the most substantial data as primary
-                    main_input = max(
-                        remaining_inputs.items(),
-                        key=lambda x: len(str(x[1])) if x[1] is not None else 0,
-                    )
-                    resolved[primary_param.name] = main_input[1]
-                    used_inputs.add(main_input[0])
-                    if self.logger:
-                        self.logger.debug(
-                            f"Primary auto-map: {primary_param.name} <- {main_input[0]}"
-                        )
+        # Phase 4: Primary input auto-mapping (handled separately for efficiency)
+        primary_params = []
+        for param_name, param_def in params.items():
+            if param_def.auto_map_primary and param_name not in resolved:
+                primary_params.append((param_name, param_def))
+
+        if len(primary_params) == 1:
+            param_name, param_def = primary_params[0]
+            # Find the main data input (usually the largest unused input)
+            remaining_inputs = {
+                k: v
+                for k, v in runtime_inputs.items()
+                if k not in used_inputs and not k.startswith("_")
+            }
+            if remaining_inputs:
+                # Use the input with the most substantial data as primary
+                main_input = max(
+                    remaining_inputs.items(),
+                    key=lambda x: len(str(x[1])) if x[1] is not None else 0,
+                )
+                resolved[param_name] = main_input[1]
+                used_inputs.add(main_input[0])
 
         return resolved
 
@@ -973,66 +1099,57 @@ class Node(ABC):
                 f"Node '{self.id}' execution failed: {type(e).__name__}: {e}"
             ) from e
 
-    async def execute_async(self, **runtime_inputs) -> dict[str, Any]:
-        """Execute the node asynchronously with validation and error handling.
-
-        This is the async version of execute() that provides the same
-        validation and error handling but allows for async execution.
-
-        Execution flow:
-        1. Logs execution start
-        2. Validates inputs against parameter schema
-        3. Calls async_run() with validated inputs
-        4. Validates outputs are JSON-serializable
-        5. Logs execution time
-        6. Returns validated outputs
+    def get_cache_stats(self) -> dict[str, Any]:
+        """Get parameter cache statistics.
 
         Returns:
-            Dictionary of validated outputs from async_run()
-
-        Raises:
-            NodeExecutionError: If execution fails
-            NodeValidationError: If input/output validation fails
+            Dictionary containing cache statistics:
+            - enabled: Whether caching is enabled
+            - size: Current cache size
+            - max_size: Maximum cache size
+            - hits: Number of cache hits
+            - misses: Number of cache misses
+            - evictions: Number of cache evictions
+            - hit_rate: Cache hit rate (0-1)
         """
-        from datetime import UTC, datetime
+        with self._param_cache_lock:
+            total_requests = self._cache_hits + self._cache_misses
+            hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0
 
-        start_time = datetime.now(UTC)
-        self.logger.info(f"Starting async execution of node {self.id}")
+            return {
+                "enabled": self._cache_enabled,
+                "size": len(self._param_cache),
+                "max_size": self._cache_max_size,
+                "hits": self._cache_hits,
+                "misses": self._cache_misses,
+                "evictions": self._cache_evictions,
+                "hit_rate": hit_rate,
+            }
 
-        try:
-            # Merge config and runtime inputs
-            merged_inputs = {**self.config, **runtime_inputs}
+    def clear_cache(self) -> None:
+        """Clear the parameter resolution cache and reset statistics."""
+        with self._param_cache_lock:
+            self._param_cache.clear()
+            self._cache_hits = 0
+            self._cache_misses = 0
+            self._cache_evictions = 0
 
-            # Validate inputs
-            validated_inputs = self.validate_inputs(**merged_inputs)
-            self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
+    def warm_cache(self, patterns: list[dict[str, Any]]) -> None:
+        """Warm the cache with known parameter patterns.
 
-            # Execute node logic asynchronously
-            outputs = await self.async_run(**validated_inputs)
+        Args:
+            patterns: List of parameter dictionaries to pre-cache
+        """
+        if not self._cache_enabled:
+            return
 
-            # Validate outputs
-            validated_outputs = self.validate_outputs(outputs)
-
-            execution_time = (datetime.now(UTC) - start_time).total_seconds()
-            self.logger.info(
-                f"Node {self.id} executed successfully (async) in {execution_time:.3f}s"
-            )
-            return validated_outputs
-
-        except NodeValidationError:
-            # Re-raise validation errors as-is
-            raise
-        except NodeExecutionError:
-            # Re-raise execution errors as-is
-            raise
-        except Exception as e:
-            # Wrap unexpected errors
-            self.logger.error(
-                f"Node {self.id} async execution failed: {e}", exc_info=True
-            )
-            raise NodeExecutionError(
-                f"Node '{self.id}' async execution failed: {type(e).__name__}: {e}"
-            ) from e
+        for pattern in patterns:
+            # Simulate parameter resolution to populate cache
+            try:
+                self.validate_inputs(**pattern)
+            except Exception:
+                # Ignore validation errors during warmup
+                pass
 
     def to_dict(self) -> dict[str, Any]:
         """Convert node to dictionary representation.

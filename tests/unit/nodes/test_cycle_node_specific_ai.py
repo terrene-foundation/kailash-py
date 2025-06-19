@@ -200,7 +200,9 @@ class TestLLMAgentNodeCycles:
         runtime = LocalRuntime()
         results, run_id = runtime.execute(
             workflow,
-            parameters={"query": "What is AI?", "context_data": "Initial context"},
+            parameters={
+                "param_llm": {"query": "What is AI?", "context_data": "Initial context"}
+            },
         )
 
         # Verify parameter mapping worked
