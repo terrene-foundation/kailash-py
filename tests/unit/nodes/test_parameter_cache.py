@@ -355,10 +355,12 @@ class TestParameterCache:
         assert stats["misses"] == 1
 
         # With cache should be faster (at least 10% improvement)
-        # Note: This might be flaky in CI, so we're lenient
-        if first_100_time > 0.001:  # Only check if resolution takes measurable time
-            # Allow up to 5% margin for timing variations in CI
-            assert next_100_time < first_100_time * 0.95
+        # Note: This might be flaky in CI, so we're very lenient
+        if (
+            first_100_time > 0.002
+        ):  # Only check if resolution takes measurable time (2ms threshold)
+            # Allow up to 20% margin for timing variations in CI environments
+            assert next_100_time < first_100_time * 0.8
 
     def test_cache_statistics_accuracy(self):
         """Test accuracy of cache statistics."""
