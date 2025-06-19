@@ -61,7 +61,7 @@ result = {"value": value + 1, "data": data + [value]}
 # Assuming standard imports from earlier examples
 
 # ✅ CORRECT: Nested paths
-workflow.connect("counter", "processor", 
+workflow.connect("counter", "processor",
     mapping={"result.count": "count"})  # result.field syntax
 
 # ❌ WRONG: Flat mapping
@@ -95,7 +95,7 @@ from kailash.nodes.base import CycleAwareNode
 
 # Use source node for data entry
 class DataSourceNode(CycleAwareNode):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         return {"data": kwargs.get("data", [])}
 
 workflow = Workflow("source-cycle")
@@ -172,8 +172,8 @@ workflow.add_node("processor", PythonCodeNode())
 workflow.add_node("validator", PythonCodeNode())
 
 workflow.connect("processor", "validator")
-workflow.connect("validator", "processor", 
-    cycle=True, 
+workflow.connect("validator", "processor",
+    cycle=True,
     convergence_check="quality >= 0.95")
 
 ```

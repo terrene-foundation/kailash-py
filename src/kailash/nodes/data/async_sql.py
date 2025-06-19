@@ -34,7 +34,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, AsyncIterator, Optional, Union
 
-from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.base import NodeParameter, register_node
+from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
@@ -425,7 +426,7 @@ class SQLiteAdapter(DatabaseAdapter):
 
 
 @register_node()
-class AsyncSQLDatabaseNode(Node):
+class AsyncSQLDatabaseNode(AsyncNode):
     """Asynchronous SQL database node for high-concurrency database operations.
 
     This node provides non-blocking database operations with connection pooling,
@@ -712,26 +713,6 @@ class AsyncSQLDatabaseNode(Node):
 
         except Exception as e:
             raise NodeExecutionError(f"Database query failed: {str(e)}")
-
-    def run(self, **inputs) -> dict[str, Any]:
-        """Synchronous run method - delegates to async_run."""
-        import asyncio
-
-        import nest_asyncio
-
-        try:
-            # Check if we're already in an event loop
-            loop = asyncio.get_running_loop()
-
-            # Apply nest_asyncio to allow nested event loops
-            nest_asyncio.apply()
-
-            # Now we can safely run even in an existing event loop
-            return asyncio.run(self.async_run(**inputs))
-
-        except RuntimeError:
-            # No event loop running, we can use asyncio.run() directly
-            return asyncio.run(self.async_run(**inputs))
 
     async def process(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Async process method for middleware compatibility."""

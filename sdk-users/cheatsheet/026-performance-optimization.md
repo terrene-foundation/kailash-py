@@ -17,8 +17,8 @@ class MemoryEfficientNode(CycleAwareNode):
         """Process a chunk of data."""
         return [item * 2 for item in chunk]  # Example processing
 
-    def run(self, context, **kwargs):
-        iteration = self.get_iteration(context)
+    def run(self, **kwargs):
+        iteration = self.get_iteration()
         data = kwargs.get("data", [])
 
         # Process in chunks to prevent memory buildup
@@ -52,7 +52,7 @@ class OptimizedProcessor(CycleAwareNode):
         """Process a single item."""
         return item * 2  # Example processing
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", [])
 
         # Generator for memory efficiency
@@ -78,7 +78,7 @@ class OptimizedProcessor(CycleAwareNode):
 ### Concurrent Task Execution
 ```python
 import asyncio
-from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.base import AsyncNode
 
 class ConcurrentProcessor(AsyncNode):
     """Process multiple tasks concurrently."""
@@ -89,7 +89,7 @@ class ConcurrentProcessor(AsyncNode):
         await asyncio.sleep(0.1)  # Simulate async work
         return {"task": task, "processed": True}
 
-    async def run_async(self, context, **kwargs):
+    async def async_run(self, **kwargs):
         tasks = kwargs.get("tasks", [])
         max_concurrent = kwargs.get("max_concurrent", 5)
 
@@ -124,7 +124,7 @@ class ConcurrentProcessor(AsyncNode):
 ```python
 import asyncpg
 from contextlib import asynccontextmanager
-from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.base import AsyncNode
 
 class DatabaseNode(AsyncNode):
     """Efficient database operations."""
@@ -148,7 +148,7 @@ class DatabaseNode(AsyncNode):
         async with self.pool.acquire() as conn:
             yield conn
 
-    async def run_async(self, context, **kwargs):
+    async def async_run(self, **kwargs):
         query = kwargs.get("query")
         params = kwargs.get("parameters", [])
 

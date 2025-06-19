@@ -2,7 +2,7 @@
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -515,24 +515,29 @@ class TestRESTClientAsyncUpgrade:
     @pytest.mark.asyncio
     async def test_rest_client_async_runtime_integration(self):
         """Test RESTClientNode with LocalRuntime async detection."""
-        # Create workflow with REST client
-        workflow = Workflow(workflow_id="rest_async_test", name="REST Async Test")
-        rest_client = RESTClientNode(name="client")
-        workflow.add_node("client", rest_client)
+        # Mock the HTTP request (RESTClientNode uses HTTPRequestNode, not AsyncHTTPRequestNode)
+        with patch("kailash.nodes.api.rest.HTTPRequestNode") as mock_http:
+            mock_instance = Mock()  # Use Mock, not AsyncMock for sync method
+            mock_http.return_value = mock_instance
 
-        # Mock the async HTTP request
-        with patch("kailash.nodes.api.http.AsyncHTTPRequestNode") as mock_async_http:
-            mock_instance = AsyncMock()
-            mock_async_http.return_value = mock_instance
-
-            mock_instance.async_run.return_value = {
+            mock_instance.run.return_value = {
                 "success": True,
                 "status_code": 200,
-                "content": [{"id": 1, "name": "User 1"}, {"id": 2, "name": "User 2"}],
-                "headers": {"content-type": "application/json"},
-                "response_time_ms": 300,
-                "url": "https://api.example.com/users",
+                "response": {
+                    "content": [
+                        {"id": 1, "name": "User 1"},
+                        {"id": 2, "name": "User 2"},
+                    ],
+                    "headers": {"content-type": "application/json"},
+                    "response_time_ms": 300,
+                    "url": "https://api.example.com/users",
+                },
             }
+
+            # Create workflow with REST client (after patching)
+            workflow = Workflow(workflow_id="rest_async_test", name="REST Async Test")
+            rest_client = RESTClientNode(name="client")
+            workflow.add_node("client", rest_client)
 
             # Test with async-enabled runtime
             runtime = LocalRuntime(enable_async=True, debug=True)

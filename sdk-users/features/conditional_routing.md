@@ -43,7 +43,7 @@ class ValidationNode(Node):
             "threshold": NodeParameter(name="threshold", type=float, default=0.8)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs["data"]
         threshold = kwargs["threshold"]
 
@@ -98,7 +98,7 @@ class StatusCheckerNode(Node):
             "data": NodeParameter(name="data", type=list, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", [])
 
         if not data:
@@ -158,9 +158,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 class DataProcessorNode(Node):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", [])
-        iteration = context.get("cycle", {}).get("iteration", 0)
+        iteration = self.context.get("cycle", {}).get("iteration", 0)
 
         # Improve data quality on each iteration
         processed = [x * (1 + iteration * 0.1) for x in data]
@@ -173,7 +173,7 @@ class DataProcessorNode(Node):
         }
 
 class QualityCheckerNode(Node):
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         quality = kwargs.get("quality", 0.0)
         data = kwargs.get("data", [])
         iteration = kwargs.get("iteration", 0)
@@ -232,7 +232,7 @@ class SafeProcessorNode(Node):
             "data": NodeParameter(name="data", type=list, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", [])
 
         try:
@@ -282,7 +282,7 @@ class DataFilterNode(Node):
             "items": NodeParameter(name="items", type=list, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         items = kwargs.get("items", [])
 
         # Categorize items
@@ -348,7 +348,7 @@ class PrimaryConditionNode(Node):
             "data": NodeParameter(name="data", type=dict, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", {})
         # Primary condition: check if data has required fields
         primary_condition = all(key in data for key in ["name", "value"])
@@ -361,7 +361,7 @@ class SecondaryConditionNode(Node):
             "primary_condition": NodeParameter(name="primary_condition", type=bool, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", {})
         primary_condition = kwargs.get("primary_condition")
         # Secondary condition: check if value is within acceptable range
@@ -436,7 +436,7 @@ class ConditionNode(Node):
             "data": NodeParameter(name="data", type=dict, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", {})
         # Simple condition based on data type
         condition = data.get("type") == "premium"
@@ -510,15 +510,15 @@ class DecisionNode(Node):
             "threshold": NodeParameter(name="threshold", type=float, default=0.8)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs.get("data", [])
         threshold = kwargs.get("threshold", 0.8)
-        
+
         # Process data (example processing)
         processed_data = [x * 1.1 for x in data] if data else []
         quality = sum(processed_data) / len(processed_data) if processed_data else 0
         success = quality > threshold
-        
+
         return {
             "data": processed_data,
             "routing_decision": "continue" if success else "retry",
@@ -557,7 +557,7 @@ class RobustSwitchNode(Node):
             "condition": NodeParameter(name="condition", type=str, required=False)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         condition = kwargs.get("condition")
 
         # Always provide default route
@@ -629,12 +629,12 @@ class LoggingNode(Node):
             "data": NodeParameter(name="data", type=list, required=False)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         condition = kwargs.get("condition", "N/A")
         route = kwargs.get("route", "N/A")
         data = kwargs.get("data", [])
         data_size = len(data) if data else 0
-        
+
         print(f"Debug: condition={condition}, route={route}, data_size={data_size}")
         return kwargs  # Pass through
 
@@ -654,8 +654,8 @@ class CycleMonitorNode(Node):
     def get_parameters(self):
         return {}  # No specific parameters required
 
-    def run(self, context, **kwargs):
-        cycle_info = context.get("cycle", {})
+    def run(self, **kwargs):
+        cycle_info = self.context.get("cycle", {})
         print(f"Cycle iteration: {cycle_info.get('iteration', 0)}")
         return kwargs  # Pass through
 
@@ -674,7 +674,7 @@ class RouteValidatorNode(Node):
             "route_decision": NodeParameter(name="route_decision", type=str, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         route = kwargs.get("route_decision")
         valid_routes = ["retry", "finish", "error"]
 
@@ -739,7 +739,7 @@ class ComplexProcessorNode(Node):
             "data": NodeParameter(name="data", type=list, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs["data"]
 
         if condition_a(data):
@@ -756,16 +756,16 @@ class ConditionEvaluatorNode(Node):
             "data": NodeParameter(name="data", type=list, required=True)
         }
 
-    def run(self, context, **kwargs):
+    def run(self, **kwargs):
         data = kwargs["data"]
-        
+
         if condition_a(data):
             path = "path_a"
         elif condition_b(data):
             path = "path_b"
         else:
             path = "default"
-            
+
         return {"data": data, "path": path}
 
 workflow = Workflow("separated-logic", "Separated Concerns with SwitchNode")

@@ -516,12 +516,11 @@ class CyclicWorkflowExecutor:
                     f"Cycle {cycle_id} iteration now at {cycle_state.iteration} (after update)"
                 )
 
-                # Check max iterations (built into monitor.record_iteration)
-                if cycle_state.iteration >= cycle_config.get(
-                    "max_iterations", float("inf")
-                ):
+                # Check max iterations - loop_count represents actual iterations executed
+                max_iterations = cycle_config.get("max_iterations", float("inf"))
+                if loop_count >= max_iterations:
                     logger.info(
-                        f"Cycle {cycle_id} reached max iterations: {cycle_state.iteration}"
+                        f"Cycle {cycle_id} reached max iterations: {loop_count}/{max_iterations}"
                     )
                     should_terminate = True
 
@@ -643,9 +642,6 @@ class CyclicWorkflowExecutor:
             if is_cycle_edge and is_cycle_iteration and previous_iteration_results:
                 # For cycle edges after first iteration, use previous iteration results
                 pred_output = previous_iteration_results.get(pred)
-                logger.debug(
-                    f"Using previous iteration result for {pred} -> {node_id}: {type(pred_output)} keys={list(pred_output.keys()) if isinstance(pred_output, dict) else 'not dict'}"
-                )
             elif pred in state.node_outputs:
                 # For non-cycle edges or first iteration, use normal state
                 pred_output = state.node_outputs[pred]
@@ -658,10 +654,6 @@ class CyclicWorkflowExecutor:
 
             # Apply mapping
             mapping = edge_data.get("mapping", {})
-            if is_cycle_edge and is_cycle_iteration:
-                logger.debug(
-                    f"Applying cycle mapping: {mapping} from {pred} to {node_id}"
-                )
             for src_key, dst_key in mapping.items():
                 # Handle nested output access
                 if "." in src_key:
@@ -677,10 +669,6 @@ class CyclicWorkflowExecutor:
                         inputs[dst_key] = value
                 elif isinstance(pred_output, dict) and src_key in pred_output:
                     inputs[dst_key] = pred_output[src_key]
-                    if is_cycle_edge and is_cycle_iteration:
-                        logger.debug(
-                            f"Mapped {src_key}={pred_output[src_key]} to {dst_key}"
-                        )
                 elif src_key == "output":
                     # Default output mapping
                     inputs[dst_key] = pred_output
@@ -705,10 +693,6 @@ class CyclicWorkflowExecutor:
 
         # Recursively filter None values from context to avoid security validation errors
         context = self._filter_none_values(context)
-
-        # Debug inputs before merging
-        if cycle_state and cycle_state.iteration > 0:
-            logger.debug(f"Inputs gathered from connections: {inputs}")
 
         # Merge node config with inputs
         # Order: config < initial_parameters < connection inputs
@@ -769,11 +753,6 @@ class CyclicWorkflowExecutor:
         logger.debug(
             f"Executing node: {node_id} (iteration: {cycle_state.iteration if cycle_state else 'N/A'})"
         )
-        logger.debug(f"Node inputs: {list(merged_inputs.keys())}")
-        if cycle_state:
-            logger.debug(
-                f"Input values - value: {merged_inputs.get('value')}, counter: {merged_inputs.get('counter')}"
-            )
 
         try:
             with collector.collect(node_id=node_id) as metrics_context:

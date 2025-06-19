@@ -21,7 +21,7 @@ class WorkflowBuilder:
 
     def add_node(
         self,
-        node_type: str,
+        node_type: str | type | Any,
         node_id: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> str:
@@ -29,9 +29,9 @@ class WorkflowBuilder:
         Add a node to the workflow.
 
         Args:
-            node_type: Node type name
+            node_type: Node type name (string), Node class, or Node instance
             node_id: Unique identifier for this node (auto-generated if not provided)
-            config: Configuration for the node
+            config: Configuration for the node (ignored if node_type is an instance)
 
         Returns:
             Node ID (useful for method chaining)
@@ -48,10 +48,79 @@ class WorkflowBuilder:
                 f"Node ID '{node_id}' already exists in workflow"
             )
 
-        self.nodes[node_id] = {"type": node_type, "config": config or {}}
+        # Import Node here to avoid circular imports
+        from kailash.nodes.base import Node
 
-        logger.info(f"Added node '{node_id}' of type '{node_type}'")
+        # Handle different input types
+        if isinstance(node_type, str):
+            # String node type name
+            self.nodes[node_id] = {"type": node_type, "config": config or {}}
+            type_name = node_type
+        elif isinstance(node_type, type) and issubclass(node_type, Node):
+            # Node class
+            self.nodes[node_id] = {
+                "type": node_type.__name__,
+                "config": config or {},
+                "class": node_type,
+            }
+            type_name = node_type.__name__
+        elif hasattr(node_type, "__class__") and issubclass(node_type.__class__, Node):
+            # Node instance
+            self.nodes[node_id] = {
+                "instance": node_type,
+                "type": node_type.__class__.__name__,
+            }
+            type_name = node_type.__class__.__name__
+        else:
+            raise WorkflowValidationError(
+                f"Invalid node type: {type(node_type)}. "
+                "Expected: str (node type name), Node class, or Node instance"
+            )
+
+        logger.info(f"Added node '{node_id}' of type '{type_name}'")
         return node_id
+
+    def add_node_instance(self, node_instance: Any, node_id: str | None = None) -> str:
+        """
+        Add a node instance to the workflow.
+
+        This is a convenience method for adding pre-configured node instances.
+
+        Args:
+            node_instance: Pre-configured node instance
+            node_id: Unique identifier for this node (auto-generated if not provided)
+
+        Returns:
+            Node ID
+
+        Raises:
+            WorkflowValidationError: If node_id is already used or instance is invalid
+        """
+        return self.add_node(node_instance, node_id)
+
+    def add_node_type(
+        self,
+        node_type: str,
+        node_id: str | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> str:
+        """
+        Add a node by type name to the workflow.
+
+        This is the original string-based method, provided for clarity and backward compatibility.
+
+        Args:
+            node_type: Node type name as string
+            node_id: Unique identifier for this node (auto-generated if not provided)
+            config: Configuration for the node
+
+        Returns:
+            Node ID
+
+        Raises:
+            WorkflowValidationError: If node_id is already used
+        """
+        return self.add_node(node_type, node_id, config)
 
     def add_connection(
         self, from_node: str, from_output: str, to_node: str, to_input: str
@@ -149,11 +218,25 @@ class WorkflowBuilder:
         # Add nodes to workflow
         for node_id, node_info in self.nodes.items():
             try:
-                node_type = node_info["type"]
-                node_config = node_info.get("config", {})
-
-                # Add the node to workflow
-                workflow._add_node_internal(node_id, node_type, node_config)
+                if "instance" in node_info:
+                    # Node instance was provided
+                    workflow.add_node(
+                        node_id=node_id, node_or_type=node_info["instance"]
+                    )
+                elif "class" in node_info:
+                    # Node class was provided
+                    node_class = node_info["class"]
+                    node_config = node_info.get("config", {})
+                    workflow.add_node(
+                        node_id=node_id, node_or_type=node_class, **node_config
+                    )
+                else:
+                    # String node type
+                    node_type = node_info["type"]
+                    node_config = node_info.get("config", {})
+                    workflow.add_node(
+                        node_id=node_id, node_or_type=node_type, **node_config
+                    )
             except Exception as e:
                 raise WorkflowValidationError(
                     f"Failed to add node '{node_id}' to workflow: {e}"
