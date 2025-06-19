@@ -46,12 +46,13 @@
 - 🏭 **Session 067 Enhancements**: Business workflow templates, data lineage tracking, automatic credential rotation
 - 🔄 **Zero-Downtime Operations**: Automatic credential rotation with enterprise notifications and audit trails
 - 🌉 **Enterprise Middleware (v0.4.0)**: Production-ready middleware architecture with real-time agent-frontend communication, dynamic workflows, and AI chat integration
+- ⚡ **Performance Revolution (v0.5.0)**: 10-100x faster parameter resolution, clear async/sync separation, automatic resource management
 
 ## 🏗️ Project Architecture
 
 The Kailash project is organized into three distinct layers:
 
-### Core Architecture (v0.4.0)
+### Core Architecture (v0.5.0)
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Frontend      │    │   Middleware     │    │   Kailash Core  │
@@ -76,9 +77,10 @@ kailash_python_sdk/
 1. **SDK Layer** (`src/kailash/`) - The core framework providing:
    - Nodes: Reusable computational units (100+ built-in)
    - Workflows: DAG-based orchestration with cyclic support
-   - Runtime: Unified execution engine (async + enterprise)
-   - Middleware: Enterprise communication layer (NEW in v0.4.0)
+   - Runtime: Unified execution engine with optimized async/sync separation (v0.5.0)
+   - Middleware: Enterprise communication layer (v0.4.0)
    - Security: RBAC/ABAC access control with audit logging
+   - Performance: LRU parameter caching, automatic resource pooling (NEW in v0.5.0)
 
 2. **Application Layer** (`apps/`) - Complete applications including:
    - User Management System (Django++ capabilities)

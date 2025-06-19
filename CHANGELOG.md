@@ -15,6 +15,12 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.5.0] - 2025-01-19
+
+See [changelogs/releases/v0.5.0-2025-01-19.md](changelogs/releases/v0.5.0-2025-01-19.md) for full details.
+
+**Key Features:** Major Architecture Refactoring, Performance Optimization, API Standardization
+
 ### [0.4.2] - 2025-06-18
 
 See [changelogs/releases/v0.4.2-2025-06-18.md](changelogs/releases/v0.4.2-2025-06-18.md) for full details.
