@@ -6,7 +6,7 @@ including retry policies, fallback nodes, and circuit breakers.
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -49,6 +49,16 @@ class RetryPolicy:
             delay = self.base_delay
 
         return min(delay, self.max_delay)
+
+    def to_dict(self) -> dict:
+        """Convert RetryPolicy to dictionary."""
+        return {
+            "max_retries": self.max_retries,
+            "strategy": self.strategy.value,
+            "base_delay": self.base_delay,
+            "max_delay": self.max_delay,
+            "retry_on": [cls.__name__ for cls in self.retry_on],
+        }
 
 
 @dataclass

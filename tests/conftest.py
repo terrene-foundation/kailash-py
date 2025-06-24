@@ -33,7 +33,7 @@ from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
 # Import Docker configuration
-from tests.docker_config import (
+from tests.utils.docker_config import (
     DATABASE_CONFIG,
     KAFKA_CONFIG,
     MONGODB_CONFIG,

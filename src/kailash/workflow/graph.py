@@ -657,9 +657,14 @@ class Workflow:
         cycle_groups = {}
         _, cycle_edges = self.separate_dag_and_cycle_edges()
 
-        # First pass: group by cycle_id as before
+        # First pass: group by cycle_id, using edge-based IDs when not specified
         for source, target, data in cycle_edges:
-            cycle_id = data.get("cycle_id", "default")
+            # Generate unique cycle_id based on edge if not provided
+            cycle_id = data.get("cycle_id")
+            if cycle_id is None:
+                # Create unique ID based on the cycle edge
+                cycle_id = f"cycle_{source}_{target}"
+
             if cycle_id not in cycle_groups:
                 cycle_groups[cycle_id] = []
             cycle_groups[cycle_id].append((source, target, data))

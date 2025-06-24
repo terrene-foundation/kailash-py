@@ -205,16 +205,22 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     query_params.append(value)
                 params = query_params
 
+            # Ensure params is a list/tuple for asyncpg
+            if params is None:
+                params = []
+            elif not isinstance(params, (list, tuple)):
+                params = [params]
+
             if fetch_mode == FetchMode.ONE:
-                row = await conn.fetchrow(query, *(params or []))
+                row = await conn.fetchrow(query, *params)
                 return self._convert_row(dict(row)) if row else None
             elif fetch_mode == FetchMode.ALL:
-                rows = await conn.fetch(query, *(params or []))
+                rows = await conn.fetch(query, *params)
                 return [self._convert_row(dict(row)) for row in rows]
             elif fetch_mode == FetchMode.MANY:
                 if not fetch_size:
                     raise ValueError("fetch_size required for MANY mode")
-                rows = await conn.fetch(query, *(params or []))
+                rows = await conn.fetch(query, *params)
                 return [self._convert_row(dict(row)) for row in rows[:fetch_size]]
             elif fetch_mode == FetchMode.ITERATOR:
                 raise NotImplementedError("Iterator mode not yet implemented")

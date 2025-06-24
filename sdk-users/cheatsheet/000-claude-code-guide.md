@@ -120,7 +120,7 @@ result = {
 ))
 
 # Connect with proper mapping
-workflow.connect("source", "processor", 
+workflow.connect("source", "processor",
     mapping={"result.data": "input_data", "result.threshold": "threshold"})
 
 ```
@@ -142,7 +142,7 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # ✅ CORRECT - Map outputs to inputs
-workflow.connect("reader", "processor", 
+workflow.connect("reader", "processor",
     mapping={"data": "input_data"})  # Map 'data' output to 'input_data' input
 
 # ✅ COMPLEX - Nested data mapping
@@ -319,7 +319,7 @@ const session = await fetch('http://localhost:8000/api/sessions', {
 });
 
 const execution = await fetch('http://localhost:8000/api/executions', {
-    method: 'POST', 
+    method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
         session_id: session.session_id,
@@ -470,7 +470,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ## 📚 Next Steps
 
 - [Workflow Patterns](004-common-node-patterns.md) - More node examples
-- [Parameter Passing](006-execution-options.md) - Advanced parameter patterns  
+- [Parameter Passing](006-execution-options.md) - Advanced parameter patterns
 - [Middleware Guide](../middleware/README.md) - Complete middleware documentation
 - [Agent Coordination](023-a2a-agent-coordination.md) - Advanced agent patterns
 - [Common Mistakes](018-common-mistakes-to-avoid.md) - What to avoid

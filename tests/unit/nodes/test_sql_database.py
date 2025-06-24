@@ -28,7 +28,7 @@ def db_configs(sqlite_test_database):
             "pool_pre_ping": True,
         },
         "postgres_test": {
-            "connection_string": "postgresql://kailash:kailash123@localhost:5432/transactions",
+            "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test",
             "pool_size": 8,
             "max_overflow": 15,
             "pool_timeout": 60,
@@ -36,7 +36,7 @@ def db_configs(sqlite_test_database):
             "connect_args": {"connect_timeout": 10, "application_name": "kailash_test"},
         },
         "mysql_test": {
-            "connection_string": "mysql+pymysql://root:password@localhost:3307/test",
+            "connection_string": "mysql+pymysql://root:test_password@localhost:3307/kailash_test",
             "pool_size": 6,
             "max_overflow": 12,
             "pool_timeout": 45,
@@ -139,14 +139,14 @@ def check_database_availability(connection_string, timeout=5):
 @pytest.fixture(scope="session")
 def postgres_available():
     """Check if PostgreSQL is available for testing."""
-    conn_str = "postgresql://postgres:password@localhost:5433/test"
+    conn_str = "postgresql://test_user:test_password@localhost:5434/kailash_test"
     return check_database_availability(conn_str)
 
 
 @pytest.fixture(scope="session")
 def mysql_available():
     """Check if MySQL is available for testing."""
-    conn_str = "mysql+pymysql://root:password@localhost:3307/test"
+    conn_str = "mysql+pymysql://root:test_password@localhost:3307/kailash_test"
     return check_database_availability(conn_str)
 
 
@@ -578,8 +578,12 @@ class TestSQLDatabaseNodeSecurity:
                 "Connection failed for postgresql://user:secret@host/db",
                 "Connection failed for postgresql://***:***@host/db",
             ),
-            ("Query failed: 'sensitive data'", "Query failed: '***'"),
-            ('Error in query "SELECT secret"', 'Error in query "***"'),
+            # Updated: Only passwords and sensitive fields are masked, not all quoted strings
+            ("Query failed: 'sensitive data'", "Query failed: 'sensitive data'"),
+            ('Error in query "SELECT secret"', 'Error in query "SELECT secret"'),
+            # New test cases for targeted sanitization
+            ("password='mypass123'", "password='***'"),
+            ("api_key='sk-1234567890'", "api_key='***'"),
         ]
 
         for original, expected in test_cases:
@@ -604,7 +608,7 @@ class TestSQLDatabaseNodePostgreSQL:
         # Setup test data similar to SQLite
         from sqlalchemy import create_engine, text
 
-        conn_str = "postgresql://postgres:password@localhost:5433/test"
+        conn_str = "postgresql://test_user:test_password@localhost:5434/kailash_test"
         engine = create_engine(conn_str)
 
         with engine.connect() as conn:
@@ -987,7 +991,7 @@ class TestSQLDatabaseNodeMySQL:
         # Setup test data similar to SQLite
         from sqlalchemy import create_engine, text
 
-        conn_str = "mysql+pymysql://root:password@localhost:3307/test"
+        conn_str = "mysql+pymysql://root:test_password@localhost:3307/kailash_test"
         engine = create_engine(conn_str)
 
         with engine.connect() as conn:

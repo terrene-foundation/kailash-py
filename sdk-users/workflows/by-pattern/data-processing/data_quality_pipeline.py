@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 import time
 
 from examples.utils.data_paths import get_input_data_path
+
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode
 from kailash.runtime.local import LocalRuntime

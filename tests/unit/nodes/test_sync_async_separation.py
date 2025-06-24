@@ -10,7 +10,7 @@ from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
 
 
-class TestSyncNode(Node):
+class SyncTestNode(Node):
     """Test sync node implementation."""
 
     def get_parameters(self):
@@ -24,7 +24,7 @@ class TestSyncNode(Node):
         return {"result": f"sync_{kwargs['input_value']}"}
 
 
-class TestAsyncNode(AsyncNode):
+class AsyncTestNode(AsyncNode):
     """Test async node implementation."""
 
     def get_parameters(self):
@@ -44,32 +44,32 @@ class TestSyncAsyncSeparation:
 
     def test_sync_node_execution(self):
         """Test sync node executes synchronously."""
-        node = TestSyncNode()
+        node = SyncTestNode()
         result = node.execute(input_value="test")
         assert result["result"] == "sync_test"
 
     @pytest.mark.asyncio
     async def test_async_node_execution(self):
         """Test async node executes asynchronously."""
-        node = TestAsyncNode()
+        node = AsyncTestNode()
         result = await node.execute_async(input_value="test")
         assert result["result"] == "async_test"
 
     def test_sync_node_execute_compat(self):
         """Test sync node execute compatibility method."""
-        node = TestSyncNode()
+        node = SyncTestNode()
         result = node.execute(input_value="test")
         assert result["result"] == "sync_test"
 
     def test_async_node_sync_wrapper(self):
         """Test async node can be called synchronously."""
-        node = TestAsyncNode()
+        node = AsyncTestNode()
         result = node.execute(input_value="test")
         assert result["result"] == "async_test"
 
     def test_sync_node_has_no_async_methods(self):
         """Test sync node doesn't have async methods by default."""
-        node = TestSyncNode()
+        node = SyncTestNode()
         # Should have run() method
         assert hasattr(node, "run")
         # Should not have async_run() method
@@ -77,7 +77,7 @@ class TestSyncAsyncSeparation:
 
     def test_async_node_has_async_methods(self):
         """Test async node has async methods."""
-        node = TestAsyncNode()
+        node = AsyncTestNode()
         # Should have async_run() method
         assert hasattr(node, "async_run")
         # Should have execute_async() method
@@ -85,20 +85,20 @@ class TestSyncAsyncSeparation:
 
     def test_sync_node_inheritance(self):
         """Test sync node inherits from Node."""
-        node = TestSyncNode()
+        node = SyncTestNode()
         assert isinstance(node, Node)
         assert not isinstance(node, AsyncNode)
 
     def test_async_node_inheritance(self):
         """Test async node inherits from AsyncNode."""
-        node = TestAsyncNode()
+        node = AsyncTestNode()
         assert isinstance(node, AsyncNode)
         # AsyncNode should also inherit from Node
         assert isinstance(node, Node)
 
     def test_parameter_caching_works_for_sync(self):
         """Test parameter caching works for sync nodes."""
-        node = TestSyncNode()
+        node = SyncTestNode()
 
         # First execution
         result1 = node.execute(input_value="cache_test")
@@ -112,7 +112,7 @@ class TestSyncAsyncSeparation:
     @pytest.mark.asyncio
     async def test_parameter_caching_works_for_async(self):
         """Test parameter caching works for async nodes."""
-        node = TestAsyncNode()
+        node = AsyncTestNode()
 
         # First execution
         result1 = await node.execute_async(input_value="cache_test")
@@ -125,8 +125,8 @@ class TestSyncAsyncSeparation:
 
     def test_clear_api_contract(self):
         """Test nodes have clear API contracts."""
-        sync_node = TestSyncNode()
-        async_node = TestAsyncNode()
+        sync_node = SyncTestNode()
+        async_node = AsyncTestNode()
 
         # Both should have execute() method
         assert hasattr(sync_node, "execute")
@@ -147,7 +147,7 @@ class TestMigrationCompatibility:
     def test_old_async_detection_removed(self):
         """Test old async auto-detection is removed."""
         # This test ensures we don't accidentally re-introduce auto-detection
-        node = TestSyncNode()
+        node = SyncTestNode()
 
         # Node should not try to detect if methods are async
         # (This would be tested by checking internal implementation,
@@ -194,7 +194,7 @@ class TestPerformanceImplications:
         """Test sync nodes have no async overhead."""
         import time
 
-        node = TestSyncNode()
+        node = SyncTestNode()
 
         # Time multiple executions
         start_time = time.time()
@@ -208,7 +208,7 @@ class TestPerformanceImplications:
     @pytest.mark.asyncio
     async def test_async_node_concurrent_execution(self):
         """Test async nodes can run concurrently."""
-        node = TestAsyncNode()
+        node = AsyncTestNode()
 
         # Run multiple async executions concurrently
         start_time = asyncio.get_event_loop().time()

@@ -66,6 +66,7 @@ class ConditionalErrorNode(Node):
         return {"processed_data": data, "status": "success"}
 
 
+@pytest.mark.critical
 class TestErrorPropagation:
     """Test error handling and propagation in workflows."""
 

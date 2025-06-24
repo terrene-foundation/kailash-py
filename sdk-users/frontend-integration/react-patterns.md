@@ -30,7 +30,7 @@ const WorkflowExecutor = ({ workflowName, defaultParams = {} }) => {
   return (
     <div className="workflow-executor">
       <h3>Execute: {workflowName}</h3>
-      
+
       {/* Parameter inputs */}
       <div className="parameters">
         {Object.entries(params).map(([key, value]) => (
@@ -46,8 +46,8 @@ const WorkflowExecutor = ({ workflowName, defaultParams = {} }) => {
       </div>
 
       {/* Execute button */}
-      <button 
-        onClick={handleExecute} 
+      <button
+        onClick={handleExecute}
         disabled={loading}
         className="execute-btn"
       >
@@ -125,7 +125,7 @@ const WorkflowProgress = ({ executionId }) => {
 
       {/* Progress bar */}
       <div className="progress-bar">
-        <div 
+        <div
           className="progress-fill"
           style={{ width: `${progress.percentage}%` }}
         />
@@ -179,10 +179,10 @@ export const useWorkflowState = (workflowName, autoExecute = false) => {
 
   const executeWorkflow = useCallback(async (params) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       const result = await execute(workflowName, params);
-      
+
       setState(prev => ({
         ...prev,
         data: result.data,
@@ -194,7 +194,7 @@ export const useWorkflowState = (workflowName, autoExecute = false) => {
           result: result.data
         }]
       }));
-      
+
       return result;
     } catch (error) {
       setState(prev => ({
@@ -246,7 +246,7 @@ export const useWorkflowForm = (workflowName, schema) => {
     schema.reduce((acc, field) => ({ ...acc, [field.name]: field.default || '' }), {})
   );
   const [validation, setValidation] = useState({});
-  
+
   const { execute, loading, error, data } = useWorkflowState(workflowName);
 
   const validateField = useCallback((name, value) => {
@@ -254,15 +254,15 @@ export const useWorkflowForm = (workflowName, schema) => {
     if (!field) return null;
 
     const errors = [];
-    
+
     if (field.required && (!value || value === '')) {
       errors.push(`${field.label} is required`);
     }
-    
+
     if (field.type === 'email' && value && !value.includes('@')) {
       errors.push(`${field.label} must be a valid email`);
     }
-    
+
     if (field.min && value && value.length < field.min) {
       errors.push(`${field.label} must be at least ${field.min} characters`);
     }
@@ -272,7 +272,7 @@ export const useWorkflowForm = (workflowName, schema) => {
 
   const updateField = useCallback((name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // Validate field
     const fieldErrors = validateField(name, value);
     setValidation(prev => ({
@@ -361,14 +361,14 @@ const WorkflowForm = ({ workflowName, schema, onSuccess }) => {
 
   const renderField = (field) => {
     const hasError = validation[field.name];
-    
+
     return (
       <div key={field.name} className="form-field">
         <label htmlFor={field.name}>
           {field.label}
           {field.required && <span className="required">*</span>}
         </label>
-        
+
         {field.type === 'select' ? (
           <select
             id={field.name}
@@ -402,7 +402,7 @@ const WorkflowForm = ({ workflowName, schema, onSuccess }) => {
             className={hasError ? 'error' : ''}
           />
         )}
-        
+
         {hasError && (
           <div className="field-errors">
             {hasError.map((error, idx) => (
@@ -410,7 +410,7 @@ const WorkflowForm = ({ workflowName, schema, onSuccess }) => {
             ))}
           </div>
         )}
-        
+
         {field.help && (
           <small className="field-help">{field.help}</small>
         )}
@@ -421,33 +421,33 @@ const WorkflowForm = ({ workflowName, schema, onSuccess }) => {
   return (
     <form onSubmit={handleSubmit} className="workflow-form">
       <h3>Execute {workflowName}</h3>
-      
+
       {schema.map(renderField)}
-      
+
       {error && (
         <div className="form-error">
           <strong>Execution Error:</strong> {error.message}
         </div>
       )}
-      
+
       <div className="form-actions">
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={loading || !isValid}
           className="submit-btn"
         >
           {loading ? 'Executing...' : 'Execute Workflow'}
         </button>
-        
-        <button 
-          type="button" 
+
+        <button
+          type="button"
           onClick={resetForm}
           className="reset-btn"
         >
           Reset
         </button>
       </div>
-      
+
       {data && (
         <div className="form-result">
           <h4>Execution Result:</h4>
@@ -470,7 +470,7 @@ import React, { useMemo } from 'react';
 const WorkflowResultsTable = ({ data, columns }) => {
   const processedData = useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
-    
+
     return data.map((row, index) => ({
       id: row.id || index,
       ...row
@@ -515,7 +515,7 @@ const WorkflowResultsTable = ({ data, columns }) => {
           ))}
         </tbody>
       </table>
-      
+
       <div className="table-footer">
         Showing {sortedData.length} results
       </div>
@@ -558,10 +558,10 @@ const WorkflowDashboard = () => {
     <div className="workflow-dashboard">
       <div className="dashboard-header">
         <h1>Workflow Dashboard</h1>
-        
+
         <div className="workflow-selector">
-          <select 
-            value={activeWorkflow || ''} 
+          <select
+            value={activeWorkflow || ''}
             onChange={(e) => setActiveWorkflow(e.target.value)}
           >
             <option value="">Select Workflow...</option>
@@ -577,7 +577,7 @@ const WorkflowDashboard = () => {
       <div className="dashboard-content">
         {activeWorkflow && (
           <div className="workflow-section">
-            <WorkflowExecutor 
+            <WorkflowExecutor
               workflowName={activeWorkflow}
               onComplete={handleWorkflowComplete}
             />
@@ -586,7 +586,7 @@ const WorkflowDashboard = () => {
 
         <div className="executions-section">
           <h3>Recent Executions</h3>
-          <WorkflowResultsTable 
+          <WorkflowResultsTable
             data={executions}
             columns={[
               { key: 'workflow', label: 'Workflow' },

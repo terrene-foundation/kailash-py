@@ -304,39 +304,83 @@ if __name__ == "__main__":
 
 ## 4. Database Integration Pattern
 
-**Purpose**: Connect workflows to various databases with connection pooling
+**Purpose**: Connect workflows to various databases with production-grade connection pooling
 
 ```python
-from kailash import Workflow
-from kailash.nodes.data import SQLNode, MongoNode
+from kailash import Workflow, WorkflowBuilder
+from kailash.nodes.data import WorkflowConnectionPool, SQLDatabaseNode, MongoNode
 from kailash.nodes.code import PythonCodeNode
+from kailash.runtime import LocalRuntime
 
-workflow = Workflow("database_integration", "Database Integration")
+# Create workflow
+workflow = WorkflowBuilder("database_integration")
 
-# PostgreSQL connection with pooling
-workflow.add_node("postgres_reader", SQLNode(),
-    connection_string=os.getenv("POSTGRES_URL"),
-    pool_size=10,
-    max_overflow=20,
-    query="""
-    SELECT
-        c.id,
-        c.name,
-        c.email,
-        COUNT(o.id) as order_count,
-        SUM(o.total) as total_spent
-    FROM customers c
-    LEFT JOIN orders o ON c.id = o.customer_id
-    WHERE c.created_at > %(start_date)s
-    GROUP BY c.id, c.name, c.email
-    ORDER BY total_spent DESC
-    LIMIT %(limit)s
-    """,
-    parameters={
+# Production PostgreSQL with WorkflowConnectionPool
+workflow.add_node("pg_pool", "WorkflowConnectionPool", {
+    "name": "main_pool",
+    "database_type": "postgresql",
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "port": int(os.getenv("POSTGRES_PORT", 5432)),
+    "database": os.getenv("POSTGRES_DB", "production"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD"),
+    "min_connections": 10,
+    "max_connections": 50,
+    "health_threshold": 70,
+    "pre_warm": True
+})
+
+# Initialize pool
+workflow.add_node("init_pool", "PythonCodeNode", {
+    "code": "result = {'operation': 'initialize'}"
+})
+workflow.add_connection("init_pool", "pg_pool", "result", "inputs")
+
+# Read customer data with connection pool
+workflow.add_node("read_customers", "PythonCodeNode", {
+    "code": """
+# Acquire connection from pool
+conn_result = await pool.process({"operation": "acquire"})
+conn_id = conn_result["connection_id"]
+
+try:
+    # Execute query
+    result = await pool.process({
+        "operation": "execute",
+        "connection_id": conn_id,
+        "query": '''
+            SELECT
+                c.id,
+                c.name,
+                c.email,
+                COUNT(o.id) as order_count,
+                SUM(o.total) as total_spent
+            FROM customers c
+            LEFT JOIN orders o ON c.id = o.customer_id
+            WHERE c.created_at > $1
+            GROUP BY c.id, c.name, c.email
+            ORDER BY total_spent DESC
+            LIMIT $2
+        ''',
+        "params": [start_date, limit],
+        "fetch_mode": "all"
+    })
+    customers = result["data"]
+finally:
+    # Always release connection
+    await pool.process({
+        "operation": "release",
+        "connection_id": conn_id
+    })
+
+result = {"customers": customers}
+""",
+    "inputs": {
+        "pool": "{{pg_pool}}",
         "start_date": "2024-01-01",
         "limit": 100
     }
-)
+})
 
 # MongoDB aggregation
 workflow.add_node("mongo_aggregator", MongoNode(),
@@ -391,30 +435,199 @@ def calculate_engagement_score(orders, events):
 """
 )
 
-# Write results back to database
-workflow.add_node("postgres_writer", SQLNode(),
-    connection_string=os.getenv("POSTGRES_URL"),
-    operation="execute_many",
-    query="""
-    INSERT INTO customer_analytics (
-        customer_id, engagement_score, last_updated
-    ) VALUES (
-        %(customer_id)s, %(engagement_score)s, NOW()
-    )
-    ON CONFLICT (customer_id)
-    DO UPDATE SET
-        engagement_score = EXCLUDED.engagement_score,
-        last_updated = NOW()
-    """
-)
+# Write results back using connection pool (transactional)
+workflow.add_node("write_analytics", "PythonCodeNode", {
+    "code": """
+# Use connection pool for transactional write
+conn_result = await pool.process({"operation": "acquire"})
+conn_id = conn_result["connection_id"]
+
+try:
+    # Start transaction
+    await pool.process({
+        "operation": "execute",
+        "connection_id": conn_id,
+        "query": "BEGIN",
+        "fetch_mode": "one"
+    })
+
+    # Batch insert/update customer analytics
+    for customer in enriched_customers:
+        await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": '''
+                INSERT INTO customer_analytics (
+                    customer_id, engagement_score, event_count,
+                    last_event, last_updated
+                ) VALUES ($1, $2, $3, $4, NOW())
+                ON CONFLICT (customer_id)
+                DO UPDATE SET
+                    engagement_score = EXCLUDED.engagement_score,
+                    event_count = EXCLUDED.event_count,
+                    last_event = EXCLUDED.last_event,
+                    last_updated = NOW()
+            ''',
+            "params": [
+                customer["id"],
+                customer["engagement_score"],
+                customer["event_count"],
+                customer["last_event"]
+            ],
+            "fetch_mode": "one"
+        })
+
+    # Commit transaction
+    await pool.process({
+        "operation": "execute",
+        "connection_id": conn_id,
+        "query": "COMMIT",
+        "fetch_mode": "one"
+    })
+
+    result = {"written": len(enriched_customers), "status": "success"}
+
+except Exception as e:
+    # Rollback on error
+    await pool.process({
+        "operation": "execute",
+        "connection_id": conn_id,
+        "query": "ROLLBACK",
+        "fetch_mode": "one"
+    })
+    result = {"error": str(e), "status": "failed"}
+    raise
+finally:
+    # Always release connection
+    await pool.process({
+        "operation": "release",
+        "connection_id": conn_id
+    })
+""",
+    "inputs": {
+        "pool": "{{pg_pool}}",
+        "enriched_customers": "{{data_joiner.result.customers}}"
+    }
+})
+
+# Monitor pool performance
+workflow.add_node("monitor_pool", "PythonCodeNode", {
+    "code": """
+# Get pool statistics
+stats = await pool.process({"operation": "stats"})
+
+# Log performance metrics
+result = {
+    "pool_name": stats["pool_name"],
+    "total_queries": stats["queries"]["executed"],
+    "error_rate": stats["queries"]["error_rate"],
+    "pool_efficiency": stats["queries"]["executed"] / stats["connections"]["created"],
+    "active_connections": stats["current_state"]["active_connections"],
+    "health_scores": stats["current_state"]["health_scores"]
+}
+
+# Alert if issues detected
+if stats["queries"]["error_rate"] > 0.05:
+    print(f"WARNING: High error rate: {stats['queries']['error_rate']:.2%}")
+
+if stats["current_state"]["available_connections"] == 0:
+    print("WARNING: Connection pool exhausted!")
+""",
+    "inputs": {"pool": "{{pg_pool}}"}
+})
 
 # Connect the workflow
-workflow.connect("postgres_reader", "data_joiner",
-    mapping={"result": "postgres_data"})
-workflow.connect("mongo_aggregator", "data_joiner",
-    mapping={"result": "mongo_data"})
-workflow.connect("data_joiner", "postgres_writer",
-    mapping={"result.customers": "data"})
+workflow.add_connection("read_customers", "data_joiner", "result.customers", "postgres_data")
+workflow.add_connection("mongo_aggregator", "data_joiner", "result", "mongo_data")
+workflow.add_connection("data_joiner", "write_analytics", "result.customers", "enriched_customers")
+workflow.add_connection("write_analytics", "monitor_pool")
+
+# Execute workflow
+runtime = LocalRuntime()
+result = runtime.execute(workflow.build())
+
+```
+
+### Advanced Database Patterns
+
+#### Connection Pool Management Service
+```python
+from kailash.nodes.data import WorkflowConnectionPool
+import asyncio
+
+class DatabasePoolManager:
+    """Centralized database connection pool management."""
+
+    def __init__(self):
+        self.pools = {}
+        self.monitoring_task = None
+
+    async def create_pool(self, name, config):
+        """Create a new connection pool."""
+        pool = WorkflowConnectionPool(
+            name=name,
+            **config
+        )
+        await pool.process({"operation": "initialize"})
+        self.pools[name] = pool
+
+        # Start monitoring if not already running
+        if not self.monitoring_task:
+            self.monitoring_task = asyncio.create_task(self._monitor_pools())
+
+        return pool
+
+    async def get_pool(self, name):
+        """Get an existing pool by name."""
+        return self.pools.get(name)
+
+    async def _monitor_pools(self):
+        """Monitor all pools for health and performance."""
+        while True:
+            for name, pool in self.pools.items():
+                try:
+                    stats = await pool.process({"operation": "stats"})
+
+                    # Check for issues
+                    if stats["queries"]["error_rate"] > 0.1:
+                        logger.error(f"Pool {name}: High error rate {stats['queries']['error_rate']:.2%}")
+
+                    if stats["current_state"]["available_connections"] == 0:
+                        logger.warning(f"Pool {name}: No available connections")
+
+                    # Check individual connection health
+                    unhealthy = [
+                        conn_id for conn_id, score in stats["current_state"]["health_scores"].items()
+                        if score < 60
+                    ]
+                    if unhealthy:
+                        logger.warning(f"Pool {name}: {len(unhealthy)} unhealthy connections")
+
+                except Exception as e:
+                    logger.error(f"Error monitoring pool {name}: {e}")
+
+            await asyncio.sleep(30)  # Check every 30 seconds
+
+# Usage in workflows
+db_manager = DatabasePoolManager()
+
+# Create pools for different purposes
+await db_manager.create_pool("analytics", {
+    "database_type": "postgresql",
+    "host": "analytics-db.internal",
+    "database": "analytics",
+    "min_connections": 5,
+    "max_connections": 20
+})
+
+await db_manager.create_pool("transactional", {
+    "database_type": "postgresql",
+    "host": "main-db.internal",
+    "database": "production",
+    "min_connections": 20,
+    "max_connections": 100,
+    "health_threshold": 60  # More aggressive for transactional
+})
 
 ```
 

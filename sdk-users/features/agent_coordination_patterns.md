@@ -227,6 +227,242 @@ for agent in team["selected_agents"]:
 
 ```
 
+## Complete Demo: Agent Coordination in Action
+
+Here's a comprehensive example demonstrating both coordination patterns:
+
+```python
+"""
+A2A Communication Demo - Agent Coordination Patterns
+
+This example demonstrates both A2ACoordinatorNode and SharedMemoryPoolNode
+for effective multi-agent coordination.
+"""
+
+from kailash.nodes.ai import A2ACoordinatorNode, SharedMemoryPoolNode
+
+
+def demo_shared_memory():
+    """Demonstrate shared memory pool functionality."""
+    print("=== Shared Memory Pool Demo ===\n")
+
+    # Create memory pool
+    memory = SharedMemoryPoolNode()
+
+    # Agent 1 writes a discovery
+    print("1. Agent writes discovery to shared memory:")
+    result = memory.execute(
+        action="write",
+        agent_id="researcher_001",
+        content="Found 30% increase in customer satisfaction after UI redesign",
+        tags=["research", "ui", "customer_satisfaction"],
+        importance=0.9,
+        segment="findings"
+    )
+    print(f"   Memory ID: {result['memory_id']}")
+    print(f"   Stored in segment: {result['segment']}")
+
+    # Agent 2 writes another finding
+    print("\n2. Another agent writes finding:")
+    memory.execute(
+        action="write",
+        agent_id="analyst_001",
+        content="Minor bug in payment processing",
+        tags=["bug", "payment"],
+        importance=0.3,
+        segment="issues"
+    )
+
+    # Agent 3 reads with attention filter
+    print("\n3. Third agent reads with attention filter (high importance only):")
+    filtered_result = memory.execute(
+        action="read",
+        agent_id="manager_001",
+        attention_filter={
+            "importance_threshold": 0.7,
+            "tags": ["research", "customer_satisfaction"],
+            "window_size": 5
+        }
+    )
+
+    print(f"   Found {len(filtered_result['memories'])} relevant memories:")
+    for mem in filtered_result['memories']:
+        print(f"   - {mem['content'][:50]}... (importance: {mem['importance']})")
+
+    # Semantic query
+    print("\n4. Semantic query across all memories:")
+    query_result = memory.execute(
+        action="query",
+        agent_id="searcher_001",
+        query="customer satisfaction"
+    )
+
+    print(f"   Found {query_result['total_matches']} matches")
+    if query_result['results']:
+        print(f"   Best match: {query_result['results'][0]['content']}")
+
+
+def demo_agent_coordination():
+    """Demonstrate agent coordination and task delegation."""
+    print("\n\n=== Agent Coordination Demo ===\n")
+
+    # Create coordinator
+    coordinator = A2ACoordinatorNode()
+
+    # Register agents
+    print("1. Registering specialized agents:")
+    agents = [
+        {
+            "id": "data_analyst_001",
+            "skills": ["data_analysis", "statistics", "visualization"],
+            "role": "data_analyst"
+        },
+        {
+            "id": "ml_engineer_001",
+            "skills": ["machine_learning", "model_training", "optimization"],
+            "role": "ml_engineer"
+        },
+        {
+            "id": "researcher_001",
+            "skills": ["research", "literature_review", "hypothesis_testing"],
+            "role": "researcher"
+        }
+    ]
+
+    for agent in agents:
+        result = coordinator.execute(
+            action="register",
+            agent_info=agent
+        )
+        print(f"   Registered: {agent['id']} as {agent['role']}")
+
+    # Delegate task
+    print("\n2. Delegating analysis task:")
+    task_result = coordinator.execute(
+        action="delegate",
+        task={
+            "name": "Analyze customer behavior patterns",
+            "required_skills": ["data_analysis", "statistics"],
+            "priority": "high",
+            "deadline": "2024-12-10"
+        },
+        coordination_strategy="best_match"
+    )
+
+    print(f"   Task delegated to: {task_result['assigned_agent']['id']}")
+    print(f"   Match score: {task_result['delegation']['score']:.2f}")
+
+    # Broadcast message
+    print("\n3. Broadcasting update to all agents:")
+    broadcast_result = coordinator.execute(
+        action="broadcast",
+        message={
+            "content": "New dataset available for analysis",
+            "priority": "medium",
+            "target_roles": ["data_analyst", "ml_engineer"]
+        }
+    )
+
+    print(f"   Message delivered to {broadcast_result['delivered_count']} agents")
+
+    # Build consensus
+    print("\n4. Building consensus on approach:")
+    consensus_result = coordinator.execute(
+        action="consensus",
+        consensus_proposal={
+            "proposal": "Use ensemble methods for prediction",
+            "proposer": "ml_engineer_001",
+            "require_unanimous": False
+        }
+    )
+
+    print(f"   Consensus reached: {consensus_result['consensus']['approved']}")
+    print(f"   Approval rate: {consensus_result['consensus']['approval_rate']:.1%}")
+
+
+def demo_collaborative_workflow():
+    """Demonstrate a complete collaborative workflow."""
+    print("\n\n=== Collaborative Workflow Demo ===\n")
+
+    # Create both nodes
+    coordinator = A2ACoordinatorNode()
+    memory = SharedMemoryPoolNode()
+
+    print("Setting up collaborative analysis workflow...")
+
+    # Register agents with coordinator
+    agents = ["analyst_001", "researcher_001", "synthesizer_001"]
+    for agent_id in agents:
+        coordinator.execute(
+            action="register",
+            agent_info={
+                "id": agent_id,
+                "role": agent_id.split("_")[0]
+            }
+        )
+
+    # Simulate collaborative work
+    print("\n1. Analyst discovers pattern:")
+    memory.execute(
+        action="write",
+        agent_id="analyst_001",
+        content="User engagement peaks at 2pm-4pm on weekdays",
+        tags=["pattern", "engagement", "timing"],
+        importance=0.8
+    )
+
+    print("2. Researcher adds context:")
+    memory.execute(
+        action="write",
+        agent_id="researcher_001",
+        content="Studies show post-lunch cognitive refresh affects online behavior",
+        tags=["research", "behavior", "timing"],
+        importance=0.7
+    )
+
+    print("3. Coordinator broadcasts synthesis request:")
+    coordinator.execute(
+        action="broadcast",
+        message={
+            "content": "Please synthesize findings on engagement timing",
+            "target_roles": ["synthesizer"]
+        }
+    )
+
+    print("4. Synthesizer queries relevant memories:")
+    synthesis_data = memory.execute(
+        action="query",
+        agent_id="synthesizer_001",
+        query="engagement timing patterns"
+    )
+
+    print(f"\nCollaborative workflow complete!")
+    print(f"Total memories created: {synthesis_data['total_matches']}")
+    print(f"Agents coordinated: {len(agents)}")
+
+
+if __name__ == "__main__":
+    # Run all demos
+    demo_shared_memory()
+    demo_agent_coordination()
+    demo_collaborative_workflow()
+
+    print("\n" + "="*60)
+    print("Demo completed successfully!")
+    print("Key takeaways:")
+    print("- SharedMemoryPoolNode enables persistent knowledge sharing")
+    print("- A2ACoordinatorNode manages active task coordination")
+    print("- Combined usage creates powerful collaborative systems")
+```
+
+This demo showcases:
+- **Shared Memory Operations**: Write, read with filters, and semantic queries
+- **Agent Coordination**: Registration, task delegation, broadcasting, and consensus
+- **Collaborative Workflows**: How both nodes work together for complex tasks
+- **Real-world Patterns**: Practical examples of multi-agent collaboration
+
+```
+
 ## Decision Tree: Which Pattern to Use?
 
 ```

@@ -57,7 +57,7 @@ workflow:
 
         # Or through runtime
         runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow, inputs={'input_data': [1, 2, 3]})
+        results, run_id = runtime.execute(workflow, parameters={'input_data': [1, 2, 3]})
 
     validate:
       signature: "validate() -> bool"

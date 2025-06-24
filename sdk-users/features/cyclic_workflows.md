@@ -88,7 +88,7 @@ workflow.add_node("processor", PythonCodeNode(code="result = [x * 2 for x in dat
 
 # Data flows through connections or runtime parameters
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, 
+results, run_id = runtime.execute(workflow,
     parameters={"processor": {"data": [1, 2, 3]}})
 
 ```
@@ -101,7 +101,7 @@ Nodes in cycles receive context about the current iteration:
 class IterativeProcessorNode(Node):
     def __init__(self, node_id=None):
         super().__init__(node_id)
-        
+
     def run(self, data=None, **kwargs):
         # Safe access to cycle state
         context = kwargs.get('context', {})
@@ -126,15 +126,15 @@ class IterativeProcessorNode(Node):
             'history': history + [result],
             'converged': self.check_convergence(result)
         }
-    
+
     def initial_processing(self, data):
         # Implement initial processing logic
         return data if data else []
-    
+
     def refine_result(self, data, previous_result):
         # Implement refinement logic
         return [x * 0.9 for x in (data if isinstance(data, list) else [data])]
-    
+
     def check_convergence(self, result):
         # Simple convergence check
         return isinstance(result, list) and len(result) > 0 and all(x < 10 for x in result)
@@ -410,7 +410,7 @@ workflow.add_connection("a", "b", "output", "input",
 class CycleAwareNode(Node):
     def __init__(self, node_id=None):
         super().__init__(node_id)
-        
+
     def run(self, **kwargs):
         cycle_info = kwargs.get('context', {}).get('cycle', {})
         iteration = cycle_info.get('iteration', 0)
@@ -422,11 +422,11 @@ class CycleAwareNode(Node):
             # Subsequent iterations - refine
             prev_state = cycle_info.get('node_state') or {}
             return self.refine_processing(kwargs.get('data'), prev_state)
-    
+
     def initialize_processing(self, data):
         # Initialize processing for first iteration
         return {'result': data, 'initialized': True}
-    
+
     def refine_processing(self, data, prev_state):
         # Refine processing for subsequent iterations
         return {'result': data, 'refined': True, 'iteration': prev_state.get('iteration', 0) + 1}
@@ -549,12 +549,12 @@ import statistics
 class EfficientNode(Node):
     def __init__(self, node_id=None):
         super().__init__(node_id)
-        
+
     def run(self, data=None, **kwargs):
         # Process data efficiently
         processed_data = [x * 1.1 for x in (data if isinstance(data, list) else [])]
         converged = len(processed_data) > 0 and statistics.mean(processed_data) < 100
-        
+
         # Don't store entire datasets
         return {
             'result': processed_data,
@@ -721,6 +721,157 @@ workflow.add_connection("quality_checker", "cleaner", "result", "data",
 
 ```
 
+### 4. Production-Ready Text Processing Pipeline
+
+```python
+"""
+Production-ready cyclic workflow for iterative text cleaning and validation.
+Demonstrates best practices without external dependencies.
+"""
+
+from kailash import Workflow
+from kailash.nodes.code import PythonCodeNode
+from kailash.runtime.local import LocalRuntime
+
+# Create production workflow
+workflow = Workflow("text_processing_pipeline", "Production text cleaning with validation")
+
+# Text cleaning node with iterative improvements
+workflow.add_node("text_cleaner", PythonCodeNode(code="""
+import re
+
+# Handle input data
+try:
+    text = data.get('text', '') if isinstance(data, dict) else str(data)
+    iteration = context.get('cycle', {}).get('iteration', 0)
+except:
+    # First iteration
+    text = "  Hello,   WORLD!  This is a TEST...   with BAD formatting!!!  "
+    iteration = 0
+
+print(f"\\nText Cleaning Iteration {iteration + 1}")
+print(f"Input: '{text}'")
+
+# Perform cleaning operations
+cleaned = text
+
+# 1. Strip whitespace
+cleaned = cleaned.strip()
+
+# 2. Normalize spaces
+cleaned = re.sub(r'\\s+', ' ', cleaned)
+
+# 3. Fix punctuation spacing
+cleaned = re.sub(r'\\s+([.,!?])', r'\\1', cleaned)
+cleaned = re.sub(r'([.,!?])([A-Za-z])', r'\\1 \\2', cleaned)
+
+# 4. Normalize case (if too much uppercase)
+words = cleaned.split()
+uppercase_count = sum(1 for w in words if w.isupper() and len(w) > 1)
+if uppercase_count > len(words) * 0.3:  # More than 30% uppercase
+    cleaned = ' '.join(w.capitalize() if w.isupper() else w for w in words)
+
+# Calculate quality improvement
+original_issues = 0
+if text != text.strip(): original_issues += 1
+if '  ' in text: original_issues += 1
+if uppercase_count > len(words) * 0.3: original_issues += 1
+
+quality_score = 1.0 - (original_issues * 0.25)
+quality_score = max(0.0, min(1.0, quality_score))
+
+print(f"Output: '{cleaned}'")
+print(f"Quality Score: {quality_score:.2f}")
+
+result = {
+    'text': cleaned,
+    'quality_score': quality_score,
+    'iteration': iteration + 1,
+    'improvements': original_issues
+}
+"""))
+
+# Text validation node
+workflow.add_node("text_validator", PythonCodeNode(code="""
+# Get cleaned text and metadata
+text = data.get('text', '')
+quality_score = data.get('quality_score', 0.0)
+iteration = data.get('iteration', 0)
+
+print(f"\\nValidating Text - Iteration {iteration}")
+
+# Validation checks
+issues = []
+
+# Check for remaining issues
+if text != text.strip():
+    issues.append("Leading/trailing whitespace")
+if '  ' in text:
+    issues.append("Multiple spaces")
+if '...' in text and '...' not in text.replace('...', ''):
+    issues.append("Excessive ellipsis")
+if text.count('!') > 2:
+    issues.append("Excessive exclamation marks")
+
+# Calculate validation score
+validation_score = 1.0 - (len(issues) * 0.2)
+validation_score = max(0.0, min(1.0, validation_score))
+
+# Determine if another iteration is needed
+needs_improvement = len(issues) > 0 and iteration < 5
+converged = validation_score >= 0.95 or iteration >= 5
+
+print(f"Validation Score: {validation_score:.2f}")
+print(f"Issues Found: {len(issues)}")
+if issues:
+    for issue in issues:
+        print(f"  - {issue}")
+print(f"Converged: {converged}")
+
+result = {
+    'text': text,
+    'validation_score': validation_score,
+    'issues': issues,
+    'needs_improvement': needs_improvement,
+    'converged': converged,
+    'iteration': iteration,
+    'quality_score': quality_score
+}
+"""))
+
+# Connect nodes with cycle
+workflow.add_connection("text_cleaner", "text_validator", "result", "data")
+workflow.add_connection("text_validator", "text_cleaner", "result", "data",
+    cycle=True,
+    max_iterations=5,
+    convergence_check="converged == True")
+
+# Execute workflow
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow)
+
+# Display final results
+final_result = results.get('text_validator', {})
+print(f"\\n{'='*60}")
+print(f"FINAL RESULTS - Run ID: {run_id}")
+print(f"{'='*60}")
+print(f"Original Text: '  Hello,   WORLD!  This is a TEST...   with BAD formatting!!!  '")
+print(f"Final Text: '{final_result.get('text', '')}'")
+print(f"Final Quality Score: {final_result.get('quality_score', 0):.2f}")
+print(f"Final Validation Score: {final_result.get('validation_score', 0):.2f}")
+print(f"Total Iterations: {final_result.get('iteration', 0)}")
+```
+
+This production example demonstrates:
+- **Error handling**: Graceful handling of missing or malformed input
+- **Progressive improvement**: Each iteration addresses specific issues
+- **Quality metrics**: Quantifiable improvement tracking
+- **Convergence criteria**: Multiple conditions for termination
+- **Debugging output**: Clear visibility into each iteration
+- **No external dependencies**: Uses only built-in Python capabilities
+
+```
+
 ## Migration Guide: From Python Loops to Workflow Cycles
 
 ### Before: Traditional Python Loop
@@ -802,7 +953,7 @@ results, run_id = runtime.execute(workflow)
 for node_id, node_result in results.items():
     if isinstance(node_result, dict) and 'iteration' in str(node_result):
         print(f"Node {node_id} completed with results: {node_result}")
-        
+
 # Access execution metadata if available
 if hasattr(runtime, 'get_execution_metadata'):
     metadata = runtime.get_execution_metadata(run_id)

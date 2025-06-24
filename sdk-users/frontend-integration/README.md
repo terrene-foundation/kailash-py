@@ -15,7 +15,7 @@ const KailashWorkflowComponent = () => {
     enableRealtime: true,
     enableAIChat: true
   }));
-  
+
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -43,13 +43,13 @@ const KailashWorkflowComponent = () => {
 
   return (
     <div className="kailash-workflow">
-      <button 
+      <button
         onClick={() => executeWorkflow('data-processor', { input: 'test' })}
         disabled={loading}
       >
         {loading ? 'Processing...' : 'Execute Workflow'}
       </button>
-      
+
       {result && (
         <div className="result">
           <pre>{JSON.stringify(result, null, 2)}</pre>
@@ -119,7 +119,7 @@ export const useKailash = (config = {}) => {
   const execute = useCallback(async (workflowName, parameters) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const result = await client.executeWorkflow(workflowName, parameters);
       return result;
@@ -171,7 +171,7 @@ import { KailashClient } from '@kailash/client';
 export default {
   install(app, options) {
     const client = new KailashClient(options);
-    
+
     app.config.globalProperties.$kailash = client;
     app.provide('kailash', client);
   }
@@ -234,7 +234,7 @@ class KailashRealtime {
   constructor(baseURL) {
     this.ws = new WebSocket(`ws://${baseURL}/ws`);
     this.subscriptions = new Map();
-    
+
     this.ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       this.handleMessage(message);
@@ -250,9 +250,9 @@ class KailashRealtime {
         channel: channel
       }));
     }
-    
+
     this.subscriptions.get(channel).add(callback);
-    
+
     return {
       unsubscribe: () => {
         this.subscriptions.get(channel)?.delete(callback);
@@ -272,15 +272,15 @@ class KailashRealtime {
 const RealtimeWorkflow = () => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('idle');
-  
+
   useEffect(() => {
     const realtime = new KailashRealtime('localhost:8000');
-    
+
     const progressSub = realtime.subscribe('workflow_progress', (data) => {
       setProgress(data.percentage);
       setStatus(data.status);
     });
-    
+
     return () => {
       progressSub.unsubscribe();
     };
@@ -301,24 +301,24 @@ const RealtimeWorkflow = () => {
 // SSE for workflow updates
 const useWorkflowSSE = (workflowId) => {
   const [updates, setUpdates] = useState([]);
-  
+
   useEffect(() => {
     const eventSource = new EventSource(
       `/api/workflows/${workflowId}/events`
     );
-    
+
     eventSource.onmessage = (event) => {
       const update = JSON.parse(event.data);
       setUpdates(prev => [...prev, update]);
     };
-    
+
     eventSource.onerror = (error) => {
       console.error('SSE error:', error);
     };
-    
+
     return () => eventSource.close();
   }, [workflowId]);
-  
+
   return updates;
 };
 ```
@@ -332,15 +332,15 @@ const KailashAIChat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  
+
   const sendMessage = async () => {
     if (!input.trim()) return;
-    
+
     const userMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
-    
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -353,11 +353,11 @@ const KailashAIChat = () => {
           }
         })
       });
-      
+
       const data = await response.json();
       const aiMessage = { role: 'assistant', content: data.response };
       setMessages(prev => [...prev, aiMessage]);
-      
+
       // If AI suggests workflow execution
       if (data.suggested_workflow) {
         await executeWorkflow(data.suggested_workflow, data.parameters);
@@ -377,7 +377,7 @@ const KailashAIChat = () => {
         ))}
         {loading && <div className="message loading">AI is thinking...</div>}
       </div>
-      
+
       <div className="input-area">
         <input
           value={input}
@@ -403,13 +403,13 @@ import { Line, Bar, Pie } from 'react-chartjs-2';
 
 const KailashChart = ({ workflowName, chartType = 'line' }) => {
   const [chartData, setChartData] = useState(null);
-  
+
   useEffect(() => {
     const fetchData = async () => {
       const result = await kailash.executeWorkflow(workflowName, {
         output_format: 'chart_data'
       });
-      
+
       setChartData({
         labels: result.labels,
         datasets: [{
@@ -420,7 +420,7 @@ const KailashChart = ({ workflowName, chartType = 'line' }) => {
         }]
       });
     };
-    
+
     fetchData();
   }, [workflowName]);
 
@@ -434,7 +434,7 @@ const KailashChart = ({ workflowName, chartType = 'line' }) => {
 
   return (
     <div className="kailash-chart">
-      <ChartComponent 
+      <ChartComponent
         data={chartData}
         options={{
           responsive: true,
@@ -468,7 +468,7 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials)
     });
-    
+
     const data = await response.json();
     setToken(data.token);
     setUser(data.user);
@@ -491,7 +491,7 @@ export const AuthProvider = ({ children }) => {
 // Authenticated API client
 const useAuthenticatedKailash = () => {
   const { token } = useContext(AuthContext);
-  
+
   return useMemo(() => new KailashClient({
     baseURL: process.env.REACT_APP_KAILASH_URL,
     headers: {
@@ -573,7 +573,7 @@ const useKailashMobile = () => {
       });
       setClient(client);
     };
-    
+
     initClient();
   }, []);
 

@@ -18,6 +18,7 @@ from examples.utils.data_paths import (
     get_input_data_path,
     get_output_data_path,
 )
+
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.runtime import LocalRuntime

@@ -11,7 +11,7 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.sdk_exceptions import NodeValidationError
 
 
-class TestCacheNode(Node):
+class CacheTestNode(Node):
     """Test node with various parameter configurations."""
 
     def __init__(self, **kwargs):
@@ -65,7 +65,7 @@ class TestParameterCache:
 
     def test_basic_cache_operation(self):
         """Test basic cache hit/miss behavior."""
-        node = TestCacheNode()
+        node = CacheTestNode()
 
         # Clear cache
         node.clear_cache()
@@ -96,7 +96,7 @@ class TestParameterCache:
 
     def test_cache_key_generation(self):
         """Test that cache keys ignore special parameters and values."""
-        node = TestCacheNode()
+        node = CacheTestNode()
         node.clear_cache()
 
         # Call with context (special parameter)
@@ -114,7 +114,7 @@ class TestParameterCache:
 
     def test_parameter_value_collision_fix(self):
         """Test that the cache correctly handles parameters with same values."""
-        node = TestCacheNode()
+        node = CacheTestNode()
         node.clear_cache()
 
         # Test the original bug scenario: a=3, b=8, c=3
@@ -137,7 +137,7 @@ class TestParameterCache:
         """Test LRU cache eviction behavior."""
         # Create node with small cache
         os.environ["KAILASH_PARAM_CACHE_SIZE"] = "3"
-        node = TestCacheNode()
+        node = CacheTestNode()
         node.clear_cache()
 
         # Fill cache with 3 patterns
@@ -171,7 +171,7 @@ class TestParameterCache:
 
     def test_cache_with_aliases(self):
         """Test cache with workflow aliases."""
-        node = TestCacheNode(use_aliases=True)
+        node = CacheTestNode(use_aliases=True)
         node.clear_cache()
 
         # Use alias
@@ -194,7 +194,7 @@ class TestParameterCache:
 
     def test_cache_with_auto_mapping(self):
         """Test cache with auto-mapped parameters."""
-        node = TestCacheNode(use_auto_map=True)
+        node = CacheTestNode(use_auto_map=True)
         node.clear_cache()
 
         # Use auto-mapped alternatives
@@ -217,7 +217,7 @@ class TestParameterCache:
     def test_cache_disabled(self):
         """Test behavior when cache is disabled."""
         os.environ["KAILASH_DISABLE_PARAM_CACHE"] = "true"
-        node = TestCacheNode()
+        node = CacheTestNode()
 
         # Multiple calls with same pattern
         for i in range(3):
@@ -237,7 +237,7 @@ class TestParameterCache:
 
     def test_thread_safety(self):
         """Test cache thread safety with concurrent access."""
-        node = TestCacheNode()
+        node = CacheTestNode()
         node.clear_cache()
 
         errors = []
@@ -284,7 +284,7 @@ class TestParameterCache:
 
     def test_cache_warmup(self):
         """Test cache warming functionality."""
-        node = TestCacheNode()
+        node = CacheTestNode()
         node.clear_cache()
 
         # Warm cache with known patterns
@@ -364,7 +364,7 @@ class TestParameterCache:
 
     def test_cache_statistics_accuracy(self):
         """Test accuracy of cache statistics."""
-        node = TestCacheNode()
+        node = CacheTestNode()
         node.clear_cache()
 
         # Known sequence of operations
@@ -388,7 +388,7 @@ class TestParameterCache:
 
     def test_edge_cases(self):
         """Test edge cases and error conditions."""
-        node = TestCacheNode()
+        node = CacheTestNode()
 
         # Empty inputs
         result = node.validate_inputs()

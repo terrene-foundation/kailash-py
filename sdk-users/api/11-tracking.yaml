@@ -137,7 +137,7 @@ tracking:
     example: |
       from kailash.tracking import TaskTracker
       from kailash import LocalRuntime, Workflow
-      
+
       # Initialize tracker with file storage
       tracker = TaskTracker(
           storage_backend='file',
@@ -145,18 +145,18 @@ tracking:
           enable_metrics=True,
           retention_days=90
       )
-      
+
       # Use with runtime
       runtime = LocalRuntime()
       workflow = Workflow(name='data-processing')
-      
+
       # Execute with tracking
       results, run_id = runtime.execute(workflow, task_manager=tracker)
-      
+
       # Get execution summary
       summary = tracker.get_run_summary(run_id)
       print(f"Workflow completed in {summary['total_time']}s")
-      
+
       # Get workflow history
       history = tracker.get_workflow_history('data-processing')
       success_rate = len([r for r in history if r['status'] == 'success']) / len(history)
@@ -215,12 +215,12 @@ tracking:
           def alert_handler(run_id, metric, value):
               print(f"ALERT: {metric} reached {value} for run {run_id}")
               # Send notification, scale resources, etc.
-          
+
           monitor.set_alert_callback(alert_handler)
 
     example: |
       from kailash.tracking import PerformanceMonitor
-      
+
       # Setup monitoring with alerts
       monitor = PerformanceMonitor(
           sampling_interval=1.0,
@@ -231,21 +231,21 @@ tracking:
               'disk': 95.0     # Alert at 95% disk usage
           }
       )
-      
+
       # Set alert handler
       def handle_alert(run_id, metric, value):
           print(f"Performance alert: {metric} = {value}% for {run_id}")
           # Could trigger scaling, notifications, etc.
-      
+
       monitor.set_alert_callback(handle_alert)
-      
+
       # Monitor workflow execution
       run_id = 'intensive-workflow-001'
       monitor.start_monitoring(run_id)
-      
+
       # Execute workflow
       results, _ = runtime.execute(workflow)
-      
+
       # Get performance summary
       perf_summary = monitor.stop_monitoring(run_id)
       print(f"Performance Summary: {perf_summary}")
@@ -325,44 +325,44 @@ tracking:
     example: |
       from kailash.tracking import MetricsCollector
       import time
-      
+
       # Initialize collector
       collector = MetricsCollector(
           aggregation_window=300,  # 5 minute windows
           storage_backend='file',
           export_format='json'
       )
-      
+
       # Record custom metrics during workflow execution
       start_time = time.time()
       # ... execute workflow ...
       execution_time = time.time() - start_time
-      
+
       collector.record_metric('workflow.duration', execution_time, {
           'workflow_id': 'data-pipeline',
           'node_count': 5,
           'environment': 'production'
       })
-      
+
       collector.record_metric('workflow.throughput', 1000, {
           'workflow_id': 'data-pipeline',
           'unit': 'records_per_second'
       })
-      
+
       # Get performance insights
       recent_times = collector.get_metrics(
           'workflow.duration',
           start_time=time.time() - 3600
       )
-      
+
       avg_duration = collector.get_aggregated_metrics(
           'workflow.duration',
           aggregation='avg',
           window_size=3600
       )
-      
+
       print(f"Average execution time: {avg_duration}s")
-      
+
       # Export for analysis
       collector.export_metrics('daily_metrics.json', format='json')
 
@@ -422,37 +422,37 @@ tracking:
 
     example: |
       from kailash.tracking import WorkflowProfiler
-      
+
       # Setup comprehensive profiling
       profiler = WorkflowProfiler(
           profile_level='comprehensive',
           include_memory=True,
           include_io=True
       )
-      
+
       # Profile workflow execution
       run_id = 'optimization-analysis-001'
       profiler.start_profiling(run_id, workflow)
-      
+
       # Execute workflow
       results, _ = runtime.execute(workflow)
-      
+
       # Get detailed profile
       profile = profiler.stop_profiling(run_id)
-      
+
       # Analyze results
       print("Performance Bottlenecks:")
       for bottleneck in profile['bottlenecks']:
           print(f"- {bottleneck['node_id']}: {bottleneck['issue']}")
-      
+
       print("\nOptimization Recommendations:")
       optimization_report = profiler.generate_optimization_report(run_id)
       for rec in optimization_report['recommendations']:
           print(f"- {rec['description']} (Impact: {rec['impact']})")
-      
+
       # Node-level analysis
       node_profiles = profiler.get_node_profiles(run_id)
-      slowest_node = max(node_profiles.items(), 
+      slowest_node = max(node_profiles.items(),
                         key=lambda x: x[1]['execution_time'])
       print(f"Slowest node: {slowest_node[0]} ({slowest_node[1]['execution_time']}s)")
 
@@ -464,7 +464,7 @@ integration_examples:
       from kailash import Workflow, LocalRuntime
       from kailash.tracking import TaskTracker, PerformanceMonitor, MetricsCollector
       import time
-      
+
       # Initialize tracking components
       tracker = TaskTracker(
           storage_backend='file',
@@ -472,17 +472,17 @@ integration_examples:
           enable_metrics=True,
           retention_days=30
       )
-      
+
       monitor = PerformanceMonitor(
           sampling_interval=1.0,
           alert_thresholds={'memory': 80.0, 'cpu': 85.0}
       )
-      
+
       collector = MetricsCollector(
           storage_backend='file',
           export_format='json'
       )
-      
+
       # Alert handling
       def performance_alert(run_id, metric, value):
           print(f"ALERT: {metric} = {value}% for run {run_id}")
@@ -490,33 +490,33 @@ integration_examples:
               'run_id': run_id,
               'alert_type': 'performance'
           })
-      
+
       monitor.set_alert_callback(performance_alert)
-      
+
       # Setup workflow
       workflow = Workflow(name='production-pipeline')
       # ... add nodes ...
-      
+
       runtime = LocalRuntime(enable_metrics=True)
-      
+
       # Execute with full tracking
       run_id = f'run-{int(time.time())}'
-      
+
       try:
           # Start monitoring
           monitor.start_monitoring(run_id)
-          
+
           # Execute with tracker
           results, actual_run_id = runtime.execute(workflow, task_manager=tracker)
-          
+
           # Record success metrics
           collector.record_metric('workflow.success', 1, {
               'workflow': 'production-pipeline',
               'run_id': actual_run_id
           })
-          
+
           print("Workflow completed successfully")
-          
+
       except Exception as e:
           # Record failure metrics
           collector.record_metric('workflow.failure', 1, {
@@ -525,30 +525,30 @@ integration_examples:
               'run_id': run_id
           })
           raise
-      
+
       finally:
           # Stop monitoring and get summary
           perf_summary = monitor.stop_monitoring(run_id)
-          
+
           # Get execution summary
           if actual_run_id:
               run_summary = tracker.get_run_summary(actual_run_id)
-              
+
               # Record performance metrics
-              collector.record_metric('workflow.execution_time', 
+              collector.record_metric('workflow.execution_time',
                                     run_summary['total_time'])
-              collector.record_metric('workflow.peak_memory', 
+              collector.record_metric('workflow.peak_memory',
                                     perf_summary['peak_memory'])
-      
+
       # Generate reports
       print("\nExecution Summary:")
       print(f"Total time: {run_summary['total_time']}s")
       print(f"Nodes completed: {run_summary['nodes_completed']}")
       print(f"Peak memory: {perf_summary['peak_memory']}MB")
-      
+
       # Export metrics for analysis
       collector.export_metrics('production_metrics.json')
-      
+
       # Cleanup old data
       cleaned = tracker.cleanup_old_data(days=7)
       print(f"Cleaned up {cleaned} old tracking records")
@@ -558,15 +558,15 @@ integration_examples:
     example: |
       from kailash.nodes.base import Node
       from kailash.tracking import MetricsCollector
-      
+
       class MetricsAwareNode(Node):
           def __init__(self, **config):
               self.metrics_collector = config.get('metrics_collector')
               super().__init__(**config)
-          
+
           def execute(self, inputs):
               start_time = time.time()
-              
+
               try:
                   # Record input metrics
                   if self.metrics_collector:
@@ -576,15 +576,15 @@ integration_examples:
                           input_size,
                           {'node_type': self.__class__.__name__}
                       )
-                  
+
                   # Process data
                   result = self.process_data(inputs)
-                  
+
                   # Record output metrics
                   if self.metrics_collector:
                       output_size = len(str(result))
                       processing_time = time.time() - start_time
-                      
+
                       self.metrics_collector.record_metric(
                           f'node.{self.node_id}.output_size',
                           output_size
@@ -593,9 +593,9 @@ integration_examples:
                           f'node.{self.node_id}.processing_time',
                           processing_time
                       )
-                  
+
                   return result
-                  
+
               except Exception as e:
                   # Record error metrics
                   if self.metrics_collector:
@@ -605,39 +605,39 @@ integration_examples:
                           {'error_type': type(e).__name__}
                       )
                   raise
-          
+
           def process_data(self, inputs):
               # Custom processing logic
               return {'processed': True, 'data': inputs.get('data', [])}
-      
+
       # Usage in workflow
       collector = MetricsCollector()
-      
+
       workflow.add_node('processor', MetricsAwareNode(),
                        metrics_collector=collector)
 
 best_practices:
   description: "Best practices for workflow tracking and monitoring"
   guidelines: |
-    1. **Choose Appropriate Storage**: Use 'memory' for development, 
+    1. **Choose Appropriate Storage**: Use 'memory' for development,
        'file' for single-node production, 'database' for distributed systems
-    
+
     2. **Set Reasonable Retention**: Balance storage costs with audit requirements
-    
+
     3. **Monitor Performance Impact**: Tracking adds overhead - adjust sampling rates accordingly
-    
+
     4. **Use Structured Logging**: Include consistent metadata in all tracking calls
-    
+
     5. **Implement Alerting**: Set up alerts for critical performance thresholds
-    
+
     6. **Regular Cleanup**: Implement automated cleanup of old tracking data
-    
+
     7. **Export for Analysis**: Regularly export metrics for deeper analysis
-    
+
     8. **Test Tracking**: Include tracking in your workflow tests
-    
+
     9. **Document Metrics**: Maintain documentation of custom metrics and their meanings
-    
+
     10. **Monitor the Monitors**: Track the performance of tracking systems themselves
 
   performance_considerations: |
@@ -650,22 +650,22 @@ best_practices:
 
   troubleshooting: |
     Common issues and solutions:
-    
+
     1. **Missing tracking data**:
        - Check storage backend configuration
        - Verify permissions for file/database storage
        - Ensure tracker is passed to runtime correctly
-    
+
     2. **High memory usage**:
        - Reduce retention period
        - Enable auto-cleanup
        - Use file or database storage instead of memory
-    
+
     3. **Performance degradation**:
        - Reduce sampling rate
        - Disable detailed metrics for high-frequency nodes
        - Use async tracking mode
-    
+
     4. **Storage errors**:
        - Check disk space for file storage
        - Verify database connectivity and permissions

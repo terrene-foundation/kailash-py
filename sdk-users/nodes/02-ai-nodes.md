@@ -87,6 +87,334 @@ workflow.runtime = LocalRuntime()
 
   ```
 
+## Ollama Integration Patterns
+
+### Working with Local LLMs
+
+Ollama provides excellent local LLM capabilities. For production reliability, use **direct API calls wrapped in PythonCodeNode** rather than LLMAgentNode:
+
+```python
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.code import PythonCodeNode
+
+def ollama_generate(prompt="Hello world", model="llama3.2:1b"):
+    """Reliable Ollama LLM generation using direct API."""
+    import requests
+    import json
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 200
+                }
+            },
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "success": True,
+                "response": data.get("response", ""),
+                "model": data.get("model", ""),
+                "duration": data.get("total_duration", 0) / 1e9
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"HTTP {response.status_code}: {response.text}"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# Create workflow with Ollama generation
+workflow = Workflow("ollama_workflow", "Local LLM processing")
+llm_node = PythonCodeNode.from_function(ollama_generate, name="ollama_llm")
+workflow.add_node("llm", llm_node)
+
+runtime = LocalRuntime()
+result, _ = runtime.execute(workflow, parameters={
+    "llm": {"prompt": "Write a haiku about programming", "model": "llama3.2:1b"}
+})
+
+# Access result
+if result["llm"]["result"]["success"]:
+    print(result["llm"]["result"]["response"])
+```
+
+### Ollama Embeddings
+
+Generate embeddings using the nomic-embed-text model:
+
+```python
+def ollama_embeddings(texts=None):
+    """Generate embeddings using Ollama."""
+    import requests
+
+    if not texts:
+        texts = ["Hello world"]
+
+    embeddings = []
+    errors = []
+
+    for text in texts:
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/embeddings",
+                json={
+                    "model": "nomic-embed-text:latest",
+                    "prompt": text
+                },
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                # ✅ CRITICAL: Extract embedding correctly
+                embeddings.append(data.get("embedding", []))
+            else:
+                errors.append(f"Failed for '{text}': HTTP {response.status_code}")
+        except Exception as e:
+            errors.append(f"Failed for '{text}': {str(e)}")
+
+    return {
+        "success": len(errors) == 0,
+        "embeddings": embeddings,
+        "embedding_dims": len(embeddings[0]) if embeddings else 0,
+        "errors": errors
+    }
+
+# Usage in workflow
+embed_node = PythonCodeNode.from_function(ollama_embeddings, name="embedder")
+workflow.add_node("embed", embed_node)
+
+result, _ = runtime.execute(workflow, parameters={
+    "embed": {"texts": ["Python is great", "AI is fascinating"]}
+})
+
+# Extract embeddings
+if result["embed"]["result"]["success"]:
+    embeddings = result["embed"]["result"]["embeddings"]
+    print(f"Generated {len(embeddings)} embeddings of {result['embed']['result']['embedding_dims']} dimensions")
+```
+
+### Ollama in Data Processing Pipelines
+
+Complete example with sentiment analysis:
+
+```python
+def analyze_sentiment_ollama(reviews):
+    """Analyze sentiment using Ollama LLM."""
+    import requests
+    import json
+    import re
+
+    results = []
+
+    for review in reviews:
+        prompt = f"""Analyze sentiment and respond with ONLY JSON:
+{{"sentiment": "positive" or "negative" or "neutral", "confidence": 0.0-1.0}}
+
+Review: {review['text']}
+
+JSON:"""
+
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "llama3.2:1b",
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.1, "num_predict": 50}
+                },
+                timeout=20
+            )
+
+            if response.status_code == 200:
+                llm_response = response.json()["response"].strip()
+
+                # Extract JSON from response
+                json_match = re.search(r'\{[^}]+\}', llm_response)
+                if json_match:
+                    sentiment_data = json.loads(json_match.group())
+                else:
+                    # Fallback parsing
+                    if "positive" in llm_response.lower():
+                        sentiment_data = {"sentiment": "positive", "confidence": 0.7}
+                    elif "negative" in llm_response.lower():
+                        sentiment_data = {"sentiment": "negative", "confidence": 0.7}
+                    else:
+                        sentiment_data = {"sentiment": "neutral", "confidence": 0.5}
+
+                results.append({
+                    "id": review["id"],
+                    "text": review["text"],
+                    "sentiment": sentiment_data.get("sentiment", "unknown"),
+                    "confidence": sentiment_data.get("confidence", 0.0)
+                })
+            else:
+                results.append({
+                    "id": review["id"],
+                    "text": review["text"],
+                    "sentiment": "error",
+                    "confidence": 0.0
+                })
+        except Exception as e:
+            results.append({
+                "id": review["id"],
+                "text": review["text"],
+                "sentiment": "error",
+                "confidence": 0.0,
+                "error": str(e)
+            })
+
+    return {
+        "analyzed_reviews": results,
+        "success": all(r["sentiment"] != "error" for r in results)
+    }
+
+# Complete pipeline
+workflow = Workflow("sentiment_pipeline", "Ollama sentiment analysis")
+
+# Data generator
+data_gen = PythonCodeNode.from_function(
+    lambda: {
+        "reviews": [
+            {"id": 1, "text": "This product is amazing!"},
+            {"id": 2, "text": "Terrible quality, very disappointed."},
+            {"id": 3, "text": "It's okay, nothing special."}
+        ]
+    },
+    name="data_generator"
+)
+
+# Sentiment analyzer
+analyzer = PythonCodeNode.from_function(analyze_sentiment_ollama, name="analyzer")
+
+workflow.add_node("data", data_gen)
+workflow.add_node("analyze", analyzer)
+workflow.connect("data", "analyze", {"result.reviews": "reviews"})
+
+result, _ = runtime.execute(workflow)
+print(f"Analyzed {len(result['analyze']['result']['analyzed_reviews'])} reviews")
+```
+
+### Ollama in Cyclic Workflows
+
+Ollama works excellently in cycles for iterative improvement:
+
+```python
+def iterative_text_improver(text="", iteration=0, target_length=50):
+    """Iteratively improve text using Ollama."""
+    import requests
+
+    if iteration == 0:
+        prompt = f"Write a short story. Make it exactly {target_length} words."
+    else:
+        current_length = len(text.split())
+        if abs(current_length - target_length) <= 5:
+            return {
+                "text": text,
+                "iteration": iteration,
+                "word_count": current_length,
+                "converged": True
+            }
+
+        if current_length < target_length:
+            prompt = f"Expand this story to {target_length} words: {text}"
+        else:
+            prompt = f"Shorten this story to {target_length} words: {text}"
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "llama3.2:1b",
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.7, "num_predict": 200}
+            },
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            new_text = response.json()["response"].strip()
+            word_count = len(new_text.split())
+
+            return {
+                "text": new_text,
+                "iteration": iteration + 1,
+                "word_count": word_count,
+                "converged": abs(word_count - target_length) <= 5
+            }
+    except Exception as e:
+        return {
+            "text": text,
+            "iteration": iteration,
+            "word_count": len(text.split()) if text else 0,
+            "converged": True,  # Stop on error
+            "error": str(e)
+        }
+
+# Cyclic workflow
+workflow = Workflow("ollama_cycles", "Iterative text improvement")
+writer = PythonCodeNode.from_function(iterative_text_improver, name="writer")
+workflow.add_node("write", writer)
+
+# Create improvement cycle
+workflow.create_cycle("writing_cycle") \
+    .connect("write", "write", {
+        "result.text": "text",
+        "result.iteration": "iteration",
+        "result.target_length": "target_length"
+    }) \
+    .max_iterations(5) \
+    .converge_when("converged == True") \
+    .build()
+
+result, _ = runtime.execute(workflow, parameters={
+    "write": {"text": "", "iteration": 0, "target_length": 50}
+})
+
+print(f"Generated story in {result['write']['result']['iteration']} iterations")
+print(f"Final word count: {result['write']['result']['word_count']}")
+```
+
+### Ollama Configuration
+
+**Docker Integration**: Ollama runs on port 11434 by default. Ensure Docker services are available:
+
+```python
+# Test Ollama connectivity
+import requests
+
+def test_ollama():
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            print(f"✅ Ollama available with {len(models)} models")
+            return True
+    except Exception as e:
+        print(f"❌ Ollama not available: {e}")
+        return False
+```
+
+**Recommended Models**:
+- **LLM**: `llama3.2:1b` (fast, good for development)
+- **Embeddings**: `nomic-embed-text:latest` (768 dimensions)
+
 ### ChatAgent & RetrievalAgent
 - **ChatAgent Module**: `kailash.nodes.ai.agents`
 - **RetrievalAgent Module**: `kailash.nodes.ai.agents`

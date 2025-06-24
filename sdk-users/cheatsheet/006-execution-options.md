@@ -76,7 +76,7 @@ runtime.execute(workflow, parameters={
 ## Common Execution Mistakes
 ```python
 # ❌ WRONG - Using wrong parameter name
-runtime.execute(workflow, inputs={"data": [1, 2, 3]})  # Should be 'parameters'
+runtime.execute(workflow, inputs={"data": [1, 2, 3]})  # Should be 'parameters', not 'inputs'
 
 # ❌ WRONG - Passing as positional argument
 runtime.execute(workflow, {"node": {"param": "value"}})  # Must use parameters=...

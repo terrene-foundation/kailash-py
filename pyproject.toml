@@ -65,6 +65,8 @@ dependencies = [
     "aiomysql>=0.2.0",
     "twilio>=9.6.3",
     "qrcode>=8.2",
+    "aiofiles>=24.1.0",
+    "bcrypt>=4.3.0",
 ]
 
 [project.optional-dependencies]

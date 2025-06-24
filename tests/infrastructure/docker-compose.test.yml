@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: kailash_test_postgres
+    environment:
+      POSTGRES_DB: kailash_test
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d kailash_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    container_name: kailash_test_redis
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kailash_test_ollama
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=/root/.ollama/models
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  mysql:
+    image: mysql:8.0
+    container_name: kailash_test_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: test_password
+      MYSQL_DATABASE: kailash_test
+      MYSQL_USER: kailash_test
+      MYSQL_PASSWORD: test_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_test_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Optional: Elasticsearch for advanced search/analytics
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: kailash_test_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9201:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # Test runner container
+  test-runner:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.test
+    container_name: kailash_test_runner
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - TEST_DB_URL=postgresql://test_user:test_password@postgres:5432/kailash_test
+      - TEST_REDIS_HOST=redis
+      - TEST_REDIS_PORT=6379
+      - TEST_OLLAMA_URL=http://ollama:11434
+      - PYTHONPATH=/app
+    volumes:
+      - ../:/app
+      - test_results:/app/test_results
+    command: >
+      bash -c "
+        echo 'Waiting for services to be ready...' &&
+        sleep 10 &&
+        echo 'Pulling Ollama model...' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama2\"}' &&
+        echo 'Running tests...' &&
+        pytest tests/e2e -v --junitxml=/app/test_results/junit.xml --html=/app/test_results/report.html
+      "
+
+volumes:
+  postgres_test_data:
+  mysql_test_data:
+  ollama_models:
+  elasticsearch_data:
+  test_results:
+
+networks:
+  default:
+    name: kailash_test_network

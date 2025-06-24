@@ -9,12 +9,72 @@
 
 ## ⚡ **Async Database Operations**
 
-### **Basic Async Database Query**
+### **Production Database Operations with WorkflowConnectionPool** ⭐ **RECOMMENDED**
+```python
+from kailash.nodes.data import WorkflowConnectionPool
+from kailash.runtime import LocalRuntime
+
+# Create production connection pool
+pool = WorkflowConnectionPool(
+    name="production_pool",
+    database_type="postgresql",
+    host="localhost",
+    port=5432,
+    database="investment_db",
+    user="postgres",
+    password="postgres",
+    min_connections=10,      # Maintain minimum connections
+    max_connections=50,      # Scale up to 50 under load
+    health_threshold=70,     # Auto-recycle unhealthy connections
+    pre_warm=True           # Pre-warm based on patterns
+)
+
+# Initialize pool once at startup
+await pool.process({"operation": "initialize"})
+
+# Use in production workflows
+async def fetch_portfolios(risk_profile):
+    # Acquire connection from pool
+    conn = await pool.process({"operation": "acquire"})
+    conn_id = conn["connection_id"]
+
+    try:
+        # Execute query with automatic health monitoring
+        result = await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": """
+                SELECT portfolio_id, client_name, total_value
+                FROM portfolios
+                WHERE risk_profile = $1
+                ORDER BY total_value DESC
+            """,
+            "params": [risk_profile],
+            "fetch_mode": "all"
+        })
+        return result["data"]
+    finally:
+        # Always release connection back to pool
+        await pool.process({
+            "operation": "release",
+            "connection_id": conn_id
+        })
+
+# Monitor pool health
+stats = await pool.process({"operation": "stats"})
+print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
+print(f"Error rate: {stats['queries']['error_rate']:.2%}")
+
+# Use LocalRuntime (includes async support)
+runtime = LocalRuntime()
+```
+
+### **Basic Async Database Query (for simple use cases)**
 ```python
 from kailash.nodes.data import AsyncSQLDatabaseNode
-from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.runtime import LocalRuntime
 
-# Create async database node
+# For simple async operations (non-production)
 db_node = AsyncSQLDatabaseNode(
     name="fetch_portfolios",
     database_type="postgresql",
@@ -29,24 +89,18 @@ db_node = AsyncSQLDatabaseNode(
     WHERE risk_profile = $1
     ORDER BY total_value DESC
     """,
-    fetch_mode="all",
-    pool_size=20,
-    max_pool_size=50
+    fetch_mode="all"
 )
 
 # Execute with parameters
 async def run_query():
-    result = await db_node.execute_async(params=["Conservative"])
-    portfolios = result["result"]["data"]
+    result = await db_node.async_run(params=["Conservative"])
+    portfolios = result["data"]
     return portfolios
 
-# Use in workflow
-workflow = Workflow("async_example", name="Async Database Example")
-workflow.add_node("fetch_data", db_node)
-
-# Execute asynchronously
-runtime = AsyncLocalRuntime()
-results, run_id = await runtime.execute(workflow)
+# Use LocalRuntime (no need for AsyncLocalRuntime)
+runtime = LocalRuntime()
+results = await runtime.execute_async(workflow)
 
 ```
 
@@ -862,7 +916,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ## 🔗 **Related Guides**
 
 **Prerequisites:**
-- **[Fundamentals](01-fundamentals.md)** - Core SDK concepts and parameter types  
+- **[Fundamentals](01-fundamentals.md)** - Core SDK concepts and parameter types
 - **[Workflows](02-workflows.md)** - Basic workflow creation and execution
 
 **See Also:**

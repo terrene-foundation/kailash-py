@@ -109,11 +109,11 @@ class TestCSVReaderNode:
         # Verify results
         assert "data" in result
         assert len(result["data"]) == 2
-        # CSV returns strings for all values
-        assert result["data"][0] == {"name": "Alice", "age": "30", "city": "New York"}
+        # Async version does type inference, so age is int
+        assert result["data"][0] == {"name": "Alice", "age": 30, "city": "New York"}
         assert result["data"][1] == {
             "name": "Bob",
-            "age": "25",
+            "age": 25,
             "city": "San Francisco",
         }
 

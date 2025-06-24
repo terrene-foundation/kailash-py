@@ -75,22 +75,21 @@ repos:
       - id: python-check-blanket-noqa
         name: Check for blanket noqa
 
-  # Pytest - Run tests
+  # Pytest - Run Tier 1 unit tests only
   - repo: local
     hooks:
       - id: pytest-check
-        name: Run pytest unit tests
+        name: Run Tier 1 unit tests
         entry: python -m pytest
         language: system
         args: [
-          tests/,
-          -m, "not slow",  # Skip slow tests
+          tests/unit/,  # Only unit tests
+          -m, "not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_ollama)",  # Exclude all external dependencies
           --tb=short,
           --maxfail=5,
           --durations=10,
           -x,  # Stop on first failure
           -q,  # Quiet output
-          --ignore=tests/test_workflow/test_cycle_performance.py  # Skip flaky performance tests
         ]
         pass_filenames: false
         always_run: true

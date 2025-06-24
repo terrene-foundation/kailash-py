@@ -28,11 +28,11 @@ runtime:
         returns: "Tuple of (results, run_id)"
         example: |
           runtime = LocalRuntime(max_workers=8, timeout=600)
-          results, run_id = runtime.execute(workflow, inputs={'data': [1, 2, 3]})
+          results, run_id = runtime.execute(workflow, parameters={'data': [1, 2, 3]})
           print(f"Execution {run_id} completed with results: {results}")
 
       execute_async:
-        signature: "async execute_async(workflow: Workflow, inputs: Optional[Dict[str, Any]] = None, task_manager: Optional[TaskManager] = None) -> Tuple[Dict[str, Any], str]"
+        signature: "async execute_async(workflow: Workflow, parameters: Optional[Dict[str, Any]] = None, task_manager: Optional[TaskManager] = None) -> Tuple[Dict[str, Any], str]"
         description: "Asynchronously execute a workflow"
         params:
           workflow: "Workflow instance to execute"
@@ -86,12 +86,12 @@ runtime:
           execution_mode='parallel',
           resource_limits={'memory_mb': 2048, 'cpu_percent': 90}
       )
-      
+
       # With custom task manager
       from kailash.tracking import TaskTracker
       tracker = TaskTracker()
       results, run_id = runtime.execute(workflow, task_manager=tracker)
-      
+
       # Async execution
       async def run_workflow():
           results, run_id = await runtime.execute_async(workflow)
@@ -122,7 +122,7 @@ runtime:
         returns: "Tuple of (results, run_id)"
         example: |
           runtime = DockerRuntime(base_image='python:3.9-slim')
-          results, run_id = runtime.execute(workflow, inputs={'data': data})
+          results, run_id = runtime.execute(workflow, parameters={'data': data})
 
       build_image:
         signature: "build_image(dockerfile_path: str, tag: str, context_path: str = '.') -> str"
@@ -167,12 +167,12 @@ runtime:
           environment={'PYTHONPATH': '/app', 'LOG_LEVEL': 'DEBUG'},
           network_mode='host'
       )
-      
+
       # Custom image build and execution
       image_id = runtime.build_image('./docker/Dockerfile', 'my-workflow:v1.0')
       runtime.base_image = 'my-workflow:v1.0'
       results, run_id = runtime.execute(workflow)
-      
+
       # Container management
       containers = runtime.list_containers()
       cleaned = runtime.cleanup(older_than_hours=6)
@@ -242,7 +242,7 @@ runtime:
           node_selector={'workload': 'compute-intensive'},
           service_account='workflow-runner'
       )
-      
+
       # Scale and monitor
       runtime.scale_cluster(replicas=10, workflow_name='batch-processor')
       status = runtime.get_cluster_status()
@@ -277,9 +277,9 @@ runtime_factory:
 
   example: |
     from kailash.runtime import RuntimeFactory
-    
+
     factory = RuntimeFactory()
-    
+
     # Create different runtime types
     local_runtime = factory.create_runtime('local', {'max_workers': 8})
     docker_runtime = factory.create_runtime('docker', {
@@ -299,33 +299,33 @@ performance_tuning:
     - Set appropriate max_workers based on CPU cores
     - Enable caching for repeated operations
     - Monitor memory usage with resource limits
-    
-    # DockerRuntime Optimization  
+
+    # DockerRuntime Optimization
     - Use slim base images to reduce startup time
     - Pre-build custom images with dependencies
     - Mount volumes for large data instead of copying
     - Set appropriate memory and CPU limits
-    
+
     # ClusterRuntime Optimization
     - Use horizontal pod autoscaling for variable loads
     - Configure resource requests and limits appropriately
     - Use node affinity for workload placement
     - Implement proper health checks and monitoring
-  
+
   examples: |
     # Performance monitoring
     runtime = LocalRuntime(enable_metrics=True)
     results, run_id = runtime.execute(workflow)
     stats = runtime.get_execution_stats(run_id)
-    
+
     print(f"Execution time: {stats['execution_time']}s")
     print(f"Memory peak: {stats['memory_peak_mb']}MB")
     print(f"CPU utilization: {stats['cpu_utilization']}%")
-    
+
     # Resource optimization
     if stats['memory_peak_mb'] > 1000:
         runtime.set_resource_limits(memory_mb=2048, cpu_percent=80)
-    
+
     # Cluster scaling based on load
     cluster_runtime = ClusterRuntime()
     status = cluster_runtime.get_cluster_status()

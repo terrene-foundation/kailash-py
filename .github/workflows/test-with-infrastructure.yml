@@ -105,7 +105,7 @@ jobs:
 
         # Stop any existing containers and clean up ports
         $DOCKER_COMPOSE -f docker-compose.sdk-dev.yml down -v || true
-        
+
         # Kill any processes using the ports we need (CI-specific)
         echo "Checking for port conflicts..."
         CONFLICTED_PORTS=""
@@ -115,7 +115,7 @@ jobs:
             CONFLICTED_PORTS="$CONFLICTED_PORTS $port"
           fi
         done
-        
+
         if [ -n "$CONFLICTED_PORTS" ]; then
           echo "Port conflicts detected for:$CONFLICTED_PORTS"
           echo "Skipping infrastructure tests due to port conflicts"

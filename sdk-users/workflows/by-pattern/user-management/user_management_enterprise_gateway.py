@@ -33,14 +33,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+# Utils
+from examples.utils.paths import get_output_data_path
+
 # FastAPI for the gateway
 from fastapi import Depends, FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
-
-# Utils
-from examples.utils.paths import get_output_data_path
 
 # Kailash Middleware - Proper Gateway Usage
 from kailash.middleware import (

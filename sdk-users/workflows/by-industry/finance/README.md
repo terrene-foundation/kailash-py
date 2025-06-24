@@ -100,6 +100,34 @@ This directory contains production-ready workflow implementations for common fin
 **Data Requirements**:
 - Customer value data with claims/amounts
 
+### 6. Portfolio Analysis with Connection Pool (`portfolio_analysis_with_connection_pool.py`) ⭐ **NEW**
+**Purpose**: Production-grade portfolio analysis using WorkflowConnectionPool for high-performance database operations.
+
+**Key Features**:
+- WorkflowConnectionPool with automatic connection management
+- Connection health monitoring and auto-recycling
+- High-concurrency portfolio analysis (50+ concurrent queries)
+- Transaction support for data consistency
+- Real-time pool performance monitoring
+- Fault-tolerant actor-based architecture
+
+**Use Cases**:
+- High-frequency portfolio valuations
+- Real-time risk calculations
+- Multi-portfolio analysis platforms
+- Production trading systems
+
+**Data Requirements**:
+- PostgreSQL database with portfolio schema
+- Market price data
+- Portfolio metadata and positions
+
+**Performance Benefits**:
+- 10x+ improvement over single connections
+- Automatic connection reuse
+- Reduced database load
+- Better scalability under concurrent load
+
 ## Best Practices Demonstrated
 
 ### 1. **Data Processing**
@@ -107,6 +135,7 @@ This directory contains production-ready workflow implementations for common fin
 - Automatic data type conversion and validation
 - Handling missing or incomplete data gracefully
 - DataFrame operations for efficient processing
+- Production database operations with WorkflowConnectionPool
 
 ### 2. **Code Organization**
 - All workflows use `PythonCodeNode.from_function()` for better maintainability
@@ -131,6 +160,8 @@ This directory contains production-ready workflow implementations for common fin
 - Detailed logging and reporting
 - Performance optimization for large datasets
 - JSON serialization for all outputs
+- Connection pooling for database scalability
+- Health monitoring and auto-recovery
 
 ## Quick Start
 
@@ -155,6 +186,7 @@ python scripts/fraud_detection.py
 python scripts/portfolio_optimization.py
 python scripts/trading_signals.py
 python scripts/credit_risk_simple.py
+python scripts/portfolio_analysis_with_connection_pool.py  # Requires PostgreSQL
 ```
 
 ## Output Structure
@@ -266,6 +298,8 @@ These workflows can be integrated into larger systems via:
 - **LLMAgentNode**: For intelligent analysis and recommendations
 - **JSONWriterNode**: For structured report output
 - **SwitchNode**: For routing based on risk levels
+- **WorkflowConnectionPool**: For production database operations
+- **AsyncSQLDatabaseNode**: For simple async queries (non-production)
 
 ## Training Resources
 
