@@ -22,7 +22,12 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 | Merge data | `pd.concat()` | `MergeNode` |
 | LLM calls | OpenAI/Anthropic SDK | `LLMAgentNode` |
 | Embeddings | OpenAI embeddings | `EmbeddingGeneratorNode` |
+| **Local LLM (Ollama)** | **Direct API calls** | **`PythonCodeNode` + Ollama API** |
+| **Ollama embeddings** | **Manual API requests** | **`PythonCodeNode` + nomic-embed-text** |
 | Text splitting | Manual chunking | `TextSplitterNode` |
+| **User management** | **Custom user auth** | **`UserManagementNode`** |
+| **Role assignment** | **Manual RBAC** | **`RoleManagementNode`** |
+| **Permission checks** | **Custom access control** | **`PermissionCheckNode`** |
 
 ## Node Categories at a Glance
 
@@ -48,8 +53,10 @@ JSONReaderNode, JSONWriterNode
 TextReaderNode, TextWriterNode
 
 # Database
-SQLDatabaseNode
-VectorDatabaseNode
+WorkflowConnectionPool  # ⭐ Production connection pooling
+AsyncSQLDatabaseNode    # Async queries with reuse
+SQLDatabaseNode         # Simple sync queries
+VectorDatabaseNode      # Vector/embedding storage
 
 # SharePoint
 SharePointGraphReader, SharePointGraphWriter
@@ -190,6 +197,104 @@ WorkflowNode    # Nested workflows
 
 ```
 
+### 🔐 Admin & Security (4+ nodes)
+```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime import LocalRuntime
+from kailash.nodes.admin import (
+    UserManagementNode,
+    RoleManagementNode,
+    PermissionCheckNode,
+    AuditLogNode
+)
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+# User lifecycle management
+UserManagementNode  # Create, update, delete, bulk operations
+
+# Role-based access control
+RoleManagementNode  # Hierarchical roles, permissions, inheritance
+
+# Real-time permission checking
+PermissionCheckNode  # RBAC/ABAC, caching, batch operations
+
+# Security and compliance
+AuditLogNode  # Comprehensive audit trails
+```
+
+**Performance Benchmarks:**
+- ✅ **PermissionCheckNode**: 221 ops/sec, P95 <50ms, 97.8% cache hit rate
+- ✅ **RoleManagementNode**: 10,000+ concurrent operations validated
+- ✅ **Test Coverage**: 72 tests (unit + integration + E2E)
+
+## Database Operations Decision Guide
+
+### When to Use Each Database Node
+
+```mermaid
+graph TD
+    A[Need Database Access?] --> B{Production App?}
+    B -->|Yes| C{Multiple Concurrent Queries?}
+    B -->|No| D{Async Support Needed?}
+
+    C -->|Yes| E[WorkflowConnectionPool ⭐]
+    C -->|No| F{Connection Reuse?}
+
+    F -->|Yes| G[AsyncSQLDatabaseNode]
+    F -->|No| H[SQLDatabaseNode]
+
+    D -->|Yes| G
+    D -->|No| H
+
+    E --> I[Benefits: Connection pooling, health monitoring, fault tolerance]
+    G --> J[Benefits: Async execution, connection reuse]
+    H --> K[Benefits: Simple, synchronous]
+```
+
+### Database Node Comparison
+
+| Feature | WorkflowConnectionPool | AsyncSQLDatabaseNode | SQLDatabaseNode |
+|---------|------------------------|---------------------|-----------------|
+| **Use Case** | Production apps | Async workflows | Simple queries |
+| **Connection Pooling** | ✅ Min/Max pools | ❌ Single connection | ❌ No pooling |
+| **Health Monitoring** | ✅ Auto-recycling | ❌ Manual checks | ❌ None |
+| **Fault Tolerance** | ✅ Actor-based | ⚠️ Basic retry | ❌ None |
+| **Performance** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
+| **Concurrency** | High (100s) | Medium (10s) | Low (1) |
+| **Setup Complexity** | Medium | Low | Very Low |
+
+### Example: Choosing the Right Node
+
+```python
+# Scenario 1: Production e-commerce app with high traffic
+# ✅ Use WorkflowConnectionPool
+pool = WorkflowConnectionPool(
+    name="ecommerce_pool",
+    database_type="postgresql",
+    min_connections=10,
+    max_connections=50,
+    health_threshold=70
+)
+
+# Scenario 2: Data pipeline with sequential processing
+# ✅ Use AsyncSQLDatabaseNode
+async_db = AsyncSQLDatabaseNode(
+    database_type="postgresql",
+    host="localhost",
+    database="analytics"
+)
+
+# Scenario 3: Simple script or one-off query
+# ✅ Use SQLDatabaseNode
+simple_db = SQLDatabaseNode(
+    connection_string="postgresql://user:pass@localhost/db"
+)
+```
+
 ## Common Anti-Patterns
 
 ### 1. File Operations
@@ -259,8 +364,10 @@ node = FilterNode(condition="age > 30")
 ```
 
 ### 4. LLM Integration
+
+#### Cloud LLMs (OpenAI, Anthropic)
 ```python
-# ❌ WRONG - Using PythonCodeNode for LLM calls
+# ❌ WRONG - Using PythonCodeNode for cloud LLM calls
 def llm_node():
     code = '''
 import openai
@@ -272,14 +379,94 @@ result = {"response": response.choices[0].message.content}
 '''
     return PythonCodeNode(name="llm", code=code)
 
-# ✅ RIGHT - Use LLMAgentNode
+# ✅ RIGHT - Use LLMAgentNode for cloud providers
 node = LLMAgentNode(
     provider="openai",
     model="gpt-4",
     system_prompt="You are a helpful assistant"
 )
-
 ```
+
+#### Local LLMs (Ollama) - EXCEPTION: Use PythonCodeNode
+```python
+# ✅ CORRECT - Ollama requires PythonCodeNode for reliability
+def ollama_llm(prompt, model="llama3.2:1b"):
+    """Production-ready Ollama integration."""
+    import requests
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.7, "num_predict": 200}
+            },
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            return {
+                "response": response.json()["response"],
+                "success": True,
+                "model": model
+            }
+        else:
+            return {"success": False, "error": f"HTTP {response.status_code}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# Use with PythonCodeNode for Ollama
+ollama_node = PythonCodeNode.from_function(ollama_llm, name="ollama")
+
+# ❌ DON'T use LLMAgentNode with Ollama in cycles - causes context conflicts
+# ✅ DO use PythonCodeNode wrapper for Ollama in all scenarios
+```
+
+#### Ollama Embeddings
+```python
+# ✅ CORRECT - Ollama embeddings with PythonCodeNode
+def ollama_embeddings(texts):
+    """Extract embeddings using Ollama nomic-embed-text."""
+    import requests
+
+    embeddings = []
+    for text in texts:
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/embeddings",
+                json={"model": "nomic-embed-text:latest", "prompt": text},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                # CRITICAL: Extract embedding from response
+                embeddings.append(response.json().get("embedding", []))
+        except Exception as e:
+            print(f"Embedding failed for '{text}': {e}")
+
+    return {
+        "embeddings": embeddings,
+        "success": len(embeddings) > 0,
+        "dimensions": len(embeddings[0]) if embeddings else 0
+    }
+
+embed_node = PythonCodeNode.from_function(ollama_embeddings, name="embedder")
+
+# ❌ DON'T use EmbeddingGeneratorNode with Ollama - format incompatibility
+# ✅ DO use direct API calls for consistent embedding extraction
+```
+
+#### When to Use Which Approach
+
+| Scenario | Use LLMAgentNode | Use PythonCodeNode |
+|----------|------------------|-------------------|
+| Cloud LLMs (OpenAI, Anthropic) | ✅ Recommended | ❌ Unnecessary |
+| Local LLMs (Ollama) | ❌ Context conflicts | ✅ Required |
+| Cyclic workflows | ❌ Parameter issues | ✅ Reliable |
+| Complex processing | ✅ Good for simple | ✅ Full control |
+| A2A agent coordination | ❌ Known issues | ✅ Working pattern |
 
 ## When to Use PythonCodeNode
 

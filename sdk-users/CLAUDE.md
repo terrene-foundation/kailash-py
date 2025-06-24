@@ -2,7 +2,7 @@
 
 *Building solutions WITH the Kailash SDK*
 
-## 🚀 v0.4.0 Enterprise Middleware Architecture
+## 🚀 Enterprise Middleware Architecture
 
 **🌉 Complete Middleware Stack**: Production-ready enterprise platform with `create_gateway()` - single function creates full app with real-time communication, AI chat, and session management.
 
@@ -10,11 +10,17 @@
 
 **🤖 AI Chat Integration**: Natural language workflow generation, context-aware conversations, automatic workflow creation from user descriptions.
 
-**⚡ Unified Runtime**: LocalRuntime includes async + all enterprise capabilities. See [developer/18-unified-runtime-guide.md](developer/18-unified-runtime-guide.md) for complete guide.
+**⚡ Unified Async Runtime**: Production-ready AsyncLocalRuntime with 2-10x performance gains. See [developer/09-unified-async-runtime-guide.md](developer/09-unified-async-runtime-guide.md) for complete guide.
+
+**🔧 Resource Registry**: Centralized resource management for database pools, HTTP clients, and caches. See [developer/08-resource-registry-guide.md](developer/08-resource-registry-guide.md) for patterns.
+
+**🚀 AsyncWorkflowBuilder**: Async-first workflow builder with 70%+ code reduction. Built-in patterns (retry, rate limit, timeout, batch, circuit breaker). See [developer/08-async-workflow-builder.md](developer/08-async-workflow-builder.md) and [workflows/async/async-workflow-builder-guide.md](workflows/async/async-workflow-builder-guide.md).
 
 **🔗 Dot Notation Mapping**: Access nested node outputs with `"result.data"`, `"result.metrics"`, `"source.nested.field"` in workflow connections.
 
 **🎯 Auto-Mapping Parameters**: NodeParameter supports `auto_map_primary=True`, `auto_map_from=["alt1"]`, `workflow_alias="name"` for automatic connection discovery.
+
+**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. See [developer/async-testing-framework-guide.md](developer/async-testing-framework-guide.md).
 
 ## 🏗️ Architecture Decisions First
 
@@ -30,11 +36,11 @@ The decision matrix provides fast answers to:
 
 ### 📚 Complete Implementation Guidance
 
-| Decision Type | Quick Decisions | Implementation Guide | Technical Details |
-|---------------|-----------------|---------------------|-------------------|
-| **Workflow Construction** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) | [ADR-0045](../# contrib (removed)/architecture/adr/0045-workflow-construction-patterns.md) |
-| **Interface Routing** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) | [ADR-0046](../# contrib (removed)/architecture/adr/0046-interface-routing-strategies.md) |
-| **Performance Strategy** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) | [ADR-0047](../# contrib (removed)/architecture/adr/0047-performance-guidelines.md) |
+| Decision Type | Quick Decisions | Implementation Guide |
+|---------------|-----------------|---------------------|
+| **Workflow Construction** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
+| **Interface Routing** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
+| **Performance Strategy** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
 
 ## 🎯 Quick Navigation Guide
 | I need to... | Go to | Purpose |
@@ -44,6 +50,7 @@ The decision matrix provides fast answers to:
 | **Find a node quickly** | [nodes/node-index.md](nodes/node-index.md) | Minimal 47-line reference |
 | **Choose right node** | [nodes/node-selection-guide.md](nodes/node-selection-guide.md) | Smart node finder with decision trees |
 | Build from scratch | [developer/](developer/) | 6 focused technical guides |
+| **Test workflows** | [developer/async-testing-framework-guide.md](developer/async-testing-framework-guide.md) | Production-certified testing framework ✅ |
 | Quick code snippet | [cheatsheet/](cheatsheet/) | 37 standardized copy-paste patterns |
 | Fix an error | [developer/05-troubleshooting.md](developer/05-troubleshooting.md) | Comprehensive error resolution |
 | Frontend integration | [frontend-integration/](frontend-integration/) | React/Vue + middleware patterns |

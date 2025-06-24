@@ -18,6 +18,7 @@ import logging
 from typing import Any, Dict, List
 
 from examples.utils.data_paths import get_input_data_path, get_output_data_path
+
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.rag import (
     AdaptiveRAGWorkflowNode,

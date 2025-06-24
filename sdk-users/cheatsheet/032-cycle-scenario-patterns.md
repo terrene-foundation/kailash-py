@@ -288,7 +288,7 @@ convergence_patterns = {
     "converged": iteration >= max_iterations
 }
 
-# Goal-based  
+# Goal-based
 convergence_patterns = {
     "converged": quality_score >= target_quality
 }

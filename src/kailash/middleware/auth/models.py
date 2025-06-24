@@ -6,7 +6,7 @@ These models can be imported anywhere in the codebase safely.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import List, Optional
 
 
@@ -102,7 +102,7 @@ class RefreshTokenData:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
 
 
 @dataclass

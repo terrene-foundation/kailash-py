@@ -42,13 +42,13 @@ workflow.add_node("output", PythonCodeNode())
 
 # Connect flow
 workflow.connect("processor", "checker")
-workflow.connect("checker", "switch", 
+workflow.connect("checker", "switch",
     mapping={"result": "input_data"})
 
 # Conditional routing
-workflow.connect("switch", "processor", 
+workflow.connect("switch", "processor",
     condition="true_output", cycle=True, max_iterations=10)
-workflow.connect("switch", "output", 
+workflow.connect("switch", "output",
     condition="false_output")
 
 ```
@@ -63,7 +63,7 @@ from kailash.nodes.logic import SwitchNode
 workflow = Workflow("mapping-examples")
 
 # ✅ Complete output transfer
-workflow.connect("processor", "switch", 
+workflow.connect("processor", "switch",
     mapping={"result": "input_data"})  # Entire dict → input_data
 
 # ✅ Specific field mapping
@@ -174,11 +174,11 @@ workflow.add_node("switch", SwitchNode(
 # Connect with proper mappings
 workflow.connect("source", "processor")
 workflow.connect("processor", "checker")
-workflow.connect("checker", "switch", 
+workflow.connect("checker", "switch",
     mapping={"result": "input_data"})
 
 # Conditional paths
-workflow.connect("switch", "processor", 
+workflow.connect("switch", "processor",
     condition="true_output", cycle=True, max_iterations=5)
 
 # Execute

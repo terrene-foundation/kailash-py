@@ -29,6 +29,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
 from examples.utils.paths import get_output_data_path
+
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 from kailash.nodes.auth.mfa import MultiFactorAuthNode

@@ -334,7 +334,7 @@ for log in parsed_logs:
     if "duration" in log:
         duration = int(log["duration"])
         response_times.append(duration)
-        
+
         # Flag slow operations
         if duration > 1000:  # > 1 second
             log_stats["performance_metrics"]["slow_queries"].append({
@@ -397,8 +397,8 @@ result = {
 }
 
 // Splunk search
-index="kailash_logs" level=ERROR 
-| stats count by error_type 
+index="kailash_logs" level=ERROR
+| stats count by error_type
 | sort -count
 
 // CloudWatch Insights
@@ -464,18 +464,18 @@ business_metrics = {
 for entry in log_entries:
     message = entry.get("message", "")
     metadata = entry.get("metadata", {})
-    
+
     # Order processing metrics
     if "order_completed" in message:
         business_metrics["orders_processed"] += 1
         business_metrics["revenue_total"] += metadata.get("amount", 0)
         business_metrics["unique_customers"].add(metadata.get("customer_id"))
-    
+
     # Feature usage tracking
     if "feature_used" in message:
         feature_name = metadata.get("feature", "unknown")
         business_metrics["feature_usage"][feature_name] += 1
-    
+
     # Conversion funnel tracking
     if "funnel_step" in message:
         step = metadata.get("step", "unknown")
@@ -484,7 +484,7 @@ for entry in log_entries:
 # Calculate derived metrics
 conversion_rate = 0
 if business_metrics["conversion_funnel"]["landing"] > 0:
-    conversion_rate = (business_metrics["conversion_funnel"]["purchase"] / 
+    conversion_rate = (business_metrics["conversion_funnel"]["purchase"] /
                       business_metrics["conversion_funnel"]["landing"]) * 100
 
 avg_order_value = 0

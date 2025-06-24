@@ -219,21 +219,26 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## 🔍 Common Issues
 
-### Parameter Loss After First Iteration
-```python
-# ❌ Problem: Config lost after iteration 1
-def run(self, context, **kwargs):
-    targets = kwargs.get("targets", {})  # Empty after iter 1!
-    return {"result": process()}
+### ~~Parameter Loss After First Iteration~~ (Fixed in v0.5.1+)
+**Update**: Initial parameters are now preserved throughout all cycle iterations!
 
-# ✅ Solution: Use state preservation
+```python
+# ✅ This now works correctly (v0.5.1+)
 def run(self, **kwargs):
+    # Initial parameters are available in ALL iterations
+    targets = kwargs.get("targets", {})  # No longer empty after iter 1!
+    learning_rate = kwargs.get("learning_rate", 0.01)  # Consistent across iterations
+
+    # You can still use state preservation for dynamic values
     prev_state = self.get_previous_state()
-    targets = kwargs.get("targets", prev_state.get("targets", {}))
+    accumulated_data = prev_state.get("accumulated_data", [])
+
+    result = process(targets, learning_rate)
+    accumulated_data.append(result)
 
     return {
-        "result": process(),
-        **self.set_cycle_state({"targets": targets})
+        "result": result,
+        **self.set_cycle_state({"accumulated_data": accumulated_data})
     }
 
 ```

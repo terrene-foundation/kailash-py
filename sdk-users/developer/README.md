@@ -1,117 +1,167 @@
 # Developer Guide
 
-This directory contains comprehensive guides and resources for developing with the Kailash SDK.
+*Comprehensive technical documentation for Kailash SDK development*
 
-## 🔗 Key Features
-- **Unified Runtime**: LocalRuntime handles sync/async + enterprise features
-- **Dot Notation Mapping**: Access nested outputs (`"result.data"`, `"metrics.performance"`)
-- **PythonCodeNode Auto-wrapping**: Function returns wrapped in `"result"` key
-- **Auto-Mapping Parameters**: `auto_map_primary`, `auto_map_from`, `workflow_alias` for seamless connections
+## 🚀 Quick Start
 
-## 🚨 Start Here: [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
-Critical rules, common patterns, and quick-fix templates for immediate use.
+**Building an app?** Start with these in order:
+1. **[01-fundamentals.md](01-fundamentals.md)** - Core concepts and basics
+2. **[02-workflows.md](02-workflows.md)** - Building and connecting workflows
+3. **[10-parameter-passing-guide.md](10-parameter-passing-guide.md)** - **NEW!** Master parameter flow (fixes #1 issue)
 
-## 📁 Contents
+**Having issues?** Jump to:
+- **[05-troubleshooting.md](05-troubleshooting.md)** - Common errors and solutions
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Critical rules and patterns
 
-### Core Guides
-- **[01-node-basics.md](01-node-basics.md)** - Creating nodes, base classes, lifecycle
-- **[02-parameter-types.md](02-parameter-types.md)** - ⚠️ CRITICAL: Type constraints to avoid errors
-- **[03-common-patterns.md](03-common-patterns.md)** - Data processing, API integration, transforms
-- **[04-pythoncode-node.md](04-pythoncode-node.md)** - ⚠️ Input variable exclusion, serialization
-- **[05-directory-reader.md](05-directory-reader.md)** - File discovery best practices
-- **[06-enhanced-mcp-server.md](06-enhanced-mcp-server.md)** - 🆕 Production-ready MCP servers with caching & metrics
-- **[07-troubleshooting.md](07-troubleshooting.md)** - Common errors and solutions
-- **[08-async-database-patterns.md](08-async-database-patterns.md)** - High-performance async database operations
-- **[09-cyclic-workflows-guide.md](09-cyclic-workflows-guide.md)** - 🆕 Iterative optimization with state preservation & convergence
-- **[10-workflow-resilience.md](10-workflow-resilience.md)** - 🆕 Enterprise reliability with retry, fallback, circuit breakers
-- **[11-credential-management.md](11-credential-management.md)** - 🆕 Secure credential handling with multi-source support
-- **[12-sharepoint-multi-auth.md](12-sharepoint-multi-auth.md)** - 🆕 SharePoint with certificate, managed identity, and more
-- **[16-middleware-integration-guide.md](16-middleware-integration-guide.md)** - 🆕 Enterprise middleware architecture with real-time communication
-- **[18-unified-runtime-guide.md](18-unified-runtime-guide.md)** - 🌟 NEW: Unified runtime with automatic enterprise capabilities
+## 📚 Complete Guide Index
 
-### Other Resources
-- **[pre-commit-hooks.md](pre-commit-hooks.md)** - Git hooks for code quality
-- **[examples/](examples/)** - Working code examples demonstrating patterns
+### Core Development Guides (Start Here)
+1. **[01-fundamentals.md](01-fundamentals.md)** - SDK basics, nodes, LocalRuntime
+2. **[02-workflows.md](02-workflows.md)** - Workflow construction and execution
+3. **[03-advanced-features.md](03-advanced-features.md)** - Cycles, agents, enterprise features
+4. **[04-production.md](04-production.md)** - Deployment, monitoring, security
+5. **[05-troubleshooting.md](05-troubleshooting.md)** - Error resolution guide
+6. **[06-custom-development.md](06-custom-development.md)** - Creating custom nodes
 
-## 🚀 Quick Start Paths
+### Specialized Guides
+7. **[07-comprehensive-rag-guide.md](07-comprehensive-rag-guide.md)** - RAG implementation patterns
+8. **[08-async-workflow-builder.md](08-async-workflow-builder.md)** - Async-first workflow patterns
+9. **[08b-resource-registry-guide.md](08b-resource-registry-guide.md)** - Resource management
+10. **[09-unified-async-runtime-guide.md](09-unified-async-runtime-guide.md)** - AsyncLocalRuntime (2-10x performance)
+11. **[10-parameter-passing-guide.md](10-parameter-passing-guide.md)** ⭐ - **Complete parameter flow reference**
+12. **[11-testing-production-quality.md](11-testing-production-quality.md)** - Testing strategies
+13. **[12-async-testing-framework-guide.md](12-async-testing-framework-guide.md)** - Production-certified async testing
+14. **[13-connection-pool-guide.md](13-connection-pool-guide.md)** - Database connection management
+15. **[14-enhanced-gateway-guide.md](14-enhanced-gateway-guide.md)** - Enterprise gateway architecture
+16. **[15-enhanced-gateway-user-guide.md](15-enhanced-gateway-user-guide.md)** - Using the gateway
 
-### Creating a Custom Node
-1. Read [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for critical rules
-2. Follow [01-node-basics.md](01-node-basics.md)
-3. Check [02-parameter-types.md](02-parameter-types.md) for type constraints
-4. See [examples/basic_node.py](examples/basic_node.py)
+### Quick References
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Critical rules and common patterns
+- **[examples/](examples/)** - Working code examples
 
-### Using PythonCodeNode
-1. **MUST READ**: [04-pythoncode-node.md](04-pythoncode-node.md)
-2. Understand input variable exclusion
-3. See [examples/pythoncode_patterns.py](examples/pythoncode_patterns.py)
+## 🔥 Key Updates (v0.5.1+)
 
-### File Processing Workflows
-1. Start with [05-directory-reader.md](05-directory-reader.md)
-2. Learn patterns in [06-document-processing.md](06-document-processing.md)
-3. See [examples/directory_reader.py](examples/directory_reader.py)
-
-### Debugging Issues
-1. Check [07-troubleshooting.md](07-troubleshooting.md)
-2. Review [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for common mistakes
-3. Look for your error in the troubleshooting guide
-
-### Building Resilient Workflows
-1. Read [09-workflow-resilience.md](09-workflow-resilience.md)
-2. Add retry policies and fallbacks
-3. Configure circuit breakers for external services
-
-### Managing Credentials
-1. Start with [10-credential-management.md](10-credential-management.md)
-2. Never hardcode credentials
-3. Use appropriate credential sources (vault for production)
-
-## ⚠️ Critical Knowledge
-
-### PythonCodeNode Input Exclusion
-Variables passed as inputs are EXCLUDED from outputs!
+### Parameter Passing Fix
+Initial parameters in cycles are now preserved throughout ALL iterations:
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+# These parameters are available in every cycle iteration
+runtime.execute(workflow, parameters={
+    "optimizer": {
+        "learning_rate": 0.01,  # No longer lost after iteration 0!
+        "target": 0.95          # Consistent across all iterations
+    }
+})
+```
+See [10-parameter-passing-guide.md](10-parameter-passing-guide.md) for complete details.
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
-# WRONG
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-
-# CORRECT
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-
+### Unified Runtime
+```python
+from kailash.runtime.local import LocalRuntime  # Handles sync + async + enterprise
+runtime = LocalRuntime()  # That's it!
 ```
 
-### Node Naming Convention
-ALL nodes must end with "Node":
-- ✅ `CSVReaderNode`
-- ❌ `CSVReader`
+### Dot Notation Mapping
+```python
+workflow.connect("processor", "writer", mapping={
+    "result.data": "input_data",
+    "result.stats.count": "record_count"
+})
+```
 
-### Parameter Types
-Only use basic types: `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
-- ❌ `List[str]`, `Optional[int]`, `Union[str, int]`
+## ⚠️ Critical Rules
 
-## 📖 Related Documentation
+### 1. Node Initialization Order
+```python
+class MyNode(Node):
+    def __init__(self, name, **kwargs):
+        # Set attributes FIRST
+        self.threshold = kwargs.get("threshold", 0.8)
+        # Then call super()
+        super().__init__(name=name)
+```
 
-- [API Reference](../reference/api/)
-- [Workflow Patterns](../patterns/)
-- [Testing Guidelines](../instructions/testing-guidelines.md)
-- [Coding Standards](../instructions/coding-standards.md)
-- [Mistakes Archive](../mistakes/)
+### 2. Declare ALL Parameters
+```python
+def get_parameters(self):
+    return {
+        "data": NodeParameter(type=list, required=True),
+        "config": NodeParameter(type=dict, required=False, default={})
+        # Must declare EVERY parameter the node will use
+    }
+```
+
+### 3. Use Basic Types Only
+```python
+# ✅ CORRECT
+"items": NodeParameter(type=list, required=True)
+
+# ❌ WRONG - No generic types!
+"items": NodeParameter(type=List[str], required=True)
+```
+
+## 🎯 Common Workflows
+
+### Data Processing Pipeline
+```python
+workflow = Workflow("data-pipeline")
+workflow.add_node("reader", CSVReaderNode())
+workflow.add_node("processor", DataTransformerNode())
+workflow.add_node("writer", CSVWriterNode())
+
+workflow.connect("reader", "processor")
+workflow.connect("processor", "writer", mapping={"transformed_data": "data"})
+```
+
+### Cyclic Optimization
+```python
+workflow = Workflow("optimization")
+workflow.add_node("optimizer", OptimizerNode())
+workflow.connect("optimizer", "optimizer",
+    cycle=True,
+    max_iterations=20,
+    convergence_check="converged == True"
+)
+```
+
+### API Integration
+```python
+workflow = Workflow("api-workflow")
+workflow.add_node("api", HTTPRequestNode())
+workflow.add_node("processor", PythonCodeNode(
+    code="result = {'parsed': json.loads(response.get('body', '{}'))}"
+))
+workflow.connect("api", "processor", mapping={"response": "response"})
+```
+
+## 📋 Development Paths
+
+### Building a Custom Node
+1. Read [06-custom-development.md](06-custom-development.md)
+2. Check parameter declaration in [10-parameter-passing-guide.md](10-parameter-passing-guide.md)
+3. See examples in [examples/basic_node.py](examples/basic_node.py)
+
+### Testing Your Workflow
+1. Start with [12-async-testing-framework-guide.md](12-async-testing-framework-guide.md)
+2. Use Docker infrastructure from `tests/docker-compose.test.yml`
+3. Check [11-testing-production-quality.md](11-testing-production-quality.md) for strategies
+
+### Debugging Issues
+1. Check [05-troubleshooting.md](05-troubleshooting.md) first
+2. Review parameter flow in [10-parameter-passing-guide.md](10-parameter-passing-guide.md)
+3. Use debug nodes from [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
+
+### Production Deployment
+1. Read [04-production.md](04-production.md) for deployment guide
+2. Set up monitoring per [14-enhanced-gateway-guide.md](14-enhanced-gateway-guide.md)
+3. Configure connection pools via [13-connection-pool-guide.md](13-connection-pool-guide.md)
+
+## 🔗 Related Resources
+
+- **[Cheatsheets](../cheatsheet/)** - Quick copy-paste patterns
+- **[Node Catalog](../nodes/)** - Complete node reference
+- **[Workflows](../workflows/)** - Production-ready examples
+- **[API Reference](../api/)** - Full API documentation
 
 ---
 
-*For user-facing SDK documentation, see the [docs/](../../docs/) directory.*
+*For the latest updates and migration guides, see [migration-guides/](../migration-guides/)*

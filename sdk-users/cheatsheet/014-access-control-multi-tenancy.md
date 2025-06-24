@@ -86,7 +86,9 @@ access_manager.add_policy({
 from kailash.nodes.data import SQLDatabaseNode
 
 # Automatic tenant filtering
-workflow.add_node("db_query", SQLDatabaseNode(),
+workflow.add_node("db_query", SQLDatabaseNode(
+    connection_string="postgresql://user:pass@localhost:5432/mydb"
+),
     query="SELECT * FROM customers WHERE tenant_id = :tenant_id",
     parameters={"tenant_id": "${user.tenant_id}"}  # Injected from context
 )

@@ -120,42 +120,67 @@ class ConcurrentProcessor(AsyncNode):
 
 ## Database Optimization
 
-### Connection Pooling
+### Production Connection Pooling with WorkflowConnectionPool
 ```python
-import asyncpg
+from kailash.nodes.data import WorkflowConnectionPool
 from contextlib import asynccontextmanager
 from kailash.nodes.base import AsyncNode
 
-class DatabaseNode(AsyncNode):
-    """Efficient database operations."""
+# Create production-grade connection pool
+pool = WorkflowConnectionPool(
+    name="production_pool",
+    database_type="postgresql",
+    host="localhost",
+    port=5432,
+    database="kailash_db",
+    user="postgres",
+    password="password",
+    min_connections=10,
+    max_connections=50,
+    health_threshold=70,  # Auto-recycle unhealthy connections
+    pre_warm=True        # Pre-warm based on patterns
+)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.pool = None
+# Initialize pool once at startup
+await pool.process({"operation": "initialize"})
 
-    async def initialize_pool(self):
-        if not self.pool:
-            self.pool = await asyncpg.create_pool(
-                database="kailash_db",
-                min_size=5,
-                max_size=20,
-                max_inactive_connection_lifetime=300
-            )
+# Context manager for safe connection handling
+@asynccontextmanager
+async def get_connection():
+    """Safely acquire and release connections."""
+    conn = await pool.process({"operation": "acquire"})
+    conn_id = conn["connection_id"]
+    try:
+        yield conn_id
+    finally:
+        await pool.process({
+            "operation": "release",
+            "connection_id": conn_id
+        })
 
-    @asynccontextmanager
-    async def get_connection(self):
-        await self.initialize_pool()
-        async with self.pool.acquire() as conn:
-            yield conn
+# High-performance query execution
+async def execute_batch_queries(queries):
+    """Execute multiple queries efficiently."""
+    results = []
 
-    async def async_run(self, **kwargs):
-        query = kwargs.get("query")
-        params = kwargs.get("parameters", [])
+    async with get_connection() as conn_id:
+        for query in queries:
+            result = await pool.process({
+                "operation": "execute",
+                "connection_id": conn_id,
+                "query": query["sql"],
+                "params": query.get("params", []),
+                "fetch_mode": query.get("fetch_mode", "all")
+            })
+            results.append(result["data"])
 
-        async with self.get_connection() as conn:
-            result = await conn.fetch(query, *params)
+    return results
 
-        return {"data": result, "count": len(result)}
+# Monitor pool health
+stats = await pool.process({"operation": "stats"})
+print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
+print(f"Error rate: {stats['queries']['error_rate']:.2%}")
+print(f"Active connections: {stats['current_state']['active_connections']}/{stats['current_state']['total_connections']}")
 
 ```
 
@@ -349,12 +374,14 @@ def get_scale_config(data_size):
 ### Quick Optimization Checklist
 - ✅ Process data in chunks (avoid loading all into memory)
 - ✅ Use generators for large datasets
-- ✅ Implement connection pooling for databases
+- ✅ Use WorkflowConnectionPool for database operations
+- ✅ Monitor connection pool health and efficiency
 - ✅ Add caching for expensive operations
 - ✅ Force garbage collection in cycles
 - ✅ Monitor memory growth between iterations
 - ✅ Use async for I/O-bound operations
 - ✅ Batch operations when possible
+- ✅ Set appropriate pool sizes based on load
 
 ### Common Bottlenecks
 | Symptom | Likely Cause | Solution |

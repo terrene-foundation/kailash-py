@@ -26,11 +26,11 @@ export const useKailash = (config = {}) => {
       baseURL: config.baseURL || 'http://localhost:8000',
       ...config
     });
-    
+
     globalState.client.on('connect', () => {
       globalState.isConnected = true;
     });
-    
+
     globalState.client.on('disconnect', () => {
       globalState.isConnected = false;
     });
@@ -39,7 +39,7 @@ export const useKailash = (config = {}) => {
   const execute = async (workflowName, parameters = {}) => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const result = await globalState.client.executeWorkflow(workflowName, parameters);
       return result;
@@ -74,7 +74,7 @@ import { useKailash } from './useKailash';
 
 export const useWorkflowState = (workflowName, options = {}) => {
   const { execute } = useKailash();
-  
+
   const state = reactive({
     data: null,
     loading: false,
@@ -86,10 +86,10 @@ export const useWorkflowState = (workflowName, options = {}) => {
   const executeWorkflow = async (params = {}) => {
     state.loading = true;
     state.error = null;
-    
+
     try {
       const result = await execute(workflowName, params);
-      
+
       state.data = result.data;
       state.executionId = result.execution_id;
       state.history.push({
@@ -97,19 +97,19 @@ export const useWorkflowState = (workflowName, options = {}) => {
         params,
         result: result.data
       });
-      
+
       if (options.onSuccess) {
         options.onSuccess(result);
       }
-      
+
       return result;
     } catch (error) {
       state.error = error;
-      
+
       if (options.onError) {
         options.onError(error);
       }
-      
+
       throw error;
     } finally {
       state.loading = false;
@@ -169,12 +169,12 @@ export const useRealtime = (channels = []) => {
         data,
         timestamp: new Date().toISOString()
       });
-      
+
       if (callback) {
         callback(data);
       }
     });
-    
+
     subscriptions.value.push(subscription);
     return subscription;
   };
@@ -232,13 +232,13 @@ export const useRealtime = (channels = []) => {
 
     <!-- Parameters Form -->
     <form @submit.prevent="handleExecute" class="parameters-form">
-      <div 
-        v-for="param in parameters" 
-        :key="param.name" 
+      <div
+        v-for="param in parameters"
+        :key="param.name"
         class="param-group"
       >
         <label :for="param.name">{{ param.label }}</label>
-        
+
         <input
           v-if="param.type === 'text'"
           :id="param.name"
@@ -247,7 +247,7 @@ export const useRealtime = (channels = []) => {
           :placeholder="param.placeholder"
           :required="param.required"
         />
-        
+
         <textarea
           v-else-if="param.type === 'textarea'"
           :id="param.name"
@@ -256,7 +256,7 @@ export const useRealtime = (channels = []) => {
           :required="param.required"
           rows="3"
         />
-        
+
         <select
           v-else-if="param.type === 'select'"
           :id="param.name"
@@ -264,9 +264,9 @@ export const useRealtime = (channels = []) => {
           :required="param.required"
         >
           <option value="">Select...</option>
-          <option 
-            v-for="option in param.options" 
-            :key="option.value" 
+          <option
+            v-for="option in param.options"
+            :key="option.value"
             :value="option.value"
           >
             {{ option.label }}
@@ -275,16 +275,16 @@ export const useRealtime = (channels = []) => {
       </div>
 
       <div class="form-actions">
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           :disabled="isLoading"
           class="execute-btn"
         >
           {{ isLoading ? 'Executing...' : 'Execute' }}
         </button>
-        
-        <button 
-          type="button" 
+
+        <button
+          type="button"
           @click="resetForm"
           class="reset-btn"
         >
@@ -307,8 +307,8 @@ export const useRealtime = (channels = []) => {
     <!-- Execution History -->
     <div v-if="state.history.length > 0" class="history-container">
       <h4>Execution History:</h4>
-      <div 
-        v-for="(execution, index) in state.history" 
+      <div
+        v-for="(execution, index) in state.history"
         :key="index"
         class="history-item"
       >
@@ -511,7 +511,7 @@ const resetForm = () => {
     <!-- Progress Bar -->
     <div class="progress-bar-container">
       <div class="progress-bar">
-        <div 
+        <div
           class="progress-fill"
           :style="{ width: `${percentage}%` }"
         />
@@ -527,8 +527,8 @@ const resetForm = () => {
     <!-- Node Progress -->
     <div v-if="nodeProgress.length > 0" class="node-progress">
       <h5>Node Status:</h5>
-      <div 
-        v-for="node in nodeProgress" 
+      <div
+        v-for="node in nodeProgress"
         :key="node.id"
         :class="['node-item', node.status]"
       >
@@ -547,8 +547,8 @@ const resetForm = () => {
         <button @click="clearLogs" class="clear-logs-btn">Clear</button>
       </div>
       <div class="logs-content" ref="logsContainer">
-        <div 
-          v-for="log in logs" 
+        <div
+          v-for="log in logs"
           :key="log.id"
           :class="['log-entry', log.level]"
         >
@@ -614,20 +614,20 @@ watch(() => props.executionId, (newId, oldId) => {
     currentNode.value = null;
     nodeProgress.splice(0);
     logs.splice(0);
-    
+
     // Subscribe to progress updates
     addSubscription(`execution:${newId}:progress`, (data) => {
       percentage.value = data.percentage || 0;
       status.value = data.status || 'running';
       currentNode.value = data.currentNode;
-      
+
       if (data.status === 'completed') {
         emit('complete', data);
       } else if (data.status === 'failed') {
         emit('error', data.error);
       }
     });
-    
+
     // Subscribe to node updates
     addSubscription(`execution:${newId}:nodes`, (data) => {
       const existingIndex = nodeProgress.findIndex(n => n.id === data.id);
@@ -637,7 +637,7 @@ watch(() => props.executionId, (newId, oldId) => {
         nodeProgress.push(data);
       }
     });
-    
+
     // Subscribe to logs
     addSubscription(`execution:${newId}:logs`, (logData) => {
       logs.push({

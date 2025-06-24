@@ -244,10 +244,10 @@ try:
     for item in data:
         process_item(item)
         processing_counter.labels(node_id="instrumented_processor").inc()
-    
+
     duration = time.time() - start_time
     processing_time.observe(duration)
-    
+
 finally:
     active_tasks.dec()
 
@@ -302,27 +302,27 @@ db_connections_active.set(pool_stats["active_connections"])
 results = []
 for query_info in queries:
     start_time = time.time()
-    
+
     try:
         with connection_pool.getconn() as conn:
             db_connections_total.inc()
             cursor = conn.cursor()
             cursor.execute(query_info["sql"], query_info["params"])
-            
+
             query_results = cursor.fetchall()
             results.append({
                 "query_id": query_info["id"],
                 "rows": len(query_results),
                 "data": query_results
             })
-            
+
     finally:
         duration = time.time() - start_time
         query_duration.labels(
             operation=query_info["operation"],
             table=query_info["table"]
         ).observe(duration)
-        
+
         connection_pool.putconn(conn)
 
 result = {"query_results": results, "pool_stats": pool_stats}
@@ -446,7 +446,7 @@ for sli_config in sli_configs:
         good_events = sum(metrics["good_events"])
         total_events = sum(metrics["total_events"])
         current_slis[sli_config["name"]] = good_events / total_events if total_events > 0 else 1.0
-        
+
     elif sli_config["type"] == "threshold":
         response_times = metrics["response_times"]
         response_times.sort()
@@ -464,7 +464,7 @@ for sli_name, sli_value in current_slis.items():
     target = next(s["target"] for s in sli_configs if s["name"] == sli_name)
     error_rate = 1.0 - sli_value
     allowed_error_rate = 1.0 - target
-    
+
     if allowed_error_rate > 0:
         burn_rate = error_rate / allowed_error_rate
         error_budget_consumed[sli_name] = burn_rate
@@ -475,7 +475,7 @@ for sli_name, sli_value in current_slis.items():
 slo_status = {
     "slis": current_slis,
     "error_budget_burn_rates": error_budget_consumed,
-    "compliance": all(sli >= target for sli, target in 
+    "compliance": all(sli >= target for sli, target in
                      [(current_slis[s["name"]], s["target"]) for s in sli_configs]),
     "timestamp": current_time.isoformat()
 }
@@ -545,7 +545,7 @@ for endpoint in service_endpoints:
     try:
         response = requests.get(endpoint, timeout=5)
         response.raise_for_status()
-        
+
         # Parse Prometheus metrics
         metrics_data = parse_prometheus_metrics(response.text)
         service_metrics.append({
@@ -553,7 +553,7 @@ for endpoint in service_endpoints:
             "metrics": metrics_data,
             "status": "healthy"
         })
-        
+
     except Exception as e:
         service_metrics.append({
             "service": extract_service_name(endpoint),
@@ -566,7 +566,7 @@ for service_data in service_metrics:
     if service_data["status"] == "healthy":
         metrics = service_data["metrics"]
         service_name = service_data["service"]
-        
+
         aggregated_metrics["total_requests"] += metrics.get("http_requests_total", 0)
         aggregated_metrics["total_errors"] += metrics.get("http_errors_total", 0)
         aggregated_metrics["service_health"][service_name] = {
@@ -576,7 +576,7 @@ for service_data in service_metrics:
         }
 
 # Calculate overall system health
-overall_error_rate = (aggregated_metrics["total_errors"] / 
+overall_error_rate = (aggregated_metrics["total_errors"] /
                      aggregated_metrics["total_requests"]) if aggregated_metrics["total_requests"] > 0 else 0
 
 healthy_services = len([s for s in aggregated_metrics["service_health"].values() if s["status"] == "healthy"])
@@ -604,16 +604,16 @@ result = {
 ### Prometheus Queries
 ```promql
 # Average response time by endpoint (5m window)
-rate(http_response_time_seconds_sum[5m]) 
+rate(http_response_time_seconds_sum[5m])
 / rate(http_response_time_seconds_count[5m])
 
 # 95th percentile latency
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(http_response_time_seconds_bucket[5m])
 )
 
 # Error rate percentage
-100 * rate(errors_total[5m]) 
+100 * rate(errors_total[5m])
 / rate(requests_total[5m])
 
 # Memory usage trend
@@ -659,17 +659,17 @@ metric_names = {
     "workflow_execution_duration_seconds": "Time taken to execute workflow",
     "http_request_duration_seconds": "HTTP request processing time",
     "database_query_duration_seconds": "Database query execution time",
-    
+
     # Totals - use _total suffix for counters
     "http_requests_total": "Total number of HTTP requests",
     "database_queries_total": "Total number of database queries",
     "errors_total": "Total number of errors",
-    
+
     # Current values - use descriptive suffix
     "database_connections_active": "Currently active database connections",
     "queue_depth_items": "Number of items in queue",
     "memory_usage_bytes": "Memory usage in bytes",
-    
+
     # Rates - calculated from totals
     "http_requests_per_second": "HTTP requests per second",
     "error_rate_percent": "Error rate as percentage"

@@ -1,76 +1,88 @@
-"""Enterprise user management node with comprehensive CRUD operations.
+"""Enterprise user management node with complete user lifecycle support.
 
-This node provides Django Admin-level user management capabilities with enhanced
-features for enterprise environments. Built on Session 065's async database
-infrastructure for high-performance operations.
+This node provides comprehensive user management capabilities for the unified admin system,
+including user creation, update, deletion, and lifecycle management. Integrates seamlessly
+with RoleManagementNode and PermissionCheckNode for complete RBAC/ABAC functionality.
 
 Features:
-- Complete user lifecycle (create, read, update, delete, restore)
-- Bulk operations with validation and rollback
-- Password management with security policies
-- User attribute management for ABAC
+- Complete user lifecycle management (CRUD operations)
+- JSONB-based role and attribute management
 - Multi-tenant user isolation
-- Comprehensive audit logging
+- User authentication and session management
+- Bulk user operations for enterprise scenarios
+- User profile and metadata management
 - Integration with external identity providers
-- User search, filtering, and pagination
+- Comprehensive audit logging
+- User status and lifecycle tracking
 """
 
 import hashlib
 import json
-import secrets
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
+from uuid import uuid4
 
-from kailash.access_control import AccessControlManager, UserContext
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.data import AsyncSQLDatabaseNode
+from kailash.nodes.data import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
+from .schema_manager import AdminSchemaManager
 
-@dataclass
-class UserConfig:
-    """Configuration for user management node."""
 
-    abac_enabled: bool = True
-    audit_enabled: bool = True
-    multi_tenant: bool = True
-    password_policy: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.password_policy is None:
-            self.password_policy = {
-                "min_length": 8,
-                "require_uppercase": True,
-                "require_lowercase": True,
-                "require_numbers": True,
-                "require_special": False,
-                "history_count": 3,
-            }
+def parse_datetime(value: Union[str, datetime, None]) -> Optional[datetime]:
+    """Parse datetime from various formats."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            # Try ISO format first
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            # Try other common formats
+            for fmt in [
+                "%Y-%m-%d %H:%M:%S.%f",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S",
+            ]:
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+    return None
 
 
 class UserOperation(Enum):
     """Supported user management operations."""
 
-    CREATE = "create"
-    READ = "read"
-    UPDATE = "update"
-    DELETE = "delete"
-    RESTORE = "restore"
-    LIST = "list"
-    SEARCH = "search"
+    CREATE_USER = "create_user"
+    UPDATE_USER = "update_user"
+    DELETE_USER = "delete_user"
+    GET_USER = "get_user"
+    LIST_USERS = "list_users"
+    ACTIVATE_USER = "activate_user"
+    DEACTIVATE_USER = "deactivate_user"
+    SET_PASSWORD = "set_password"
+    UPDATE_PROFILE = "update_profile"
     BULK_CREATE = "bulk_create"
     BULK_UPDATE = "bulk_update"
     BULK_DELETE = "bulk_delete"
-    CHANGE_PASSWORD = "change_password"
+    GET_USER_ROLES = "get_user_roles"
+    GET_USER_PERMISSIONS = "get_user_permissions"
+    SEARCH_USERS = "search_users"
+    EXPORT_USERS = "export_users"
+    GENERATE_RESET_TOKEN = "generate_reset_token"
     RESET_PASSWORD = "reset_password"
-    DEACTIVATE = "deactivate"
-    ACTIVATE = "activate"
+    AUTHENTICATE = "authenticate"
 
 
 class UserStatus(Enum):
-    """User account status."""
+    """User status values."""
 
     ACTIVE = "active"
     INACTIVE = "inactive"
@@ -80,110 +92,134 @@ class UserStatus(Enum):
 
 
 @dataclass
-class UserProfile:
-    """Enhanced user profile with ABAC attributes."""
+class User:
+    """Complete user definition with all attributes."""
 
     user_id: str
     email: str
-    username: str
-    first_name: str
-    last_name: str
-    status: UserStatus
+    username: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
+    display_name: Optional[str]
     roles: List[str]
     attributes: Dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
-    last_login: Optional[datetime] = None
-    password_changed_at: Optional[datetime] = None
-    tenant_id: Optional[str] = None
+    status: UserStatus
+    tenant_id: str
+    external_auth_id: Optional[str] = None
+    auth_provider: str = "local"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
 
-    def to_user_context(self) -> UserContext:
-        """Convert to UserContext for permission checks."""
-        return UserContext(
-            user_id=self.user_id,
-            tenant_id=self.tenant_id or "default",
-            email=self.email,
-            roles=self.roles,
-            attributes=self.attributes,
-        )
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+
+        def format_datetime(dt: Union[datetime, str, None]) -> Optional[str]:
+            """Format datetime handling both datetime objects and strings."""
+            if dt is None:
+                return None
+            if isinstance(dt, datetime):
+                return dt.isoformat()
+            if isinstance(dt, str):
+                # Already a string, return as-is or try to parse and format
+                parsed = parse_datetime(dt)
+                return parsed.isoformat() if parsed else dt
+            return None
+
+        return {
+            "user_id": self.user_id,
+            "email": self.email,
+            "username": self.username,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "display_name": self.display_name,
+            "roles": self.roles,
+            "attributes": self.attributes,
+            "status": self.status.value,
+            "tenant_id": self.tenant_id,
+            "external_auth_id": self.external_auth_id,
+            "auth_provider": self.auth_provider,
+            "created_at": format_datetime(self.created_at),
+            "updated_at": format_datetime(self.updated_at),
+            "last_login_at": format_datetime(self.last_login_at),
+        }
 
 
 @register_node()
 class UserManagementNode(Node):
-    """Enterprise user management node with Django Admin-inspired features.
+    """Enterprise user management node with complete lifecycle support.
 
     This node provides comprehensive user management capabilities including:
-    - User CRUD operations with validation
-    - Bulk operations with transaction support
-    - Password management with security policies
-    - User search and filtering
-    - Attribute management for ABAC
-    - Audit logging integration
-    - Multi-tenant support
+    - Complete user CRUD operations
+    - JSONB-based role and attribute management
+    - Multi-tenant user isolation
+    - User profile and metadata management
+    - Bulk operations for enterprise scenarios
+    - Integration with authentication systems
+    - Comprehensive audit logging
 
     Parameters:
-        operation: Type of operation to perform
+        operation: Type of user management operation
+        user_id: User ID for single user operations
         user_data: User data for create/update operations
-        user_id: User ID for single-user operations
-        user_ids: List of user IDs for bulk operations
-        search_query: Search query for user lookup
-        filters: Filters for user listing
-        pagination: Pagination parameters
+        users_data: List of user data for bulk operations
+        email: Email address for user lookup
+        username: Username for user lookup
         tenant_id: Tenant isolation
-        include_deleted: Whether to include soft-deleted users
+        status: User status filter
+        search_query: Search query for user search
+        limit: Result limit for list operations
+        offset: Result offset for pagination
+        include_deleted: Whether to include deleted users
+        export_format: Format for user export
 
     Example:
-        >>> # Create new user
+        >>> # Create a new user
         >>> node = UserManagementNode(
-        ...     operation="create",
+        ...     operation="create_user",
         ...     user_data={
-        ...         "email": "john@company.com",
-        ...         "username": "john.smith",
+        ...         "email": "john.doe@company.com",
+        ...         "username": "johndoe",
         ...         "first_name": "John",
-        ...         "last_name": "Smith",
-        ...         "roles": ["analyst"],
-        ...         "attributes": {
-        ...             "department": "finance",
-        ...             "clearance": "confidential"
-        ...         }
-        ...     }
+        ...         "last_name": "Doe",
+        ...         "roles": ["employee", "developer"],
+        ...         "attributes": {"department": "engineering", "level": "senior"}
+        ...     },
+        ...     tenant_id="company"
         ... )
         >>> result = node.run()
         >>> user_id = result["user"]["user_id"]
 
-        >>> # Bulk user operations
+        >>> # Update user profile
         >>> node = UserManagementNode(
-        ...     operation="bulk_create",
-        ...     user_data=[
-        ...         {"email": "user1@company.com", ...},
-        ...         {"email": "user2@company.com", ...}
-        ...     ]
+        ...     operation="update_profile",
+        ...     user_id="user123",
+        ...     user_data={
+        ...         "display_name": "John D. Smith",
+        ...         "attributes": {"department": "engineering", "level": "lead"}
+        ...     },
+        ...     tenant_id="company"
         ... )
         >>> result = node.run()
-        >>> created_count = result["stats"]["created"]
+
+        >>> # Bulk create users
+        >>> node = UserManagementNode(
+        ...     operation="bulk_create",
+        ...     users_data=[
+        ...         {"email": "user1@company.com", "roles": ["employee"]},
+        ...         {"email": "user2@company.com", "roles": ["manager"]},
+        ...     ],
+        ...     tenant_id="company"
+        ... )
+        >>> result = node.run()
+        >>> created_count = result["bulk_result"]["created_count"]
     """
 
     def __init__(self, **config):
         super().__init__(**config)
         self._db_node = None
-        self._access_manager = None
-        self._config = UserConfig(
-            abac_enabled=config.get("abac_enabled", True),
-            audit_enabled=config.get("audit_enabled", True),
-            multi_tenant=config.get("multi_tenant", True),
-            password_policy=config.get(
-                "password_policy",
-                {
-                    "min_length": 8,
-                    "require_uppercase": True,
-                    "require_lowercase": True,
-                    "require_numbers": True,
-                    "require_special": False,
-                    "history_count": 3,
-                },
-            ),
-        )
-        self._audit_logger = None
+        self._schema_manager = None
+        self.logger = logging.getLogger(__name__)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define parameters for user management operations."""
@@ -198,52 +234,72 @@ class UserManagementNode(Node):
                     description="User management operation to perform",
                     choices=[op.value for op in UserOperation],
                 ),
-                # User data for create/update
+                # User identification
+                NodeParameter(
+                    name="user_id",
+                    type=str,
+                    required=False,
+                    description="User ID for single user operations",
+                ),
+                NodeParameter(
+                    name="email",
+                    type=str,
+                    required=False,
+                    description="Email address for user lookup",
+                ),
+                NodeParameter(
+                    name="username",
+                    type=str,
+                    required=False,
+                    description="Username for user lookup",
+                ),
+                # User data
                 NodeParameter(
                     name="user_data",
                     type=dict,
                     required=False,
                     description="User data for create/update operations",
                 ),
-                # Single user operations
                 NodeParameter(
-                    name="user_id",
-                    type=str,
+                    name="users_data",
+                    type=list,
                     required=False,
-                    description="User ID for single-user operations",
+                    description="List of user data for bulk operations",
                 ),
-                # Bulk operations
                 NodeParameter(
                     name="user_ids",
                     type=list,
                     required=False,
-                    description="List of user IDs for bulk operations",
+                    description="List of user IDs for bulk delete operations",
                 ),
-                # Search and filtering
+                # Filtering and search
+                NodeParameter(
+                    name="status",
+                    type=str,
+                    required=False,
+                    choices=[status.value for status in UserStatus],
+                    description="User status filter",
+                ),
                 NodeParameter(
                     name="search_query",
                     type=str,
                     required=False,
-                    description="Search query for user lookup",
+                    description="Search query for user search",
+                ),
+                # Pagination
+                NodeParameter(
+                    name="limit",
+                    type=int,
+                    required=False,
+                    default=50,
+                    description="Result limit for list operations",
                 ),
                 NodeParameter(
-                    name="filters",
-                    type=dict,
+                    name="offset",
+                    type=int,
                     required=False,
-                    description="Filters for user listing",
-                ),
-                NodeParameter(
-                    name="pagination",
-                    type=dict,
-                    required=False,
-                    description="Pagination parameters (page, size, sort)",
-                ),
-                # Multi-tenancy
-                NodeParameter(
-                    name="tenant_id",
-                    type=str,
-                    required=False,
-                    description="Tenant ID for multi-tenant isolation",
+                    default=0,
+                    description="Result offset for pagination",
                 ),
                 # Options
                 NodeParameter(
@@ -251,102 +307,106 @@ class UserManagementNode(Node):
                     type=bool,
                     required=False,
                     default=False,
-                    description="Include soft-deleted users in results",
+                    description="Whether to include deleted users",
+                ),
+                NodeParameter(
+                    name="export_format",
+                    type=str,
+                    required=False,
+                    default="json",
+                    choices=["json", "csv"],
+                    description="Format for user export",
+                ),
+                # Password reset parameters
+                NodeParameter(
+                    name="token",
+                    type=str,
+                    required=False,
+                    description="Password reset token",
+                ),
+                NodeParameter(
+                    name="new_password",
+                    type=str,
+                    required=False,
+                    description="New password for reset",
+                ),
+                NodeParameter(
+                    name="password",
+                    type=str,
+                    required=False,
+                    description="Password for authentication",
+                ),
+                # Security
+                NodeParameter(
+                    name="password_hash",
+                    type=str,
+                    required=False,
+                    description="Password hash for user creation/update",
+                ),
+                # Multi-tenancy
+                NodeParameter(
+                    name="tenant_id",
+                    type=str,
+                    required=True,
+                    description="Tenant ID for multi-tenant isolation",
                 ),
                 # Database configuration
                 NodeParameter(
                     name="database_config",
                     type=dict,
-                    required=False,
+                    required=True,
                     description="Database connection configuration",
-                ),
-                # Password options
-                NodeParameter(
-                    name="password",
-                    type=str,
-                    required=False,
-                    description="Password for create/change operations",
-                ),
-                NodeParameter(
-                    name="force_password_change",
-                    type=bool,
-                    required=False,
-                    default=False,
-                    description="Force password change on next login",
-                ),
-                # Validation options
-                NodeParameter(
-                    name="validate_email",
-                    type=bool,
-                    required=False,
-                    default=True,
-                    description="Validate email format and uniqueness",
-                ),
-                NodeParameter(
-                    name="validate_username",
-                    type=bool,
-                    required=False,
-                    default=True,
-                    description="Validate username format and uniqueness",
                 ),
             ]
         }
 
     def run(self, **inputs) -> Dict[str, Any]:
-        """Execute user management operation (sync wrapper for async_run)."""
-        import asyncio
-
-        try:
-            # Check if we're already in an event loop
-            loop = asyncio.get_running_loop()
-            # If we are, we need to handle this differently
-            import concurrent.futures
-
-            # Run in a thread pool to avoid blocking the event loop
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self.async_run(**inputs))
-                return future.result()
-        except RuntimeError:
-            # No event loop running, we can use asyncio.run()
-            return asyncio.run(self.async_run(**inputs))
-
-    async def async_run(self, **inputs) -> Dict[str, Any]:
-        """Execute user management operation asynchronously."""
+        """Execute user management operation."""
         try:
             operation = UserOperation(inputs["operation"])
 
-            # Initialize database and access manager
+            # Initialize dependencies
             self._init_dependencies(inputs)
 
             # Route to appropriate operation
-            if operation == UserOperation.CREATE:
-                return await self._create_user_async(inputs)
-            elif operation == UserOperation.READ:
-                return await self._read_user_async(inputs)
-            elif operation == UserOperation.UPDATE:
-                return await self._update_user_async(inputs)
-            elif operation == UserOperation.DELETE:
-                return await self._delete_user_async(inputs)
-            elif operation == UserOperation.RESTORE:
-                return await self._restore_user_async(inputs)
-            elif operation == UserOperation.LIST:
-                return await self._list_users_async(inputs)
-            elif operation == UserOperation.SEARCH:
-                return await self._search_users_async(inputs)
+            if operation == UserOperation.CREATE_USER:
+                return self._create_user(inputs)
+            elif operation == UserOperation.UPDATE_USER:
+                return self._update_user(inputs)
+            elif operation == UserOperation.DELETE_USER:
+                return self._delete_user(inputs)
+            elif operation == UserOperation.GET_USER:
+                return self._get_user(inputs)
+            elif operation == UserOperation.LIST_USERS:
+                return self._list_users(inputs)
+            elif operation == UserOperation.ACTIVATE_USER:
+                return self._activate_user(inputs)
+            elif operation == UserOperation.DEACTIVATE_USER:
+                return self._deactivate_user(inputs)
+            elif operation == UserOperation.SET_PASSWORD:
+                return self._set_password(inputs)
+            elif operation == UserOperation.UPDATE_PROFILE:
+                return self._update_profile(inputs)
             elif operation == UserOperation.BULK_CREATE:
-                return await self._bulk_create_users_async(inputs)
+                return self._bulk_create(inputs)
             elif operation == UserOperation.BULK_UPDATE:
-                return await self._bulk_update_users_async(inputs)
+                return self._bulk_update(inputs)
             elif operation == UserOperation.BULK_DELETE:
-                return await self._bulk_delete_users_async(inputs)
-            elif operation == UserOperation.CHANGE_PASSWORD:
-                return await self._change_password_async(inputs)
+                return self._bulk_delete(inputs)
+            elif operation == UserOperation.GET_USER_ROLES:
+                return self._get_user_roles(inputs)
+            elif operation == UserOperation.GET_USER_PERMISSIONS:
+                return self._get_user_permissions(inputs)
+            elif operation == UserOperation.SEARCH_USERS:
+                return self._search_users(inputs)
+            elif operation == UserOperation.EXPORT_USERS:
+                return self._export_users(inputs)
+            elif operation == UserOperation.GENERATE_RESET_TOKEN:
+                return self._generate_reset_token(inputs)
             elif operation == UserOperation.RESET_PASSWORD:
-                return await self._reset_password_async(inputs)
-            elif operation == UserOperation.DEACTIVATE:
-                return await self._deactivate_user_async(inputs)
-            elif operation == UserOperation.ACTIVATE:
-                return await self._activate_user_async(inputs)
+                return self._reset_password(inputs)
+            elif operation == UserOperation.AUTHENTICATE:
+                return self._authenticate(inputs)
             else:
                 raise NodeExecutionError(f"Unknown operation: {operation}")
 
@@ -354,1577 +414,1059 @@ class UserManagementNode(Node):
             raise NodeExecutionError(f"User management operation failed: {str(e)}")
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
-        """Initialize database and access manager dependencies."""
-        # Get database config
-        db_config = inputs.get(
-            "database_config",
-            {
-                "database_type": "postgresql",
-                "host": "localhost",
-                "port": 5432,
-                "database": "kailash_admin",
-                "user": "admin",
-                "password": "admin",
-            },
-        )
+        """Initialize database and schema manager dependencies."""
+        # Skip initialization if already initialized (for testing)
+        if hasattr(self, "_db_node") and self._db_node is not None:
+            return
 
-        # Initialize async database node
-        self._db_node = AsyncSQLDatabaseNode(name="user_management_db", **db_config)
+        db_config = inputs["database_config"]
 
-        # Initialize enhanced access manager
-        self._access_manager = AccessControlManager(strategy="abac")
+        # Initialize database node
+        self._db_node = SQLDatabaseNode(name="user_management_db", **db_config)
 
-    async def _create_user_async(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new user with validation and audit logging (async version)."""
-        user_data = inputs["user_data"]
-        tenant_id = inputs.get("tenant_id", "default")
+        # Initialize schema manager and ensure schema exists
+        if not self._schema_manager:
+            self._schema_manager = AdminSchemaManager(db_config)
 
-        # Validate required fields
-        required_fields = ["email", "username", "first_name", "last_name"]
-        for field in required_fields:
-            if field not in user_data:
-                raise NodeValidationError(f"Missing required field: {field}")
-
-        # Validate email format
-        if inputs.get("validate_email", True):
-            if not self._validate_email(user_data["email"]):
-                raise NodeValidationError(f"Invalid email format: {user_data['email']}")
-
-        # Validate username format
-        if inputs.get("validate_username", True):
-            if not self._validate_username(user_data["username"]):
-                raise NodeValidationError(
-                    "Invalid username format. Username must be 3-50 characters, "
-                    "alphanumeric with underscores/dashes allowed"
-                )
-
-        # Generate user ID
-        user_id = self._generate_user_id()
-
-        # Hash password if provided
-        password_hash = None
-        if "password" in user_data:
-            # Validate password against policy
-            policy = self._config.password_policy
-            password = user_data["password"]
-
-            if len(password) < policy["min_length"]:
-                raise NodeValidationError(
-                    f"Password must be at least {policy['min_length']} characters"
-                )
-
-            if policy.get("require_uppercase") and not any(
-                c.isupper() for c in password
-            ):
-                raise NodeValidationError("Password must contain uppercase letters")
-
-            if policy.get("require_lowercase") and not any(
-                c.islower() for c in password
-            ):
-                raise NodeValidationError("Password must contain lowercase letters")
-
-            if policy.get("require_numbers") and not any(c.isdigit() for c in password):
-                raise NodeValidationError("Password must contain numbers")
-
-            if policy.get("require_special") and not any(
-                c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password
-            ):
-                raise NodeValidationError("Password must contain special characters")
-
-            password_hash = self._hash_password(password)
-
-        # Create user record
-        user_record = {
-            "user_id": user_id,
-            "tenant_id": tenant_id,
-            "email": user_data["email"],
-            "username": user_data["username"],
-            "first_name": user_data["first_name"],
-            "last_name": user_data["last_name"],
-            "status": user_data.get("status", UserStatus.ACTIVE.value),
-            "roles": json.dumps(user_data.get("roles", ["user"])),
-            "attributes": json.dumps(user_data.get("attributes", {})),
-            "password_hash": password_hash,
-            "force_password_change": user_data.get("force_password_change", False),
-            "created_at": datetime.now(UTC),
-            "updated_at": datetime.now(UTC),
-            "created_by": inputs.get("metadata", {}).get("created_by", "system"),
-        }
-
-        # Insert into database
-        insert_query = """
-        INSERT INTO users (
-            user_id, tenant_id, email, username, first_name, last_name,
-            status, roles, attributes, password_hash, force_password_change,
-            created_at, updated_at, created_by
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-        )
-        """
-
-        # Execute database insert using async method
-        query = {
-            "query": insert_query,
-            "params": [
-                user_record["user_id"],
-                user_record["tenant_id"],
-                user_record["email"],
-                user_record["username"],
-                user_record["first_name"],
-                user_record["last_name"],
-                user_record["status"],
-                user_record["roles"],
-                user_record["attributes"],
-                user_record["password_hash"],
-                user_record["force_password_change"],
-                user_record["created_at"],
-                user_record["updated_at"],
-                user_record["created_by"],
-            ],
-        }
-
-        db_result = await self._db_node.async_run(**query)
-
-        # Create user profile response
-        user_profile = UserProfile(
-            user_id=user_id,
-            email=user_record["email"],
-            username=user_record["username"],
-            first_name=user_record["first_name"],
-            last_name=user_record["last_name"],
-            status=UserStatus(user_record["status"]),
-            roles=user_record["roles"],
-            attributes=user_record["attributes"],
-            created_at=user_record["created_at"],
-            updated_at=user_record["updated_at"],
-        )
-
-        # Handle initial role assignments
-        if inputs.get("initial_roles"):
-            # Role assignment would be handled by RoleManagementNode
-            pass
-
-        # Audit log
-        if self._config.audit_enabled:
-            # In production, this would use AuditLogNode
-            print(f"[AUDIT] user_created: {user_id} ({user_record['username']})")
-
-        return {
-            "success": True,
-            "user": user_profile.__dict__,
-            "message": f"User {user_record['username']} created successfully",
-        }
+            # Validate schema exists, create if needed
+            try:
+                validation = self._schema_manager.validate_schema()
+                if not validation["is_valid"]:
+                    self.logger.info(
+                        "Creating unified admin schema for user management..."
+                    )
+                    self._schema_manager.create_full_schema(drop_existing=False)
+                    self.logger.info("Unified admin schema created successfully")
+            except Exception as e:
+                self.logger.warning(f"Schema validation/creation failed: {e}")
 
     def _create_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new user with validation and audit logging."""
+        """Create a new user."""
         user_data = inputs["user_data"]
-        tenant_id = inputs.get("tenant_id", "default")
+        tenant_id = inputs["tenant_id"]
 
         # Validate required fields
-        required_fields = ["email", "username", "first_name", "last_name"]
-        for field in required_fields:
-            if field not in user_data:
-                raise NodeValidationError(f"Missing required field: {field}")
+        if "email" not in user_data:
+            raise NodeValidationError("Email is required for user creation")
 
-        # Validate email format
-        if inputs.get("validate_email", True):
-            if not self._validate_email(user_data["email"]):
-                raise NodeValidationError(f"Invalid email format: {user_data['email']}")
+        # Generate user ID if not provided
+        user_id = user_data.get("user_id", str(uuid4()))
 
-        # Validate username format
-        if inputs.get("validate_username", True):
-            if not self._validate_username(user_data["username"]):
-                raise NodeValidationError(
-                    f"Invalid username format: {user_data['username']}"
-                )
+        # Prepare user data with defaults
+        user = User(
+            user_id=user_id,
+            email=user_data["email"],
+            username=user_data.get("username"),
+            first_name=user_data.get("first_name"),
+            last_name=user_data.get("last_name"),
+            display_name=user_data.get("display_name"),
+            roles=user_data.get("roles", []),
+            attributes=user_data.get("attributes", {}),
+            status=UserStatus(user_data.get("status", "active")),
+            tenant_id=tenant_id,
+            external_auth_id=user_data.get("external_auth_id"),
+            auth_provider=user_data.get("auth_provider", "local"),
+        )
 
-        # Generate user ID and timestamps
-        user_id = self._generate_user_id()
-        now = datetime.now(UTC)
-
-        # Hash password if provided
-        password_hash = None
-        if "password" in inputs:
-            password_hash = self._hash_password(inputs["password"])
-        elif "password" in user_data:
-            password_hash = self._hash_password(user_data["password"])
-
-        # Prepare user record
-        user_record = {
-            "user_id": user_id,
-            "tenant_id": tenant_id,
-            "email": user_data["email"],
-            "username": user_data["username"],
-            "first_name": user_data["first_name"],
-            "last_name": user_data["last_name"],
-            "status": user_data.get("status", UserStatus.ACTIVE.value),
-            "roles": user_data.get("roles", []),
-            "attributes": user_data.get("attributes", {}),
-            "password_hash": password_hash,
-            "force_password_change": inputs.get("force_password_change", False),
-            "created_at": now,
-            "updated_at": now,
-            "created_by": inputs.get("created_by", "system"),
-        }
-
-        # Insert user into database
+        # Insert user into database with conflict resolution
         insert_query = """
         INSERT INTO users (
-            user_id, tenant_id, email, username, first_name, last_name,
-            status, roles, attributes, password_hash, force_password_change,
-            created_at, updated_at, created_by
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-        )
+            user_id, email, username, password_hash, first_name, last_name,
+            display_name, roles, attributes, status, tenant_id,
+            external_auth_id, auth_provider
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ON CONFLICT (user_id) DO UPDATE SET
+            email = EXCLUDED.email,
+            username = EXCLUDED.username,
+            first_name = EXCLUDED.first_name,
+            last_name = EXCLUDED.last_name,
+            display_name = EXCLUDED.display_name,
+            roles = EXCLUDED.roles,
+            attributes = EXCLUDED.attributes,
+            status = EXCLUDED.status,
+            external_auth_id = EXCLUDED.external_auth_id,
+            auth_provider = EXCLUDED.auth_provider,
+            updated_at = CURRENT_TIMESTAMP
         """
 
-        # Execute database insert
-        query = {
-            "query": insert_query,
-            "params": [
-                user_record["user_id"],
-                user_record["tenant_id"],
-                user_record["email"],
-                user_record["username"],
-                user_record["first_name"],
-                user_record["last_name"],
-                user_record["status"],
-                user_record["roles"],
-                user_record["attributes"],
-                user_record["password_hash"],
-                user_record["force_password_change"],
-                user_record["created_at"],
-                user_record["updated_at"],
-                user_record["created_by"],
-            ],
-        }
+        try:
+            self._db_node.run(
+                query=insert_query,
+                parameters=[
+                    user.user_id,
+                    user.email,
+                    user.username,
+                    inputs.get("password_hash"),
+                    user.first_name,
+                    user.last_name,
+                    user.display_name,
+                    json.dumps(user.roles),
+                    json.dumps(user.attributes),
+                    user.status.value,
+                    user.tenant_id,
+                    user.external_auth_id,
+                    user.auth_provider,
+                ],
+            )
 
-        db_result = self._db_node.run(**query)
+            # Get the created user to return complete data
+            created_user = self._get_user_by_id(user.user_id, tenant_id)
 
-        # Create user profile response
-        user_profile = UserProfile(
-            user_id=user_id,
-            email=user_record["email"],
-            username=user_record["username"],
-            first_name=user_record["first_name"],
-            last_name=user_record["last_name"],
-            status=UserStatus(user_record["status"]),
-            roles=user_record["roles"],
-            attributes=user_record["attributes"],
-            created_at=user_record["created_at"],
-            updated_at=user_record["updated_at"],
-            tenant_id=tenant_id,
-        )
-
-        return {
-            "result": {
-                "user": {
-                    "user_id": user_profile.user_id,
-                    "email": user_profile.email,
-                    "username": user_profile.username,
-                    "first_name": user_profile.first_name,
-                    "last_name": user_profile.last_name,
-                    "status": user_profile.status.value,
-                    "roles": user_profile.roles,
-                    "attributes": user_profile.attributes,
-                    "created_at": user_profile.created_at.isoformat(),
-                    "tenant_id": user_profile.tenant_id,
-                },
-                "operation": "create",
-                "success": True,
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-        }
-
-    def _read_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Read user information by ID or email."""
-        user_id = inputs.get("user_id")
-        email = inputs.get("email")
-        tenant_id = inputs.get("tenant_id", "default")
-        include_deleted = inputs.get("include_deleted", False)
-
-        if not user_id and not email:
-            raise NodeValidationError("Either user_id or email must be provided")
-
-        # Build query
-        where_conditions = ["tenant_id = $1"]
-        params = [tenant_id]
-        param_count = 1
-
-        if user_id:
-            param_count += 1
-            where_conditions.append(f"user_id = ${param_count}")
-            params.append(user_id)
-
-        if email:
-            param_count += 1
-            where_conditions.append(f"email = ${param_count}")
-            params.append(email)
-
-        if not include_deleted:
-            where_conditions.append("status != 'deleted'")
-
-        query = f"""
-        SELECT user_id, tenant_id, email, username, first_name, last_name,
-               status, roles, attributes, created_at, updated_at, last_login,
-               password_changed_at, force_password_change
-        FROM users
-        WHERE {' AND '.join(where_conditions)}
-        LIMIT 1
-        """
-
-        # Execute query
-        self._db_node.config.update(
-            {"query": query, "params": params, "fetch_mode": "one"}
-        )
-
-        db_result = self._db_node.run(**query)
-
-        if not db_result.get("result", {}).get("data"):
             return {
                 "result": {
-                    "user": None,
-                    "found": False,
-                    "operation": "read",
+                    "user": created_user.to_dict(),
+                    "operation": "create_user",
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
             }
 
-        user_data = db_result["result"]["data"]
+        except Exception as e:
+            if "duplicate key" in str(e).lower():
+                raise NodeValidationError(
+                    f"User with email {user.email} already exists"
+                )
+            raise NodeExecutionError(f"Failed to create user: {str(e)}")
 
-        return {
-            "result": {
-                "user": {
-                    "user_id": user_data["user_id"],
-                    "email": user_data["email"],
-                    "username": user_data["username"],
-                    "first_name": user_data["first_name"],
-                    "last_name": user_data["last_name"],
-                    "status": user_data["status"],
-                    "roles": user_data["roles"],
-                    "attributes": user_data["attributes"],
-                    "created_at": user_data["created_at"],
-                    "updated_at": user_data["updated_at"],
-                    "last_login": user_data["last_login"],
-                    "tenant_id": user_data["tenant_id"],
-                },
-                "found": True,
-                "operation": "read",
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-        }
-
-    def _list_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """List users with filtering, pagination, and search."""
-        tenant_id = inputs.get("tenant_id", "default")
-        filters = inputs.get("filters", {})
-        pagination = inputs.get(
-            "pagination", {"page": 1, "size": 20, "sort": "created_at"}
-        )
-        include_deleted = inputs.get("include_deleted", False)
-
-        # Build WHERE clause
-        where_conditions = ["tenant_id = $1"]
-        params = [tenant_id]
-        param_count = 1
-
-        if not include_deleted:
-            where_conditions.append("status != 'deleted'")
-
-        # Apply filters
-        if "status" in filters:
-            param_count += 1
-            where_conditions.append(f"status = ${param_count}")
-            params.append(filters["status"])
-
-        if "role" in filters:
-            param_count += 1
-            where_conditions.append(f"${param_count} = ANY(roles)")
-            params.append(filters["role"])
-
-        if "department" in filters:
-            param_count += 1
-            where_conditions.append(f"attributes->>'department' = ${param_count}")
-            params.append(filters["department"])
-
-        # Search query
-        search_query = inputs.get("search_query")
-        if search_query:
-            param_count += 1
-            where_conditions.append(
-                f"""
-                (email ILIKE ${param_count} OR
-                 username ILIKE ${param_count} OR
-                 first_name ILIKE ${param_count} OR
-                 last_name ILIKE ${param_count})
-            """
-            )
-            params.append(f"%{search_query}%")
-
-        # Pagination
-        page = pagination.get("page", 1)
-        size = pagination.get("size", 20)
-        sort_field = pagination.get("sort", "created_at")
-        sort_direction = pagination.get("direction", "DESC")
-
-        offset = (page - 1) * size
-
-        # Count query
-        count_query = f"""
-        SELECT COUNT(*) as total
+    def _get_user_by_id(self, user_id: str, tenant_id: str) -> User:
+        """Get user by ID and tenant."""
+        query = """
+        SELECT user_id, email, username, first_name, last_name, display_name,
+               roles, attributes, status, tenant_id, external_auth_id, auth_provider,
+               created_at, updated_at, last_login_at
         FROM users
-        WHERE {' AND '.join(where_conditions)}
+        WHERE user_id = $1 AND tenant_id = $2
         """
 
-        # Data query
-        data_query = f"""
-        SELECT user_id, email, username, first_name, last_name,
-               status, roles, attributes, created_at, updated_at, last_login
-        FROM users
-        WHERE {' AND '.join(where_conditions)}
-        ORDER BY {sort_field} {sort_direction}
-        LIMIT {size} OFFSET {offset}
-        """
-
-        # Execute count query
-        self._db_node.config.update(
-            {"query": count_query, "params": params, "fetch_mode": "one"}
+        result = self._db_node.run(
+            query=query, parameters=[user_id, tenant_id], result_format="dict"
         )
-        count_result = self._db_node.run()
-        total_count = count_result["result"]["data"]["total"]
 
-        # Execute data query
-        self._db_node.config.update(
-            {"query": data_query, "params": params, "fetch_mode": "all"}
+        user_rows = result.get("data", [])
+        if not user_rows:
+            raise NodeValidationError(f"User not found: {user_id}")
+
+        user_data = user_rows[0]
+        return User(
+            user_id=user_data["user_id"],
+            email=user_data["email"],
+            username=user_data["username"],
+            first_name=user_data["first_name"],
+            last_name=user_data["last_name"],
+            display_name=user_data["display_name"],
+            roles=user_data.get("roles", []),
+            attributes=user_data.get("attributes", {}),
+            status=UserStatus(user_data["status"]),
+            tenant_id=user_data["tenant_id"],
+            external_auth_id=user_data["external_auth_id"],
+            auth_provider=user_data["auth_provider"],
+            created_at=parse_datetime(user_data.get("created_at")),
+            updated_at=parse_datetime(user_data.get("updated_at")),
+            last_login_at=parse_datetime(user_data.get("last_login_at")),
         )
-        data_result = self._db_node.run()
-        users = data_result["result"]["data"]
 
-        # Calculate pagination info
-        total_pages = (total_count + size - 1) // size
-        has_next = page < total_pages
-        has_prev = page > 1
-
-        return {
-            "result": {
-                "users": users,
-                "pagination": {
-                    "page": page,
-                    "size": size,
-                    "total": total_count,
-                    "total_pages": total_pages,
-                    "has_next": has_next,
-                    "has_prev": has_prev,
-                },
-                "filters_applied": filters,
-                "search_query": search_query,
-                "operation": "list",
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-        }
-
-    def _bulk_create_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Create multiple users with transaction support."""
-        user_data_list = inputs["user_data"]
-        tenant_id = inputs.get("tenant_id", "default")
-
-        if not isinstance(user_data_list, list):
-            raise NodeValidationError("user_data must be a list for bulk operations")
-
-        results = {"created": [], "failed": [], "stats": {"created": 0, "failed": 0}}
-
-        for i, user_data in enumerate(user_data_list):
-            try:
-                # Create individual user
-                create_inputs = {
-                    "operation": "create",
-                    "user_data": user_data,
-                    "tenant_id": tenant_id,
-                    "validate_email": inputs.get("validate_email", True),
-                    "validate_username": inputs.get("validate_username", True),
-                }
-
-                result = self._create_user(create_inputs)
-                results["created"].append(
-                    {"index": i, "user": result["result"]["user"]}
-                )
-                results["stats"]["created"] += 1
-
-            except Exception as e:
-                results["failed"].append(
-                    {"index": i, "user_data": user_data, "error": str(e)}
-                )
-                results["stats"]["failed"] += 1
-
-        return {
-            "result": {
-                "operation": "bulk_create",
-                "results": results,
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-        }
-
-    # Utility methods
-    def _generate_user_id(self) -> str:
-        """Generate unique user ID."""
-        import uuid
-
-        return str(uuid.uuid4())
-
-    def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256 with salt."""
-        salt = secrets.token_hex(32)
-        password_hash = hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
-        return f"{salt}${password_hash}"
-
-    def _validate_email(self, email: str) -> bool:
-        """Validate email format."""
-        import re
-
-        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        return bool(re.match(pattern, email))
-
-    def _validate_username(self, username: str) -> bool:
-        """Validate username format."""
-        import re
-
-        # Username: alphanumeric, dots, hyphens, underscores, 3-50 chars
-        pattern = r"^[a-zA-Z0-9._-]{3,50}$"
-        return bool(re.match(pattern, username))
-
-    # Additional operations (update, delete, etc.) would follow similar patterns
-    def _update_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Update user information."""
+    def _get_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Get a single user by ID, email, or username."""
+        tenant_id = inputs["tenant_id"]
         user_id = inputs.get("user_id")
-        user_data = inputs.get("user_data", {})
-        tenant_id = inputs.get("tenant_id", "default")
+        email = inputs.get("email")
+        username = inputs.get("username")
 
-        if not user_id:
-            raise NodeValidationError("user_id is required for update operation")
+        if not any([user_id, email, username]):
+            raise NodeValidationError("Must provide user_id, email, or username")
 
-        # Build update fields
+        # Build query based on available identifiers
+        if user_id:
+            user = self._get_user_by_id(user_id, tenant_id)
+        elif email:
+            user = self._get_user_by_email(email, tenant_id)
+        else:
+            user = self._get_user_by_username(username, tenant_id)
+
+        return {
+            "result": {
+                "user": user.to_dict(),
+                "operation": "get_user",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _get_user_by_email(self, email: str, tenant_id: str) -> User:
+        """Get user by email and tenant."""
+        query = """
+        SELECT user_id, email, username, first_name, last_name, display_name,
+               roles, attributes, status, tenant_id, external_auth_id, auth_provider,
+               created_at, updated_at, last_login_at
+        FROM users
+        WHERE email = $1 AND tenant_id = $2
+        """
+
+        result = self._db_node.run(
+            query=query, parameters=[email, tenant_id], result_format="dict"
+        )
+
+        user_rows = result.get("data", [])
+        if not user_rows:
+            raise NodeValidationError(f"User not found with email: {email}")
+
+        user_data = user_rows[0]
+        return User(
+            user_id=user_data["user_id"],
+            email=user_data["email"],
+            username=user_data["username"],
+            first_name=user_data["first_name"],
+            last_name=user_data["last_name"],
+            display_name=user_data["display_name"],
+            roles=user_data.get("roles", []),
+            attributes=user_data.get("attributes", {}),
+            status=UserStatus(user_data["status"]),
+            tenant_id=user_data["tenant_id"],
+            external_auth_id=user_data["external_auth_id"],
+            auth_provider=user_data["auth_provider"],
+            created_at=parse_datetime(user_data.get("created_at")),
+            updated_at=parse_datetime(user_data.get("updated_at")),
+            last_login_at=parse_datetime(user_data.get("last_login_at")),
+        )
+
+    def _get_user_by_username(self, username: str, tenant_id: str) -> User:
+        """Get user by username and tenant."""
+        query = """
+        SELECT user_id, email, username, first_name, last_name, display_name,
+               roles, attributes, status, tenant_id, external_auth_id, auth_provider,
+               created_at, updated_at, last_login_at
+        FROM users
+        WHERE username = $1 AND tenant_id = $2
+        """
+
+        result = self._db_node.run(
+            query=query, parameters=[username, tenant_id], result_format="dict"
+        )
+
+        user_rows = result.get("data", [])
+        if not user_rows:
+            raise NodeValidationError(f"User not found with username: {username}")
+
+        user_data = user_rows[0]
+        return User(
+            user_id=user_data["user_id"],
+            email=user_data["email"],
+            username=user_data["username"],
+            first_name=user_data["first_name"],
+            last_name=user_data["last_name"],
+            display_name=user_data["display_name"],
+            roles=user_data.get("roles", []),
+            attributes=user_data.get("attributes", {}),
+            status=UserStatus(user_data["status"]),
+            tenant_id=user_data["tenant_id"],
+            external_auth_id=user_data["external_auth_id"],
+            auth_provider=user_data["auth_provider"],
+            created_at=parse_datetime(user_data.get("created_at")),
+            updated_at=parse_datetime(user_data.get("updated_at")),
+            last_login_at=parse_datetime(user_data.get("last_login_at")),
+        )
+
+    def _update_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing user."""
+        user_id = inputs["user_id"]
+        user_data = inputs["user_data"]
+        tenant_id = inputs["tenant_id"]
+
+        # Get existing user
+        existing_user = self._get_user_by_id(user_id, tenant_id)
+
+        # Build update query dynamically based on provided fields
         update_fields = []
-        params = []
-        param_count = 1
+        parameters = []
+        param_index = 1
 
-        # Update allowed fields
-        allowed_fields = [
+        updatable_fields = [
             "email",
             "username",
             "first_name",
             "last_name",
+            "display_name",
             "status",
-            "roles",
-            "attributes",
-            "phone",
-            "department",
+            "external_auth_id",
+            "auth_provider",
         ]
 
-        for field, value in user_data.items():
-            if field in allowed_fields:
-                # Validate specific fields
-                if field == "email" and inputs.get("validate_email", True):
-                    if not self._validate_email(value):
-                        raise NodeValidationError(f"Invalid email format: {value}")
-                elif field == "username" and inputs.get("validate_username", True):
-                    if not self._validate_username(value):
-                        raise NodeValidationError(f"Invalid username format: {value}")
-                elif field == "status":
-                    if value not in [s.value for s in UserStatus]:
-                        raise NodeValidationError(f"Invalid status: {value}")
+        for field in updatable_fields:
+            if field in user_data:
+                update_fields.append(f"{field} = ${param_index}")
+                parameters.append(user_data[field])
+                param_index += 1
 
-                update_fields.append(f"{field} = ${param_count}")
-                params.append(value)
-                param_count += 1
+        # Handle JSONB fields separately
+        if "roles" in user_data:
+            update_fields.append(f"roles = ${param_index}")
+            parameters.append(json.dumps(user_data["roles"]))
+            param_index += 1
+
+        if "attributes" in user_data:
+            update_fields.append(f"attributes = ${param_index}")
+            parameters.append(json.dumps(user_data["attributes"]))
+            param_index += 1
+
+        if "password_hash" in inputs:
+            update_fields.append(f"password_hash = ${param_index}")
+            parameters.append(inputs["password_hash"])
+            param_index += 1
 
         if not update_fields:
-            return {"success": False, "message": "No valid fields to update"}
+            raise NodeValidationError("No valid fields provided for update")
 
-        # Add updated_at
-        update_fields.append(f"updated_at = ${param_count}")
-        params.append(datetime.now(UTC))
-        param_count += 1
+        # Always update the updated_at timestamp
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
 
-        # Build query
+        # Add WHERE clause parameters
+        parameters.extend([user_id, tenant_id])
+
         update_query = f"""
         UPDATE users
         SET {', '.join(update_fields)}
-        WHERE user_id = ${param_count} AND tenant_id = ${param_count + 1}
-        RETURNING user_id, email, username, first_name, last_name, status, roles, attributes
+        WHERE user_id = ${param_index} AND tenant_id = ${param_index + 1}
         """
-        params.extend([user_id, tenant_id])
-
-        self._ensure_db_node(inputs)
-        result = self._db_node.execute(query=update_query, params=params)
-
-        if not result.get("rows"):
-            return {"success": False, "message": "User not found"}
-
-        updated_user = result["rows"][0]
-
-        # Audit log
-        if self._config.audit_enabled:
-            print(f"[AUDIT] user_updated: {user_id}")
-
-        return {
-            "success": True,
-            "user": updated_user,
-            "message": f"User {user_id} updated successfully",
-        }
-
-    def _delete_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Soft delete user."""
-        user_id = inputs.get("user_id")
-        tenant_id = inputs.get("tenant_id", "default")
-        hard_delete = inputs.get("hard_delete", False)
-
-        if not user_id:
-            raise NodeValidationError("user_id is required for delete operation")
-
-        self._ensure_db_node(inputs)
-
-        if hard_delete:
-            # Permanent deletion - use with caution
-            delete_query = """
-            DELETE FROM users
-            WHERE user_id = $1 AND tenant_id = $2
-            RETURNING user_id, email, username
-            """
-        else:
-            # Soft delete - change status to 'deleted'
-            delete_query = """
-            UPDATE users
-            SET status = 'deleted',
-                updated_at = $3,
-                deleted_at = $3,
-                deleted_by = $4
-            WHERE user_id = $1 AND tenant_id = $2 AND status != 'deleted'
-            RETURNING user_id, email, username, status
-            """
-
-        params = [user_id, tenant_id]
-        if not hard_delete:
-            params.extend([datetime.now(UTC), inputs.get("deleted_by", "system")])
-
-        result = self._db_node.execute(query=delete_query, params=params)
-
-        if not result.get("rows"):
-            return {"success": False, "message": "User not found or already deleted"}
-
-        deleted_user = result["rows"][0]
-
-        # Audit log
-        if self._config.audit_enabled:
-            action = "hard_deleted" if hard_delete else "soft_deleted"
-            print(f"[AUDIT] user_{action}: {user_id}")
-
-        return {
-            "success": True,
-            "user": deleted_user,
-            "message": f"User {user_id} deleted successfully",
-            "hard_delete": hard_delete,
-        }
-
-    def _change_password(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Change user password."""
-        user_id = inputs.get("user_id")
-        current_password = inputs.get("current_password")
-        new_password = inputs.get("new_password")
-        tenant_id = inputs.get("tenant_id", "default")
-        skip_current_check = inputs.get("skip_current_check", False)
-
-        if not user_id:
-            raise NodeValidationError("user_id is required for password change")
-        if not new_password:
-            raise NodeValidationError("new_password is required")
-        if not skip_current_check and not current_password:
-            raise NodeValidationError(
-                "current_password is required unless skip_current_check is True"
-            )
-
-        self._ensure_db_node(inputs)
-
-        # Verify current password if required
-        if not skip_current_check:
-            verify_query = """
-            SELECT password_hash
-            FROM users
-            WHERE user_id = $1 AND tenant_id = $2 AND status != 'deleted'
-            """
-            result = self._db_node.execute(
-                query=verify_query, params=[user_id, tenant_id]
-            )
-
-            if not result.get("rows"):
-                return {"success": False, "message": "User not found"}
-
-            stored_hash = result["rows"][0]["password_hash"]
-            if stored_hash and not self._verify_password(current_password, stored_hash):
-                return {"success": False, "message": "Current password is incorrect"}
-
-        # Validate new password against policy
-        policy = self._config.password_policy
-        if len(new_password) < policy["min_length"]:
-            raise NodeValidationError(
-                f"Password must be at least {policy['min_length']} characters"
-            )
-
-        if policy.get("require_uppercase") and not any(
-            c.isupper() for c in new_password
-        ):
-            raise NodeValidationError("Password must contain uppercase letters")
-
-        if policy.get("require_lowercase") and not any(
-            c.islower() for c in new_password
-        ):
-            raise NodeValidationError("Password must contain lowercase letters")
-
-        if policy.get("require_numbers") and not any(c.isdigit() for c in new_password):
-            raise NodeValidationError("Password must contain numbers")
-
-        if policy.get("require_special") and not any(
-            c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in new_password
-        ):
-            raise NodeValidationError("Password must contain special characters")
-
-        # Check password history if configured
-        if policy.get("history_count", 0) > 0:
-            history_query = """
-            SELECT password_hash
-            FROM password_history
-            WHERE user_id = $1 AND tenant_id = $2
-            ORDER BY created_at DESC
-            LIMIT $3
-            """
-            history_result = self._db_node.execute(
-                query=history_query,
-                params=[user_id, tenant_id, policy["history_count"]],
-            )
-
-            for row in history_result.get("rows", []):
-                if self._verify_password(new_password, row["password_hash"]):
-                    return {
-                        "success": False,
-                        "message": f"Password cannot be reused from last {policy['history_count']} passwords",
-                    }
-
-        # Hash new password
-        new_hash = self._hash_password(new_password)
-
-        # Update password
-        update_query = """
-        UPDATE users
-        SET password_hash = $1,
-            password_changed_at = $2,
-            updated_at = $2,
-            force_password_change = false
-        WHERE user_id = $3 AND tenant_id = $4
-        RETURNING user_id, email, username
-        """
-
-        now = datetime.now(UTC)
-        result = self._db_node.execute(
-            query=update_query, params=[new_hash, now, user_id, tenant_id]
-        )
-
-        if not result.get("rows"):
-            return {"success": False, "message": "Failed to update password"}
-
-        # Store in password history
-        if policy.get("history_count", 0) > 0:
-            history_insert = """
-            INSERT INTO password_history (user_id, tenant_id, password_hash, created_at)
-            VALUES ($1, $2, $3, $4)
-            """
-            self._db_node.execute(
-                query=history_insert, params=[user_id, tenant_id, new_hash, now]
-            )
-
-        # Audit log
-        if self._config.audit_enabled:
-            print(f"[AUDIT] password_changed: {user_id}")
-
-        return {
-            "success": True,
-            "user": result["rows"][0],
-            "message": "Password changed successfully",
-        }
-
-    def _reset_password(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Reset user password with token generation."""
-        user_id = inputs.get("user_id")
-        email = inputs.get("email")
-        tenant_id = inputs.get("tenant_id", "default")
-        generate_token = inputs.get("generate_token", True)
-        new_password = inputs.get("new_password")
-        token_expiry_hours = inputs.get("token_expiry_hours", 24)
-
-        if not user_id and not email:
-            raise NodeValidationError(
-                "Either user_id or email is required for password reset"
-            )
-
-        self._ensure_db_node(inputs)
-
-        # Find user
-        if user_id:
-            query = "SELECT user_id, email, username FROM users WHERE user_id = $1 AND tenant_id = $2 AND status != 'deleted'"
-            params = [user_id, tenant_id]
-        else:
-            query = "SELECT user_id, email, username FROM users WHERE email = $1 AND tenant_id = $2 AND status != 'deleted'"
-            params = [email, tenant_id]
-
-        result = self._db_node.execute(query=query, params=params)
-
-        if not result.get("rows"):
-            return {"success": False, "message": "User not found"}
-
-        user_data = result["rows"][0]
-        user_id = user_data["user_id"]
-
-        if generate_token:
-            # Generate secure reset token
-            reset_token = secrets.token_urlsafe(32)
-            token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
-            expiry_time = datetime.now(UTC) + timedelta(hours=token_expiry_hours)
-
-            # Store reset token
-            token_query = """
-            INSERT INTO password_reset_tokens (user_id, tenant_id, token_hash, expires_at, created_at)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (user_id, tenant_id)
-            DO UPDATE SET token_hash = $3, expires_at = $4, created_at = $5, used = false
-            """
-
-            self._db_node.execute(
-                query=token_query,
-                params=[user_id, tenant_id, token_hash, expiry_time, datetime.now(UTC)],
-            )
-
-            # Force password change on next login
-            update_query = """
-            UPDATE users
-            SET force_password_change = true, updated_at = $1
-            WHERE user_id = $2 AND tenant_id = $3
-            """
-            self._db_node.execute(
-                query=update_query, params=[datetime.now(UTC), user_id, tenant_id]
-            )
-
-            # Audit log
-            if self._config.audit_enabled:
-                print(f"[AUDIT] password_reset_requested: {user_id}")
-
-            return {
-                "success": True,
-                "user": user_data,
-                "reset_token": reset_token,
-                "expires_at": expiry_time.isoformat(),
-                "message": "Password reset token generated",
-            }
-
-        elif new_password:
-            # Direct password reset (admin action)
-            # Validate new password
-            policy = self._config.password_policy
-            if len(new_password) < policy["min_length"]:
-                raise NodeValidationError(
-                    f"Password must be at least {policy['min_length']} characters"
-                )
-
-            # Hash and update password
-            new_hash = self._hash_password(new_password)
-
-            update_query = """
-            UPDATE users
-            SET password_hash = $1,
-                password_changed_at = $2,
-                updated_at = $2,
-                force_password_change = $3
-            WHERE user_id = $4 AND tenant_id = $5
-            RETURNING user_id, email, username
-            """
-
-            force_change = inputs.get("force_password_change", True)
-            now = datetime.now(UTC)
-
-            result = self._db_node.execute(
-                query=update_query,
-                params=[new_hash, now, force_change, user_id, tenant_id],
-            )
-
-            if not result.get("rows"):
-                return {"success": False, "message": "Failed to reset password"}
-
-            # Audit log
-            if self._config.audit_enabled:
-                print(f"[AUDIT] password_reset_admin: {user_id}")
-
-            return {
-                "success": True,
-                "user": result["rows"][0],
-                "message": "Password reset successfully",
-                "force_password_change": force_change,
-            }
-
-        else:
-            raise NodeValidationError(
-                "Either generate_token or new_password must be provided"
-            )
-
-    def _deactivate_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Deactivate user account."""
-        user_id = inputs.get("user_id")
-        tenant_id = inputs.get("tenant_id", "default")
-        reason = inputs.get("reason", "Manual deactivation")
-        deactivated_by = inputs.get("deactivated_by", "system")
-
-        if not user_id:
-            raise NodeValidationError("user_id is required for deactivate operation")
-
-        self._ensure_db_node(inputs)
-
-        # Update user status to inactive
-        update_query = """
-        UPDATE users
-        SET status = 'inactive',
-            updated_at = $1,
-            deactivated_at = $1,
-            deactivation_reason = $2,
-            deactivated_by = $3
-        WHERE user_id = $4 AND tenant_id = $5 AND status = 'active'
-        RETURNING user_id, email, username, status, first_name, last_name
-        """
-
-        now = datetime.now(UTC)
-        result = self._db_node.execute(
-            query=update_query, params=[now, reason, deactivated_by, user_id, tenant_id]
-        )
-
-        if not result.get("rows"):
-            # Check if user exists but is already inactive
-            check_query = """
-            SELECT status FROM users
-            WHERE user_id = $1 AND tenant_id = $2
-            """
-            check_result = self._db_node.execute(
-                query=check_query, params=[user_id, tenant_id]
-            )
-
-            if check_result.get("rows"):
-                current_status = check_result["rows"][0]["status"]
-                return {
-                    "success": False,
-                    "message": f"User is already {current_status}",
-                }
-            else:
-                return {"success": False, "message": "User not found"}
-
-        deactivated_user = result["rows"][0]
-
-        # Revoke active sessions
-        session_query = """
-        UPDATE user_sessions
-        SET status = 'revoked', revoked_at = $1
-        WHERE user_id = $2 AND tenant_id = $3 AND status = 'active'
-        """
-        self._db_node.execute(query=session_query, params=[now, user_id, tenant_id])
-
-        # Audit log
-        if self._config.audit_enabled:
-            print(f"[AUDIT] user_deactivated: {user_id} (reason: {reason})")
-
-        return {
-            "success": True,
-            "user": deactivated_user,
-            "message": f"User {user_id} deactivated successfully",
-            "reason": reason,
-        }
-
-    def _activate_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Activate user account."""
-        user_id = inputs.get("user_id")
-        tenant_id = inputs.get("tenant_id", "default")
-        activated_by = inputs.get("activated_by", "system")
-        clear_deactivation_data = inputs.get("clear_deactivation_data", True)
-
-        if not user_id:
-            raise NodeValidationError("user_id is required for activate operation")
-
-        self._ensure_db_node(inputs)
-
-        # Update user status to active
-        if clear_deactivation_data:
-            update_query = """
-            UPDATE users
-            SET status = 'active',
-                updated_at = $1,
-                activated_at = $1,
-                activated_by = $2,
-                deactivated_at = NULL,
-                deactivation_reason = NULL,
-                deactivated_by = NULL
-            WHERE user_id = $3 AND tenant_id = $4 AND status IN ('inactive', 'pending')
-            RETURNING user_id, email, username, status, first_name, last_name
-            """
-        else:
-            update_query = """
-            UPDATE users
-            SET status = 'active',
-                updated_at = $1,
-                activated_at = $1,
-                activated_by = $2
-            WHERE user_id = $3 AND tenant_id = $4 AND status IN ('inactive', 'pending')
-            RETURNING user_id, email, username, status, first_name, last_name
-            """
-
-        now = datetime.now(UTC)
-        result = self._db_node.execute(
-            query=update_query, params=[now, activated_by, user_id, tenant_id]
-        )
-
-        if not result.get("rows"):
-            # Check if user exists but is already active
-            check_query = """
-            SELECT status FROM users
-            WHERE user_id = $1 AND tenant_id = $2
-            """
-            check_result = self._db_node.execute(
-                query=check_query, params=[user_id, tenant_id]
-            )
-
-            if check_result.get("rows"):
-                current_status = check_result["rows"][0]["status"]
-                if current_status == "active":
-                    return {"success": False, "message": "User is already active"}
-                elif current_status == "deleted":
-                    return {
-                        "success": False,
-                        "message": "Cannot activate deleted user. Use restore operation instead.",
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "message": f"Cannot activate user with status: {current_status}",
-                    }
-            else:
-                return {"success": False, "message": "User not found"}
-
-        activated_user = result["rows"][0]
-
-        # Audit log
-        if self._config.audit_enabled:
-            print(f"[AUDIT] user_activated: {user_id}")
-
-        return {
-            "success": True,
-            "user": activated_user,
-            "message": f"User {user_id} activated successfully",
-        }
-
-    def _ensure_db_node(self, inputs: Dict[str, Any]):
-        """Ensure database node is initialized."""
-        if not self._db_node:
-            self._init_dependencies(inputs)
-
-    def _verify_password(self, password: str, password_hash: str) -> bool:
-        """Verify password against hash."""
-        if not password_hash or "$" not in password_hash:
-            return False
-
-        salt, stored_hash = password_hash.split("$", 1)
-        test_hash = hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
-        return test_hash == stored_hash
-
-    def _restore_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Restore soft-deleted user."""
-        user_id = inputs.get("user_id")
-        tenant_id = inputs.get("tenant_id", "default")
-        restored_by = inputs.get("restored_by", "system")
-        new_status = inputs.get("new_status", "active")
-
-        if not user_id:
-            raise NodeValidationError("user_id is required for restore operation")
-
-        if new_status not in ["active", "inactive", "pending"]:
-            raise NodeValidationError(
-                f"Invalid new_status: {new_status}. Must be active, inactive, or pending"
-            )
-
-        self._ensure_db_node(inputs)
-
-        # Check if user exists and is deleted
-        check_query = """
-        SELECT user_id, email, username, status, deleted_at
-        FROM users
-        WHERE user_id = $1 AND tenant_id = $2
-        """
-        check_result = self._db_node.execute(
-            query=check_query, params=[user_id, tenant_id]
-        )
-
-        if not check_result.get("rows"):
-            return {"success": False, "message": "User not found"}
-
-        user_data = check_result["rows"][0]
-        if user_data["status"] != "deleted":
-            return {
-                "success": False,
-                "message": f"User is not deleted. Current status: {user_data['status']}",
-            }
-
-        # Restore user
-        restore_query = """
-        UPDATE users
-        SET status = $1,
-            updated_at = $2,
-            restored_at = $2,
-            restored_by = $3,
-            deleted_at = NULL,
-            deleted_by = NULL
-        WHERE user_id = $4 AND tenant_id = $5 AND status = 'deleted'
-        RETURNING user_id, email, username, status, first_name, last_name
-        """
-
-        now = datetime.now(UTC)
-        result = self._db_node.execute(
-            query=restore_query,
-            params=[new_status, now, restored_by, user_id, tenant_id],
-        )
-
-        if not result.get("rows"):
-            return {"success": False, "message": "Failed to restore user"}
-
-        restored_user = result["rows"][0]
-
-        # Audit log
-        if self._config.audit_enabled:
-            print(f"[AUDIT] user_restored: {user_id} (new_status: {new_status})")
-
-        return {
-            "success": True,
-            "user": restored_user,
-            "message": f"User {user_id} restored successfully",
-            "new_status": new_status,
-            "previous_deleted_at": user_data["deleted_at"],
-        }
-
-    def _search_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Advanced user search with full-text capabilities."""
-        search_query = inputs.get("search_query", "")
-        tenant_id = inputs.get("tenant_id", "default")
-        filters = inputs.get("filters", {})
-        search_fields = inputs.get(
-            "search_fields", ["email", "username", "first_name", "last_name"]
-        )
-        pagination = inputs.get(
-            "pagination", {"page": 1, "size": 20, "sort": "relevance"}
-        )
-        include_deleted = inputs.get("include_deleted", False)
-        fuzzy_search = inputs.get("fuzzy_search", True)
-
-        self._ensure_db_node(inputs)
-
-        # Build search conditions
-        where_conditions = ["tenant_id = $1"]
-        params = [tenant_id]
-        param_count = 1
-
-        if not include_deleted:
-            where_conditions.append("status != 'deleted'")
-
-        # Apply filters
-        if "status" in filters:
-            param_count += 1
-            if isinstance(filters["status"], list):
-                where_conditions.append(f"status = ANY(${param_count})")
-                params.append(filters["status"])
-            else:
-                where_conditions.append(f"status = ${param_count}")
-                params.append(filters["status"])
-
-        if "roles" in filters:
-            param_count += 1
-            where_conditions.append(f"roles && ${param_count}")
-            params.append(filters["roles"])
-
-        if "created_after" in filters:
-            param_count += 1
-            where_conditions.append(f"created_at >= ${param_count}")
-            params.append(filters["created_after"])
-
-        if "created_before" in filters:
-            param_count += 1
-            where_conditions.append(f"created_at <= ${param_count}")
-            params.append(filters["created_before"])
-
-        # Apply attribute filters
-        if "attributes" in filters:
-            for attr_key, attr_value in filters["attributes"].items():
-                param_count += 1
-                where_conditions.append(f"attributes->>'{attr_key}' = ${param_count}")
-                params.append(attr_value)
-
-        # Build search query
-        if search_query:
-            search_conditions = []
-            param_count += 1
-
-            if fuzzy_search:
-                # Use ILIKE for fuzzy matching
-                search_pattern = f"%{search_query}%"
-                params.append(search_pattern)
-
-                for field in search_fields:
-                    search_conditions.append(f"{field} ILIKE ${param_count}")
-            else:
-                # Exact match
-                params.append(search_query)
-
-                for field in search_fields:
-                    search_conditions.append(f"{field} = ${param_count}")
-
-            if search_conditions:
-                where_conditions.append(f"({' OR '.join(search_conditions)})")
-
-        # Get pagination settings
-        page = pagination.get("page", 1)
-        size = pagination.get("size", 20)
-        sort_field = pagination.get("sort", "relevance")
-        sort_direction = pagination.get("direction", "DESC")
-
-        # Calculate offset
-        offset = (page - 1) * size
-
-        # Build relevance scoring for sorting
-        if sort_field == "relevance" and search_query:
-            relevance_score = f"""
-                CASE
-                    WHEN email = ${param_count} THEN 4
-                    WHEN username = ${param_count} THEN 3
-                    WHEN email ILIKE ${param_count} THEN 2
-                    WHEN username ILIKE ${param_count} OR first_name ILIKE ${param_count} OR last_name ILIKE ${param_count} THEN 1
-                    ELSE 0
-                END as relevance
-            """
-
-            order_by = "relevance DESC, created_at DESC"
-        else:
-            relevance_score = "0 as relevance"
-            order_by = f"{sort_field} {sort_direction}"
-
-        # Count query
-        count_query = f"""
-        SELECT COUNT(*) as total
-        FROM users
-        WHERE {' AND '.join(where_conditions)}
-        """
-
-        # Data query
-        data_query = f"""
-        SELECT user_id, email, username, first_name, last_name,
-               status, roles, attributes, created_at, updated_at, last_login,
-               {relevance_score}
-        FROM users
-        WHERE {' AND '.join(where_conditions)}
-        ORDER BY {order_by}
-        LIMIT {size} OFFSET {offset}
-        """
-
-        # Execute count query
-        count_result = self._db_node.execute(query=count_query, params=params)
-        total_count = (
-            count_result["rows"][0]["total"] if count_result.get("rows") else 0
-        )
-
-        # Execute data query
-        data_result = self._db_node.execute(query=data_query, params=params)
-        users = data_result.get("rows", [])
-
-        # Calculate pagination info
-        total_pages = (total_count + size - 1) // size if size > 0 else 0
-        has_next = page < total_pages
-        has_prev = page > 1
-
-        # Audit log search action
-        if self._config.audit_enabled and search_query:
-            print(f"[AUDIT] user_search: query='{search_query}', results={len(users)}")
-
-        return {
-            "success": True,
-            "users": users,
-            "pagination": {
-                "page": page,
-                "size": size,
-                "total": total_count,
-                "total_pages": total_pages,
-                "has_next": has_next,
-                "has_prev": has_prev,
-            },
-            "search": {
-                "query": search_query,
-                "fields": search_fields,
-                "fuzzy": fuzzy_search,
-            },
-            "filters_applied": filters,
-            "message": f"Found {total_count} users matching criteria",
-        }
-
-    def _bulk_update_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Bulk update multiple users."""
-        user_updates = inputs.get("user_updates", [])
-        tenant_id = inputs.get("tenant_id", "default")
-        updated_by = inputs.get("updated_by", "system")
-        transaction_mode = inputs.get("transaction_mode", "all_or_none")
-
-        if not user_updates:
-            raise NodeValidationError("user_updates list is required for bulk update")
-
-        if not isinstance(user_updates, list):
-            raise NodeValidationError("user_updates must be a list")
-
-        self._ensure_db_node(inputs)
-
-        results = {"updated": [], "failed": [], "stats": {"updated": 0, "failed": 0}}
-
-        # Start transaction if all_or_none mode
-        if transaction_mode == "all_or_none":
-            self._db_node.execute(query="BEGIN")
 
         try:
-            for i, update_data in enumerate(user_updates):
-                try:
-                    user_id = update_data.get("user_id")
-                    if not user_id:
-                        raise NodeValidationError(
-                            f"user_id missing in update at index {i}"
-                        )
+            self._db_node.run(query=update_query, parameters=parameters)
 
-                    # Build update fields
-                    update_fields = []
-                    params = []
-                    param_count = 1
-
-                    # Update allowed fields
-                    allowed_fields = [
-                        "email",
-                        "username",
-                        "first_name",
-                        "last_name",
-                        "status",
-                        "roles",
-                        "attributes",
-                        "phone",
-                        "department",
-                    ]
-
-                    for field, value in update_data.items():
-                        if field in allowed_fields:
-                            # Validate specific fields
-                            if field == "email" and inputs.get("validate_email", True):
-                                if not self._validate_email(value):
-                                    raise NodeValidationError(
-                                        f"Invalid email format: {value}"
-                                    )
-                            elif field == "username" and inputs.get(
-                                "validate_username", True
-                            ):
-                                if not self._validate_username(value):
-                                    raise NodeValidationError(
-                                        f"Invalid username format: {value}"
-                                    )
-                            elif field == "status":
-                                if value not in [s.value for s in UserStatus]:
-                                    raise NodeValidationError(
-                                        f"Invalid status: {value}"
-                                    )
-
-                            update_fields.append(f"{field} = ${param_count}")
-                            params.append(value)
-                            param_count += 1
-
-                    if not update_fields:
-                        raise NodeValidationError(
-                            f"No valid fields to update at index {i}"
-                        )
-
-                    # Add updated_at and updated_by
-                    update_fields.append(f"updated_at = ${param_count}")
-                    params.append(datetime.now(UTC))
-                    param_count += 1
-
-                    update_fields.append(f"updated_by = ${param_count}")
-                    params.append(updated_by)
-                    param_count += 1
-
-                    # Build query
-                    update_query = f"""
-                    UPDATE users
-                    SET {', '.join(update_fields)}
-                    WHERE user_id = ${param_count} AND tenant_id = ${param_count + 1}
-                    RETURNING user_id, email, username, status
-                    """
-                    params.extend([user_id, tenant_id])
-
-                    result = self._db_node.execute(query=update_query, params=params)
-
-                    if result.get("rows"):
-                        results["updated"].append(
-                            {"index": i, "user": result["rows"][0]}
-                        )
-                        results["stats"]["updated"] += 1
-                    else:
-                        raise Exception("User not found or no changes made")
-
-                except Exception as e:
-                    error_info = {
-                        "index": i,
-                        "user_id": update_data.get("user_id"),
-                        "error": str(e),
-                    }
-
-                    if transaction_mode == "all_or_none":
-                        # Rollback and return error
-                        self._db_node.execute(query="ROLLBACK")
-                        return {
-                            "success": False,
-                            "message": f"Bulk update failed at index {i}: {str(e)}",
-                            "error_detail": error_info,
-                            "stats": results["stats"],
-                        }
-                    else:
-                        # Continue with next update
-                        results["failed"].append(error_info)
-                        results["stats"]["failed"] += 1
-
-            # Commit transaction if all_or_none mode
-            if transaction_mode == "all_or_none":
-                self._db_node.execute(query="COMMIT")
-
-            # Audit log
-            if self._config.audit_enabled:
-                print(
-                    f"[AUDIT] bulk_user_update: updated={results['stats']['updated']}, failed={results['stats']['failed']}"
-                )
+            # Get updated user
+            updated_user = self._get_user_by_id(user_id, tenant_id)
 
             return {
-                "success": True,
-                "results": results,
-                "message": f"Bulk update completed: {results['stats']['updated']} updated, {results['stats']['failed']} failed",
-                "transaction_mode": transaction_mode,
+                "result": {
+                    "user": updated_user.to_dict(),
+                    "operation": "update_user",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
             }
 
         except Exception as e:
-            if transaction_mode == "all_or_none":
-                self._db_node.execute(query="ROLLBACK")
-            raise NodeExecutionError(f"Bulk update failed: {str(e)}")
+            raise NodeExecutionError(f"Failed to update user: {str(e)}")
 
-    def _bulk_delete_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Bulk delete multiple users."""
-        user_ids = inputs.get("user_ids", [])
-        tenant_id = inputs.get("tenant_id", "default")
+    def _delete_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Delete (or soft-delete) a user."""
+        user_id = inputs["user_id"]
+        tenant_id = inputs["tenant_id"]
         hard_delete = inputs.get("hard_delete", False)
-        deleted_by = inputs.get("deleted_by", "system")
-        transaction_mode = inputs.get("transaction_mode", "all_or_none")
 
-        if not user_ids:
-            raise NodeValidationError("user_ids list is required for bulk delete")
+        # Get existing user to return in response
+        existing_user = self._get_user_by_id(user_id, tenant_id)
+
+        if hard_delete:
+            # Hard delete - remove from database
+            delete_query = "DELETE FROM users WHERE user_id = $1 AND tenant_id = $2"
+        else:
+            # Soft delete - mark as deleted
+            delete_query = """
+            UPDATE users
+            SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = $1 AND tenant_id = $2
+            """
+
+        try:
+            self._db_node.run(query=delete_query, parameters=[user_id, tenant_id])
+
+            return {
+                "result": {
+                    "deleted_user": existing_user.to_dict(),
+                    "hard_delete": hard_delete,
+                    "operation": "delete_user",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            }
+
+        except Exception as e:
+            raise NodeExecutionError(f"Failed to delete user: {str(e)}")
+
+    def _list_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """List users with filtering and pagination."""
+        tenant_id = inputs["tenant_id"]
+        status = inputs.get("status")
+        limit = inputs.get("limit", 50)
+        offset = inputs.get("offset", 0)
+        include_deleted = inputs.get("include_deleted", False)
+
+        # Build query with filters
+        where_conditions = ["tenant_id = $1"]
+        parameters = [tenant_id]
+        param_index = 2
+
+        if status:
+            where_conditions.append(f"status = ${param_index}")
+            parameters.append(status)
+            param_index += 1
+        elif not include_deleted:
+            where_conditions.append(f"status != ${param_index}")
+            parameters.append("deleted")
+            param_index += 1
+
+        # Add pagination
+        parameters.extend([limit, offset])
+
+        list_query = f"""
+        SELECT user_id, email, username, first_name, last_name, display_name,
+               roles, attributes, status, tenant_id, external_auth_id, auth_provider,
+               created_at, updated_at, last_login_at
+        FROM users
+        WHERE {' AND '.join(where_conditions)}
+        ORDER BY created_at DESC
+        LIMIT ${param_index} OFFSET ${param_index + 1}
+        """
+
+        count_query = f"""
+        SELECT COUNT(*) as total_count
+        FROM users
+        WHERE {' AND '.join(where_conditions)}
+        """
+
+        try:
+            # Get users
+            result = self._db_node.run(
+                query=list_query, parameters=parameters, result_format="dict"
+            )
+
+            # Get total count
+            count_result = self._db_node.run(
+                query=count_query, parameters=parameters[:-2], result_format="dict"
+            )
+
+            users = []
+            for user_data in result.get("data", []):
+                user = User(
+                    user_id=user_data["user_id"],
+                    email=user_data["email"],
+                    username=user_data["username"],
+                    first_name=user_data["first_name"],
+                    last_name=user_data["last_name"],
+                    display_name=user_data["display_name"],
+                    roles=user_data.get("roles", []),
+                    attributes=user_data.get("attributes", {}),
+                    status=UserStatus(user_data["status"]),
+                    tenant_id=user_data["tenant_id"],
+                    external_auth_id=user_data["external_auth_id"],
+                    auth_provider=user_data["auth_provider"],
+                    created_at=user_data.get("created_at"),
+                    updated_at=user_data.get("updated_at"),
+                    last_login_at=user_data.get("last_login_at"),
+                )
+                users.append(user.to_dict())
+
+            total_count = count_result.get("data", [{}])[0].get("total_count", 0)
+
+            return {
+                "result": {
+                    "users": users,
+                    "pagination": {
+                        "total_count": total_count,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_more": offset + limit < total_count,
+                    },
+                    "filters": {
+                        "status": status,
+                        "include_deleted": include_deleted,
+                    },
+                    "operation": "list_users",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            }
+
+        except Exception as e:
+            raise NodeExecutionError(f"Failed to list users: {str(e)}")
+
+    def _activate_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Activate a user."""
+        return self._change_user_status(inputs, UserStatus.ACTIVE, "activate_user")
+
+    def _deactivate_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Deactivate a user."""
+        return self._change_user_status(inputs, UserStatus.INACTIVE, "deactivate_user")
+
+    def _change_user_status(
+        self, inputs: Dict[str, Any], new_status: UserStatus, operation: str
+    ) -> Dict[str, Any]:
+        """Helper method to change user status."""
+        user_id = inputs["user_id"]
+        tenant_id = inputs["tenant_id"]
+
+        update_query = """
+        UPDATE users
+        SET status = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $2 AND tenant_id = $3
+        """
+
+        try:
+            self._db_node.run(
+                query=update_query, parameters=[new_status.value, user_id, tenant_id]
+            )
+
+            # Get updated user
+            updated_user = self._get_user_by_id(user_id, tenant_id)
+
+            return {
+                "result": {
+                    "user": updated_user.to_dict(),
+                    "operation": operation,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            }
+
+        except Exception as e:
+            raise NodeExecutionError(f"Failed to {operation}: {str(e)}")
+
+    def _set_password(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Set user password hash."""
+        user_id = inputs["user_id"]
+        tenant_id = inputs["tenant_id"]
+        password_hash = inputs["password_hash"]
+
+        update_query = """
+        UPDATE users
+        SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $2 AND tenant_id = $3
+        """
+
+        try:
+            self._db_node.run(
+                query=update_query, parameters=[password_hash, user_id, tenant_id]
+            )
+
+            return {
+                "result": {
+                    "user_id": user_id,
+                    "password_updated": True,
+                    "operation": "set_password",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            }
+
+        except Exception as e:
+            raise NodeExecutionError(f"Failed to set password: {str(e)}")
+
+    def _update_profile(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Update user profile fields."""
+        # This is essentially the same as update_user but with a different operation name
+        result = self._update_user(inputs)
+        result["result"]["operation"] = "update_profile"
+        return result
+
+    def _bulk_create(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Create multiple users in bulk."""
+        users_data = inputs["users_data"]
+        tenant_id = inputs["tenant_id"]
+
+        if not isinstance(users_data, list):
+            raise NodeValidationError("users_data must be a list")
+
+        created_users = []
+        failed_users = []
+
+        for i, user_data in enumerate(users_data):
+            try:
+                # Create each user individually for better error handling
+                create_inputs = {
+                    "operation": "create_user",
+                    "user_data": user_data,
+                    "tenant_id": tenant_id,
+                    "database_config": inputs["database_config"],
+                }
+
+                result = self._create_user(create_inputs)
+                created_users.append(result["result"]["user"])
+
+            except Exception as e:
+                failed_users.append(
+                    {
+                        "index": i,
+                        "user_data": user_data,
+                        "error": str(e),
+                    }
+                )
+
+        return {
+            "result": {
+                "bulk_result": {
+                    "created_count": len(created_users),
+                    "failed_count": len(failed_users),
+                    "total_count": len(users_data),
+                    "created_users": created_users,
+                    "failed_users": failed_users,
+                },
+                "operation": "bulk_create",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _bulk_update(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Update multiple users in bulk."""
+        users_data = inputs["users_data"]
+        tenant_id = inputs["tenant_id"]
+
+        if not isinstance(users_data, list):
+            raise NodeValidationError("users_data must be a list")
+
+        updated_users = []
+        failed_users = []
+
+        for i, user_data in enumerate(users_data):
+            try:
+                if "user_id" not in user_data:
+                    raise NodeValidationError("user_id is required for bulk update")
+
+                update_inputs = {
+                    "operation": "update_user",
+                    "user_id": user_data.pop("user_id"),
+                    "user_data": user_data,
+                    "tenant_id": tenant_id,
+                    "database_config": inputs["database_config"],
+                }
+
+                result = self._update_user(update_inputs)
+                updated_users.append(result["result"]["user"])
+
+            except Exception as e:
+                failed_users.append(
+                    {
+                        "index": i,
+                        "user_data": user_data,
+                        "error": str(e),
+                    }
+                )
+
+        return {
+            "result": {
+                "bulk_result": {
+                    "updated_count": len(updated_users),
+                    "failed_count": len(failed_users),
+                    "total_count": len(users_data),
+                    "updated_users": updated_users,
+                    "failed_users": failed_users,
+                },
+                "operation": "bulk_update",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _bulk_delete(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Delete multiple users in bulk."""
+        user_ids = inputs.get("user_ids", [])
+        tenant_id = inputs["tenant_id"]
+        hard_delete = inputs.get("hard_delete", False)
 
         if not isinstance(user_ids, list):
             raise NodeValidationError("user_ids must be a list")
 
-        self._ensure_db_node(inputs)
+        deleted_users = []
+        failed_users = []
 
-        results = {"deleted": [], "failed": [], "stats": {"deleted": 0, "failed": 0}}
+        for user_id in user_ids:
+            try:
+                delete_inputs = {
+                    "operation": "delete_user",
+                    "user_id": user_id,
+                    "tenant_id": tenant_id,
+                    "hard_delete": hard_delete,
+                    "database_config": inputs["database_config"],
+                }
 
-        # Start transaction if all_or_none mode
-        if transaction_mode == "all_or_none":
-            self._db_node.execute(query="BEGIN")
+                result = self._delete_user(delete_inputs)
+                deleted_users.append(result["result"]["deleted_user"])
 
-        try:
-            now = datetime.now(UTC)
-
-            for i, user_id in enumerate(user_ids):
-                try:
-                    if hard_delete:
-                        # Permanent deletion
-                        delete_query = """
-                        DELETE FROM users
-                        WHERE user_id = $1 AND tenant_id = $2
-                        RETURNING user_id, email, username
-                        """
-                        params = [user_id, tenant_id]
-                    else:
-                        # Soft delete
-                        delete_query = """
-                        UPDATE users
-                        SET status = 'deleted',
-                            updated_at = $1,
-                            deleted_at = $1,
-                            deleted_by = $2
-                        WHERE user_id = $3 AND tenant_id = $4 AND status != 'deleted'
-                        RETURNING user_id, email, username, status
-                        """
-                        params = [now, deleted_by, user_id, tenant_id]
-
-                    result = self._db_node.execute(query=delete_query, params=params)
-
-                    if result.get("rows"):
-                        results["deleted"].append(
-                            {"index": i, "user": result["rows"][0]}
-                        )
-                        results["stats"]["deleted"] += 1
-
-                        # Revoke sessions for soft delete
-                        if not hard_delete:
-                            session_query = """
-                            UPDATE user_sessions
-                            SET status = 'revoked', revoked_at = $1
-                            WHERE user_id = $2 AND tenant_id = $3 AND status = 'active'
-                            """
-                            self._db_node.execute(
-                                query=session_query, params=[now, user_id, tenant_id]
-                            )
-                    else:
-                        raise Exception("User not found or already deleted")
-
-                except Exception as e:
-                    error_info = {"index": i, "user_id": user_id, "error": str(e)}
-
-                    if transaction_mode == "all_or_none":
-                        # Rollback and return error
-                        self._db_node.execute(query="ROLLBACK")
-                        return {
-                            "success": False,
-                            "message": f"Bulk delete failed at index {i}: {str(e)}",
-                            "error_detail": error_info,
-                            "stats": results["stats"],
-                        }
-                    else:
-                        # Continue with next deletion
-                        results["failed"].append(error_info)
-                        results["stats"]["failed"] += 1
-
-            # Commit transaction if all_or_none mode
-            if transaction_mode == "all_or_none":
-                self._db_node.execute(query="COMMIT")
-
-            # Audit log
-            if self._config.audit_enabled:
-                action = "hard_deleted" if hard_delete else "soft_deleted"
-                print(
-                    f"[AUDIT] bulk_user_{action}: deleted={results['stats']['deleted']}, failed={results['stats']['failed']}"
+            except Exception as e:
+                failed_users.append(
+                    {
+                        "user_id": user_id,
+                        "error": str(e),
+                    }
                 )
 
+        return {
+            "result": {
+                "bulk_result": {
+                    "deleted_count": len(deleted_users),
+                    "failed_count": len(failed_users),
+                    "total_count": len(user_ids),
+                    "deleted_users": deleted_users,
+                    "failed_users": failed_users,
+                    "hard_delete": hard_delete,
+                },
+                "operation": "bulk_delete",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _get_user_roles(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Get roles assigned to a user."""
+        user_id = inputs["user_id"]
+        tenant_id = inputs["tenant_id"]
+
+        # Get user with roles
+        user = self._get_user_by_id(user_id, tenant_id)
+
+        # Get detailed role information
+        if user.roles:
+            placeholders = ",".join([f"${i+1}" for i in range(len(user.roles))])
+            role_query = f"""
+            SELECT role_id, name, description, permissions, parent_roles, attributes
+            FROM roles
+            WHERE role_id IN ({placeholders}) AND tenant_id = ${len(user.roles) + 1}
+            """
+
+            result = self._db_node.run(
+                query=role_query,
+                parameters=user.roles + [tenant_id],
+                result_format="dict",
+            )
+            role_details = result.get("data", [])
+        else:
+            role_details = []
+
+        return {
+            "result": {
+                "user_id": user_id,
+                "roles": user.roles,
+                "role_details": role_details,
+                "operation": "get_user_roles",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _get_user_permissions(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Get effective permissions for a user."""
+        user_id = inputs["user_id"]
+        tenant_id = inputs["tenant_id"]
+
+        # This would integrate with PermissionCheckNode to get effective permissions
+        # For now, return a basic implementation
+        user = self._get_user_by_id(user_id, tenant_id)
+
+        return {
+            "result": {
+                "user_id": user_id,
+                "roles": user.roles,
+                "attributes": user.attributes,
+                "operation": "get_user_permissions",
+                "note": "Use PermissionCheckNode.get_user_permissions for complete permission evaluation",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _search_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Search users by query."""
+        search_query = inputs["search_query"]
+        tenant_id = inputs["tenant_id"]
+        limit = inputs.get("limit", 50)
+        offset = inputs.get("offset", 0)
+
+        # Simple text search across email, username, first_name, last_name
+        query = """
+        SELECT user_id, email, username, first_name, last_name, display_name,
+               roles, attributes, status, tenant_id, external_auth_id, auth_provider,
+               created_at, updated_at, last_login_at
+        FROM users
+        WHERE tenant_id = $1 AND status != 'deleted' AND (
+            email ILIKE $2 OR
+            username ILIKE $2 OR
+            first_name ILIKE $2 OR
+            last_name ILIKE $2 OR
+            display_name ILIKE $2
+        )
+        ORDER BY created_at DESC
+        LIMIT $3 OFFSET $4
+        """
+
+        search_pattern = f"%{search_query}%"
+
+        try:
+            result = self._db_node.run(
+                query=query,
+                parameters=[tenant_id, search_pattern, limit, offset],
+                result_format="dict",
+            )
+
+            users = []
+            for user_data in result.get("data", []):
+                user = User(
+                    user_id=user_data["user_id"],
+                    email=user_data["email"],
+                    username=user_data["username"],
+                    first_name=user_data["first_name"],
+                    last_name=user_data["last_name"],
+                    display_name=user_data["display_name"],
+                    roles=user_data.get("roles", []),
+                    attributes=user_data.get("attributes", {}),
+                    status=UserStatus(user_data["status"]),
+                    tenant_id=user_data["tenant_id"],
+                    external_auth_id=user_data["external_auth_id"],
+                    auth_provider=user_data["auth_provider"],
+                    created_at=user_data.get("created_at"),
+                    updated_at=user_data.get("updated_at"),
+                    last_login_at=user_data.get("last_login_at"),
+                )
+                users.append(user.to_dict())
+
             return {
-                "success": True,
-                "results": results,
-                "message": f"Bulk delete completed: {results['stats']['deleted']} deleted, {results['stats']['failed']} failed",
-                "hard_delete": hard_delete,
-                "transaction_mode": transaction_mode,
+                "result": {
+                    "users": users,
+                    "search_query": search_query,
+                    "count": len(users),
+                    "pagination": {
+                        "limit": limit,
+                        "offset": offset,
+                    },
+                    "operation": "search_users",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
             }
 
         except Exception as e:
-            if transaction_mode == "all_or_none":
-                self._db_node.execute(query="ROLLBACK")
-            raise NodeExecutionError(f"Bulk delete failed: {str(e)}")
+            raise NodeExecutionError(f"Failed to search users: {str(e)}")
+
+    def _export_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Export users in specified format."""
+        tenant_id = inputs["tenant_id"]
+        export_format = inputs.get("export_format", "json")
+        include_deleted = inputs.get("include_deleted", False)
+
+        # Get all users for export
+        list_inputs = {
+            **inputs,
+            "operation": "list_users",
+            "limit": 10000,  # Large limit for export
+            "offset": 0,
+            "include_deleted": include_deleted,
+        }
+
+        result = self._list_users(list_inputs)
+        users = result["result"]["users"]
+
+        if export_format == "json":
+            export_data = {
+                "users": users,
+                "export_metadata": {
+                    "tenant_id": tenant_id,
+                    "export_time": datetime.now(UTC).isoformat(),
+                    "total_users": len(users),
+                    "include_deleted": include_deleted,
+                },
+            }
+        elif export_format == "csv":
+            # Convert to CSV format (simplified)
+            csv_headers = [
+                "user_id",
+                "email",
+                "username",
+                "first_name",
+                "last_name",
+                "status",
+                "roles",
+                "created_at",
+            ]
+            csv_rows = []
+            for user in users:
+                csv_rows.append(
+                    [
+                        user.get("user_id", ""),
+                        user.get("email", ""),
+                        user.get("username", ""),
+                        user.get("first_name", ""),
+                        user.get("last_name", ""),
+                        user.get("status", ""),
+                        ",".join(user.get("roles", [])),
+                        user.get("created_at", ""),
+                    ]
+                )
+
+            export_data = {
+                "format": "csv",
+                "headers": csv_headers,
+                "rows": csv_rows,
+                "export_metadata": {
+                    "tenant_id": tenant_id,
+                    "export_time": datetime.now(UTC).isoformat(),
+                    "total_users": len(users),
+                    "include_deleted": include_deleted,
+                },
+            }
+        else:
+            raise NodeValidationError(f"Unsupported export format: {export_format}")
+
+        return {
+            "result": {
+                "export_data": export_data,
+                "operation": "export_users",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        }
+
+    def _generate_reset_token(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a password reset token for a user."""
+        user_id = inputs["user_id"]
+        tenant_id = inputs["tenant_id"]
+
+        # Generate a secure reset token
+        token = str(uuid4())
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+        # Store token in database (using user_sessions table)
+        store_token_query = """
+        INSERT INTO user_sessions (
+            session_id, user_id, tenant_id,
+            session_token_hash, expires_at, created_at,
+            last_accessed, ip_address, user_agent
+        ) VALUES (
+            :session_id, :user_id, :tenant_id,
+            :token_hash, :expires_at, :created_at,
+            :last_accessed, :ip_address, :user_agent
+        )
+        """
+
+        result = self._db_node.run(
+            operation="execute",
+            query=store_token_query,
+            parameters={
+                "session_id": token,
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "token_hash": hashlib.sha256(f"reset_{token}".encode()).hexdigest(),
+                "expires_at": expires_at,
+                "created_at": datetime.now(UTC),
+                "last_accessed": datetime.now(UTC),
+                "ip_address": "127.0.0.1",
+                "user_agent": "password_reset_token",
+            },
+        )
+
+        return {
+            "token": token,
+            "expires_at": expires_at.isoformat(),
+            "user_id": user_id,
+        }
+
+    def _reset_password(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Reset user password using a valid token."""
+        token = inputs["token"]
+        new_password = inputs["new_password"]
+        tenant_id = inputs["tenant_id"]
+
+        # Verify token and get user_id
+        verify_query = """
+        SELECT user_id FROM user_sessions
+        WHERE session_id = :token
+        AND tenant_id = :tenant_id
+        AND user_agent = 'password_reset_token'
+        AND expires_at > CURRENT_TIMESTAMP
+        """
+
+        result = self._db_node.run(
+            operation="query",
+            query=verify_query,
+            parameters={"token": token, "tenant_id": tenant_id},
+        )
+
+        if not result.get("data", []):
+            raise NodeExecutionError("Invalid or expired reset token")
+
+        user_id = result["data"][0]["user_id"]
+
+        # Update password
+        password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+        update_query = """
+        UPDATE users
+        SET password_hash = :password_hash,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = :user_id
+        AND tenant_id = :tenant_id
+        """
+
+        update_result = self._db_node.run(
+            operation="execute",
+            query=update_query,
+            parameters={
+                "password_hash": password_hash,
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+            },
+        )
+
+        # Delete the used token
+        delete_token_query = """
+        DELETE FROM user_sessions
+        WHERE session_id = :token
+        """
+
+        self._db_node.run(
+            operation="execute", query=delete_token_query, parameters={"token": token}
+        )
+
+        return {
+            "success": True,
+            "user_id": user_id,
+            "message": "Password reset successfully",
+        }
+
+    def _authenticate(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Authenticate a user with username/email and password."""
+        username = inputs.get("username")
+        email = inputs.get("email")
+        password = inputs["password"]
+        tenant_id = inputs["tenant_id"]
+
+        # Build query based on provided credentials
+        if username:
+            auth_query = """
+            SELECT user_id, password_hash, status
+            FROM users
+            WHERE username = :username
+            AND tenant_id = :tenant_id
+            """
+            params = {"username": username, "tenant_id": tenant_id}
+        elif email:
+            auth_query = """
+            SELECT user_id, password_hash, status
+            FROM users
+            WHERE email = :email
+            AND tenant_id = :tenant_id
+            """
+            params = {"email": email, "tenant_id": tenant_id}
+        else:
+            raise NodeValidationError("Either username or email must be provided")
+
+        result = self._db_node.run(
+            operation="query", query=auth_query, parameters=params
+        )
+
+        if not result.get("data", []):
+            return {"authenticated": False, "message": "User not found"}
+
+        user_data = result["data"][0]
+        stored_hash = user_data["password_hash"]
+        provided_hash = hashlib.sha256(password.encode()).hexdigest()
+
+        if stored_hash != provided_hash:
+            return {"authenticated": False, "message": "Invalid password"}
+
+        if user_data["status"] != "active":
+            return {
+                "authenticated": False,
+                "message": f"User account is {user_data['status']}",
+            }
+
+        # Update last login
+        update_login_query = """
+        UPDATE users
+        SET last_login_at = CURRENT_TIMESTAMP
+        WHERE user_id = :user_id
+        """
+
+        self._db_node.run(
+            operation="execute",
+            query=update_login_query,
+            parameters={"user_id": user_data["user_id"]},
+        )
+
+        return {
+            "authenticated": True,
+            "user_id": user_data["user_id"],
+            "message": "Authentication successful",
+        }

@@ -4,6 +4,14 @@ This directory contains all migration guides for SDK users. These guides help yo
 
 ## 📋 Migration Guides by Version
 
+### v2.1 - SQL Parameter Flexibility ⭐ **NEW**
+**File**: [v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md)
+- SQLDatabaseNode parameter type flexibility (dict and list support)
+- Named parameter syntax recommendations (:param_name format)
+- AsyncSQLDatabaseNode parameter naming clarification (params vs parameters)
+- Improved error handling and validation patterns
+- Fully backward compatible with enhanced developer experience
+
 ### v0.6.1 - Parameter Flow Updates
 **File**: [v0.6.1-parameter-flow-updates.md](v0.5.1-parameter-flow-updates.md)
 - Node construction vs runtime validation separation
@@ -41,6 +49,21 @@ This directory contains all migration guides for SDK users. These guides help yo
 - Leverage enterprise nodes (BatchProcessorNode, DataLineageNode)
 - Performance optimization checklist
 
+### Database Connection Migration
+**File**: [async-sql-to-workflowconnectionpool.md](async-sql-to-workflowconnectionpool.md)
+- Migrate from AsyncSQLDatabaseNode to WorkflowConnectionPool
+- Production-grade connection pooling with fault tolerance
+- Health monitoring and automatic recycling
+- Performance improvements (10x+ throughput)
+- Step-by-step migration patterns
+
+### Sync to Async Workflow Builder Migration
+**File**: [sync-to-async-workflow-builder.md](sync-to-async-workflow-builder.md) ⭐ **NEW**
+- Migrate from WorkflowBuilder to AsyncWorkflowBuilder
+- Automatic code indentation handling with textwrap.dedent()
+- Built-in async patterns (retry, rate limiting, circuit breaker)
+- Integrated resource management for databases, HTTP, and caches
+- 70%+ code reduction with production-grade reliability
 ## 🚀 Quick Start
 
 1. **Identify your current SDK version**:
@@ -62,6 +85,8 @@ Based on impact and benefits:
 1. **High Priority**:
    - v0.5.0 Architecture Refactoring (performance & reliability)
    - Auth Consolidation (security & circular imports)
+   - Database Connection Migration (10x+ performance for production apps)
+   - Sync to Async Workflow Builder (70%+ code reduction, production-grade)
 
 2. **Medium Priority**:
    - API to Middleware Migration (new features)

@@ -20,6 +20,7 @@ examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
 from examples.utils.paths import get_data_dir
+
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code.python import PythonCodeNode

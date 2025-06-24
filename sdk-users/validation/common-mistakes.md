@@ -20,7 +20,34 @@ from kailash.nodes.base import Node, NodeParameter
 
 ## 🚨 **Most Common Mistakes**
 
-### **Mistake #1: Wrong Execution Pattern**
+### **Mistake #1: Cycle Parameter Passing Errors**
+
+```python
+# ❌ WRONG - Direct field mapping for PythonCodeNode
+counter = PythonCodeNode.from_function(lambda x=0: {"count": x+1}, name="counter")
+workflow.connect("counter", "counter", {"count": "x"}, cycle=True)
+
+# ✅ CORRECT - Use dot notation for PythonCodeNode outputs
+workflow.connect("counter", "counter", {"result.count": "x"}, cycle=True)
+```
+
+```python
+# ❌ WRONG - No initial parameters for cycle
+runtime.execute(workflow)  # ERROR: Required parameter 'x' not provided
+
+# ✅ CORRECT - Provide initial parameters
+runtime.execute(workflow, parameters={"counter": {"x": 0}})
+```
+
+```python
+# ❌ WRONG - Dot notation in convergence check
+.converge_when("result.done == True")
+
+# ✅ CORRECT - Flattened field names in convergence
+.converge_when("done == True")
+```
+
+### **Mistake #2: Wrong Execution Pattern**
 ```python
 
 # ❌ WRONG - This will cause an error

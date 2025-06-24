@@ -297,19 +297,29 @@ class CyclicWorkflowExecutor:
             entry_nodes = set()
             exit_nodes = set()
 
+            # First, collect all nodes in the cycle
             for source, target, data in cycle_edges:
                 cycle_nodes.add(source)
                 cycle_nodes.add(target)
 
+            # Then identify entry and exit nodes
+            for node in cycle_nodes:
                 # Entry nodes have incoming edges from non-cycle nodes
-                for pred in workflow.graph.predecessors(target):
+                for pred in workflow.graph.predecessors(node):
                     if pred not in cycle_nodes:
-                        entry_nodes.add(target)
+                        entry_nodes.add(node)
+                        logger.debug(
+                            f"Cycle {cycle_id}: Node {node} is an entry node (has predecessor {pred})"
+                        )
 
                 # Exit nodes have outgoing edges to non-cycle nodes
-                for succ in workflow.graph.successors(source):
+                for succ in workflow.graph.successors(node):
                     if succ not in cycle_nodes:
-                        exit_nodes.add(source)
+                        exit_nodes.add(node)
+
+            logger.debug(
+                f"Cycle {cycle_id}: nodes={cycle_nodes}, entry_nodes={entry_nodes}, exit_nodes={exit_nodes}"
+            )
 
             plan.add_cycle_group(
                 cycle_id=cycle_id,
@@ -320,7 +330,7 @@ class CyclicWorkflowExecutor:
             )
 
         # Build execution stages
-        plan.build_stages(topo_order, dag_graph)
+        plan.build_stages(topo_order, dag_graph, workflow)
 
         return plan
 
@@ -628,6 +638,10 @@ class CyclicWorkflowExecutor:
         # Gather inputs from connections
         inputs = {}
 
+        logger.debug(
+            f"_execute_node {node_id}: state.node_outputs keys = {list(state.node_outputs.keys())}"
+        )
+
         # Check if we're in a cycle and this is not the first iteration
         in_cycle = cycle_state is not None
         is_cycle_iteration = in_cycle and cycle_state.iteration > 0
@@ -654,6 +668,9 @@ class CyclicWorkflowExecutor:
 
             # Apply mapping
             mapping = edge_data.get("mapping", {})
+            logger.debug(
+                f"Edge {pred} -> {node_id}: mapping = {mapping}, pred_output keys = {list(pred_output.keys()) if isinstance(pred_output, dict) else type(pred_output)}"
+            )
             for src_key, dst_key in mapping.items():
                 # Handle nested output access
                 if "." in src_key:
@@ -669,6 +686,9 @@ class CyclicWorkflowExecutor:
                         inputs[dst_key] = value
                 elif isinstance(pred_output, dict) and src_key in pred_output:
                     inputs[dst_key] = pred_output[src_key]
+                    logger.debug(
+                        f"Mapped {src_key} -> {dst_key}: {type(pred_output[src_key])}, length={len(pred_output[src_key]) if hasattr(pred_output[src_key], '__len__') else 'N/A'}"
+                    )
                 elif src_key == "output":
                     # Default output mapping
                     inputs[dst_key] = pred_output
@@ -698,12 +718,11 @@ class CyclicWorkflowExecutor:
         # Order: config < initial_parameters < connection inputs
         merged_inputs = {**node.config}
 
-        # Add initial parameters if available and node hasn't been executed yet
+        # Add initial parameters if available
+        # For cycle nodes, initial parameters should be available throughout all iterations
         if hasattr(state, "initial_parameters") and node_id in state.initial_parameters:
-            if node_id not in state.node_outputs or (
-                cycle_state and cycle_state.iteration == 0
-            ):
-                # Use initial parameters on first execution
+            if node_id not in state.node_outputs or cycle_state is not None:
+                # Use initial parameters on first execution or for any cycle iteration
                 merged_inputs.update(state.initial_parameters[node_id])
 
         # Connection inputs override everything
@@ -711,6 +730,10 @@ class CyclicWorkflowExecutor:
 
         # Filter out None values to avoid security validation errors
         merged_inputs = {k: v for k, v in merged_inputs.items() if v is not None}
+
+        logger.debug(
+            f"Final merged_inputs for {node_id}: keys={list(merged_inputs.keys())}"
+        )
 
         # Create task for node execution if task manager available
         task = None
@@ -837,12 +860,15 @@ class ExecutionPlan:
             edges=edges,
         )
 
-    def build_stages(self, topo_order: list[str], dag_graph: nx.DiGraph) -> None:
+    def build_stages(
+        self, topo_order: list[str], dag_graph: nx.DiGraph, workflow: Workflow
+    ) -> None:
         """Build execution stages.
 
         Args:
             topo_order: Topological order of DAG nodes
             dag_graph: DAG portion of the graph
+            workflow: The full workflow for checking dependencies
         """
         # Track which nodes have been scheduled
         scheduled = set()
@@ -873,17 +899,82 @@ class ExecutionPlan:
                 f"in_cycle_id value: {in_cycle_id}, found_cycle_group: {found_cycle_group is not None}"
             )
             if found_cycle_group is not None:
-                logger.debug(f"Scheduling cycle group {in_cycle_id} for node {node_id}")
-                # Schedule entire cycle group
-                self.stages.append(
-                    ExecutionStage(is_cycle=True, cycle_group=found_cycle_group)
+                # Check if all DAG dependencies of cycle entry nodes are satisfied
+                can_schedule_cycle = True
+                logger.debug(
+                    f"Checking dependencies for cycle {in_cycle_id}, entry_nodes: {found_cycle_group.entry_nodes}"
                 )
-                scheduled.update(found_cycle_group.nodes)
+                for entry_node in found_cycle_group.entry_nodes:
+                    # Check all predecessors of this entry node in the FULL workflow graph
+                    # (dag_graph only contains DAG edges, not connections to cycle nodes)
+                    preds = list(workflow.graph.predecessors(entry_node))
+                    logger.debug(
+                        f"Entry node {entry_node} has predecessors: {preds}, scheduled: {scheduled}"
+                    )
+                    for pred in preds:
+                        # Skip self-cycles and nodes within the same cycle group
+                        logger.debug(
+                            f"Checking pred {pred}: in scheduled? {pred in scheduled}, in cycle? {pred in found_cycle_group.nodes}"
+                        )
+                        if (
+                            pred not in scheduled
+                            and pred not in found_cycle_group.nodes
+                        ):
+                            # This predecessor hasn't been scheduled yet
+                            logger.debug(
+                                f"Cannot schedule cycle {in_cycle_id} yet - entry node {entry_node} "
+                                f"depends on unscheduled node {pred}"
+                            )
+                            can_schedule_cycle = False
+                            break
+                    if not can_schedule_cycle:
+                        break
+
+                if can_schedule_cycle:
+                    logger.debug(
+                        f"Scheduling cycle group {in_cycle_id} for node {node_id}"
+                    )
+                    # Schedule entire cycle group
+                    self.stages.append(
+                        ExecutionStage(is_cycle=True, cycle_group=found_cycle_group)
+                    )
+                    scheduled.update(found_cycle_group.nodes)
+                else:
+                    # Skip this node for now, it will be scheduled when its dependencies are met
+                    logger.debug(
+                        f"Deferring cycle group {in_cycle_id} - dependencies not met"
+                    )
+                    continue
             else:
                 logger.debug(f"Scheduling DAG node {node_id}")
                 # Schedule DAG node
                 self.stages.append(ExecutionStage(is_cycle=False, nodes=[node_id]))
                 scheduled.add(node_id)
+
+        # After processing all nodes in topological order, check for any unscheduled cycle groups
+        for cycle_id, cycle_group in self.cycle_groups.items():
+            if not any(node in scheduled for node in cycle_group.nodes):
+                # This cycle group hasn't been scheduled yet
+                # Check if all dependencies are now satisfied
+                can_schedule = True
+                for entry_node in cycle_group.entry_nodes:
+                    for pred in workflow.graph.predecessors(entry_node):
+                        if pred not in scheduled and pred not in cycle_group.nodes:
+                            logger.warning(
+                                f"Cycle group {cycle_id} has unsatisfied dependency: "
+                                f"{entry_node} depends on {pred}"
+                            )
+                            can_schedule = False
+                            break
+                    if not can_schedule:
+                        break
+
+                if can_schedule:
+                    logger.debug(f"Scheduling deferred cycle group {cycle_id}")
+                    self.stages.append(
+                        ExecutionStage(is_cycle=True, cycle_group=cycle_group)
+                    )
+                    scheduled.update(cycle_group.nodes)
 
 
 class ExecutionStage:

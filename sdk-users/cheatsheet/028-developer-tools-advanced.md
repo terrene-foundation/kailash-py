@@ -101,15 +101,15 @@ session_report = analyzer.generate_session_report()
 def optimize_during_development(workflow):
     """Optimize cycle performance during development."""
     from kailash.workflow import CycleAnalyzer
-    
+
     def execute_workflow_with_tracking(wf, trace):
         """Mock function for workflow execution."""
         return {"results": "processed", "iterations": 5}
-    
+
     def apply_optimizations(wf, recommendations):
         """Mock function for applying optimizations."""
         return wf  # Return optimized workflow
-    
+
     analyzer = CycleAnalyzer(analysis_level="comprehensive")
     session = analyzer.start_analysis_session("development")
 
@@ -143,11 +143,11 @@ def monitor_production_cycles():
     """Monitor cycle health in production."""
     from kailash.workflow import CycleDebugger
     from kailash.runtime.local import LocalRuntime
-    
+
     def send_alerts(alerts, report):
         """Mock function for sending alerts."""
         print(f"ALERT: {alerts}")
-    
+
     debugger = CycleDebugger(
         debug_level="basic",  # Minimal overhead
         enable_profiling=True
@@ -198,26 +198,26 @@ def monitor_production_cycles():
 def ab_test_cycle_variants():
     """A/B test different cycle implementations."""
     from kailash.workflow import CycleProfiler
-    
+
     def create_baseline_cycle():
         """Mock function to create baseline cycle."""
         from kailash import Workflow
         return Workflow("baseline")
-    
+
     def create_optimized_v1():
         """Mock function to create optimized v1."""
         from kailash import Workflow
         return Workflow("optimized_v1")
-    
+
     def create_optimized_v2():
         """Mock function to create optimized v2."""
         from kailash import Workflow
         return Workflow("optimized_v2")
-    
+
     def execute_workflow_with_profiling(workflow):
         """Mock function for profiled execution."""
         return {"trace_id": workflow.workflow_id, "performance": 0.75}
-    
+
     profiler = CycleProfiler(enable_advanced_metrics=True)
 
     # Define variants
@@ -372,7 +372,7 @@ def export_analysis_data(analyzer):
 
 ### Key Tools
 - **CycleDebugger**: Real-time execution tracking
-- **CycleProfiler**: Performance analysis & recommendations  
+- **CycleProfiler**: Performance analysis & recommendations
 - **CycleAnalyzer**: Comprehensive analysis framework
 
 ### Common Workflows

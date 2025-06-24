@@ -8,11 +8,11 @@ from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import NodeValidationError
 
 
-class TestNodeWithSchema(Node):
+class NodeWithSchemaTest(Node):
     """Test node with output schema defined."""
 
     metadata = NodeMetadata(
-        name="TestNodeWithSchema", description="Test node with output schema"
+        name="NodeWithSchemaTest", description="Test node with output schema"
     )
 
     def configure(self, **kwargs):
@@ -51,11 +51,11 @@ class TestNodeWithSchema(Node):
         return {"result": input_value * 2, "status": "success"}
 
 
-class TestNodeWithoutSchema(Node):
+class NodeWithoutSchemaTest(Node):
     """Test node without output schema (default behavior)."""
 
     metadata = NodeMetadata(
-        name="TestNodeWithoutSchema", description="Test node without output schema"
+        name="NodeWithoutSchemaTest", description="Test node without output schema"
     )
 
     def configure(self, **kwargs):
@@ -89,7 +89,7 @@ def test_output_schema_validation():
     # Test 1: Valid outputs with schema
     print("\n1. Testing valid outputs with schema...")
     try:
-        node = TestNodeWithSchema()
+        node = NodeWithSchemaTest()
         outputs = {"result": 42, "status": "success"}
         validated = node.validate_outputs(outputs)
         print(f"✓ Valid outputs accepted: {validated}")
@@ -103,7 +103,7 @@ def test_output_schema_validation():
     # Test 2: Missing required output
     print("\n2. Testing missing required output...")
     try:
-        node = TestNodeWithSchema()
+        node = NodeWithSchemaTest()
         outputs = {"result": 42}  # Missing required 'status'
         validated = node.validate_outputs(outputs)
         print("✗ Should have failed for missing required output")
@@ -114,7 +114,7 @@ def test_output_schema_validation():
     # Test 3: Type conversion in outputs
     print("\n3. Testing type conversion in outputs...")
     try:
-        node = TestNodeWithSchema()
+        node = NodeWithSchemaTest()
         outputs = {"result": "42", "status": "success"}  # String instead of int
         validated = node.validate_outputs(outputs)
         print(f"✓ Type conversion successful: {validated}")
@@ -126,7 +126,7 @@ def test_output_schema_validation():
     # Test 4: Invalid type that can't be converted
     print("\n4. Testing invalid type conversion...")
     try:
-        node = TestNodeWithSchema()
+        node = NodeWithSchemaTest()
         outputs = {"result": "not_a_number", "status": "success"}
         validated = node.validate_outputs(outputs)
         print("✗ Should have failed for invalid type conversion")
@@ -137,7 +137,7 @@ def test_output_schema_validation():
     # Test 5: Optional output handling
     print("\n5. Testing optional output handling...")
     try:
-        node = TestNodeWithSchema()
+        node = NodeWithSchemaTest()
         outputs = {"result": 42, "status": "success", "metadata": None}
         validated = node.validate_outputs(outputs)
         print(f"✓ Optional None value accepted: {validated}")
@@ -148,7 +148,7 @@ def test_output_schema_validation():
     # Test 6: Extra outputs not in schema
     print("\n6. Testing extra outputs not in schema...")
     try:
-        node = TestNodeWithSchema()
+        node = NodeWithSchemaTest()
         outputs = {
             "result": 42,
             "status": "success",
@@ -166,7 +166,7 @@ def test_output_schema_validation():
     # Test 7: Node without schema (default behavior)
     print("\n7. Testing node without output schema...")
     try:
-        node = TestNodeWithoutSchema()
+        node = NodeWithoutSchemaTest()
         outputs = node.execute(input_value=21)
         validated = node.validate_outputs(outputs)
         print(f"✓ No schema validation, only JSON check: {validated}")
@@ -177,7 +177,7 @@ def test_output_schema_validation():
     # Test 8: Non-JSON-serializable output
     print("\n8. Testing non-JSON-serializable output...")
     try:
-        node = TestNodeWithoutSchema()
+        node = NodeWithoutSchemaTest()
         outputs = {
             "result": 42,
             "bad_value": lambda x: x,

@@ -288,10 +288,10 @@ class SQLDatabaseNode(Node):
             ),
             "parameters": NodeParameter(
                 name="parameters",
-                type=list,
+                type=Any,  # Allow both list and dict for parameters
                 required=False,
-                default=[],
-                description="Query parameters for parameterized queries",
+                default=None,
+                description="Query parameters for parameterized queries (list for positional, dict for named)",
             ),
             "result_format": NodeParameter(
                 name="result_format",
@@ -367,7 +367,7 @@ class SQLDatabaseNode(Node):
         """
         # Extract validated inputs
         query = kwargs.get("query")
-        parameters = kwargs.get("parameters", [])
+        parameters = kwargs.get("parameters")
         result_format = kwargs.get("result_format", "dict")
         user_context = kwargs.get("user_context")
 
@@ -757,19 +757,28 @@ class SQLDatabaseNode(Node):
 
         import re
 
-        # Remove potential passwords from error messages
+        # Remove potential passwords from error messages, but be more selective
         patterns_to_mask = [
             # Connection string passwords
             (r"://[^:]+:[^@]+@", "://***:***@"),
-            # SQL query content (in some error messages)
-            (r"'[^']*'", "'***'"),
-            # Quoted strings that might contain sensitive data
-            (r'"[^"]*"', '"***"'),
+            # Password fields in SQL (case insensitive)
+            (r"password\s*=\s*['\"][^'\"]*['\"]", "password='***'", re.IGNORECASE),
+            # API keys and tokens in SQL
+            (
+                r"(api_key|token|secret)\s*=\s*['\"][^'\"]*['\"]",
+                r"\1='***'",
+                re.IGNORECASE,
+            ),
         ]
 
         sanitized = error_message
-        for pattern, replacement in patterns_to_mask:
-            sanitized = re.sub(pattern, replacement, sanitized)
+        for pattern_info in patterns_to_mask:
+            if len(pattern_info) == 3:
+                pattern, replacement, flags = pattern_info
+                sanitized = re.sub(pattern, replacement, sanitized, flags=flags)
+            else:
+                pattern, replacement = pattern_info
+                sanitized = re.sub(pattern, replacement, sanitized)
 
         return sanitized
 

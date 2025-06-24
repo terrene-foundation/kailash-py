@@ -145,7 +145,7 @@ alerts.add_rule(AlertRule(
     ],
     severity_mapping={
         "1m": "critical",
-        "5m": "warning", 
+        "5m": "warning",
         "30m": "info"
     },
     require_all_windows=False  # Alert if any window breaches
@@ -347,14 +347,14 @@ intelligent_alerts = IntelligentAlerting([
         "window": "5m",
         "fields": ["alert_name", "service", "severity"]
     },
-    
+
     # Rate limiting
     {
         "strategy": "rate_limit",
         "max_alerts_per_hour": 10,
         "burst_threshold": 3
     },
-    
+
     # Smart grouping
     {
         "strategy": "group_similar",
@@ -362,7 +362,7 @@ intelligent_alerts = IntelligentAlerting([
         "max_group_size": 5,
         "group_notification": "📊 {count} similar alerts grouped"
     },
-    
+
     # Adaptive thresholds
     {
         "strategy": "adaptive_threshold",
@@ -370,7 +370,7 @@ intelligent_alerts = IntelligentAlerting([
         "adjustment_factor": 0.1,
         "seasonal_awareness": True
     },
-    
+
     # Alert scoring
     {
         "strategy": "priority_scoring",
@@ -463,7 +463,7 @@ enricher = ContextualAlertEnricher([
         "include_upstream": True,
         "include_downstream": True
     },
-    
+
     # Recent deployments
     {
         "type": "deployment_history",
@@ -471,7 +471,7 @@ enricher = ContextualAlertEnricher([
         "lookback_hours": 24,
         "correlation_threshold": 0.8
     },
-    
+
     # Similar historical incidents
     {
         "type": "incident_history",
@@ -479,14 +479,14 @@ enricher = ContextualAlertEnricher([
         "max_suggestions": 3,
         "time_weight": 0.3
     },
-    
+
     # Resource utilization
     {
         "type": "resource_context",
         "metrics": ["cpu", "memory", "disk", "network"],
         "time_range": "1h"
     },
-    
+
     # Business impact
     {
         "type": "business_impact",
@@ -558,7 +558,7 @@ quality_tracker = AlertQualityTracker([
         "target": 0.8,  # 80% of alerts should be actionable
         "window": "7d"
     },
-    
+
     # Recall: How many real issues were caught?
     {
         "metric": "recall",
@@ -566,14 +566,14 @@ quality_tracker = AlertQualityTracker([
         "target": 0.95,  # Catch 95% of real issues
         "window": "30d"
     },
-    
+
     # Time to detection
     {
         "metric": "mean_time_to_detection",
         "target": 120,  # 2 minutes
         "unit": "seconds"
     },
-    
+
     # False positive rate
     {
         "metric": "false_positive_rate",
@@ -581,7 +581,7 @@ quality_tracker = AlertQualityTracker([
         "target": 0.1,  # Less than 10% false positives
         "severity_weighted": True
     },
-    
+
     # Alert resolution time
     {
         "metric": "mean_time_to_resolution",
@@ -638,14 +638,14 @@ for scenario in test_scenarios:
         duration=30,  # 30 seconds
         tags={"test": True, "scenario": scenario["type"]}
     )
-    
+
     # Wait for alert to fire
     alert_result = tester.wait_for_alert(
         test_id=test_id,
         timeout=60,  # 1 minute
         expected_channels=["test-channel"]
     )
-    
+
     test_results.append({
         "scenario": scenario["type"],
         "alert_fired": alert_result["fired"],
@@ -653,7 +653,7 @@ for scenario in test_scenarios:
         "channels_notified": alert_result["channels"],
         "message_quality": alert_result["message_score"]
     })
-    
+
     # Clean up test condition
     tester.cleanup_test(test_id)
 

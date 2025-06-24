@@ -100,6 +100,7 @@ ALLOWED_MODULES = {
     "pathlib",  # For modern path operations
     "glob",  # For file pattern matching
     "xml",  # For XML processing
+    "uuid",  # For generating unique identifiers (safe, no I/O)
 }
 
 

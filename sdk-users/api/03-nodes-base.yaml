@@ -78,7 +78,7 @@ base_classes:
               # Process the inputs
               data = inputs.get('data', [])
               processed = [x * 2 for x in data]
-              
+
               # Return outputs
               return {
                   'result': processed,
@@ -140,7 +140,7 @@ base_classes:
               async with aiohttp.ClientSession() as session:
                   async with session.get(inputs['url']) as response:
                       data = await response.json()
-              
+
               return {'data': data, 'status': 'success'}
 
       execute:
@@ -177,7 +177,7 @@ base_classes:
               if cycle_id:
                   state = self.get_cycle_state(cycle_id)
                   iteration = state.get('iteration', 0)
-              
+
               # Process with cycle awareness
               result = self.process_with_state(inputs, state)
               return result
@@ -192,7 +192,7 @@ base_classes:
           def execute(self, inputs):
               # Process inputs
               result = self.process_inputs(inputs)
-              
+
               # Update cycle state
               cycle_id = self.config.get('cycle_id')
               if cycle_id:
@@ -202,7 +202,7 @@ base_classes:
                       'last_result': result
                   }
                   self.set_cycle_state(cycle_id, new_state)
-              
+
               return result
 
       check_convergence:
@@ -216,14 +216,14 @@ base_classes:
           def check_convergence(self, cycle_id, current_result):
               state = self.get_cycle_state(cycle_id)
               previous_result = state.get('last_result')
-              
+
               if not previous_result:
                   return False
-              
+
               # Check for convergence based on result similarity
               current_score = current_result.get('quality_score', 0)
               previous_score = previous_result.get('quality_score', 0)
-              
+
               threshold = self.config.get('convergence_threshold', 0.01)
               return abs(current_score - previous_score) < threshold
 
@@ -248,14 +248,14 @@ node_registry:
     example: |
       from kailash.nodes import register_node
       from kailash.nodes.base import Node
-      
+
       @register_node(name='DataProcessor', category='data', version='1.0.0')
       class DataProcessorNode(Node):
           def __init__(self, **config):
               self.processing_mode = config.get('processing_mode', 'simple')
               self.batch_size = config.get('batch_size', 100)
               super().__init__(**config)
-          
+
           def get_parameters(self):
               return {
                   'processing_mode': NodeParameter(
@@ -276,21 +276,21 @@ node_registry:
                       description='Batch size for processing'
                   )
               }
-          
+
           def validate_config(self, config):
               mode = config.get('processing_mode', 'simple')
               if mode not in ['simple', 'advanced', 'batch']:
                   raise ValueError(f"Invalid processing_mode: {mode}")
-              
+
               batch_size = config.get('batch_size', 100)
               if not isinstance(batch_size, int) or batch_size < 1:
                   raise ValueError("batch_size must be a positive integer")
-              
+
               return True
-          
+
           def execute(self, inputs):
               data = inputs.get('data', [])
-              
+
               if self.processing_mode == 'batch':
                   # Process in batches
                   results = []
@@ -303,11 +303,11 @@ node_registry:
                   # Process all at once
                   result = self.process_data(data)
                   return {'result': result}
-          
+
           def process_batch(self, batch):
               # Custom batch processing logic
               return [item * 2 for item in batch]
-          
+
           def process_data(self, data):
               # Custom data processing logic
               if self.processing_mode == 'advanced':
@@ -324,11 +324,11 @@ node_registry:
     returns: "Dictionary mapping node names to node classes"
     example: |
       from kailash.nodes import get_registered_nodes
-      
+
       # Get all nodes
       all_nodes = get_registered_nodes()
       print(f"Available nodes: {list(all_nodes.keys())}")
-      
+
       # Get nodes by category
       data_nodes = get_registered_nodes(category='data')
       ai_nodes = get_registered_nodes(category='ai')
@@ -343,12 +343,12 @@ node_registry:
     returns: "Node instance"
     example: |
       from kailash.nodes import create_node
-      
+
       # Create node from registry
-      processor = create_node('DataProcessor', 
+      processor = create_node('DataProcessor',
                             processing_mode='advanced',
                             batch_size=50)
-      
+
       # Use in workflow
       workflow.add_node('processor', processor)
 
@@ -382,13 +382,13 @@ node_parameter:
             min_value=0.0,
             max_value=1.0
         )
-        
+
         param.validate(0.5)  # Returns True
         param.validate(1.5)  # Raises ValueError
 
   example: |
     from kailash.nodes.base import NodeParameter
-    
+
     # String parameter with options
     mode_param = NodeParameter(
         name='mode',
@@ -397,7 +397,7 @@ node_parameter:
         options=['fast', 'accurate', 'balanced'],
         description='Processing mode'
     )
-    
+
     # Numeric parameter with range
     threshold_param = NodeParameter(
         name='threshold',
@@ -408,7 +408,7 @@ node_parameter:
         max_value=1.0,
         description='Decision threshold'
     )
-    
+
     # Array parameter
     tags_param = NodeParameter(
         name='tags',
@@ -417,7 +417,7 @@ node_parameter:
         default=[],
         description='Processing tags'
     )
-    
+
     # Object parameter
     config_param = NodeParameter(
         name='advanced_config',
@@ -435,14 +435,14 @@ node_development_patterns:
       example: |
         from kailash.nodes.base import Node, NodeParameter
         from kailash.nodes import register_node
-        
+
         @register_node('SimpleProcessor')
         class SimpleProcessorNode(Node):
             def __init__(self, **config):
                 # Set attributes BEFORE super().__init__()
                 self.multiplier = config.get('multiplier', 2)
                 super().__init__(**config)
-            
+
             def get_parameters(self):
                 return {
                     'multiplier': NodeParameter(
@@ -453,7 +453,7 @@ node_development_patterns:
                         description='Multiplication factor'
                     )
                 }
-            
+
             def execute(self, inputs):
                 data = inputs.get('data', [])
                 result = [x * self.multiplier for x in data]
@@ -466,18 +466,18 @@ node_development_patterns:
         import aiohttp
         from kailash.nodes.base_async import AsyncNode
         from kailash.nodes import register_node
-        
+
         @register_node('AsyncAPIClient')
         class AsyncAPIClientNode(AsyncNode):
             def __init__(self, **config):
                 self.api_url = config.get('api_url', '')
                 self.timeout = config.get('timeout', 30)
                 super().__init__(**config)
-            
+
             async def execute_async(self, inputs):
                 endpoint = inputs.get('endpoint', '')
                 url = f"{self.api_url}/{endpoint}"
-                
+
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, timeout=self.timeout) as response:
                         data = await response.json()
@@ -492,26 +492,26 @@ node_development_patterns:
       example: |
         from kailash.nodes.base_cycle_aware import CycleAwareNode
         from kailash.nodes import register_node
-        
+
         @register_node('IterativeOptimizer')
         class IterativeOptimizerNode(CycleAwareNode):
             def __init__(self, **config):
                 self.learning_rate = config.get('learning_rate', 0.1)
                 self.target_quality = config.get('target_quality', 0.9)
                 super().__init__(**config)
-            
+
             def execute(self, inputs):
                 cycle_id = self.config.get('cycle_id')
                 state = self.get_cycle_state(cycle_id) if cycle_id else {}
-                
+
                 # Get current parameters or initialize
                 current_params = state.get('parameters', inputs.get('initial_params', []))
                 iteration = state.get('iteration', 0)
-                
+
                 # Optimize parameters
                 new_params = self.optimize_step(current_params, inputs.get('feedback', 0))
                 quality = self.evaluate_quality(new_params, inputs.get('target', 0))
-                
+
                 # Update state
                 if cycle_id:
                     new_state = {
@@ -521,18 +521,18 @@ node_development_patterns:
                         'converged': quality >= self.target_quality
                     }
                     self.set_cycle_state(cycle_id, new_state)
-                
+
                 return {
                     'parameters': new_params,
                     'quality': quality,
                     'iteration': iteration + 1,
                     'converged': quality >= self.target_quality
                 }
-            
+
             def optimize_step(self, params, feedback):
                 # Simple gradient descent step
                 return [p + self.learning_rate * feedback for p in params]
-            
+
             def evaluate_quality(self, params, target):
                 # Simple quality metric
                 return 1.0 / (1.0 + abs(sum(params) - target))
@@ -543,43 +543,43 @@ node_development_patterns:
         import logging
         from kailash.nodes.base import Node
         from kailash.nodes import register_node
-        
+
         @register_node('RobustProcessor')
         class RobustProcessorNode(Node):
             def __init__(self, **config):
                 self.fail_fast = config.get('fail_fast', False)
                 self.default_value = config.get('default_value', None)
                 super().__init__(**config)
-            
+
             def execute(self, inputs):
                 try:
                     return self._safe_execute(inputs)
                 except Exception as e:
                     logging.error(f"Node {self.node_id} failed: {str(e)}")
-                    
+
                     if self.fail_fast:
                         raise
-                    
+
                     # Return default or error result
                     return {
                         'result': self.default_value,
                         'error': str(e),
                         'success': False
                     }
-            
+
             def _safe_execute(self, inputs):
                 # Validate inputs
                 if 'data' not in inputs:
                     raise ValueError("Missing required input: data")
-                
+
                 data = inputs['data']
                 if not isinstance(data, list):
                     raise TypeError("Input data must be a list")
-                
+
                 # Process data with error handling
                 results = []
                 errors = []
-                
+
                 for i, item in enumerate(data):
                     try:
                         result = self.process_item(item)
@@ -590,13 +590,13 @@ node_development_patterns:
                             results.append(self.default_value)
                         else:
                             raise
-                
+
                 return {
                     'result': results,
                     'errors': errors,
                     'success': len(errors) == 0
                 }
-            
+
             def process_item(self, item):
                 # Custom processing logic that might fail
                 if item is None:
@@ -607,25 +607,25 @@ best_practices:
   description: "Best practices for node development"
   guidelines: |
     1. **Initialization Order**: Always set custom attributes BEFORE calling super().__init__()
-    
+
     2. **Parameter Definition**: Use get_parameters() to define all configurable parameters
-    
+
     3. **Validation**: Implement validate_config() for configuration validation
-    
+
     4. **Error Handling**: Use try-catch blocks and provide meaningful error messages
-    
+
     5. **State Management**: For cycle-aware nodes, always check for cycle_id before accessing state
-    
+
     6. **Output Format**: Return dictionaries with descriptive keys for outputs
-    
+
     7. **Documentation**: Include docstrings and parameter descriptions
-    
+
     8. **Testing**: Write unit tests for all node functionality
-    
+
     9. **Naming**: Use descriptive names ending with 'Node'
-    
+
     10. **Resource Cleanup**: Implement proper cleanup in async nodes
-  
+
   common_mistakes: |
     - Calling super().__init__() before setting attributes
     - Not implementing get_parameters() for UI integration

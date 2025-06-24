@@ -14,7 +14,7 @@ from kailash.workflow.graph import Workflow
 
 
 @register_node()
-class TestInputNode(Node):
+class InputTestNode(Node):
     """Test node that provides input data."""
 
     def get_parameters(self) -> dict[str, NodeParameter]:
@@ -33,7 +33,7 @@ class TestInputNode(Node):
 
 
 @register_node()
-class TestProcessorNode(Node):
+class ProcessorTestNode(Node):
     """Test node that processes data."""
 
     def get_parameters(self) -> dict[str, NodeParameter]:
@@ -74,6 +74,7 @@ class TestProcessorNode(Node):
         }
 
 
+@pytest.mark.critical
 class TestWorkflowNode:
     """Test suite for WorkflowNode."""
 
@@ -81,8 +82,8 @@ class TestWorkflowNode:
         """Test wrapping a workflow instance directly."""
         # Create inner workflow
         inner = Workflow("inner", "Inner Workflow")
-        input_node = TestInputNode(name="input")
-        processor_node = TestProcessorNode(name="processor")
+        input_node = InputTestNode(name="input")
+        processor_node = ProcessorTestNode(name="processor")
 
         inner.add_node("input", input_node)
         inner.add_node("processor", processor_node)
@@ -103,8 +104,8 @@ class TestWorkflowNode:
         """Test automatic parameter discovery from entry nodes."""
         # Create workflow with multiple entry nodes
         workflow = Workflow("test", "Test")
-        input1 = TestInputNode(name="input1")
-        input2 = TestInputNode(name="input2")
+        input1 = InputTestNode(name="input1")
+        input2 = InputTestNode(name="input2")
 
         workflow.add_node("input1", input1)
         workflow.add_node("input2", input2)
@@ -126,7 +127,7 @@ class TestWorkflowNode:
         """Test automatic output schema discovery from exit nodes."""
         # Create workflow
         workflow = Workflow("test", "Test")
-        processor = TestProcessorNode(name="processor")
+        processor = ProcessorTestNode(name="processor")
         workflow.add_node("processor", processor)
 
         # Wrap in WorkflowNode
@@ -142,7 +143,7 @@ class TestWorkflowNode:
         """Test loading workflow from YAML file."""
         # Create and save workflow
         workflow = Workflow("test", "Test Workflow")
-        input_node = TestInputNode(name="input")
+        input_node = InputTestNode(name="input")
         workflow.add_node("input", input_node)
 
         yaml_path = tmp_path / "workflow.yaml"
@@ -166,7 +167,7 @@ class TestWorkflowNode:
         """Test loading workflow from JSON file."""
         # Create and save workflow
         workflow = Workflow("test", "Test Workflow")
-        input_node = TestInputNode(name="input")
+        input_node = InputTestNode(name="input")
         workflow.add_node("input", input_node)
 
         json_path = tmp_path / "workflow.json"
@@ -186,7 +187,7 @@ class TestWorkflowNode:
         workflow_dict = {
             "workflow_id": "test",
             "name": "Test Workflow",
-            "nodes": {"input": {"type": "TestInputNode", "config": {"name": "input"}}},
+            "nodes": {"input": {"type": "InputTestNode", "config": {"name": "input"}}},
         }
 
         # Create WorkflowNode from dict
@@ -200,7 +201,7 @@ class TestWorkflowNode:
         """Test custom input parameter mapping."""
         # Create workflow
         workflow = Workflow("test", "Test")
-        processor = TestProcessorNode(name="processor")
+        processor = ProcessorTestNode(name="processor")
         workflow.add_node("processor", processor)
 
         # Create node with custom mapping
@@ -224,7 +225,7 @@ class TestWorkflowNode:
         """Test custom output parameter mapping."""
         # Create workflow
         workflow = Workflow("test", "Test")
-        processor = TestProcessorNode(name="processor")
+        processor = ProcessorTestNode(name="processor")
         workflow.add_node("processor", processor)
 
         # Create node with custom output mapping
@@ -244,7 +245,7 @@ class TestWorkflowNode:
         """Test nested workflow composition."""
         # Level 1 workflow
         level1 = Workflow("level1", "Level 1")
-        input_node = TestInputNode(name="input")
+        input_node = InputTestNode(name="input")
         level1.add_node("input", input_node)
 
         # Wrap level 1
@@ -319,7 +320,7 @@ class TestWorkflowNode:
         """Test WorkflowNode serialization."""
         # Create workflow
         workflow = Workflow("test", "Test")
-        input_node = TestInputNode(name="input")
+        input_node = InputTestNode(name="input")
         workflow.add_node("input", input_node)
 
         # Create node with various configs
@@ -342,7 +343,7 @@ class TestWorkflowNode:
         """Test that additional inputs can override defaults."""
         # Create workflow
         workflow = Workflow("test", "Test")
-        processor = TestProcessorNode(name="processor")
+        processor = ProcessorTestNode(name="processor")
         workflow.add_node("processor", processor)
 
         # Wrap

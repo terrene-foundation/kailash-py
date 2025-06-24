@@ -90,7 +90,7 @@ def safe_data_processor(data: list) -> dict:
                 errors.append({"item": item, "error": "Invalid format"})
         except Exception as e:
             errors.append({"item": item, "error": str(e)})
-    
+
     return {
         "processed": processed,
         "errors": errors,

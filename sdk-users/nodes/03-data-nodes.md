@@ -148,13 +148,175 @@ workflow.runtime = LocalRuntime()
 
 ## Database Nodes
 
+### WorkflowConnectionPool ⭐ **PRODUCTION RECOMMENDED**
+- **Module**: `kailash.nodes.data.workflow_connection_pool`
+- **Purpose**: Production-grade connection pooling with actor-based fault tolerance
+- **Key Features**:
+  - Actor-based architecture for fault tolerance
+  - Connection pooling with min/max limits
+  - Health monitoring and automatic recycling
+  - Pre-warming based on workflow patterns
+  - Comprehensive metrics and statistics
+  - Supervisor integration for failure recovery
+  - Support for PostgreSQL, MySQL, SQLite
+- **Parameters**:
+  - `name`: Pool name for identification
+  - `database_type`: "postgresql", "mysql", or "sqlite"
+  - `host`: Database host
+  - `port`: Database port
+  - `database`: Database name
+  - `user`: Database user
+  - `password`: Database password
+  - `min_connections`: Minimum pool size (default: 2)
+  - `max_connections`: Maximum pool size (default: 10)
+  - `health_threshold`: Health score threshold for recycling (default: 75)
+  - `pre_warm`: Enable pattern-based pre-warming (default: True)
+- **Operations**:
+  - `initialize`: Start the pool
+  - `acquire`: Get a connection from pool
+  - `release`: Return connection to pool
+  - `execute`: Execute query on connection
+  - `stats`: Get pool statistics
+  - `recycle`: Force recycle a connection
+- **Best For**:
+  - Production applications with high concurrency
+  - Long-running services requiring fault tolerance
+  - Applications with database connection limits
+  - Systems requiring connection health monitoring
+- **Example**:
+  ```python
+  from kailash.nodes.data import WorkflowConnectionPool
+
+  # Create connection pool
+  pool = WorkflowConnectionPool(
+      name="main_pool",
+      database_type="postgresql",
+      host="localhost",
+      port=5432,
+      database="myapp",
+      user="postgres",
+      password="password",
+      min_connections=5,
+      max_connections=20,
+      health_threshold=70,
+      pre_warm=True
+  )
+
+  # Initialize pool
+  await pool.process({"operation": "initialize"})
+
+  # Use in workflow
+  async def process_order(order_id):
+      # Acquire connection
+      conn = await pool.process({"operation": "acquire"})
+      conn_id = conn["connection_id"]
+
+      try:
+          # Execute query
+          result = await pool.process({
+              "operation": "execute",
+              "connection_id": conn_id,
+              "query": "SELECT * FROM orders WHERE id = $1",
+              "params": [order_id],
+              "fetch_mode": "one"
+          })
+          return result["data"]
+      finally:
+          # Always release connection
+          await pool.process({
+              "operation": "release",
+              "connection_id": conn_id
+          })
+
+  # Get pool statistics
+  stats = await pool.process({"operation": "stats"})
+  print(f"Active connections: {stats['current_state']['active_connections']}")
+  print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
+  ```
+
+### AsyncSQLDatabaseNode
+- **Module**: `kailash.nodes.data.async_sql`
+- **Purpose**: Asynchronous SQL execution with connection reuse
+- **Key Features**:
+  - Database-specific parameter handling (PostgreSQL, MySQL, SQLite)
+  - Named parameter support with `:param_name` syntax
+  - Async connection pooling per database type
+  - Different result format: `{"result": {"data": [...]}}`
+- **Constructor Parameters**:
+  - `database_type`: Database type (postgresql, mysql, sqlite)
+  - `host`: Database host
+  - `port`: Database port
+  - `database`: Database name
+  - `user`: Database user
+  - `password`: Database password
+  - `connection_string`: Full connection string (alternative to individual params)
+- **Runtime Parameters** (passed to `async_run()`):
+  - `query`: SQL query to execute
+  - `params`: Query parameters (note: different from SQLDatabaseNode's `parameters`)
+  - `operation`: Operation type ("execute", "fetch_all", "fetch_one")
+  - `fetch_mode`: "one", "all", "many", or "iterator"
+- **Parameter Format Examples**:
+  ```python
+  # Named parameters
+  result = await node.async_run(
+      query="SELECT * FROM users WHERE active = :active",
+      params={"active": True},
+      operation="fetch_all"
+  )
+  # Access data: result["result"]["data"]
+
+  # Positional parameters (PostgreSQL auto-converts to $1, $2)
+  result = await node.async_run(
+      query="SELECT * FROM users WHERE id = :user_id",
+      params={"user_id": 123},
+      operation="fetch_one"
+  )
+  ```
+- **Best For**:
+  - Simple async database operations
+  - Single connection workflows
+  - Development and testing
+- **Note**: For production use, prefer WorkflowConnectionPool for better connection management
+
 ### SQLDatabaseNode
 - **Module**: `kailash.nodes.data.sql`
-- **Purpose**: Execute SQL queries
-- **Parameters**:
-  - `connection_string`: Database connection
-  - `query`: SQL query
-  - `parameters`: Query parameters
+- **Purpose**: Synchronous SQL query execution with shared connection pooling
+- **Key Features**:
+  - Unified parameter handling: supports both list and dict parameters
+  - Named parameter binding using `:param_name` syntax (recommended)
+  - Automatic conversion of positional parameters (`?`, `$1`, `%s`) to named parameters
+  - Shared connection pools for efficient resource utilization
+  - Transaction support with automatic commit/rollback
+  - Access control integration
+- **Constructor Parameters**:
+  - `connection_string`: Database connection URL (required)
+  - `pool_size`: Connection pool size (default: 5)
+  - `max_overflow`: Maximum overflow connections (default: 10)
+  - `pool_timeout`: Connection timeout seconds (default: 30)
+  - `pool_recycle`: Connection recycle time seconds (default: 3600)
+  - `pool_pre_ping`: Test connections before use (default: True)
+- **Runtime Parameters** (passed to `execute()`):
+  - `query`: SQL query to execute
+  - `parameters`: Query parameters (dict for named, list for positional)
+  - `operation`: Operation type ("execute", "fetch_all", "fetch_one")
+  - `result_format`: Output format ("dict", "list", "raw")
+- **Parameter Format Examples**:
+  ```python
+  # Named parameters (recommended)
+  node.execute(
+      query="SELECT * FROM users WHERE active = :active AND age > :min_age",
+      parameters={"active": True, "min_age": 18},
+      operation="fetch_all"
+  )
+
+  # Positional parameters (auto-converted to named)
+  node.execute(
+      query="SELECT * FROM users WHERE id = ?",
+      parameters=[123],
+      operation="fetch_one"
+  )
+  ```
+- **Best For**: Production applications requiring connection pooling and parameter flexibility
 
 ### SQLQueryBuilderNode
 - **Module**: `kailash.nodes.data.sql`

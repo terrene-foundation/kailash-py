@@ -4,30 +4,46 @@
 
 ## 🚨 Most Common Issues
 
-### 1. Parameter Loss After First Iteration
+### 1. ~~Parameter Loss After First Iteration~~ (Fixed in v0.5.1+)
+**Update**: Initial parameters are now preserved throughout all cycle iterations!
+
 ```python
 from kailash import Workflow
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import Node, CycleAwareNode
 
-# ❌ Problem: Parameters disappear after iteration 1
-class ProcessorNode(Node):
-    def run(self, context, **kwargs):
-        quality = kwargs.get("quality", 0.0)  # Always 0.0 after iter 1!
-        return {"quality": quality + 0.2}
+# ✅ This now works correctly (v0.5.1+)
+class ProcessorNode(CycleAwareNode):
+    def get_parameters(self):
+        return {
+            "quality_target": NodeParameter(type=float, required=False, default=0.95),
+            "improvement_rate": NodeParameter(type=float, required=False, default=0.1)
+        }
 
-# ✅ Solution: Use cycle state
-class ProcessorNodeFixed(CycleAwareNode):
     def run(self, **kwargs):
-        prev_state = self.get_previous_state()
-        quality = kwargs.get("quality", prev_state.get("quality", 0.0))
+        # Initial parameters are available in ALL iterations
+        quality_target = kwargs.get("quality_target", 0.95)
+        improvement_rate = kwargs.get("improvement_rate", 0.1)
 
-        new_quality = quality + 0.2
+        context = kwargs.get("context", {})
+        prev_quality = self.get_previous_state(context).get("quality", 0.0)
+
+        new_quality = min(prev_quality + improvement_rate, 1.0)
+        converged = new_quality >= quality_target
+
         return {
             "quality": new_quality,
+            "converged": converged,
             **self.set_cycle_state({"quality": new_quality})
         }
 
+# Parameters persist across all iterations
+runtime.execute(workflow, parameters={
+    "processor": {
+        "quality_target": 0.90,      # Available in iterations 0-N
+        "improvement_rate": 0.05     # No longer reverts to default!
+    }
+})
 ```
 
 ### 2. PythonCodeNode Parameter Access

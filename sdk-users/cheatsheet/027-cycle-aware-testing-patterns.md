@@ -191,7 +191,7 @@ def test_conditional_cycle():
     from kailash.nodes.logic import SwitchNode
     from kailash.nodes.base import CycleAwareNode
     from typing import Dict, Any
-    
+
     class ConditionalNode(CycleAwareNode):
         def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
             data = kwargs.get("data", [])
@@ -360,7 +360,7 @@ return {"result": data, "converged": converged}
 
 4. **Test Incrementally**
    - Individual nodes first
-   - Simple cycles second  
+   - Simple cycles second
    - Complex multi-node cycles last
 
 ---

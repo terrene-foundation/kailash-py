@@ -27,6 +27,13 @@ Example:
     workflow.add_node(custom_node)
 """
 
+from .async_python import AsyncPythonCodeNode
 from .python import ClassWrapper, CodeExecutor, FunctionWrapper, PythonCodeNode
 
-__all__ = ["PythonCodeNode", "CodeExecutor", "FunctionWrapper", "ClassWrapper"]
+__all__ = [
+    "PythonCodeNode",
+    "AsyncPythonCodeNode",
+    "CodeExecutor",
+    "FunctionWrapper",
+    "ClassWrapper",
+]

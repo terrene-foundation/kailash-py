@@ -28,7 +28,7 @@
 | HTTP calls | `HTTPRequestNode` | `HTTPClientNode` (deprecated) |
 | Send alerts | `DiscordAlertNode` | Manual webhook requests |
 | Transform data | `DataTransformer` | Complex PythonCodeNode |
-| Async operations | `LocalRuntime(enable_async=True)` | `AsyncLocalRuntime` (deprecated) |
+| Async operations | `AsyncLocalRuntime` + `AsyncWorkflowBuilder` | Manual async handling |
 | Enterprise features | `LocalRuntime` with enterprise params | Custom implementations |
 
 ## 🧪 Tests vs Examples
@@ -376,7 +376,7 @@ builder = WorkflowBuilder("mcp_workflow")
 search_node = MCPToolNode(
     mcp_server="tools",
     tool_name="search",
-    parameter_mapping={"search_query": "query"}  # Map workflow -> tool params
+    mapping={"search_query": "query"}  # Map workflow -> tool params
 )
 builder.add_node("search", search_node)
 

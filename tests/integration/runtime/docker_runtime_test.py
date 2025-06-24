@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from examples.utils.paths import get_data_dir, get_output_dir
 
 # Add parent directory to path to allow importing the Kailash SDK

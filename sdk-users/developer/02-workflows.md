@@ -40,7 +40,7 @@ results, run_id = runtime.execute(workflow)
 def build_data_pipeline():
     """Build a complete data processing pipeline"""
     workflow = Workflow("data_pipeline", name="Customer Data Processing Pipeline")
-    
+
     # 1. Data Input Layer
     workflow.add_node("csv_reader", CSVReaderNode(),
         file_path="/data/customers.csv",
@@ -511,7 +511,7 @@ else:
         # Convert to pandas DataFrame
         # Access inputs
         data = inputs.get("data", [])
-        
+
         # Convert to pandas DataFrame
         df = pd.DataFrame(data)
 

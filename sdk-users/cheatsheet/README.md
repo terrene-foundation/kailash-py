@@ -57,6 +57,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [023-a2a-agent-coordination](023-a2a-agent-coordination.md) | A2A Agent Coordination | A2A coordination patterns and workflows |
 | [024-self-organizing-agents](024-self-organizing-agents.md) | Self-Organizing Agents | Self-organizing agent pool patterns |
 | [025-mcp-integration](025-mcp-integration.md) | MCP Integration | MCP integration with LLMAgentNode |
+| **[045-ollama-integration-patterns](045-ollama-integration-patterns.md)** | **Ollama Local LLMs** | **Production-ready Ollama integration patterns** |
 
 ### ⚡ **Advanced Patterns**
 | File | Topic | Description |

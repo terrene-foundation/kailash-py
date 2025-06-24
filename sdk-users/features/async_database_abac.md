@@ -1,15 +1,142 @@
 # Async Database & ABAC Infrastructure
 
-This guide covers the enterprise-grade async database capabilities and attribute-based access control (ABAC) features added in Session 065.
+This guide covers the enterprise-grade async database capabilities and attribute-based access control (ABAC) features.
 
 ## Overview
 
 The async database and ABAC infrastructure provides:
-- **AsyncSQLDatabaseNode**: Non-blocking database operations with connection pooling
+- **WorkflowConnectionPool**: ⭐ Production-grade connection pooling with actor-based fault tolerance (RECOMMENDED)
+- **AsyncSQLDatabaseNode**: Non-blocking database operations with single connection reuse
 - **AsyncConnectionManager**: Centralized connection pool management
 - **AsyncPostgreSQLVectorNode**: pgvector operations for AI/ML workflows
 - **Enhanced ABAC**: Attribute-based access control with complex conditions
 - **Migration Framework**: Django-inspired async-first database migrations
+
+> **Important**: For production applications, use `WorkflowConnectionPool` instead of `AsyncSQLDatabaseNode` for better connection management, fault tolerance, and performance.
+
+## WorkflowConnectionPool (Production Recommended)
+
+Enterprise-grade connection pooling with actor-based fault tolerance, health monitoring, and automatic recovery.
+
+### Key Features
+- **Actor-based architecture**: Each connection is an independent actor with supervisor monitoring
+- **Connection pooling**: Min/max pool sizes with automatic scaling
+- **Health monitoring**: Automatic health checks and connection recycling
+- **Fault tolerance**: Supervisor-based failure recovery
+- **Pre-warming**: Pattern-based connection preparation
+- **Comprehensive metrics**: Detailed statistics and monitoring
+
+### Basic Usage
+
+```python
+from kailash.nodes.data import WorkflowConnectionPool
+
+# Create production connection pool
+pool = WorkflowConnectionPool(
+    name="main_pool",
+    database_type="postgresql",
+    host="localhost",
+    port=5432,
+    database="production_db",
+    user="app_user",
+    password="secure_password",
+    min_connections=10,      # Minimum pool size
+    max_connections=50,      # Maximum pool size
+    health_threshold=70,     # Recycle connections below 70% health
+    pre_warm=True           # Pre-warm based on usage patterns
+)
+
+# Initialize pool (do this once at startup)
+await pool.process({"operation": "initialize"})
+
+# Use in workflows
+async def execute_query(query, params):
+    # Acquire connection
+    conn = await pool.process({"operation": "acquire"})
+    conn_id = conn["connection_id"]
+
+    try:
+        # Execute query
+        result = await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": query,
+            "params": params,
+            "fetch_mode": "all"
+        })
+        return result["data"]
+    finally:
+        # Always release connection
+        await pool.process({
+            "operation": "release",
+            "connection_id": conn_id
+        })
+
+# Monitor pool health
+stats = await pool.process({"operation": "stats"})
+print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
+```
+
+### Transaction Support
+
+```python
+async def transfer_funds(from_account, to_account, amount):
+    conn = await pool.process({"operation": "acquire"})
+    conn_id = conn["connection_id"]
+
+    try:
+        # Start transaction
+        await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": "BEGIN",
+            "fetch_mode": "one"
+        })
+
+        # Perform operations
+        await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": "UPDATE accounts SET balance = balance - $1 WHERE id = $2",
+            "params": [amount, from_account],
+            "fetch_mode": "one"
+        })
+
+        await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+            "params": [amount, to_account],
+            "fetch_mode": "one"
+        })
+
+        # Commit
+        await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": "COMMIT",
+            "fetch_mode": "one"
+        })
+
+    except Exception as e:
+        # Rollback on error
+        await pool.process({
+            "operation": "execute",
+            "connection_id": conn_id,
+            "query": "ROLLBACK",
+            "fetch_mode": "one"
+        })
+        raise
+    finally:
+        await pool.process({
+            "operation": "release",
+            "connection_id": conn_id
+        })
+```
+
+### Migration from AsyncSQLDatabaseNode
+
+See the [migration guide](../migration-guides/async-sql-to-workflowconnectionpool.md) for step-by-step instructions on migrating from AsyncSQLDatabaseNode to WorkflowConnectionPool.
 
 ## AsyncSQLDatabaseNode
 

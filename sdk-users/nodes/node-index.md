@@ -9,16 +9,20 @@
 |------|---------------|-------------------|
 | Read CSV/Excel | `CSVReaderNode`, `ExcelReaderNode` | ❌ `pd.read_csv()` |
 | Call REST API | `HTTPRequestNode`, `RESTClientNode` | ❌ `requests.get()` |
-| Query Database | `SQLDatabaseNode`, `AsyncSQLDatabaseNode` | ❌ `cursor.execute()` |
+| Query Database (Simple) | `SQLDatabaseNode`, `AsyncSQLDatabaseNode` | ❌ `cursor.execute()` |
+| Query Database (Production) | `WorkflowConnectionPool` ⭐ | ❌ Manual pooling |
 | Use LLM/AI | `LLMAgentNode`, `MonitoredLLMAgentNode` | ❌ OpenAI SDK |
 | Filter/Transform | `FilterNode`, `DataTransformer` | ❌ List comprehensions |
 | Route Logic | `SwitchNode`, `ConditionalRouterNode` | ❌ if/else blocks |
 | Send Alerts | `DiscordAlertNode`, `EmailSenderNode` | ❌ SMTP/webhook code |
+| Manage Roles/Permissions | `RoleManagementNode`, `PermissionCheckNode` | ❌ Custom RBAC |
+| Check User Access | `PermissionCheckNode` | ❌ Manual checks |
 
 ## Node Categories (110+ total)
 
 | Category | Count | Key Nodes | Details |
 |----------|-------|-----------|---------|
+| **Admin** | 4 | RoleManagementNode, PermissionCheckNode | [admin-nodes-guide.md](admin-nodes-guide.md) |
 | **AI/ML** | 20+ | LLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode | [02-ai-nodes.md](02-ai-nodes.md) |
 | **Data I/O** | 15+ | CSVReaderNode, SQLDatabaseNode, VectorDatabaseNode | [03-data-nodes.md](03-data-nodes.md) |
 | **API/HTTP** | 10+ | HTTPRequestNode, RESTClientNode, GraphQLClientNode | [04-api-nodes.md](04-api-nodes.md) |
@@ -39,10 +43,19 @@
 
 ```python
 # Top 10 most commonly used nodes
-from kailash.nodes.data import CSVReaderNode, SQLDatabaseNode
+from kailash.nodes.data import CSVReaderNode, SQLDatabaseNode, WorkflowConnectionPool
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 from kailash.nodes.logic import SwitchNode, MergeNode
 from kailash.nodes.transform import FilterNode, DataTransformer
 from kailash.nodes.code import PythonCodeNode  # Use sparingly!
+
+# For production database operations
+pool = WorkflowConnectionPool(
+    name="main_pool",
+    database_type="postgresql",
+    host="localhost",
+    min_connections=5,
+    max_connections=20
+)
 ```

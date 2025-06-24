@@ -34,7 +34,7 @@ workflow.remove_node(node_id: str) -> None
 workflow.get_node(node_id: str) -> Node
 
 # Connections
-workflow.connect(from_node: str, to_node: str, 
+workflow.connect(from_node: str, to_node: str,
                 mapping: Dict[str, str] = None,
                 output_key: str = None,
                 cycle: bool = False,
@@ -198,7 +198,7 @@ MergeNode(
 # WorkflowNode (nested workflows)
 WorkflowNode(
     workflow: Workflow = None,
-    parameter_mapping={"output": "input"}
+    mapping={"output": "input"}
 )
 
 ```

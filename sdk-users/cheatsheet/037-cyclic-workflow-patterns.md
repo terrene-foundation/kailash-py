@@ -13,18 +13,17 @@ class OptimizerNode(CycleAwareNode):
         iteration = self.get_iteration()
         prev_state = self.get_previous_state()
 
-        # Preserve config
-        targets = kwargs.get("targets", {})
-        if not targets and prev_state.get("targets"):
-            targets = prev_state["targets"]
+        # Initial parameters now persist automatically (v0.5.1+)
+        targets = kwargs.get("targets", {})  # Available in ALL iterations
+        learning_rate = kwargs.get("learning_rate", 0.01)  # No longer lost!
 
         # Do work
-        result = optimize(kwargs.get("metrics", {}), targets)
+        result = optimize(kwargs.get("metrics", {}), targets, learning_rate)
 
-        # Save state
+        # Save dynamic state (not needed for initial params)
         return {
             "metrics": result,
-            **self.set_cycle_state({"targets": targets})
+            **self.set_cycle_state({"last_result": result})
         }
 
 ```
@@ -74,22 +73,26 @@ workflow.connect("switch", "optimizer", output_port="continue")
 
 ## ⚠️ Critical Rules
 
-1. **Preserve configuration state** - Parameters get lost after iteration 1
+1. **~~Preserve configuration state~~ (Fixed in v0.5.1+)** - Initial parameters now persist across all iterations!
 2. **Use packager for SwitchNode** - Creates proper input structure
 3. **Map parameters explicitly** - No automatic propagation
 4. **Set iteration limits** - Prevent infinite loops
 
-## 🔧 Common Fix
+## 🔧 Updated Pattern (v0.5.1+)
 
 ```python
-# Problem: Targets lost after first iteration
-if not targets and prev_state.get("targets"):
-    targets = prev_state["targets"]
+# Initial parameters now persist automatically!
+targets = kwargs.get("targets", {})  # Available in ALL iterations
+learning_rate = kwargs.get("learning_rate", 0.01)  # No longer lost
 
-# Save in state
+# State preservation still useful for dynamic values
+prev_state = self.get_previous_state()
+accumulated_results = prev_state.get("results", [])
+accumulated_results.append(data)
+
 return {
     "result": data,
-    **self.set_cycle_state({"targets": targets})
+    **self.set_cycle_state({"results": accumulated_results})
 }
 
 ```
@@ -121,8 +124,8 @@ class SelfOptimizingNode(CycleAwareNode):
     def run(self, **kwargs):
         prev_state = self.get_previous_state()
 
-        # Preserve configuration
-        target_quality = kwargs.get("target_quality", prev_state.get("target_quality", 0.8))
+        # Initial parameters persist automatically (v0.5.1+)
+        target_quality = kwargs.get("target_quality", 0.8)  # Available in ALL iterations!
 
         # Process data
         data = kwargs.get("data", [])
@@ -139,11 +142,15 @@ class SelfOptimizingNode(CycleAwareNode):
         # Built-in convergence check
         converged = improved_quality >= target_quality
 
+        # Track improvement history
+        improvement_history = prev_state.get("improvement_history", [])
+        improvement_history.append(improved_quality - current_quality)
+
         return {
             "data": improved_data,
             "quality": improved_quality,
             "converged": converged,
-            **self.set_cycle_state({"target_quality": target_quality})
+            **self.set_cycle_state({"improvement_history": improvement_history})
         }
 
 # Usage
@@ -159,24 +166,29 @@ workflow.workflow.connect("self_optimizer", "self_optimizer",
 
 ## 🔍 Parameter Preservation Patterns
 
-### State-Based Preservation
+### State-Based Preservation (Updated for v0.5.1+)
 ```python
 def run(self, **kwargs):
     prev_state = self.get_previous_state()
 
-    # Restore configuration from state
-    config = kwargs.get("config", prev_state.get("config", {}))
-    learning_rate = kwargs.get("learning_rate", prev_state.get("learning_rate", 0.1))
+    # Initial parameters now persist automatically!
+    config = kwargs.get("config", {})  # Available in ALL iterations
+    learning_rate = kwargs.get("learning_rate", 0.1)  # No longer lost
 
-    # Process with preserved config
+    # Use state for dynamic/accumulated values
+    processed_count = prev_state.get("processed_count", 0)
+    error_history = prev_state.get("error_history", [])
+
+    # Process with config
     result = process_with_config(kwargs.get("data", []), config, learning_rate)
+    processed_count += len(result)
 
-    # Always save back to state
+    # Save only dynamic state (not initial params)
     return {
         "result": result,
         **self.set_cycle_state({
-            "config": config,
-            "learning_rate": learning_rate
+            "processed_count": processed_count,
+            "error_history": error_history + [result.get("error", 0)]
         })
     }
 
@@ -242,15 +254,19 @@ class ConvergenceControllerNode(CycleAwareNode):
         prev_state = self.get_previous_state()
 
         quality_score = kwargs.get("quality_score", 0)
-        target = kwargs.get("target", prev_state.get("target", 100))
+        target = kwargs.get("target", 100)  # Available in ALL iterations (v0.5.1+)
 
         converged = quality_score >= target
+
+        # Track progress history
+        progress_history = prev_state.get("progress_history", [])
+        progress_history.append(quality_score)
 
         return {
             "data": kwargs.get("analyzed_data", []),
             "converged": converged,
             "quality": quality_score,
-            **self.set_cycle_state({"target": target})
+            **self.set_cycle_state({"progress_history": progress_history})
         }
 
 # Connect in cycle
@@ -367,12 +383,15 @@ workflow.workflow.connect("node", "node",
 
 ```
 
-### Multi-Node with State Preservation
+### Multi-Node with State Preservation (Updated for v0.5.1+)
 ```python
-# Always preserve configuration in cycle state
+# Initial params persist automatically - use state for dynamic values only
 return {
     "result": processed_data,
-    **self.set_cycle_state({"config": config, "params": params})
+    **self.set_cycle_state({
+        "processed_count": len(processed_data),
+        "last_result": processed_data[-1] if processed_data else None
+    })
 }
 
 ```
@@ -407,7 +426,7 @@ return {
 
 ## 🚨 Common Pitfalls
 
-1. **Parameters vanish after iteration 1** → Use cycle state
+1. **~~Parameters vanish after iteration 1~~ (Fixed in v0.5.1+)** → Initial params now persist automatically
 2. **SwitchNode expects packaged data** → Create input_data structure
 3. **Infinite cycles** → Always set max_iterations
 4. **Complex multi-node cycles** → Use direct cycles when possible

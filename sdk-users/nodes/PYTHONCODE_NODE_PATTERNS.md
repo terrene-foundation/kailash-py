@@ -301,6 +301,280 @@ else:
 """
 ```
 
+## Comprehensive Example: All PythonCodeNode Patterns
+
+Here's a complete example demonstrating various ways to create and use PythonCodeNode:
+
+```python
+"""
+PythonCodeNode Comprehensive Example
+====================================
+
+This example shows all the ways to create and use PythonCodeNode:
+1. From Python functions
+2. From Python classes
+3. From code strings
+4. From external files
+"""
+
+from pathlib import Path
+import numpy as np
+import pandas as pd
+
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.data import CSVReaderNode, CSVWriterNode
+from kailash.runtime import LocalRuntime
+from kailash.workflow.graph import Workflow
+
+
+def create_function_based_node():
+    """Example of creating a node from a Python function."""
+
+    # Define a custom data processing function
+    def calculate_metrics(data: pd.DataFrame, window_size: int = 5) -> pd.DataFrame:
+        """Calculate rolling metrics for the data."""
+        # Convert to DataFrame if needed
+        if isinstance(data, list):
+            data = pd.DataFrame(data)
+
+        # Convert string columns to numeric where possible
+        for col in ["value", "quantity"]:
+            if col in data.columns:
+                data[col] = pd.to_numeric(data[col], errors="coerce")
+
+        result = data.copy()
+
+        # Calculate rolling mean
+        for column in data.select_dtypes(include=[np.number]).columns:
+            result[f"{column}_rolling_mean"] = data[column].rolling(window_size).mean()
+            result[f"{column}_rolling_std"] = data[column].rolling(window_size).std()
+
+        # Add a custom metric
+        if "value" in data.columns:
+            result["value_zscore"] = (data["value"] - data["value"].mean()) / data["value"].std()
+
+        # Convert DataFrame to JSON-serializable format
+        return result.to_dict("records")
+
+    # Create node from function
+    return PythonCodeNode.from_function(
+        func=calculate_metrics,
+        name="metrics_calculator",
+        description="Calculate rolling statistics and z-scores"
+    )
+
+
+def create_class_based_node():
+    """Example of creating a stateful node from a Python class."""
+
+    class OutlierDetector:
+        """Stateful outlier detection using IQR method."""
+
+        def __init__(self, sensitivity: float = 1.5):
+            self.sensitivity = sensitivity
+            self.q1 = None
+            self.q3 = None
+            self.iqr = None
+            self.outlier_count = 0
+
+        def process(self, data: pd.DataFrame, value_column: str = "value") -> pd.DataFrame:
+            """Process data and mark outliers."""
+            # Convert to DataFrame if needed
+            if isinstance(data, list):
+                data = pd.DataFrame(data)
+
+            # Convert string columns to numeric
+            for col in ["value", "quantity"]:
+                if col in data.columns:
+                    data[col] = pd.to_numeric(data[col], errors="coerce")
+
+            result = data.copy()
+
+            # Calculate IQR on first run
+            if self.q1 is None:
+                self.q1 = data[value_column].quantile(0.25)
+                self.q3 = data[value_column].quantile(0.75)
+                self.iqr = self.q3 - self.q1
+
+            # Detect outliers
+            lower_bound = self.q1 - self.sensitivity * self.iqr
+            upper_bound = self.q3 + self.sensitivity * self.iqr
+
+            result["is_outlier"] = (
+                (data[value_column] < lower_bound) |
+                (data[value_column] > upper_bound)
+            )
+
+            # Update outlier count
+            new_outliers = result["is_outlier"].sum()
+            self.outlier_count += new_outliers
+
+            # Add metadata
+            result["lower_bound"] = lower_bound
+            result["upper_bound"] = upper_bound
+            result["total_outliers"] = self.outlier_count
+
+            # Convert to records
+            return result.to_dict("records")
+
+    # Create node from class
+    return PythonCodeNode.from_class(
+        cls=OutlierDetector,
+        name="outlier_detector",
+        description="Detect outliers using IQR method",
+        method_name="process",  # Optional: specify which method to call
+        init_params={"sensitivity": 2.0}  # Constructor parameters
+    )
+
+
+def create_code_string_node():
+    """Example of creating a node from a code string."""
+
+    code = """
+# Direct variable access - no 'inputs' dict!
+import statistics
+
+# Filter high-value items
+high_value_items = [item for item in data if item.get('value', 0) > threshold]
+
+# Calculate statistics
+values = [item['value'] for item in high_value_items]
+stats = {
+    'count': len(high_value_items),
+    'mean': statistics.mean(values) if values else 0,
+    'median': statistics.median(values) if values else 0,
+    'total': sum(values)
+}
+
+# Prepare output
+result = {
+    'high_value_items': high_value_items,
+    'statistics': stats,
+    'threshold_used': threshold
+}
+"""
+
+    return PythonCodeNode(
+        name="high_value_filter",
+        code=code,
+        description="Filter and analyze high-value items"
+    )
+
+
+def build_complete_workflow():
+    """Build a complete workflow using all node types."""
+
+    workflow = Workflow("python_code_demo", description="PythonCodeNode demonstration")
+
+    # Add data source
+    workflow.add_node("csv_reader", CSVReaderNode())
+
+    # Add function-based node
+    metrics_node = create_function_based_node()
+    workflow.add_node("metrics", metrics_node)
+
+    # Add class-based node
+    outlier_node = create_class_based_node()
+    workflow.add_node("outliers", outlier_node)
+
+    # Add code string node
+    filter_node = create_code_string_node()
+    workflow.add_node("filter", filter_node)
+
+    # Add aggregation node using inline code
+    workflow.add_node("aggregator", PythonCodeNode(
+        code="""
+# Aggregate results from previous nodes
+outlier_count = sum(1 for item in outlier_data if item.get('is_outlier', False))
+high_value_count = summary.get('statistics', {}).get('count', 0)
+
+# Create final summary
+result = {
+    'total_records': len(outlier_data),
+    'outliers_found': outlier_count,
+    'high_value_items': high_value_count,
+    'outlier_percentage': (outlier_count / len(outlier_data) * 100) if outlier_data else 0,
+    'metrics': metrics_data[0] if metrics_data else {},
+    'filter_summary': summary
+}
+"""
+    ))
+
+    # Add output node
+    workflow.add_node("csv_writer", CSVWriterNode())
+
+    # Connect the workflow
+    workflow.add_connection("csv_reader", "metrics", "result", "data")
+    workflow.add_connection("metrics", "outliers", "result", "data")
+    workflow.add_connection("outliers", "filter", "result", "data")
+    workflow.add_connection("outliers", "aggregator", "result", "outlier_data")
+    workflow.add_connection("metrics", "aggregator", "result", "metrics_data")
+    workflow.add_connection("filter", "aggregator", "result", "summary")
+    workflow.add_connection("aggregator", "csv_writer", "result", "data")
+
+    return workflow
+
+
+def main():
+    """Run the complete demonstration."""
+
+    # Create workflow
+    workflow = build_complete_workflow()
+
+    # Prepare runtime
+    runtime = LocalRuntime()
+
+    # Execute with sample data
+    results, run_id = runtime.execute(
+        workflow,
+        parameters={
+            "csv_reader": {
+                "file_path": "sample_data.csv"
+            },
+            "filter": {
+                "threshold": 100  # Direct parameter injection
+            },
+            "csv_writer": {
+                "file_path": "output_results.csv"
+            }
+        }
+    )
+
+    print(f"Workflow executed successfully! Run ID: {run_id}")
+    print(f"Final summary: {results.get('aggregator', {})}")
+
+    # Demonstrate from_file method
+    external_node = PythonCodeNode.from_file(
+        file_path="custom_processor.py",
+        name="external_processor",
+        function_name="process_data"  # Optional: specific function to use
+    )
+
+    print("Created node from external file:", external_node.name)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+This comprehensive example demonstrates:
+
+1. **Function-based nodes**: Converting Python functions with type hints
+2. **Class-based nodes**: Using stateful classes for complex processing
+3. **Code string nodes**: Direct code strings with variable injection
+4. **Inline nodes**: Creating nodes directly in workflow definition
+5. **File-based nodes**: Loading code from external Python files
+6. **Parameter injection**: How variables are directly available
+7. **Data flow**: Connecting nodes with proper output handling
+8. **Best practices**: Error handling, type conversion, and serialization
+
+Key takeaways:
+- Variables are injected directly into the execution namespace
+- Always set the `result` variable for output
+- Convert complex types to JSON-serializable formats
+- Use descriptive names to avoid variable conflicts
+- Leverage different creation methods based on your needs
+
 ## Summary
 
 1. **Variables are injected directly** - no `inputs` dictionary
