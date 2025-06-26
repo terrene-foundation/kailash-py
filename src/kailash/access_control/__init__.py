@@ -42,8 +42,8 @@ set_access_control_manager = _original_module.set_access_control_manager
 
 # Import new composition-based components
 from kailash.access_control.managers import AccessControlManager  # noqa: E402
+from kailash.access_control.rule_evaluators import ABACRuleEvaluator  # noqa: E402
 from kailash.access_control.rule_evaluators import (  # noqa: E402
-    ABACRuleEvaluator,
     HybridRuleEvaluator,
     RBACRuleEvaluator,
     RuleEvaluator,

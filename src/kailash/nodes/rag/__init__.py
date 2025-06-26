@@ -174,9 +174,7 @@ from .query_processing import (
 
 # Real-time RAG
 from .realtime import IncrementalIndexNode, RealtimeRAGNode
-from .realtime import (
-    StreamingRAGNode as RealtimeStreamingRAGNode,  # Avoid name conflict
-)
+from .realtime import StreamingRAGNode as RealtimeStreamingRAGNode
 from .registry import RAGWorkflowRegistry
 from .router import (
     RAGPerformanceMonitorNode,
