@@ -389,7 +389,7 @@ result = {'execution_result': execution_result}
         tool_node = self.tools[tool_name]
 
         try:
-            result = tool_node.process({"tool_input": arguments})
+            result = tool_node.execute(tool_input=arguments)
 
             # Emit middleware event
             if self.event_stream:
@@ -433,7 +433,7 @@ result = {'execution_result': execution_result}
         resource_node = self.resources[uri]
 
         try:
-            result = resource_node.process({"resource_uri": uri})
+            result = resource_node.execute({"resource_uri": uri})
 
             # Emit middleware event
             if self.event_stream:

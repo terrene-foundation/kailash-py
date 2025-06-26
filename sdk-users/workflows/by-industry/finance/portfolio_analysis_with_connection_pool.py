@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Portfolio Analysis with Production-Grade Connection Pooling.
+"""Portfolio Analysis with Production-Grade Connection Pooling and Query Routing.
 
 This example demonstrates:
 1. WorkflowConnectionPool for production database operations
-2. High-concurrency portfolio analysis
-3. Connection health monitoring and auto-recycling
-4. Transaction support for data consistency
-5. Real-world financial calculations with proper error handling
+2. QueryRouterNode for intelligent query routing (Phase 2)
+3. High-concurrency portfolio analysis with caching
+4. Connection health monitoring and auto-recycling
+5. Transaction support for data consistency
+6. Real-world financial calculations with proper error handling
 
-Key improvements over AsyncSQLDatabaseNode:
-- Connection pooling with min/max limits
-- Automatic health monitoring
-- Fault tolerance with actor-based architecture
-- Better performance under load
+Key improvements with Phase 2:
+- Automatic connection management via QueryRouterNode
+- Prepared statement caching for repeated queries
+- Read/write splitting for better performance
+- Pattern learning for workload optimization
+- Adaptive pool sizing based on load
 """
 
 import asyncio
@@ -23,15 +25,16 @@ from typing import Any, Dict, List
 
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import WorkflowConnectionPool
+from kailash.nodes.data.query_router import QueryRouterNode
 from kailash.runtime import LocalRuntime
 from kailash.workflow import Workflow, WorkflowBuilder
 
 
 class PortfolioAnalysisService:
-    """Production portfolio analysis service with connection pooling."""
+    """Production portfolio analysis service with connection pooling and query routing."""
 
     def __init__(self):
-        # Create connection pool for high-concurrency operations
+        # Create connection pool with Phase 2 features
         self.pool = WorkflowConnectionPool(
             name="portfolio_pool",
             database_type="postgresql",
@@ -44,7 +47,19 @@ class PortfolioAnalysisService:
             max_connections=50,  # Scale up to 50 for peak load
             health_threshold=70,  # Recycle connections below 70% health
             pre_warm=True,  # Pre-warm connections based on patterns
+            adaptive_sizing=True,  # NEW: Dynamic pool sizing
+            enable_query_routing=True,  # NEW: Pattern tracking
         )
+
+        # Phase 2: Query Router for intelligent routing
+        self.router = QueryRouterNode(
+            name="portfolio_router",
+            connection_pool="portfolio_pool",
+            enable_read_write_split=True,  # Route reads to any connection
+            cache_size=2000,  # Cache prepared statements
+            pattern_learning=True,  # Learn from query patterns
+        )
+
         self._initialized = False
 
     async def initialize(self):
@@ -139,224 +154,232 @@ class PortfolioAnalysisService:
             )
 
     async def analyze_portfolio(self, portfolio_id: str) -> Dict[str, Any]:
-        """Analyze a single portfolio with connection pooling."""
-        async with self.get_connection() as conn_id:
-            # Get portfolio metadata
-            portfolio = await self.pool.process(
-                {
-                    "operation": "execute",
-                    "connection_id": conn_id,
-                    "query": """
-                    SELECT p.*,
-                           COUNT(DISTINCT pos.symbol) as position_count,
-                           SUM(pos.current_value) as calculated_value
-                    FROM portfolio_metadata p
-                    LEFT JOIN portfolio_positions pos ON p.portfolio_id = pos.portfolio_id
-                    WHERE p.portfolio_id = $1
-                    GROUP BY p.portfolio_id
-                """,
-                    "params": [portfolio_id],
-                    "fetch_mode": "one",
-                }
-            )
-
-            if not portfolio["data"]:
-                return {"error": f"Portfolio {portfolio_id} not found"}
-
-            # Get positions with current prices
-            positions = await self.pool.process(
-                {
-                    "operation": "execute",
-                    "connection_id": conn_id,
-                    "query": """
-                    SELECT
-                        pos.*,
-                        mp.close_price as current_price,
-                        mp.volatility,
-                        (pos.quantity * mp.close_price) as market_value,
-                        ((mp.close_price - pos.purchase_price) / pos.purchase_price * 100) as return_pct
-                    FROM portfolio_positions pos
-                    JOIN market_prices mp ON pos.symbol = mp.symbol
-                    WHERE pos.portfolio_id = $1
-                    AND mp.price_date = (
-                        SELECT MAX(price_date) FROM market_prices WHERE symbol = pos.symbol
-                    )
-                    ORDER BY market_value DESC
-                """,
-                    "params": [portfolio_id],
-                    "fetch_mode": "all",
-                }
-            )
-
-            # Calculate portfolio metrics
-            total_value = sum(pos["market_value"] for pos in positions["data"])
-            weighted_return = (
-                sum(
-                    pos["return_pct"] * (pos["market_value"] / total_value)
-                    for pos in positions["data"]
-                )
-                if total_value > 0
-                else 0
-            )
-
-            # Sector allocation
-            sector_allocation = {}
-            for pos in positions["data"]:
-                sector = pos["sector"]
-                if sector not in sector_allocation:
-                    sector_allocation[sector] = 0
-                sector_allocation[sector] += pos["market_value"]
-
-            return {
-                "portfolio_id": portfolio_id,
-                "client_name": portfolio["data"]["client_name"],
-                "risk_profile": portfolio["data"]["risk_profile"],
-                "total_value": float(total_value),
-                "position_count": len(positions["data"]),
-                "weighted_return": float(weighted_return),
-                "top_positions": positions["data"][:5],
-                "sector_allocation": {
-                    k: {"value": float(v), "percentage": float(v / total_value * 100)}
-                    for k, v in sector_allocation.items()
-                },
-                "analysis_timestamp": datetime.now().isoformat(),
+        """Analyze a single portfolio using query router for optimal performance."""
+        # Get portfolio metadata - router handles connection management
+        portfolio = await self.router.process(
+            {
+                "query": """
+                SELECT p.*,
+                       COUNT(DISTINCT pos.symbol) as position_count,
+                       SUM(pos.current_value) as calculated_value
+                FROM portfolio_metadata p
+                LEFT JOIN portfolio_positions pos ON p.portfolio_id = pos.portfolio_id
+                WHERE p.portfolio_id = ?
+                GROUP BY p.portfolio_id
+            """,
+                "parameters": [portfolio_id],
+                "fetch_mode": "one",
             }
+        )
+
+        if not portfolio["data"]:
+            return {"error": f"Portfolio {portfolio_id} not found"}
+
+        # Get positions with current prices - benefits from caching
+        positions = await self.router.process(
+            {
+                "query": """
+                SELECT
+                    pos.*,
+                    mp.close_price as current_price,
+                    mp.volatility,
+                    (pos.quantity * mp.close_price) as market_value,
+                    ((mp.close_price - pos.purchase_price) / pos.purchase_price * 100) as return_pct
+                FROM portfolio_positions pos
+                JOIN market_prices mp ON pos.symbol = mp.symbol
+                WHERE pos.portfolio_id = ?
+                AND mp.price_date = (
+                    SELECT MAX(price_date) FROM market_prices WHERE symbol = pos.symbol
+                )
+                ORDER BY market_value DESC
+            """,
+                "parameters": [portfolio_id],
+                "fetch_mode": "all",
+            }
+        )
+
+        # Calculate portfolio metrics
+        total_value = sum(pos["market_value"] for pos in positions["data"])
+        weighted_return = (
+            sum(
+                pos["return_pct"] * (pos["market_value"] / total_value)
+                for pos in positions["data"]
+            )
+            if total_value > 0
+            else 0
+        )
+
+        # Sector allocation
+        sector_allocation = {}
+        for pos in positions["data"]:
+            sector = pos["sector"]
+            if sector not in sector_allocation:
+                sector_allocation[sector] = 0
+            sector_allocation[sector] += pos["market_value"]
+
+        # Check if query was cached (Phase 2 benefit)
+        cache_info = {
+            "portfolio_query_cached": portfolio.get("routing_metadata", {}).get(
+                "cache_hit", False
+            ),
+            "positions_query_cached": positions.get("routing_metadata", {}).get(
+                "cache_hit", False
+            ),
+        }
+
+        return {
+            "portfolio_id": portfolio_id,
+            "client_name": portfolio["data"]["client_name"],
+            "risk_profile": portfolio["data"]["risk_profile"],
+            "total_value": float(total_value),
+            "position_count": len(positions["data"]),
+            "weighted_return": float(weighted_return),
+            "top_positions": positions["data"][:5],
+            "sector_allocation": {
+                k: {"value": float(v), "percentage": float(v / total_value * 100)}
+                for k, v in sector_allocation.items()
+            },
+            "analysis_timestamp": datetime.now().isoformat(),
+            "cache_info": cache_info,  # Phase 2: Show caching benefits
+        }
 
     async def rebalance_portfolio(
         self, portfolio_id: str, target_allocations: Dict[str, float]
     ):
-        """Rebalance portfolio using transactions for consistency."""
-        async with self.get_connection() as conn_id:
-            try:
-                # Start transaction
-                await self.pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": "BEGIN",
-                        "fetch_mode": "one",
-                    }
+        """Rebalance portfolio using transactions with session affinity."""
+        session_id = f"rebalance_{portfolio_id}_{datetime.now().timestamp()}"
+
+        try:
+            # Start transaction with session ID for affinity
+            await self.router.process(
+                {
+                    "query": "BEGIN",
+                    "session_id": session_id,
+                    "fetch_mode": "one",
+                }
+            )
+
+            # Get current positions - same session for transaction
+            positions = await self.router.process(
+                {
+                    "query": """
+                    SELECT pos.*, mp.close_price as current_price
+                    FROM portfolio_positions pos
+                    JOIN market_prices mp ON pos.symbol = mp.symbol
+                    WHERE pos.portfolio_id = ?
+                    AND mp.price_date = (
+                        SELECT MAX(price_date) FROM market_prices WHERE symbol = pos.symbol
+                    )
+                """,
+                    "parameters": [portfolio_id],
+                    "session_id": session_id,
+                    "fetch_mode": "all",
+                }
+            )
+
+            # Calculate total portfolio value
+            total_value = sum(
+                pos["quantity"] * pos["current_price"] for pos in positions["data"]
+            )
+
+            # Generate rebalancing trades
+            trades = []
+            for sector, target_pct in target_allocations.items():
+                target_value = total_value * target_pct
+                current_value = sum(
+                    pos["quantity"] * pos["current_price"]
+                    for pos in positions["data"]
+                    if pos["sector"] == sector
                 )
 
-                # Get current positions
-                positions = await self.pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": """
-                        SELECT pos.*, mp.close_price as current_price
-                        FROM portfolio_positions pos
-                        JOIN market_prices mp ON pos.symbol = mp.symbol
-                        WHERE pos.portfolio_id = $1
-                        AND mp.price_date = (
-                            SELECT MAX(price_date) FROM market_prices WHERE symbol = pos.symbol
-                        )
-                    """,
-                        "params": [portfolio_id],
-                        "fetch_mode": "all",
-                    }
-                )
-
-                # Calculate total portfolio value
-                total_value = sum(
-                    pos["quantity"] * pos["current_price"] for pos in positions["data"]
-                )
-
-                # Generate rebalancing trades
-                trades = []
-                for sector, target_pct in target_allocations.items():
-                    target_value = total_value * target_pct
-                    current_value = sum(
-                        pos["quantity"] * pos["current_price"]
-                        for pos in positions["data"]
-                        if pos["sector"] == sector
+                if abs(current_value - target_value) > 1000:  # Threshold
+                    trades.append(
+                        {
+                            "sector": sector,
+                            "current_value": current_value,
+                            "target_value": target_value,
+                            "adjustment": target_value - current_value,
+                        }
                     )
 
-                    if abs(current_value - target_value) > 1000:  # Threshold
-                        trades.append(
-                            {
-                                "sector": sector,
-                                "current_value": current_value,
-                                "target_value": target_value,
-                                "adjustment": target_value - current_value,
-                            }
-                        )
-
-                # Record rebalancing action
-                await self.pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": """
-                        INSERT INTO portfolio_performance
-                        (portfolio_id, calculation_date, total_value, daily_return)
-                        VALUES ($1, CURRENT_DATE, $2, 0)
-                        ON CONFLICT (portfolio_id, calculation_date)
-                        DO UPDATE SET total_value = EXCLUDED.total_value
-                    """,
-                        "params": [portfolio_id, total_value],
-                        "fetch_mode": "one",
-                    }
-                )
-
-                # Update last rebalanced date
-                await self.pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": """
-                        UPDATE portfolio_metadata
-                        SET last_rebalanced = NOW()
-                        WHERE portfolio_id = $1
-                    """,
-                        "params": [portfolio_id],
-                        "fetch_mode": "one",
-                    }
-                )
-
-                # Commit transaction
-                await self.pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": "COMMIT",
-                        "fetch_mode": "one",
-                    }
-                )
-
-                return {
-                    "portfolio_id": portfolio_id,
-                    "total_value": float(total_value),
-                    "trades": trades,
-                    "status": "rebalanced",
+            # Record rebalancing action - same session
+            await self.router.process(
+                {
+                    "query": """
+                    INSERT INTO portfolio_performance
+                    (portfolio_id, calculation_date, total_value, daily_return)
+                    VALUES (?, CURRENT_DATE, ?, 0)
+                    ON CONFLICT (portfolio_id, calculation_date)
+                    DO UPDATE SET total_value = EXCLUDED.total_value
+                """,
+                    "parameters": [portfolio_id, total_value],
+                    "session_id": session_id,
+                    "fetch_mode": "one",
                 }
+            )
 
-            except Exception as e:
-                # Rollback on error
-                await self.pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": "ROLLBACK",
-                        "fetch_mode": "one",
-                    }
-                )
-                raise
+            # Update last rebalanced date - same session
+            await self.router.process(
+                {
+                    "query": """
+                    UPDATE portfolio_metadata
+                    SET last_rebalanced = NOW()
+                    WHERE portfolio_id = ?
+                """,
+                    "parameters": [portfolio_id],
+                    "session_id": session_id,
+                    "fetch_mode": "one",
+                }
+            )
+
+            # Commit transaction
+            await self.router.process(
+                {
+                    "query": "COMMIT",
+                    "session_id": session_id,
+                    "fetch_mode": "one",
+                }
+            )
+
+            return {
+                "portfolio_id": portfolio_id,
+                "total_value": float(total_value),
+                "trades": trades,
+                "status": "rebalanced",
+                "session_id": session_id,  # For debugging
+            }
+
+        except Exception as e:
+            # Rollback on error - same session
+            await self.router.process(
+                {
+                    "query": "ROLLBACK",
+                    "session_id": session_id,
+                    "fetch_mode": "one",
+                }
+            )
+            raise
 
     async def _monitor_pool_health(self):
-        """Monitor connection pool health in background."""
+        """Monitor connection pool and router health in background."""
         while self._initialized:
             try:
+                # Pool statistics
                 stats = await self.pool.process({"operation": "stats"})
+
+                # Router metrics (Phase 2)
+                router_metrics = await self.router.get_metrics()
 
                 # Log metrics
                 print(
                     f"""
-Pool Health Report:
+Pool & Router Health Report:
 - Active connections: {stats['current_state']['active_connections']}/{stats['current_state']['total_connections']}
 - Queries executed: {stats['queries']['executed']}
 - Error rate: {stats['queries']['error_rate']:.2%}
 - Pool efficiency: {stats['queries']['executed'] / max(1, stats['connections']['created']):.1f} queries/connection
+- Cache hit rate: {router_metrics['cache_stats']['hit_rate']:.2%}
+- Avg routing time: {router_metrics['router_metrics']['avg_routing_time_ms']}ms
                 """
                 )
 
@@ -378,7 +401,7 @@ Pool Health Report:
 
 # Create workflow using the service
 def create_portfolio_analysis_workflow():
-    """Create a workflow for portfolio analysis using connection pooling."""
+    """Create a workflow for portfolio analysis using connection pooling and query routing."""
     workflow = WorkflowBuilder("portfolio_analysis")
 
     # Initialize service
@@ -389,6 +412,11 @@ def create_portfolio_analysis_workflow():
             "code": """
 service = PortfolioAnalysisService()
 await service.initialize()
+
+# Register pool and router with runtime for workflow access
+runtime.register_node("portfolio_pool", service.pool)
+runtime.register_node("portfolio_router", service.router)
+
 result = {"service": service, "status": "initialized"}
 """,
             "imports": ["PortfolioAnalysisService"],
@@ -411,12 +439,20 @@ analyses = await asyncio.gather(*[
 # Get pool statistics
 stats = await service.pool.process({"operation": "stats"})
 
+# Get router metrics (Phase 2)
+router_metrics = await service.router.get_metrics()
+
 result = {
     "analyses": analyses,
     "pool_stats": {
         "total_queries": stats["queries"]["executed"],
         "connections_used": stats["connections"]["created"],
         "efficiency": stats["queries"]["executed"] / max(1, stats["connections"]["created"])
+    },
+    "router_stats": {
+        "cache_hit_rate": router_metrics["cache_stats"]["hit_rate"],
+        "avg_routing_time_ms": router_metrics["router_metrics"]["avg_routing_time_ms"],
+        "queries_cached": router_metrics["cache_stats"]["total_queries"]
     }
 }
 """,
@@ -452,6 +488,8 @@ report = {
     "total_aum": total_aum,
     "average_return": avg_return,
     "pool_efficiency": inputs["pool_stats"]["efficiency"],
+    "cache_hit_rate": inputs["router_stats"]["cache_hit_rate"],  # Phase 2
+    "avg_routing_time_ms": inputs["router_stats"]["avg_routing_time_ms"],  # Phase 2
     "top_performers": sorted(
         [a for a in analyses if "error" not in a],
         key=lambda x: x["weighted_return"],
@@ -465,6 +503,7 @@ result = report
             "inputs": {
                 "analyses": "{{analyze_portfolios.result.analyses}}",
                 "pool_stats": "{{analyze_portfolios.result.pool_stats}}",
+                "router_stats": "{{analyze_portfolios.result.router_stats}}",
             },
         },
     )
@@ -503,7 +542,10 @@ Portfolios Analyzed: {report['portfolios_analyzed']}
 Total AUM: ${report['total_aum']:,.2f}
 Average Return: {report['average_return']:.2f}%
 
-Connection Pool Efficiency: {report['pool_efficiency']:.1f} queries/connection
+Performance Metrics:
+- Connection Pool Efficiency: {report['pool_efficiency']:.1f} queries/connection
+- Query Cache Hit Rate: {report['cache_hit_rate']:.2%} (Phase 2)
+- Avg Routing Time: {report['avg_routing_time_ms']:.2f}ms (Phase 2)
 
 Top Performers:
 """

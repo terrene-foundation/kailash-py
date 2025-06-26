@@ -1,7 +1,5 @@
-"""Monitoring and performance nodes for the Kailash SDK."""
+"""Monitoring nodes for connection and workflow visualization."""
 
-from .performance_benchmark import PerformanceBenchmarkNode
+from .connection_dashboard import ConnectionDashboardNode
 
-__all__ = [
-    "PerformanceBenchmarkNode",
-]
+__all__ = ["ConnectionDashboardNode"]

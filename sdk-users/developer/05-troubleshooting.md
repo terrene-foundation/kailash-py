@@ -11,6 +11,8 @@
 ## 🔗 **Related Guides**
 - **[Quick Reference](QUICK_REFERENCE.md)** - Common patterns and anti-patterns
 - **[Node Catalog](../nodes/comprehensive-node-catalog.md)** - Alternative nodes to avoid issues
+- **[Testing Framework](async-testing-framework-guide.md)** - Production-certified testing with real Docker services
+- **[Test Status Report](../../tests/TEST_IMPROVEMENTS_SUMMARY.md)** - Comprehensive test improvements and quality metrics
 
 ## 🔥 **Most Common Issues**
 

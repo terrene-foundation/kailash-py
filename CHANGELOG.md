@@ -15,6 +15,18 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.6.1] - 2025-01-26
+
+See [changelogs/releases/v0.6.1-2025-01-26.md](changelogs/releases/v0.6.1-2025-01-26.md) for full details.
+
+**Key Features:** Critical middleware bug fixes, standardized test environment, massive CI performance improvements (10min → 40sec)
+
+### [0.6.0] - 2025-01-24
+
+See [changelogs/releases/v0.6.0-2025-01-24.md](changelogs/releases/v0.6.0-2025-01-24.md) for full details.
+
+**Key Features:** User Management System, Enterprise Admin Infrastructure
+
 ### [0.5.0] - 2025-01-19
 
 See [changelogs/releases/v0.5.0-2025-01-19.md](changelogs/releases/v0.5.0-2025-01-19.md) for full details.
