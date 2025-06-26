@@ -1,5 +1,20 @@
 # Kailash SDK Test Suite
 
+## 🚀 Quick Start - Standardized Test Environment
+
+```bash
+# One-time setup (downloads models, initializes databases)
+./test-env setup
+
+# Run all tier 2 (integration) tests
+./test-env test tier2
+
+# Check service status
+./test-env status
+```
+
+See [test-environment/README.md](test-environment/README.md) for complete documentation.
+
 ## 🎯 Test Excellence (v0.5.0)
 
 ### Latest Achievements (v0.5.0 - Session 075)

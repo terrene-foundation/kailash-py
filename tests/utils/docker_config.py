@@ -1,7 +1,9 @@
 # Docker infrastructure configuration
+# Standardized test environment configuration
+# Use ./test-env script to manage Docker services
 import os
 
-# PostgreSQL configuration - using existing Docker container on port 5434
+# PostgreSQL configuration - using Docker container on port 5434
 DATABASE_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": int(os.getenv("DB_PORT", "5434")),
@@ -29,10 +31,20 @@ KAFKA_CONFIG = {
     "bootstrap_servers": os.getenv("KAFKA_SERVERS", "localhost:9092"),
 }
 
+# MySQL configuration - using test MySQL on port 3307
+MYSQL_CONFIG = {
+    "host": os.getenv("MYSQL_HOST", "localhost"),
+    "port": int(os.getenv("MYSQL_PORT", "3307")),
+    "database": os.getenv("MYSQL_DATABASE", "kailash_test"),
+    "user": os.getenv("MYSQL_USER", "kailash_test"),
+    "password": os.getenv("MYSQL_PASSWORD", "test_password"),
+}
+
 # Ollama configuration - using test Ollama on port 11435
 OLLAMA_CONFIG = {
     "host": os.getenv("OLLAMA_HOST", "localhost"),
     "port": int(os.getenv("OLLAMA_PORT", "11435")),
+    "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11435"),
 }
 
 # OAuth2 configuration
@@ -70,6 +82,15 @@ def get_redis_url():
     return f"redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}"
 
 
+def get_mysql_connection_string(database=None):
+    """Get MySQL connection string for the Docker setup."""
+    db = database or MYSQL_CONFIG["database"]
+    return (
+        f"mysql://{MYSQL_CONFIG['user']}:{MYSQL_CONFIG['password']}"
+        f"@{MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/{db}"
+    )
+
+
 # Test database names
 TEST_DATABASES = {
     "admin": "kailash_admin",
@@ -97,6 +118,18 @@ async def ensure_docker_services():
 
         r = redis.Redis(**REDIS_CONFIG)
         r.ping()
+
+        # Check MySQL
+        import pymysql
+
+        conn = pymysql.connect(
+            host=MYSQL_CONFIG["host"],
+            port=MYSQL_CONFIG["port"],
+            user=MYSQL_CONFIG["user"],
+            password=MYSQL_CONFIG["password"],
+            database=MYSQL_CONFIG["database"],
+        )
+        conn.close()
 
         # Check Ollama
         async with httpx.AsyncClient() as client:

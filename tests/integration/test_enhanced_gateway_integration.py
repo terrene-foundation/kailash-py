@@ -41,9 +41,9 @@ async def gateway_with_resources(real_resource_registry):
     """Create gateway with real resources."""
     secret_manager = SecretManager()
 
-    # Store test credentials
+    # Store test credentials matching Docker setup
     await secret_manager.store_secret(
-        "db_credentials", {"user": "postgres", "password": "postgres"}
+        "db_credentials", {"user": "test_user", "password": "test_password"}
     )
 
     gateway = EnhancedDurableAPIGateway(
@@ -130,7 +130,11 @@ async with db.acquire() as conn:
             resources={
                 "main_db": ResourceReference(
                     type="database",
-                    config={"host": "localhost", "port": 5433, "database": "postgres"},
+                    config={
+                        "host": "localhost",
+                        "port": 5434,
+                        "database": "kailash_test",
+                    },
                     credentials_ref="db_credentials",
                 )
             },
@@ -225,11 +229,15 @@ result = {
             resources={
                 "db": ResourceReference(
                     type="database",
-                    config={"host": "localhost", "port": 5433, "database": "postgres"},
+                    config={
+                        "host": "localhost",
+                        "port": 5434,
+                        "database": "kailash_test",
+                    },
                     credentials_ref="db_credentials",
                 ),
                 "cache": ResourceReference(
-                    type="cache", config={"host": "localhost", "port": 6379}
+                    type="cache", config={"host": "localhost", "port": 6380}
                 ),
             },
         )

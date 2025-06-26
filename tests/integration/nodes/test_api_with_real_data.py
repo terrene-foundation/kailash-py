@@ -240,7 +240,7 @@ class TestAPINodesWithRealData:
             )
             assert result["token_type"] == "Bearer"
             assert result["expires_in"] == 3600
-            assert result["refresh_token_present"] == True
+            assert result["refresh_token_present"]
 
             # Verify OAuth request
             mock_post.assert_called_once()

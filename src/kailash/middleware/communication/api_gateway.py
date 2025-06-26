@@ -225,10 +225,8 @@ class APIGateway:
         # Data transformer for request/response formatting
         self.data_transformer = DataTransformer(
             name="gateway_transformer",
-            transformations=[
-                {"type": "validate", "schema": "api_response"},
-                {"type": "add_field", "field": "timestamp", "value": "now()"},
-            ],
+            # Transformations will be provided at runtime
+            transformations=[],
         )
 
         # Credential manager for gateway security
@@ -362,17 +360,9 @@ class APIGateway:
                     "active": session.active,
                 }
 
-                transformed = await self.data_transformer.process(
-                    {
-                        "data": response_data,
-                        "transformations": [
-                            {
-                                "type": "add_field",
-                                "field": "api_version",
-                                "value": self.version,
-                            }
-                        ],
-                    }
+                transformed = self.data_transformer.execute(
+                    data=response_data,
+                    transformations=[f"{{**data, 'api_version': '{self.version}'}}"],
                 )
 
                 return SessionResponse(**transformed["result"])

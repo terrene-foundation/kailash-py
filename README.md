@@ -21,6 +21,17 @@
 
 ---
 
+## 🔥 Latest Release: v0.6.1 (January 26, 2025)
+
+**Critical patch fixing middleware compatibility issues from v0.6.0**
+
+- 🚨 **Fixed**: All middleware components now use `.execute()` method
+- 🔧 **Fixed**: DataTransformer string transformation validation
+- 🧹 **Fixed**: EventStore async task cleanup preventing crashes
+- 🐳 **New**: Standardized Docker test environment (`./test-env`)
+
+[Full Changelog](changelogs/releases/v0.6.1-2025-01-26.md) | [Migration Guide](sdk-users/migration-guides/v0.6.0-to-v0.6.1-migration.md)
+
 ## ✨ Highlights
 
 - 🚀 **Rapid Prototyping**: Create and test workflows locally without containerization

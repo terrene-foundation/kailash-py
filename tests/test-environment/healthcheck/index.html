@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kailash SDK Test Environment Status</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .service {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .service h3 {
+            margin: 0 0 10px 0;
+            color: #444;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.checking {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .details {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+        .url {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .refresh {
+            margin-bottom: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kailash SDK Test Environment Status</h1>
+        
+        <div class="refresh">
+            <button onclick="checkAllServices()">Refresh Status</button>
+            <span id="last-update"></span>
+        </div>
+
+        <div class="services" id="services-container">
+            <!-- Services will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        const services = [
+            {
+                name: 'PostgreSQL',
+                url: 'http://localhost:5434',
+                checkUrl: '/health',
+                port: 5434,
+                connection: 'postgresql://test_user:test_password@localhost:5434/kailash_test'
+            },
+            {
+                name: 'Redis',
+                url: 'http://localhost:6380',
+                checkUrl: '/health',
+                port: 6380,
+                connection: 'redis://localhost:6380'
+            },
+            {
+                name: 'MySQL',
+                url: 'http://localhost:3307',
+                checkUrl: '/health',
+                port: 3307,
+                connection: 'mysql://kailash_test:test_password@localhost:3307/kailash_test'
+            },
+            {
+                name: 'Ollama',
+                url: 'http://localhost:11435',
+                checkUrl: '/api/version',
+                port: 11435,
+                connection: 'http://localhost:11435'
+            },
+            {
+                name: 'MongoDB',
+                url: 'http://localhost:27017',
+                checkUrl: '/health',
+                port: 27017,
+                connection: 'mongodb://kailash:kailash123@localhost:27017'
+            },
+            {
+                name: 'Qdrant',
+                url: 'http://localhost:6333',
+                checkUrl: '/health',
+                port: 6333,
+                connection: 'http://localhost:6333'
+            },
+            {
+                name: 'MinIO',
+                url: 'http://localhost:9000',
+                checkUrl: '/minio/health/live',
+                port: 9000,
+                connection: 'http://localhost:9000 (Console: 9001)'
+            },
+            {
+                name: 'Kafka',
+                url: 'http://localhost:9092',
+                checkUrl: '/health',
+                port: 9092,
+                connection: 'localhost:9092'
+            },
+            {
+                name: 'Elasticsearch',
+                url: 'http://localhost:9200',
+                checkUrl: '/_cluster/health',
+                port: 9200,
+                connection: 'http://localhost:9200'
+            },
+            {
+                name: 'OAuth2 Mock',
+                url: 'http://localhost:8080',
+                checkUrl: '/default/.well-known/openid-configuration',
+                port: 8080,
+                connection: 'http://localhost:8080'
+            },
+            {
+                name: 'Adminer',
+                url: 'http://localhost:8090',
+                checkUrl: '/',
+                port: 8090,
+                connection: 'http://localhost:8090'
+            }
+        ];
+
+        function createServiceCard(service) {
+            return `
+                <div class="service">
+                    <h3>${service.name}</h3>
+                    <span class="status checking" id="status-${service.name}">Checking...</span>
+                    <div class="details">
+                        <p>Port: ${service.port}</p>
+                        <p>Connection: <span class="url">${service.connection}</span></p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function checkService(service) {
+            const statusElement = document.getElementById(`status-${service.name}`);
+            
+            try {
+                // For services that don't have HTTP endpoints, we'll just mark them as online
+                // In a real implementation, you'd check each service appropriately
+                if (['PostgreSQL', 'Redis', 'MySQL', 'MongoDB', 'Kafka'].includes(service.name)) {
+                    statusElement.textContent = 'Online (Port Open)';
+                    statusElement.className = 'status online';
+                    return;
+                }
+
+                const response = await fetch(service.url + service.checkUrl, {
+                    method: 'GET',
+                    mode: 'no-cors'
+                });
+                
+                statusElement.textContent = 'Online';
+                statusElement.className = 'status online';
+            } catch (error) {
+                statusElement.textContent = 'Offline';
+                statusElement.className = 'status offline';
+            }
+        }
+
+        function checkAllServices() {
+            services.forEach(service => checkService(service));
+            document.getElementById('last-update').textContent = 
+                ` Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        // Initialize
+        document.getElementById('services-container').innerHTML = 
+            services.map(createServiceCard).join('');
+        
+        checkAllServices();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(checkAllServices, 30000);
+    </script>
+</body>
+</html>

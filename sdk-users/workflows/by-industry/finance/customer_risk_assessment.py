@@ -25,7 +25,6 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 from examples.utils.data_paths import get_input_data_path, get_output_data_path
-
 from kailash.access_control import UserContext
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode

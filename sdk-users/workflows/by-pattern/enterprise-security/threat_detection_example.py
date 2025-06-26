@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List
 
 from examples.utils.paths import get_output_data_path
-
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.security.threat_detection import ThreatDetectionNode
 

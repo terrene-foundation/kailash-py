@@ -371,7 +371,7 @@ EXPLANATION:
 
         try:
             result = await asyncio.to_thread(
-                self.llm_node.process, messages=[{"role": "user", "content": prompt}]
+                self.llm_node.execute, messages=[{"role": "user", "content": prompt}]
             )
 
             # Extract content from response
@@ -847,10 +847,10 @@ What would you like to work on? Just describe what you want to accomplish and I'
         """Store chat message with embedding in vector database."""
         try:
             # Generate embedding
-            embedding_result = await self.embedding_node.process({"text": content})
+            embedding_result = self.embedding_node.execute(text=content)
 
             # Store in database (simplified for now)
-            await self.vector_db.process(
+            self.vector_db.execute(
                 {
                     "query": "INSERT INTO chat_messages (id, session_id, user_id, content, role, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                     "parameters": [
@@ -875,10 +875,10 @@ What would you like to work on? Just describe what you want to accomplish and I'
         """Find similar past conversations using vector search."""
         try:
             # Generate query embedding
-            query_embedding = await self.embedding_node.process({"text": query})
+            query_embedding = self.embedding_node.execute(text=query)
 
             # Search for similar messages (simplified for now)
-            search_result = await self.vector_db.process(
+            search_result = self.vector_db.execute(
                 {
                     "query": "SELECT * FROM chat_messages WHERE role = 'user' ORDER BY timestamp DESC LIMIT ?",
                     "parameters": [limit * 2],
@@ -930,7 +930,7 @@ What would you like to work on? Just describe what you want to accomplish and I'
 
         try:
             # Generate query embedding
-            query_embedding = await self.embedding_node.process({"text": query})
+            query_embedding = self.embedding_node.execute(text=query)
 
             # Prepare filters
             filters = {}
@@ -948,7 +948,7 @@ What would you like to work on? Just describe what you want to accomplish and I'
             query_parts.append("ORDER BY timestamp DESC LIMIT ?")
             params.append(limit)
 
-            search_result = await self.vector_db.process(
+            search_result = self.vector_db.execute(
                 {"query": " ".join(query_parts), "parameters": params}
             )
 

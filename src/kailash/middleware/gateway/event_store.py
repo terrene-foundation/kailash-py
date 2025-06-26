@@ -13,7 +13,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 
@@ -55,7 +55,7 @@ class RequestEvent:
     event_id: str = field(default_factory=lambda: f"evt_{uuid.uuid4().hex[:12]}")
     event_type: EventType = EventType.REQUEST_CREATED
     request_id: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     sequence_number: int = 0
     data: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -103,6 +103,7 @@ class EventStore:
         # In-memory buffer
         self._buffer: List[RequestEvent] = []
         self._buffer_lock = asyncio.Lock()
+        self._flush_in_progress = False
 
         # Event stream
         self._event_stream: List[RequestEvent] = []
@@ -120,7 +121,16 @@ class EventStore:
         self.flush_count = 0
 
         # Start flush task
-        self._flush_task = asyncio.create_task(self._flush_loop())
+        try:
+            self._flush_task = asyncio.create_task(self._flush_loop())
+        except RuntimeError:
+            # If no event loop is running, defer task creation
+            self._flush_task = None
+
+    async def _ensure_flush_task(self):
+        """Ensure the flush task is running."""
+        if self._flush_task is None:
+            self._flush_task = asyncio.create_task(self._flush_loop())
 
     async def append(
         self,
@@ -130,6 +140,9 @@ class EventStore:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> RequestEvent:
         """Append an event to the store."""
+        # Ensure flush task is running
+        await self._ensure_flush_task()
+
         async with self._buffer_lock:
             # Get next sequence number
             sequence = self._sequences.get(request_id, 0)
@@ -148,19 +161,27 @@ class EventStore:
             self._buffer.append(event)
             self.event_count += 1
 
-            # Flush if buffer is full
-            if len(self._buffer) >= self.batch_size:
+            # Check if we need to flush (but don't flush inside the lock)
+            needs_flush = len(self._buffer) >= self.batch_size
+
+        # Apply projections outside the lock
+        await self._apply_projections(event)
+
+        # Flush if needed (outside the lock to avoid deadlock)
+        if needs_flush and not self._flush_in_progress:
+            # Set flag to prevent concurrent flushes
+            self._flush_in_progress = True
+            try:
                 await self._flush_buffer()
+            finally:
+                self._flush_in_progress = False
 
-            # Apply projections
-            await self._apply_projections(event)
+        logger.debug(
+            f"Appended event {event.event_type.value} for request {request_id} "
+            f"(seq: {sequence})"
+        )
 
-            logger.debug(
-                f"Appended event {event.event_type.value} for request {request_id} "
-                f"(seq: {sequence})"
-            )
-
-            return event
+        return event
 
     async def get_events(
         self,
@@ -233,6 +254,9 @@ class EventStore:
         follow: bool = False,
     ) -> AsyncIterator[RequestEvent]:
         """Stream events as they occur."""
+        # Ensure buffer is flushed before streaming
+        await self._flush_buffer()
+
         last_index = 0
 
         while True:
@@ -294,12 +318,19 @@ class EventStore:
 
     async def _flush_buffer(self) -> None:
         """Flush event buffer to storage."""
-        async with self._buffer_lock:
-            if not self._buffer:
-                return
+        # Acquire lock with timeout to prevent deadlock
+        try:
+            # Use wait_for to add timeout on lock acquisition
+            async with asyncio.timeout(1.0):  # 1 second timeout
+                async with self._buffer_lock:
+                    if not self._buffer:
+                        return
 
-            events_to_flush = self._buffer.copy()
-            self._buffer.clear()
+                    events_to_flush = self._buffer.copy()
+                    self._buffer.clear()
+        except asyncio.TimeoutError:
+            logger.warning("Timeout acquiring buffer lock during flush")
+            return
 
         # Add to in-memory stream
         async with self._stream_lock:
@@ -317,10 +348,16 @@ class EventStore:
         while True:
             try:
                 await asyncio.sleep(self.flush_interval)
-                await self._flush_buffer()
+                if not self._flush_in_progress:
+                    self._flush_in_progress = True
+                    try:
+                        await self._flush_buffer()
+                    finally:
+                        self._flush_in_progress = False
             except asyncio.CancelledError:
                 # Final flush before shutdown
-                await self._flush_buffer()
+                if not self._flush_in_progress:
+                    await self._flush_buffer()
                 break
             except Exception as e:
                 logger.error(f"Flush error: {e}")
@@ -388,11 +425,14 @@ class EventStore:
 
     async def close(self) -> None:
         """Close event store and flush remaining events."""
-        self._flush_task.cancel()
-        try:
-            await self._flush_task
-        except asyncio.CancelledError:
-            pass
+        if self._flush_task is not None:
+            self._flush_task.cancel()
+            try:
+                await self._flush_task
+            except asyncio.CancelledError:
+                pass
+        # Final flush
+        await self._flush_buffer()
 
 
 # Example projection handlers

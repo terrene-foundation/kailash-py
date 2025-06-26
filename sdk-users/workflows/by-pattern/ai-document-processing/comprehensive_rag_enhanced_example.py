@@ -13,8 +13,10 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from kailash.nodes.rag import (  # Core strategies; Similarity approaches; Query processing; Advanced techniques; Performance optimization; Utilities
-    AdaptiveQueryProcessorNode,
+from kailash.nodes.rag import (
+    AdaptiveQueryProcessorNode,  # Core strategies; Similarity approaches; Query processing; Advanced techniques; Performance optimization; Utilities
+)
+from kailash.nodes.rag import (
     AdaptiveRAGWorkflowNode,
     AsyncParallelRAGNode,
     BatchOptimizedRAGNode,
