@@ -19,6 +19,17 @@ from kailash.core.actors import (
     ConnectionState,
     SupervisionStrategy,
 )
+from kailash.core.actors.adaptive_pool_controller import AdaptivePoolController
+from kailash.core.ml.query_patterns import QueryPatternTracker
+from kailash.core.monitoring.connection_metrics import (
+    ConnectionMetricsCollector,
+    ErrorCategory,
+)
+from kailash.core.resilience.circuit_breaker import (
+    CircuitBreakerConfig,
+    CircuitBreakerError,
+    ConnectionCircuitBreaker,
+)
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
@@ -187,6 +198,8 @@ class WorkflowConnectionPool(AsyncNode):
         self.max_connections = config.get("max_connections", 10)
         self.health_threshold = config.get("health_threshold", 50)
         self.pre_warm_enabled = config.get("pre_warm", True)
+        self.adaptive_sizing_enabled = config.get("adaptive_sizing", False)
+        self.enable_query_routing = config.get("enable_query_routing", False)
 
         # Database configuration
         self.db_config = {
@@ -222,6 +235,41 @@ class WorkflowConnectionPool(AsyncNode):
         # State
         self._initialized = False
         self._closing = False
+
+        # Phase 2 components
+        self.query_pattern_tracker = None
+        self.adaptive_controller = None
+
+        if self.enable_query_routing:
+            self.query_pattern_tracker = QueryPatternTracker()
+
+        if self.adaptive_sizing_enabled:
+            self.adaptive_controller = AdaptivePoolController(
+                min_size=self.min_connections, max_size=self.max_connections
+            )
+
+        # Phase 3 components
+        # Circuit breaker for connection failures
+        self.circuit_breaker_config = CircuitBreakerConfig(
+            failure_threshold=config.get("circuit_breaker_failure_threshold", 5),
+            recovery_timeout=config.get("circuit_breaker_recovery_timeout", 60),
+            error_rate_threshold=config.get("circuit_breaker_error_rate", 0.5),
+        )
+        self.circuit_breaker = ConnectionCircuitBreaker(self.circuit_breaker_config)
+
+        # Comprehensive metrics collector
+        self.metrics_collector = ConnectionMetricsCollector(
+            pool_name=self.metadata.name,
+            retention_minutes=config.get("metrics_retention_minutes", 60),
+        )
+
+        # Enable query pipelining support
+        self.enable_pipelining = config.get("enable_pipelining", False)
+        self.pipeline_batch_size = config.get("pipeline_batch_size", 100)
+
+        # Monitoring dashboard integration
+        self.enable_monitoring = config.get("enable_monitoring", False)
+        self.monitoring_port = config.get("monitoring_port", 8080)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define node parameters."""
@@ -286,6 +334,77 @@ class WorkflowConnectionPool(AsyncNode):
                 required=False,
                 default=True,
                 description="Enable pattern-based pre-warming",
+            ),
+            NodeParameter(
+                name="adaptive_sizing",
+                type=bool,
+                required=False,
+                default=False,
+                description="Enable adaptive pool sizing based on workload",
+            ),
+            NodeParameter(
+                name="enable_query_routing",
+                type=bool,
+                required=False,
+                default=False,
+                description="Enable query pattern tracking for routing optimization",
+            ),
+            # Phase 3 parameters
+            NodeParameter(
+                name="circuit_breaker_failure_threshold",
+                type=int,
+                required=False,
+                default=5,
+                description="Failures before circuit breaker opens",
+            ),
+            NodeParameter(
+                name="circuit_breaker_recovery_timeout",
+                type=int,
+                required=False,
+                default=60,
+                description="Seconds before circuit breaker tries recovery",
+            ),
+            NodeParameter(
+                name="circuit_breaker_error_rate",
+                type=float,
+                required=False,
+                default=0.5,
+                description="Error rate threshold to open circuit",
+            ),
+            NodeParameter(
+                name="metrics_retention_minutes",
+                type=int,
+                required=False,
+                default=60,
+                description="How long to retain detailed metrics",
+            ),
+            NodeParameter(
+                name="enable_pipelining",
+                type=bool,
+                required=False,
+                default=False,
+                description="Enable query pipelining for batch operations",
+            ),
+            NodeParameter(
+                name="pipeline_batch_size",
+                type=int,
+                required=False,
+                default=100,
+                description="Maximum queries per pipeline batch",
+            ),
+            NodeParameter(
+                name="enable_monitoring",
+                type=bool,
+                required=False,
+                default=False,
+                description="Enable monitoring dashboard",
+            ),
+            NodeParameter(
+                name="monitoring_port",
+                type=int,
+                required=False,
+                default=8080,
+                description="Port for monitoring dashboard",
             ),
             # Operation parameters
             NodeParameter(
@@ -355,6 +474,20 @@ class WorkflowConnectionPool(AsyncNode):
             return await self._execute_query(inputs)
         elif operation == "stats":
             return await self._get_stats()
+        elif operation == "get_status":
+            return await self._get_pool_status()
+        elif operation == "adjust_pool_size":
+            return await self.adjust_pool_size(inputs.get("new_size"))
+        elif operation == "get_pool_statistics":
+            return await self.get_pool_statistics()
+        elif operation == "get_comprehensive_status":
+            return await self.get_comprehensive_status()
+        elif operation == "start_monitoring":
+            return await self._start_monitoring_dashboard()
+        elif operation == "stop_monitoring":
+            return await self._stop_monitoring_dashboard()
+        elif operation == "export_metrics":
+            return {"prometheus_metrics": self.metrics_collector.export_prometheus()}
         else:
             raise NodeExecutionError(f"Unknown operation: {operation}")
 
@@ -374,12 +507,20 @@ class WorkflowConnectionPool(AsyncNode):
             # Create minimum connections
             await self._ensure_min_connections()
 
+            # Start adaptive controller if enabled
+            if self.adaptive_controller:
+                await self.adaptive_controller.start(
+                    pool_ref=self, pattern_tracker=self.query_pattern_tracker
+                )
+
             self._initialized = True
 
             return {
                 "status": "initialized",
                 "min_connections": self.min_connections,
                 "max_connections": self.max_connections,
+                "adaptive_sizing": self.adaptive_sizing_enabled,
+                "query_routing": self.enable_query_routing,
             }
 
         except Exception as e:
@@ -394,27 +535,38 @@ class WorkflowConnectionPool(AsyncNode):
         start_time = time.time()
 
         try:
-            # Try to get available connection
-            connection = None
+            # Use circuit breaker to protect connection acquisition
+            async def acquire_with_circuit_breaker():
+                # Try to get available connection
+                connection = None
 
-            # Fast path: try to get immediately available connection
-            try:
-                connection = await asyncio.wait_for(
-                    self.available_connections.get(), timeout=0.1
-                )
-            except asyncio.TimeoutError:
-                # Need to create new connection or wait
-                if len(self.all_connections) < self.max_connections:
-                    # Create new connection
-                    connection = await self._create_connection()
-                    # Don't put it in available queue - we'll use it directly
-                else:
-                    # Wait for available connection
-                    connection = await self.available_connections.get()
+                # Fast path: try to get immediately available connection
+                try:
+                    connection = await asyncio.wait_for(
+                        self.available_connections.get(), timeout=0.1
+                    )
+                except asyncio.TimeoutError:
+                    # Need to create new connection or wait
+                    if len(self.all_connections) < self.max_connections:
+                        # Create new connection
+                        connection = await self._create_connection()
+                        # Don't put it in available queue - we'll use it directly
+                    else:
+                        # Wait for available connection
+                        connection = await self.available_connections.get()
+
+                return connection
+
+            # Execute with circuit breaker protection
+            connection = await self.circuit_breaker.call(acquire_with_circuit_breaker)
 
             # Record acquisition time
             wait_time = time.time() - start_time
             self.metrics.record_acquisition_time(wait_time)
+
+            # Track in comprehensive metrics
+            with self.metrics_collector.track_acquisition() as timer:
+                pass  # Already acquired, just recording time
 
             # Move to active
             self.active_connections[connection.id] = connection
@@ -431,8 +583,14 @@ class WorkflowConnectionPool(AsyncNode):
                 "acquisition_time_ms": wait_time * 1000,
             }
 
+        except CircuitBreakerError as e:
+            # Circuit is open - pool is experiencing failures
+            self.metrics_collector.track_pool_exhaustion()
+            logger.error(f"Circuit breaker open: {e}")
+            raise NodeExecutionError(f"Connection pool circuit breaker open: {e}")
         except Exception as e:
             logger.error(f"Failed to acquire connection: {e}")
+            self.metrics_collector.track_query_error("ACQUIRE", e)
             raise NodeExecutionError(f"Connection acquisition failed: {e}")
 
     async def _release_connection(self, connection_id: Optional[str]) -> Dict[str, Any]:
@@ -462,18 +620,45 @@ class WorkflowConnectionPool(AsyncNode):
 
         connection = self.active_connections[connection_id]
 
+        # Determine query type for metrics
+        query = inputs.get("query", "").strip().upper()
+        query_type = "UNKNOWN"
+        if query.startswith("SELECT"):
+            query_type = "SELECT"
+        elif query.startswith("INSERT"):
+            query_type = "INSERT"
+        elif query.startswith("UPDATE"):
+            query_type = "UPDATE"
+        elif query.startswith("DELETE"):
+            query_type = "DELETE"
+
         try:
-            # Execute query
-            result = await connection.execute(
-                query=inputs.get("query"),
-                params=inputs.get("params"),
-                fetch_mode=inputs.get("fetch_mode", "all"),
-            )
+            # Execute query with comprehensive metrics tracking
+            with self.metrics_collector.track_query(query_type) as timer:
+                result = await connection.execute(
+                    query=inputs.get("query"),
+                    params=inputs.get("params"),
+                    fetch_mode=inputs.get("fetch_mode", "all"),
+                )
 
             # Update metrics
             self.metrics.queries_executed += 1
             if not result.success:
                 self.metrics.query_errors += 1
+                self.metrics_collector.track_query_error(
+                    query_type, Exception(result.error)
+                )
+
+            # Track query pattern if enabled
+            if self.query_pattern_tracker and inputs.get("query"):
+                self.query_pattern_tracker.record_execution(
+                    fingerprint=inputs.get("query_fingerprint", inputs.get("query")),
+                    execution_time_ms=result.execution_time * 1000,
+                    connection_id=connection_id,
+                    parameters=inputs.get("params", {}),
+                    success=result.success,
+                    result_size=len(result.data) if result.data else 0,
+                )
 
             return {
                 "success": result.success,
@@ -593,6 +778,10 @@ class WorkflowConnectionPool(AsyncNode):
         # Stop accepting new connections
         self._initialized = False
 
+        # Stop adaptive controller if running
+        if self.adaptive_controller:
+            await self.adaptive_controller.stop()
+
         # Stop all connection actors gracefully
         actors_to_stop = list(self.all_connections.values())
         for actor in actors_to_stop:
@@ -641,3 +830,242 @@ class WorkflowConnectionPool(AsyncNode):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         await self._cleanup()
+
+    async def _get_pool_status(self) -> Dict[str, Any]:
+        """Get pool status for query router."""
+        connections = {}
+
+        for conn_id, conn in self.all_connections.items():
+            connections[conn_id] = {
+                "health_score": conn.health_score,
+                "active_queries": 1 if conn_id in self.active_connections else 0,
+                "capabilities": [
+                    "read",
+                    "write",
+                ],  # TODO: Add actual capability detection
+                "avg_latency_ms": 0.0,  # TODO: Track actual latency
+                "last_used": datetime.now().isoformat(),
+            }
+
+        return {
+            "connections": connections,
+            "pool_size": len(self.all_connections),
+            "active_count": len(self.active_connections),
+            "available_count": self.available_connections.qsize(),
+        }
+
+    async def adjust_pool_size(self, new_size: int) -> Dict[str, Any]:
+        """Dynamically adjust pool size."""
+        if new_size < self.min_connections or new_size > self.max_connections:
+            return {
+                "success": False,
+                "reason": f"Size must be between {self.min_connections} and {self.max_connections}",
+            }
+
+        current_size = len(self.all_connections)
+
+        if new_size > current_size:
+            # Scale up
+            connections_to_add = new_size - current_size
+            for _ in range(connections_to_add):
+                try:
+                    await self._create_connection()
+                except Exception as e:
+                    logger.error(f"Failed to create connection during scale up: {e}")
+
+        elif new_size < current_size:
+            # Scale down - remove idle connections first
+            connections_to_remove = current_size - new_size
+            removed = 0
+
+            # Try to remove idle connections
+            while (
+                removed < connections_to_remove
+                and not self.available_connections.empty()
+            ):
+                try:
+                    conn = await asyncio.wait_for(
+                        self.available_connections.get(), timeout=0.1
+                    )
+                    await self._recycle_connection(conn)
+                    removed += 1
+                except asyncio.TimeoutError:
+                    break
+
+        return {
+            "success": True,
+            "previous_size": current_size,
+            "new_size": len(self.all_connections),
+        }
+
+    async def get_pool_statistics(self) -> Dict[str, Any]:
+        """Get detailed pool statistics for adaptive sizing."""
+        total_connections = len(self.all_connections)
+        active_connections = len(self.active_connections)
+        idle_connections = self.available_connections.qsize()
+
+        # Calculate metrics
+        utilization_rate = (
+            active_connections / total_connections if total_connections > 0 else 0
+        )
+
+        # Get average health score
+        health_scores = [conn.health_score for conn in self.all_connections.values()]
+        avg_health_score = (
+            sum(health_scores) / len(health_scores) if health_scores else 100
+        )
+
+        # Queue depth (approximate based on waiters)
+        queue_depth = 0  # TODO: Track actual queue depth
+
+        # Get timing metrics from pool metrics
+        stats = self.metrics.get_stats()
+
+        return {
+            "total_connections": total_connections,
+            "active_connections": active_connections,
+            "idle_connections": idle_connections,
+            "queue_depth": queue_depth,
+            "utilization_rate": utilization_rate,
+            "avg_health_score": avg_health_score,
+            "avg_acquisition_time_ms": stats["performance"]["avg_acquisition_time_ms"],
+            "avg_query_time_ms": 50.0,  # TODO: Track actual query time
+            "queries_per_second": (
+                stats["queries"]["executed"] / stats["uptime_seconds"]
+                if stats["uptime_seconds"] > 0
+                else 0
+            ),
+            # Phase 3 additions
+            "circuit_breaker_status": self.circuit_breaker.get_status(),
+            "comprehensive_metrics": self.metrics_collector.get_all_metrics(),
+            "error_rate": self.metrics_collector.get_error_summary()["error_rate"],
+            "health_score": avg_health_score,
+            "pool_name": self.metadata.name,
+        }
+
+    async def get_comprehensive_status(self) -> Dict[str, Any]:
+        """Get comprehensive status including all Phase 3 features."""
+        base_stats = await self.get_pool_statistics()
+
+        # Add circuit breaker details
+        cb_status = self.circuit_breaker.get_status()
+
+        # Add comprehensive metrics
+        metrics = self.metrics_collector.get_all_metrics()
+
+        # Add pattern learning insights if enabled
+        pattern_insights = {}
+        if self.query_pattern_tracker:
+            patterns = self.query_pattern_tracker.get_all_patterns()
+            pattern_insights = {
+                "detected_patterns": len(patterns),
+                "workload_forecast": self.query_pattern_tracker.get_workload_forecast(
+                    15
+                ),
+            }
+
+        # Add adaptive controller status if enabled
+        adaptive_status = {}
+        if self.adaptive_controller:
+            adaptive_status = {
+                "current_size": len(self.all_connections),
+                "recommended_size": self.adaptive_controller.get_recommended_size(),
+                "last_adjustment": self.adaptive_controller.get_last_adjustment(),
+            }
+
+        return {
+            **base_stats,
+            "circuit_breaker": {
+                "state": cb_status["state"],
+                "metrics": cb_status["metrics"],
+                "time_until_recovery": cb_status.get("time_until_recovery"),
+            },
+            "detailed_metrics": {
+                "counters": metrics["counters"],
+                "gauges": metrics["gauges"],
+                "histograms": metrics["histograms"],
+                "errors": metrics["errors"],
+                "query_summary": metrics["queries"],
+            },
+            "pattern_insights": pattern_insights,
+            "adaptive_control": adaptive_status,
+            "monitoring": {
+                "dashboard_enabled": self.enable_monitoring,
+                "dashboard_url": (
+                    f"http://localhost:{self.monitoring_port}"
+                    if self.enable_monitoring
+                    else None
+                ),
+            },
+        }
+
+    async def _start_monitoring_dashboard(self) -> Dict[str, Any]:
+        """Start the monitoring dashboard if enabled."""
+        if not self.enable_monitoring:
+            return {"error": "Monitoring not enabled in configuration"}
+
+        try:
+            # Register this pool with the global metrics aggregator
+            if hasattr(self.runtime, "metrics_aggregator"):
+                self.runtime.metrics_aggregator.register_collector(
+                    self.metrics_collector
+                )
+
+            # Start monitoring dashboard if not already running
+            if not hasattr(self.runtime, "monitoring_dashboard"):
+                from kailash.nodes.monitoring.connection_dashboard import (
+                    ConnectionDashboardNode,
+                )
+
+                dashboard = ConnectionDashboardNode(
+                    name="global_dashboard",
+                    port=self.monitoring_port,
+                    update_interval=1.0,
+                )
+
+                # Store dashboard in runtime for sharing
+                self.runtime.monitoring_dashboard = dashboard
+                await dashboard.start()
+
+                return {
+                    "status": "started",
+                    "dashboard_url": f"http://localhost:{self.monitoring_port}",
+                }
+            else:
+                return {
+                    "status": "already_running",
+                    "dashboard_url": f"http://localhost:{self.monitoring_port}",
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to start monitoring dashboard: {e}")
+            return {"error": str(e)}
+
+    async def _stop_monitoring_dashboard(self) -> Dict[str, Any]:
+        """Stop the monitoring dashboard."""
+        try:
+            if hasattr(self.runtime, "monitoring_dashboard"):
+                await self.runtime.monitoring_dashboard.stop()
+                del self.runtime.monitoring_dashboard
+                return {"status": "stopped"}
+            else:
+                return {"status": "not_running"}
+        except Exception as e:
+            logger.error(f"Failed to stop monitoring dashboard: {e}")
+            return {"error": str(e)}
+
+    def _update_pool_metrics(self):
+        """Update pool metrics for monitoring."""
+        total = len(self.all_connections)
+        active = len(self.active_connections)
+        idle = self.available_connections.qsize()
+
+        # Update comprehensive metrics
+        self.metrics_collector.update_pool_stats(active, idle, total)
+
+        # Track health checks
+        for conn in self.all_connections.values():
+            self.metrics_collector.track_health_check(
+                success=conn.health_score > self.health_threshold,
+                duration_ms=5.0,  # Placeholder - real implementation would track actual time
+            )

@@ -123,10 +123,11 @@ class ConcurrentProcessor(AsyncNode):
 ### Production Connection Pooling with WorkflowConnectionPool
 ```python
 from kailash.nodes.data import WorkflowConnectionPool
+from kailash.nodes.data.query_router import QueryRouterNode
 from contextlib import asynccontextmanager
 from kailash.nodes.base import AsyncNode
 
-# Create production-grade connection pool
+# Create production-grade connection pool with Phase 2 features
 pool = WorkflowConnectionPool(
     name="production_pool",
     database_type="postgresql",
@@ -137,14 +138,47 @@ pool = WorkflowConnectionPool(
     password="password",
     min_connections=10,
     max_connections=50,
-    health_threshold=70,  # Auto-recycle unhealthy connections
-    pre_warm=True        # Pre-warm based on patterns
+    health_threshold=70,      # Auto-recycle unhealthy connections
+    pre_warm=True,           # Pre-warm based on patterns
+    adaptive_sizing=True,    # NEW: Dynamic pool sizing
+    enable_query_routing=True # NEW: Pattern tracking
 )
 
 # Initialize pool once at startup
 await pool.process({"operation": "initialize"})
 
-# Context manager for safe connection handling
+# NEW: Query Router for intelligent routing (Phase 2)
+router = QueryRouterNode(
+    name="smart_router",
+    connection_pool="production_pool",
+    enable_read_write_split=True,  # Route reads to any connection
+    cache_size=2000,               # Cache prepared statements
+    pattern_learning=True,         # Learn from patterns
+    health_threshold=60            # Min health for routing
+)
+
+# Simple usage with router - no manual connection management!
+result = await router.process({
+    "query": "SELECT * FROM users WHERE active = ?",
+    "parameters": [True]
+})
+
+# Transaction support with session affinity
+await router.process({
+    "query": "BEGIN",
+    "session_id": "user_123"
+})
+await router.process({
+    "query": "UPDATE accounts SET balance = balance - ? WHERE id = ?",
+    "parameters": [100, 1],
+    "session_id": "user_123"
+})
+await router.process({
+    "query": "COMMIT",
+    "session_id": "user_123"
+})
+
+# Context manager for direct pool access (when needed)
 @asynccontextmanager
 async def get_connection():
     """Safely acquire and release connections."""
@@ -181,6 +215,17 @@ stats = await pool.process({"operation": "stats"})
 print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
 print(f"Error rate: {stats['queries']['error_rate']:.2%}")
 print(f"Active connections: {stats['current_state']['active_connections']}/{stats['current_state']['total_connections']}")
+
+# NEW: Monitor Phase 2 features
+if pool.adaptive_controller:
+    history = pool.adaptive_controller.get_adjustment_history()
+    print(f"Pool size adjustments: {len(history)}")
+    print(f"Current pool size: {stats['current_state']['total_connections']}")
+
+# Router metrics
+router_metrics = await router.get_metrics()
+print(f"Cache hit rate: {router_metrics['cache_stats']['hit_rate']:.2%}")
+print(f"Avg routing time: {router_metrics['router_metrics']['avg_routing_time_ms']}ms")
 
 ```
 
@@ -376,6 +421,10 @@ def get_scale_config(data_size):
 - ✅ Use generators for large datasets
 - ✅ Use WorkflowConnectionPool for database operations
 - ✅ Monitor connection pool health and efficiency
+- ✅ **NEW**: Use QueryRouterNode for automatic connection management
+- ✅ **NEW**: Enable adaptive pool sizing for dynamic workloads
+- ✅ **NEW**: Monitor cache hit rates (target >80%)
+- ✅ **NEW**: Enable pattern learning for workload insights
 - ✅ Add caching for expensive operations
 - ✅ Force garbage collection in cycles
 - ✅ Monitor memory growth between iterations
@@ -390,3 +439,7 @@ def get_scale_config(data_size):
 | Slow iterations | Synchronous I/O | Use AsyncNode |
 | CPU spikes | Inefficient algorithms | Profile and optimize |
 | Memory leaks | Accumulating state | Clear caches periodically |
+| **Connection exhaustion** | Fixed pool size | Enable adaptive_sizing |
+| **Slow query routing** | No caching | Use QueryRouterNode |
+| **Low cache hits** | Dynamic queries | Use parameterized queries |
+| **Pool not scaling** | Resource limits | Check DB max_connections |

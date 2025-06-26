@@ -72,7 +72,7 @@ class MiddlewareAccessControlManager:
         """Check if user can access a specific session."""
 
         # Use Kailash permission check node
-        result = self.permission_check_node.process(
+        result = self.permission_check_node.execute(
             {
                 "user_context": user_context,
                 "resource_type": "session",
@@ -114,7 +114,7 @@ class MiddlewareAccessControlManager:
 
         # Audit logging using Kailash audit node
         if self.enable_audit and self.audit_node:
-            self.audit_node.process(
+            self.audit_node.execute(
                 {
                     "event_type": "workflow_access_check",
                     "user_id": user_context.user_id,
@@ -192,7 +192,7 @@ class MiddlewareAccessControlManager:
     ) -> Dict[str, Any]:
         """Assign role to user using Kailash role management node."""
 
-        result = self.role_mgmt_node.process(
+        result = self.role_mgmt_node.execute(
             {
                 "action": "assign_role",
                 "user_id": user_id,
@@ -239,7 +239,7 @@ class MiddlewareAccessControlManager:
 
         # Audit the rule creation
         if self.enable_audit and self.audit_node:
-            self.audit_node.process(
+            self.audit_node.execute(
                 {
                     "event_type": "permission_rule_created",
                     "rule_data": rule_data,
@@ -366,7 +366,7 @@ class MiddlewareAuthenticationMiddleware:
         try:
             # This would typically validate JWT token
             # For now, simulating with credential manager
-            cred_result = self.credential_manager.process(
+            cred_result = self.credential_manager.execute(
                 {"action": "validate_token", "token": token}
             )
 
@@ -388,7 +388,7 @@ class MiddlewareAuthenticationMiddleware:
 
         except Exception as e:
             # Log security event using Kailash security event node
-            self.access_manager.security_event_node.process(
+            self.access_manager.security_event_node.execute(
                 {
                     "event_type": "authentication_failure",
                     "error": str(e),

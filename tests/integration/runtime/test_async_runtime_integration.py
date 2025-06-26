@@ -60,10 +60,7 @@ from kailash.workflow import AsyncWorkflowBuilder
 async def docker_services():
     """Setup Docker services for integration testing."""
     # Import docker config to use actual running services
-    import sys
-
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-    from utils.docker_config import (
+    from tests.utils.docker_config import (
         DATABASE_CONFIG,
         OLLAMA_CONFIG,
         REDIS_CONFIG,

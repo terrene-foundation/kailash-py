@@ -30,15 +30,15 @@ TEST_PORT = 8001
 POSTGRES_CONFIG = {
     "database_type": "postgresql",
     "host": "localhost",
-    "port": 5433,  # Docker PostgreSQL port
+    "port": 5434,  # Docker PostgreSQL port
     "database": "kailash_test",
-    "user": "admin",
-    "password": "admin",
+    "user": "test_user",
+    "password": "test_password",
 }
 
 OLLAMA_CONFIG = {
-    "base_url": "http://localhost:11434",
-    "model": "llama2",  # Will use a small model for tests
+    "base_url": "http://localhost:11435",
+    "model": "llama3.2:3b",  # Will use a small model for tests
 }
 
 
@@ -147,7 +147,6 @@ class TestDurableGatewayIntegration:
 
         gateway = DurableAPIGateway(
             title="Test Durable Gateway",
-            port=TEST_PORT,
             enable_durability=True,
             checkpoint_manager=checkpoint_manager,
             deduplicator=deduplicator,

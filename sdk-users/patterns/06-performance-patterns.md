@@ -1184,6 +1184,7 @@ result = {
 
 ```python
 from kailash.nodes.data import WorkflowConnectionPool
+from kailash.nodes.data.query_router import QueryRouterNode
 from kailash import Workflow, WorkflowBuilder
 from kailash.runtime import LocalRuntime
 import asyncio
@@ -1191,10 +1192,10 @@ from contextlib import asynccontextmanager
 
 class DatabaseService:
     """
-    Production database service with connection pooling.
+    Production database service with connection pooling and Phase 2 features.
 
     This pattern demonstrates best practices for database operations
-    in high-concurrency production environments.
+    in high-concurrency production environments with intelligent routing.
     """
 
     def __init__(self, config):
@@ -1209,8 +1210,21 @@ class DatabaseService:
             min_connections=config.get("min_connections", 5),
             max_connections=config.get("max_connections", 20),
             health_threshold=config.get("health_threshold", 70),
-            pre_warm=config.get("pre_warm", True)
+            pre_warm=config.get("pre_warm", True),
+            # Phase 2 features
+            adaptive_sizing=config.get("adaptive_sizing", True),
+            enable_query_routing=config.get("enable_query_routing", True)
         )
+
+        # Phase 2: Query Router for intelligent routing
+        self.router = QueryRouterNode(
+            name="query_router",
+            connection_pool="production_pool",
+            enable_read_write_split=config.get("read_write_split", True),
+            cache_size=config.get("cache_size", 2000),
+            pattern_learning=config.get("pattern_learning", True)
+        )
+
         self._initialized = False
 
     async def initialize(self):
@@ -1236,17 +1250,34 @@ class DatabaseService:
                 "connection_id": conn_id
             })
 
-    async def execute_query(self, query, params=None, fetch_mode="all"):
-        """Execute a query with automatic connection management."""
-        async with self.get_connection() as conn_id:
-            result = await self.pool.process({
-                "operation": "execute",
-                "connection_id": conn_id,
+    async def execute_query(self, query, params=None, fetch_mode="all", use_router=True):
+        """Execute a query with automatic connection management.
+
+        Args:
+            query: SQL query to execute
+            params: Query parameters
+            fetch_mode: 'all', 'one', or 'none'
+            use_router: Use query router (recommended) or direct pool access
+        """
+        if use_router:
+            # Phase 2: Use router for intelligent routing and caching
+            result = await self.router.process({
                 "query": query,
-                "params": params or [],
+                "parameters": params or [],
                 "fetch_mode": fetch_mode
             })
             return result["data"]
+        else:
+            # Direct pool access (for special cases)
+            async with self.get_connection() as conn_id:
+                result = await self.pool.process({
+                    "operation": "execute",
+                    "connection_id": conn_id,
+                    "query": query,
+                    "params": params or [],
+                    "fetch_mode": fetch_mode
+                })
+                return result["data"]
 
     async def execute_transaction(self, operations):
         """Execute multiple operations in a transaction."""
@@ -1396,6 +1427,184 @@ result = {
 
 ```
 
+### Phase 2: Intelligent Query Routing Pattern
+
+```python
+from kailash.nodes.data.query_router import QueryRouterNode
+from kailash.workflow import WorkflowBuilder
+
+# Create workflow with intelligent routing
+async def create_intelligent_db_workflow():
+    """
+    Workflow demonstrating Phase 2 intelligent features:
+    - Query classification and routing
+    - Prepared statement caching
+    - Pattern learning
+    - Adaptive pool sizing
+    """
+
+    workflow = WorkflowBuilder("intelligent_analytics")
+
+    # Pool with all Phase 2 features enabled
+    workflow.add_node(
+        "smart_pool",
+        WorkflowConnectionPool,
+        {
+            "database_type": "postgresql",
+            "host": "analytics.db.internal",
+            "database": "analytics",
+            "min_connections": 5,
+            "max_connections": 100,
+            "adaptive_sizing": True,      # Dynamic pool sizing
+            "enable_query_routing": True, # Pattern tracking
+            "health_threshold": 70
+        }
+    )
+
+    # Query router for intelligent routing
+    workflow.add_node(
+        "router",
+        QueryRouterNode,
+        {
+            "connection_pool": "smart_pool",
+            "enable_read_write_split": True,
+            "cache_size": 5000,  # Large cache for analytics
+            "pattern_learning": True,
+            "health_threshold": 60
+        }
+    )
+
+    # Analytics queries with router
+    workflow.add_node(
+        "run_analytics",
+        "PythonCodeNode",
+        {
+            "code": """
+# Complex analytics queries benefit from caching
+queries = [
+    # This query will be classified as READ_COMPLEX
+    {
+        "name": "revenue_by_segment",
+        "query": '''
+            SELECT
+                s.segment_name,
+                COUNT(DISTINCT c.customer_id) as customers,
+                SUM(o.total_amount) as revenue,
+                AVG(o.total_amount) as avg_order_value
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.id
+            JOIN segments s ON c.segment_id = s.id
+            WHERE o.order_date >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY s.segment_name
+            ORDER BY revenue DESC
+        ''',
+        "parameters": []
+    },
+    # This will be classified as READ_SIMPLE and cached
+    {
+        "name": "active_products",
+        "query": "SELECT * FROM products WHERE status = ? AND category = ?",
+        "parameters": ["active", "electronics"]
+    }
+]
+
+# Execute with router - benefits from caching and optimal routing
+results = {}
+for q in queries:
+    result = await router.process({
+        "query": q["query"],
+        "parameters": q["parameters"],
+        "fetch_mode": "all"
+    })
+
+    results[q["name"]] = {
+        "data": result["data"],
+        "cache_hit": result["routing_metadata"]["cache_hit"],
+        "query_type": result["routing_metadata"]["query_type"],
+        "routing_time_ms": result["routing_metadata"]["routing_time_ms"]
+    }
+
+# Get performance insights
+router_metrics = await router.get_metrics()
+pool_stats = await smart_pool.process({"operation": "stats"})
+
+return {
+    "results": results,
+    "performance": {
+        "cache_hit_rate": router_metrics["cache_stats"]["hit_rate"],
+        "avg_routing_time": router_metrics["router_metrics"]["avg_routing_time_ms"],
+        "pool_utilization": pool_stats["current_state"]["active_connections"] / pool_stats["current_state"]["total_connections"],
+        "queries_per_connection": pool_stats["queries"]["executed"] / pool_stats["connections"]["created"]
+    }
+}
+""",
+            "imports": ["asyncio"],
+            "inputs": {"router": "{{router}}", "smart_pool": "{{smart_pool}}"}
+        }
+    )
+
+    return workflow.build()
+
+# Pattern Learning Example
+async def demonstrate_pattern_learning():
+    """Show how pattern learning improves performance over time."""
+
+    service = DatabaseService({
+        "db_type": "postgresql",
+        "host": "localhost",
+        "database": "app_db",
+        "pattern_learning": True,
+        "adaptive_sizing": True
+    })
+
+    await service.initialize()
+
+    # Simulate typical workload pattern
+    for day in range(7):
+        print(f"\nDay {day + 1} simulation:")
+
+        # Morning: Light load
+        for _ in range(10):
+            await service.execute_query(
+                "SELECT * FROM users WHERE last_login > ?",
+                [datetime.now() - timedelta(days=1)]
+            )
+
+        # Afternoon: Heavy analytics
+        analytics_queries = [
+            "SELECT COUNT(*) FROM orders WHERE status = ?",
+            "SELECT SUM(amount) FROM transactions WHERE date > ?",
+            "SELECT * FROM products WHERE category = ? LIMIT 100"
+        ]
+
+        tasks = []
+        for _ in range(50):
+            for query in analytics_queries:
+                tasks.append(service.execute_query(query, ["active"]))
+
+        await asyncio.gather(*tasks)
+
+        # Evening: Batch updates
+        for _ in range(20):
+            await service.execute_transaction([
+                {"query": "UPDATE users SET last_seen = NOW() WHERE id = ?", "params": [i]}
+                for i in range(100, 110)
+            ])
+
+        # Check what the system learned
+        if service.pool.query_pattern_tracker:
+            patterns = service.pool.query_pattern_tracker.get_frequent_patterns()
+            forecast = service.pool.query_pattern_tracker.get_workload_forecast()
+
+            print(f"Patterns detected: {len(patterns)}")
+            print(f"Predicted peak load: {forecast['peak_hours']}")
+            print(f"Recommended pool size: {forecast['recommended_pool_size']}")
+
+        # Pool should adapt its size
+        stats = await service.pool.process({"operation": "stats"})
+        print(f"Current pool size: {stats['current_state']['total_connections']}")
+```
+
 ### Connection Pool Sizing Guidelines
 
 ```python
@@ -1532,12 +1741,14 @@ if metrics["performance"]["p99_acquisition_time_ms"] > 100:
    - Use lazy loading for large datasets
    - Use streaming for unbounded data
    - Use async I/O for network operations
+   - **NEW**: Use QueryRouterNode for automatic query optimization
 
 2. **Memory Management**:
    - Set appropriate cache sizes
    - Use generators for large data
    - Implement proper cleanup
    - Monitor memory usage
+   - **NEW**: Monitor prepared statement cache size
 
 3. **Connection Management**:
    - Always use WorkflowConnectionPool for production
@@ -1545,12 +1756,17 @@ if metrics["performance"]["p99_acquisition_time_ms"] > 100:
    - Monitor health scores and auto-recycling
    - Use context managers for safe connection handling
    - Implement transaction patterns for data consistency
+   - **NEW**: Enable adaptive sizing for dynamic workloads
+   - **NEW**: Use query router for connection-free query execution
 
 4. **Performance Monitoring**:
    - Track cache hit rates
    - Monitor processing times
    - Log resource usage
    - Set up performance alerts
+   - **NEW**: Monitor router cache hit rates (target >80%)
+   - **NEW**: Track pool size adjustments
+   - **NEW**: Analyze learned query patterns
 
 ## See Also
 - [Data Processing Patterns](03-data-processing-patterns.md) - Efficient data handling

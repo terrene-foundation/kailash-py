@@ -348,6 +348,123 @@ runtime = LocalRuntime(
 
 ## 📊 **Performance & Monitoring**
 
+### **Phase 3: Production-Grade Connection Management**
+
+#### **Circuit Breaker Protection**
+```python
+from kailash.core.resilience.circuit_breaker import CircuitBreakerManager, CircuitBreakerConfig
+
+# Setup circuit breaker for database operations
+cb_manager = CircuitBreakerManager()
+cb_config = CircuitBreakerConfig(
+    failure_threshold=5,        # Open after 5 failures
+    recovery_timeout=30,        # Wait 30s before trying half-open
+    error_rate_threshold=0.5,   # Open at 50% error rate
+    min_calls=10               # Minimum calls before calculating error rate
+)
+
+circuit_breaker = cb_manager.get_or_create("database", cb_config)
+
+# Use circuit breaker with async operations
+async def protected_db_operation():
+    return db_node.run(query="SELECT * FROM users")
+
+try:
+    result = await circuit_breaker.call(protected_db_operation)
+    print("Operation succeeded:", result)
+except Exception as e:
+    if "Circuit breaker is OPEN" in str(e):
+        print("Circuit breaker prevented operation - system is recovering")
+    else:
+        print("Operation failed:", e)
+
+# Monitor circuit breaker status
+status = circuit_breaker.get_status()
+print(f"State: {status['state']}, Failed calls: {status['metrics']['failed_calls']}")
+```
+
+#### **Comprehensive Metrics Collection**
+```python
+from kailash.core.monitoring.connection_metrics import ConnectionMetricsCollector
+
+# Create metrics collector for connection pool
+metrics_collector = ConnectionMetricsCollector("production_pool")
+
+# Track database queries with detailed metrics
+with metrics_collector.track_query("SELECT", "users"):
+    result = db_node.run(query="SELECT * FROM users WHERE active = true")
+
+# Track connection acquisition performance
+with metrics_collector.track_acquisition():
+    # Connection pool operations
+    pass
+
+# Get comprehensive metrics
+all_metrics = metrics_collector.get_all_metrics()
+print(f"Query throughput: {all_metrics['rates']['queries_per_second']:.1f} qps")
+print(f"Average execution time: {all_metrics['percentiles']['query_execution_ms']['p95']:.1f}ms")
+print(f"Error rate: {all_metrics['rates']['error_rate']:.1%}")
+
+# Export to Prometheus format
+prometheus_metrics = metrics_collector.export_prometheus()
+print("Prometheus metrics:", prometheus_metrics)
+```
+
+#### **Query Pipelining for High Performance**
+```python
+from kailash.nodes.data.query_pipeline import QueryPipelineNode
+
+# Create query pipeline with batching
+pipeline = QueryPipelineNode(
+    name="high_performance_pipeline",
+    connection_string="postgresql://user:pass@localhost:5432/db",
+    batch_size=50,              # Process 50 queries per batch
+    flush_interval=1.0,         # Auto-flush every 1 second
+    max_queue_size=1000,        # Queue up to 1000 queries
+    execution_strategy="parallel"  # parallel, sequential, transactional, best_effort
+)
+
+# Add queries to pipeline (non-blocking)
+for user_id in range(1000):
+    pipeline.add_query(
+        f"UPDATE users SET last_seen = NOW() WHERE id = {user_id}",
+        query_type="UPDATE"
+    )
+
+# Execute pipeline with automatic batching
+result = pipeline.run()
+print(f"Processed {result['queries_executed']} queries in {result['batches_processed']} batches")
+print(f"Throughput: {result['queries_per_second']:.1f} qps")
+```
+
+#### **Real-time Monitoring Dashboard**
+```python
+from kailash.nodes.monitoring.connection_dashboard import ConnectionDashboardNode
+
+# Create monitoring dashboard
+dashboard = ConnectionDashboardNode(
+    name="production_dashboard",
+    metrics_collector=metrics_collector,
+    circuit_breaker=circuit_breaker,
+    websocket_port=8765,
+    enable_prometheus_export=True,
+    refresh_interval=5.0
+)
+
+# Start dashboard server (non-blocking)
+dashboard_info = dashboard.run()
+print(f"Dashboard available at: {dashboard_info['dashboard_url']}")
+print(f"WebSocket endpoint: {dashboard_info['websocket_url']}")
+print(f"Prometheus metrics: {dashboard_info['prometheus_url']}")
+
+# Dashboard provides real-time metrics via WebSocket:
+# - Connection pool utilization
+# - Query performance histograms
+# - Circuit breaker status
+# - Error rates and categorization
+# - Throughput trends
+```
+
 ### **Performance Optimization**
 ```python
 from kailash.tracking import MetricsCollector

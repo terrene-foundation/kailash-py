@@ -21,27 +21,20 @@ import httpx
 import pytest
 
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
-from kailash.nodes.data import AsyncSQLDatabaseNode, CSVWriterNode
-from kailash.nodes.integration import HTTPRequestNode, RedisCacheNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import CSVWriterNode, SQLDatabaseNode
 from kailash.nodes.logic import MergeNode, SwitchNode
-from kailash.nodes.monitoring import PerformanceMonitorNode
-from kailash.nodes.processing import DataTransformNode, PythonCodeNode
-from kailash.resources.factory import ResourceFactory
-from kailash.resources.registry import ResourceRegistry
-from kailash.runtime.async_local import AsyncLocalRuntime
-from kailash.workflow import (
-    AsyncPatterns,
-    AsyncWorkflowBuilder,
-    CircuitBreaker,
-    ErrorHandler,
-    RetryPolicy,
-)
+from kailash.nodes.transform import DataTransformer
+from kailash.resources import ResourceFactory, ResourceRegistry
+from kailash.runtime.local import LocalRuntime
+from kailash.tracking.metrics_collector import MetricsCollector as PerformanceMonitor
+from kailash.workflow.async_builder import AsyncWorkflowBuilder, ErrorHandler
+from kailash.workflow.async_patterns import AsyncPatterns
 from tests.utils.docker_config import (
     DATABASE_CONFIG,
     OLLAMA_CONFIG,
     REDIS_CONFIG,
-    check_ollama_model,
-    ensure_docker_services,
     get_postgres_connection_string,
     get_redis_url,
 )

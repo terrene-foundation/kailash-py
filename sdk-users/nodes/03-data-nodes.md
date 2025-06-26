@@ -159,6 +159,8 @@ workflow.runtime = LocalRuntime()
   - Comprehensive metrics and statistics
   - Supervisor integration for failure recovery
   - Support for PostgreSQL, MySQL, SQLite
+  - **NEW**: Adaptive pool sizing (Phase 2)
+  - **NEW**: Pattern tracking for query routing (Phase 2)
 - **Parameters**:
   - `name`: Pool name for identification
   - `database_type`: "postgresql", "mysql", or "sqlite"
@@ -171,6 +173,8 @@ workflow.runtime = LocalRuntime()
   - `max_connections`: Maximum pool size (default: 10)
   - `health_threshold`: Health score threshold for recycling (default: 75)
   - `pre_warm`: Enable pattern-based pre-warming (default: True)
+  - `adaptive_sizing`: **NEW** Enable dynamic pool sizing (default: False)
+  - `enable_query_routing`: **NEW** Enable pattern tracking (default: False)
 - **Operations**:
   - `initialize`: Start the pool
   - `acquire`: Get a connection from pool
@@ -232,6 +236,85 @@ workflow.runtime = LocalRuntime()
   stats = await pool.process({"operation": "stats"})
   print(f"Active connections: {stats['current_state']['active_connections']}")
   print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
+  ```
+
+### QueryRouterNode ⭐ **NEW - PHASE 2**
+- **Module**: `kailash.nodes.data.query_router`
+- **Purpose**: Intelligent query routing with caching and optimization
+- **Key Features**:
+  - Automatic connection management (no manual acquire/release)
+  - Query classification (READ_SIMPLE, READ_COMPLEX, WRITE, etc.)
+  - Prepared statement caching for performance
+  - Read/write splitting for scalability
+  - Transaction support with session affinity
+  - Pattern learning for workload optimization
+  - Health-aware routing decisions
+- **Parameters**:
+  - `name`: Router name for identification
+  - `connection_pool`: Name of WorkflowConnectionPool to use (required)
+  - `enable_read_write_split`: Route reads to any healthy connection (default: True)
+  - `cache_size`: Max prepared statements to cache (default: 1000)
+  - `pattern_learning`: Learn from query patterns (default: True)
+  - `health_threshold`: Min health score for routing (default: 50.0)
+- **Best For**:
+  - High-performance applications with query patterns
+  - Read-heavy workloads requiring load distribution
+  - Applications needing prepared statement caching
+  - Systems requiring transaction session management
+- **Example**:
+  ```python
+  from kailash.nodes.data import WorkflowConnectionPool
+  from kailash.nodes.data.query_router import QueryRouterNode
+
+  # First create pool with Phase 2 features
+  pool = WorkflowConnectionPool(
+      name="smart_pool",
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      min_connections=5,
+      max_connections=50,
+      adaptive_sizing=True,
+      enable_query_routing=True
+  )
+  await pool.process({"operation": "initialize"})
+
+  # Create query router
+  router = QueryRouterNode(
+      name="query_router",
+      connection_pool="smart_pool",
+      enable_read_write_split=True,
+      cache_size=2000,
+      pattern_learning=True
+  )
+
+  # Simple query - no connection management needed!
+  result = await router.process({
+      "query": "SELECT * FROM users WHERE active = ?",
+      "parameters": [True]
+  })
+
+  # Transaction with session affinity
+  await router.process({
+      "query": "BEGIN",
+      "session_id": "user_123"
+  })
+
+  await router.process({
+      "query": "UPDATE accounts SET balance = balance - ? WHERE id = ?",
+      "parameters": [100, 1],
+      "session_id": "user_123"
+  })
+
+  await router.process({
+      "query": "COMMIT",
+      "session_id": "user_123"
+  })
+
+  # Check router performance
+  metrics = await router.get_metrics()
+  print(f"Cache hit rate: {metrics['cache_stats']['hit_rate']:.2%}")
+  print(f"Avg routing time: {metrics['router_metrics']['avg_routing_time_ms']}ms")
   ```
 
 ### AsyncSQLDatabaseNode

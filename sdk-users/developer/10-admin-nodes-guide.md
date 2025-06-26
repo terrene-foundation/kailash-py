@@ -25,8 +25,8 @@ user_node = UserManagementNode(
     }
 )
 
-# Create a new user
-result = user_node.run(
+# Create a new user (use execute() method)
+result = user_node.execute(
     operation="create_user",
     user_data={
         "email": "john.doe@example.com",
@@ -40,6 +40,10 @@ result = user_node.run(
 )
 
 user_id = result["result"]["user"]["user_id"]
+
+# Note: For production use, execute nodes through the runtime:
+# runtime = LocalRuntime()
+# result = runtime.execute_node(user_node, {...})
 ```
 
 ### Role Management
@@ -51,7 +55,7 @@ from kailash.nodes.admin import RoleManagementNode
 role_node = RoleManagementNode(database_config=db_config)
 
 # Create a role with inheritance
-result = role_node.run(
+result = role_node.execute(
     operation="create_role",
     role_data={
         "name": "editor",
@@ -80,7 +84,7 @@ perm_node = PermissionCheckNode(
 )
 
 # Check permission
-result = perm_node.run(
+result = perm_node.execute(
     operation="check_permission",
     user_id=user_id,
     resource_id="document_123",
@@ -118,7 +122,7 @@ else:
 
 ```python
 # 1. Create user (starts as active by default)
-user = user_node.run(
+user = user_node.execute(
     operation="create_user",
     user_data={
         "email": "new.user@example.com",
@@ -130,14 +134,14 @@ user = user_node.run(
 )
 
 # 2. Activate user
-activated = user_node.run(
+activated = user_node.execute(
     operation="activate_user",
     user_id=user["result"]["user"]["user_id"],
     tenant_id="tenant_001"
 )
 
 # 3. Update user profile
-updated = user_node.run(
+updated = user_node.execute(
     operation="update_profile",
     user_id=user["result"]["user"]["user_id"],
     user_data={
@@ -152,14 +156,14 @@ updated = user_node.run(
 )
 
 # 4. Deactivate user
-deactivated = user_node.run(
+deactivated = user_node.execute(
     operation="deactivate_user",
     user_id=user["result"]["user"]["user_id"],
     tenant_id="tenant_001"
 )
 
 # 5. Delete user (soft delete by default)
-deleted = user_node.run(
+deleted = user_node.execute(
     operation="delete_user",
     user_id=user["result"]["user"]["user_id"],
     hard_delete=False,  # Set True for permanent deletion
@@ -171,7 +175,7 @@ deleted = user_node.run(
 
 ```python
 # Bulk create users
-bulk_result = user_node.run(
+bulk_result = user_node.execute(
     operation="bulk_create",
     users_data=[
         {
@@ -202,7 +206,7 @@ Roles support inheritance through parent-child relationships:
 
 ```python
 # Create base roles
-viewer = role_node.run(
+viewer = role_node.execute(
     operation="create_role",
     role_data={
         "name": "viewer",
@@ -213,7 +217,7 @@ viewer = role_node.run(
 )
 
 # Create role that inherits from viewer
-editor = role_node.run(
+editor = role_node.execute(
     operation="create_role",
     role_data={
         "name": "editor",
@@ -225,7 +229,7 @@ editor = role_node.run(
 )
 
 # Create admin role with multiple parents
-admin = role_node.run(
+admin = role_node.execute(
     operation="create_role",
     role_data={
         "name": "admin",
@@ -241,7 +245,7 @@ admin = role_node.run(
 
 ```python
 # Assign role to user
-assignment = role_node.run(
+assignment = role_node.execute(
     operation="assign_user",
     user_id=user_id,
     role_id="editor",
@@ -249,7 +253,7 @@ assignment = role_node.run(
 )
 
 # Assign with expiration
-temp_assignment = role_node.run(
+temp_assignment = role_node.execute(
     operation="assign_user",
     user_id=user_id,
     role_id="admin",
@@ -258,14 +262,14 @@ temp_assignment = role_node.run(
 )
 
 # Get user's roles
-user_roles = role_node.run(
+user_roles = role_node.execute(
     operation="get_user_roles",
     user_id=user_id,
     tenant_id="tenant_001"
 )
 
 # Get users with a specific role
-role_users = role_node.run(
+role_users = role_node.execute(
     operation="get_role_users",
     role_id="editor",
     tenant_id="tenant_001"
@@ -289,7 +293,7 @@ Permissions follow the format `resource:action`:
 
 ```python
 # Simple permission check
-check = perm_node.run(
+check = perm_node.execute(
     operation="check_permission",
     user_id=user_id,
     resource_id="document_123",
@@ -298,7 +302,7 @@ check = perm_node.run(
 )
 
 # Batch permission checking
-batch_check = perm_node.run(
+batch_check = perm_node.execute(
     operation="batch_check",
     user_id=user_id,
     checks=[
@@ -310,7 +314,7 @@ batch_check = perm_node.run(
 )
 
 # Check with context (for ABAC)
-contextual_check = perm_node.run(
+contextual_check = perm_node.execute(
     operation="check_permission",
     user_id=user_id,
     resource_id="sensitive_doc",
@@ -428,7 +432,7 @@ app = create_gateway(
 
 ```python
 # Always specify tenant_id for multi-tenant systems
-result = user_node.run(
+result = user_node.execute(
     operation="list_users",
     tenant_id=request.tenant_id  # From request context
 )
@@ -440,7 +444,7 @@ result = user_node.run(
 from kailash.sdk_exceptions import NodeValidationError, NodeExecutionError
 
 try:
-    result = user_node.run(
+    result = user_node.execute(
         operation="create_user",
         user_data=user_data,
         tenant_id=tenant_id
@@ -458,10 +462,10 @@ except NodeExecutionError as e:
 ```python
 # Instead of multiple individual operations
 for user_data in users_list:
-    user_node.run(operation="create_user", user_data=user_data)
+    user_node.execute(operation="create_user", user_data=user_data)
 
 # Use bulk operations
-result = user_node.run(
+result = user_node.execute(
     operation="bulk_create",
     users_data=users_list,
     tenant_id=tenant_id
@@ -502,7 +506,7 @@ perm_node = PermissionCheckNode(
 )
 
 # Clear cache when permissions change
-perm_node.run(
+perm_node.execute(
     operation="clear_cache",
     user_id=user_id,  # Clear specific user
     tenant_id=tenant_id
@@ -524,7 +528,7 @@ perm_node.run(
 1. **User Not Found**
    ```python
    # Ensure user exists and tenant_id matches
-   user = user_node.run(
+   user = user_node.execute(
        operation="get_user",
        user_id=user_id,
        tenant_id=correct_tenant_id
@@ -534,7 +538,7 @@ perm_node.run(
 2. **Permission Denied**
    ```python
    # Check effective permissions
-   perms = role_node.run(
+   perms = role_node.execute(
        operation="get_effective_permissions",
        role_id=user_role,
        tenant_id=tenant_id
@@ -585,7 +589,7 @@ Tests use Ollama to generate realistic enterprise data:
 users_data = await self.generate_realistic_user_data(llm_agent, count=20)
 
 # Generate enterprise scenarios
-scenario = llm_agent.run(
+scenario = llm_agent.execute(
     prompt="Generate realistic enterprise onboarding scenario...",
     model="llama3.2:latest"
 )

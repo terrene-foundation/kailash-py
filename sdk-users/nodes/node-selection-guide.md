@@ -15,6 +15,7 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 | REST API calls | `requests` library | `RESTClientNode` |
 | GraphQL queries | GraphQL libraries | `GraphQLClientNode` |
 | SQL queries | `cursor.execute()` | `SQLDatabaseNode` |
+| **High-perf SQL** | **Manual pooling** | **`QueryRouterNode` + Pool` ⭐NEW** |
 | Filter data | `df[df['x'] > y]` | `FilterNode` |
 | Map function | `[f(x) for x in data]` | `Map` |
 | Sort data | `sorted()` or `df.sort()` | `Sort` |
@@ -53,7 +54,8 @@ JSONReaderNode, JSONWriterNode
 TextReaderNode, TextWriterNode
 
 # Database
-WorkflowConnectionPool  # ⭐ Production connection pooling
+QueryRouterNode         # ⭐⭐⭐ Intelligent query routing (Phase 2)
+WorkflowConnectionPool  # ⭐⭐ Production connection pooling
 AsyncSQLDatabaseNode    # Async queries with reuse
 SQLDatabaseNode         # Simple sync queries
 VectorDatabaseNode      # Vector/embedding storage
@@ -241,8 +243,11 @@ graph TD
     B -->|Yes| C{Multiple Concurrent Queries?}
     B -->|No| D{Async Support Needed?}
 
-    C -->|Yes| E[WorkflowConnectionPool ⭐]
+    C -->|Yes| E{Need Query Optimization?}
     C -->|No| F{Connection Reuse?}
+
+    E -->|Yes| R[QueryRouterNode + WorkflowConnectionPool ⭐⭐⭐]
+    E -->|No| P[WorkflowConnectionPool ⭐⭐]
 
     F -->|Yes| G[AsyncSQLDatabaseNode]
     F -->|No| H[SQLDatabaseNode]
@@ -250,37 +255,67 @@ graph TD
     D -->|Yes| G
     D -->|No| H
 
-    E --> I[Benefits: Connection pooling, health monitoring, fault tolerance]
+    R --> M[Benefits: Auto connection mgmt, caching, pattern learning]
+    P --> I[Benefits: Connection pooling, health monitoring, fault tolerance]
     G --> J[Benefits: Async execution, connection reuse]
     H --> K[Benefits: Simple, synchronous]
 ```
 
 ### Database Node Comparison
 
-| Feature | WorkflowConnectionPool | AsyncSQLDatabaseNode | SQLDatabaseNode |
-|---------|------------------------|---------------------|-----------------|
-| **Use Case** | Production apps | Async workflows | Simple queries |
-| **Connection Pooling** | ✅ Min/Max pools | ❌ Single connection | ❌ No pooling |
-| **Health Monitoring** | ✅ Auto-recycling | ❌ Manual checks | ❌ None |
-| **Fault Tolerance** | ✅ Actor-based | ⚠️ Basic retry | ❌ None |
-| **Performance** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| **Concurrency** | High (100s) | Medium (10s) | Low (1) |
-| **Setup Complexity** | Medium | Low | Very Low |
+| Feature | QueryRouterNode + Pool | WorkflowConnectionPool | AsyncSQLDatabaseNode | SQLDatabaseNode |
+|---------|------------------------|------------------------|---------------------|-----------------|
+| **Use Case** | High-perf production | Production apps | Async workflows | Simple queries |
+| **Connection Pooling** | ✅ Auto-managed | ✅ Min/Max pools | ❌ Single connection | ❌ No pooling |
+| **Query Caching** | ✅ Prepared statements | ❌ None | ❌ None | ❌ None |
+| **Read/Write Split** | ✅ Automatic | ❌ Manual | ❌ None | ❌ None |
+| **Pattern Learning** | ✅ AI-optimized | ❌ Basic patterns | ❌ None | ❌ None |
+| **Health Monitoring** | ✅ Smart routing | ✅ Auto-recycling | ❌ Manual checks | ❌ None |
+| **Fault Tolerance** | ✅ Multi-layer | ✅ Actor-based | ⚠️ Basic retry | ❌ None |
+| **Performance** | ⭐⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
+| **Concurrency** | Very High (1000s) | High (100s) | Medium (10s) | Low (1) |
+| **Setup Complexity** | Medium-High | Medium | Low | Very Low |
 
 ### Example: Choosing the Right Node
 
 ```python
-# Scenario 1: Production e-commerce app with high traffic
-# ✅ Use WorkflowConnectionPool
+# Scenario 1: High-performance production app with query patterns
+# ✅ Use QueryRouterNode + WorkflowConnectionPool (Phase 2)
 pool = WorkflowConnectionPool(
     name="ecommerce_pool",
     database_type="postgresql",
     min_connections=10,
     max_connections=50,
+    health_threshold=70,
+    adaptive_sizing=True,        # NEW: Dynamic sizing
+    enable_query_routing=True    # NEW: Pattern tracking
+)
+
+router = QueryRouterNode(
+    name="smart_router",
+    connection_pool="ecommerce_pool",
+    enable_read_write_split=True,  # Optimize read queries
+    cache_size=2000,               # Cache prepared statements
+    pattern_learning=True          # Learn from patterns
+)
+
+# Use router for all queries - no manual connection management!
+result = await router.process({
+    "query": "SELECT * FROM products WHERE category = ?",
+    "parameters": ["electronics"]
+})
+
+# Scenario 2: Production app without complex patterns
+# ✅ Use WorkflowConnectionPool alone
+pool = WorkflowConnectionPool(
+    name="app_pool",
+    database_type="postgresql",
+    min_connections=5,
+    max_connections=20,
     health_threshold=70
 )
 
-# Scenario 2: Data pipeline with sequential processing
+# Scenario 3: Data pipeline with sequential processing
 # ✅ Use AsyncSQLDatabaseNode
 async_db = AsyncSQLDatabaseNode(
     database_type="postgresql",
@@ -288,7 +323,7 @@ async_db = AsyncSQLDatabaseNode(
     database="analytics"
 )
 
-# Scenario 3: Simple script or one-off query
+# Scenario 4: Simple script or one-off query
 # ✅ Use SQLDatabaseNode
 simple_db = SQLDatabaseNode(
     connection_string="postgresql://user:pass@localhost/db"

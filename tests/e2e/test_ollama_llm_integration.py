@@ -22,6 +22,7 @@ from kailash.testing import (
     AsyncWorkflowTestCase,
 )
 from kailash.workflow import AsyncWorkflowBuilder
+from tests.utils.docker_config import OLLAMA_CONFIG
 
 # Mark all tests as ollama-dependent and slow
 pytestmark = [pytest.mark.ollama, pytest.mark.slow]
@@ -38,7 +39,7 @@ class OllamaTestHelper:
 
             async with httpx.AsyncClient() as client:
                 # Check Ollama health
-                response = await client.get("http://localhost:11434/api/tags")
+                response = await client.get(f"{OLLAMA_CONFIG['base_url']}/api/tags")
                 if response.status_code != 200:
                     return False, "Ollama not responding"
 
@@ -67,7 +68,7 @@ class OllamaTestHelper:
         try:
             import httpx
 
-            return httpx.AsyncClient(base_url="http://localhost:11434")
+            return httpx.AsyncClient(base_url=OLLAMA_CONFIG["base_url"])
         except ImportError:
             pytest.skip("httpx not available for Ollama testing")
 
