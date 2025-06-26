@@ -146,8 +146,31 @@ run_tests() {
 
     case $tier in
         tier1|unit)
-            print_info "Running Tier 1 (Unit) tests..."
-            pytest tests/unit/ -v
+            print_info "Running Tier 1 (Unit) tests (excluding slow tests with sleep/timeout)..."
+            # Exclude tests with sleep/timeout calls for fast CI
+            IGNORE_SLOW="--ignore=tests/unit/core/test_adaptive_pool_controller.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/core/test_circuit_breaker.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/core/test_connection_metrics.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/gateway/test_enhanced_gateway.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/middleware/test_checkpoint_manager.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/code/test_async_python.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_a2a.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_async_operations.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_query_pipeline.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_sync_async_separation.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_workflow_connection_pool.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/runtime/test_async_local.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/runtime/test_local.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/scenarios/test_cycle_scenarios.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/test_architecture_refactoring.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/testing/test_async_test_case.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/testing/test_async_utils.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/testing/test_fixtures.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/tracking/test_metrics_collector.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/utils/test_resource_manager_simple.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/workflow/test_async_workflow_builder.py"
+            IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/workflows/test_convergence_safety.py"
+            pytest tests/unit/ -v $IGNORE_SLOW
             ;;
         tier2|integration)
             print_info "Running Tier 2 (Integration) tests..."

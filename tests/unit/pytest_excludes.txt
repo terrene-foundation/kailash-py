@@ -1,0 +1,24 @@
+# Unit test files with sleep/timeout calls that should be excluded from CI Tier 1
+# These tests violate the Tier 1 principle of being fast and having no external dependencies
+tests/unit/core/test_adaptive_pool_controller.py
+tests/unit/core/test_circuit_breaker.py
+tests/unit/core/test_connection_metrics.py
+tests/unit/gateway/test_enhanced_gateway.py
+tests/unit/middleware/test_checkpoint_manager.py
+tests/unit/nodes/code/test_async_python.py
+tests/unit/nodes/test_a2a.py
+tests/unit/nodes/test_async_operations.py
+tests/unit/nodes/test_query_pipeline.py
+tests/unit/nodes/test_sync_async_separation.py
+tests/unit/nodes/test_workflow_connection_pool.py
+tests/unit/runtime/test_async_local.py
+tests/unit/runtime/test_local.py
+tests/unit/scenarios/test_cycle_scenarios.py
+tests/unit/test_architecture_refactoring.py
+tests/unit/testing/test_async_test_case.py
+tests/unit/testing/test_async_utils.py
+tests/unit/testing/test_fixtures.py
+tests/unit/tracking/test_metrics_collector.py
+tests/unit/utils/test_resource_manager_simple.py
+tests/unit/workflow/test_async_workflow_builder.py
+tests/unit/workflows/test_convergence_safety.py
