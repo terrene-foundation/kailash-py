@@ -19,7 +19,7 @@ The changelog has been reorganized into individual files for better management. 
 
 See [changelogs/releases/v0.6.1-2025-01-26.md](changelogs/releases/v0.6.1-2025-01-26.md) for full details.
 
-**Key Features:** Critical middleware bug fixes, standardized test environment
+**Key Features:** Critical middleware bug fixes, standardized test environment, massive CI performance improvements (10min → 40sec)
 
 ### [0.6.0] - 2025-01-24
 
