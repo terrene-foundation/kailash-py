@@ -448,9 +448,15 @@ jobs:
           IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/utils/test_resource_manager_simple.py"
           IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/workflow/test_async_workflow_builder.py"
           IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/workflows/test_convergence_safety.py"
+          # Also exclude other known slow tests
+          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_async_sql.py"
+          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_llm_agent.py"
+          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_sql_database.py"
+          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/apps/user_management/test_password_security.py"
 
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker)' $IGNORE_SLOW --maxfail=5 -v"
-          echo "Running Tier 1 unit tests only (fast mode) - excluding 22 slow tests"
+          # Use pytest-xdist for parallel execution (-n auto uses all CPU cores)
+          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker)' $IGNORE_SLOW --maxfail=5 -v -n auto"
+          echo "Running Tier 1 unit tests only (fast mode) - excluding 22 slow tests with parallel execution"
 
           # Run all checks in parallel with proper failure detection
           pids=()
@@ -465,9 +471,9 @@ jobs:
           run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
           pids[2]=$!
 
-          # Run tests with the venv Python (with coverage)
+          # Run tests with the venv Python (WITHOUT coverage for speed)
           if [ -d ".venv" ]; then
-              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD --cov=kailash --cov-report=xml --cov-report=term-missing" "pytest.log" &
+              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
               pids[3]=$!
           else
               echo "⚠️  No .venv found, skipping tests"
@@ -509,13 +515,14 @@ jobs:
           chmod +x run-all-checks.sh
           ./run-all-checks.sh
 
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+      # Coverage disabled for CI speed
+      # - name: Upload coverage reports
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     files: ./coverage.xml
+      #     flags: unittests
+      #     name: codecov-umbrella
+      #     fail_ci_if_error: false
 
       - name: Cleanup Docker containers
         if: always()

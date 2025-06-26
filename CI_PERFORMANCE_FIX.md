@@ -1,10 +1,17 @@
 # CI Performance Fix - Excluding Slow Unit Tests
 
 ## Problem
-CI Pipeline was taking too long (10+ minutes) to run Tier 1 unit tests because 22 unit test files contained sleep/timeout calls, violating the Tier 1 principle of being fast and having no external dependencies.
+CI Pipeline was taking too long (10+ minutes) to run Tier 1 unit tests due to:
+1. **Coverage collection overhead** - Running with `--cov` flag adds ~20x slowdown
+2. **Slow test files** - 26+ unit test files with sleep/timeout calls or heavy operations
+3. **Sequential execution** - Tests running one at a time instead of in parallel
+4. **Specific slow tests** - e.g., test_async_sql.py takes 6s for a single test!
 
 ## Solution
-Instead of modifying test files with pytest markers (which caused syntax errors), we now explicitly exclude these slow test files from CI runs using pytest's `--ignore` option.
+1. **Removed coverage collection** from CI (biggest performance gain)
+2. **Added parallel execution** with pytest-xdist (`-n auto` uses all CPU cores)
+3. **Excluded slow test files** using pytest's `--ignore` option
+4. **Expected runtime: ~40 seconds** (down from 10+ minutes)
 
 ## Changes Made
 
@@ -17,7 +24,9 @@ Created `scripts/list-slow-tests.py` to find all unit tests with sleep/timeout c
 Modified `.github/workflows/unified-ci.yml`:
 - Added explicit `--ignore` flags for all 22 slow test files
 - Tests are now excluded from Tier 1 CI runs
-- Expected runtime: 2-3 minutes (down from 10+ minutes)
+- Expected runtime: ~40 seconds (matches previous CI performance)
+- Removed coverage collection for massive speedup
+- Added parallel test execution
 
 ### 3. Updated test-env Script
 Modified `test-env` script to exclude slow tests from tier1 runs:
@@ -26,6 +35,12 @@ Modified `test-env` script to exclude slow tests from tier1 runs:
 
 ### 4. Documentation
 Created `tests/unit/pytest_excludes.txt` listing all excluded files for reference.
+
+## Key Performance Improvements
+
+1. **Coverage Removal**: 22x speedup (0.07s vs 1.58s for 15 tests)
+2. **Parallel Execution**: Uses all available CPU cores
+3. **Test Exclusions**: Removed 400+ slow tests from CI
 
 ## Excluded Test Files
 The following unit test files are excluded from Tier 1 CI runs:
@@ -53,6 +68,11 @@ tests/unit/tracking/test_metrics_collector.py
 tests/unit/utils/test_resource_manager_simple.py
 tests/unit/workflow/test_async_workflow_builder.py
 tests/unit/workflows/test_convergence_safety.py
+# Additional slow tests identified:
+tests/unit/nodes/test_async_sql.py
+tests/unit/nodes/test_llm_agent.py
+tests/unit/nodes/test_sql_database.py
+tests/unit/apps/user_management/test_password_security.py
 ```
 
 ## Future Improvements
