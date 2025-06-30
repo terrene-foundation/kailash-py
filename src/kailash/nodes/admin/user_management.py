@@ -25,11 +25,32 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union
 from uuid import uuid4
 
+import bcrypt
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 from .schema_manager import AdminSchemaManager
+
+
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt with salt."""
+    if not password:
+        return ""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed.decode("utf-8")
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify password against bcrypt hash."""
+    if not password or not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def parse_datetime(value: Union[str, datetime, None]) -> Optional[datetime]:
@@ -496,7 +517,7 @@ class UserManagementNode(Node):
                     user.user_id,
                     user.email,
                     user.username,
-                    inputs.get("password_hash"),
+                    hash_password(inputs.get("password", "")),
                     user.first_name,
                     user.last_name,
                     user.display_name,
@@ -918,7 +939,8 @@ class UserManagementNode(Node):
         """Set user password hash."""
         user_id = inputs["user_id"]
         tenant_id = inputs["tenant_id"]
-        password_hash = inputs["password_hash"]
+        password = inputs.get("password", "")
+        password_hash = hash_password(password)
 
         update_query = """
         UPDATE users
@@ -964,9 +986,13 @@ class UserManagementNode(Node):
         for i, user_data in enumerate(users_data):
             try:
                 # Create each user individually for better error handling
+                # Extract password from user_data if present
+                user_data_copy = user_data.copy()
+                password = user_data_copy.pop("password", "")
                 create_inputs = {
                     "operation": "create_user",
-                    "user_data": user_data,
+                    "user_data": user_data_copy,
+                    "password": password,
                     "tenant_id": tenant_id,
                     "database_config": inputs["database_config"],
                 }
@@ -1370,7 +1396,7 @@ class UserManagementNode(Node):
         user_id = result["data"][0]["user_id"]
 
         # Update password
-        password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+        password_hash = hash_password(new_password)
         update_query = """
         UPDATE users
         SET password_hash = :password_hash,
@@ -1441,9 +1467,8 @@ class UserManagementNode(Node):
 
         user_data = result["data"][0]
         stored_hash = user_data["password_hash"]
-        provided_hash = hashlib.sha256(password.encode()).hexdigest()
 
-        if stored_hash != provided_hash:
+        if not verify_password(password, stored_hash):
             return {"authenticated": False, "message": "Invalid password"}
 
         if user_data["status"] != "active":

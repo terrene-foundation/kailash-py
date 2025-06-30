@@ -797,6 +797,101 @@ builder.add_connection(step1_id, "output", step2_id, "input")
 workflow = builder.build()
 ```
 
+## Advanced Connection Patterns
+
+### Multiple Connections Between Same Nodes
+
+AsyncWorkflowBuilder supports multiple connections between the same pair of nodes, automatically merging connection mappings:
+
+```python
+# Multiple outputs from health monitoring
+builder.add_async_code("health_monitor", """
+result = {
+    "alerts": ["CPU High", "Memory Warning"],
+    "needs_alerting": True,
+    "metrics": {"cpu": 95, "memory": 88},
+    "status": "critical"
+}
+""")
+
+builder.add_async_code("alert_processor", """
+# All connected variables are available
+alerts = locals().get('alerts', [])
+needs_alerting = locals().get('needs_alerting', False)
+metrics = locals().get('metrics', {})
+
+result = {
+    "processed_alerts": len(alerts),
+    "alerting_enabled": needs_alerting,
+    "critical_metrics": [k for k, v in metrics.items() if v > 90]
+}
+""")
+
+# Multiple connections to same target node - automatically merged
+builder.add_connection("health_monitor", "result.alerts", "alert_processor", "alerts")
+builder.add_connection("health_monitor", "result.needs_alerting", "alert_processor", "needs_alerting")
+builder.add_connection("health_monitor", "result.metrics", "alert_processor", "metrics")
+```
+
+### Complex Data Path Mapping
+
+Use dot notation to map specific parts of complex outputs:
+
+```python
+builder.add_async_code("data_fetcher", """
+result = {
+    "user_data": {"id": 123, "profile": {"name": "Alice", "role": "admin"}},
+    "permissions": {"read": True, "write": True, "admin": False},
+    "session": {"token": "abc123", "expires": 3600}
+}
+""")
+
+# Map nested data paths to different target inputs
+builder.add_connection("data_fetcher", "result.user_data.profile", "processor", "user_profile")
+builder.add_connection("data_fetcher", "result.permissions", "processor", "user_permissions")
+builder.add_connection("data_fetcher", "result.session.token", "processor", "auth_token")
+```
+
+### Fan-out and Fan-in Patterns
+
+```python
+# Fan-out: One source to multiple targets
+builder.add_connection("source", "result.data", "processor_a", "input")
+builder.add_connection("source", "result.data", "processor_b", "input")
+builder.add_connection("source", "result.metadata", "monitor", "stats")
+
+# Fan-in: Multiple sources to one target
+builder.add_connection("processor_a", "result", "aggregator", "data_a")
+builder.add_connection("processor_b", "result", "aggregator", "data_b")
+builder.add_connection("processor_c", "result", "aggregator", "data_c")
+```
+
+### Connection Best Practices
+
+1. **Use descriptive variable names** in target nodes
+2. **Group related connections** by functionality
+3. **Validate all required inputs** are connected
+4. **Use meaningful output paths** with dot notation
+5. **Test complex connection patterns** with unit tests
+6. **Multiple connections supported** - AsyncWorkflowBuilder automatically merges mappings
+
+Example of production-ready connection pattern:
+
+```python
+# Production monitoring workflow with multiple connections
+builder.add_async_code("collect_metrics", collect_metrics_code)
+builder.add_async_code("evaluate_health", health_evaluation_code)
+builder.add_async_code("send_alerts", alert_sending_code)
+
+# Pipeline connections
+builder.add_connection("collect_metrics", "result", "evaluate_health", "metrics")
+
+# Multiple alert connections (the pattern that was previously broken)
+builder.add_connection("evaluate_health", "result.alerts", "send_alerts", "alerts")
+builder.add_connection("evaluate_health", "result.needs_alerting", "send_alerts", "needs_alerting")
+builder.add_connection("evaluate_health", "result.severity", "send_alerts", "severity_level")
+```
+
 ## Next Steps
 
 - Explore more patterns in `/sdk-users/workflows/async/`

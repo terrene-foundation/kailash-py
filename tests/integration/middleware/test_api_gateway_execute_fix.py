@@ -196,10 +196,14 @@ class TestMiddlewareComponentsExecuteFix:
     def test_ai_chat_middleware_uses_execute(self):
         """Test that AIChatMiddleware uses execute() for LLM and embedding nodes."""
         from kailash.middleware.communication.ai_chat import AIChatMiddleware
+        from kailash.middleware.core.agent_ui import AgentUIMiddleware
         from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 
-        # Create middleware
-        chat = AIChatMiddleware()
+        # Create middleware with required agent_ui
+        agent_ui = MagicMock(spec=AgentUIMiddleware)
+        chat = AIChatMiddleware(
+            agent_ui_middleware=agent_ui, enable_semantic_search=False
+        )
 
         # Mock nodes to verify execute() is available
         chat.llm_node = MagicMock(spec=LLMAgentNode)
@@ -218,10 +222,12 @@ class TestMiddlewareComponentsExecuteFix:
 
     def test_access_control_uses_execute(self):
         """Test that access control components use execute()."""
-        from kailash.middleware.auth.access_control import MiddlewareAccessControl
+        from kailash.middleware.auth.access_control import (
+            MiddlewareAccessControlManager,
+        )
 
         # Create access control
-        access_control = MiddlewareAccessControl(strategy="rbac")
+        access_control = MiddlewareAccessControlManager(strategy="rbac")
 
         # Verify internal nodes have execute() method
         assert hasattr(access_control.permission_check_node, "execute")

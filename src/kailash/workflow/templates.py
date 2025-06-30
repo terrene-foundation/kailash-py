@@ -176,15 +176,10 @@ class CycleTemplates:
         # Connect processor to evaluator
         workflow.connect(processor_node, evaluator_node)
 
-        # Close the cycle with convergence condition
-        workflow.connect(
-            evaluator_node,
-            processor_node,
-            cycle=True,
-            max_iterations=max_iterations,
-            convergence_check=convergence,
-            cycle_id=cycle_id,
-        )
+        # Close the cycle with convergence condition using new API
+        workflow.create_cycle(cycle_id).connect(
+            evaluator_node, processor_node
+        ).max_iterations(max_iterations).converge_when(convergence).build()
 
         return cycle_id
 

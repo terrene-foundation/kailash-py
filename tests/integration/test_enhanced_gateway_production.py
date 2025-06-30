@@ -695,7 +695,7 @@ result = {
                         type="database",
                         config={
                             "host": "localhost",
-                            "port": 5433,
+                            "port": 5434,
                             "database": "postgres",
                             "options": f"-c search_path=tenant_{tenant_id},public",
                         },
@@ -1056,7 +1056,7 @@ result = {
                         type="database",
                         config={
                             "host": "localhost",
-                            "port": 5433,
+                            "port": 5434,
                             "database": "postgres",
                         },
                         credentials_ref="postgres_prod",
@@ -1154,7 +1154,7 @@ result = {"health_status": health_status}
         resources = {
             "db": ResourceReference(
                 type="database",
-                config={"host": "localhost", "port": 5433, "database": "postgres"},
+                config={"host": "localhost", "port": 5434, "database": "postgres"},
                 credentials_ref="postgres_prod",
             ),
             "cache": ResourceReference(

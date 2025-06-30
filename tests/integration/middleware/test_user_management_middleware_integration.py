@@ -13,7 +13,7 @@ import pytest
 import pytest_asyncio
 
 from kailash.middleware import AgentUIMiddleware, create_gateway
-from kailash.middleware.auth.access_control import MiddlewareAccessControl
+from kailash.middleware.auth.access_control import MiddlewareAccessControlManager
 from kailash.nodes.admin import (
     AuditLogNode,
     PermissionCheckNode,
@@ -46,7 +46,7 @@ class TestUserManagementMiddlewareIntegration:
         )
 
         # Create access control
-        access_control = MiddlewareAccessControl(
+        access_control = MiddlewareAccessControlManager(
             strategy="rbac",
             database_url=db_url,
         )

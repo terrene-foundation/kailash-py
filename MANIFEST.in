@@ -8,6 +8,7 @@ include setup.cfg
 # Include source code
 recursive-include src *.py
 recursive-include src *.pyi
+recursive-include src *.sql
 recursive-include src py.typed
 
 # Exclude all non-essential directories

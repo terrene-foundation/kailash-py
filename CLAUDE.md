@@ -33,6 +33,12 @@
 5. **Middleware**: Use `create_gateway()` for production apps
     - ✅ Real-time communication, AI chat, session management included
 
+6. **Git Safety**: NEVER destroy uncommitted work
+    - ❌ **FORBIDDEN**: `git reset --hard`, `git clean -fd`, `rm -rf` on code
+    - ✅ **REQUIRED**: `git add . && git commit -m "WIP"` before risky operations
+    - ✅ Use `git stash` instead of destructive resets
+    - 🚨 **ASK PERMISSION** before any potentially destructive git command
+
 ## ⚡ Critical Patterns
 1. **Data Paths**: `get_input_data_path()`, `get_output_data_path()`
 2. **Access Control**: `AccessControlManager(strategy="rbac"|"abac"|"hybrid")`

@@ -160,6 +160,8 @@ class TestAsyncSQLDatabaseNode:
         # Mock aiomysql
         mock_aiomysql = MagicMock()
         mock_pool = AsyncMock()
+        # Make close() a regular synchronous mock
+        mock_pool.close = MagicMock()
         mock_aiomysql.create_pool = AsyncMock(return_value=mock_pool)
 
         with patch.dict("sys.modules", {"aiomysql": mock_aiomysql}):

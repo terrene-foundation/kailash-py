@@ -308,7 +308,7 @@ result = {
         # Register a shared database resource
         db_ref = ResourceReference(
             type="database",
-            config={"host": "localhost", "port": 5433, "database": "postgres"},
+            config={"host": "localhost", "port": 5434, "database": "postgres"},
             credentials_ref="db_credentials",
         )
 

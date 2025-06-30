@@ -64,14 +64,17 @@ class FunctionalTestMixin:
 class PerformanceTestMixin:
     """Mixin for performance tests with controlled timing."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mock_time = MockTimeProvider()
+    @property
+    def mock_time(self):
+        """Get or create mock time provider."""
+        if not hasattr(self, "_mock_time"):
+            self._mock_time = MockTimeProvider()
+        return self._mock_time
 
     @contextmanager
     def controlled_time(self, duration: float = 0.1):
         """Context manager for controlled timing tests."""
-        with patch("time.time", self.mock_time.time):
+        with patch("time.time", self.mock_time.get_time):
             self.mock_time.reset()
             # Set up time to show the expected duration
             original_call_count = self.mock_time.call_count

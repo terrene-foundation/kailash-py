@@ -33,7 +33,7 @@ from kailash.workflow import WorkflowBuilder
 POSTGRES_CONFIG = {
     "database_type": "postgresql",
     "host": "localhost",
-    "port": 5433,
+    "port": 5434,
     "database": "kailash_test",
     "user": "admin",
     "password": "admin",

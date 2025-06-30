@@ -247,7 +247,7 @@ class TestResourceRegistry:
 
         assert cleanup_called
 
-    def test_has_resource_and_factory(self, registry):
+    async def test_has_resource_and_factory(self, registry):
         """Test resource and factory existence checks."""
         factory = MockFactory()
         registry.register_factory("test_check", factory)
