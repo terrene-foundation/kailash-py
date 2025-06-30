@@ -47,8 +47,8 @@ class TestUserManagementMiddlewareIntegration:
 
         # Create access control
         access_control = MiddlewareAccessControlManager(
-            strategy="rbac",
-            database_url=db_url,
+            enable_abac=False,  # Use RBAC only for tests
+            enable_audit=True,
         )
 
         yield agent_ui, access_control

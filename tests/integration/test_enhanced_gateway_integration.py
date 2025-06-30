@@ -14,6 +14,7 @@ import os
 from datetime import datetime
 
 import pytest
+import pytest_asyncio
 
 from kailash.client import KailashClient
 from kailash.gateway import (
@@ -28,7 +29,7 @@ from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import AsyncWorkflowBuilder
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def real_resource_registry():
     """Create resource registry with real services."""
     registry = ResourceRegistry()
@@ -36,7 +37,7 @@ async def real_resource_registry():
     await registry.cleanup()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def gateway_with_resources(real_resource_registry):
     """Create gateway with real resources."""
     secret_manager = SecretManager()
@@ -114,8 +115,8 @@ async with db.acquire() as conn:
 """,
                 required_resources=["main_db"],
             )
-            .add_connection("create_table", None, "insert_data", None)
-            .add_connection("insert_data", None, "query_data", None)
+            .add_connection("create_table", "result", "insert_data", "input")
+            .add_connection("insert_data", "result", "query_data", "input")
             .build()
         )
 
