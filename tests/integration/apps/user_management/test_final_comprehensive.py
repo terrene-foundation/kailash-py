@@ -1,6 +1,5 @@
 """Final comprehensive test to ensure all user management features work perfectly."""
 
-import hashlib
 from datetime import datetime
 
 import pytest
@@ -95,7 +94,7 @@ class TestFinalComprehensive:
                 "username": "admin",
                 "attributes": {"department": "IT", "level": "Senior"},
             },
-            password_hash=hashlib.sha256("AdminPass123!".encode()).hexdigest(),
+            password="AdminPass123!",
         )
         assert "result" in admin_user
         admin_user_id = admin_user["result"]["user"]["user_id"]
@@ -143,9 +142,7 @@ class TestFinalComprehensive:
                 {
                     "email": f"user{i}@test.com",
                     "username": f"user{i}",
-                    "password_hash": hashlib.sha256(
-                        f"Pass{i}123!".encode()
-                    ).hexdigest(),
+                    "password": f"Pass{i}123!",
                     "attributes": {"department": "Sales" if i < 5 else "Marketing"},
                 }
             )

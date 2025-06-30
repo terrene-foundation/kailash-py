@@ -112,11 +112,11 @@ class TestSQLDatabaseNodeMySQL:
         node = SQLDatabaseNode(**mysql_config)
 
         # Simple SELECT
-        result = node.run(
+        result = node.execute(
             query="SELECT * FROM test_users WHERE active = TRUE ORDER BY id"
         )
 
-        assert result["success"] is True
+        assert "data" in result
         assert len(result["data"]) == 3
         assert result["data"][0]["name"] == "Alice"
         assert result["data"][0]["active"] == 1  # MySQL stores boolean as tinyint
@@ -126,7 +126,7 @@ class TestSQLDatabaseNodeMySQL:
         node = SQLDatabaseNode(**mysql_config)
 
         # INSERT
-        insert_result = node.run(
+        insert_result = node.execute(
             query="""
             INSERT INTO test_users (name, email, age, balance)
             VALUES (:name, :email, :age, :balance)
@@ -138,11 +138,10 @@ class TestSQLDatabaseNodeMySQL:
                 "balance": 750.25,
             },
         )
-        assert insert_result["success"] is True
-        assert insert_result["rows_affected"] == 1
+        assert insert_result["row_count"] == 1
 
         # SELECT to verify
-        select_result = node.run(
+        select_result = node.execute(
             query="SELECT * FROM test_users WHERE email = :email",
             parameters={"email": "david@example.com"},
         )
@@ -150,49 +149,41 @@ class TestSQLDatabaseNodeMySQL:
         assert select_result["data"][0]["name"] == "David"
 
         # UPDATE
-        update_result = node.run(
+        update_result = node.execute(
             query="UPDATE test_users SET age = :age WHERE email = :email",
             parameters={"age": 29, "email": "david@example.com"},
         )
-        assert update_result["rows_affected"] == 1
+        assert update_result["row_count"] == 1
 
         # DELETE
-        delete_result = node.run(
+        delete_result = node.execute(
             query="DELETE FROM test_users WHERE email = :email",
             parameters={"email": "david@example.com"},
         )
-        assert delete_result["rows_affected"] == 1
+        assert delete_result["row_count"] == 1
 
     def test_result_formats(self, mysql_config):
-        """Test different result formats."""
+        """Test result format (currently only dict format is supported)."""
         node = SQLDatabaseNode(**mysql_config)
 
         # Default dict format
-        dict_result = node.run(
+        dict_result = node.execute(
             query="SELECT name, age FROM test_users ORDER BY id LIMIT 2"
         )
         assert isinstance(dict_result["data"], list)
         assert isinstance(dict_result["data"][0], dict)
+        assert dict_result["data"][0]["name"] == "Alice"
+        assert dict_result["data"][0]["age"] == 30
+        assert dict_result["data"][1]["name"] == "Bob"
+        assert dict_result["data"][1]["age"] == 25
 
-        # Records format
-        records_result = node.run(
-            query="SELECT name, age FROM test_users ORDER BY id LIMIT 2",
-            result_format="records",
-        )
-        assert records_result["data"] == [
-            {"name": "Alice", "age": 30},
-            {"name": "Bob", "age": 25},
-        ]
+        # Verify columns are included
+        assert "columns" in dict_result
+        assert "name" in dict_result["columns"]
+        assert "age" in dict_result["columns"]
 
-        # DataFrame format
-        df_result = node.run(
-            query="SELECT name, age FROM test_users ORDER BY id LIMIT 2",
-            result_format="dataframe",
-        )
-        import pandas as pd
-
-        assert isinstance(df_result["dataframe"], pd.DataFrame)
-        assert len(df_result["dataframe"]) == 2
+        # Verify row count
+        assert dict_result["row_count"] == 2
 
     def test_parameterized_queries_security(self, mysql_config):
         """Test parameterized queries for SQL injection prevention."""
@@ -202,29 +193,29 @@ class TestSQLDatabaseNodeMySQL:
         malicious_input = "'; DROP TABLE test_users; --"
 
         # This should be safe due to parameterization
-        result = node.run(
+        result = node.execute(
             query="SELECT * FROM test_users WHERE name = :name",
             parameters={"name": malicious_input},
         )
 
-        assert result["success"] is True
+        assert "data" in result
         assert len(result["data"]) == 0  # No matching user
 
         # Verify table still exists
-        table_check = node.run(query="SELECT COUNT(*) as count FROM test_users")
+        table_check = node.execute(query="SELECT COUNT(*) as count FROM test_users")
         assert table_check["data"][0]["count"] > 0
 
     def test_transaction_rollback(self, mysql_config):
         """Test transaction rollback on error."""
         node = SQLDatabaseNode(**mysql_config)
 
-        initial_count = node.run("SELECT COUNT(*) as count FROM test_users")["data"][0][
-            "count"
-        ]
+        initial_count = node.execute(query="SELECT COUNT(*) as count FROM test_users")[
+            "data"
+        ][0]["count"]
 
         # Try to insert with duplicate email (should fail)
         with pytest.raises(NodeExecutionError) as exc_info:
-            node.run(
+            node.execute(
                 query="""
                 INSERT INTO test_users (name, email, age, balance)
                 VALUES (:name, :email, :age, :balance)
@@ -238,9 +229,9 @@ class TestSQLDatabaseNodeMySQL:
             )
 
         # Verify count unchanged
-        final_count = node.run("SELECT COUNT(*) as count FROM test_users")["data"][0][
-            "count"
-        ]
+        final_count = node.execute(query="SELECT COUNT(*) as count FROM test_users")[
+            "data"
+        ][0]["count"]
         assert final_count == initial_count
 
     def test_connection_pooling(self, mysql_config):
@@ -251,7 +242,7 @@ class TestSQLDatabaseNodeMySQL:
         # Execute queries on all nodes
         results = []
         for i, node in enumerate(nodes):
-            result = node.run(
+            result = node.execute(
                 query="SELECT :node_id as node_id, COUNT(*) as count FROM test_users",
                 parameters={"node_id": i},
             )
@@ -264,7 +255,7 @@ class TestSQLDatabaseNodeMySQL:
         """Test complex JOIN queries."""
         node = SQLDatabaseNode(**mysql_config)
 
-        result = node.run(
+        result = node.execute(
             query="""
             SELECT
                 u.name,
@@ -279,7 +270,7 @@ class TestSQLDatabaseNodeMySQL:
         """
         )
 
-        assert result["success"] is True
+        assert "data" in result
         assert len(result["data"]) == 2  # Only users with orders
 
     def test_mysql_specific_features(self, mysql_config):
@@ -287,7 +278,7 @@ class TestSQLDatabaseNodeMySQL:
         node = SQLDatabaseNode(**mysql_config)
 
         # Test JSON functions (MySQL 5.7+)
-        result = node.run(
+        result = node.execute(
             query="""
             SELECT name, JSON_EXTRACT(metadata, '$.vip') as is_vip
             FROM test_users
@@ -298,7 +289,7 @@ class TestSQLDatabaseNodeMySQL:
         assert len(result["data"]) == 2  # Alice and Charlie are VIP
 
         # Test DATE functions
-        date_result = node.run(
+        date_result = node.execute(
             query="""
             SELECT
                 YEAR(order_date) as year,
@@ -323,17 +314,17 @@ class TestSQLDatabaseNodeMySQL:
             "balance": 1000.00,
         }
 
-        insert_result = node.run(
+        insert_result = node.execute(
             query="""
             INSERT INTO test_users (name, email, age, balance)
             VALUES (:name, :email, :age, :balance)
         """,
             parameters=unicode_data,
         )
-        assert insert_result["success"] is True
+        assert insert_result["row_count"] == 1
 
         # Retrieve and verify
-        select_result = node.run(
+        select_result = node.execute(
             query="SELECT name FROM test_users WHERE email = :email",
             parameters={"email": "jose@example.com"},
         )
