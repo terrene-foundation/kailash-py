@@ -76,6 +76,7 @@ from tests.utils.docker_config import (
 @pytest.mark.requires_ollama
 @pytest.mark.requires_redis
 @pytest.mark.slow
+@pytest.mark.asyncio
 class TestWorkflowBuilderRealWorldE2E:
     """Comprehensive real-world tests for AsyncWorkflowBuilder."""
 

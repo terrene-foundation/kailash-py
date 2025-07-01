@@ -56,8 +56,16 @@ class TestSimpleAIDocker:
             {
                 "code": """
 # Simple response processing
-response_text = llm_response.get("response", "")
-word_count = len(response_text.split())
+# Handle both dict and string responses
+if isinstance(llm_response, dict):
+    # Try different fields where the response might be
+    response_text = llm_response.get("response", "") or llm_response.get("content", "") or llm_response.get("message", "")
+elif isinstance(llm_response, str):
+    response_text = llm_response
+else:
+    response_text = str(llm_response)
+
+word_count = len(response_text.split()) if response_text else 0
 
 result = {
     "response": response_text,
@@ -80,15 +88,14 @@ result = {
             "simple_llm": {"prompt": "Say hello in exactly 3 words.", "max_tokens": 10}
         }
 
-        result = runtime.execute_workflow(workflow, inputs)
+        result, run_id = runtime.execute(workflow, inputs)
 
         # Verify basic functionality
-        assert result["status"] == "success"
-        assert "simple_llm" in result["results"]
-        assert "process_response" in result["results"]
+        assert "simple_llm" in result
+        assert "process_response" in result
 
         # Verify response processing
-        processed = result["results"]["process_response"]
+        processed = result["process_response"]["result"]
         assert processed["success"] is True
         assert processed["word_count"] > 0
 
@@ -132,7 +139,7 @@ Charlie,35,Chicago"""
 import json
 
 # Extract AI analysis
-analysis_text = llm_response.get("response", "")
+analysis_text = llm_response.get("response", "") or llm_response.get("content", "")
 
 # Simple analysis formatting
 result = {
@@ -163,23 +170,24 @@ result = {
                 }
             }
 
-            result = runtime.execute_workflow(workflow, inputs)
+            result, run_id = runtime.execute(workflow, inputs)
 
-            # Verify workflow success
-            assert result["status"] == "success"
-            assert len(result["errors"]) == 0
+            # Verify workflow completed
+            assert "read_data" in result
+            assert "analyze_data" in result
+            assert "format_analysis" in result
 
             # Verify data was read
-            read_result = result["results"]["read_data"]
+            read_result = result["read_data"]
             assert len(read_result["data"]) == 3  # 3 people
 
             # Verify AI analysis
-            ai_result = result["results"]["analyze_data"]
+            ai_result = result["analyze_data"]
             assert "response" in ai_result
             assert len(ai_result["response"]) > 0
 
             # Verify formatted analysis
-            formatted = result["results"]["format_analysis"]
+            formatted = result["format_analysis"]["result"]
             assert formatted["data_points_analyzed"] == 3
             assert formatted["analysis_length"] > 0
 
@@ -223,8 +231,8 @@ result = {
             {
                 "code": """
 # Combine AI responses
-first_response = first_ai_response.get("response", "")
-second_response = second_ai_response.get("response", "")
+first_response = first_ai_response.get("response", "") or first_ai_response.get("content", "")
+second_response = second_ai_response.get("response", "") or second_ai_response.get("content", "")
 
 result = {
     "first_response": first_response,
@@ -257,15 +265,16 @@ result = {
             },
         }
 
-        result = runtime.execute_workflow(workflow, inputs)
+        result, run_id = runtime.execute(workflow, inputs)
 
         # Verify conversation worked
-        assert result["status"] == "success"
-        assert len(result["errors"]) == 0
+        assert "first_ai" in result
+        assert "second_ai" in result
+        assert "combine_responses" in result
 
         # Verify both AI responses
-        first_ai = result["results"]["first_ai"]
-        second_ai = result["results"]["second_ai"]
+        first_ai = result["first_ai"]
+        second_ai = result["second_ai"]
 
         assert "response" in first_ai
         assert "response" in second_ai
@@ -273,7 +282,7 @@ result = {
         assert len(second_ai["response"]) > 0
 
         # Verify combination
-        combined = result["results"]["combine_responses"]
+        combined = result["combine_responses"]["result"]
         assert combined["conversation_complete"] is True
         assert combined["total_length"] > 0
 
@@ -309,7 +318,7 @@ if "error" in ai_result:
         "fallback_response": "AI service unavailable"
     }
 else:
-    response_text = ai_result.get("response", "")
+    response_text = ai_result.get("response", "") or ai_result.get("content", "")
     result = {
         "success": True,
         "error_handled": False,
@@ -330,13 +339,14 @@ else:
         # Execute with simple prompt
         inputs = {"ai_with_timeout": {"prompt": "Count to 3.", "max_tokens": 10}}
 
-        result = runtime.execute_workflow(workflow, inputs)
+        result, run_id = runtime.execute(workflow, inputs)
 
-        # Workflow should complete regardless of AI success/failure
-        assert result["status"] == "success"
+        # Workflow should complete
+        assert "ai_with_timeout" in result
+        assert "handle_result" in result
 
         # Check error handling
-        handler_result = result["results"]["handle_result"]
+        handler_result = result["handle_result"]["result"]
 
         # Either success or proper error handling
         if handler_result["success"]:

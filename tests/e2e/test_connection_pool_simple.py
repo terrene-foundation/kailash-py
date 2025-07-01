@@ -12,20 +12,23 @@ from kailash.runtime import LocalRuntime
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
+@pytest.mark.requires_docker
 class TestConnectionPoolSimple:
     """Simple E2E test for connection pool."""
 
     @pytest.fixture
     def db_config(self):
         """Database configuration."""
+        from tests.utils.docker_config import DATABASE_CONFIG
+
         return {
             "name": "test_pool",
             "database_type": "postgresql",
-            "host": os.getenv("POSTGRES_HOST", "localhost"),
-            "port": int(os.getenv("POSTGRES_PORT", 5433)),
-            "database": os.getenv("POSTGRES_DB", "kailash_test"),
-            "user": os.getenv("POSTGRES_USER", "admin"),
-            "password": os.getenv("POSTGRES_PASSWORD", "admin"),
+            "host": DATABASE_CONFIG["host"],
+            "port": DATABASE_CONFIG["port"],  # Use 5434 from docker config
+            "database": DATABASE_CONFIG["database"],
+            "user": DATABASE_CONFIG["user"],
+            "password": DATABASE_CONFIG["password"],
             "min_connections": 2,
             "max_connections": 5,
         }
@@ -98,7 +101,12 @@ result = {"operation": "initialize"}
             "PythonCodeNode",
             code="""
 # Prepare query operation
-pool_status = inputs.get("pool", {})
+# In PythonCodeNode, inputs are available as individual variables, not as a dict
+try:
+    pool_status = pool
+except NameError:
+    pool_status = {}
+
 result = {
     "operation": "acquire"
 }
@@ -106,8 +114,8 @@ result = {
         )
 
         # Connect nodes
-        workflow.connect("init", "pool")
-        workflow.connect("pool", "query")
+        workflow.connect("init", "pool", mapping={"result": "input"})
+        workflow.connect("pool", "query", mapping={"status": "pool"})
 
         # Execute workflow
         runtime = LocalRuntime(enable_async=True)
@@ -115,14 +123,10 @@ result = {
         # Provide runtime parameters to satisfy validation
         params = {"pool": {"operation": "initialize"}, "query": {"pool": {}}}
 
-        outputs, error = await runtime.execute_async(workflow, parameters=params)
-
-        if error:
-            print(f"Error: {error}")
-            print(f"Outputs: {outputs}")
+        outputs, run_id = await runtime.execute_async(workflow, parameters=params)
 
         # Basic check
-        assert error is None
+        assert run_id is not None
         assert "pool" in outputs
 
         # Clean up pool
