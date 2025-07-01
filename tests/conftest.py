@@ -42,6 +42,16 @@ from tests.utils.docker_config import (
     REDIS_CONFIG,
 )
 
+# Set up event loop policy for better async cleanup
+asyncio.set_event_loop_policy(
+    asyncio.WindowsSelectorEventLoopPolicy()
+    if os.name == "nt"
+    else asyncio.DefaultEventLoopPolicy()
+)
+
+# Configure pytest-asyncio to use strict mode
+pytest_plugins = ("pytest_asyncio",)
+
 # ===========================
 # SDK Infrastructure Support
 # ===========================
@@ -804,3 +814,23 @@ def acm_with_standard_rules(clean_acm, standard_rules):
     for rule in standard_rules:
         clean_acm.add_rule(rule)
     return clean_acm
+
+
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_async_tasks(request):
+    """Cleanup async tasks after each test to prevent warnings."""
+    yield
+
+    # Only cleanup for async tests
+    if hasattr(request.node, "iter_markers"):
+        if any(marker.name == "asyncio" for marker in request.node.iter_markers()):
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Schedule cleanup
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        if not task.done() and task != asyncio.current_task():
+                            task.cancel()
+            except RuntimeError:
+                pass  # No event loop

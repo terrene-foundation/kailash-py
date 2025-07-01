@@ -54,8 +54,19 @@ async def gateway_with_resources(real_resource_registry):
     yield gateway
 
     # Cleanup
+    try:
+        await gateway.shutdown()
+    except Exception:
+        pass
+
     if hasattr(gateway, "_runtime"):
-        await gateway._runtime.cleanup()
+        try:
+            await gateway._runtime.cleanup()
+        except Exception:
+            pass
+
+    # Wait for async tasks to complete
+    await asyncio.sleep(0.1)
 
 
 @pytest.mark.integration
