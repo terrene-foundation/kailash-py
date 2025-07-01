@@ -68,7 +68,8 @@ class TestEnhancedGatewayIntegration:
         """Test workflow using real PostgreSQL database."""
         # Create workflow that uses database
         workflow = (
-            AsyncWorkflowBuilder("db_workflow")
+            AsyncWorkflowBuilder()
+            .set_name("db_workflow")
             .add_async_code(
                 "create_table",
                 """
@@ -167,7 +168,8 @@ async with db.acquire() as conn:
         """Test workflow using multiple resources."""
         # Create workflow using database and cache
         workflow = (
-            AsyncWorkflowBuilder("multi_resource")
+            AsyncWorkflowBuilder()
+            .set_name("multi_resource")
             .add_async_code(
                 "fetch_from_db",
                 """
@@ -255,7 +257,8 @@ result = {
         """Test concurrent execution of multiple workflows."""
         # Create simple workflow
         workflow = (
-            AsyncWorkflowBuilder("concurrent_test")
+            AsyncWorkflowBuilder()
+            .set_name("concurrent_test")
             .add_async_code(
                 "process",
                 """
