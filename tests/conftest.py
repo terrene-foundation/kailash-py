@@ -131,7 +131,9 @@ def pytest_collection_modifyitems(config, items):
     import asyncio
 
     postgres_available = asyncio.run(check_postgres_connection())
+    ollama_available = check_ollama_connection()
     skip_postgres = pytest.mark.skip(reason="PostgreSQL not available")
+    skip_ollama = pytest.mark.skip(reason="Ollama not available")
 
     for item in items:
         # Add infrastructure marker for tests that need specific services
@@ -144,6 +146,8 @@ def pytest_collection_modifyitems(config, items):
         # Skip tests requiring unavailable services
         if "requires_postgres" in item.keywords and not postgres_available:
             item.add_marker(skip_postgres)
+        if "requires_ollama" in item.keywords and not ollama_available:
+            item.add_marker(skip_ollama)
 
 
 async def check_postgres_connection():
@@ -153,14 +157,29 @@ async def check_postgres_connection():
 
         conn = await asyncpg.connect(
             host="localhost",
-            port=5432,
-            user="kailash",
-            password="kailash123",
-            database="test_db",
+            port=5434,
+            user="test_user",
+            password="test_password",
+            database="kailash_test",
             timeout=5,
         )
         await conn.close()
         return True
+    except Exception:
+        return False
+
+
+def check_ollama_connection():
+    """Check if Ollama is available and has models."""
+    try:
+        import requests
+
+        response = requests.get("http://localhost:11435/api/tags", timeout=5)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            # For the test to work, we need at least one model
+            return len(models) > 0
+        return False
     except Exception:
         return False
 

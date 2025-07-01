@@ -26,6 +26,7 @@ from kailash.nodes.admin import (
     UserManagementNode,
 )
 from kailash.nodes.base import Node, NodeParameter
+from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
@@ -333,9 +334,36 @@ result = {
             "perm_check", "aggregator", mapping={"results": "permission_results"}
         )
 
-        # Execute workflow
+        # Execute workflow with required parameters
         runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow)
+        results, run_id = runtime.execute(
+            workflow,
+            {
+                "user_mgmt": {
+                    "operation": "bulk_create_users",
+                    "tenant_id": "test_tenant",
+                    "users_to_create": [],  # Will be provided by the batch_creator node
+                    "database_config": {
+                        "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test"
+                    },
+                },
+                "role_mgmt": {
+                    "operation": "list_roles",
+                    "tenant_id": "test_tenant",
+                    "database_config": {
+                        "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test"
+                    },
+                },
+                "perm_check": {
+                    "operation": "batch_check",
+                    "permission_checks": [],  # Will be provided by the perm_tester node
+                    "database_config": {
+                        "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test"
+                    },
+                },
+                "aggregator": {"conn_string": self.conn_string},
+            },
+        )
 
         # Verify results
         assert results["schema_init"]["status"] == "schema_initialized"
@@ -358,6 +386,7 @@ result = {
         schema_init = PythonCodeNode(
             name="schema_init",
             code=f"""
+conn_string = "{self.conn_string}"
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
@@ -373,9 +402,7 @@ cur.execute('''
         email VARCHAR(255) UNIQUE NOT NULL,
         role VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        tenant_id INTEGER,
-        INDEX idx_tenant (tenant_id),
-        INDEX idx_role (role)
+        tenant_id INTEGER
     )
 ''')
 
@@ -386,8 +413,7 @@ cur.execute('''
         action VARCHAR(100),
         resource VARCHAR(100),
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        success BOOLEAN,
-        INDEX idx_user_action (user_id, action)
+        success BOOLEAN
     )
 ''')
 
@@ -791,13 +817,9 @@ result = {
         )
 
         # Add cycle for iterative validation
-        workflow.connect(
-            "validator",
-            "validator",
-            cycle=True,
-            max_iterations=5,
-            convergence_check="converged == True",
-        )
+        workflow.create_cycle("isolation_validation_cycle").connect(
+            "validator", "validator", mapping={}
+        ).max_iterations(5).converge_when("converged == True").build()
 
         workflow.connect(
             "validator",

@@ -266,6 +266,12 @@ class ResourceRegistry:
                     )
 
             # Try generic cleanup methods
+            elif hasattr(resource, "aclose"):
+                # Use aclose for modern async resources (e.g., Redis)
+                if asyncio.iscoroutinefunction(resource.aclose):
+                    await resource.aclose()
+                else:
+                    resource.aclose()
             elif hasattr(resource, "close"):
                 if asyncio.iscoroutinefunction(resource.close):
                     await resource.close()

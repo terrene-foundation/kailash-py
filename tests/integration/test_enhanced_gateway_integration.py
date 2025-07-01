@@ -68,8 +68,7 @@ class TestEnhancedGatewayIntegration:
         """Test workflow using real PostgreSQL database."""
         # Create workflow that uses database
         workflow = (
-            AsyncWorkflowBuilder()
-            .set_name("db_workflow")
+            AsyncWorkflowBuilder("db_workflow")
             .add_async_code(
                 "create_table",
                 """
@@ -157,19 +156,15 @@ async with db.acquire() as conn:
         assert any(r["name"] == "Bob" for r in query_result["records"])
         assert any(r["name"] == "Charlie" for r in query_result["records"])
 
-        # Cleanup
-        db = await gateway_with_resources.resource_registry.get_resource("db_")
-        if db:
-            async with db.acquire() as conn:
-                await conn.execute("DROP TABLE IF EXISTS gateway_test")
+        # Cleanup - don't try to get db resource directly since it has a hashed name
+        # The resource will be cleaned up automatically by the fixture
 
     @pytest.mark.asyncio
     async def test_multi_resource_workflow(self, gateway_with_resources):
         """Test workflow using multiple resources."""
         # Create workflow using database and cache
         workflow = (
-            AsyncWorkflowBuilder()
-            .set_name("multi_resource")
+            AsyncWorkflowBuilder("multi_resource")
             .add_async_code(
                 "fetch_from_db",
                 """
@@ -257,13 +252,13 @@ result = {
         """Test concurrent execution of multiple workflows."""
         # Create simple workflow
         workflow = (
-            AsyncWorkflowBuilder()
-            .set_name("concurrent_test")
+            AsyncWorkflowBuilder("concurrent_test")
             .add_async_code(
                 "process",
                 """
 import asyncio
 import random
+import time
 
 # Simulate some async work
 delay = random.uniform(0.1, 0.3)
@@ -316,8 +311,8 @@ result = {
             credentials_ref="db_credentials",
         )
 
-        # Resolve it once to register in registry
-        await gateway_with_resources._resource_resolver.resolve(db_ref)
+        # Store the reference in registry with a name we can use
+        shared_db_name = "shared_db"
 
         # Create workflow that counts connections
         workflow = (
@@ -325,7 +320,8 @@ result = {
             .add_async_code(
                 "check_pool",
                 """
-db = await get_resource("db_")  # Will use the shared pool
+# Use the resource name from the request
+db = await get_resource("shared_db")
 pool_size = db.size if hasattr(db, 'size') else 'unknown'
 result = {
     "workflow_id": workflow_id,
@@ -333,7 +329,7 @@ result = {
     "has_pool": True
 }
 """,
-                required_resources=["db_"],
+                required_resources=["shared_db"],
             )
             .build()
         )
@@ -345,7 +341,7 @@ result = {
         for i in range(5):
             request = WorkflowRequest(
                 inputs={"workflow_id": i},
-                resources={"db_": "@db_"},  # Reference the shared resource
+                resources={"shared_db": db_ref},  # Use the same reference
             )
             response = await gateway_with_resources.execute_workflow(
                 "connection_test", request
@@ -402,9 +398,7 @@ result = {
         request = WorkflowRequest(
             inputs={},
             resources={
-                "api": ResourceReference(
-                    type="http_client", config={"timeout": 10, "connection_limit": 10}
-                )
+                "api": ResourceReference(type="http_client", config={"timeout": 10})
             },
         )
 

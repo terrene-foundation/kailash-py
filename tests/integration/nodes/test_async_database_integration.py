@@ -405,7 +405,7 @@ class TestAsyncDatabaseIntegration:
 
                 # Execute workflow
                 runtime = LocalRuntime(enable_async=True)
-                results, run_id = await runtime.execute(workflow)
+                results, run_id = runtime.execute(workflow)
 
                 assert "fetch_users" in results
                 assert "fetch_embeddings" in results

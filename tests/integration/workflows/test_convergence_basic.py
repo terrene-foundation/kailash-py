@@ -47,17 +47,9 @@ class TestConvergence:
         workflow.add_node("incrementor", incrementor)
 
         # Create cycle with max iterations limit (intentionally low)
-        workflow.connect(
-            "incrementor",
-            "incrementor",
-            mapping={
-                "result.value": "value",
-            },
-            cycle=True,
-            max_iterations=5,  # Very low limit
-            convergence_check="value >= 0.95",  # Hard to reach convergence
-            cycle_id="limited_loop",
-        )
+        workflow.create_cycle("limited_loop").connect(
+            "incrementor", "incrementor", {"result.value": "value"}
+        ).max_iterations(5).converge_when("value >= 0.95").build()
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -101,16 +93,9 @@ class TestConvergence:
         workflow.add_node("counter", counter)
 
         # Create simple cycle
-        workflow.connect(
-            "counter",
-            "counter",
-            mapping={
-                "result.count": "n",
-            },
-            cycle=True,
-            max_iterations=3,
-            cycle_id="count_loop",
-        )
+        workflow.create_cycle("count_loop").connect(
+            "counter", "counter", {"result.count": "n"}
+        ).max_iterations(3).build()
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -151,17 +136,14 @@ class TestConvergence:
         workflow.add_node("accumulator", accumulator)
 
         # Create cycle
-        workflow.connect(
+        workflow.create_cycle("accumulate_loop").connect(
             "accumulator",
             "accumulator",
-            mapping={
+            {
                 "result.total": "total",
                 "result.step": "step",
             },
-            cycle=True,
-            max_iterations=5,
-            cycle_id="accumulate_loop",
-        )
+        ).max_iterations(5).build()
 
         # Execute with initial parameters
         runtime = LocalRuntime(enable_cycles=True)
@@ -205,14 +187,9 @@ class TestConvergence:
         workflow.add_node("handler", node)
 
         # Create cycle
-        workflow.connect(
-            "handler",
-            "handler",
-            mapping={"result.value": "value"},
-            cycle=True,
-            max_iterations=3,
-            cycle_id="none_loop",
-        )
+        workflow.create_cycle("none_loop").connect(
+            "handler", "handler", {"result.value": "value"}
+        ).max_iterations(3).build()
 
         # Execute with no parameters (None initial value)
         runtime = LocalRuntime(enable_cycles=True)
@@ -281,16 +258,9 @@ class TestConvergence:
         )
 
         # Create cycle from processor back to generator
-        workflow.connect(
-            "processor",
-            "generator",
-            mapping={
-                "result.iteration": "iteration",
-            },
-            cycle=True,
-            max_iterations=3,
-            cycle_id="multi_node_loop",
-        )
+        workflow.create_cycle("multi_node_loop").connect(
+            "processor", "generator", {"result.iteration": "iteration"}
+        ).max_iterations(3).build()
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)

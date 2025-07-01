@@ -48,9 +48,15 @@ class TestConvergenceSafety:
         workflow.add_node("improver", improver)
 
         # Create cycle with convergence expression
-        workflow.create_cycle("quality_cycle").connect(
-            "improver", "improver", {"result.quality": "quality"}
-        ).max_iterations(20).converge_when("quality >= 0.9").build()
+        workflow.connect(
+            "improver",
+            "improver",
+            mapping={"result.quality": "quality"},
+            cycle=True,
+            max_iterations=20,
+            convergence_check="quality >= 0.9",
+            cycle_id="quality_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -83,9 +89,15 @@ class TestConvergenceSafety:
         workflow.add_node("improver", improver)
 
         # Create cycle with low max_iterations
-        workflow.create_cycle("slow_cycle").connect(
-            "improver", "improver", {"result.value": "value"}
-        ).max_iterations(5).converge_when("value >= 1.0").build()
+        workflow.connect(
+            "improver",
+            "improver",
+            mapping={"result.value": "value"},
+            cycle=True,
+            max_iterations=5,
+            convergence_check="value >= 1.0",  # Won't reach this
+            cycle_id="slow_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -127,14 +139,18 @@ class TestConvergenceSafety:
 
         # Create cycle with compound conditions
         # Note: Current SDK may have limitations on complex expressions
-        workflow.create_cycle("process_cycle").connect(
+        workflow.connect(
             "processor",
             "processor",
-            {
+            mapping={
                 "result.error_rate": "error_rate",
                 "result.processed_count": "processed_count",
             },
-        ).max_iterations(15).converge_when("error_rate <= 0.1").build()
+            cycle=True,
+            max_iterations=15,
+            convergence_check="error_rate <= 0.1",  # Primary condition
+            cycle_id="process_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -172,9 +188,14 @@ class TestConvergenceSafety:
         workflow.add_node("slow", slow_node)
 
         # Create cycle with timeout consideration
-        workflow.create_cycle("slow_cycle").connect(
-            "slow", "slow", {"result.counter": "counter"}
-        ).max_iterations(3).build()
+        workflow.connect(
+            "slow",
+            "slow",
+            mapping={"result.counter": "counter"},
+            cycle=True,
+            max_iterations=3,  # Keep low for test speed
+            cycle_id="slow_cycle",
+        )
 
         # Execute with runtime timeout (if supported)
         runtime = LocalRuntime(enable_cycles=True)
@@ -220,9 +241,14 @@ class TestConvergenceSafety:
         workflow.add_node("memory", memory_node)
 
         # Create cycle with resource limits
-        workflow.create_cycle("memory_cycle").connect(
-            "memory", "memory", {"result.size": "size", "result.iteration": "iteration"}
-        ).max_iterations(5).build()
+        workflow.connect(
+            "memory",
+            "memory",
+            mapping={"result.size": "size", "result.iteration": "iteration"},
+            cycle=True,
+            max_iterations=5,  # Limit iterations to prevent excessive memory
+            cycle_id="memory_cycle",
+        )
 
         # Execute with resource monitoring
         runtime = LocalRuntime(
@@ -259,9 +285,15 @@ class TestConvergenceSafety:
         workflow.add_node("fast", fast_node)
 
         # Create cycle that should terminate early
-        workflow.create_cycle("fast_cycle").connect(
-            "fast", "fast", {"result.value": "value"}
-        ).max_iterations(10).converge_when("value >= 1.0").build()
+        workflow.connect(
+            "fast",
+            "fast",
+            mapping={"result.value": "value"},
+            cycle=True,
+            max_iterations=10,  # More than needed
+            convergence_check="value >= 1.0",
+            cycle_id="fast_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -281,9 +313,14 @@ class TestConvergenceSafety:
 
         # Create cycle with potentially invalid expression
         # SDK should handle this gracefully
-        workflow.create_cycle("invalid_cycle").connect("node", "node").max_iterations(
-            5
-        ).converge_when("invalid_var > 10").build()
+        workflow.connect(
+            "node",
+            "node",
+            cycle=True,
+            max_iterations=5,
+            convergence_check="invalid_var > 10",  # Variable doesn't exist
+            cycle_id="invalid_cycle",
+        )
 
         # Execute - should handle gracefully (rely on max_iterations)
         runtime = LocalRuntime(enable_cycles=True)

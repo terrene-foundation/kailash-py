@@ -113,13 +113,13 @@ class TestSQLDatabaseNodePostgreSQL:
         node = SQLDatabaseNode(**postgres_config)
 
         # Test SELECT
-        result = node.run(query="SELECT * FROM test_users ORDER BY id")
-        assert result["success"] is True
+        result = node.execute(query="SELECT * FROM test_users ORDER BY id")
+        assert "data" in result
         assert len(result["data"]) == 3
         assert result["data"][0]["name"] == "Alice"
 
         # Test aggregate
-        count_result = node.run(
+        count_result = node.execute(
             query="SELECT COUNT(*) as total FROM test_users WHERE active = TRUE"
         )
         assert count_result["data"][0]["total"] == 3
@@ -129,7 +129,7 @@ class TestSQLDatabaseNodePostgreSQL:
         node = SQLDatabaseNode(**postgres_config)
 
         # Query JSONB data
-        vip_result = node.run(
+        vip_result = node.execute(
             query="""
             SELECT name, metadata->>'vip' as is_vip,
                    (metadata->>'level')::int as level
@@ -143,7 +143,7 @@ class TestSQLDatabaseNodePostgreSQL:
         assert vip_result["data"][0]["level"] == 5
 
         # Update JSONB
-        update_result = node.run(
+        update_result = node.execute(
             query="""
             UPDATE test_users
             SET metadata = jsonb_set(metadata, '{level}', '10'::jsonb)
@@ -151,14 +151,14 @@ class TestSQLDatabaseNodePostgreSQL:
         """,
             parameters={"email": "alice@example.com"},
         )
-        assert update_result["rows_affected"] == 1
+        assert update_result["row_count"] == 1
 
     def test_array_operations(self, postgres_config):
         """Test PostgreSQL array operations."""
         node = SQLDatabaseNode(**postgres_config)
 
         # Query array data
-        premium_result = node.run(
+        premium_result = node.execute(
             query="""
             SELECT name, tags
             FROM test_users
@@ -169,7 +169,7 @@ class TestSQLDatabaseNodePostgreSQL:
         assert len(premium_result["data"]) == 2
 
         # Array aggregation
-        all_tags_result = node.run(
+        all_tags_result = node.execute(
             query="""
             SELECT array_agg(DISTINCT tag) as all_tags
             FROM test_users, unnest(tags) as tag
@@ -184,7 +184,7 @@ class TestSQLDatabaseNodePostgreSQL:
         node = SQLDatabaseNode(**postgres_config)
 
         # CTE example
-        cte_result = node.run(
+        cte_result = node.execute(
             query="""
             WITH user_orders AS (
                 SELECT u.name, COUNT(o.id) as order_count,
@@ -201,7 +201,7 @@ class TestSQLDatabaseNodePostgreSQL:
         assert len(cte_result["data"]) == 2
 
         # Window function example
-        window_result = node.run(
+        window_result = node.execute(
             query="""
             SELECT name, balance,
                    RANK() OVER (ORDER BY balance DESC) as wealth_rank,
@@ -218,7 +218,7 @@ class TestSQLDatabaseNodePostgreSQL:
         node = SQLDatabaseNode(**postgres_config)
 
         # Test RETURNING clause
-        insert_result = node.run(
+        insert_result = node.execute(
             query="""
             INSERT INTO test_users (name, email, age, balance)
             VALUES (:name, :email, :age, :balance)
@@ -231,12 +231,12 @@ class TestSQLDatabaseNodePostgreSQL:
                 "balance": 750.25,
             },
         )
-        assert insert_result["success"] is True
+        assert insert_result["row_count"] == 1
         assert insert_result["data"][0]["name"] == "David"
         new_id = insert_result["data"][0]["id"]
 
         # Clean up
-        node.run(
+        node.execute(
             query="DELETE FROM test_users WHERE id = :id", parameters={"id": new_id}
         )
 
@@ -245,11 +245,11 @@ class TestSQLDatabaseNodePostgreSQL:
         node = SQLDatabaseNode(**postgres_config)
 
         # Add a text search column
-        node.run(
+        node.execute(
             query="ALTER TABLE test_orders ADD COLUMN IF NOT EXISTS search_vector tsvector"
         )
 
-        node.run(
+        node.execute(
             query="""
             UPDATE test_orders
             SET search_vector = to_tsvector('english', product)
@@ -257,7 +257,7 @@ class TestSQLDatabaseNodePostgreSQL:
         )
 
         # Perform text search
-        search_result = node.run(
+        search_result = node.execute(
             query="""
             SELECT product
             FROM test_orders
@@ -272,7 +272,7 @@ class TestSQLDatabaseNodePostgreSQL:
         node = SQLDatabaseNode(**postgres_config)
 
         # Initial insert
-        upsert_result = node.run(
+        upsert_result = node.execute(
             query="""
             INSERT INTO test_users (email, name, age, balance)
             VALUES (:email, :name, :age, :balance)
@@ -291,9 +291,9 @@ class TestSQLDatabaseNodePostgreSQL:
             },
         )
 
-        assert upsert_result["success"] is True
+        assert upsert_result["row_count"] >= 1
         assert upsert_result["data"][0]["name"] == "Alice Updated"
-        assert upsert_result["data"][0]["balance"] == "1100.50"  # Original + 100
+        assert float(upsert_result["data"][0]["balance"]) == 1100.50  # Original + 100
 
     def test_custom_types_and_enums(self, postgres_config):
         """Test PostgreSQL custom types and enums."""
@@ -301,16 +301,16 @@ class TestSQLDatabaseNodePostgreSQL:
 
         # Create enum type
         try:
-            node.run(query="DROP TYPE IF EXISTS order_status CASCADE")
+            node.execute(query="DROP TYPE IF EXISTS order_status CASCADE")
         except:
             pass
 
-        node.run(
+        node.execute(
             query="CREATE TYPE order_status AS ENUM ('pending', 'processing', 'shipped', 'delivered')"
         )
 
         # Use enum in query
-        status_result = node.run(
+        status_result = node.execute(
             query="""
             SELECT DISTINCT status::text as status
             FROM test_orders
@@ -320,14 +320,14 @@ class TestSQLDatabaseNodePostgreSQL:
         assert status_result["data"][0]["status"] == "pending"
 
         # Clean up
-        node.run(query="DROP TYPE order_status CASCADE")
+        node.execute(query="DROP TYPE order_status CASCADE")
 
     def test_postgres_specific_functions(self, postgres_config):
         """Test PostgreSQL-specific functions."""
         node = SQLDatabaseNode(**postgres_config)
 
         # Test generate_series
-        series_result = node.run(
+        series_result = node.execute(
             query="""
             SELECT generate_series(1, 5) as num
         """
@@ -335,7 +335,7 @@ class TestSQLDatabaseNodePostgreSQL:
         assert len(series_result["data"]) == 5
 
         # Test array operations
-        array_result = node.run(
+        array_result = node.execute(
             query="SELECT ARRAY[1,2,3] as numbers", result_format="dict"
         )
         assert len(array_result["data"]) == 1

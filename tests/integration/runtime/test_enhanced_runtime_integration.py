@@ -102,14 +102,9 @@ result = {'counter': counter, 'should_continue': should_continue}
 
         # Create cycle
         workflow.connect("init", "increment", {"result": "data"})
-        workflow.connect(
-            "increment",
-            "increment",
-            {"result": "data"},
-            cycle=True,
-            max_iterations=5,
-            convergence_check="should_continue == False",
-        )
+        workflow.create_cycle("increment_cycle").connect(
+            "increment", "increment", {"result": "data"}
+        ).max_iterations(5).converge_when("should_continue == False").build()
 
         # Test with LocalRuntime
         runtime = LocalRuntime(debug=True, enable_cycles=True)
@@ -182,14 +177,9 @@ result = {'final_value': final_value, 'reached_target': final_value >= final_tar
 
         # Connect DAG -> Cycle -> DAG
         workflow.connect("prepare", "iterate", {"result": "data"})
-        workflow.connect(
-            "iterate",
-            "iterate",
-            {"result": "data"},
-            cycle=True,
-            convergence_check="converged == True",
-            max_iterations=10,
-        )
+        workflow.create_cycle("iterate_cycle").connect(
+            "iterate", "iterate", {"result": "data"}
+        ).max_iterations(10).converge_when("converged == True").build()
         workflow.connect("iterate", "finalize", {"result": "data"})
 
         # Execute with LocalRuntime
@@ -224,9 +214,9 @@ result = {'final_value': final_value, 'reached_target': final_value >= final_tar
 
         # Create cycle
         workflow.connect("node1", "node2", {"value": "value"})
-        workflow.connect(
-            "node2", "node1", {"value": "value"}, cycle=True, max_iterations=2
-        )
+        workflow.create_cycle("node_cycle").connect(
+            "node2", "node1", {"value": "value"}
+        ).max_iterations(2).build()
 
         # Test with cycles disabled
         runtime = LocalRuntime(debug=False, enable_cycles=False)
@@ -376,14 +366,11 @@ result = {
         workflow.connect(
             "init", "process", {"result.counter": "counter", "result.values": "values"}
         )
-        workflow.connect(
+        workflow.create_cycle("process_cycle").connect(
             "process",
             "process",
             {"result.counter": "counter", "result.values": "values"},
-            cycle=True,
-            max_iterations=5,
-            convergence_check="should_continue == False",
-        )
+        ).max_iterations(5).converge_when("should_continue == False").build()
 
         # Test with ParallelCyclicRuntime
         runtime = ParallelCyclicRuntime(debug=False, max_workers=4)
@@ -686,14 +673,9 @@ result = {'counter': new_counter, 'should_continue': should_continue}
 
         # Create cycle
         workflow.connect("init", "increment", {"result.counter": "counter"})
-        workflow.connect(
-            "increment",
-            "increment",
-            {"result.counter": "counter"},
-            cycle=True,
-            max_iterations=5,
-            convergence_check="should_continue == False",
-        )
+        workflow.create_cycle("increment_tracking_cycle").connect(
+            "increment", "increment", {"result.counter": "counter"}
+        ).max_iterations(5).converge_when("should_continue == False").build()
 
         # Execute with task tracking
         runtime = LocalRuntime(debug=False, enable_cycles=True)
@@ -897,14 +879,9 @@ result = {'counter': new_counter, 'should_continue': should_continue}
 
         # Create cycle
         workflow.connect("init", "iterate", {"result.counter": "counter"})
-        workflow.connect(
-            "iterate",
-            "iterate",
-            {"result.counter": "counter"},
-            cycle=True,
-            max_iterations=10,
-            convergence_check="should_continue == False",
-        )
+        workflow.create_cycle("iterate_tracking_cycle").connect(
+            "iterate", "iterate", {"result.counter": "counter"}
+        ).max_iterations(10).converge_when("should_continue == False").build()
 
         # Test execution time scales reasonably with iterations
         runtime = LocalRuntime(debug=False, enable_cycles=True)

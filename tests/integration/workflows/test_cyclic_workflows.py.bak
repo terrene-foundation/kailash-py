@@ -51,11 +51,14 @@ class TestCyclicWorkflowBasics:
         workflow.add_node("counter", counter)
 
         # Create self-loop with max iterations
-        workflow.create_cycle("count_loop").connect(
+        workflow.connect(
             "counter",
             "counter",
-            {"result.count": "count", "result.increment": "increment"},
-        ).max_iterations(3).build()
+            mapping={"result.count": "count", "result.increment": "increment"},
+            cycle=True,
+            max_iterations=3,
+            cycle_id="count_loop",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -81,9 +84,13 @@ class TestCyclicWorkflowBasics:
         # Try to create cycle without limits
         # This should raise CycleConfigurationError
         try:
-            workflow.create_cycle("invalid_cycle").connect(
-                "node", "node"
-            ).build()  # No max_iterations or convergence_when provided
+            workflow.connect(
+                "node",
+                "node",
+                cycle=True,
+                cycle_id="invalid_cycle",
+                # Missing both max_iterations and convergence_check
+            )
             assert False, "Should have raised CycleConfigurationError"
         except CycleConfigurationError:
             # Expected - test passes
@@ -114,11 +121,15 @@ class TestCyclicWorkflowBasics:
         workflow.add_node("accumulator", accumulator)
 
         # Create cycle with convergence expression
-        workflow.create_cycle("accumulate_loop").connect(
+        workflow.connect(
             "accumulator",
             "accumulator",
-            {"result.total": "total", "result.step": "step"},
-        ).max_iterations(50).converge_when("total >= 1.0").build()
+            mapping={"result.total": "total", "result.step": "step"},
+            cycle=True,
+            max_iterations=50,  # Safety limit
+            convergence_check="total >= 1.0",
+            cycle_id="accumulate_loop",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -148,9 +159,14 @@ class TestCyclicWorkflowBasics:
         )
         workflow.add_node("counter", counter)
 
-        workflow.create_cycle("counter_cycle").connect(
-            "counter", "counter", {"result.count": "count"}
-        ).max_iterations(3).build()
+        workflow.connect(
+            "counter",
+            "counter",
+            mapping={"result.count": "count"},
+            cycle=True,
+            max_iterations=3,
+            cycle_id="counter_cycle",
+        )
 
         # Second cycle - accumulator (independent)
         def accumulator_func(sum=0):
@@ -165,9 +181,14 @@ class TestCyclicWorkflowBasics:
         )
         workflow.add_node("accumulator", accumulator)
 
-        workflow.create_cycle("accumulator_cycle").connect(
-            "accumulator", "accumulator", {"result.sum": "sum"}
-        ).max_iterations(2).build()
+        workflow.connect(
+            "accumulator",
+            "accumulator",
+            mapping={"result.sum": "sum"},
+            cycle=True,
+            max_iterations=2,
+            cycle_id="accumulator_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -218,9 +239,14 @@ class TestCyclicWorkflowBasics:
         )
 
         # Create cycle
-        workflow.create_cycle("process_cycle").connect(
-            "processor", "processor", {"result.value": "value"}
-        ).max_iterations(10).build()
+        workflow.connect(
+            "processor",
+            "processor",
+            mapping={"result.value": "value"},
+            cycle=True,
+            max_iterations=10,
+            cycle_id="process_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -246,7 +272,7 @@ class TestCyclicWorkflowBasics:
         workflow2 = Workflow("cyclic", "Cyclic Workflow")
         node = PythonCodeNode(name="node", code="result = 1")
         workflow2.add_node("node", node)
-        workflow2.create_cycle("test").connect("node", "node").max_iterations(5).build()
+        workflow2.connect("node", "node", cycle=True, max_iterations=5, cycle_id="test")
 
         assert workflow2.has_cycles()
 
@@ -261,17 +287,21 @@ class TestCyclicWorkflowBasics:
         workflow.add_node("node2", node2)
 
         # Create first cycle
-        workflow.create_cycle("same_id").connect("node1", "node1").max_iterations(
-            10
-        ).build()
+        workflow.connect(
+            "node1", "node1", cycle=True, max_iterations=3, cycle_id="same_id"
+        )
 
         # Try to create second cycle with same ID
         # This might not raise an error in current implementation
         # but test the behavior anyway
         try:
-            workflow.create_cycle("same_id").connect("node2", "node2").max_iterations(
-                3
-            ).build()
+            workflow.connect(
+                "node2",
+                "node2",
+                cycle=True,
+                max_iterations=3,
+                cycle_id="same_id",  # Duplicate ID
+            )
             # If no error raised, at least verify both cycles exist
             assert workflow.has_cycles()
         except (WorkflowValidationError, ValueError, KeyError):

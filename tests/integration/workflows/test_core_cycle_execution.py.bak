@@ -45,11 +45,14 @@ class TestCoreCycleExecution:
         workflow.add_node("counter", counter_node)
 
         # Create basic cycle
-        workflow.create_cycle("basic_cycle").connect(
+        workflow.connect(
             "counter",
             "counter",
-            {"result.count": "count", "result.increment": "increment"},
-        ).max_iterations(5).build()
+            mapping={"result.count": "count", "result.increment": "increment"},
+            cycle=True,
+            max_iterations=5,
+            cycle_id="basic_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -97,11 +100,15 @@ class TestCoreCycleExecution:
         workflow.add_node("converger", converge_node)
 
         # Create convergence cycle
-        workflow.create_cycle("convergence_cycle").connect(
+        workflow.connect(
             "converger",
             "converger",
-            {"result.value": "value", "result.target": "target"},
-        ).max_iterations(50).converge_when("difference < 0.01").build()
+            mapping={"result.value": "value", "result.target": "target"},
+            cycle=True,
+            max_iterations=50,
+            convergence_check="difference < 0.01",  # If supported
+            cycle_id="convergence_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -135,11 +142,14 @@ class TestCoreCycleExecution:
         workflow.add_node("processor", processor)
 
         # Create cycle with multiple parameter mappings
-        workflow.create_cycle("param_cycle").connect(
+        workflow.connect(
             "processor",
             "processor",
-            {"result.a": "a", "result.b": "b", "result.c": "c"},
-        ).max_iterations(3).build()
+            mapping={"result.a": "a", "result.b": "b", "result.c": "c"},
+            cycle=True,
+            max_iterations=3,
+            cycle_id="param_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -201,14 +211,24 @@ class TestCoreCycleExecution:
         workflow.connect("outer", "inner", mapping={"result.inner_input": "base_value"})
 
         # Create inner cycle
-        workflow.create_cycle("inner_cycle").connect(
-            "inner", "inner", {"result.inner_count": "inner_count"}
-        ).max_iterations(2).build()
+        workflow.connect(
+            "inner",
+            "inner",
+            mapping={"result.inner_count": "inner_count"},
+            cycle=True,
+            max_iterations=2,
+            cycle_id="inner_cycle",
+        )
 
         # Create outer cycle
-        workflow.create_cycle("outer_cycle").connect(
-            "inner", "outer", {"result.result": "inner_result"}
-        ).max_iterations(3).build()
+        workflow.connect(
+            "inner",
+            "outer",
+            mapping={"result.result": "inner_result"},
+            cycle=True,
+            max_iterations=3,
+            cycle_id="outer_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -254,15 +274,18 @@ class TestCoreCycleExecution:
         workflow.add_node("accumulator", accumulator)
 
         # Create accumulation cycle
-        workflow.create_cycle("accumulate_cycle").connect(
+        workflow.connect(
             "accumulator",
             "accumulator",
-            {
+            mapping={
                 "result.total": "total",
                 "result.value": "value",
                 "result.operation": "operation",
             },
-        ).max_iterations(5).build()
+            cycle=True,
+            max_iterations=5,
+            cycle_id="accumulate_cycle",
+        )
 
         # Test addition
         runtime = LocalRuntime(enable_cycles=True)
@@ -316,11 +339,14 @@ class TestCoreCycleExecution:
         workflow.add_node("processor", processor)
 
         # Create simple cycle without conditional routing
-        workflow.create_cycle("value_cycle").connect(
+        workflow.connect(
             "processor",
             "processor",
-            {"result.value": "value", "result.threshold": "threshold"},
-        ).max_iterations(10).build()
+            mapping={"result.value": "value", "result.threshold": "threshold"},
+            cycle=True,
+            max_iterations=10,
+            cycle_id="value_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -353,9 +379,14 @@ class TestCoreCycleExecution:
         workflow.add_node("inc", incrementor)
 
         # Create cycle with specific limit
-        workflow.create_cycle("limit_test").connect(
-            "inc", "inc", {"result.value": "value"}
-        ).max_iterations(7).build()
+        workflow.connect(
+            "inc",
+            "inc",
+            mapping={"result.value": "value"},
+            cycle=True,
+            max_iterations=7,
+            cycle_id="limit_test",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)

@@ -251,13 +251,9 @@ class TestRealisticCycleScenarios:
 
         etl_node = RealisticETLNode()
         workflow.add_node("etl", etl_node)
-        workflow.connect(
-            "etl",
-            "etl",
-            cycle=True,
-            max_iterations=8,
-            convergence_check="status == 'success'",
-        )
+        workflow.create_cycle("etl_retry_cycle").connect(
+            "etl", "etl", mapping={}
+        ).max_iterations(8).converge_when("status == 'success'").build()
 
         runtime = LocalRuntime()
         start_time = time.time()
@@ -296,13 +292,9 @@ class TestRealisticCycleScenarios:
 
         poller_node = RealisticAPIPollerNode()
         workflow.add_node("poller", poller_node)
-        workflow.connect(
-            "poller",
-            "poller",
-            cycle=True,
-            max_iterations=10,
-            convergence_check="should_continue == False",
-        )
+        workflow.create_cycle("api_polling_cycle").connect(
+            "poller", "poller", mapping={}
+        ).max_iterations(10).converge_when("should_continue == False").build()
 
         runtime = LocalRuntime()
         start_time = time.time()
@@ -339,13 +331,9 @@ class TestRealisticCycleScenarios:
 
         processor_node = RealisticBatchProcessorNode()
         workflow.add_node("processor", processor_node)
-        workflow.connect(
-            "processor",
-            "processor",
-            cycle=True,
-            max_iterations=15,
-            convergence_check="all_processed == True",
-        )
+        workflow.create_cycle("batch_processing_cycle").connect(
+            "processor", "processor", mapping={}
+        ).max_iterations(15).converge_when("all_processed == True").build()
 
         runtime = LocalRuntime()
         start_time = time.time()
@@ -432,13 +420,9 @@ class TestRealisticCycleScenarios:
 
         optimizer_node = RealisticOptimizerNode()
         workflow.add_node("optimizer", optimizer_node)
-        workflow.connect(
-            "optimizer",
-            "optimizer",
-            cycle=True,
-            max_iterations=15,
-            convergence_check="target_met == True",
-        )
+        workflow.create_cycle("optimization_cycle").connect(
+            "optimizer", "optimizer", mapping={}
+        ).max_iterations(15).converge_when("target_met == True").build()
 
         runtime = LocalRuntime()
         start_time = time.time()
@@ -535,13 +519,9 @@ class TestRealisticCycleScenarios:
 
         quality_node = RealisticQualityNode()
         workflow.add_node("quality", quality_node)
-        workflow.connect(
-            "quality",
-            "quality",
-            cycle=True,
-            max_iterations=8,
-            convergence_check="quality_threshold_met == True",
-        )
+        workflow.create_cycle("quality_improvement_cycle").connect(
+            "quality", "quality", mapping={}
+        ).max_iterations(8).converge_when("quality_threshold_met == True").build()
 
         runtime = LocalRuntime()
         start_time = time.time()

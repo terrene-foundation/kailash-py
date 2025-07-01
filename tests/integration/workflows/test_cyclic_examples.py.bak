@@ -32,9 +32,14 @@ class TestCyclicExamples:
         workflow.add_node("increment", incrementor)
 
         # Create cycle
-        workflow.create_cycle("increment_cycle").connect(
-            "increment", "increment", {"result.value": "value", "result.step": "step"}
-        ).max_iterations(15).build()
+        workflow.connect(
+            "increment",
+            "increment",
+            mapping={"result.value": "value", "result.step": "step"},
+            cycle=True,
+            max_iterations=15,
+            cycle_id="increment_cycle",
+        )
 
         # Execute with initial values
         runtime = LocalRuntime(enable_cycles=True)
@@ -82,9 +87,14 @@ class TestCyclicExamples:
         workflow.add_node("improver", improver)
 
         # Create improvement cycle
-        workflow.create_cycle("quality_cycle").connect(
-            "improver", "improver", {"result.quality": "quality"}
-        ).max_iterations(10).build()
+        workflow.connect(
+            "improver",
+            "improver",
+            mapping={"result.quality": "quality"},
+            cycle=True,
+            max_iterations=10,
+            cycle_id="quality_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -121,15 +131,18 @@ class TestCyclicExamples:
         workflow.add_node("processor", processor)
 
         # Create cycle with multiple mappings
-        workflow.create_cycle("multi_cycle").connect(
+        workflow.connect(
             "processor",
             "processor",
-            {
+            mapping={
                 "result.counter": "counter",
                 "result.accumulator": "accumulator",
                 "result.multiplier": "multiplier",
             },
-        ).max_iterations(5).build()
+            cycle=True,
+            max_iterations=5,
+            cycle_id="multi_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
@@ -172,9 +185,14 @@ class TestCyclicExamples:
         workflow.add_node("counter", counter)
 
         # Create cycle
-        workflow.create_cycle("default_cycle").connect(
-            "counter", "counter", {"result.count": "count"}
-        ).max_iterations(3).build()
+        workflow.connect(
+            "counter",
+            "counter",
+            mapping={"result.count": "count"},
+            cycle=True,
+            max_iterations=3,
+            cycle_id="default_cycle",
+        )
 
         # Execute without parameters
         runtime = LocalRuntime(enable_cycles=True)
@@ -210,11 +228,14 @@ class TestCyclicExamples:
         workflow.add_node("processor", processor)
 
         # Create cycle with high max_iterations
-        workflow.create_cycle("threshold_cycle").connect(
+        workflow.connect(
             "processor",
             "processor",
-            {"result.value": "value", "result.threshold": "threshold"},
-        ).max_iterations(10).build()
+            mapping={"result.value": "value", "result.threshold": "threshold"},
+            cycle=True,
+            max_iterations=10,  # More than needed
+            cycle_id="threshold_cycle",
+        )
 
         # Execute
         runtime = LocalRuntime(enable_cycles=True)
