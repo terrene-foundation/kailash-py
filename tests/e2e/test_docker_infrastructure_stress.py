@@ -19,6 +19,20 @@ from typing import Any, Dict, List
 import asyncpg
 import pytest
 
+from kailash import Workflow
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.base import Node, NodeParameter
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import SQLDatabaseNode
+from kailash.runtime.local import LocalRuntime
+from kailash.utils.resource_manager import ResourceTracker
+from tests.utils.docker_config import (
+    DATABASE_CONFIG,
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+    get_redis_url,
+)
+
 try:
     import redis
 except ImportError:
@@ -33,20 +47,6 @@ pytestmark = [
 
 if redis is None:
     pytest.skip("Redis not installed", allow_module_level=True)
-
-from kailash import Workflow
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import SQLDatabaseNode
-from kailash.runtime.local import LocalRuntime
-from kailash.utils.resource_manager import ResourceManager
-from tests.utils.docker_config import (
-    DATABASE_CONFIG,
-    REDIS_CONFIG,
-    get_postgres_connection_string,
-    get_redis_url,
-)
 
 # Mark as infrastructure stress tests
 pytestmark = [pytest.mark.docker, pytest.mark.stress, pytest.mark.slow]

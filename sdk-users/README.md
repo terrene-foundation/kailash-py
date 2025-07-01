@@ -41,7 +41,6 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Production-ready scripts with real data
 
 ### **Quick Reference**
-- **[essentials/](essentials/)** - Essential patterns and guides
 - **[cheatsheet/](cheatsheet/)** - Copy-paste code snippets
   - **NEW: Claude Code specific guides**
   - Installation and basic setup
@@ -70,7 +69,7 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Integration and deployment patterns
   - Performance and security patterns
 
-- **[templates/](templates/)** - Ready-to-use boilerplate code
+- **[workflows/](workflows/)** - Ready-to-use boilerplate code
   - Basic workflows
   - Custom node templates
   - Integration examples
@@ -88,7 +87,7 @@ Quick reference with critical rules, common patterns, and navigation guide.
 ### **New to Kailash?**
 1. Read [CLAUDE.md](CLAUDE.md) for critical rules
 2. Try [workflows/quick-start/](workflows/quick-start/) examples
-3. Use [essentials/getting-started/](essentials/getting-started/) patterns
+3. Use [cheatsheet/](cheatsheet/) for common patterns
 4. Reference [nodes/](nodes/) for available components
 
 ### **Building Complex Workflows?**
@@ -98,16 +97,16 @@ Quick reference with critical rules, common patterns, and navigation guide.
 4. Reference [api/](api/) for detailed specifications
 
 ### **Industry-Specific Solutions?**
-1. Browse [workflows/industry-solutions/](workflows/industry-solutions/)
+1. Browse [workflows/by-industry/](workflows/by-industry/)
 2. Check [features/](features/) for relevant capabilities
-3. Use [templates/](templates/) for boilerplate code
+3. Use [workflows/](workflows/) for boilerplate code
 4. Customize with [developer/](developer/) patterns
 
 ### **Debugging Issues?**
-1. Check [developer/07-troubleshooting.md](developer/07-troubleshooting.md)
+1. Check [developer/05-troubleshooting.md](developer/05-troubleshooting.md)
 2. Review [CLAUDE.md](CLAUDE.md) common mistakes
 3. Look up errors in [../shared/mistakes/](../shared/mistakes/)
-4. Validate with [validation-guide.md](validation-guide.md)
+4. Validate with [validation/common-mistakes.md](validation/common-mistakes.md)
 
 ## ⚠️ Critical Knowledge
 

@@ -12,7 +12,7 @@
 
 **⚡ Unified Async Runtime**: Production-ready AsyncLocalRuntime with 2-10x performance gains. See [developer/09-unified-async-runtime-guide.md](developer/09-unified-async-runtime-guide.md) for complete guide.
 
-**🔧 Resource Registry**: Centralized resource management for database pools, HTTP clients, and caches. See [developer/08-resource-registry-guide.md](developer/08-resource-registry-guide.md) for patterns.
+**🔧 Resource Registry**: Centralized resource management for database pools, HTTP clients, and caches. See [developer/09-resource-registry-guide.md](developer/09-resource-registry-guide.md) for patterns.
 
 **🚀 AsyncWorkflowBuilder**: Async-first workflow builder with 70%+ code reduction. Built-in patterns (retry, rate limit, timeout, batch, circuit breaker). See [developer/08-async-workflow-builder.md](developer/08-async-workflow-builder.md) and [workflows/async/async-workflow-builder-guide.md](workflows/async/async-workflow-builder-guide.md).
 
@@ -20,7 +20,7 @@
 
 **🎯 Auto-Mapping Parameters**: NodeParameter supports `auto_map_primary=True`, `auto_map_from=["alt1"]`, `workflow_alias="name"` for automatic connection discovery.
 
-**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. See [developer/async-testing-framework-guide.md](developer/async-testing-framework-guide.md).
+**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. See [developer/14-async-testing-framework-guide.md](developer/14-async-testing-framework-guide.md).
 
 ## 🏗️ Architecture Decisions First
 
@@ -38,19 +38,19 @@ The decision matrix provides fast answers to:
 
 | Decision Type | Quick Decisions | Implementation Guide |
 |---------------|-----------------|---------------------|
-| **Workflow Construction** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
-| **Interface Routing** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
-| **Performance Strategy** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
+| **Workflow Construction** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/APP_DEVELOPMENT_GUIDE.md) |
+| **Interface Routing** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/APP_DEVELOPMENT_GUIDE.md) |
+| **Performance Strategy** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/APP_DEVELOPMENT_GUIDE.md) |
 
 ## 🎯 Quick Navigation Guide
 | I need to... | Go to | Purpose |
 |--------------|-------|---------|
 | **Make architecture decisions** | [decision-matrix.md](decision-matrix.md) | Choose workflow patterns, routing |
-| **Build complete app** | [../apps/ARCHITECTURAL_GUIDE.md](../apps/ARCHITECTURAL_GUIDE.md) | App implementation guide |
+| **Build complete app** | [../apps/APP_DEVELOPMENT_GUIDE.md](../apps/APP_DEVELOPMENT_GUIDE.md) | App implementation guide |
 | **Find a node quickly** | [nodes/node-index.md](nodes/node-index.md) | Minimal 47-line reference |
 | **Choose right node** | [nodes/node-selection-guide.md](nodes/node-selection-guide.md) | Smart node finder with decision trees |
 | Build from scratch | [developer/](developer/) | 6 focused technical guides |
-| **Test workflows** | [developer/async-testing-framework-guide.md](developer/async-testing-framework-guide.md) | Production-certified testing framework ✅ |
+| **Test workflows** | [developer/14-async-testing-framework-guide.md](developer/14-async-testing-framework-guide.md) | Production-certified testing framework ✅ |
 | Quick code snippet | [cheatsheet/](cheatsheet/) | 37 standardized copy-paste patterns |
 | Fix an error | [developer/05-troubleshooting.md](developer/05-troubleshooting.md) | Comprehensive error resolution |
 | Frontend integration | [frontend-integration/](frontend-integration/) | React/Vue + middleware patterns |

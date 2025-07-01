@@ -26,10 +26,10 @@ sys.path.append("apps/user_management")
 
 from apps.user_management.config.settings import UserManagementConfig
 from apps.user_management.main import UserManagementApp
+from kailash.nodes.admin.audit_log import EnterpriseAuditLogNode
 from kailash.nodes.admin.permission_check import PermissionCheckNode
 from kailash.nodes.admin.role_management import RoleManagementNode
 from kailash.nodes.admin.user_management import UserManagementNode
-from kailash.nodes.logs.enterprise_audit import EnterpriseAuditLogNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

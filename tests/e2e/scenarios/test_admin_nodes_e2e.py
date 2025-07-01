@@ -12,56 +12,50 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List
 
 import pytest
-from testcontainers.postgres import PostgresContainer
-from testcontainers.redis import RedisContainer
 
 from kailash.nodes.admin.permission_check import PermissionCheckNode
 from kailash.nodes.admin.role_management import RoleManagementNode
 from kailash.nodes.admin.schema_manager import AdminSchemaManager
 from kailash.nodes.admin.user_management import UserManagementNode
+from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.data import SQLDatabaseNode
-from kailash.nodes.llm import LLMAgentNode
 from kailash.runtime import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
-from kailash.workflow_builder import WorkflowBuilder
+from kailash.workflow import WorkflowBuilder
+from tests.utils.docker_config import (
+    ensure_docker_services,
+    get_postgres_connection_string,
+    get_redis_url,
+)
 
 
 @pytest.mark.e2e
-@pytest.mark.docker
+@pytest.mark.requires_docker
 class TestAdminNodesE2E:
     """End-to-end tests for admin nodes with real infrastructure."""
 
     @pytest.fixture(scope="class")
-    def postgres_container(self):
-        """Start PostgreSQL container for testing."""
-        with PostgresContainer("postgres:16-alpine").with_env(
-            "POSTGRES_PASSWORD", "test"
-        ) as postgres:
-            postgres.start()
-            yield postgres
-
-    @pytest.fixture(scope="class")
-    def redis_container(self):
-        """Start Redis container for caching."""
-        with RedisContainer("redis:7-alpine") as redis:
-            redis.start()
-            yield redis
+    def docker_services(self):
+        """Ensure Docker services are running."""
+        ensure_docker_services()
+        return {
+            "postgres_url": get_postgres_connection_string(),
+            "redis_url": get_redis_url(),
+        }
 
     @pytest.fixture
-    def db_config(self, postgres_container):
+    def db_config(self, docker_services):
         """Database configuration for tests."""
         return {
-            "connection_string": postgres_container.get_connection_url(),
+            "connection_string": docker_services["postgres_url"],
             "database_type": "postgresql",
         }
 
     @pytest.fixture
-    def cache_config(self, redis_container):
+    def cache_config(self, docker_services):
         """Cache configuration for tests."""
-        host, port = redis_container.get_exposed_port(6379).split(":")
         return {
-            "host": host,
-            "port": int(port),
+            "redis_url": docker_services["redis_url"],
             "ttl": 300,
         }
 

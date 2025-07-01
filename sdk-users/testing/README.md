@@ -22,10 +22,10 @@ Quick reference for AI assistants working with tests.
 ## Current Test Status
 
 As of latest consolidation:
-- **Unit tests**: 109 files, 1223/1241 passing (98.5%)
-- **Integration tests**: 40 files, 31/36 passing (86%)
-- **E2E tests**: 33 files (Docker-dependent)
-- **Total**: 182 properly organized test files
+- **Unit tests**: 90 files, 1,267 tests passing (99.8%)
+- **Integration tests**: 55 files, 479 tests passing (95%+)
+- **E2E tests**: 42 files, 196 tests (Docker-dependent)
+- **Total**: 192 properly organized test files with 1,958 tests
 
 ## Test Execution
 

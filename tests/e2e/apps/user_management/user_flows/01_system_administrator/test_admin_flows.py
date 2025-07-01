@@ -15,7 +15,7 @@ import pytest
 from apps.user_management.config.settings import UserManagementConfig
 from apps.user_management.main import UserManagementApp
 from kailash.runtime import LocalRuntime
-from kailash.workflows import WorkflowBuilder
+from kailash.workflow import WorkflowBuilder
 
 
 class TestSystemAdministratorFlows:
