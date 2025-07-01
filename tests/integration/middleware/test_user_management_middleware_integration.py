@@ -148,9 +148,7 @@ class TestUserManagementMiddlewareIntegration:
             }
         }
 
-        execution_id = await agent_ui.execute_workflow(
-            session_id, workflow_id, inputs=inputs
-        )
+        execution_id = await agent_ui.execute(session_id, workflow_id, inputs=inputs)
 
         # Poll for completion
         max_attempts = 30
@@ -237,7 +235,7 @@ class TestUserManagementMiddlewareIntegration:
             },
         }
 
-        exec_id = await agent_ui.execute_workflow(admin_session, workflow_id, inputs)
+        exec_id = await agent_ui.execute(admin_session, workflow_id, inputs)
 
         # Poll for completion
         status = None
@@ -370,7 +368,7 @@ class TestUserManagementMiddlewareIntegration:
             },
         }
 
-        exec_id = await agent_ui.execute_workflow(session_id, workflow_id, inputs)
+        exec_id = await agent_ui.execute(session_id, workflow_id, inputs)
 
         # Poll for completion
         status = None

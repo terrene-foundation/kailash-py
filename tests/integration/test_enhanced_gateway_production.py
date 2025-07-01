@@ -95,8 +95,15 @@ class TestEnhancedGatewayProduction:
         except Exception:
             pass
 
-        # Wait for any remaining async tasks
-        await asyncio.sleep(0.1)
+        # Wait for any remaining async tasks to complete
+        await asyncio.sleep(0.3)
+
+        # Give async cleanup tasks more time to finish
+        pending_tasks = [
+            t for t in asyncio.all_tasks() if not t.done() and not t.cancelled()
+        ]
+        if pending_tasks:
+            await asyncio.sleep(0.2)
 
     @pytest.mark.asyncio
     async def test_real_data_pipeline_with_ollama(self, production_gateway):
@@ -619,6 +626,9 @@ result = {
             for r in successful_workflows
         )
         assert not pool_exhausted, "Connection pool was exhausted"
+
+        # Cleanup - wait for resource cleanup tasks to complete
+        await asyncio.sleep(0.3)
 
     @pytest.mark.asyncio
     async def test_multi_tenant_isolation(self, production_gateway):

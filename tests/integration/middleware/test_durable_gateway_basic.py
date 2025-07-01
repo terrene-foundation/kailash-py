@@ -8,6 +8,7 @@ import asyncio
 import os
 import random
 import tempfile
+import warnings
 from typing import Any, Dict
 
 import httpx
@@ -18,6 +19,16 @@ from kailash.middleware.gateway.checkpoint_manager import CheckpointManager, Dis
 from kailash.middleware.gateway.durable_gateway import DurableAPIGateway
 from kailash.nodes.code import PythonCodeNode
 from kailash.workflow import WorkflowBuilder
+
+# Suppress WebSocket deprecation warnings from external libraries
+warnings.filterwarnings(
+    "ignore", message="websockets.legacy is deprecated", category=DeprecationWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message="websockets.server.WebSocketServerProtocol is deprecated",
+    category=DeprecationWarning,
+)
 
 
 class TestDurableGatewayBasic:
