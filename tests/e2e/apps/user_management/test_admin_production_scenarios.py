@@ -546,7 +546,7 @@ class TestAdminProductionScenarios:
             operation="bulk_create",
             tenant_id=self.tenant_id,
             database_config=self.db_config,
-            users=users_to_create,
+            users_data=users_to_create,
         )
 
         create_time = time.time() - start
@@ -590,7 +590,7 @@ class TestAdminProductionScenarios:
                 operation="search_users",
                 tenant_id=self.tenant_id,
                 database_config=self.db_config,
-                query=term,
+                search_query=term,
                 limit=50,
             )
             search_time = time.time() - start
