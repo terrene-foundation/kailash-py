@@ -71,6 +71,18 @@ class AdminTestHelper:
         conn_string = get_postgres_connection_string("postgres")
         conn = await asyncpg.connect(conn_string)
         try:
+            # First terminate any active connections to the test database
+            await conn.execute(
+                f"""
+                SELECT pg_terminate_backend(pg_stat_activity.pid)
+                FROM pg_stat_activity
+                WHERE pg_stat_activity.datname = '{db_name}'
+                AND pid <> pg_backend_pid()
+            """
+            )
+            # Small delay to ensure connections are terminated
+            await asyncio.sleep(0.1)
+            # Now drop the database
             await conn.execute(f"DROP DATABASE IF EXISTS {db_name}")
         finally:
             await conn.close()

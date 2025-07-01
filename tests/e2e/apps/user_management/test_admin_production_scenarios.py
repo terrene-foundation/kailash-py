@@ -68,8 +68,8 @@ class TestAdminProductionScenarios:
         # Initialize admin nodes
         self.user_node = UserManagementNode()
         self.role_node = RoleManagementNode()
-        self.perm_node = PermissionManagementNode()
-        self.audit_node = AuditLogNode()
+        self.perm_node = PermissionCheckNode()  # Use PermissionCheckNode instead
+        self.audit_node = EnterpriseAuditLogNode()
 
         yield
 
