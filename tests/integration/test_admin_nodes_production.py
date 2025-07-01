@@ -44,6 +44,7 @@ from tests.utils.docker_config import (
 
 @pytest.mark.integration
 @pytest.mark.requires_docker
+@pytest.mark.slow
 class TestAdminNodesProduction:
     """Production integration tests for admin nodes with full infrastructure."""
 

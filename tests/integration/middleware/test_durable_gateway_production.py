@@ -51,6 +51,7 @@ REDIS_CONFIG = {
 }
 
 
+@pytest.mark.slow
 class TestDurableGatewayProduction:
     """Production-quality integration tests for Durable Gateway."""
 

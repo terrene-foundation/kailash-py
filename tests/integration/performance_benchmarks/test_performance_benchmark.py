@@ -23,6 +23,7 @@ import pytest
 from kailash.nodes.monitoring.performance_benchmark import PerformanceBenchmarkNode
 
 
+@pytest.mark.slow
 class TestPerformanceBenchmarkNode:
     """Test suite for PerformanceBenchmarkNode."""
 
@@ -618,6 +619,7 @@ class TestPerformanceBenchmarkNode:
 
 
 @pytest.mark.asyncio
+@pytest.mark.slow
 class TestPerformanceBenchmarkNodeAsync:
     """Test asynchronous operations if supported."""
 

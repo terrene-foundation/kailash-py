@@ -84,9 +84,19 @@ class TestEnhancedGatewayProduction:
 
         yield gateway
 
-        # Cleanup
-        await registry.cleanup()
-        await gateway.shutdown()
+        # Cleanup - wait for all tasks to complete
+        try:
+            await gateway.shutdown()
+        except Exception:
+            pass
+
+        try:
+            await registry.cleanup()
+        except Exception:
+            pass
+
+        # Wait for any remaining async tasks
+        await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_real_data_pipeline_with_ollama(self, production_gateway):

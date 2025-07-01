@@ -20,6 +20,7 @@ from kailash.sdk_exceptions import NodeExecutionError
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.slow
 class TestConnectionPoolProduction:
     """Production-grade integration tests with demanding scenarios."""
 
