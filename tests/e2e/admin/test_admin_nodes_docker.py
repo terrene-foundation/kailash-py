@@ -105,9 +105,6 @@ class TestAdminNodesDockerIntegration:
         loop.run_until_complete(AdminTestHelper.drop_test_database(self.test_db))
         loop.close()
 
-    @pytest.mark.skip(
-        reason="Complex workflow needs refactoring for new admin node API"
-    )
     @pytest.mark.asyncio
     async def test_complete_admin_workflow_with_real_database(self):
         """Test complete admin workflow with real PostgreSQL database."""
@@ -177,16 +174,28 @@ result = {{"status": "schema_initialized", "database": "{self.test_db}"}}
         )
         workflow.add_node("schema_init", schema_init)
 
-        # User management node
-        user_mgmt = UserManagementNode(database_url=self.conn_string)
+        # User management node with configuration
+        user_mgmt = UserManagementNode(
+            operation="bulk_create",
+            tenant_id="test_tenant",
+            database_config={"connection_string": self.conn_string},
+        )
         workflow.add_node("user_mgmt", user_mgmt)
 
-        # Role management node
-        role_mgmt = RoleManagementNode(database_url=self.conn_string)
+        # Role management node with configuration
+        role_mgmt = RoleManagementNode(
+            operation="list_roles",
+            tenant_id="test_tenant",
+            database_config={"connection_string": self.conn_string},
+        )
         workflow.add_node("role_mgmt", role_mgmt)
 
-        # Permission check node
-        perm_check = PermissionCheckNode(database_url=self.conn_string)
+        # Permission check node with configuration
+        perm_check = PermissionCheckNode(
+            operation="batch_check",
+            tenant_id="test_tenant",
+            database_config={"connection_string": self.conn_string},
+        )
         workflow.add_node("perm_check", perm_check)
 
         # Test data generator
@@ -234,7 +243,7 @@ for user_data in users:
 result = {
     'created_count': len(created_users),
     'failed_count': len(failed_users),
-    'users_to_create': users
+    'users_data': users
 }
 """,
         )
@@ -322,7 +331,7 @@ result = {
 
         # User creation flow
         workflow.connect(
-            "batch_creator", "user_mgmt", mapping={"users_to_create": "users_to_create"}
+            "batch_creator", "user_mgmt", mapping={"users_data": "users_data"}
         )
 
         # Permission check flow
@@ -338,33 +347,11 @@ result = {
             "perm_check", "aggregator", mapping={"results": "permission_results"}
         )
 
-        # Execute workflow with required parameters
+        # Execute workflow
         runtime = LocalRuntime()
         results, run_id = await runtime.execute_async(
             workflow,
             {
-                "user_mgmt": {
-                    "operation": "bulk_create",
-                    "tenant_id": "test_tenant",
-                    "users_to_create": [],  # Will be provided by the batch_creator node
-                    "database_config": {
-                        "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test"
-                    },
-                },
-                "role_mgmt": {
-                    "operation": "list_roles",
-                    "tenant_id": "test_tenant",
-                    "database_config": {
-                        "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test"
-                    },
-                },
-                "perm_check": {
-                    "operation": "batch_check",
-                    "permission_checks": [],  # Will be provided by the perm_tester node
-                    "database_config": {
-                        "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test"
-                    },
-                },
                 "aggregator": {"conn_string": self.conn_string},
             },
         )
@@ -382,9 +369,6 @@ result = {
         role_counts = {r["role"]: r["count"] for r in role_dist}
         assert all(role in role_counts for role in ["admin", "editor", "viewer"])
 
-    @pytest.mark.skip(
-        reason="Complex workflow needs refactoring for new admin node API"
-    )
     @pytest.mark.asyncio
     async def test_concurrent_admin_operations_with_load(self):
         """Test admin operations under concurrent load."""
@@ -572,13 +556,15 @@ result = {
         workflow.connect("schema_init", "concurrent_gen")
         workflow.connect("concurrent_gen", "perf_monitor", mapping={"users": "users"})
 
-        # Create admin nodes
-        user_mgmt = UserManagementNode(database_url=self.conn_string)
+        # Create admin node with configuration
+        user_mgmt = UserManagementNode(
+            operation="bulk_create",
+            tenant_id="test_tenant",
+            database_config={"connection_string": self.conn_string},
+        )
         workflow.add_node("user_mgmt", user_mgmt)
 
-        workflow.connect(
-            "perf_monitor", "user_mgmt", mapping={"users": "users_to_create"}
-        )
+        workflow.connect("concurrent_gen", "user_mgmt", mapping={"users": "users_data"})
         workflow.connect(
             "perf_monitor",
             "analyzer",
@@ -601,9 +587,6 @@ result = {
             len(results["analyzer"]["role_performance"]) == 3
         )  # admin, editor, viewer
 
-    @pytest.mark.skip(
-        reason="Complex workflow needs refactoring for new admin node API"
-    )
     @pytest.mark.asyncio
     async def test_multi_tenant_isolation_with_cycles(self):
         """Test multi-tenant data isolation with cyclic permission checks."""
@@ -720,7 +703,9 @@ result = {
                 scenarios = kwargs.get("scenarios", [])
                 access_tests = kwargs.get("access_tests", [])
                 quality_threshold = kwargs.get("quality_threshold", 0.95)
-                conn_string = kwargs.get("conn_string", self.conn_string)
+                conn_string = kwargs.get(
+                    "conn_string", getattr(self, "conn_string", "")
+                )
 
                 context = kwargs.get("context", {})
                 iteration = self.get_iteration(context)
