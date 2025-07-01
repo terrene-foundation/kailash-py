@@ -40,17 +40,32 @@ class TestUserManagementMiddlewareIntegration:
 
         db_node = SQLDatabaseNode(connection_string=db_url)
 
-        # Clean up existing test users
-        cleanup_queries = [
-            "DELETE FROM users WHERE email LIKE '%@example.com'",
-            "DELETE FROM roles WHERE name = 'data_analyst'",
-        ]
+        # Initialize admin schema for user management tests
+        from kailash.nodes.admin.schema_manager import AdminSchemaManager
 
-        for query in cleanup_queries:
-            try:
-                db_node.execute(query=query, operation="execute")
-            except Exception:
-                pass  # Table might not exist yet
+        schema_manager = AdminSchemaManager({"connection_string": db_url})
+        try:
+            # Drop existing tables to ensure clean state
+            drop_queries = [
+                "DROP TABLE IF EXISTS users CASCADE",
+                "DROP TABLE IF EXISTS roles CASCADE",
+                "DROP TABLE IF EXISTS permissions CASCADE",
+                "DROP TABLE IF EXISTS user_roles CASCADE",
+                "DROP TABLE IF EXISTS role_permissions CASCADE",
+                "DROP TABLE IF EXISTS user_sessions CASCADE",
+                "DROP TABLE IF EXISTS audit_log CASCADE",
+            ]
+            for query in drop_queries:
+                try:
+                    db_node.execute(query=query, operation="execute")
+                except Exception:
+                    pass
+
+            # Create fresh admin schema
+            schema_manager.create_full_schema(drop_existing=True)
+        except Exception as e:
+            # If schema creation fails, the test should fail
+            raise Exception(f"Failed to initialize admin schema: {e}")
 
         # Create agent UI middleware
         agent_ui = AgentUIMiddleware(
@@ -80,7 +95,11 @@ class TestUserManagementMiddlewareIntegration:
         # Wait a bit for async tasks to complete
         await asyncio.sleep(0.1)
 
-        # Cleanup database
+        # Cleanup database - remove test data
+        cleanup_queries = [
+            "DELETE FROM users WHERE email LIKE '%@example.com'",
+            "DELETE FROM roles WHERE name = 'data_analyst'",
+        ]
         for query in cleanup_queries:
             try:
                 db_node.execute(query=query, operation="execute")
