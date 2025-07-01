@@ -150,15 +150,17 @@ docker-compose -f docker-compose.test.yml ps
 
 ### Running Tests by Tier
 ```bash
-# Tier 1 - Unit tests (no Docker needed)
-pytest tests/unit -m "not slow"
+# Tier 1 - Unit tests (ALL unit tests - no exclusions)
+pytest tests/unit/
 
-# Tier 2 - Integration tests (Docker required)
-pytest tests/integration
+# Tier 2 - Integration tests (ALL integration tests - no exclusions)
+pytest tests/integration/
 
-# Tier 3 - E2E tests (full infrastructure)
-pytest tests/e2e
+# Tier 3 - E2E tests (ALL e2e tests - no exclusions)
+pytest tests/e2e/
 ```
+
+**IMPORTANT**: Do NOT use marker exclusions like `-m "not requires_docker"`. This creates "zombie tests" that never run, violating our zero-skip policy. If a test requires Docker, ensure Docker is running.
 
 ## Debugging Failed Tests
 

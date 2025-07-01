@@ -45,6 +45,7 @@ Mock API:   Port 8888 (kailash_sdk_test_mock_api) 🆕
 - ✅ Fixed test file organization
 - ✅ Replaced mocking with real Docker services
 - ✅ Added proper error messages for missing infrastructure
+- ⚠️ Identified marker exclusions creating "zombie tests" - NO exclusions allowed
 
 ### 2. Infrastructure Enhancements
 - Added comprehensive mock API server with:
@@ -69,10 +70,10 @@ Mock API:   Port 8888 (kailash_sdk_test_mock_api) 🆕
 - **Notes**: All unit tests running successfully without Docker dependencies
 
 ### Tier 2 - Integration Tests
-- **Status**: ✅ PASSED
-- **Tests**: 308 tests collected (126 deselected by markers)
-- **Duration**: ~5-10 minutes
-- **Notes**: All integration tests using real Docker services (PostgreSQL, Redis, Mock API)
+- **Status**: ⚠️ IN PROGRESS
+- **Tests**: 434 tests total (NO exclusions allowed per zero-skip policy)
+- **Duration**: ~10-15 minutes
+- **Notes**: ALL integration tests must run - marker exclusions create "zombie tests"
 
 ### Tier 3 - E2E Tests
 - **Status**: ⚠️ PARTIAL (5 failures in user management app)
@@ -99,18 +100,20 @@ Mock API:   Port 8888 (kailash_sdk_test_mock_api) 🆕
 ## Test Execution Commands
 
 ```bash
-# Tier 1 - Unit Tests (Fast, No Docker)
-pytest tests/unit -m "not (slow or integration or e2e or requires_docker or requires_redis or requires_ollama)"
+# Tier 1 - Unit Tests (ALL unit tests)
+pytest tests/unit/
 
-# Tier 2 - Integration Tests (With Docker)
-pytest tests/integration -m "not (slow or e2e or requires_docker or requires_redis or requires_ollama)"
+# Tier 2 - Integration Tests (ALL integration tests - Docker MUST be running)
+pytest tests/integration/
 
-# Tier 3 - E2E Tests (Full Scenarios)
-pytest tests/e2e
+# Tier 3 - E2E Tests (ALL e2e tests - Full infrastructure required)
+pytest tests/e2e/
 
 # All Tests
 pytest tests/
 ```
+
+**⚠️ IMPORTANT**: NO marker exclusions! Tests requiring Docker/Redis/Ollama must have those services running. Excluding tests with markers violates the zero-skip policy.
 
 ## Regression Testing Strategy
 
