@@ -166,13 +166,9 @@ class TestCyclePatternsE2E:
 
         # Connect with cycle for retry logic
         workflow.connect("reader", "processor", mapping={"data": "data"})
-        workflow.connect(
-            "processor",
-            "processor",
-            cycle=True,
-            max_iterations=5,
-            convergence_check="should_retry == False",
-        )
+        workflow.create_cycle("retry_cycle").connect(
+            "processor", "processor"
+        ).max_iterations(5).converge_when("should_retry == False").build()
 
         runtime = LocalRuntime()
         start_time = time.time()
@@ -299,13 +295,9 @@ class TestCyclePatternsE2E:
 
         api_client = MockAPIClientNode()
         workflow.add_node("api_client", api_client)
-        workflow.connect(
-            "api_client",
-            "api_client",
-            cycle=True,
-            max_iterations=12,
-            convergence_check="should_continue == False",
-        )
+        workflow.create_cycle("api_polling_cycle").connect(
+            "api_client", "api_client"
+        ).max_iterations(12).converge_when("should_continue == False").build()
 
         runtime = LocalRuntime()
         start_time = time.time()
@@ -518,25 +510,17 @@ class TestCyclePatternsE2E:
 
         # Connect pipeline with cycles
         workflow.connect("reader", "validator", mapping={"data": "data"})
-        workflow.connect(
-            "validator",
-            "validator",
-            cycle=True,
-            max_iterations=3,
-            convergence_check="should_retry == False",
-        )
+        workflow.create_cycle("validation_retry").connect(
+            "validator", "validator"
+        ).max_iterations(3).converge_when("should_retry == False").build()
         workflow.connect(
             "validator",
             "enricher",
             mapping={"valid_records": "valid_records"},
         )
-        workflow.connect(
-            "enricher",
-            "enricher",
-            cycle=True,
-            max_iterations=10,
-            convergence_check="all_processed == True",
-        )
+        workflow.create_cycle("enrichment_cycle").connect(
+            "enricher", "enricher"
+        ).max_iterations(10).converge_when("all_processed == True").build()
         workflow.connect("enricher", "writer", mapping={"enriched_records": "data"})
 
         runtime = LocalRuntime()

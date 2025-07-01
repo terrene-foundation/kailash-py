@@ -247,6 +247,7 @@ result = {
 # Analyze content quality and perform content intelligence
 import re
 import json
+import time
 
 ollama = await get_resource("ollama")
 
@@ -259,7 +260,7 @@ content_insights = {
     "total_analysis_time": 0
 }
 
-analysis_start = asyncio.get_event_loop().time()
+analysis_start = time.time()
 
 for item in generated_content:
     content = item["generated_content"]
@@ -375,7 +376,7 @@ for item in generated_content:
         }
         quality_analysis.append(quality_item)
 
-content_insights["total_analysis_time"] = asyncio.get_event_loop().time() - analysis_start
+content_insights["total_analysis_time"] = time.time() - analysis_start
 
 # Calculate aggregate quality metrics
 total_scores = {"structure": 0, "length_appropriateness": 0, "content_presence": 0}
