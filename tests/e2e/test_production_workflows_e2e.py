@@ -73,15 +73,21 @@ class TestProductionWorkflowsE2E:
 
     async def setup_method_async(self):
         """Async setup for each test method."""
-        # Ensure services are available
-        services_ready = await ensure_docker_services()
-        if not services_ready:
-            pytest.skip("Docker services not available")
+        # Ensure services are available by directly trying to connect
+        # PostgreSQL check
+        node = SQLDatabaseNode(connection_string=self.db_config["connection_string"])
+        node.execute(query="SELECT 1", operation="select")
 
-        # Check Ollama model
-        model_ready = await check_ollama_model("llama2")
-        if not model_ready:
-            pytest.skip("Ollama model not available")
+        # Redis check
+        import redis
+
+        r = redis.Redis.from_url(self.redis_config["redis_url"])
+        r.ping()
+
+        # Ollama check
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.ollama_config['base_url']}/api/tags")
+            assert response.status_code == 200, "Ollama must be available"
 
         # Set up resource registry
         self.registry = ResourceRegistry()
@@ -110,7 +116,7 @@ class TestProductionWorkflowsE2E:
         )
 
         # Initialize runtime
-        self.runtime = AsyncLocalRuntime(
+        self.runtime = LocalRuntime(
             max_workers=20,
             enable_monitoring=True,
             enable_checkpointing=True,
@@ -481,7 +487,7 @@ try:
 
     # Extract numeric score (simplified)
     import re
-    numbers = re.findall(r'\d+', score_text)
+    numbers = re.findall(r'\\d+', score_text)
     score = int(numbers[0]) if numbers else 75  # Default score
 
     result = {

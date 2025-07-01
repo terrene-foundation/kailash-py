@@ -52,20 +52,14 @@ class TestAdminNodesProduction:
     def check_infrastructure(self):
         """Check Docker infrastructure availability."""
         # Check PostgreSQL synchronously
-        try:
-            db_node = SQLDatabaseNode(name="test", **DATABASE_CONFIG)
-            db_node.run(query="SELECT 1", operation="select")
-        except Exception as e:
-            pytest.skip(f"PostgreSQL not available: {e}")
+        db_node = SQLDatabaseNode(name="test", **DATABASE_CONFIG)
+        db_node.run(query="SELECT 1", operation="select")
 
         # Check Redis
-        try:
-            import redis
+        import redis
 
-            r = redis.Redis(**REDIS_CONFIG)
-            r.ping()
-        except Exception as e:
-            pytest.skip(f"Redis not available: {e}")
+        r = redis.Redis(**REDIS_CONFIG)
+        r.ping()
 
     def setup_method(self):
         """Set up test environment."""
@@ -84,11 +78,8 @@ class TestAdminNodesProduction:
 
         # Initialize schema manager and create schema
         self.schema_manager = AdminSchemaManager(self.db_config)
-        try:
-            result = self.schema_manager.create_full_schema(drop_existing=True)
-            assert result.get("success", False), f"Schema creation failed: {result}"
-        except Exception as e:
-            pytest.skip(f"Could not create schema: {e}")
+        result = self.schema_manager.create_full_schema(drop_existing=True)
+        assert result.get("success", False), f"Schema creation failed: {result}"
 
         # Create test tenant IDs
         self.tenant_a = f"tenant_a_{int(time.time())}"
@@ -451,13 +442,10 @@ class TestAdminNodesProduction:
     def test_enterprise_scenario_with_ollama(self):
         """Test enterprise scenario with AI-generated test data using Ollama."""
         # Check if Ollama is available
-        try:
-            llm_agent = LLMAgentNode(
-                model="mistral:latest",
-                api_config={"base_url": "http://localhost:11434"},
-            )
-        except Exception:
-            pytest.skip("Ollama not available for AI data generation")
+        llm_agent = LLMAgentNode(
+            model="mistral:latest",
+            api_config={"base_url": "http://localhost:11434"},
+        )
 
         # Create workflow with AI data generation
         workflow = WorkflowBuilder.from_dict(

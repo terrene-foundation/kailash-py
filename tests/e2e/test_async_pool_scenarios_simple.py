@@ -156,15 +156,13 @@ else:
         assert pool_health["success_rate"] == 1.0
         assert pool_health["performance_acceptable"] is True
 
-    @pytest.mark.skip(reason="aioredis not installed in test environment")
     async def test_redis_pool_simple_operations(self):
         """Test Redis connection pool with simple operations."""
         builder = AsyncWorkflowBuilder("redis_pool_simple")
 
-        # Redis pool operations
+        # Redis pool operations - using synchronous redis since aioredis not installed
         redis_pool_code = f"""
-import asyncio
-import aioredis
+import redis
 import time
 
 # Redis configuration
@@ -179,7 +177,7 @@ operations_completed = []
 
 try:
     # Create Redis connection pool
-    redis_client = await aioredis.from_url(f"redis://{{redis_config['host']}}:{{redis_config['port']}}", decode_responses=True)
+    redis_client = redis.from_url(f"redis://{{redis_config['host']}}:{{redis_config['port']}}", decode_responses=True)
 
     # Test basic Redis operations
     operations = [
@@ -196,11 +194,11 @@ try:
         op_start = time.time()
 
         if operation[0] == "set":
-            result = await redis_client.set(operation[1], operation[2])
+            result = redis_client.set(operation[1], operation[2])
         elif operation[0] == "get":
-            result = await redis_client.get(operation[1])
+            result = redis_client.get(operation[1])
         elif operation[0] == "incr":
-            result = await redis_client.incr(operation[1])
+            result = redis_client.incr(operation[1])
 
         op_time = time.time() - op_start
         operations_completed.append({{
@@ -211,8 +209,8 @@ try:
         }})
 
     # Cleanup test keys
-    await redis_client.delete("test_key_1", "test_key_2", "counter_test")
-    await redis_client.close()
+    redis_client.delete("test_key_1", "test_key_2", "counter_test")
+    redis_client.close()
 
     total_time = time.time() - start_time
 
@@ -276,8 +274,17 @@ else:
     }
 """
 
-        builder.add_async_code("redis_operations", redis_pool_code)
-        builder.add_async_code("redis_validation", validation_code)
+        # Use regular PythonCodeNode since we're using sync redis
+        from kailash.nodes.code import PythonCodeNode
+
+        builder.add_node(
+            PythonCodeNode(name="redis_operations", code=redis_pool_code),
+            "redis_operations",
+        )
+        builder.add_node(
+            PythonCodeNode(name="redis_validation", code=validation_code),
+            "redis_validation",
+        )
 
         builder.add_connection(
             "redis_operations", "result", "redis_validation", "redis_operations"
@@ -308,16 +315,15 @@ else:
         performance = validation_result["performance_metrics"]
         assert performance["performance_grade"] in ["excellent", "good"]
 
-    @pytest.mark.skip(reason="aioredis not installed in test environment")
     async def test_mixed_pool_coordination(self):
         """Test coordination between multiple pool types."""
         builder = AsyncWorkflowBuilder("mixed_pool_coordination")
 
-        # Coordinated pool operations
+        # Coordinated pool operations - using hybrid approach
         coordination_code = f'''
 import asyncio
 import asyncpg
-import aioredis
+import redis
 import json
 import time
 
@@ -336,7 +342,7 @@ try:
         max_size=3
     )
 
-    redis_client = await aioredis.from_url("redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}", decode_responses=True)
+    redis_client = redis.from_url("redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}", decode_responses=True)
 
     # Coordinated operations scenario
     coordination_log.append({{"step": "pools_initialized", "timestamp": time.time()}})
@@ -360,11 +366,11 @@ try:
 
     # Step 2: Cache reference in Redis
     cache_key = f"coordination_test:{{result_id}}"
-    await redis_client.set(cache_key, json.dumps({{"db_id": result_id, "cached_at": time.time()}}))
+    redis_client.set(cache_key, json.dumps({{"db_id": result_id, "cached_at": time.time()}}))
     coordination_log.append({{"step": "reference_cached", "cache_key": cache_key, "timestamp": time.time()}})
 
     # Step 3: Retrieve via cache then database
-    cached_data = await redis_client.get(cache_key)
+    cached_data = redis_client.get(cache_key)
     cache_info = json.loads(cached_data)
     coordination_log.append({{"step": "cache_retrieved", "cache_info": cache_info, "timestamp": time.time()}})
 
@@ -376,11 +382,11 @@ try:
         coordination_log.append({{"step": "db_data_retrieved", "db_data": dict(db_data), "timestamp": time.time()}})
 
     # Step 4: Cleanup
-    await redis_client.delete(cache_key)
+    redis_client.delete(cache_key)
     coordination_log.append({{"step": "cache_cleaned", "timestamp": time.time()}})
 
     await db_pool.close()
-    await redis_client.close()
+    redis_client.close()
 
     total_time = time.time() - start_time
 

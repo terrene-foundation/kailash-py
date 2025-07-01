@@ -54,9 +54,10 @@ class TestDockerProductionIntegration:
 
                     # Set up test schema and data
                     await self._setup_test_data()
-
                 except ImportError:
-                    pytest.skip("asyncpg not available for PostgreSQL testing")
+                    raise ImportError(
+                        "asyncpg must be installed for PostgreSQL testing"
+                    )
 
             async def _setup_test_data(self):
                 """Set up realistic test data."""
@@ -382,37 +383,29 @@ result = {
                 await super().setUp()
 
                 # Create real Redis instance
-                try:
-                    import docker
+                import docker
 
-                    client = docker.from_env()
+                client = docker.from_env()
 
-                    # Start Redis container
-                    self.redis_container = client.containers.run(
-                        "redis:7-alpine",
-                        ports={"6379/tcp": None},
-                        detach=True,
-                        remove=False,
-                    )
+                # Start Redis container
+                self.redis_container = client.containers.run(
+                    "redis:7-alpine",
+                    ports={"6379/tcp": None},
+                    detach=True,
+                    remove=False,
+                )
 
-                    # Get assigned port
-                    self.redis_container.reload()
-                    redis_port = int(
-                        self.redis_container.ports["6379/tcp"][0]["HostPort"]
-                    )
+                # Get assigned port
+                self.redis_container.reload()
+                redis_port = int(self.redis_container.ports["6379/tcp"][0]["HostPort"])
 
-                    # Wait for Redis to be ready
-                    await asyncio.sleep(2)
+                # Wait for Redis to be ready
+                await asyncio.sleep(2)
 
-                    import aioredis
+                import aioredis
 
-                    self.redis_client = aioredis.from_url(
-                        f"redis://localhost:{redis_port}"
-                    )
-                    await self.create_test_resource("cache", lambda: self.redis_client)
-
-                except (ImportError, Exception) as e:
-                    pytest.skip(f"Redis testing not available: {e}")
+                self.redis_client = aioredis.from_url(f"redis://localhost:{redis_port}")
+                await self.create_test_resource("cache", lambda: self.redis_client)
 
             async def test_high_throughput_caching_workflow(self):
                 """Test high-throughput caching with real Redis."""
@@ -664,54 +657,42 @@ result = {
                     password="target_pass",
                 )
 
-                try:
-                    import asyncpg
+                import asyncpg
 
-                    import docker
+                import docker
 
-                    # Connect to databases
-                    self.source_conn = await asyncpg.connect(
-                        self.source_db.connection_string
-                    )
-                    self.target_conn = await asyncpg.connect(
-                        self.target_db.connection_string
-                    )
+                # Connect to databases
+                self.source_conn = await asyncpg.connect(
+                    self.source_db.connection_string
+                )
+                self.target_conn = await asyncpg.connect(
+                    self.target_db.connection_string
+                )
 
-                    # Set up Redis for caching
-                    client = docker.from_env()
-                    self.redis_container = client.containers.run(
-                        "redis:7-alpine",
-                        ports={"6379/tcp": None},
-                        detach=True,
-                        remove=False,
-                    )
+                # Set up Redis for caching
+                client = docker.from_env()
+                self.redis_container = client.containers.run(
+                    "redis:7-alpine",
+                    ports={"6379/tcp": None},
+                    detach=True,
+                    remove=False,
+                )
 
-                    self.redis_container.reload()
-                    redis_port = int(
-                        self.redis_container.ports["6379/tcp"][0]["HostPort"]
-                    )
-                    await asyncio.sleep(2)
+                self.redis_container.reload()
+                redis_port = int(self.redis_container.ports["6379/tcp"][0]["HostPort"])
+                await asyncio.sleep(2)
 
-                    import aioredis
+                import aioredis
 
-                    self.redis_client = aioredis.from_url(
-                        f"redis://localhost:{redis_port}"
-                    )
+                self.redis_client = aioredis.from_url(f"redis://localhost:{redis_port}")
 
-                    # Register resources
-                    await self.create_test_resource(
-                        "source_db", lambda: self.source_conn
-                    )
-                    await self.create_test_resource(
-                        "target_db", lambda: self.target_conn
-                    )
-                    await self.create_test_resource("cache", lambda: self.redis_client)
+                # Register resources
+                await self.create_test_resource("source_db", lambda: self.source_conn)
+                await self.create_test_resource("target_db", lambda: self.target_conn)
+                await self.create_test_resource("cache", lambda: self.redis_client)
 
-                    # Set up source data
-                    await self._setup_migration_data()
-
-                except ImportError as e:
-                    pytest.skip(f"Required dependencies not available: {e}")
+                # Set up source data
+                await self._setup_migration_data()
 
             async def _setup_migration_data(self):
                 """Set up complex source data for migration."""

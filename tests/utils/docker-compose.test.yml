@@ -123,6 +123,28 @@ services:
         reservations:
           memory: 512M
 
+  # Mock API Server - Port 8888 (LOCKED-IN)
+  mock-api:
+    build:
+      context: ../../docker/mock-api-server
+      dockerfile: Dockerfile
+    container_name: kailash_sdk_test_mock_api
+    ports:
+      - "8888:8888"
+    environment:
+      - PORT=8888
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
 volumes:
   kailash_sdk_postgres_data:
   kailash_sdk_mysql_data:

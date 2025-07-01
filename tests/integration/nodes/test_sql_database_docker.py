@@ -74,7 +74,6 @@ class TestSQLDatabaseWithDocker:
             "POSTGRES_TEST_URL",
             "postgresql://test_user:test_password@localhost:5434/kailash_test",
         )
-        # No skipping - we have a default PostgreSQL setup
 
         node = SQLDatabaseNode(connection_string=connection_string)
 
@@ -148,7 +147,6 @@ class TestSQLDatabaseWithDocker:
             "MYSQL_TEST_URL",
             "mysql+pymysql://kailash_test:test_password@localhost:3307/kailash_test",
         )
-        # No skipping - we have a default MySQL setup
 
         node = SQLDatabaseNode(connection_string=connection_string)
 
@@ -251,7 +249,6 @@ class TestSQLDatabaseWithDocker:
             "POSTGRES_TEST_URL",
             "postgresql://test_user:test_password@localhost:5434/kailash_test",
         )
-        # No skipping - we have a default PostgreSQL setup
 
         node = AsyncSQLDatabaseNode(connection_string=connection_string)
 
