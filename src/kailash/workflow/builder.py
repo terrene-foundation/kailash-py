@@ -162,6 +162,44 @@ class WorkflowBuilder:
 
         logger.info(f"Connected '{from_node}.{from_output}' to '{to_node}.{to_input}'")
 
+    def connect(
+        self, from_node: str, to_node: str, mapping: dict = None, 
+        from_output: str = None, to_input: str = None
+    ) -> None:
+        """
+        Connect two nodes in the workflow with flexible parameter formats.
+        
+        This method provides a more intuitive API for connecting nodes and supports
+        both simple connections and complex mapping-based connections.
+        
+        Args:
+            from_node: Source node ID
+            to_node: Target node ID  
+            mapping: Dict mapping from_output to to_input (e.g., {"data": "input"})
+            from_output: Single output field (alternative to mapping)
+            to_input: Single input field (alternative to mapping)
+        
+        Examples:
+            # Simple connection
+            workflow.connect("node1", "node2", from_output="data", to_input="input")
+            
+            # Mapping-based connection
+            workflow.connect("node1", "node2", mapping={"data": "input"})
+            
+            # Default data flow
+            workflow.connect("node1", "node2")  # Uses "data" -> "data"
+        """
+        if mapping:
+            # Handle mapping-based connections
+            for from_out, to_in in mapping.items():
+                self.add_connection(from_node, from_out, to_node, to_in)
+        elif from_output and to_input:
+            # Handle explicit parameter connections
+            self.add_connection(from_node, from_output, to_node, to_input)
+        else:
+            # Default data flow
+            self.add_connection(from_node, "data", to_node, "data")
+
     def set_metadata(self, **kwargs) -> "WorkflowBuilder":
         """
         Set workflow metadata.

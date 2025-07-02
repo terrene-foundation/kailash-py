@@ -530,12 +530,15 @@ class UserManagementNode(Node):
                 ],
             )
 
-            # Get the created user to return complete data
-            created_user = self._get_user_by_id(user.user_id, tenant_id)
+            # Return the user data that was successfully inserted
+            # Add timestamps that would be set by the database
+            user_dict = user.to_dict()
+            user_dict["created_at"] = datetime.now(UTC).isoformat()
+            user_dict["updated_at"] = datetime.now(UTC).isoformat()
 
             return {
                 "result": {
-                    "user": created_user.to_dict(),
+                    "user": user_dict,
                     "operation": "create_user",
                     "timestamp": datetime.now(UTC).isoformat(),
                 }

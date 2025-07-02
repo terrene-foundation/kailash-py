@@ -722,30 +722,45 @@ class PermissionCheckNode(Node):
 
     def _get_user_context(self, user_id: str, tenant_id: str) -> Optional[UserContext]:
         """Get user context for permission evaluation."""
-        # Query user data from unified admin schema
-        query = """
-        SELECT user_id, email, roles, attributes, status, tenant_id
+        # Query user data and assigned roles from unified admin schema
+        user_query = """
+        SELECT user_id, email, attributes, status, tenant_id
         FROM users
         WHERE user_id = $1 AND tenant_id = $2 AND status = 'active'
         """
 
+        # Get assigned roles from user_role_assignments table
+        roles_query = """
+        SELECT role_id
+        FROM user_role_assignments
+        WHERE user_id = $1 AND tenant_id = $2 AND is_active = true
+        """
+
         try:
-            result = self._db_node.run(
-                query=query, parameters=[user_id, tenant_id], result_format="dict"
+            # Get user data
+            user_result = self._db_node.run(
+                query=user_query, parameters=[user_id, tenant_id], result_format="dict"
             )
 
-            # Handle the corrected result structure
-            user_rows = result.get("data", [])
+            user_rows = user_result.get("data", [])
             if not user_rows:
                 return None
 
             user_data = user_rows[0]
 
+            # Get assigned roles
+            roles_result = self._db_node.run(
+                query=roles_query, parameters=[user_id, tenant_id], result_format="dict"
+            )
+
+            role_rows = roles_result.get("data", [])
+            assigned_roles = [row["role_id"] for row in role_rows]
+
             return UserContext(
                 user_id=user_data["user_id"],
                 tenant_id=user_data["tenant_id"],
                 email=user_data["email"],
-                roles=user_data.get("roles", []),
+                roles=assigned_roles,
                 attributes=user_data.get("attributes", {}),
             )
         except Exception as e:
