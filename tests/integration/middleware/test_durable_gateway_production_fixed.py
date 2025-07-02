@@ -1,0 +1,296 @@
+"""Fixed production-quality integration tests for Durable Gateway.
+
+This version fixes the async/await issues in PythonCodeNode by using proper
+workflow patterns with SQLDatabaseNode and other SDK components.
+"""
+
+import asyncio
+import json
+import os
+import random
+import tempfile
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+
+import httpx
+import pytest
+import pytest_asyncio
+
+from kailash.middleware.gateway.checkpoint_manager import CheckpointManager, DiskStorage
+from kailash.middleware.gateway.durable_gateway import DurableAPIGateway
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.data import SQLDatabaseNode
+from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
+from kailash.workflow import WorkflowBuilder
+
+# Production test configuration
+POSTGRES_CONFIG = {
+    "database_type": "postgresql",
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "port": int(os.getenv("POSTGRES_PORT", 5434)),
+    "database": os.getenv("POSTGRES_DB", "kailash_test"),
+    "user": os.getenv("POSTGRES_USER", "test_user"),
+    "password": os.getenv("POSTGRES_PASSWORD", "test_password"),
+}
+
+OLLAMA_CONFIG = {
+    "base_url": "http://localhost:11434",
+    "model": "llama3.2:3b",
+}
+
+REDIS_CONFIG = {
+    "host": os.getenv("REDIS_HOST", "localhost"),
+    "port": int(os.getenv("REDIS_PORT", 6380)),
+    "db": 0,
+}
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+class TestDurableGatewayProductionFixed:
+    """Fixed production tests using proper SDK patterns."""
+
+    @pytest_asyncio.fixture
+    async def gateway(self):
+        """Create a production-grade durable gateway with real infrastructure."""
+        # Initialize checkpoint storage
+        checkpoint_dir = tempfile.mkdtemp()
+        storage = DiskStorage(checkpoint_dir)
+        checkpoint_manager = CheckpointManager(storage=storage)
+
+        # Create gateway with production configuration
+        gateway = DurableAPIGateway(
+            checkpoint_manager=checkpoint_manager,
+            max_retries=3,
+            retry_delay=1.0,
+            enable_streaming=True,
+            max_concurrent_workflows=20,
+            request_timeout=300.0,  # 5 minutes for production workflows
+        )
+
+        # Start gateway
+        await gateway.startup()
+
+        yield gateway
+
+        # Cleanup
+        await gateway.shutdown()
+
+    async def _create_analytics_workflow_fixed(self) -> WorkflowBuilder:
+        """Create analytics workflow using proper SDK patterns."""
+        workflow = WorkflowBuilder()
+        workflow.name = "realtime_analytics_fixed"
+
+        # Create connection string
+        conn_string = (
+            f"postgresql://{POSTGRES_CONFIG['user']}:{POSTGRES_CONFIG['password']}"
+            f"@{POSTGRES_CONFIG['host']}:{POSTGRES_CONFIG['port']}/{POSTGRES_CONFIG['database']}"
+        )
+
+        # Add SQL node to fetch transactions
+        workflow.add_node(
+            "SQLDatabaseNode",
+            "fetch_transactions",
+            {
+                "connection_string": conn_string,
+                "query": """
+                    SELECT
+                        COUNT(*) as total_transactions,
+                        SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END) as total_revenue,
+                        AVG(CASE WHEN status = 'completed' THEN amount ELSE NULL END) as avg_order_value,
+                        COUNT(DISTINCT user_id) as unique_customers,
+                        payment_method,
+                        COUNT(*) as method_count
+                    FROM transactions
+                    WHERE created_at >= NOW() - INTERVAL '1 hour'
+                    GROUP BY payment_method
+                    ORDER BY method_count DESC
+                """,
+                "operation": "select",
+            },
+        )
+
+        # Add data transformation node
+        workflow.add_node(
+            "PythonCodeNode",
+            "transform_data",
+            {
+                "code": """
+# Process the SQL results
+import json
+
+# Get data from previous node
+transactions_data = data.get('data', [])
+
+# Calculate totals across all payment methods
+total_revenue = sum(float(row.get('total_revenue', 0)) for row in transactions_data)
+total_transactions = sum(int(row.get('method_count', 0)) for row in transactions_data)
+unique_customers = max(int(row.get('unique_customers', 0)) for row in transactions_data) if transactions_data else 0
+
+# Format for AI analysis
+analytics_summary = {
+    "total_revenue": total_revenue,
+    "total_transactions": total_transactions,
+    "unique_customers": unique_customers,
+    "payment_methods": [
+        {
+            "method": row['payment_method'],
+            "count": row['method_count'],
+            "revenue": float(row['total_revenue'])
+        }
+        for row in transactions_data
+    ],
+    "timestamp": str(datetime.now())
+}
+
+result = {"analytics_data": analytics_summary}
+"""
+            },
+        )
+
+        # Add AI analysis node
+        workflow.add_node(
+            "LLMAgentNode",
+            "ai_analysis",
+            {
+                "base_url": OLLAMA_CONFIG["base_url"],
+                "model": OLLAMA_CONFIG["model"],
+                "system_prompt": "You are a business analytics expert. Analyze transaction data and provide insights.",
+                "temperature": 0.3,
+                "max_tokens": 500,
+            },
+        )
+
+        # Store results back to database
+        workflow.add_node(
+            "SQLDatabaseNode",
+            "store_results",
+            {
+                "connection_string": conn_string,
+                "query": """
+                    INSERT INTO analytics_reports
+                    (report_type, data, ai_insights, created_at)
+                    VALUES ('realtime_analytics', $1::jsonb, $2, NOW())
+                    RETURNING id
+                """,
+                "operation": "insert",
+            },
+        )
+
+        # Connect nodes
+        workflow.connect(
+            "fetch_transactions", "transform_data", mapping={"data": "data"}
+        )
+        workflow.connect(
+            "transform_data", "ai_analysis", mapping={"result.analytics_data": "query"}
+        )
+        workflow.connect(
+            "transform_data",
+            "store_results",
+            mapping={"result.analytics_data": "params[0]"},
+        )
+        workflow.connect(
+            "ai_analysis", "store_results", mapping={"response": "params[1]"}
+        )
+
+        return workflow
+
+    @pytest.mark.asyncio
+    async def test_analytics_workflow_fixed(self, gateway):
+        """Test analytics workflow with proper SDK patterns."""
+        # Setup database tables
+        await self._setup_test_database()
+
+        # Create and register workflow
+        workflow = await self._create_analytics_workflow_fixed()
+        gateway.register_workflow("analytics_fixed", workflow)
+
+        # Execute workflow
+        response = await gateway.execute_workflow(
+            "analytics_fixed", inputs={}, stream=False
+        )
+
+        assert response is not None
+        assert "store_results" in response
+
+        # Cleanup
+        await self._cleanup_test_database()
+
+    async def _setup_test_database(self):
+        """Setup test database tables."""
+        conn_string = (
+            f"postgresql://{POSTGRES_CONFIG['user']}:{POSTGRES_CONFIG['password']}"
+            f"@{POSTGRES_CONFIG['host']}:{POSTGRES_CONFIG['port']}/{POSTGRES_CONFIG['database']}"
+        )
+
+        db_node = SQLDatabaseNode(name="setup", connection_string=conn_string)
+
+        # Create tables
+        await db_node.async_run(
+            query="""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id SERIAL PRIMARY KEY,
+                    transaction_id VARCHAR(50) UNIQUE,
+                    user_id VARCHAR(50),
+                    product_id VARCHAR(50),
+                    amount DECIMAL(10,2),
+                    status VARCHAR(20),
+                    payment_method VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """,
+            operation="execute",
+        )
+
+        await db_node.async_run(
+            query="""
+                CREATE TABLE IF NOT EXISTS analytics_reports (
+                    id SERIAL PRIMARY KEY,
+                    report_type VARCHAR(50),
+                    data JSONB,
+                    ai_insights TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """,
+            operation="execute",
+        )
+
+        # Insert test data
+        for i in range(50):
+            await db_node.async_run(
+                query="""
+                    INSERT INTO transactions
+                    (transaction_id, user_id, product_id, amount, status, payment_method)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                """,
+                params=[
+                    f"txn_{uuid.uuid4().hex[:12]}",
+                    f"user_{random.randint(1000, 9999)}",
+                    f"prod_{random.randint(100, 999)}",
+                    round(random.uniform(10.99, 999.99), 2),
+                    random.choice(["completed", "pending", "failed"]),
+                    random.choice(["credit_card", "paypal", "apple_pay"]),
+                ],
+                operation="execute",
+            )
+
+    async def _cleanup_test_database(self):
+        """Cleanup test database."""
+        conn_string = (
+            f"postgresql://{POSTGRES_CONFIG['user']}:{POSTGRES_CONFIG['password']}"
+            f"@{POSTGRES_CONFIG['host']}:{POSTGRES_CONFIG['port']}/{POSTGRES_CONFIG['database']}"
+        )
+
+        db_node = SQLDatabaseNode(name="cleanup", connection_string=conn_string)
+
+        await db_node.async_run(
+            query="DROP TABLE IF EXISTS transactions CASCADE", operation="execute"
+        )
+
+        await db_node.async_run(
+            query="DROP TABLE IF EXISTS analytics_reports CASCADE", operation="execute"
+        )

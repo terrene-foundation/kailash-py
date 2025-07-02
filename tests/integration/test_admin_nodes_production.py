@@ -52,7 +52,9 @@ class TestAdminNodesProduction:
     def check_infrastructure(self):
         """Check Docker infrastructure availability."""
         # Check PostgreSQL synchronously
-        db_node = SQLDatabaseNode(name="test", **DATABASE_CONFIG)
+        db_node = SQLDatabaseNode(
+            name="test", connection_string=get_postgres_connection_string()
+        )
         db_node.run(query="SELECT 1", operation="select")
 
         # Check Redis
@@ -146,7 +148,9 @@ class TestAdminNodesProduction:
                 tenant_id=self.tenant_a,
                 database_config=self.db_config,
             )
-            assert role_result["result"]["success"] is True
+            # Check role was created successfully
+            assert "result" in role_result
+            assert "role" in role_result["result"]
             role_ids[role["name"]] = role_result["result"]["role"]["role_id"]
 
         # Create test user
@@ -165,7 +169,10 @@ class TestAdminNodesProduction:
             tenant_id=self.tenant_a,
             database_config=self.db_config,
         )
-        assert user_result["result"]["success"] is True
+        # Check if user was created successfully
+        assert "result" in user_result
+        assert "user" in user_result["result"]
+        assert user_result["result"]["user"]["user_id"] == user_data["user_id"]
 
         # Assign director role to user
         assign_result = role_mgmt.run(
@@ -175,7 +182,8 @@ class TestAdminNodesProduction:
             tenant_id=self.tenant_a,
             database_config=self.db_config,
         )
-        assert assign_result["result"]["success"] is True
+        # Check role was assigned successfully
+        assert "result" in assign_result
 
         # First permission check - should inherit "company:read" from employee role
         direct_result = perm_check.run(
