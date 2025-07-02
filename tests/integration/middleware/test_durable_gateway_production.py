@@ -11,6 +11,7 @@ These tests simulate real-world production scenarios including:
 
 import asyncio
 import json
+import os
 import random
 import tempfile
 import threading
@@ -32,11 +33,11 @@ from kailash.workflow import WorkflowBuilder
 # Production test configuration
 POSTGRES_CONFIG = {
     "database_type": "postgresql",
-    "host": "localhost",
-    "port": 5434,
-    "database": "kailash_test",
-    "user": "admin",
-    "password": "admin",
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "port": int(os.getenv("POSTGRES_PORT", 5434)),
+    "database": os.getenv("POSTGRES_DB", "kailash_test"),
+    "user": os.getenv("POSTGRES_USER", "test_user"),
+    "password": os.getenv("POSTGRES_PASSWORD", "test_password"),
 }
 
 OLLAMA_CONFIG = {
@@ -45,8 +46,8 @@ OLLAMA_CONFIG = {
 }
 
 REDIS_CONFIG = {
-    "host": "localhost",
-    "port": 6379,
+    "host": os.getenv("REDIS_HOST", "localhost"),
+    "port": int(os.getenv("REDIS_PORT", 6380)),
     "db": 0,
 }
 

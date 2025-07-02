@@ -70,11 +70,17 @@ Mock API:   Port 8888 (kailash_sdk_test_mock_api) 🆕
 - **Notes**: All unit tests running successfully without Docker dependencies
 
 ### Tier 2 - Integration Tests
-- **Status**: ✅ PASSED
+- **Status**: ✅ PASSED (Standard) | ⚠️ PARTIAL (Production)
 - **Tests**: 259 tests total (redundant tests removed)
-- **Breakdown**: 246 non-slow + 13 essential slow tests
-- **Duration**: ~5-10 minutes for standard tests
-- **Notes**: Removed 175+ redundant slow tests (external dependencies, duplicate scenarios)
+- **Breakdown**:
+  - Tier 2A (Standard): 246 non-slow tests - ✅ ALL PASS
+  - Tier 2B (Production): 59 slow tests - ⚠️ 39/59 pass (66%)
+- **Duration**:
+  - Standard: ~5-10 minutes
+  - Production: ~10-15 minutes with extended timeouts
+- **Notes**:
+  - Removed 175+ redundant slow tests
+  - Production tests need fixes for async patterns and config
 
 ### Tier 3 - E2E Tests
 - **Status**: ⚠️ PARTIAL (5 failures in user management app)
