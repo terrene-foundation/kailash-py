@@ -207,7 +207,20 @@ router.get('/comments', (req, res) => {
 
 // OAuth token endpoint
 router.post('/oauth/token', (req, res) => {
-    const { grant_type, client_id, client_secret, scope } = req.body;
+    let { grant_type, client_id, client_secret, scope } = req.body;
+
+    // Check for Basic auth (client credentials in header)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Basic ')) {
+        const credentials = Buffer.from(authHeader.slice(6), 'base64').toString();
+        const [headerClientId, headerClientSecret] = credentials.split(':');
+
+        // Use header credentials if available
+        if (headerClientId && headerClientSecret) {
+            client_id = client_id || headerClientId;
+            client_secret = headerClientSecret;
+        }
+    }
 
     // Simple validation
     if (!grant_type || !client_id || !client_secret) {
