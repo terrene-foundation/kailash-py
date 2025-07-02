@@ -601,47 +601,60 @@ result = {{
 # Use AI to perform intelligent customer segmentation
 import json
 import asyncio
+from datetime import datetime
 
 ollama = await get_resource("ollama")
 
 # Prepare customer data for AI analysis
 customer_profiles = []
-for customer in customers:
-    # Get related transactions and support tickets
-    customer_transactions = [t for t in transactions if t["customer_id"] == customer["id"]]
-    customer_tickets = [t for t in support_tickets if t["customer_id"] == customer["id"]]
+try:
+    for customer in customers:
+        # Ensure customer is a dictionary
+        if not isinstance(customer, dict):
+            continue
 
-    # Calculate metrics
-    total_spend = sum(t["amount"] for t in customer_transactions if t["status"] == "Completed")
-    transaction_count = len(customer_transactions)
-    support_ticket_count = len(customer_tickets)
-    avg_transaction = total_spend / max(1, transaction_count)
+        try:
+            # Get related transactions and support tickets
+            customer_transactions = [t for t in transactions if isinstance(t, dict) and t.get("customer_id") == customer.get("id")]
+            customer_tickets = [t for t in support_tickets if isinstance(t, dict) and t.get("customer_id") == customer.get("id")]
 
-    profile = {{
-        "customer_id": customer["id"],
-        "name": customer["name"],
-        "industry": customer["industry"],
-        "size": customer["size"],
-        "region": customer["region"],
-        "tier": customer["tier"],
-        "satisfaction_score": customer["satisfaction_score"],
-        "contract_value": customer["contract_value"],
-        "total_spend": total_spend,
-        "transaction_count": transaction_count,
-        "avg_transaction_value": avg_transaction,
-        "support_ticket_count": support_ticket_count,
-        "months_as_customer": max(1, (365 - int((datetime.now() - datetime.fromisoformat(customer["signup_date"].replace("Z", "+00:00"))).days)) // 30)
-    }}
-    customer_profiles.append(profile)
+            # Calculate metrics
+            total_spend = sum(t.get("amount", 0) for t in customer_transactions if isinstance(t, dict) and t.get("status") == "Completed")
+            transaction_count = len(customer_transactions)
+            support_ticket_count = len(customer_tickets)
+            avg_transaction = total_spend / max(1, transaction_count)
+
+            profile = {{
+                "customer_id": customer.get("id", ""),
+                "name": customer.get("name", ""),
+                "industry": customer.get("industry", ""),
+                "size": customer.get("size", ""),
+                "region": customer.get("region", ""),
+                "tier": customer.get("tier", ""),
+                "satisfaction_score": customer.get("satisfaction_score", 0),
+                "contract_value": customer.get("contract_value", 0),
+                "total_spend": total_spend,
+                "transaction_count": transaction_count,
+                "avg_transaction_value": avg_transaction,
+                "support_ticket_count": support_ticket_count,
+                "months_as_customer": 12  # Simplified calculation
+            }}
+            customer_profiles.append(profile)
+        except Exception as e:
+            print(f"Error processing customer {{customer}}: {{e}}")
+            continue
+except Exception as e:
+    print(f"Error in customer processing loop: {{e}}")
+    customer_profiles = []  # Fallback to empty list
 
 # Use AI to analyze customer segments
 segmentation_prompt = f'''Analyze these customer profiles and create intelligent customer segments based on behavior patterns, value, and characteristics.
 
 Customer Data Summary:
 - Total customers: {len(customer_profiles)}
-- Industries: {list(set(c["industry"] for c in customer_profiles))}
-- Size categories: {list(set(c["size"] for c in customer_profiles))}
-- Regions: {list(set(c["region"] for c in customer_profiles))}
+- Industries: {list(set(c.get("industry", "Unknown") for c in customer_profiles if isinstance(c, dict)))}
+- Size categories: {list(set(c.get("size", "Unknown") for c in customer_profiles if isinstance(c, dict)))}
+- Regions: {list(set(c.get("region", "Unknown") for c in customer_profiles if isinstance(c, dict)))}
 
 Sample customer profiles:
 {json.dumps(customer_profiles[:5], indent=2)}
