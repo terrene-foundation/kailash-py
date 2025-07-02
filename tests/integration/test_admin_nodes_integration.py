@@ -460,14 +460,18 @@ class TestPermissionCheckNodeIntegration:
                 {"query": query, "params": params, "fetch_mode": fetch_mode}
             )
 
-            # Default responses
-            if "FROM users" in query and "WHERE user_id" in query:
+            # Default responses - updated for new schema with separate user and roles queries
+            if (
+                "FROM users" in query
+                and "WHERE user_id" in query
+                and "status = 'active'" in query
+            ):
+                # User data query (first query in _get_user_context)
                 return {
                     "data": [
                         {
                             "user_id": params[0] if params else "test_user",
                             "email": "test@example.com",
-                            "roles": ["analyst", "reader"],
                             "attributes": {
                                 "department": "analytics",
                                 "clearance": "confidential",
@@ -480,11 +484,21 @@ class TestPermissionCheckNodeIntegration:
                     "columns": [
                         "user_id",
                         "email",
-                        "roles",
                         "attributes",
                         "status",
                         "tenant_id",
                     ],
+                    "execution_time": 0.001,
+                }
+            elif "FROM user_role_assignments" in query and "is_active = true" in query:
+                # User roles query (second query in _get_user_context)
+                return {
+                    "data": [
+                        {"role_id": "analyst"},
+                        {"role_id": "reader"},
+                    ],
+                    "row_count": 2,
+                    "columns": ["role_id"],
                     "execution_time": 0.001,
                 }
             elif "WITH RECURSIVE role_hierarchy" in query:
@@ -499,6 +513,34 @@ class TestPermissionCheckNodeIntegration:
                     "columns": ["permission"],
                     "execution_time": 0.001,
                 }
+            elif "SELECT permissions FROM roles" in query and "WHERE role_id" in query:
+                # Direct role permissions query (used in _get_role_direct_permissions)
+                role_id = params[0] if params else "analyst"
+                if role_id == "analyst":
+                    return {
+                        "data": [
+                            {"permissions": ["data:read", "analytics:execute"]},
+                        ],
+                        "row_count": 1,
+                        "columns": ["permissions"],
+                        "execution_time": 0.001,
+                    }
+                elif role_id == "reader":
+                    return {
+                        "data": [
+                            {"permissions": ["reports:view"]},
+                        ],
+                        "row_count": 1,
+                        "columns": ["permissions"],
+                        "execution_time": 0.001,
+                    }
+                else:
+                    return {
+                        "data": [],
+                        "row_count": 0,
+                        "columns": ["permissions"],
+                        "execution_time": 0.001,
+                    }
             else:
                 return {
                     "data": [],

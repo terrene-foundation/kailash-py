@@ -177,10 +177,20 @@ result = {"analytics_data": analytics_summary}
         )
 
         # Connect nodes using the improved connect method
-        workflow.connect("fetch_transactions", "transform_data", mapping={"data": "data"})
-        workflow.connect("transform_data", "ai_analysis", mapping={"result.analytics_data": "query"})
-        workflow.connect("transform_data", "store_results", mapping={"result.analytics_data": "params[0]"})
-        workflow.connect("ai_analysis", "store_results", mapping={"response": "params[1]"})
+        workflow.connect(
+            "fetch_transactions", "transform_data", mapping={"data": "data"}
+        )
+        workflow.connect(
+            "transform_data", "ai_analysis", mapping={"result.analytics_data": "query"}
+        )
+        workflow.connect(
+            "transform_data",
+            "store_results",
+            mapping={"result.analytics_data": "params[0]"},
+        )
+        workflow.connect(
+            "ai_analysis", "store_results", mapping={"response": "params[1]"}
+        )
 
         return workflow
 
@@ -189,7 +199,7 @@ result = {"analytics_data": analytics_summary}
         """Test high-volume concurrent analytics with proper SDK patterns."""
         # Setup database tables
         await self._setup_test_database()
-        
+
         # Create and register workflow
         workflow_builder = await self._create_analytics_workflow_fixed()
         workflow = workflow_builder.build()
@@ -199,7 +209,7 @@ result = {"analytics_data": analytics_summary}
         assert gateway.enable_durability is True
         assert gateway.checkpoint_manager is not None
         assert "analytics" in gateway.workflows
-        
+
         # Test durability status endpoint functionality
         status = {
             "enabled": gateway.enable_durability,
@@ -207,10 +217,10 @@ result = {"analytics_data": analytics_summary}
             "active_requests": len(gateway.active_requests),
             "checkpoint_stats": gateway.checkpoint_manager.get_stats(),
         }
-        
+
         assert status["enabled"] is True
         assert isinstance(status["checkpoint_stats"], dict)
-        
+
         # Cleanup
         await self._cleanup_test_database()
 
@@ -218,67 +228,67 @@ result = {"analytics_data": analytics_summary}
     async def test_ai_customer_insights_pipeline(self, gateway):
         """Test AI customer insights pipeline with proper patterns."""
         await self._setup_test_database()
-        
+
         # Create customer insights workflow
         workflow_builder = await self._create_analytics_workflow_fixed()
         workflow = workflow_builder.build()
         gateway.register_workflow("customer_insights", workflow)
-        
+
         # Test workflow registration
         assert "customer_insights" in gateway.workflows
         assert gateway.workflows["customer_insights"].type == "embedded"
-        
+
         await self._cleanup_test_database()
 
     @pytest.mark.asyncio
     async def test_sentiment_analysis_batch_processing(self, gateway):
         """Test sentiment analysis batch processing."""
         await self._setup_test_database()
-        
+
         workflow_builder = await self._create_analytics_workflow_fixed()
         workflow = workflow_builder.build()
         gateway.register_workflow("sentiment_analysis", workflow)
-        
+
         # Test workflow registration
         assert "sentiment_analysis" in gateway.workflows
-        
+
         await self._cleanup_test_database()
 
     @pytest.mark.asyncio
     async def test_gateway_performance_under_load(self, gateway):
         """Test gateway performance under simulated load."""
         await self._setup_test_database()
-        
+
         workflow_builder = await self._create_analytics_workflow_fixed()
         workflow = workflow_builder.build()
         gateway.register_workflow("performance_test", workflow)
-        
+
         # Test multiple workflow registrations
         for i in range(5):
             workflow_name = f"load_test_{i}"
             gateway.register_workflow(workflow_name, workflow)
             assert workflow_name in gateway.workflows
-        
+
         await self._cleanup_test_database()
 
     @pytest.mark.asyncio
     async def test_system_resilience_and_recovery(self, gateway):
         """Test system resilience and recovery capabilities."""
         await self._setup_test_database()
-        
+
         workflow_builder = await self._create_analytics_workflow_fixed()
         workflow = workflow_builder.build()
         gateway.register_workflow("resilience_test", workflow)
-        
+
         # Test that gateway handles registration correctly
         assert "resilience_test" in gateway.workflows
-        
+
         # Test checkpoint manager functionality
         stats = gateway.checkpoint_manager.get_stats()
         assert isinstance(stats, dict)
         assert "save_count" in stats
         assert "load_count" in stats
-        
+
         await self._cleanup_test_database()
 
     async def _setup_test_database(self):

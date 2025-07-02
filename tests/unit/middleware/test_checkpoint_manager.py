@@ -404,29 +404,34 @@ class TestCheckpointManager:
     @pytest.mark.asyncio
     async def test_gc_lazy_initialization(self):
         """Test that GC task is lazily initialized when needed."""
-        from kailash.middleware.gateway.durable_request import Checkpoint
-        from datetime import datetime, UTC
-        
+        from datetime import UTC, datetime
+
+        from kailash.middleware.gateway.durable_request import Checkpoint, RequestState
+
         manager = CheckpointManager()
-        
+
         # Initially, GC task should not be started
         assert manager._gc_task is None
         assert manager._gc_started is False
-        
+
         # Save a checkpoint, which should start GC task
         checkpoint = Checkpoint(
             checkpoint_id="test_123",
-            request_id="req_123", 
+            request_id="req_123",
             sequence=1,
+            name="test_checkpoint",
+            state=RequestState.EXECUTING,
+            data={"test": "data"},
             workflow_state={"test": "data"},
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
+            size_bytes=100,
         )
-        
+
         await manager.save_checkpoint(checkpoint)
-        
+
         # Now GC task should be started
         assert manager._gc_started is True
         assert manager._gc_task is not None
-        
+
         # Clean up
         await manager.close()

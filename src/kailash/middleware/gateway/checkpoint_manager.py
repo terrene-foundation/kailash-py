@@ -179,7 +179,7 @@ class CheckpointManager:
         storage: Optional[DiskStorage] = None,
     ):
         """Initialize checkpoint manager.
-        
+
         Args:
             memory_storage: Memory storage backend (optional)
             disk_storage: Disk storage backend (optional)
@@ -192,14 +192,15 @@ class CheckpointManager:
         # Handle backward compatibility
         if storage is not None:
             import warnings
+
             warnings.warn(
                 "The 'storage' parameter is deprecated. Use 'disk_storage' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             if disk_storage is None:
                 disk_storage = storage
-        
+
         self.memory_storage = memory_storage or MemoryStorage()
         self.disk_storage = disk_storage or DiskStorage()
         self.cloud_storage = cloud_storage  # Optional cloud backend

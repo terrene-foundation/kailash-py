@@ -721,7 +721,7 @@ class PermissionCheckNode(Node):
         }
 
     def _get_user_context(self, user_id: str, tenant_id: str) -> Optional[UserContext]:
-        """Get user context for permission evaluation."""
+        """Get user context for permission evaluation with strict tenant isolation."""
         # Query user data and assigned roles from unified admin schema
         user_query = """
         SELECT user_id, email, attributes, status, tenant_id
@@ -729,7 +729,7 @@ class PermissionCheckNode(Node):
         WHERE user_id = $1 AND tenant_id = $2 AND status = 'active'
         """
 
-        # Get assigned roles from user_role_assignments table
+        # Get assigned roles from user_role_assignments table with strict tenant isolation
         roles_query = """
         SELECT role_id
         FROM user_role_assignments
@@ -737,24 +737,38 @@ class PermissionCheckNode(Node):
         """
 
         try:
-            # Get user data
+            # Get user data - strict tenant check
             user_result = self._db_node.run(
                 query=user_query, parameters=[user_id, tenant_id], result_format="dict"
             )
 
             user_rows = user_result.get("data", [])
             if not user_rows:
+                # User not found in this tenant - strict tenant isolation
+                self.logger.debug(f"User {user_id} not found in tenant {tenant_id}")
                 return None
 
             user_data = user_rows[0]
 
-            # Get assigned roles
+            # Verify tenant isolation - ensure user belongs to the requested tenant
+            if user_data.get("tenant_id") != tenant_id:
+                self.logger.warning(
+                    f"Tenant isolation violation: User {user_id} belongs to {user_data.get('tenant_id')} but permission check requested for {tenant_id}"
+                )
+                return None
+
+            # Get assigned roles - also with strict tenant isolation
             roles_result = self._db_node.run(
                 query=roles_query, parameters=[user_id, tenant_id], result_format="dict"
             )
 
             role_rows = roles_result.get("data", [])
             assigned_roles = [row["role_id"] for row in role_rows]
+
+            # Log for debugging tenant isolation
+            self.logger.debug(
+                f"User {user_id} in tenant {tenant_id} has roles: {assigned_roles}"
+            )
 
             return UserContext(
                 user_id=user_data["user_id"],
@@ -765,7 +779,9 @@ class PermissionCheckNode(Node):
             )
         except Exception as e:
             # Log the error and return None to indicate user not found
-            self.logger.warning(f"Failed to get user context for {user_id}: {e}")
+            self.logger.warning(
+                f"Failed to get user context for {user_id} in tenant {tenant_id}: {e}"
+            )
             return None
 
     def _check_rbac_permission(
@@ -841,17 +857,17 @@ class PermissionCheckNode(Node):
         return permissions
 
     def _get_role_permissions(self, role_id: str, tenant_id: str) -> Set[str]:
-        """Get permissions for a specific role including inherited permissions."""
-        # Query role and its hierarchy
+        """Get permissions for a specific role including inherited permissions with strict tenant isolation."""
+        # Query role and its hierarchy with strict tenant boundaries
         query = """
         WITH RECURSIVE role_hierarchy AS (
-            SELECT role_id, permissions, parent_roles
+            SELECT role_id, permissions, parent_roles, tenant_id
             FROM roles
             WHERE role_id = $1 AND tenant_id = $2 AND is_active = true
 
             UNION ALL
 
-            SELECT r.role_id, r.permissions, r.parent_roles
+            SELECT r.role_id, r.permissions, r.parent_roles, r.tenant_id
             FROM roles r
             JOIN role_hierarchy rh ON r.role_id = ANY(
                 SELECT jsonb_array_elements_text(rh.parent_roles)
@@ -862,18 +878,34 @@ class PermissionCheckNode(Node):
             CASE
                 WHEN jsonb_typeof(permissions) = 'array'
                 THEN ARRAY(SELECT jsonb_array_elements_text(permissions))
+                WHEN permissions IS NOT NULL AND permissions::text != 'null'
+                THEN ARRAY[permissions::text]
                 ELSE ARRAY[]::text[]
             END
         ) as permission
         FROM role_hierarchy
+        WHERE tenant_id = $2
         """
 
-        result = self._db_node.run(
-            query=query, parameters=[role_id, tenant_id], result_format="dict"
-        )
-        permission_rows = result.get("data", [])
+        try:
+            result = self._db_node.run(
+                query=query, parameters=[role_id, tenant_id], result_format="dict"
+            )
+            permission_rows = result.get("data", [])
 
-        return {row["permission"] for row in permission_rows}
+            permissions = {
+                row["permission"] for row in permission_rows if row["permission"]
+            }
+            self.logger.debug(
+                f"Role {role_id} in tenant {tenant_id} has permissions: {permissions}"
+            )
+
+            return permissions
+        except Exception as e:
+            self.logger.warning(
+                f"Failed to get permissions for role {role_id} in tenant {tenant_id}: {e}"
+            )
+            return set()
 
     def _build_permission_explanation(
         self,
@@ -1204,23 +1236,54 @@ class PermissionCheckNode(Node):
         }
 
     def _get_role_direct_permissions(self, role_id: str, tenant_id: str) -> Set[str]:
-        """Get direct permissions for a role (no inheritance)."""
+        """Get direct permissions for a role (no inheritance) with proper format handling."""
         query = """
         SELECT permissions
         FROM roles
         WHERE role_id = $1 AND tenant_id = $2 AND is_active = true
         """
 
-        result = self._db_node.run(
-            query=query, parameters=[role_id, tenant_id], result_format="dict"
-        )
-        role_rows = result.get("data", [])
-        role_data = role_rows[0] if role_rows else None
+        try:
+            result = self._db_node.run(
+                query=query, parameters=[role_id, tenant_id], result_format="dict"
+            )
+            role_rows = result.get("data", [])
+            role_data = role_rows[0] if role_rows else None
 
-        if not role_data:
+            if not role_data:
+                self.logger.debug(f"Role {role_id} not found in tenant {tenant_id}")
+                return set()
+
+            permissions_data = role_data.get("permissions", [])
+
+            # Handle different permission storage formats
+            if isinstance(permissions_data, list):
+                permissions = set(permissions_data)
+            elif isinstance(permissions_data, str):
+                try:
+                    # Try to parse as JSON array
+                    import json
+
+                    parsed = json.loads(permissions_data)
+                    permissions = (
+                        set(parsed) if isinstance(parsed, list) else {permissions_data}
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    # Treat as single permission string
+                    permissions = {permissions_data} if permissions_data else set()
+            else:
+                permissions = set()
+
+            self.logger.debug(
+                f"Role {role_id} direct permissions in tenant {tenant_id}: {permissions}"
+            )
+            return permissions
+
+        except Exception as e:
+            self.logger.warning(
+                f"Failed to get direct permissions for role {role_id} in tenant {tenant_id}: {e}"
+            )
             return set()
-
-        return set(role_data.get("permissions", []))
 
     def _explain_permission(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Provide detailed explanation of permission logic."""
@@ -1640,7 +1703,7 @@ class PermissionCheckNode(Node):
             audit_query = """
             INSERT INTO admin_audit_log (
                 user_id, action, resource_type, resource_id,
-                operation, details, success, tenant_id, created_at
+                operation, context, success, tenant_id, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """
 

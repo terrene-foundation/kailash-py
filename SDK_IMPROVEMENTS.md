@@ -78,7 +78,7 @@ helper = TransactionHelper(db_node, max_retries=3, retry_delay=0.1)
 # Create user with automatic verification
 result = helper.create_user_with_verification(user_data, tenant_id)
 
-# Assign role with automatic verification  
+# Assign role with automatic verification
 result = helper.assign_role_with_verification(user_id, role_id, tenant_id)
 ```
 
@@ -123,7 +123,7 @@ isolation_mgr.enforce_tenant_isolation(user_id, user_tenant, operation_tenant)
 # Before
 raise NodeExecutionError("Failed to create user")
 
-# After  
+# After
 raise NodeExecutionError("Failed to create user: User not found after creation - possible database transaction timing issue")
 ```
 
@@ -232,7 +232,7 @@ helper.assign_role_with_verification(user_id, role_id, tenant)
 - [ ] Extend transaction utilities to more node types
 - [ ] Create migration scripts for deprecated APIs
 
-### Medium Term  
+### Medium Term
 - [ ] Implement true async database operations
 - [ ] Add distributed caching support
 - [ ] Create comprehensive SDK testing framework
