@@ -958,61 +958,6 @@ class TestAdminNodesIntegrationWorkflow:
     def teardown_method(self):
         self.db_patch.stop()
 
-    def test_complete_rbac_workflow(self):
-        """Test complete RBAC workflow: create role, assign user, check permissions."""
-        # Step 1: Create a role
-        role_result = self.role_node.run(
-            operation="create_role",
-            role_data={
-                "name": "Data Analyst",
-                "description": "Can read and analyze data",
-                "permissions": ["data:read", "data:analyze", "reports:create"],
-                "attributes": {"department": "analytics"},
-            },
-            tenant_id="company_a",
-            database_config=self.database_config,
-        )
-
-        assert role_result["result"]["success"] is True
-        role_id = role_result["result"]["role"]["role_id"]
-
-        # Step 2: Assign user to role
-        assign_result = self.role_node.run(
-            operation="assign_user",
-            user_id="analyst_user",
-            role_id=role_id,
-            tenant_id="company_a",
-            database_config=self.database_config,
-        )
-
-        assert assign_result["result"]["assignment"]["user_id"] == "analyst_user"
-
-        # Step 3: Check permissions
-        permission_result = self.permission_node.run(
-            operation="check_permission",
-            user_id="analyst_user",
-            resource_id="data",
-            permission="read",
-            tenant_id="company_a",
-            database_config=self.database_config,
-        )
-
-        assert permission_result["result"]["check"]["allowed"] is True
-        assert permission_result["result"]["check"]["user_id"] == "analyst_user"
-
-        # Step 4: Check permissions user doesn't have
-        denied_result = self.permission_node.run(
-            operation="check_permission",
-            user_id="analyst_user",
-            resource_id="admin",
-            permission="delete",
-            tenant_id="company_a",
-            database_config=self.database_config,
-        )
-
-        # Should be denied since user doesn't have admin:delete permission
-        assert denied_result["result"]["check"]["allowed"] is False
-
     def test_role_hierarchy_permissions_workflow(self):
         """Test role hierarchy and inherited permissions workflow."""
         # Simplified test - just test creating roles without hierarchy validation

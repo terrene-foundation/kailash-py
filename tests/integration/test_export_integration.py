@@ -30,10 +30,8 @@ class TestExportIntegration:
         exporter = WorkflowExporter()
         export_path = temp_data_dir / "exported_workflow.json"
 
-        try:
-            exporter.export_workflow(workflow, export_path)
-        except (AttributeError, NotImplementedError):
-            pytest.skip("export_workflow method not implemented")
+        # Export to JSON file
+        exporter.to_json(workflow, str(export_path))
 
         # Verify export file exists
         assert export_path.exists()
@@ -57,31 +55,44 @@ class TestExportIntegration:
         exporter = WorkflowExporter()
         json_path = temp_data_dir / "complex_workflow.json"
 
-        try:
-            exporter.export_workflow(workflow, json_path)
-            assert json_path.exists()
-        except (AttributeError, NotImplementedError):
-            pytest.skip("export_workflow method not implemented")
+        # Export to JSON
+        exporter.to_json(workflow, str(json_path))
+        assert json_path.exists()
+
+        # Also test YAML export
+        yaml_path = temp_data_dir / "complex_workflow.yaml"
+        exporter.to_yaml(workflow, str(yaml_path))
+        assert yaml_path.exists()
 
     def test_export_workflow_as_python_code(self, temp_data_dir: Path):
         """Test exporting workflow as executable Python code."""
-        # Create simple workflow
+        # Create a workflow to export
         builder = WorkflowBuilder()
         builder.add_node("MockNode", "test_node", config={"value": 10})
+        builder.add_node("MockNode", "processor", config={"value": 20})
+        builder.add_connection("test_node", "output", "processor", "input")
         workflow = builder.build("test_workflow")
 
-        # Test code export if available
+        # Export as Python code
         exporter = WorkflowExporter()
         python_file = temp_data_dir / "workflow_code.py"
 
-        try:
-            if hasattr(exporter, "export_as_code"):
-                exporter.export_as_code(workflow, python_file)
-                assert python_file.exists()
-            else:
-                pytest.skip("export_as_code method not available")
-        except (AttributeError, NotImplementedError):
-            pytest.skip("export_as_code method not implemented")
+        python_code = exporter.export_as_code(workflow, str(python_file))
+
+        # Verify file was created
+        assert python_file.exists()
+        assert python_file.stat().st_mode & 0o111  # Check executable bit
+
+        # Verify code content
+        assert "#!/usr/bin/env python3" in python_code
+        assert "from kailash import WorkflowBuilder" in python_code
+        assert "def build_workflow():" in python_code
+        assert 'builder.add_node("MockNode", "test_node"' in python_code
+        assert (
+            'builder.add_connection("test_node", "output", "processor", "input")'
+            in python_code
+        )
+        assert 'if __name__ == "__main__":' in python_code
 
     def test_export_with_node_templates(self, temp_data_dir: Path):
         """Test exporting workflow with custom node templates."""

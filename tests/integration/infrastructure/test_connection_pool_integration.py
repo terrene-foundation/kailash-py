@@ -97,12 +97,6 @@ class TestConnectionPoolIntegration:
         # Clean up
         await pool._cleanup()
 
-    @pytest.mark.skip(reason="MySQL not available in current docker setup")
-    async def test_mysql_connection_lifecycle(self, mysql_config):
-        """Test full connection lifecycle with MySQL."""
-        # Skipped - MySQL service not configured in docker-compose
-        pass
-
     async def test_connection_pool_under_load(self, postgres_config):
         """Test connection pool behavior under concurrent load."""
         pool = WorkflowConnectionPool(**postgres_config)

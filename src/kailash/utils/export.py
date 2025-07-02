@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from copy import deepcopy
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -642,6 +643,157 @@ class WorkflowExporter:
             raise
         except Exception as e:
             raise ExportException(f"Failed to export workflow manifest: {e}") from e
+
+    def export_as_code(self, workflow: Workflow, output_path: str | None = None) -> str:
+        """Export workflow as executable Python code.
+
+        Args:
+            workflow: Workflow to export
+            output_path: Optional path to write Python file
+
+        Returns:
+            Python code string
+
+        Raises:
+            ExportException: If export fails
+        """
+        if not workflow:
+            raise ExportException("Workflow is required")
+
+        try:
+            if self.pre_export_hook:
+                self.pre_export_hook(workflow, "python")
+
+            # Generate Python code
+            metadata = workflow.metadata if hasattr(workflow, "metadata") else {}
+            if isinstance(metadata, dict):
+                name = metadata.get("name", "workflow")
+                description = metadata.get("description", "Generated workflow")
+            else:
+                name = getattr(metadata, "name", "workflow")
+                description = getattr(metadata, "description", "Generated workflow")
+
+            code_lines = [
+                "#!/usr/bin/env python3",
+                '"""',
+                f"Generated workflow: {name}",
+                f"Description: {description}",
+                f"Generated at: {datetime.now(UTC).isoformat()}",
+                '"""',
+                "",
+                "from kailash import WorkflowBuilder",
+                "from kailash.runtime.local import LocalRuntime",
+                "",
+                "",
+                "def build_workflow():",
+                '    """Build the workflow."""',
+                "    builder = WorkflowBuilder()",
+                "",
+            ]
+
+            # Add nodes
+            for node_id, node in workflow.nodes.items():
+                node_type = node.node_type
+                config = node.config
+
+                # Format config as Python dict
+                config_str = self._format_dict_for_code(config, indent=8)
+
+                code_lines.extend(
+                    [
+                        f"    # Add {node_type} node",
+                        f'    builder.add_node("{node_type}", "{node_id}", config={config_str})',
+                        "",
+                    ]
+                )
+
+            # Add connections
+            if workflow.connections:
+                code_lines.append("    # Add connections")
+                for conn in workflow.connections:
+                    code_lines.append(
+                        f'    builder.add_connection("{conn.source_node}", "{conn.source_output}", '
+                        f'"{conn.target_node}", "{conn.target_input}")'
+                    )
+                code_lines.append("")
+
+            # Build workflow
+            code_lines.extend(
+                [
+                    f'    return builder.build("{name}")',
+                    "",
+                    "",
+                    "def main():",
+                    '    """Execute the workflow."""',
+                    "    # Build workflow",
+                    "    workflow = build_workflow()",
+                    "    ",
+                    "    # Create runtime",
+                    "    runtime = LocalRuntime()",
+                    "    ",
+                    "    # Execute workflow",
+                    "    result = runtime.execute(workflow)",
+                    "    ",
+                    "    # Print results",
+                    '    print("Workflow execution completed!")',
+                    '    print(f"Result: {result}")',
+                    "",
+                    "",
+                    'if __name__ == "__main__":',
+                    "    main()",
+                    "",
+                ]
+            )
+
+            python_code = "\n".join(code_lines)
+
+            if output_path:
+                try:
+                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(output_path).write_text(python_code)
+                    # Make executable
+                    Path(output_path).chmod(0o755)
+                except Exception as e:
+                    raise ExportException(
+                        f"Failed to write Python code to '{output_path}': {e}"
+                    ) from e
+
+            if self.post_export_hook:
+                self.post_export_hook(workflow, "python", python_code)
+
+            return python_code
+
+        except ExportException:
+            raise
+        except Exception as e:
+            raise ExportException(f"Failed to export workflow as code: {e}") from e
+
+    def _format_dict_for_code(self, data: dict, indent: int = 0) -> str:
+        """Format dictionary for Python code generation."""
+        if not data:
+            return "{}"
+
+        lines = ["{"]
+        indent_str = " " * indent
+        inner_indent = " " * (indent + 4)
+
+        for i, (key, value) in enumerate(data.items()):
+            if isinstance(value, str):
+                value_str = f'"{value}"'
+            elif isinstance(value, dict):
+                value_str = self._format_dict_for_code(value, indent + 4)
+            elif isinstance(value, list):
+                value_str = str(value)
+            else:
+                value_str = str(value)
+
+            line = f'{inner_indent}"{key}": {value_str}'
+            if i < len(data) - 1:
+                line += ","
+            lines.append(line)
+
+        lines.append(indent_str + "}")
+        return "\n".join(lines)
 
     def export_with_templates(
         self, workflow: Workflow, template_name: str, output_dir: str

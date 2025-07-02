@@ -68,6 +68,7 @@ dependencies = [
     "qrcode>=8.2",
     "aiofiles>=24.1.0",
     "bcrypt>=4.3.0",
+    "plotly>=6.2.0",
 ]
 
 [project.optional-dependencies]

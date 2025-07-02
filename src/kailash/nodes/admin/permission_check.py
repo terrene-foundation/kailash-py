@@ -872,7 +872,7 @@ class PermissionCheckNode(Node):
             JOIN role_hierarchy rh ON r.role_id = ANY(
                 SELECT jsonb_array_elements_text(rh.parent_roles)
             )
-            WHERE r.tenant_id = $2 AND r.is_active = true
+            WHERE r.tenant_id = $3 AND r.is_active = true
         )
         SELECT DISTINCT unnest(
             CASE
@@ -884,12 +884,14 @@ class PermissionCheckNode(Node):
             END
         ) as permission
         FROM role_hierarchy
-        WHERE tenant_id = $2
+        WHERE tenant_id = $4
         """
 
         try:
             result = self._db_node.run(
-                query=query, parameters=[role_id, tenant_id], result_format="dict"
+                query=query,
+                parameters=[role_id, tenant_id, tenant_id, tenant_id],
+                result_format="dict",
             )
             permission_rows = result.get("data", [])
 
