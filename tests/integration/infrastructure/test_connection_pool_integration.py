@@ -172,45 +172,53 @@ class TestConnectionPoolIntegration:
         pool = WorkflowConnectionPool(**postgres_config)
         pool.health_threshold = 70
 
-        await pool.process({"operation": "initialize"})
+        try:
+            await pool.process({"operation": "initialize"})
 
-        # Acquire connection
-        acquire_result = await pool.process({"operation": "acquire"})
-        conn_id = acquire_result["connection_id"]
-        initial_health = acquire_result["health_score"]
+            # Acquire connection
+            acquire_result = await pool.process({"operation": "acquire"})
+            conn_id = acquire_result["connection_id"]
+            initial_health = acquire_result["health_score"]
 
-        # Simulate errors to degrade health
-        for _ in range(5):
+            # Simulate errors to degrade health
+            for _ in range(5):
+                try:
+                    await pool.process(
+                        {
+                            "operation": "execute",
+                            "connection_id": conn_id,
+                            "query": "SELECT * FROM nonexistent_table",
+                        }
+                    )
+                except:
+                    pass  # Expected to fail
+
+            # Check connection health degraded
+            stats = await pool.process({"operation": "stats"})
+            current_health = stats["current_state"]["health_scores"][conn_id]
+            assert current_health < initial_health
+
+            # Release should trigger recycling if health is low
+            release_result = await pool.process(
+                {"operation": "release", "connection_id": conn_id}
+            )
+
+            # Verify recycling happened if health dropped enough
+            if current_health < pool.health_threshold:
+                assert release_result["status"] == "recycled"
+
+                # Verify connection was replaced
+                stats_after = await pool.process({"operation": "stats"})
+                assert conn_id not in stats_after["current_state"]["health_scores"]
+
+        finally:
+            # Ensure cleanup happens even if test fails
             try:
-                await pool.process(
-                    {
-                        "operation": "execute",
-                        "connection_id": conn_id,
-                        "query": "SELECT * FROM nonexistent_table",
-                    }
-                )
-            except:
-                pass  # Expected to fail
-
-        # Check connection health degraded
-        stats = await pool.process({"operation": "stats"})
-        current_health = stats["current_state"]["health_scores"][conn_id]
-        assert current_health < initial_health
-
-        # Release should trigger recycling if health is low
-        release_result = await pool.process(
-            {"operation": "release", "connection_id": conn_id}
-        )
-
-        # Verify recycling happened if health dropped enough
-        if current_health < pool.health_threshold:
-            assert release_result["status"] == "recycled"
-
-            # Verify connection was replaced
-            stats_after = await pool.process({"operation": "stats"})
-            assert conn_id not in stats_after["current_state"]["health_scores"]
-
-        await pool._cleanup()
+                await asyncio.wait_for(pool._cleanup(), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("Pool cleanup timed out - forcing cleanup")
+                # Force cleanup of any remaining tasks
+                pool._closing = True
 
     async def test_workflow_integration_with_pool(self, postgres_config):
         """Test connection pool integrated with workflow - simplified."""

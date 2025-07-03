@@ -75,6 +75,65 @@ result, run_id = runtime.execute(workflow, parameters={
 
 ## 🔬 Advanced LLM Patterns
 
+### Local LLM Integration with Ollama (v0.6.2+)
+
+Run powerful LLMs locally with enhanced Ollama support:
+
+```python
+from kailash import Workflow
+from kailash.nodes.ai import LLMAgentNode
+from kailash.runtime import LocalRuntime
+
+# Local LLM workflow with Ollama
+workflow = Workflow(
+    workflow_id="local_llm_001",
+    name="ollama_processing"
+)
+
+# Basic Ollama usage with async support
+ollama_node = LLMAgentNode(
+    id="local_llm",
+    provider="ollama",
+    model="llama3.2:3b"
+)
+workflow.add_node("llm", ollama_node)
+
+# Execute with improved error handling
+runtime = LocalRuntime()
+result, run_id = await runtime.execute_async(workflow, parameters={
+    "llm": {
+        "prompt": "Explain the benefits of edge computing",
+        "generation_config": {
+            "temperature": 0.7,
+            "max_tokens": 300
+        }
+    }
+})
+
+# Remote Ollama server configuration
+remote_ollama = LLMAgentNode(
+    id="remote_llm",
+    provider="ollama",
+    model="mixtral:8x7b"
+)
+workflow.add_node("remote_llm", remote_ollama)
+
+# Execute with custom backend
+result, run_id = await runtime.execute_async(workflow, parameters={
+    "remote_llm": {
+        "prompt": "Analyze this technical architecture",
+        "backend_config": {
+            "host": "gpu-cluster.internal",
+            "port": 11434
+        },
+        "generation_config": {
+            "temperature": 0.3,
+            "max_tokens": 1000
+        }
+    }
+})
+```
+
 ### Multi-Agent Reasoning Chain
 ```python
 from kailash.nodes.ai import IterativeLLMAgentNode

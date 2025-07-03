@@ -97,15 +97,21 @@ class OllamaMultiAgentHelper:
 class TestOllamaMultiAgentCycles:
     """Test multi-agent collaboration with Ollama and cycles."""
 
-    @pytest.fixture(autouse=True)
-    async def check_ollama(self):
-        """Check Ollama availability before tests."""
-        available, model_or_error = (
-            await OllamaMultiAgentHelper.check_ollama_available()
-        )
-        if not available:
-            pytest.skip(f"Ollama not available: {model_or_error}")
-        self.ollama_model = model_or_error
+    def setup_method(self):
+        """Setup test method - check Ollama availability."""
+        # Run async check synchronously
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            available, model_or_error = loop.run_until_complete(
+                OllamaMultiAgentHelper.check_ollama_available()
+            )
+            if not available:
+                pytest.skip(f"Ollama not available: {model_or_error}")
+            self.ollama_model = model_or_error
+        finally:
+            loop.close()
 
     def test_document_refinement_with_ai_feedback_cycles(self):
         """Test iterative document refinement using AI agents."""

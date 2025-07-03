@@ -1,0 +1,48 @@
+Summary of Async Fixture Fixes in E2E Tests
+==========================================
+
+Fixed the following files by:
+1. Adding `import pytest_asyncio` where missing
+2. Replacing `@pytest.fixture` with `@pytest_asyncio.fixture` for async fixtures
+
+Files Fixed:
+------------
+1. tests/e2e/test_async_workflow_builder_e2e_real_world.py
+   - Added pytest_asyncio import
+   - Fixed 2 async fixtures:
+     - infrastructure_setup (class-scoped)
+     - real_resource_registry
+
+2. tests/e2e/test_workflow_builder_real_world_e2e.py
+   - Added pytest_asyncio import
+   - Fixed 2 async fixtures:
+     - setup_test_data
+     - redis_client
+
+3. tests/e2e/test_docker_infrastructure_stress.py
+   - Added pytest_asyncio import
+   - Fixed 1 async fixture:
+     - setup_teardown (autouse)
+
+4. tests/e2e/scenarios/test_admin_nodes_complete_workflow.py
+   - Added pytest_asyncio import
+   - Fixed 1 async fixture:
+     - setup_infrastructure (class-scoped, autouse)
+
+5. tests/e2e/scenarios/test_admin_nodes_ollama_ai_e2e.py
+   - Added pytest_asyncio import
+   - Fixed 1 async fixture:
+     - ensure_ollama_ready (autouse)
+
+Files Already Correct:
+---------------------
+- tests/e2e/user_journeys/test_enhanced_gateway_user_flows.py (already uses pytest_asyncio)
+- tests/e2e/user_journeys/test_durable_gateway_user_flows.py (already uses pytest_asyncio)
+
+Files Without Async Fixtures:
+----------------------------
+- tests/e2e/user_journeys/test_async_workflow_builder_user_flows.py
+- tests/e2e/user_journeys/test_async_runtime_user_flows.py
+- tests/e2e/user_journeys/test_async_testing_user_flows.py
+
+Total Fixes Applied: 7 async fixtures across 5 files

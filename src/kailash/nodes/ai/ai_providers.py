@@ -387,10 +387,16 @@ class OllamaProvider(UnifiedAIProvider):
             return self._available
 
         try:
+            import os
+
             import ollama
 
+            # Check with environment-configured host if available
+            host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+            client = ollama.Client(host=host) if host else ollama.Client()
+
             # Check if Ollama is running
-            ollama.list()
+            client.list()
             self._available = True
         except Exception:
             self._available = False
@@ -409,6 +415,9 @@ class OllamaProvider(UnifiedAIProvider):
                     * temperature, max_tokens, top_p, top_k, repeat_penalty
                     * seed, stop, num_ctx, num_batch, num_thread
                     * tfs_z, typical_p, mirostat, mirostat_tau, mirostat_eta
+                backend_config (dict): Backend configuration including:
+                    * host (str): Ollama host URL (default: from env or http://localhost:11434)
+                    * port (int): Ollama port (if provided, will be appended to host)
 
         Returns:
             Dict containing the standardized response.
@@ -418,6 +427,28 @@ class OllamaProvider(UnifiedAIProvider):
 
             model = kwargs.get("model", "llama3.1:8b-instruct-q8_0")
             generation_config = kwargs.get("generation_config", {})
+            backend_config = kwargs.get("backend_config", {})
+
+            # Configure Ollama client with custom host if provided
+            if backend_config:
+                host = backend_config.get("host", "localhost")
+                port = backend_config.get("port")
+                if port:
+                    # Construct full URL if port is provided
+                    host = (
+                        f"http://{host}:{port}"
+                        if not host.startswith("http")
+                        else f"{host}:{port}"
+                    )
+                elif backend_config.get("base_url"):
+                    host = backend_config["base_url"]
+                self._client = ollama.Client(host=host)
+            elif self._client is None:
+                # Use default client
+                import os
+
+                host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+                self._client = ollama.Client(host=host) if host else ollama.Client()
 
             # Map generation_config to Ollama options
             options = {
@@ -482,7 +513,7 @@ class OllamaProvider(UnifiedAIProvider):
                     processed_messages.append(msg)
 
             # Call Ollama
-            response = ollama.chat(
+            response = self._client.chat(
                 model=model, messages=processed_messages, options=options
             )
 
@@ -522,16 +553,37 @@ class OllamaProvider(UnifiedAIProvider):
         Supported kwargs:
         - model (str): Ollama model name (default: "snowflake-arctic-embed2")
         - normalize (bool): Normalize embeddings to unit length
+        - backend_config (dict): Backend configuration (host, port, base_url)
         """
         try:
             import ollama
 
             model = kwargs.get("model", "snowflake-arctic-embed2")
             normalize = kwargs.get("normalize", False)
+            backend_config = kwargs.get("backend_config", {})
+
+            # Configure Ollama client if not already configured
+            if backend_config and not hasattr(self, "_client"):
+                host = backend_config.get("host", "localhost")
+                port = backend_config.get("port")
+                if port:
+                    host = (
+                        f"http://{host}:{port}"
+                        if not host.startswith("http")
+                        else f"{host}:{port}"
+                    )
+                elif backend_config.get("base_url"):
+                    host = backend_config["base_url"]
+                self._client = ollama.Client(host=host)
+            elif not hasattr(self, "_client") or self._client is None:
+                import os
+
+                host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+                self._client = ollama.Client(host=host) if host else ollama.Client()
 
             embeddings = []
             for text in texts:
-                response = ollama.embeddings(model=model, prompt=text)
+                response = self._client.embeddings(model=model, prompt=text)
                 embedding = response.get("embedding", [])
 
                 if normalize and embedding:

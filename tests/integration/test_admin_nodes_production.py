@@ -505,8 +505,8 @@ class TestAdminNodesProduction:
         try:
             # Check if Ollama is available by testing a simple call
             llm_agent = LLMAgentNode(
-                model="llama3.2:latest",  # Use available model
-                api_config={"base_url": "http://localhost:11434"},
+                model="llama3.2:1b",  # Use available model
+                api_config={"base_url": "http://localhost:11435"},
             )
 
             # Generate some test data
@@ -518,8 +518,8 @@ class TestAdminNodesProduction:
                     }
                 ],
                 provider="ollama",  # Required parameter for LLMAgentNode
-                model="llama3.2:latest",  # Use available model
-                api_config={"base_url": "http://localhost:11434"},
+                model="llama3.2:1b",  # Use available model
+                backend_config={"host": "localhost", "port": 11435},
             )
 
             # Extract roles from AI response (basic parsing)

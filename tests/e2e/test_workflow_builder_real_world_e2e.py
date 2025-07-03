@@ -27,6 +27,7 @@ import httpx
 import numpy as np
 import psutil
 import pytest
+import pytest_asyncio
 
 try:
     import redis.asyncio as redis
@@ -114,7 +115,7 @@ class TestWorkflowBuilderRealWorldE2E:
             "concurrent_workflows": 50,
         }
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def setup_test_data(self):
         """Create comprehensive test data in PostgreSQL."""
         conn = await asyncpg.connect(
@@ -287,7 +288,7 @@ class TestWorkflowBuilderRealWorldE2E:
         finally:
             await conn.close()
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def redis_client(self):
         """Create Redis client for caching."""
         if redis is None:

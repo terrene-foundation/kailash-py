@@ -43,7 +43,7 @@ POSTGRES_CONFIG = {
 class TestUserFlows:
     """User flow tests for real-world scenarios."""
 
-    @pytest_asyncio.fixture
+    @pytest.fixture
     async def test_data_setup(self):
         """Set up test data and environment."""
         pool = WorkflowConnectionPool(
@@ -317,7 +317,7 @@ class TestUserFlows:
                 }
             )
 
-    @pytest_asyncio.fixture
+    @pytest.fixture
     async def gateway_with_workflows(self, test_data_setup):
         """Create gateway with comprehensive workflows."""
         gateway = DurableAPIGateway(

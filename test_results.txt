@@ -1,0 +1,501 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-8.4.0, pluggy-1.6.0 -- ./repos/projects/kailash_python_sdk/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: ./repos/projects/kailash_python_sdk
+configfile: pytest.ini
+plugins: xdist-3.7.0, anyio-4.9.0, Faker-37.4.0, timeout-2.4.0, cov-6.2.1, split-0.10.0, asyncio-1.0.0
+timeout: 60.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 388 items
+
+tests/integration/architecture/test_integration.py::TestAccessControlIntegration::test_enhanced_access_control_basic PASSED [  0%]
+tests/integration/architecture/test_integration.py::TestAccessControlIntegration::test_abac_functionality_preserved PASSED [  0%]
+tests/integration/architecture/test_integration.py::TestTestUtilities::test_functional_test_mixin PASSED [  0%]
+tests/integration/architecture/test_integration.py::TestTestUtilities::test_database_test_utils PASSED [  1%]
+tests/integration/architecture/test_integration.py::TestTestUtilities::test_existing_abac_tests_still_pass PASSED [  1%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_postgres_connection_lifecycle PASSED [  1%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_connection_pool_under_load PASSED [  1%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_connection_health_monitoring PASSED [  2%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_workflow_integration_with_pool PASSED [  2%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_connection_pool_recovery PASSED [  2%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_pattern_based_pre_warming PASSED [  2%]
+tests/integration/infrastructure/test_connection_pool_integration.py::TestConnectionPoolIntegration::test_metrics_accuracy PASSED [  3%]
+tests/integration/infrastructure/test_connection_pool_production.py::TestConnectionPoolProduction::test_high_concurrency_mixed_workload PASSED [  3%]
+tests/integration/infrastructure/test_connection_pool_production.py::TestConnectionPoolProduction::test_connection_failure_recovery PASSED [  3%]
+tests/integration/infrastructure/test_connection_pool_production.py::TestConnectionPoolProduction::test_long_running_queries_timeout PASSED [  3%]
+tests/integration/infrastructure/test_connection_pool_production.py::TestConnectionPoolProduction::test_memory_pressure_and_resource_limits PASSED [  4%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_data_transformer_has_execute_not_process PASSED [  4%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_session_creation_endpoint_with_execute PASSED [  4%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_data_transformer_execute_in_session_flow PASSED [  4%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_error_handling_with_execute PASSED [  5%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_api_endpoints_no_process_calls[/api/sessions-post] PASSED [  5%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_api_endpoints_no_process_calls[/api/sessions/test-123-get] PASSED [  5%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_concurrent_session_creation_with_execute PASSED [  5%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestMiddlewareComponentsExecuteFix::test_ai_chat_middleware_uses_execute PASSED [  6%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestMiddlewareComponentsExecuteFix::test_access_control_uses_execute PASSED [  6%]
+tests/integration/middleware/test_basic_integration.py::test_middleware_imports PASSED [  6%]
+tests/integration/middleware/test_basic_integration.py::test_auth_uses_sdk_nodes PASSED [  6%]
+tests/integration/middleware/test_basic_integration.py::test_agent_ui_uses_sdk_runtime PASSED [  7%]
+tests/integration/middleware/test_basic_integration.py::test_realtime_uses_sdk_http_node PASSED [  7%]
+tests/integration/middleware/test_basic_integration.py::test_event_system_basic_functionality PASSED [  7%]
+tests/integration/middleware/test_basic_integration.py::test_database_repos_use_sdk_nodes PASSED [  7%]
+tests/integration/middleware/test_basic_integration.py::test_ai_chat_uses_sdk_vector_nodes PASSED [  8%]
+tests/integration/middleware/test_basic_integration.py::test_workflow_creation_integration PASSED [  8%]
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_basic_echo PASSED [  8%]
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_durability_status PASSED [  9%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_high_volume_concurrent_analytics PASSED [  9%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_ai_customer_insights_pipeline PASSED [  9%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_sentiment_analysis_batch_processing PASSED [  9%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_gateway_performance_under_load PASSED [ 10%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_system_resilience_and_recovery PASSED [ 10%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_simple_compute_workflow PASSED [ 10%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_multi_step_workflow PASSED [ 10%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_concurrent_executions PASSED [ 11%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_durability_features PASSED [ 11%]
+tests/integration/middleware/test_event_store.py::TestRequestEvent::test_event_creation PASSED [ 11%]
+tests/integration/middleware/test_event_store.py::TestRequestEvent::test_event_serialization PASSED [ 11%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_append_event PASSED [ 12%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_sequence_numbers PASSED [ 12%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_buffer_flush_on_size PASSED [ 12%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_events PASSED [ 12%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_events_with_filters PASSED [ 13%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_replay_events PASSED [ 13%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_stream_events PASSED [ 13%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_stream_events_with_filter PASSED [ 13%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_projections PASSED [ 14%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_async_projection PASSED [ 14%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_storage_backend PASSED [ 14%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_load_from_storage PASSED [ 14%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_stats PASSED [ 15%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_close PASSED [ 15%]
+tests/integration/middleware/test_event_store.py::TestProjections::test_request_state_projection PASSED [ 15%]
+tests/integration/middleware/test_event_store.py::TestProjections::test_performance_metrics_projection PASSED [ 15%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_end_to_end_workflow_execution PASSED [ 16%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_multiple_workflow_orchestration PASSED [ 16%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_realtime_communication_integration PASSED [ 16%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_session_isolation_and_cleanup PASSED [ 17%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_middleware_stack_health_monitoring PASSED [ 17%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management PASSED [ 17%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_error_handling_and_recovery PASSED [ 17%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_middleware_performance_characteristics PASSED [ 18%]
+tests/integration/middleware/test_real_integration.py::TestRealAuthMiddleware::test_auth_middleware_uses_real_sdk_nodes PASSED [ 18%]
+tests/integration/middleware/test_real_integration.py::TestRealAuthMiddleware::test_real_user_registration_workflow PASSED [ 18%]
+tests/integration/middleware/test_real_integration.py::TestRealAuthMiddleware::test_credential_manager_real_functionality PASSED [ 18%]
+tests/integration/middleware/test_real_integration.py::TestRealDatabaseRepositories::test_repository_uses_real_sql_node PASSED [ 19%]
+tests/integration/middleware/test_real_integration.py::TestRealDatabaseRepositories::test_real_database_operations PASSED [ 19%]
+tests/integration/middleware/test_real_integration.py::TestRealRealtimeMiddleware::test_webhook_manager_uses_real_http_node PASSED [ 19%]
+tests/integration/middleware/test_real_integration.py::TestRealRealtimeMiddleware::test_real_http_request_execution PASSED [ 19%]
+tests/integration/middleware/test_real_integration.py::TestRealRealtimeMiddleware::test_real_event_system PASSED [ 20%]
+tests/integration/middleware/test_real_integration.py::TestRealAgentUIMiddleware::test_agent_ui_uses_real_runtime PASSED [ 20%]
+tests/integration/middleware/test_real_integration.py::TestRealAgentUIMiddleware::test_real_workflow_creation PASSED [ 20%]
+tests/integration/middleware/test_real_integration.py::TestRealAIChatMiddleware::test_ai_chat_uses_real_sdk_nodes PASSED [ 20%]
+tests/integration/middleware/test_real_integration.py::TestRealAIChatMiddleware::test_real_chat_session_management PASSED [ 21%]
+tests/integration/middleware/test_real_integration.py::TestRealAIChatMiddleware::test_real_workflow_generation_attempt PASSED [ 21%]
+tests/integration/middleware/test_real_integration.py::TestEndToEndRealScenarios::test_complete_middleware_integration PASSED [ 21%]
+tests/integration/middleware/test_real_integration.py::TestEndToEndRealScenarios::test_all_middleware_components_importable PASSED [ 21%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_user_creation_through_middleware PASSED [ 22%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_role_management_with_access_control PASSED [ 22%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_permission_check_through_gateway PASSED [ 22%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_bulk_user_operations PASSED [ 22%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_admin_node_execute_method PASSED [ 23%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_middleware_access_control_integration PASSED [ 23%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_in_sync_context PASSED [ 23%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_in_async_context PASSED [ 23%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_in_jupyter_like_environment PASSED [ 24%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_concurrent_calls PASSED [ 24%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_timeout_behavior PASSED [ 24%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_error_recovery PASSED [ 25%]
+tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_with_real_llm FAILED [ 25%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_http_request_node_with_real_api PASSED [ 25%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_rest_client_with_pagination PASSED [ 25%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_oauth2_node_with_real_flow PASSED [ 26%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_graphql_client_with_complex_query PASSED [ 26%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_error_handling_with_real_errors PASSED [ 26%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_rest_client_crud_operations PASSED [ 26%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPIWithOllamaGeneration::test_generate_api_responses_with_ollama PASSED [ 27%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_http_request_node_with_real_api PASSED [ 27%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_rest_client_with_pagination PASSED [ 27%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_oauth2_node_with_real_flow PASSED [ 27%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_graphql_client_with_complex_query PASSED [ 28%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_error_handling_with_real_errors PASSED [ 28%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_rest_client_crud_operations PASSED [ 28%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_api_aggregation_endpoints PASSED [ 28%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPIWithOllamaGeneration::test_generate_and_test_api_responses PASSED [ 29%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_async_sql_with_connection_pooling PASSED [ 29%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_vector_node_operations PASSED [ 29%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_vector_similarity_search PASSED [ 29%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_connection_manager_pooling PASSED [ 30%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_abac_with_async_nodes PASSED [ 30%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_migration_framework PASSED [ 30%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_workflow_with_async_nodes PASSED [ 30%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_simple_alert PASSED [ 31%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_workflow_with_alert PASSED [ 31%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_conditional_alerts PASSED [ 31%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_rate_limiting PASSED [ 31%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_complex_embeds PASSED [ 32%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_error_reporting_workflow PASSED [ 32%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_async_workflow_alerts PASSED [ 32%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_a2a_coordination_alerts PASSED [ 32%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_batch_alerts PASSED [ 33%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_validation_and_sanitization PASSED [ 33%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_postgres_real_connection PASSED [ 33%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_mysql_real_connection PASSED [ 34%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_async_postgres_operations PASSED [ 34%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLWithOllamaGeneration::test_generate_complex_queries_with_ollama PASSED [ 34%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_basic_connection_and_select PASSED [ 34%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_crud_operations PASSED [ 35%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_result_formats PASSED [ 35%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_parameterized_queries_security PASSED [ 35%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_transaction_rollback PASSED [ 35%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_connection_pooling PASSED [ 36%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_complex_joins PASSED [ 36%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_mysql_specific_features PASSED [ 36%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_mysql_charset_unicode PASSED [ 36%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_basic_queries PASSED [ 37%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_jsonb_operations PASSED [ 37%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_array_operations PASSED [ 37%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_cte_and_window_functions PASSED [ 37%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_transactions PASSED [ 38%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_full_text_search PASSED [ 38%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_upsert_operations PASSED [ 38%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_custom_types_and_enums PASSED [ 38%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_postgres_specific_functions PASSED [ 39%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_basic_resource_access PASSED [ 39%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_multiple_resource_access PASSED [ 39%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_resource_error_handling PASSED [ 39%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_no_registry_provided PASSED [ 40%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_resource_with_concurrent_tasks PASSED [ 40%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_resource_cleanup_simulation PASSED [ 40%]
+tests/integration/resources/test_async_integration.py::TestAsyncPythonCodeNodeResourceIntegration::test_resource_health_check_integration PASSED [ 40%]
+tests/integration/runtime/test_async_runtime_integration.py::TestAsyncRuntimeRealWorld::test_database_etl_pipeline PASSED [ 41%]
+tests/integration/runtime/test_async_runtime_integration.py::TestAsyncRuntimeRealWorld::test_llm_enhanced_data_processing PASSED [ 41%]
+tests/integration/runtime/test_async_runtime_integration.py::TestAsyncRuntimeRealWorld::test_real_time_data_pipeline PASSED [ 41%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_dag_workflow_detection PASSED [ 42%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_cyclic_workflow_detection PASSED [ 42%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_mixed_workflow_execution PASSED [ 42%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_cycle_disabled_runtime PASSED [ 42%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_parallel_dag_execution PASSED [ 43%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_parallel_cyclic_execution PASSED [ 43%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_worker_count_configuration PASSED [ 43%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_async_configuration PASSED [ 43%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestRuntimeConfiguration::test_debug_mode_configuration PASSED [ 44%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestRuntimeConfiguration::test_runtime_interface_compatibility PASSED [ 44%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestRuntimeConfiguration::test_runtime_error_handling PASSED [ 44%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestTaskTrackingIntegration::test_local_runtime_tracking PASSED [ 44%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestTaskTrackingIntegration::test_parallel_runtime_tracking PASSED [ 45%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestTaskTrackingIntegration::test_cyclic_workflow_tracking PASSED [ 45%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestPerformanceBenchmarking::test_dag_performance_comparison PASSED [ 45%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestPerformanceBenchmarking::test_parallel_workflow_speedup PASSED [ 45%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestPerformanceBenchmarking::test_cyclic_performance_scaling PASSED [ 46%]
+tests/integration/test_access_control_integration.py::TestAccessControlIntegration::test_workflow_execution_without_access_control PASSED [ 46%]
+tests/integration/test_access_control_integration.py::TestAccessControlIntegration::test_mixed_workflow_with_regular_and_acl_nodes PASSED [ 46%]
+tests/integration/test_access_control_integration.py::TestAccessControlIntegration::test_node_with_output_masking_configuration PASSED [ 46%]
+tests/integration/test_access_control_integration.py::TestAccessControlIntegration::test_complex_workflow_with_multiple_acl_nodes PASSED [ 47%]
+tests/integration/test_access_control_integration.py::TestAccessControlIntegration::test_error_handling_in_acl_wrapped_nodes PASSED [ 47%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_create_role_basic PASSED [ 47%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_create_hierarchical_role PASSED [ 47%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_circular_dependency_validation PASSED [ 48%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_assign_user_to_role PASSED [ 48%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_bulk_assign_users PASSED [ 48%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_get_effective_permissions PASSED [ 48%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_update_role PASSED [ 49%]
+tests/integration/test_admin_nodes_integration.py::TestRoleManagementNodeIntegration::test_validate_hierarchy PASSED [ 49%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_check_permission_basic PASSED [ 49%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_check_permission_with_explanation PASSED [ 50%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_batch_permission_check PASSED [ 50%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_bulk_user_permission_check PASSED [ 50%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_get_user_permissions PASSED [ 50%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_explain_permission_detailed PASSED [ 51%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_validate_abac_conditions PASSED [ 51%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_hierarchical_permission_check PASSED [ 51%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_permission_caching PASSED [ 51%]
+tests/integration/test_admin_nodes_integration.py::TestPermissionCheckNodeIntegration::test_clear_cache PASSED [ 52%]
+tests/integration/test_admin_nodes_integration.py::TestAdminNodesIntegrationWorkflow::test_role_hierarchy_permissions_workflow PASSED [ 52%]
+tests/integration/test_admin_nodes_integration.py::TestAdminNodesIntegrationWorkflow::test_multi_tenant_isolation PASSED [ 52%]
+tests/integration/test_admin_nodes_integration.py::TestAdminNodesIntegrationWorkflow::test_performance_with_many_permissions PASSED [ 52%]
+tests/integration/test_admin_nodes_integration.py::TestAdminNodesIntegrationWorkflow::test_error_handling_and_validation PASSED [ 53%]
+tests/integration/test_admin_nodes_production.py::TestAdminNodesProduction::test_complete_user_lifecycle_with_caching PASSED [ 53%]
+tests/integration/test_admin_nodes_production.py::TestAdminNodesProduction::test_multi_tenant_isolation_concurrent PASSED [ 53%]
+tests/integration/test_admin_nodes_production.py::TestAdminNodesProduction::test_performance_under_load PASSED [ 53%]
+tests/integration/test_admin_nodes_production.py::TestAdminNodesProduction::test_enterprise_scenario_with_ollama PASSED [ 54%]
+tests/integration/test_admin_nodes_production.py::TestAdminNodesProduction::test_audit_compliance_workflow PASSED [ 54%]
+tests/integration/test_admin_nodes_production.py::TestAdminNodesProduction::test_abac_enterprise_policies PASSED [ 54%]
+tests/integration/test_async_testing_framework.py::TestAsyncTestingFrameworkIntegration::test_data_processing_workflow_with_mocks PASSED [ 54%]
+tests/integration/test_async_testing_framework.py::TestAsyncTestingFrameworkIntegration::test_concurrent_workflow_execution PASSED [ 55%]
+tests/integration/test_async_testing_framework.py::TestAsyncTestingFrameworkIntegration::test_error_handling_and_retry_patterns PASSED [ 55%]
+tests/integration/test_async_testing_framework.py::TestAsyncTestingFrameworkIntegration::test_performance_and_monitoring PASSED [ 55%]
+tests/integration/test_async_testing_framework.py::TestAsyncTestingFrameworkIntegration::test_state_management_and_convergence PASSED [ 55%]
+tests/integration/test_async_testing_framework.py::TestAsyncTestingFrameworkIntegration::test_comprehensive_workflow_suite PASSED [ 56%]
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_database_integration_workflow PASSED [ 56%]
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_http_integration_with_patterns PASSED [ 56%]
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_cache_integration_patterns PASSED [ 56%]
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_complex_real_world_pipeline PASSED [ 57%]
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_error_handling_and_recovery PASSED [ 57%]
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_performance_and_concurrency PASSED [ 57%]
+tests/integration/test_code_node_integration.py::TestPythonCodeNodeIntegration::test_function_node_in_workflow PASSED [ 57%]
+tests/integration/test_code_node_integration.py::TestPythonCodeNodeIntegration::test_class_node_with_state PASSED [ 58%]
+tests/integration/test_code_node_integration.py::TestPythonCodeNodeIntegration::test_code_string_node PASSED [ 58%]
+tests/integration/test_code_node_integration.py::TestPythonCodeNodeIntegration::test_multiple_code_nodes PASSED [ 58%]
+tests/integration/test_code_node_integration.py::TestPythonCodeNodeIntegration::test_error_handling_in_workflow PASSED [ 59%]
+tests/integration/test_cycle_integration_realistic.py::TestRealisticCycleScenarios::test_realistic_etl_with_retries SKIPPED [ 59%]
+tests/integration/test_cycle_integration_realistic.py::TestRealisticCycleScenarios::test_realistic_api_polling_with_rate_limits PASSED [ 59%]
+tests/integration/test_cycle_integration_realistic.py::TestRealisticCycleScenarios::test_realistic_batch_processing_with_checkpoints PASSED [ 59%]
+tests/integration/test_cycle_integration_realistic.py::TestRealisticCycleScenarios::test_realistic_resource_optimization_cycle PASSED [ 60%]
+tests/integration/test_cycle_integration_realistic.py::TestRealisticCycleScenarios::test_realistic_data_quality_improvement_cycle PASSED [ 60%]
+tests/integration/test_docker_infrastructure_validation.py::test_postgres PASSED [ 60%]
+tests/integration/test_docker_infrastructure_validation.py::test_redis PASSED [ 60%]
+tests/integration/test_docker_infrastructure_validation.py::test_ollama PASSED [ 61%]
+tests/integration/test_docker_infrastructure_validation.py::test_integration PASSED [ 61%]
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_database_workflow_integration PASSED [ 61%]
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_multi_resource_workflow PASSED [ 61%]
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_concurrent_workflow_execution PASSED [ 62%]
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_resource_sharing_across_workflows PASSED [ 62%]
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_workflow_with_http_resource PASSED [ 62%]
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_real_data_pipeline_with_ollama PASSED [ 62%]
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_high_concurrency_resource_sharing PASSED [ 63%]
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_multi_tenant_isolation PASSED [ 63%]
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_real_world_api_aggregation PASSED [ 63%]
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_gateway_health_monitoring PASSED [ 63%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_simple_node_error PASSED [ 64%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_error_in_chain PASSED [ 64%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_conditional_error_handling PASSED [ 64%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_parallel_error_handling PASSED [ 64%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_error_with_task_tracking PASSED [ 65%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_validation_error_before_execution PASSED [ 65%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_error_message_context PASSED [ 65%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_nested_error_handling PASSED [ 65%]
+tests/integration/test_error_propagation.py::TestErrorPropagation::test_workflow_recovery_after_error PASSED [ 66%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_simple_workflow PASSED [ 66%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_complex_workflow PASSED [ 66%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_workflow_as_python_code PASSED [ 67%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_with_node_templates PASSED [ 67%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_validation PASSED [ 67%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_with_execution_results PASSED [ 67%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_export_workflow_bundle PASSED [ 68%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_incremental_export PASSED [ 68%]
+tests/integration/test_export_integration.py::TestExportIntegration::test_custom_serialization_concept PASSED [ 68%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_validation_error_handling PASSED [ 68%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_workflow_builder_api PASSED [ 69%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_runtime_initialization PASSED [ 69%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_node_base_class PASSED [ 69%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_workflow_metadata PASSED [ 69%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_error_handling_in_communication PASSED [ 70%]
+tests/integration/test_node_communication.py::TestNodeCommunication::test_imports_available PASSED [ 70%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_workflow_execution_with_tracking PASSED [ 70%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_hierarchy_tracking PASSED [ 70%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_failed_node_tracking PASSED [ 71%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_progress_tracking PASSED [ 71%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_concurrent_workflow_tracking PASSED [ 71%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_metadata_tracking PASSED [ 71%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_duration_tracking PASSED [ 72%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_retry_tracking PASSED [ 72%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_search_and_filtering PASSED [ 72%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_storage_backend_integration PASSED [ 72%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_lifecycle_events PASSED [ 73%]
+tests/integration/test_task_tracking_integration.py::TestTaskTrackingIntegration::test_task_performance_metrics PASSED [ 73%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_visualizer_availability PASSED [ 73%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_simple_workflow_visualization PASSED [ 73%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_basic_visualization_methods PASSED [ 74%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_matplotlib_availability PASSED [ 74%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_workflow_builder_integration PASSED [ 74%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_visualization_components_integration PASSED [ 75%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_basic_workflow_creation_for_viz PASSED [ 75%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_workflow_metadata_for_visualization PASSED [ 75%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_runtime_visualization_integration PASSED [ 75%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_pathlib_integration PASSED [ 76%]
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_workflow_import_availability PASSED [ 76%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_simple_workflow_execution PASSED [ 76%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_complex_workflow_execution PASSED [ 76%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_with_task_tracking PASSED [ 77%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_state_persistence PASSED [ 77%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_retry_on_failure PASSED [ 77%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_partial_workflow_execution PASSED [ 77%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_with_dynamic_inputs PASSED [ 78%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_with_environment_variables PASSED [ 78%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_cancellation PASSED [ 78%]
+tests/integration/test_workflow_execution.py::TestWorkflowExecution::test_workflow_resource_cleanup PASSED [ 78%]
+tests/integration/test_workflow_patterns.py::TestWorkflowPatterns::test_simple_etl_workflow PASSED [ 79%]
+tests/integration/test_workflow_patterns.py::TestWorkflowPatterns::test_conditional_workflow PASSED [ 79%]
+tests/integration/test_workflow_patterns.py::TestWorkflowPatterns::test_parallel_processing_workflow PASSED [ 79%]
+tests/integration/testing/test_fixtures.py::TestAsyncWorkflowFixtures::test_temp_directory PASSED [ 79%]
+tests/integration/testing/test_fixtures.py::TestAsyncWorkflowFixtures::test_create_test_files PASSED [ 80%]
+tests/integration/testing/test_fixtures.py::TestAsyncWorkflowFixtures::test_create_mock_http_client PASSED [ 80%]
+tests/integration/testing/test_fixtures.py::TestAsyncWorkflowFixtures::test_create_test_cache PASSED [ 80%]
+tests/integration/testing/test_fixtures.py::TestAsyncWorkflowFixtures::test_mock_time PASSED [ 80%]
+tests/integration/testing/test_fixtures.py::TestAsyncWorkflowFixtures::test_create_test_database SKIPPED [ 81%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_basic_requests PASSED [ 81%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_default_response PASSED [ 81%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_call_tracking PASSED [ 81%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_assert_called PASSED [ 82%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_response_methods PASSED [ 82%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_add_responses_batch PASSED [ 82%]
+tests/integration/testing/test_fixtures.py::TestMockHttpClient::test_reset PASSED [ 82%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_basic_operations PASSED [ 83%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_expiration PASSED [ 83%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_setex PASSED [ 83%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_expire PASSED [ 84%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_clear PASSED [ 84%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_call_tracking PASSED [ 84%]
+tests/integration/testing/test_fixtures.py::TestMockCache::test_assert_called PASSED [ 84%]
+tests/integration/testing/test_fixtures.py::TestHttpCall::test_http_call PASSED [ 85%]
+tests/integration/workflow/test_connection_merging_integration.py::TestConnectionMergingIntegration::test_async_and_sync_builder_connection_consistency PASSED [ 85%]
+tests/integration/workflow/test_connection_merging_integration.py::TestConnectionMergingIntegration::test_async_runtime_executes_merged_connections_correctly PASSED [ 85%]
+tests/integration/workflow/test_connection_merging_integration.py::TestConnectionMergingIntegration::test_database_integration_with_merged_connections PASSED [ 85%]
+tests/integration/workflow/test_connection_merging_integration.py::TestConnectionMergingIntegration::test_parallel_workflow_execution_with_merged_connections PASSED [ 86%]
+tests/integration/workflow/test_connection_merging_integration.py::TestConnectionMergingIntegration::test_regression_original_monitoring_scenario PASSED [ 86%]
+tests/integration/workflows/test_convergence_basic.py::TestConvergence::test_max_iterations_safety PASSED [ 86%]
+tests/integration/workflows/test_convergence_basic.py::TestConvergence::test_simple_cycle_execution PASSED [ 86%]
+tests/integration/workflows/test_convergence_basic.py::TestConvergence::test_cycle_with_initial_parameters PASSED [ 87%]
+tests/integration/workflows/test_convergence_basic.py::TestConvergence::test_none_handling_in_cycle PASSED [ 87%]
+tests/integration/workflows/test_convergence_basic.py::TestConvergence::test_multi_node_cycle PASSED [ 87%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_expression_based_convergence PASSED [ 87%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_max_iteration_safety PASSED [ 88%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_compound_convergence_conditions PASSED [ 88%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_timeout_safety_mechanism PASSED [ 88%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_resource_monitoring_safety PASSED [ 88%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_early_termination_on_convergence PASSED [ 89%]
+tests/integration/workflows/test_convergence_safety.py::TestConvergenceSafety::test_invalid_convergence_expression PASSED [ 89%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_basic_cycle_execution PASSED [ 89%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_convergence_detection PASSED [ 89%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_parameter_propagation_through_cycles PASSED [ 90%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_nested_cycle_execution PASSED [ 90%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_state_accumulation_pattern PASSED [ 90%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_cycle_with_conditional_flow PASSED [ 90%]
+tests/integration/workflows/test_core_cycle_execution.py::TestCoreCycleExecution::test_cycle_iteration_limits PASSED [ 91%]
+tests/integration/workflows/test_cycle_advanced.py::TestNestedCycleScenarios::test_nested_workflow_with_internal_cycles PASSED [ 91%]
+tests/integration/workflows/test_cycle_advanced.py::TestNestedCycleScenarios::test_parallel_nested_cycles PASSED [ 91%]
+tests/integration/workflows/test_cycle_advanced.py::TestErrorRecoveryInCycles::test_cycle_with_error_recovery PASSED [ 92%]
+tests/integration/workflows/test_cycle_advanced.py::TestErrorRecoveryInCycles::test_cycle_with_timeout_recovery PASSED [ 92%]
+tests/integration/workflows/test_cycle_advanced.py::TestMultiCriteriaConvergence::test_multi_criteria_convergence PASSED [ 92%]
+tests/integration/workflows/test_cycle_advanced.py::TestMultiCriteriaConvergence::test_adaptive_convergence_criteria PASSED [ 92%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_simple_self_cycle PASSED [ 93%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_two_node_cycle PASSED [ 93%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_convergence_conditions PASSED [ 93%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_cycle_state_management PASSED [ 93%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_cycle_detection_and_validation PASSED [ 94%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_parameter_propagation_through_cycles PASSED [ 94%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_cycle_with_external_nodes PASSED [ 94%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_edge_cases PASSED [ 94%]
+tests/integration/workflows/test_cycle_core.py::TestCyclicWorkflowBasics::test_cycle_performance_monitoring PASSED [ 95%]
+tests/integration/workflows/test_cycle_patterns.py::TestDataQualityPatterns::test_simple_cyclic_data_improvement PASSED [ 95%]
+tests/integration/workflows/test_cycle_patterns.py::TestDataQualityPatterns::test_iterative_data_quality_improvement PASSED [ 95%]
+tests/integration/workflows/test_cycle_patterns.py::TestMLTrainingPatterns::test_ml_training_with_convergence PASSED [ 95%]
+tests/integration/workflows/test_cycle_patterns.py::TestStreamProcessingPatterns::test_sliding_window_stream_processing PASSED [ 96%]
+tests/integration/workflows/test_cycle_patterns.py::TestDistributedProcessingPatterns::test_simple_task_coordination_cycles PASSED [ 96%]
+tests/integration/workflows/test_cycle_patterns.py::TestDistributedProcessingPatterns::test_a2a_coordination_cycles PASSED [ 96%]
+tests/integration/workflows/test_cyclic_examples.py::TestCyclicExamples::test_simple_increment_cycle PASSED [ 96%]
+tests/integration/workflows/test_cyclic_examples.py::TestCyclicExamples::test_quality_improvement_cycle PASSED [ 97%]
+tests/integration/workflows/test_cyclic_examples.py::TestCyclicExamples::test_cycle_with_multiple_outputs PASSED [ 97%]
+tests/integration/workflows/test_cyclic_examples.py::TestCyclicExamples::test_cycle_execution_without_initial_params PASSED [ 97%]
+tests/integration/workflows/test_cyclic_examples.py::TestCyclicExamples::test_cycle_with_early_termination PASSED [ 97%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_simple_cycle_with_max_iterations PASSED [ 98%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_cycle_without_max_iterations_raises_error PASSED [ 98%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_cycle_with_convergence_expression PASSED [ 98%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_multiple_cycles_in_workflow PASSED [ 98%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_cycle_with_external_input PASSED [ 99%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_workflow_has_cycles_detection PASSED [ 99%]
+tests/integration/workflows/test_cyclic_workflows.py::TestCyclicWorkflowBasics::test_cycle_id_uniqueness PASSED [ 99%]
+tests/integration/workflows/test_exception_handling.py::test_exception_handling PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_basic_echo
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_basic_echo
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:17: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_stats
+  ./repos/projects/kailash_python_sdk/src/kailash/middleware/gateway/event_store.py:128: RuntimeWarning: coroutine 'EventStore._flush_loop' was never awaited
+    self._flush_task = None
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_end_to_end_workflow_execution
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:168: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_multiple_workflow_orchestration
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:239: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec1_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_multiple_workflow_orchestration
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:243: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec2_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_realtime_communication_integration
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:305: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_session_isolation_and_cleanup
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:355: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec1_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_session_isolation_and_cleanup
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:361: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec2_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:453: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_error_handling_and_recovery
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:539: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    error_execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_error_handling_and_recovery
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:544: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    success_execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py: 10 warnings
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:604: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_cache_integration_patterns
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_complex_real_world_pipeline
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_performance_and_concurrency
+  ./repos/projects/kailash_python_sdk/src/kailash/workflow/async_builder.py:568: DeprecationWarning: Call to deprecated close. (Use aclose() instead) -- Deprecated since version 5.0.1.
+    cache.close()
+
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_cache_integration_patterns
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_complex_real_world_pipeline
+tests/integration/test_async_workflow_builder_integration.py::TestAsyncWorkflowBuilderIntegration::test_performance_and_concurrency
+  ./repos/projects/kailash_python_sdk/src/kailash/workflow/async_builder.py:568: RuntimeWarning: coroutine 'Redis.close' was never awaited
+    cache.close()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_concurrent_workflow_execution
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_high_concurrency_resource_sharing
+  ./.pyenv/versions/3.12.9/lib/python3.12/asyncio/base_events.py:2000: RuntimeWarning: coroutine 'AsyncPythonCodeNode.async_run.<locals>.limited_create_task.<locals>.wrapped' was never awaited
+    handle = None  # Needed to break cycles when an exception occurs.
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/test_enhanced_gateway_integration.py::TestEnhancedGatewayIntegration::test_concurrent_workflow_execution
+  ./repos/projects/kailash_python_sdk/tests/integration/test_enhanced_gateway_integration.py:58: RuntimeWarning: coroutine 'AsyncPythonCodeNode.async_run.<locals>.limited_create_task.<locals>.wrapped' was never awaited
+    await gateway.shutdown()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/test_enhanced_gateway_production.py::TestEnhancedGatewayProduction::test_high_concurrency_resource_sharing
+  ./repos/projects/kailash_python_sdk/tests/integration/test_enhanced_gateway_production.py:89: RuntimeWarning: coroutine 'AsyncPythonCodeNode.async_run.<locals>.limited_create_task.<locals>.wrapped' was never awaited
+    await gateway.shutdown()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/test_visualization_integration.py::TestVisualizationIntegration::test_basic_visualization_methods
+  ./repos/projects/kailash_python_sdk/src/kailash/workflow/visualization.py:289: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+    plt.show()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/nodes/ai/test_llm_agent_mcp_real.py::TestLLMAgentMCPRealIntegration::test_mcp_with_real_llm
+====== 1 failed, 385 passed, 2 skipped, 37 warnings in 104.12s (0:01:44) =======

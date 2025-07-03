@@ -853,6 +853,62 @@ class LLMAgentNode(Node):
             "loaded_from": "mock_storage",
         }
 
+    def _run_async_in_sync_context(self, coro):
+        """
+        Run async coroutine in a synchronous context, handling existing event loops.
+
+        This helper method detects if an event loop is already running and handles
+        the execution appropriately to avoid "RuntimeError: This event loop is already running".
+
+        Args:
+            coro: The coroutine to execute
+
+        Returns:
+            The result of the coroutine execution
+
+        Raises:
+            TimeoutError: If the operation times out (30 seconds)
+            Exception: Any exception raised by the coroutine
+        """
+        import asyncio
+
+        try:
+            # Check if there's already a running event loop
+            loop = asyncio.get_running_loop()
+            # If we're here, there's a running loop - create a new thread
+            import threading
+
+            result = None
+            exception = None
+
+            def run_in_thread():
+                nonlocal result, exception
+                try:
+                    # Create new event loop in thread
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        result = new_loop.run_until_complete(coro)
+                    finally:
+                        new_loop.close()
+                except Exception as e:
+                    exception = e
+
+            thread = threading.Thread(target=run_in_thread)
+            thread.start()
+            thread.join(timeout=30)  # 30 second timeout
+
+            if thread.is_alive():
+                raise TimeoutError("MCP operation timed out after 30 seconds")
+
+            if exception:
+                raise exception
+            return result
+
+        except RuntimeError:
+            # No running event loop, use asyncio.run()
+            return asyncio.run(coro)
+
     def _retrieve_mcp_context(
         self, mcp_servers: list[dict], mcp_context: list[str]
     ) -> list[dict[str, Any]]:
@@ -939,14 +995,14 @@ class LLMAgentNode(Node):
                 for server_config in mcp_servers:
                     try:
                         # List resources from server
-                        resources = asyncio.run(
+                        resources = self._run_async_in_sync_context(
                             self._mcp_client.list_resources(server_config)
                         )
 
                         # Read specific resources if requested
                         for uri in mcp_context:
                             try:
-                                resource_data = asyncio.run(
+                                resource_data = self._run_async_in_sync_context(
                                     self._mcp_client.read_resource(server_config, uri)
                                 )
 
@@ -1014,17 +1070,48 @@ class LLMAgentNode(Node):
                                     }
                                 )
 
-                    except Exception as e:
-                        self.logger.debug(f"MCP server connection failed: {e}")
+                    except TimeoutError as e:
+                        self.logger.warning(
+                            f"MCP server '{server_config.get('name', 'unknown')}' timed out after 30 seconds: {e}"
+                        )
                         # Fall back to mock for this server
                         context_data.append(
                             {
                                 "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
-                                "content": "Connection failed, using fallback content",
+                                "content": "MCP server timed out - using fallback content. Check if the server is running and accessible.",
                                 "source": server_config.get("name", "unknown"),
                                 "retrieved_at": datetime.now().isoformat(),
                                 "relevance_score": 0.5,
-                                "metadata": {"error": str(e)},
+                                "metadata": {
+                                    "error": "timeout",
+                                    "error_message": str(e),
+                                },
+                            }
+                        )
+                    except Exception as e:
+                        error_type = type(e).__name__
+                        self.logger.error(
+                            f"MCP server '{server_config.get('name', 'unknown')}' connection failed ({error_type}): {e}"
+                        )
+
+                        # Provide helpful error messages based on exception type
+                        if "coroutine" in str(e).lower() and "await" in str(e).lower():
+                            self.logger.error(
+                                "This appears to be an async/await issue. Please report this bug to the Kailash SDK team."
+                            )
+
+                        # Fall back to mock for this server
+                        context_data.append(
+                            {
+                                "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
+                                "content": f"Connection failed ({error_type}) - using fallback content. Error: {str(e)}",
+                                "source": server_config.get("name", "unknown"),
+                                "retrieved_at": datetime.now().isoformat(),
+                                "relevance_score": 0.5,
+                                "metadata": {
+                                    "error": error_type,
+                                    "error_message": str(e),
+                                },
                             }
                         )
 
@@ -1032,11 +1119,17 @@ class LLMAgentNode(Node):
                 if context_data:
                     return context_data
 
-            except ImportError:
+            except ImportError as e:
                 # MCPClient not available, fall back to mock
+                self.logger.info(
+                    "MCP client not available. Install the MCP SDK with 'pip install mcp' to use real MCP servers."
+                )
                 pass
             except Exception as e:
-                self.logger.debug(f"MCP retrieval error: {e}")
+                self.logger.error(
+                    f"Unexpected error in MCP retrieval: {type(e).__name__}: {e}"
+                )
+                self.logger.info("Falling back to mock MCP implementation.")
 
         # Fallback to mock implementation
         for uri in mcp_context:
@@ -1089,8 +1182,6 @@ class LLMAgentNode(Node):
 
         if use_real_mcp:
             try:
-                import asyncio
-
                 from kailash.mcp import MCPClient
 
                 # Initialize MCP client if not already done
@@ -1101,7 +1192,7 @@ class LLMAgentNode(Node):
                 for server_config in mcp_servers:
                     try:
                         # Discover tools asynchronously
-                        tools = asyncio.run(
+                        tools = self._run_async_in_sync_context(
                             self._mcp_client.discover_tools(server_config)
                         )
 
@@ -1131,16 +1222,27 @@ class LLMAgentNode(Node):
                                     {"type": "function", "function": function_def}
                                 )
 
+                    except TimeoutError as e:
+                        self.logger.warning(
+                            f"Tool discovery timed out for MCP server '{server_config.get('name', 'unknown')}': {e}"
+                        )
                     except Exception as e:
-                        self.logger.debug(
-                            f"Failed to discover tools from {server_config.get('name', 'unknown')}: {e}"
+                        error_type = type(e).__name__
+                        self.logger.error(
+                            f"Failed to discover tools from '{server_config.get('name', 'unknown')}' ({error_type}): {e}"
                         )
 
             except ImportError:
                 # MCPClient not available, use mock tools
+                self.logger.info(
+                    "MCP client not available for tool discovery. Install with 'pip install mcp' for real MCP tools."
+                )
                 pass
             except Exception as e:
-                self.logger.debug(f"MCP tool discovery error: {e}")
+                self.logger.error(
+                    f"Unexpected error in MCP tool discovery: {type(e).__name__}: {e}"
+                )
+                self.logger.info("Using mock tools as fallback.")
 
         # If no real tools discovered, provide minimal generic tools
         if not discovered_tools:

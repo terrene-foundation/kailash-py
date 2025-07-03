@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 
 import asyncpg
 import pytest
+import pytest_asyncio
 
 from kailash import Workflow
 from kailash.nodes.api import HTTPRequestNode
@@ -121,7 +122,7 @@ class InfrastructureStressHelper:
 class TestDockerInfrastructureStress:
     """Stress tests for Docker infrastructure."""
 
-    @pytest.fixture(autouse=True)
+    @pytest_asyncio.fixture(autouse=True)
     async def setup_teardown(self):
         """Setup and teardown for stress tests."""
         available, status = await InfrastructureStressHelper.check_services_available()
