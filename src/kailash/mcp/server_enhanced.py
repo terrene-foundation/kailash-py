@@ -104,7 +104,7 @@ class EnhancedMCPServer:
             return
 
         try:
-            from mcp.server.fastmcp import FastMCP
+            from mcp.server import FastMCP
 
             self._mcp = FastMCP(self.name)
             logger.info(f"Initialized FastMCP server: {self.name}")
