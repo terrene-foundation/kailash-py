@@ -15,6 +15,12 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.6.2] - 2025-07-03
+
+See [changelogs/releases/v0.6.2-2025-07-03.md](changelogs/releases/v0.6.2-2025-07-03.md) for full details.
+
+**Key Features:** LLM integration enhancements with Ollama backend_config support, 100% test coverage across all tiers, comprehensive documentation updates
+
 ### [0.6.1] - 2025-01-26
 
 See [changelogs/releases/v0.6.1-2025-01-26.md](changelogs/releases/v0.6.1-2025-01-26.md) for full details.
