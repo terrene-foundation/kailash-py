@@ -15,6 +15,26 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.6.3] - 2025-07-03
+
+**Critical MCP Namespace Collision Fix**
+
+**Fixed:**
+- **MCP Namespace Collision**: Resolved critical import error where local `kailash.mcp` package was shadowing external `mcp.server`, preventing FastMCP imports
+- **API Design**: Consolidated redundant MCP server implementations into clean architecture:
+  - `MCPServerBase`: Abstract base for custom implementations
+  - `MCPServer`: Main concrete server with all production features
+  - `SimpleMCPServer`/`EnhancedMCPServer`: Backward compatibility aliases
+- **Zero Skipped Tests**: Fixed all previously skipped MCP tests to enforce quality policy
+- **Import Paths**: Updated all imports across codebase from `kailash.mcp` to `kailash.mcp_server`
+
+**Enhanced:**
+- Preserved all production features: caching, metrics, formatting, configuration management
+- Maintained full backward compatibility for existing code
+- 50/50 MCP tests now passing (36 unit + 14 integration)
+
+**Breaking Changes:** None - fully backward compatible
+
 ### [0.6.2] - 2025-07-03
 
 See [changelogs/releases/v0.6.2-2025-07-03.md](changelogs/releases/v0.6.2-2025-07-03.md) for full details.
