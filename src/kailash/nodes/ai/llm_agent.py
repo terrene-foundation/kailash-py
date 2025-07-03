@@ -985,7 +985,7 @@ class LLMAgentNode(Node):
                 import asyncio
                 from datetime import datetime
 
-                from kailash.mcp import MCPClient
+                from kailash.mcp_server import MCPClient
 
                 # Initialize MCP client if not already done
                 if not hasattr(self, "_mcp_client"):
@@ -1182,7 +1182,7 @@ class LLMAgentNode(Node):
 
         if use_real_mcp:
             try:
-                from kailash.mcp import MCPClient
+                from kailash.mcp_server import MCPClient
 
                 # Initialize MCP client if not already done
                 if not hasattr(self, "_mcp_client"):
@@ -1767,7 +1767,7 @@ class LLMAgentNode(Node):
         server_config = mcp_tool.get("function", {}).get("mcp_server_config", {})
 
         try:
-            from kailash.mcp import MCPClient
+            from kailash.mcp_server import MCPClient
 
             # Initialize MCP client if not already done
             if not hasattr(self, "_mcp_client"):

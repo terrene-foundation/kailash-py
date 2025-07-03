@@ -6,7 +6,6 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 
@@ -112,7 +111,7 @@ class TestLLMAgentMCPIntegration(unittest.TestCase):
 
         self.assertEqual(str(cm.exception), "Test exception")
 
-    @patch("kailash.mcp.MCPClient")
+    @patch("kailash.mcp_server.MCPClient")
     def test_retrieve_mcp_context_with_mock_client(self, mock_mcp_client_class):
         """Test _retrieve_mcp_context with mocked MCP client."""
         # Create mock client instance
@@ -155,7 +154,7 @@ class TestLLMAgentMCPIntegration(unittest.TestCase):
 
         self.assertTrue(resource_found, "Expected resource not found in results")
 
-    @patch("kailash.mcp.MCPClient")
+    @patch("kailash.mcp_server.MCPClient")
     def test_retrieve_mcp_context_timeout_handling(self, mock_mcp_client_class):
         """Test _retrieve_mcp_context timeout handling."""
         # Create mock client instance
@@ -213,7 +212,7 @@ class TestLLMAgentMCPIntegration(unittest.TestCase):
             # Restore original method
             self.node._run_async_in_sync_context = original_run_async
 
-    @patch("kailash.mcp.MCPClient")
+    @patch("kailash.mcp_server.MCPClient")
     def test_discover_mcp_tools_with_mock_client(self, mock_mcp_client_class):
         """Test _discover_mcp_tools with mocked MCP client."""
         # Create mock client instance

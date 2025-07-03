@@ -44,7 +44,7 @@ import time
 from pathlib import Path
 
 from kailash import Workflow
-from kailash.mcp import MCPClient
+from kailash.mcp_server import MCPClient
 from kailash.nodes.ai import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from kailash.runtime import LocalRuntime
 

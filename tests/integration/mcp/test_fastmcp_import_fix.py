@@ -12,7 +12,7 @@ class TestFastMCPImportFix:
         # This is the core test - if the import fix failed, this would raise
         # ModuleNotFoundError: No module named 'mcp.server.fastmcp'
         try:
-            from kailash.mcp.server_enhanced import EnhancedMCPServer
+            from kailash.mcp_server.server import EnhancedMCPServer
 
             # If we get here, the import succeeded
             assert True
@@ -36,7 +36,7 @@ class TestFastMCPImportFix:
     def test_enhanced_mcp_server_creation(self):
         """Test creating an EnhancedMCPServer instance."""
         try:
-            from kailash.mcp.server_enhanced import EnhancedMCPServer
+            from kailash.mcp_server.server import EnhancedMCPServer
 
             # Create a server instance
             server = EnhancedMCPServer(name="test-import-fix-server")
@@ -56,7 +56,7 @@ class TestFastMCPImportFix:
 
     def test_init_mcp_method_exists_and_correct(self):
         """Test that _init_mcp method has the correct import."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(name="test-server")
 
@@ -80,7 +80,7 @@ class TestFastMCPImportFix:
 
     def test_tool_decorator_available(self):
         """Test that tool decorator is available and doesn't crash on import issues."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(name="test-server")
 
@@ -103,7 +103,7 @@ class TestFastMCPImportFix:
 
     def test_resource_decorator_available(self):
         """Test that resource decorator is available."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(name="test-server")
 
@@ -128,7 +128,7 @@ class TestFastMCPImportFix:
         """Test the exact scenario reported by the user."""
         # This simulates what happens when ai_hub tries to use EnhancedMCPServer
         try:
-            from kailash.mcp.server_enhanced import EnhancedMCPServer
+            from kailash.mcp_server.server import EnhancedMCPServer
 
             # Create server like in agent_server.py
             server = EnhancedMCPServer(name="agent-server")

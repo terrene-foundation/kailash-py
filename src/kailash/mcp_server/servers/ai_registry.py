@@ -9,10 +9,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from kailash.mcp.local_server import MCPServer
+from kailash.mcp_server.server import MCPServerBase
 
 
-class AIRegistryServer(MCPServer):
+class AIRegistryServer(MCPServerBase):
     """MCP server for AI use case registry.
 
     Provides tools and resources for exploring AI use cases from

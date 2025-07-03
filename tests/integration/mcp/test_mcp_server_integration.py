@@ -7,8 +7,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from kailash.mcp.server_enhanced import EnhancedMCPServer
+from kailash.mcp_server.server import EnhancedMCPServer
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 
@@ -41,7 +40,8 @@ class TestMCPServerIntegration:
         except ImportError as e:
             pytest.fail(f"FastMCP import fix failed: {e}")
 
-    def test_mcp_server_with_tools(self):
+    @patch("mcp.server.FastMCP")
+    def test_mcp_server_with_tools(self, mock_fastmcp_class):
         """Test MCP server with tools registration."""
         # Create mock FastMCP instance
         mock_fastmcp = MagicMock()
@@ -80,7 +80,7 @@ class TestMCPServerIntegration:
         result = process_data({"test": "data"})
         assert result == {"processed": {"test": "data"}}
 
-    @patch("kailash.mcp.server_enhanced.FastMCP")
+    @patch("mcp.server.FastMCP")
     def test_mcp_server_with_resources(self, mock_fastmcp_class):
         """Test MCP server with resources registration."""
         # Create mock FastMCP instance
@@ -230,7 +230,7 @@ class TestMCPServerIntegration:
         agent = LLMAgentNode(name="tool-discovery-agent")
 
         # Mock MCP client for tool discovery
-        with patch("kailash.mcp.MCPClient") as mock_mcp_client_class:
+        with patch("kailash.mcp_server.MCPClient") as mock_mcp_client_class:
             mock_client = MagicMock()
             mock_mcp_client_class.return_value = mock_client
 

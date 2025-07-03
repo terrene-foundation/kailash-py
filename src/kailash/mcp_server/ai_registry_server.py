@@ -5,7 +5,7 @@ AI Registry MCP Server using Anthropic's Official MCP Python SDK.
 This creates a real MCP server that exposes AI Registry tools following
 the actual Model Context Protocol specification.
 
-Run as: python -m kailash.mcp.ai_registry_server
+Run as: python -m kailash.mcp_server.ai_registry_server
 """
 
 import asyncio
@@ -708,5 +708,5 @@ if __name__ == "__main__":
 
 # For module execution
 def run_server():
-    """Entry point for python -m kailash.mcp.ai_registry_server"""
+    """Entry point for python -m kailash.mcp_server.ai_registry_server"""
     asyncio.run(main())

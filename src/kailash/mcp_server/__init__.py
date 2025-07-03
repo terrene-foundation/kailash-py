@@ -12,8 +12,8 @@ Design Philosophy:
 
 Key Components:
     - MCPClient: Connects to MCP servers for tool and resource access
-    - MCPServer: Base framework for creating custom MCP servers
-    - SimpleMCPServer: Quick server creation for basic use cases
+    - MCPServer: Main production-ready server with all features
+    - MCPServerBase: Abstract base class for custom server implementations
 
 Upstream Dependencies:
     - Official Anthropic MCP Python SDK for protocol implementation
@@ -28,26 +28,31 @@ Downstream Consumers:
 Examples:
     Basic MCP client usage:
 
-    >>> from kailash.mcp import MCPClient
+    >>> from kailash.mcp_server import MCPClient
     >>> client = MCPClient()
     >>> tools = await client.discover_tools(server_config)
     >>> result = await client.call_tool(server_config, "search", {"query": "AI"})
 
     Simple MCP server creation:
 
-    >>> from kailash.mcp import SimpleMCPServer
-    >>> server = SimpleMCPServer("my-tools")
+    >>> from kailash.mcp_server import MCPServer
+    >>> server = MCPServer("my-tools")
     >>> @server.tool()
     ... def calculate(a: int, b: int) -> int:
     ...     return a + b
-    >>> server.start()
+    >>> server.run()
 """
 
 from .client import MCPClient
-from .server_enhanced import MCPServer, SimpleMCPServer
+
+# For backward compatibility
+from .server import EnhancedMCPServer, MCPServer, MCPServerBase, SimpleMCPServer
 
 __all__ = [
     "MCPClient",
     "MCPServer",
+    "MCPServerBase",
+    # Backward compatibility
     "SimpleMCPServer",
+    "EnhancedMCPServer",
 ]

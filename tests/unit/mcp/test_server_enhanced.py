@@ -13,7 +13,7 @@ class TestEnhancedMCPServer:
     def test_import_enhanced_mcp_server(self):
         """Test that EnhancedMCPServer can be imported without errors."""
         try:
-            from kailash.mcp.server_enhanced import EnhancedMCPServer
+            from kailash.mcp_server.server import EnhancedMCPServer
 
             assert EnhancedMCPServer is not None
         except ImportError as e:
@@ -21,7 +21,7 @@ class TestEnhancedMCPServer:
 
     def test_create_enhanced_mcp_server_instance(self):
         """Test creating an instance of EnhancedMCPServer."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(name="test-server")
         assert server.name == "test-server"
@@ -31,7 +31,7 @@ class TestEnhancedMCPServer:
 
     def test_enhanced_mcp_server_with_custom_cache_settings(self):
         """Test creating EnhancedMCPServer with custom cache settings."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(
             name="test-server", enable_cache=False, cache_ttl=600
@@ -39,10 +39,10 @@ class TestEnhancedMCPServer:
         assert server.name == "test-server"
         assert server.cache.enabled is False
 
-    @patch("kailash.mcp.server_enhanced.logger")
+    @patch("kailash.mcp_server.server.logger")
     def test_init_mcp_import_error_handling(self, mock_logger):
         """Test that import errors are handled gracefully."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(name="test-server")
 
@@ -56,15 +56,30 @@ class TestEnhancedMCPServer:
                 "FastMCP not available. Install with: pip install 'mcp[server]'"
             )
 
-    def test_init_mcp_successful_import(self):
+    @patch("mcp.server.FastMCP")
+    def test_init_mcp_successful_import(self, mock_fastmcp_class):
         """Test successful FastMCP initialization."""
-        pytest.skip(
-            "Cannot reliably mock external mcp.server.FastMCP due to namespace collision"
-        )
+        from kailash.mcp_server.server import EnhancedMCPServer
+
+        # Create mock FastMCP instance
+        mock_fastmcp = MagicMock()
+        mock_fastmcp_class.return_value = mock_fastmcp
+
+        server = EnhancedMCPServer(name="test-server")
+
+        # Should be None initially
+        assert server._mcp is None
+
+        # Initialize MCP
+        server._init_mcp()
+
+        # Should now be set to our mock
+        assert server._mcp is mock_fastmcp
+        mock_fastmcp_class.assert_called_once_with("test-server")
 
     def test_init_mcp_idempotent(self):
         """Test that _init_mcp is idempotent."""
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         server = EnhancedMCPServer(name="test-server")
 
@@ -78,24 +93,64 @@ class TestEnhancedMCPServer:
         # Should still be the same instance since it was already set
         assert server._mcp == mock_mcp  # Same instance
 
-    def test_tool_decorator_initializes_mcp(self):
+    @patch("mcp.server.FastMCP")
+    def test_tool_decorator_initializes_mcp(self, mock_fastmcp_class):
         """Test that using @tool decorator initializes MCP."""
-        pytest.skip(
-            "Cannot reliably mock external mcp.server.FastMCP due to namespace collision"
-        )
+        from kailash.mcp_server.server import EnhancedMCPServer
 
-    def test_resource_decorator_initializes_mcp(self):
+        # Create mock FastMCP instance
+        mock_fastmcp = MagicMock()
+        mock_fastmcp_class.return_value = mock_fastmcp
+
+        # Mock the tool decorator to return the original function
+        mock_fastmcp.tool.return_value = lambda func: func
+
+        server = EnhancedMCPServer(name="test-server")
+
+        # Should be None initially
+        assert server._mcp is None
+
+        # Use tool decorator - should initialize MCP
+        @server.tool()
+        def test_tool():
+            return "test"
+
+        # Should now be initialized
+        assert server._mcp is mock_fastmcp
+        mock_fastmcp_class.assert_called_once_with("test-server")
+
+    @patch("mcp.server.FastMCP")
+    def test_resource_decorator_initializes_mcp(self, mock_fastmcp_class):
         """Test that using @resource decorator initializes MCP."""
-        pytest.skip(
-            "Cannot reliably mock external mcp.server.FastMCP due to namespace collision"
-        )
+        from kailash.mcp_server.server import EnhancedMCPServer
+
+        # Create mock FastMCP instance
+        mock_fastmcp = MagicMock()
+        mock_fastmcp_class.return_value = mock_fastmcp
+
+        # Mock the resource decorator to return the original function
+        mock_fastmcp.resource.return_value = lambda func: func
+
+        server = EnhancedMCPServer(name="test-server")
+
+        # Should be None initially
+        assert server._mcp is None
+
+        # Use resource decorator - should initialize MCP
+        @server.resource("test://resource")
+        def test_resource():
+            return "test data"
+
+        # Should now be initialized
+        assert server._mcp is mock_fastmcp
+        mock_fastmcp_class.assert_called_once_with("test-server")
 
     def test_fastmcp_import_path(self):
         """Test that the correct import path is used for FastMCP."""
         # This test verifies the fix by checking the actual import in the code
         import inspect
 
-        from kailash.mcp.server_enhanced import EnhancedMCPServer
+        from kailash.mcp_server.server import EnhancedMCPServer
 
         # Get the source code of _init_mcp method
         source = inspect.getsource(EnhancedMCPServer._init_mcp)
@@ -105,11 +160,26 @@ class TestEnhancedMCPServer:
         # Verify the old incorrect import is NOT present
         assert "from mcp.server.fastmcp import FastMCP" not in source
 
-    def test_run_method(self):
+    @patch("mcp.server.FastMCP")
+    def test_run_method(self, mock_fastmcp_class):
         """Test the run method starts the server."""
-        pytest.skip(
-            "Cannot reliably mock external mcp.server.FastMCP due to namespace collision"
-        )
+        from kailash.mcp_server.server import EnhancedMCPServer
+
+        # Create mock FastMCP instance
+        mock_fastmcp = MagicMock()
+        mock_fastmcp_class.return_value = mock_fastmcp
+
+        # Mock run to not block
+        mock_fastmcp.run = MagicMock()
+
+        server = EnhancedMCPServer(name="test-server")
+
+        # Should initialize and call run
+        server.run()
+
+        # Verify FastMCP was initialized and run called
+        mock_fastmcp_class.assert_called_once_with("test-server")
+        mock_fastmcp.run.assert_called_once()
 
 
 class TestEnhancedMCPServerIntegration:
@@ -121,10 +191,10 @@ class TestEnhancedMCPServerIntegration:
         try:
             # Try to import the real MCP package
             import mcp
-            from mcp.server import FastMCP
 
             # If we get here, MCP is installed
-            from kailash.mcp.server_enhanced import EnhancedMCPServer
+            from kailash.mcp_server.server import EnhancedMCPServer
+            from mcp.server import FastMCP
 
             server = EnhancedMCPServer(name="integration-test-server")
 
@@ -157,7 +227,7 @@ class TestEnhancedMCPServerIntegration:
         try:
             # Mock the import to fail
             with patch.dict("sys.modules", {"mcp.server": None}):
-                from kailash.mcp.server_enhanced import EnhancedMCPServer
+                from kailash.mcp_server.server import EnhancedMCPServer
 
                 server = EnhancedMCPServer(name="test-server")
 

@@ -1,16 +1,39 @@
 """
-Enhanced MCP Server with production-ready capabilities.
+MCP Server Framework with production-ready capabilities.
 
-This module provides an enhanced MCP server that includes caching, configuration,
-metrics, and other production features by default, while maintaining compatibility
-with the official Anthropic FastMCP framework.
+This module provides both basic and enhanced MCP server implementations using
+the official FastMCP framework from Anthropic. Servers run as long-lived
+services that expose tools, resources, and prompts to MCP clients.
+
+Basic Usage:
+    Abstract base class for custom servers:
+
+    >>> class MyServer(MCPServerBase):
+    ...     def setup(self):
+    ...         @self.add_tool()
+    ...         def calculate(a: int, b: int) -> int:
+    ...             return a + b
+    >>> server = MyServer("calculator")
+    >>> server.start()
+
+Production Usage:
+    Main server with all production features:
+
+    >>> from kailash.mcp_server import MCPServer
+    >>> server = MCPServer("my-server", enable_cache=True)
+    >>> @server.tool(cache_key="search", cache_ttl=600)
+    ... def search(query: str) -> dict:
+    ...     return {"results": f"Found data for {query}"}
+    >>> server.run()
 """
 
 import asyncio
 import functools
 import logging
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, Dict, Optional, TypeVar, Union
 
 from .utils import CacheManager, ConfigManager, MetricsCollector, format_response
 
@@ -19,18 +42,199 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+class MCPServerBase(ABC):
+    """Base class for MCP servers using FastMCP.
+
+    This provides a framework for creating MCP servers that expose
+    tools, resources, and prompts via the Model Context Protocol.
+
+    Examples:
+        Creating a custom server:
+
+        >>> class MyServer(MCPServerBase):
+        ...     def setup(self):
+        ...         @self.add_tool()
+        ...         def search(query: str) -> str:
+        ...             return f"Results for: {query}"
+        ...         @self.add_resource("data://example")
+        ...         def get_example():
+        ...             return "Example data"
+        >>> server = MyServer("my-server", port=8080)
+        >>> server.start()  # Runs until stopped
+    """
+
+    def __init__(self, name: str, port: int = 8080, host: str = "localhost"):
+        """Initialize the MCP server.
+
+        Args:
+            name: Name of the server.
+            port: Port to listen on (default: 8080).
+            host: Host to bind to (default: "localhost").
+        """
+        self.name = name
+        self.port = port
+        self.host = host
+        self._mcp = None
+        self._running = False
+
+    @abstractmethod
+    def setup(self):
+        """Setup server tools, resources, and prompts.
+
+        This method should be implemented by subclasses to define
+        the server's capabilities using decorators.
+
+        Note:
+            Use @self.add_tool(), @self.add_resource(uri), and
+            @self.add_prompt(name) decorators to register capabilities.
+        """
+
+    def add_tool(self):
+        """Decorator to add a tool to the server.
+
+        Returns:
+            Function decorator for registering tools.
+
+        Examples:
+            >>> @server.add_tool()
+            ... def calculate(a: int, b: int) -> int:
+            ...     '''Add two numbers'''
+            ...     return a + b
+        """
+
+        def decorator(func: Callable):
+            if self._mcp is None:
+                self._init_mcp()
+
+            # Use FastMCP's tool decorator
+            return self._mcp.tool()(func)
+
+        return decorator
+
+    def add_resource(self, uri: str):
+        """Decorator to add a resource to the server.
+
+        Args:
+            uri: URI pattern for the resource (supports wildcards).
+
+        Returns:
+            Function decorator for registering resources.
+
+        Examples:
+            >>> @server.add_resource("file:///data/*")
+            ... def get_file(path: str) -> str:
+            ...     return f"Content of {path}"
+        """
+
+        def decorator(func: Callable):
+            if self._mcp is None:
+                self._init_mcp()
+
+            # Use FastMCP's resource decorator
+            return self._mcp.resource(uri)(func)
+
+        return decorator
+
+    def add_prompt(self, name: str):
+        """Decorator to add a prompt template to the server.
+
+        Args:
+            name: Name of the prompt.
+
+        Returns:
+            Function decorator for registering prompts.
+
+        Examples:
+            >>> @server.add_prompt("analyze")
+            ... def analyze_prompt(data: str) -> str:
+            ...     return f"Please analyze the following data: {data}"
+        """
+
+        def decorator(func: Callable):
+            if self._mcp is None:
+                self._init_mcp()
+
+            # Use FastMCP's prompt decorator
+            return self._mcp.prompt(name)(func)
+
+        return decorator
+
+    def _init_mcp(self):
+        """Initialize the FastMCP instance."""
+        try:
+            from mcp.server import FastMCP
+
+            self._mcp = FastMCP(self.name)
+        except ImportError:
+            logger.error(
+                "FastMCP not available. Install with: pip install 'mcp[server]'"
+            )
+            raise
+
+    def start(self):
+        """Start the MCP server.
+
+        This runs the server as a long-lived process until stopped.
+
+        Raises:
+            ImportError: If FastMCP is not available.
+            Exception: If server fails to start.
+        """
+        if self._mcp is None:
+            self._init_mcp()
+
+        # Run setup to register tools/resources
+        self.setup()
+
+        logger.info(f"Starting MCP server '{self.name}' on {self.host}:{self.port}")
+        self._running = True
+
+        try:
+            # Run the FastMCP server
+            logger.info("Running FastMCP server in stdio mode")
+            self._mcp.run()
+        except Exception as e:
+            logger.error(f"Failed to start server: {e}")
+            raise
+        finally:
+            self._running = False
+
+    def stop(self):
+        """Stop the MCP server."""
+        logger.info(f"Stopping MCP server '{self.name}'")
+        self._running = False
+        # In a real implementation, we'd need to handle graceful shutdown
+
+
 class EnhancedMCPServer:
     """
-    Production-ready MCP server with enhanced capabilities.
+    Production-ready MCP server (available as SimpleMCPServer).
 
-    Features included by default:
-    - Caching with TTL support
+    This is the main concrete MCP server implementation with all production
+    features available. Features can be enabled/disabled as needed.
+
+    Features available:
+    - Caching with TTL support (enable_cache=True)
+    - Metrics collection and monitoring (enable_metrics=True)
+    - Response formatting utilities (enable_formatting=True)
     - Hierarchical configuration management
-    - Metrics collection and monitoring
-    - Response formatting utilities
     - Error handling and logging
 
-    All features can be disabled if not needed.
+    Examples:
+        Basic usage (recommended):
+        >>> from kailash.mcp_server import MCPServer
+        >>> server = MCPServer("my-server")
+        >>> @server.tool()
+        ... def search(query: str) -> dict:
+        ...     return {"results": f"Found: {query}"}
+        >>> server.run()
+
+        With production features enabled:
+        >>> server = MCPServer("my-server", enable_cache=True, enable_metrics=True)
+        >>> @server.tool(cache_key="search", cache_ttl=600)
+        ... def search(query: str) -> dict:
+        ...     return {"results": f"Found: {query}"}
+        >>> server.run()
     """
 
     def __init__(
@@ -110,6 +314,9 @@ class EnhancedMCPServer:
             self._mcp = FastMCP(self.name)
             logger.info(f"Initialized FastMCP server: {self.name}")
         except ImportError as e:
+            logger.error(
+                f"FastMCP import failed with: {e}. Details: {type(e).__name__}"
+            )
             logger.error(
                 "FastMCP not available. Install with: pip install 'mcp[server]'"
             )
@@ -416,37 +623,10 @@ class EnhancedMCPServer:
             self._running = False
 
 
-# For backward compatibility, make EnhancedMCPServer the default MCPServer
+# Clean public API design:
+# - MCPServerBase: Abstract base for custom implementations (e.g., AIRegistryServer)
+# - MCPServer: Main concrete server with all production features
+# - SimpleMCPServer: Alias for backward compatibility
+# - EnhancedMCPServer: Alias for backward compatibility
 MCPServer = EnhancedMCPServer
-
-
-class SimpleMCPServer(EnhancedMCPServer):
-    """
-    Simplified MCP server with minimal configuration.
-
-    This inherits all enhanced capabilities but disables some features
-    by default for simpler use cases.
-    """
-
-    def __init__(self, name: str, description: str = ""):
-        """
-        Initialize simple MCP server.
-
-        Args:
-            name: Server name
-            description: Server description
-        """
-        # Initialize with some features disabled for simplicity
-        super().__init__(
-            name=name,
-            enable_cache=False,  # Disable cache by default
-            enable_metrics=False,  # Disable metrics by default
-            enable_formatting=True,  # Keep formatting for better output
-        )
-
-        self.description = description
-
-        # Update config for simple use
-        self.config.update(
-            {"server": {"name": name, "description": description, "version": "1.0.0"}}
-        )
+SimpleMCPServer = EnhancedMCPServer
