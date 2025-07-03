@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from kailash.mcp.server import MCPServer
+from kailash.mcp.local_server import MCPServer
 
 
 class AIRegistryServer(MCPServer):

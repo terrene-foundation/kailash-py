@@ -1051,7 +1051,7 @@ requires-dist = [
     { name = "isort", specifier = ">=6.0.1" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.10" },
     { name = "matplotlib", specifier = ">=3.5" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.9.2" },
+    { name = "mcp", extras = ["cli", "server"], specifier = ">=1.9.2" },
     { name = "msal", specifier = ">=1.32.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=0.9" },
     { name = "myst-parser", specifier = ">=4.0.1" },

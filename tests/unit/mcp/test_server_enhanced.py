@@ -100,11 +100,8 @@ class TestEnhancedMCPServer:
         # Get the source code of _init_mcp method
         source = inspect.getsource(EnhancedMCPServer._init_mcp)
 
-        # Verify the code uses importlib.import_module('mcp.server')
-        assert (
-            "importlib.import_module('mcp.server')" in source
-            or 'importlib.import_module("mcp.server")' in source
-        )
+        # Verify the code uses standard import (namespace collision resolved)
+        assert "from mcp.server import FastMCP" in source
         # Verify the old incorrect import is NOT present
         assert "from mcp.server.fastmcp import FastMCP" not in source
 

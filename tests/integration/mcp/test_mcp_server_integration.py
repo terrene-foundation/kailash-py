@@ -41,8 +41,7 @@ class TestMCPServerIntegration:
         except ImportError as e:
             pytest.fail(f"FastMCP import fix failed: {e}")
 
-    @patch("kailash.mcp.server_enhanced.FastMCP")
-    def test_mcp_server_with_tools(self, mock_fastmcp_class):
+    def test_mcp_server_with_tools(self):
         """Test MCP server with tools registration."""
         # Create mock FastMCP instance
         mock_fastmcp = MagicMock()

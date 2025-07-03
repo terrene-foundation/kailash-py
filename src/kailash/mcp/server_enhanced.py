@@ -104,28 +104,12 @@ class EnhancedMCPServer:
             return
 
         try:
-            # Use absolute import to get the external mcp package
-            import importlib
-            import sys
-
-            # Temporarily remove local mcp module from path to import external one
-            local_mcp = sys.modules.get("kailash.mcp.server")
-            if local_mcp:
-                # Store and remove temporarily
-                del sys.modules["kailash.mcp.server"]
-
-            try:
-                # Now import from external mcp package
-                external_mcp = importlib.import_module("mcp.server")
-                FastMCP = external_mcp.FastMCP
-            finally:
-                # Restore local module if it was there
-                if local_mcp:
-                    sys.modules["kailash.mcp.server"] = local_mcp
+            # Now we can safely import from external mcp.server (no namespace collision)
+            from mcp.server import FastMCP
 
             self._mcp = FastMCP(self.name)
             logger.info(f"Initialized FastMCP server: {self.name}")
-        except (ImportError, AttributeError) as e:
+        except ImportError as e:
             logger.error(
                 "FastMCP not available. Install with: pip install 'mcp[server]'"
             )

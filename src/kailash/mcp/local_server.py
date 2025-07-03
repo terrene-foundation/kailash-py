@@ -12,7 +12,7 @@ Note:
 Examples:
     Basic server with tools:
 
-    >>> from kailash.mcp.server import MCPServer
+    >>> from kailash.mcp.local_server import MCPServer
     >>> class MyServer(MCPServer):
     ...     def setup(self):
     ...         @self.add_tool()
