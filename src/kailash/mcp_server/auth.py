@@ -81,8 +81,15 @@ class AuthProvider(ABC):
     """Abstract base class for authentication providers."""
 
     @abstractmethod
-    def authenticate(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
-        """Authenticate credentials and return user info."""
+    def authenticate(self, credentials: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Authenticate credentials and return user info.
+
+        Args:
+            credentials: Authentication credentials (string token or dict)
+
+        Returns:
+            Authentication context dict
+        """
         pass
 
     @abstractmethod
@@ -142,11 +149,31 @@ class APIKeyAuth(AuthProvider):
 
         logger.info(f"Initialized API Key auth with {len(self.keys)} keys")
 
-    def authenticate(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
-        """Authenticate API key credentials."""
-        api_key = credentials.get("api_key")
-        if not api_key:
-            raise AuthenticationError("Missing API key")
+    def authenticate(self, credentials: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Authenticate API key credentials.
+
+        Args:
+            credentials: Either API key string or dict with 'api_key' field
+
+        Returns:
+            Authentication context dict
+
+        Raises:
+            AuthenticationError: If credentials are invalid or missing
+        """
+        # Handle both string and dict inputs for better developer experience
+        if isinstance(credentials, str):
+            api_key = credentials
+        elif isinstance(credentials, dict):
+            api_key = credentials.get("api_key")
+            if not api_key:
+                raise AuthenticationError(
+                    "Expected dict with 'api_key' field, got dict without api_key"
+                )
+        else:
+            raise AuthenticationError(
+                f"Expected string or dict, got {type(credentials).__name__}"
+            )
 
         if api_key not in self.keys:
             raise AuthenticationError("Invalid API key")
@@ -225,11 +252,28 @@ class BearerTokenAuth(AuthProvider):
 
         logger.info(f"Initialized Bearer Token auth (JWT: {validate_jwt})")
 
-    def authenticate(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
-        """Authenticate bearer token credentials."""
-        token = credentials.get("token")
-        if not token:
-            raise AuthenticationError("Missing bearer token")
+    def authenticate(self, credentials: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Authenticate bearer token credentials.
+
+        Args:
+            credentials: Either bearer token string or dict with 'token' field
+
+        Returns:
+            Authentication context dict
+        """
+        # Handle both string and dict inputs
+        if isinstance(credentials, str):
+            token = credentials
+        elif isinstance(credentials, dict):
+            token = credentials.get("token")
+            if not token:
+                raise AuthenticationError(
+                    "Expected dict with 'token' field, got dict without token"
+                )
+        else:
+            raise AuthenticationError(
+                f"Expected string or dict, got {type(credentials).__name__}"
+            )
 
         if self.validate_jwt:
             return self._validate_jwt_token(token)
@@ -449,8 +493,24 @@ class BasicAuth(AuthProvider):
             # Fallback to plain text comparison (for development)
             return password == password_hash
 
-    def authenticate(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
-        """Authenticate basic auth credentials."""
+    def authenticate(self, credentials: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Authenticate basic auth credentials.
+
+        Args:
+            credentials: Dict with 'username' and 'password' fields (string not supported for BasicAuth)
+
+        Returns:
+            Authentication context dict
+        """
+        if isinstance(credentials, str):
+            raise AuthenticationError(
+                "BasicAuth requires dict with 'username' and 'password' fields, not string"
+            )
+        elif not isinstance(credentials, dict):
+            raise AuthenticationError(
+                f"Expected dict, got {type(credentials).__name__}"
+            )
+
         username = credentials.get("username")
         password = credentials.get("password")
 

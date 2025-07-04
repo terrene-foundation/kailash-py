@@ -471,6 +471,8 @@ class SSETransport(BaseTransport):
         allowed_origins: Optional[List[str]] = None,
         endpoint_path: str = "/sse",
         message_path: str = "/message",
+        allow_localhost: bool = False,
+        skip_security_validation: bool = False,
         **kwargs,
     ):
         """Initialize SSE transport.
@@ -482,6 +484,8 @@ class SSETransport(BaseTransport):
             allowed_origins: List of allowed origins
             endpoint_path: SSE endpoint path
             message_path: Message posting path
+            allow_localhost: Allow connections to localhost (for testing)
+            skip_security_validation: Skip all security validation (for testing)
             **kwargs: Base transport arguments
         """
         super().__init__("sse", **kwargs)
@@ -492,6 +496,8 @@ class SSETransport(BaseTransport):
         self.allowed_origins = allowed_origins or [base_url]
         self.endpoint_path = endpoint_path
         self.message_path = message_path
+        self.allow_localhost = allow_localhost
+        self.skip_security_validation = skip_security_validation
 
         # Connection state
         self.session: Optional[aiohttp.ClientSession] = None
@@ -504,9 +510,12 @@ class SSETransport(BaseTransport):
         if self._connected:
             return
 
-        # Validate URL
-        if not TransportSecurity.validate_url(self.base_url):
-            raise TransportError("Invalid or unsafe URL", transport_type="sse")
+        # Validate URL (with configurable security)
+        if not self.skip_security_validation:
+            if not TransportSecurity.validate_url(
+                self.base_url, allow_localhost=self.allow_localhost
+            ):
+                raise TransportError("Invalid or unsafe URL", transport_type="sse")
 
         try:
             # Create session
@@ -662,6 +671,8 @@ class StreamableHTTPTransport(BaseTransport):
         session_management: bool = True,
         streaming_threshold: int = 1024,
         chunk_size: int = 8192,
+        allow_localhost: bool = False,
+        skip_security_validation: bool = False,
         **kwargs,
     ):
         """Initialize StreamableHTTP transport.
@@ -671,6 +682,8 @@ class StreamableHTTPTransport(BaseTransport):
             session_management: Enable session management
             streaming_threshold: Size threshold for streaming
             chunk_size: Chunk size for streaming
+            allow_localhost: Allow connections to localhost (for testing)
+            skip_security_validation: Skip all security validation (for testing)
             **kwargs: Base transport arguments
         """
         super().__init__("streamable_http", **kwargs)
@@ -679,6 +692,8 @@ class StreamableHTTPTransport(BaseTransport):
         self.session_management = session_management
         self.streaming_threshold = streaming_threshold
         self.chunk_size = chunk_size
+        self.allow_localhost = allow_localhost
+        self.skip_security_validation = skip_security_validation
 
         # Session state
         self.session: Optional[aiohttp.ClientSession] = None
@@ -689,11 +704,14 @@ class StreamableHTTPTransport(BaseTransport):
         if self._connected:
             return
 
-        # Validate URL
-        if not TransportSecurity.validate_url(self.base_url):
-            raise TransportError(
-                "Invalid or unsafe URL", transport_type="streamable_http"
-            )
+        # Validate URL (with configurable security)
+        if not self.skip_security_validation:
+            if not TransportSecurity.validate_url(
+                self.base_url, allow_localhost=self.allow_localhost
+            ):
+                raise TransportError(
+                    "Invalid or unsafe URL", transport_type="streamable_http"
+                )
 
         try:
             # Create HTTP session
@@ -901,6 +919,8 @@ class WebSocketTransport(BaseTransport):
         subprotocols: Optional[List[str]] = None,
         ping_interval: float = 20.0,
         ping_timeout: float = 20.0,
+        allow_localhost: bool = False,
+        skip_security_validation: bool = False,
         **kwargs,
     ):
         """Initialize WebSocket transport.
@@ -910,6 +930,8 @@ class WebSocketTransport(BaseTransport):
             subprotocols: WebSocket subprotocols
             ping_interval: Ping interval in seconds
             ping_timeout: Ping timeout in seconds
+            allow_localhost: Allow connections to localhost (for testing)
+            skip_security_validation: Skip all security validation (for testing)
             **kwargs: Base transport arguments
         """
         super().__init__("websocket", **kwargs)
@@ -918,6 +940,8 @@ class WebSocketTransport(BaseTransport):
         self.subprotocols = subprotocols or ["mcp-v1"]
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
+        self.allow_localhost = allow_localhost
+        self.skip_security_validation = skip_security_validation
 
         # Connection state
         self.websocket: Optional[websockets.WebSocketServerProtocol] = None
@@ -929,9 +953,14 @@ class WebSocketTransport(BaseTransport):
         if self._connected:
             return
 
-        # Validate URL
-        if not TransportSecurity.validate_url(self.url):
-            raise TransportError("Invalid or unsafe URL", transport_type="websocket")
+        # Validate URL (with configurable security)
+        if not self.skip_security_validation:
+            if not TransportSecurity.validate_url(
+                self.url, allow_localhost=self.allow_localhost
+            ):
+                raise TransportError(
+                    "Invalid or unsafe URL", transport_type="websocket"
+                )
 
         try:
             # Connect to WebSocket

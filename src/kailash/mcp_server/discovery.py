@@ -67,6 +67,7 @@ class ServerInfo:
     command: Optional[str] = None  # For stdio transport
     args: Optional[List[str]] = None  # For stdio transport
     url: Optional[str] = None  # For HTTP/SSE transport
+    health_endpoint: Optional[str] = None  # Health check endpoint path
     health_status: str = "unknown"  # healthy, unhealthy, unknown
     health: Optional[Dict[str, Any]] = None  # Health information dict
     last_seen: float = 0.0
@@ -1065,8 +1066,10 @@ class HealthChecker:
                 async with aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as session:
-                    # Try health endpoint first
-                    health_url = f"{server.endpoint}/health"
+                    # Try health endpoint first (use configured endpoint or default to /health)
+                    health_path = server.health_endpoint or "/health"
+                    base_url = server.endpoint or server.url or ""
+                    health_url = f"{base_url.rstrip('/')}{health_path}"
                     try:
                         async with session.get(health_url) as response:
                             if response.status == 200:

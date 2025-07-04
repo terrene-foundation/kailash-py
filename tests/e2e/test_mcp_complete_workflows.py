@@ -12,16 +12,17 @@ from pathlib import Path
 
 import aiohttp
 import pytest
+import pytest_asyncio
 import redis.asyncio as redis
 
 from kailash.mcp_server import MCPClient, MCPServer
-from kailash.mcp_server.auth import AuthorizationServer, OAuth2Client
 from kailash.mcp_server.discovery import (
     FileBasedDiscovery,
     ServiceMesh,
     ServiceRegistry,
     create_default_registry,
 )
+from kailash.mcp_server.oauth import AuthorizationServer, OAuth2Client
 from kailash.mcp_server.transports import get_transport_manager
 from tests.utils.docker_config import (
     OLLAMA_CONFIG,
@@ -38,10 +39,10 @@ from tests.utils.docker_config import (
 class TestMCPCompleteWorkflows:
     """Test complete MCP workflows end-to-end."""
 
-    @pytest.fixture(autouse=True)
+    @pytest_asyncio.fixture(autouse=True)
     async def setup_services(self):
         """Ensure all required Docker services are running."""
-        await ensure_docker_services(["redis", "postgres"])
+        await ensure_docker_services()
         yield
 
     @pytest.mark.asyncio
@@ -114,7 +115,7 @@ class TestMCPCompleteWorkflows:
             assert elapsed < 0.01  # Should be instant from cache
 
         finally:
-            await redis_client.close()
+            await redis_client.aclose()
 
         # 6. Test metrics collection
         metrics = server.get_metrics()
@@ -184,13 +185,27 @@ class TestMCPCompleteWorkflows:
             # 5. Create service mesh for failover
             mesh = ServiceMesh(registry)
 
-            # Mock a call that would use failover
-            async def mock_llm_call():
-                # In real scenario, would call actual LLM
-                return {"response": "Generated text", "model": "llama2"}
+            # Test real failover with multiple server instances
+            # In production, this would handle server failures gracefully
 
-            # Test would normally call through mesh with failover
-            # result = await mesh.call_with_failover("llm", mock_llm_call)
+            # Simulate multiple tool calls to test load balancing
+            results = []
+            for i in range(3):
+                try:
+                    # Call tool through service mesh
+                    result = await mesh.call_with_failover(
+                        "tools",  # capability
+                        "add",  # tool name
+                        {"a": i, "b": 10},  # arguments
+                        max_retries=2,
+                    )
+                    results.append(result)
+                except Exception as e:
+                    # In real scenario, would log and handle failure
+                    print(f"Call {i} failed: {e}")
+
+            # At least some calls should succeed if servers are healthy
+            assert len(results) > 0
 
     @pytest.mark.asyncio
     @pytest.mark.requires_ollama

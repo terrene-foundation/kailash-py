@@ -151,7 +151,16 @@ class TestMCPServerIntegration:
     @pytest.mark.asyncio
     async def test_service_discovery_integration(self):
         """Test service discovery functionality."""
-        registry = ServiceRegistry()
+        # Use a temporary file for test isolation
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            temp_registry_path = f.name
+
+        from kailash.mcp_server.discovery import FileBasedDiscovery
+
+        file_discovery = FileBasedDiscovery(temp_registry_path)
+        registry = ServiceRegistry(backends=[file_discovery])
 
         # Register a test server
         server_config = {
@@ -174,10 +183,24 @@ class TestMCPServerIntegration:
         assert len(test_servers) == 1
         assert test_servers[0].capabilities == ["tools", "resources"]
 
+        # Clean up
+        import os
+
+        os.unlink(temp_registry_path)
+
     @pytest.mark.asyncio
     async def test_service_discovery_with_filters(self):
         """Test service discovery with capability filters."""
-        registry = ServiceRegistry()
+        # Use a temporary file for test isolation
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            temp_registry_path = f.name
+
+        from kailash.mcp_server.discovery import FileBasedDiscovery
+
+        file_discovery = FileBasedDiscovery(temp_registry_path)
+        registry = ServiceRegistry(backends=[file_discovery])
 
         # Register servers with different capabilities
         tools_server = {
@@ -364,36 +387,86 @@ class TestMCPServerIntegration:
         # (exact behavior depends on implementation)
 
     @pytest.mark.asyncio
+    @pytest.mark.requires_docker
     async def test_mcp_client_server_communication(self):
-        """Test communication between MCP client and server."""
-        # This is a mock test since we can't easily run full client-server
-        # communication in the integration test environment
-
-        # Create server
+        """Test real communication between MCP client and server using Docker."""
+        # Create a real MCP server instance
         server = MCPServer("comm-server")
 
         @server.tool()
-        def echo_tool(message: str) -> str:
+        async def echo_tool(message: str) -> str:
             return f"Echo: {message}"
 
-        # Create client config for the server
-        client_config = {
-            "name": "comm-client",
-            "transport": "stdio",
-            "command": "python",
-            "args": ["-c", "print('mocked response')"],
-        }
+        @server.tool()
+        async def add_numbers(a: int, b: int) -> int:
+            return a + b
 
-        client = MCPClient(client_config)
+        # Start the server in a subprocess (real server instance)
+        import subprocess
+        import tempfile
 
-        # Test that both client and server can be created
-        assert server.name == "comm-server"
-        assert client is not None
+        # Create a temporary Python script that runs the server using FastMCP
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            server_script = """
+from mcp.server import FastMCP
 
-        # In a real scenario, we would test actual tool calls
-        # For now, verify the components are properly set up
-        assert callable(echo_tool)
-        assert echo_tool("test") == "Echo: test"
+# Create FastMCP server
+mcp = FastMCP("test-server")
+
+@mcp.tool()
+def echo_tool(message: str) -> str:
+    '''Echo back the message'''
+    return f"Echo: {message}"
+
+@mcp.tool()
+def add_numbers(a: int, b: int) -> int:
+    '''Add two numbers'''
+    return a + b
+
+if __name__ == "__main__":
+    # Run server using stdio transport (FastMCP handles the protocol)
+    mcp.run()
+"""
+            f.write(server_script)
+            server_script_path = f.name
+
+        try:
+            # Create client that connects to the real server subprocess
+            import sys
+
+            client_config = {
+                "transport": "stdio",
+                "command": sys.executable,  # Use the current Python interpreter
+                "args": [server_script_path],
+            }
+
+            client = MCPClient(client_config)
+
+            # Test real tool discovery
+            tools = await client.discover_tools(client_config)
+            assert len(tools) >= 2
+            assert any(t["name"] == "echo_tool" for t in tools)
+            assert any(t["name"] == "add_numbers" for t in tools)
+
+            # Test real tool execution
+            result = await client.call_tool(
+                client_config, "echo_tool", {"message": "Hello MCP!"}
+            )
+            assert result["success"] is True
+            assert "Echo: Hello MCP!" in result.get("content", "")
+
+            # Test another tool
+            result = await client.call_tool(
+                client_config, "add_numbers", {"a": 15, "b": 27}
+            )
+            assert result["success"] is True
+            assert "42" in str(result.get("content", ""))
+
+        finally:
+            # Clean up
+            import os
+
+            os.unlink(server_script_path)
 
 
 @pytest.mark.integration
