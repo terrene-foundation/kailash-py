@@ -349,6 +349,20 @@ class LLMAgentNode(Node):
                 required=False,
                 description="Override default model pricing (per 1K tokens)",
             ),
+            "auto_execute_tools": NodeParameter(
+                name="auto_execute_tools",
+                type=bool,
+                required=False,
+                default=True,
+                description="Automatically execute tool calls from LLM",
+            ),
+            "tool_execution_config": NodeParameter(
+                name="tool_execution_config",
+                type=dict,
+                required=False,
+                default={},
+                description="Configuration for tool execution behavior",
+            ),
         }
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -589,6 +603,8 @@ class LLMAgentNode(Node):
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)
         max_retries = kwargs.get("max_retries", 3)
+        auto_execute_tools = kwargs.get("auto_execute_tools", True)
+        tool_execution_config = kwargs.get("tool_execution_config", {})
 
         # Check monitoring parameters
         enable_monitoring = kwargs.get("enable_monitoring", self.enable_monitoring)
@@ -616,10 +632,11 @@ class LLMAgentNode(Node):
             mcp_context_data = self._retrieve_mcp_context(mcp_servers, mcp_context)
 
             # Discover MCP tools if enabled
+            discovered_mcp_tools = []
             if auto_discover_tools and mcp_servers:
-                mcp_tools = self._discover_mcp_tools(mcp_servers)
+                discovered_mcp_tools = self._discover_mcp_tools(mcp_servers)
                 # Merge MCP tools with existing tools
-                tools = self._merge_tools(tools, mcp_tools)
+                tools = self._merge_tools(tools, discovered_mcp_tools)
 
             # Perform RAG retrieval if configured
             rag_context = self._perform_rag_retrieval(
@@ -656,6 +673,54 @@ class LLMAgentNode(Node):
                 response = self._provider_llm_response(
                     provider, model, enriched_messages, tools, generation_config
                 )
+
+            # Handle tool execution if enabled and tools were called
+            if auto_execute_tools and response.get("tool_calls"):
+                tool_execution_rounds = 0
+                max_rounds = tool_execution_config.get("max_rounds", 5)
+
+                # Keep executing tools until no more tool calls or max rounds reached
+                while response.get("tool_calls") and tool_execution_rounds < max_rounds:
+                    tool_execution_rounds += 1
+
+                    # Execute all tool calls
+                    tool_results = self._execute_tool_calls(
+                        response["tool_calls"],
+                        tools,
+                        mcp_tools=discovered_mcp_tools,  # Track which tools are MCP
+                    )
+
+                    # Add assistant message with tool calls
+                    enriched_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": response.get("content"),
+                            "tool_calls": response["tool_calls"],
+                        }
+                    )
+
+                    # Add tool results as tool messages
+                    for tool_result in tool_results:
+                        enriched_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_result["tool_call_id"],
+                                "content": tool_result["content"],
+                            }
+                        )
+
+                    # Get next response from LLM with tool results
+                    if provider == "mock":
+                        response = self._mock_llm_response(
+                            enriched_messages, tools, generation_config
+                        )
+                    else:
+                        response = self._provider_llm_response(
+                            provider, model, enriched_messages, tools, generation_config
+                        )
+
+                # Update final response metadata
+                response["tool_execution_rounds"] = tool_execution_rounds
 
             # Update conversation memory
             if conversation_id:
@@ -718,6 +783,7 @@ class LLMAgentNode(Node):
                     "mcp_resources_used": len(mcp_context_data),
                     "rag_documents_retrieved": len(rag_context.get("documents", [])),
                     "tools_available": len(tools),
+                    "tools_executed": response.get("tool_execution_rounds", 0),
                     "memory_tokens": conversation_memory.get("token_count", 0),
                 },
                 "metadata": {
@@ -1515,6 +1581,13 @@ class LLMAgentNode(Node):
         """Generate mock LLM response for testing."""
         last_user_message = ""
         has_images = False
+        has_tool_results = False
+
+        # Check if we have tool results in the conversation
+        for msg in messages:
+            if msg.get("role") == "tool":
+                has_tool_results = True
+                break
 
         for msg in reversed(messages):
             if msg.get("role") == "user":
@@ -1533,37 +1606,51 @@ class LLMAgentNode(Node):
                 break
 
         # Generate contextual mock response
-        if has_images:
+        if has_tool_results:
+            # We've executed tools, provide final response
+            response_content = "Based on the tool execution results, I've completed the requested task. The tools have been successfully executed and the operation is complete."
+            tool_calls = []  # No more tool calls after execution
+        elif has_images:
             response_content = "I can see the image(s) you've provided. Based on my analysis, [Mock vision response for testing]"
+            tool_calls = []
         elif "analyze" in last_user_message.lower():
             response_content = "Based on the provided data and context, I can see several key patterns: 1) Customer engagement has increased by 15% this quarter, 2) Product A shows the highest conversion rate, and 3) There are opportunities for improvement in the onboarding process."
+            tool_calls = []
         elif (
             "create" in last_user_message.lower()
             or "generate" in last_user_message.lower()
         ):
             response_content = "I'll help you create that. Based on the requirements and available tools, I recommend a structured approach with the following steps..."
+            # Simulate tool calls if tools are available and no tools executed yet
+            tool_calls = []
+            if (
+                tools
+                and not has_tool_results
+                and any(
+                    keyword in last_user_message.lower()
+                    for keyword in ["create", "send", "execute", "run"]
+                )
+            ):
+                for tool in tools[:2]:  # Limit to first 2 tools
+                    tool_name = tool.get("function", {}).get(
+                        "name", tool.get("name", "unknown")
+                    )
+                    tool_calls.append(
+                        {
+                            "id": f"call_{hash(tool_name) % 10000}",
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps({"mock": "arguments"}),
+                            },
+                        }
+                    )
         elif "?" in last_user_message:
             response_content = f"Regarding your question about '{last_user_message[:50]}...', here's what I found from the available context and resources..."
+            tool_calls = []
         else:
             response_content = f"I understand you want me to work with: '{last_user_message[:100]}...'. Based on the context provided, I can help you achieve this goal."
-
-        # Simulate tool calls if tools are available
-        tool_calls = []
-        if tools and any(
-            keyword in last_user_message.lower()
-            for keyword in ["create", "send", "execute", "run"]
-        ):
-            for tool in tools[:2]:  # Limit to first 2 tools
-                tool_calls.append(
-                    {
-                        "id": f"call_{hash(tool['name']) % 10000}",
-                        "type": "function",
-                        "function": {
-                            "name": tool["name"],
-                            "arguments": json.dumps({"mock": "arguments"}),
-                        },
-                    }
-                )
+            tool_calls = []
 
         return {
             "id": f"msg_{hash(last_user_message) % 100000}",
@@ -1788,6 +1875,96 @@ class LLMAgentNode(Node):
         except Exception as e:
             self.logger.error(f"MCP tool execution failed: {e}")
             return {"error": str(e), "success": False, "tool_name": tool_name}
+
+    def _execute_tool_calls(
+        self,
+        tool_calls: list[dict[str, Any]],
+        available_tools: list[dict[str, Any]],
+        mcp_tools: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute all tool calls from LLM response.
+
+        Args:
+            tool_calls: List of tool calls from LLM response
+            available_tools: All available tools (MCP + regular)
+            mcp_tools: Tools that came from MCP discovery
+
+        Returns:
+            List of tool results formatted for LLM consumption
+        """
+        tool_results = []
+        mcp_tools = mcp_tools or []
+
+        # Create lookup for MCP tools
+        mcp_tool_names = {
+            tool.get("function", {}).get("name"): tool for tool in mcp_tools
+        }
+
+        for tool_call in tool_calls:
+            try:
+                tool_name = tool_call.get("function", {}).get("name")
+                tool_id = tool_call.get("id")
+
+                # Check if this is an MCP tool
+                if tool_name in mcp_tool_names:
+                    # Execute via MCP
+                    result = self._run_async_in_sync_context(
+                        self._execute_mcp_tool_call(tool_call, mcp_tools)
+                    )
+                else:
+                    # Execute regular tool (future implementation)
+                    result = self._execute_regular_tool(tool_call, available_tools)
+
+                # Format successful result
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_id,
+                        "content": (
+                            json.dumps(result)
+                            if isinstance(result, dict)
+                            else str(result)
+                        ),
+                    }
+                )
+
+            except Exception as e:
+                # Format error result
+                tool_name = tool_call.get("function", {}).get("name", "unknown")
+                self.logger.error(f"Tool execution failed for {tool_name}: {e}")
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call.get("id", "unknown"),
+                        "content": json.dumps(
+                            {"error": str(e), "tool": tool_name, "status": "failed"}
+                        ),
+                    }
+                )
+
+        return tool_results
+
+    def _execute_regular_tool(
+        self, tool_call: dict[str, Any], available_tools: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Execute a regular (non-MCP) tool.
+
+        Args:
+            tool_call: Tool call from LLM
+            available_tools: List of available tools
+
+        Returns:
+            Tool execution result
+        """
+        tool_name = tool_call.get("function", {}).get("name")
+        tool_args = json.loads(tool_call.get("function", {}).get("arguments", "{}"))
+
+        # For now, return a mock result
+        # In future, this could execute actual Python functions
+        return {
+            "status": "success",
+            "tool": tool_name,
+            "result": f"Executed {tool_name} with args: {tool_args}",
+            "note": "Regular tool execution not yet implemented",
+        }
 
     # Monitoring methods
     def _get_pricing(self, model: str) -> Dict[str, float]:

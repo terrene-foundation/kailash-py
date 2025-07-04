@@ -1,6 +1,6 @@
 # Kailash SDK Cheatsheet Index
 
-**Version**: 0.2.1 | **Last Updated**: 2025-06-09
+**Version**: 0.6.3 | **Last Updated**: 2025-07-03
 
 Quick reference guides organized by topic. Each file contains focused, actionable code snippets and patterns.
 

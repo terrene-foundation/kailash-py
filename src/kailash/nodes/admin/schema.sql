@@ -346,19 +346,24 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Apply auto-update triggers
+-- Apply auto-update triggers with conflict resolution
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_roles_updated_at ON roles;
 CREATE TRIGGER update_roles_updated_at BEFORE UPDATE ON roles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_permissions_updated_at ON permissions;
 CREATE TRIGGER update_permissions_updated_at BEFORE UPDATE ON permissions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_user_attributes_updated_at ON user_attributes;
 CREATE TRIGGER update_user_attributes_updated_at BEFORE UPDATE ON user_attributes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_resource_attributes_updated_at ON resource_attributes;
 CREATE TRIGGER update_resource_attributes_updated_at BEFORE UPDATE ON resource_attributes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

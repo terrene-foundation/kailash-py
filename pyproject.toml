@@ -69,6 +69,8 @@ dependencies = [
     "aiofiles>=24.1.0",
     "bcrypt>=4.3.0",
     "plotly>=6.2.0",
+    "redis[asyncio]>=6.2.0",
+    "faker>=37.4.0",
 ]
 
 [project.optional-dependencies]

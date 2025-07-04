@@ -27,15 +27,47 @@ results, run_id = runtime.execute(workflow, parameters={
                 "args": ["-m", "mcp_data_server"]
             }
         ],
-        "auto_discover_tools": True
+        "auto_discover_tools": True,
+        "auto_execute_tools": True  # NEW: Execute tools automatically
     }
 })
 
 ```
 
+## Tool Execution with MCP
+```python
+# Automatic tool execution
+workflow = Workflow("tool-execution")
+workflow.add_node("agent", LLMAgentNode())
+
+results, run_id = runtime.execute(workflow, parameters={
+    "agent": {
+        "provider": "openai",
+        "model": "gpt-4",
+        "messages": [
+            {"role": "user", "content": "Search for customer data and create a report"}
+        ],
+        "mcp_servers": [{
+            "name": "customer-db",
+            "transport": "stdio",
+            "command": "mcp-customer-server"
+        }],
+        "auto_discover_tools": True,
+        "auto_execute_tools": True,  # Execute discovered tools
+        "tool_execution_config": {
+            "max_rounds": 3,  # Limit execution rounds
+            "timeout": 120    # 2 minute timeout
+        }
+    }
+})
+
+# Check execution details
+print(f"Tools executed: {results['agent']['context']['tools_executed']}")
+```
+
 ## MCP Server Creation
 ```python
-from kailash.mcp import MCPServer
+from kailash.mcp_server import MCPServer
 
 # Production server with caching
 server = MCPServer("my-server")

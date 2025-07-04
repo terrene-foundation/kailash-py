@@ -13,7 +13,7 @@
 - **[Node Catalog](../nodes/comprehensive-node-catalog.md)** - Alternative nodes to avoid issues
 - **[Testing Framework](14-async-testing-framework-guide.md)** - Production-certified testing with real Docker services
 - **[Testing Organization Policy](../testing/test-organization-policy.md)** - Test structure and classification
-- **[Complete Test Status Report](../../e2e_summary.txt)** - All tiers validation status (2025-07-02)
+- **[Complete Test Status Report](../testing/README.md)** - All tiers validation status (2025-07-03)
 
 ## 🔥 **Most Common Issues**
 

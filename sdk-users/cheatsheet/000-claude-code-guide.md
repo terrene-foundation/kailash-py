@@ -28,20 +28,6 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### ❌ Never Use These Patterns
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
 # ❌ WRONG - Missing runtime
 workflow = Workflow("example", name="Example")
 workflow.execute()  # AttributeError - workflows don't have execute()

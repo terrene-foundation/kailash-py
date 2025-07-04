@@ -1,6 +1,6 @@
 # Kailash SDK Workflow Library
 
-**Version**: Phase 7 Consolidation | **Last Updated**: 2025-01-09
+**Version**: 0.6.3 | **Last Updated**: 2025-07-03
 
 A comprehensive, token-efficient library of production-ready workflows consolidating learnings from 74 documented mistakes, 32 cheatsheets, and 11 pattern categories.
 

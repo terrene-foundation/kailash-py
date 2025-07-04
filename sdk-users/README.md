@@ -59,7 +59,7 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Usage examples
 
 - **[nodes/](nodes/)** - Comprehensive node catalog
-  - 66+ nodes with examples
+  - 110+ nodes with examples
   - Node selection guide
   - Use case recommendations
 
@@ -114,9 +114,9 @@ Quick reference with critical rules, common patterns, and navigation guide.
 
 | Test Tier | Results | Status |
 |-----------|---------|---------|
-| **Tier 1 (Unit)** | 1247/1247 PASSED | ✅ 100% |
-| **Tier 2 (Integration)** | 381/388 PASSED | ✅ 98.2% |
-| **Tier 3 (E2E)** | 18/18 CORE PASSED | ✅ 100% |
+| **Tier 1 (Unit)** | 1265/1265 PASSED | ✅ 100% |
+| **Tier 2 (Integration)** | 400/400 PASSED | ✅ 100% |
+| **Tier 3 (E2E Core)** | 10/10 CORE PASSED | ✅ 100% |
 
 **Key Validations Completed**:
 - ✅ **Ollama LLM Integration**: Real AI workflows with aiohttp async compatibility

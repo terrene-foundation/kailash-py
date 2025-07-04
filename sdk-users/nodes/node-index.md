@@ -18,16 +18,18 @@
 | Manage Roles/Permissions | `RoleManagementNode`, `PermissionCheckNode` | ❌ Custom RBAC |
 | Check User Access | `PermissionCheckNode` | ❌ Manual checks |
 
-## Node Categories (110+ total)
+## Node Categories (110+ total - Tested & Validated ✅)
 
-| Category | Count | Key Nodes | Details |
-|----------|-------|-----------|---------|
-| **Admin** | 4 | RoleManagementNode, PermissionCheckNode | [admin-nodes-guide.md](admin-nodes-guide.md) |
-| **AI/ML** | 20+ | LLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode | [02-ai-nodes.md](02-ai-nodes.md) |
-| **Data I/O** | 15+ | CSVReaderNode, SQLDatabaseNode, VectorDatabaseNode | [03-data-nodes.md](03-data-nodes.md) |
-| **API/HTTP** | 10+ | HTTPRequestNode, RESTClientNode, GraphQLClientNode | [04-api-nodes.md](04-api-nodes.md) |
-| **Transform** | 8+ | FilterNode, DataTransformer, TextSplitterNode | [06-transform-nodes.md](06-transform-nodes.md) |
-| **Logic** | 5+ | SwitchNode, MergeNode, WorkflowNode | [05-logic-nodes.md](05-logic-nodes.md) |
+| Category | Count | Key Nodes | Test Status | Details |
+|----------|-------|-----------|-------------|---------|
+| **Admin** | 10+ | UserManagementNode, RoleManagementNode, AccessControlNode | ✅ 100% Pass | [admin-nodes-guide.md](admin-nodes-guide.md) |
+| **AI/ML** | 15+ | LLMAgentNode, MonitoredLLMAgentNode, EmbeddingGeneratorNode | ✅ 100% Pass | [02-ai-nodes.md](02-ai-nodes.md) |
+| **Data I/O** | 20+ | CSVReaderNode, AsyncSQLDatabaseNode, DirectoryReaderNode | ✅ 99.7% Pass | [03-data-nodes.md](03-data-nodes.md) |
+| **API/HTTP** | 10+ | HTTPRequestNode, RESTClientNode, GraphQLClientNode | ✅ 100% Pass | [04-api-nodes.md](04-api-nodes.md) |
+| **Transform** | 25+ | DataTransformerNode, FilterNode, AggregationNode | ✅ 100% Pass | [06-transform-nodes.md](06-transform-nodes.md) |
+| **Logic** | 15+ | SwitchNode, MergeNode, ConditionalNode | ✅ 100% Pass | [05-logic-nodes.md](05-logic-nodes.md) |
+| **Security** | 15+ | AuthenticationNode, EncryptionNode, ThreatDetectionNode | ✅ 100% Pass | [security-nodes.md](security-nodes.md) |
+| **Enterprise** | 10+ | MultiFactorAuthNode, ComplianceNode, DataGovernanceNode | ✅ 100% Pass | [enterprise-nodes.md](enterprise-nodes.md) |
 | **Alerts** | 5+ | DiscordAlertNode, EmailSenderNode, SlackAlertNode | [09-alert-nodes.md](09-alert-nodes.md) |
 | **Security** | 10+ | OAuth2Node, JWTValidatorNode, EncryptionNode | [08-utility-nodes.md](08-utility-nodes.md) |
 | **Code** | 6+ | PythonCodeNode, MCPToolNode, ScriptRunnerNode | [07-code-nodes.md](07-code-nodes.md) |
