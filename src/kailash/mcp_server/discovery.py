@@ -91,6 +91,13 @@ class ServerInfo:
         if self.capabilities is None:
             self.capabilities = []
 
+        # Extract response_time from health if available
+        if self.health and isinstance(self.health, dict):
+            if "response_time" in self.health and self.response_time is None:
+                self.response_time = self.health["response_time"]
+            if "status" in self.health and self.health_status == "unknown":
+                self.health_status = self.health["status"]
+
         # Set endpoint based on transport if not provided
         if self.endpoint is None:
             if self.transport == "stdio" and self.command:
