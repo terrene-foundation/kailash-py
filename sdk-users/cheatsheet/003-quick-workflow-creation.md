@@ -2,119 +2,119 @@
 
 ## Basic Workflow Pattern
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode, CSVWriterNode
-from kailash.nodes.code import PythonCodeNode
 
 # 1. Create workflow
-workflow = Workflow("wf-001", name="my_pipeline")
+workflow = WorkflowBuilder()
 
-# 2. Add nodes with config parameters
-workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")
-workflow.add_node("process", PythonCodeNode(
-    name="process",
-    code="result = {'count': len(data), 'items': data}",
-    input_types={"data": list}
-))
-workflow.add_node("writer", CSVWriterNode(), file_path="output.csv")
+# 2. Add nodes with modern syntax
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'data': [{'name': 'item1'}, {'name': 'item2'}]}"
+})
+
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'count': len(input_data.get('data', [])), 'items': input_data.get('data', [])}"
+})
+
+workflow.add_node("PythonCodeNode", "output", {
+    "code": "result = {'processed': f'Found {input_data.get(\"count\", 0)} items'}"
+})
 
 # 3. Connect nodes
-workflow.connect("reader", "process")
-workflow.connect("process", "writer", mapping={"result.items": "data"})
+workflow.connect("data_source", "result", mapping={"processor": "input_data"})
+workflow.connect("processor", "result", mapping={"output": "input_data"})
 
 # 4. Execute with runtime
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
-
+results, run_id = runtime.execute(workflow.build())
+print(f"Result: {results['output']['result']['processed']}")
 ```
 
 ## Common Patterns
 
 ### Data Processing Pipeline
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode, JSONReaderNode, JSONWriterNode
-from kailash.nodes.transform import DataTransformerNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-workflow = Workflow("etl-001", name="ETL Pipeline")
+# Extract (simulate data source)
+workflow.add_node("PythonCodeNode", "extract", {
+    "code": "result = {'data': [{'amount': 150}, {'amount': 50}, {'amount': 200}]}"
+})
 
-# Extract
-workflow.add_node("extract", CSVReaderNode(),
-    file_path="sales.csv")
+# Transform (filter and process data)
+workflow.add_node("PythonCodeNode", "transform", {
+    "code": """
+# Filter and transform data
+data = input_data.get('data', [])
+filtered = [item for item in data if item.get('amount', 0) > 100]
+transformed = [{'id': i, 'total': item['amount'] * 1.1} for i, item in enumerate(filtered)]
+result = transformed
+"""
+})
 
-# Transform
-workflow.add_node("transform", DataTransformerNode(),
-    operations=[
-        {"type": "filter", "condition": "amount > 100"},
-        {"type": "map", "expression": "{'id': id, 'total': amount * 1.1}"}
-    ])
-
-# Load
-workflow.add_node("load", JSONWriterNode(),
-    file_path="processed.json")
+# Load (save results)
+workflow.add_node("PythonCodeNode", "load", {
+    "code": "result = {'saved': len(input_data), 'status': 'complete'}"
+})
 
 # Connect nodes
-workflow.connect("extract", "transform")
-workflow.connect("transform", "load", mapping={"result": "data"})
+workflow.connect("extract", "result", mapping={"transform": "input_data"})
+workflow.connect("transform", "result", mapping={"load": "input_data"})
 
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"Processed {results['load']['result']['saved']} items")
 ```
 
 ### AI Integration Pipeline
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode, JSONReaderNode, JSONWriterNode
-from kailash.nodes.transform import DataTransformerNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-workflow = Workflow("ai-001", name="AI Analysis")
+# Read data (simulate with PythonCodeNode)
+workflow.add_node("PythonCodeNode", "reader", {
+    "code": "result = {'reviews': [{'text': 'Great product!'}, {'text': 'Poor quality'}]}"
+})
 
-# Read data
-workflow.add_node("reader", JSONReaderNode(),
-    file_path="reviews.json")
+# Analyze with simulated LLM (avoid real API calls in examples)
+workflow.add_node("PythonCodeNode", "analyze", {
+    "code": """
+reviews = input_data.get('reviews', [])
+analyzed = []
+for review in reviews:
+    sentiment = 'positive' if 'great' in review.get('text', '').lower() else 'negative'
+    analyzed.append({'text': review['text'], 'sentiment': sentiment})
+result = {'analyzed_reviews': analyzed}
+"""
+})
 
-# Analyze with LLM
-workflow.add_node("analyze", LLMAgentNode(),
-    provider="openai",
-    model="gpt-4",
-    prompt="Analyze sentiment: {text}")
-
-# Save results
-workflow.add_node("save", JSONWriterNode(),
-    file_path="sentiment.json")
+# Save results (simulate)
+workflow.add_node("PythonCodeNode", "save", {
+    "code": "result = {'saved_count': len(input_data.get('analyzed_reviews', [])), 'status': 'saved'}"
+})
 
 # Connect nodes
-workflow.connect("reader", "analyze", mapping={"data": "text"})
-workflow.connect("analyze", "save", mapping={"result": "data"})
+workflow.connect("reader", "result", mapping={"analyze": "input_data"})
+workflow.connect("analyze", "result", mapping={"save": "input_data"})
 
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"Analyzed {results['save']['result']['saved_count']} reviews")
 ```
 
 ## Key Points
 - Always use `LocalRuntime()` for execution
-- Configuration params in `add_node()`, data flows through `connect()`
+- Configuration params in `add_node()`, data flows through `add_connection()`
 - Use dot notation for nested access: `"result.data"`
-- PythonCodeNode needs `name` as first parameter
+- PythonCodeNode wraps outputs in `result` key
 
 ## Next Steps
 - [Common Node Patterns](004-common-node-patterns.md) - Node examples

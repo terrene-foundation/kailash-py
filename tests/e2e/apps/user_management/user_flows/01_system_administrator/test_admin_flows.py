@@ -11,17 +11,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 from apps.user_management.config.settings import UserManagementConfig
 from apps.user_management.main import UserManagementApp
 from kailash.runtime import LocalRuntime
-from kailash.workflows import WorkflowBuilder
+from kailash.workflow import WorkflowBuilder
 
 
 class TestSystemAdministratorFlows:
     """Test all System Administrator user flows with real implementations"""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def setup_environment(self):
         """Set up real test environment with database and services"""
         # Initialize app
@@ -554,7 +555,7 @@ import re
 
 errors = []
 validated_users = []
-email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
 
 for idx, user in enumerate(input_data["users"]):
     user_errors = []

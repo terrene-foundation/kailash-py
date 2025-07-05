@@ -35,7 +35,7 @@ router = QueryRouterNode(
 ### Simple Query
 ```python
 # Router handles everything
-result = await router.process({
+result = await router.execute({
     "query": "SELECT * FROM users WHERE status = ?",
     "parameters": ["active"]
 })
@@ -44,20 +44,20 @@ result = await router.process({
 ### Transaction
 ```python
 # Start
-await router.process({
+await router.execute({
     "query": "BEGIN",
     "session_id": "order_123"
 })
 
 # Operations use same connection
-await router.process({
+await router.execute({
     "query": "UPDATE inventory SET stock = stock - ?",
     "parameters": [1],
     "session_id": "order_123"
 })
 
 # Commit
-await router.process({
+await router.execute({
     "query": "COMMIT",
     "session_id": "order_123"
 })
@@ -66,7 +66,7 @@ await router.process({
 ### Bulk Operations
 ```python
 # Classified as WRITE_BULK, routed accordingly
-await router.process({
+await router.execute({
     "query": """
         INSERT INTO events (type, data)
         VALUES ('click', '{}'), ('view', '{}'), ('purchase', '{}')
@@ -90,7 +90,7 @@ await router.process({
 
 ### Pool Statistics
 ```python
-stats = await pool.process({"operation": "stats"})
+stats = await pool.execute({"operation": "stats"})
 print(f"Connections: {stats['current_state']['total_connections']}")
 print(f"Utilization: {stats['current_state']['active_connections']}")
 print(f"Health: {stats['health']['success_rate']:.1%}")
@@ -164,7 +164,7 @@ parameters = [user_id]
 session = f"report_{uuid.uuid4()}"
 # All queries in report use same connection
 for table in tables:
-    await router.process({
+    await router.execute({
         "query": f"SELECT COUNT(*) FROM {table}",
         "session_id": session
     })
@@ -204,6 +204,6 @@ logging.getLogger("kailash.nodes.data.query_router").setLevel(logging.DEBUG)
 logging.getLogger("kailash.core.actors.adaptive_pool_controller").setLevel(logging.DEBUG)
 
 # Get detailed status
-detailed = await pool.process({"operation": "get_pool_statistics"})
+detailed = await pool.execute({"operation": "get_pool_statistics"})
 print(json.dumps(detailed, indent=2))
 ```

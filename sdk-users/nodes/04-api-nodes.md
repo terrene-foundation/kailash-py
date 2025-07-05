@@ -48,6 +48,27 @@ This document covers all API integration nodes including HTTP clients, authentic
   - `body`: Request body
   - `timeout`: Request timeout
 
+**Example**:
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# HTTP GET request
+workflow.add_node("HTTPRequestNode", "api_get", {
+    "url": "https://api.github.com/users/octocat",
+    "method": "GET",
+    "headers": {"User-Agent": "Kailash-SDK"},
+    "timeout": 30
+})
+
+# Execute workflow
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"Response: {results['api_get']['result']['status_code']}")
+```
+
 ### AsyncHTTPRequestNode
 - **Module**: `kailash.nodes.api.http`
 - **Purpose**: Make HTTP requests (asynchronous)
@@ -79,6 +100,29 @@ This document covers all API integration nodes including HTTP clients, authentic
   - `method`: HTTP method
   - `params`: Query parameters
   - `json_data`: JSON payload
+
+**Example**:
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# REST API POST request
+workflow.add_node("RESTClientNode", "create_user", {
+    "base_url": "https://api.example.com",
+    "endpoint": "/users",
+    "method": "POST",
+    "json_data": {
+        "name": "John Doe",
+        "email": "john@example.com"
+    },
+    "headers": {"Authorization": "Bearer token123"}
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
 
 ### AsyncRESTClientNode
 - **Module**: `kailash.nodes.api.rest`

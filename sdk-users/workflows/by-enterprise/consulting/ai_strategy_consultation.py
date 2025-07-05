@@ -37,12 +37,13 @@ And access resources like registry://stats for statistics.
 
 import os
 
-from examples.utils.data_paths import get_output_data_path
 from kailash import Workflow
 from kailash.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONWriterNode
 from kailash.runtime.local import LocalRuntime
+
+from examples.utils.data_paths import get_output_data_path
 
 
 def create_ai_strategy_workflow() -> Workflow:
@@ -145,7 +146,9 @@ def run_with_mock_data():
     print("AI STRATEGY CONSULTATION - MOCK MODE")
     print("=" * 70)
     print("\nNote: Running with mock data. For full functionality:")
-    print("1. Start AI Registry server: python -m kailash.mcp.servers.ai_registry")
+    print(
+        "1. Start AI Registry server: python -m kailash.mcp_server.servers.ai_registry"
+    )
     print("2. Run this example again")
 
     workflow = create_ai_strategy_workflow()
@@ -357,7 +360,7 @@ Use multiple iterations to build a comprehensive strategic analysis.""",
     except Exception as e:
         print(f"\n❌ Error executing workflow: {e}")
         print("\nMake sure the MCP server is running:")
-        print("python -m kailash.mcp.servers.ai_registry --port 8080")
+        print("python -m kailash.mcp_server.servers.ai_registry --port 8080")
 
 
 def main():

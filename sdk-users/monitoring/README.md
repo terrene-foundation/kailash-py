@@ -71,7 +71,7 @@ workflow.add_node("metrics", MetricsCollectorNode(
 ### Custom Metrics
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 workflow = Workflow("monitoring_example")

@@ -493,6 +493,20 @@ class StreamPublisherNode(Node):
                 required=False,
                 default=3,
             ),
+            "messages": NodeParameter(
+                name="messages",
+                type=list,
+                description="Messages to publish",
+                required=False,
+                default=[],
+            ),
+            "headers": NodeParameter(
+                name="headers",
+                type=dict,
+                description="Optional message headers",
+                required=False,
+                default={},
+            ),
         }
 
     def configure(self, config: dict[str, Any]) -> None:
@@ -792,6 +806,13 @@ class WebSocketNode(Node):
                 description="Receive timeout (for receive action)",
                 required=False,
                 default=1.0,
+            ),
+            "connection_config": NodeParameter(
+                name="connection_config",
+                type=dict,
+                description="Connection configuration from load balancer",
+                required=False,
+                default={},
             ),
         }
 

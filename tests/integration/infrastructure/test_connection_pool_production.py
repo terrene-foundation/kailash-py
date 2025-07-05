@@ -20,6 +20,7 @@ from kailash.sdk_exceptions import NodeExecutionError
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.slow
 class TestConnectionPoolProduction:
     """Production-grade integration tests with demanding scenarios."""
 
@@ -30,10 +31,10 @@ class TestConnectionPoolProduction:
             "name": "production_pool",
             "database_type": "postgresql",
             "host": os.getenv("POSTGRES_HOST", "localhost"),
-            "port": int(os.getenv("POSTGRES_PORT", 5433)),
+            "port": int(os.getenv("POSTGRES_PORT", 5434)),
             "database": os.getenv("POSTGRES_DB", "kailash_test"),
-            "user": os.getenv("POSTGRES_USER", "admin"),
-            "password": os.getenv("POSTGRES_PASSWORD", "admin"),
+            "user": os.getenv("POSTGRES_USER", "test_user"),
+            "password": os.getenv("POSTGRES_PASSWORD", "test_password"),
             "min_connections": 5,
             "max_connections": 20,
             "health_threshold": 60,

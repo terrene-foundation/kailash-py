@@ -310,7 +310,7 @@ if __name__ == "__main__":
 from kailash import Workflow, WorkflowBuilder
 from kailash.nodes.data import WorkflowConnectionPool, SQLDatabaseNode, MongoNode
 from kailash.nodes.code import PythonCodeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Create workflow
 workflow = WorkflowBuilder("database_integration")
@@ -334,18 +334,18 @@ workflow.add_node("pg_pool", "WorkflowConnectionPool", {
 workflow.add_node("init_pool", "PythonCodeNode", {
     "code": "result = {'operation': 'initialize'}"
 })
-workflow.add_connection("init_pool", "pg_pool", "result", "inputs")
+workflow.connect("init_pool", "pg_pool", mapping={"result": "inputs"})
 
 # Read customer data with connection pool
 workflow.add_node("read_customers", "PythonCodeNode", {
     "code": """
 # Acquire connection from pool
-conn_result = await pool.process({"operation": "acquire"})
+conn_result = await pool.execute({"operation": "acquire"})
 conn_id = conn_result["connection_id"]
 
 try:
     # Execute query
-    result = await pool.process({
+    result = await pool.execute({
         "operation": "execute",
         "connection_id": conn_id,
         "query": '''
@@ -368,7 +368,7 @@ try:
     customers = result["data"]
 finally:
     # Always release connection
-    await pool.process({
+    await pool.execute({
         "operation": "release",
         "connection_id": conn_id
     })
@@ -439,12 +439,12 @@ def calculate_engagement_score(orders, events):
 workflow.add_node("write_analytics", "PythonCodeNode", {
     "code": """
 # Use connection pool for transactional write
-conn_result = await pool.process({"operation": "acquire"})
+conn_result = await pool.execute({"operation": "acquire"})
 conn_id = conn_result["connection_id"]
 
 try:
     # Start transaction
-    await pool.process({
+    await pool.execute({
         "operation": "execute",
         "connection_id": conn_id,
         "query": "BEGIN",
@@ -453,7 +453,7 @@ try:
 
     # Batch insert/update customer analytics
     for customer in enriched_customers:
-        await pool.process({
+        await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": '''
@@ -478,7 +478,7 @@ try:
         })
 
     # Commit transaction
-    await pool.process({
+    await pool.execute({
         "operation": "execute",
         "connection_id": conn_id,
         "query": "COMMIT",
@@ -489,7 +489,7 @@ try:
 
 except Exception as e:
     # Rollback on error
-    await pool.process({
+    await pool.execute({
         "operation": "execute",
         "connection_id": conn_id,
         "query": "ROLLBACK",
@@ -499,7 +499,7 @@ except Exception as e:
     raise
 finally:
     # Always release connection
-    await pool.process({
+    await pool.execute({
         "operation": "release",
         "connection_id": conn_id
     })
@@ -514,7 +514,7 @@ finally:
 workflow.add_node("monitor_pool", "PythonCodeNode", {
     "code": """
 # Get pool statistics
-stats = await pool.process({"operation": "stats"})
+stats = await pool.execute({"operation": "stats"})
 
 # Log performance metrics
 result = {
@@ -537,10 +537,10 @@ if stats["current_state"]["available_connections"] == 0:
 })
 
 # Connect the workflow
-workflow.add_connection("read_customers", "data_joiner", "result.customers", "postgres_data")
-workflow.add_connection("mongo_aggregator", "data_joiner", "result", "mongo_data")
-workflow.add_connection("data_joiner", "write_analytics", "result.customers", "enriched_customers")
-workflow.add_connection("write_analytics", "monitor_pool")
+workflow.connect("read_customers", "data_joiner", mapping={"result.customers": "postgres_data"})
+workflow.connect("mongo_aggregator", "data_joiner", mapping={"result": "mongo_data"})
+workflow.connect("data_joiner", "write_analytics", mapping={"result.customers": "enriched_customers"})
+workflow.connect("write_analytics", "monitor_pool")
 
 # Execute workflow
 runtime = LocalRuntime()
@@ -568,7 +568,7 @@ class DatabasePoolManager:
             name=name,
             **config
         )
-        await pool.process({"operation": "initialize"})
+        await pool.execute({"operation": "initialize"})
         self.pools[name] = pool
 
         # Start monitoring if not already running
@@ -586,7 +586,7 @@ class DatabasePoolManager:
         while True:
             for name, pool in self.pools.items():
                 try:
-                    stats = await pool.process({"operation": "stats"})
+                    stats = await pool.execute({"operation": "stats"})
 
                     # Check for issues
                     if stats["queries"]["error_rate"] > 0.1:

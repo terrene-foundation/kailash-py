@@ -2,225 +2,323 @@
 
 ## Data I/O
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
 # CSV Reading
-workflow = Workflow("example", name="Example")
-workflow.add_node("reader", CSVReaderNode(),
-    file_path="data.csv",
-    delimiter=",",
-    has_header=True
-)
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "data.csv",
+    "delimiter": ",",
+    "has_header": True
+})
 
 # JSON Writing
-from kailash.nodes.data import JSONWriterNode
-workflow = Workflow("example", name="Example")
-workflow.add_node("writer", JSONWriterNode(),
-    file_path="output.json",
-    indent=2
-)
+workflow.add_node("JSONWriterNode", "writer", {
+    "file_path": "output.json",
+    "indent": 2
+})
 
-# With data paths utility
-from examples.utils.data_paths import get_input_data_path
-workflow = Workflow("example", name="Example")
-workflow.add_node("reader", CSVReaderNode(),
-    file_path=str(get_input_data_path("data.csv"))
-)
+# Connect them
+workflow.connect("reader", "result", mapping={"writer": "data"})
 
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## PythonCodeNode
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-# ✅ CORRECT: Direct statements, wrap output
-workflow = Workflow("example", name="Example")
-workflow.add_node("filter", PythonCodeNode(
-    name="filter",
-    code='''
-filtered = [item for item in data if item.get('score', 0) > 0.8]
+# Data source
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = [{'score': 0.9}, {'score': 0.3}, {'score': 0.85}]"
+})
+
+# Filter with wrapped output
+workflow.add_node("PythonCodeNode", "filter", {
+    "code": '''
+filtered = [item for item in input_data if item.get('score', 0) > 0.8]
 result = {'items': filtered, 'count': len(filtered)}
-''',
-    input_types={"data": list}
-))
+'''
+})
+
+# Connect with proper syntax
+workflow.connect("data_source", "result", mapping={"filter": "input_data"})
 
 # Access nested output with dot notation
-workflow = Workflow("example", name="Example")
-workflow.connect("filter", "next_node", mapping={"result.items": "processed_data"})
+workflow.connect("filter", "result.items", mapping={"next_node": "processed_data"})
 
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## LLM Integration
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-# Basic LLM
-workflow = Workflow("example", name="Example")
-workflow.add_node("llm", LLMAgentNode(),
-    provider="openai",
-    model="gpt-4",
-    temperature=0.7,
-    prompt="Analyze this data: {data}"
-)
+# Data source
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'text': 'This is sample data to analyze'}"
+})
 
-# With system prompt
-workflow = Workflow("example", name="Example")
-workflow.add_node("analyst", LLMAgentNode(),
-    provider="openai",
-    model="gpt-4",
-    system_prompt="You are a data analyst. Be concise.",
-    prompt="Summarize trends in: {metrics}"
-)
+# Simulate LLM analysis (avoid real API calls in examples)
+workflow.add_node("PythonCodeNode", "llm_analysis", {
+    "code": '''
+text = input_data.get('text', '')
+# Simulate LLM analysis
+analysis = f"Analysis of '{text}': This appears to be informational text."
+result = {'analysis': analysis, 'confidence': 0.85}
+'''
+})
 
+# Connect nodes
+workflow.connect("data_source", "result", mapping={"llm_analysis": "input_data"})
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"Analysis: {results['llm_analysis']['result']['analysis']}")
 ```
 
 ## Data Transformation
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.transform import FilterNode
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-from kailash.nodes.transform import DataTransformerNode
-workflow = Workflow("example", name="Example")
-workflow.add_node("transform", DataTransformerNode(),
-    operations=[
-        {"type": "filter", "condition": "status == 'active'"},
-        {"type": "map", "expression": "{'id': id, 'name': name.upper()}"},
-        {"type": "sort", "key": "created_at", "reverse": True}
-    ]
-)
+# Data source
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = [{'status': 'active', 'id': 1, 'name': 'alice'}, {'status': 'inactive', 'id': 2, 'name': 'bob'}]"
+})
 
+# Filter data
+workflow.add_node("FilterNode", "filter", {
+    "field": "status",
+    "operator": "==",
+    "value": "active"
+})
+
+# Transform filtered data
+workflow.add_node("PythonCodeNode", "transform", {
+    "code": '''
+transformed = []
+for item in input_data:
+    transformed.append({'id': item['id'], 'name': item['name'].upper()})
+result = transformed
+'''
+})
+
+# Connect nodes
+workflow.connect("data_source", "result", mapping={"filter": "data"})
+workflow.connect("filter", "filtered_data", mapping={"transform": "input_data"})
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Conditional Routing
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-# Switch node with conditions
-workflow = Workflow("example", name="Example")
-workflow.add_node("router", SwitchNode(),
-    conditions=[
-        {"output": "high", "expression": "score > 80"},
-        {"output": "medium", "expression": "score > 50"},
-        {"output": "low", "expression": "score <= 50"}
-    ]
-)
+# Data source
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'score': 85}"
+})
 
-# Connect each output
-workflow.connect("router", "high_processor", output_port="high")
-workflow.connect("router", "medium_processor", output_port="medium")
-workflow.connect("router", "low_processor", output_port="low")
+# Router with conditional logic
+workflow.add_node("PythonCodeNode", "router", {
+    "code": '''
+score = input_data.get('score', 0)
+if score > 80:
+    category = 'high'
+elif score > 50:
+    category = 'medium'
+else:
+    category = 'low'
+result = {'category': category, 'score': score}
+'''
+})
 
+# Processors for each category
+workflow.add_node("PythonCodeNode", "high_processor", {
+    "code": "result = {'processed': f'High score processing: {input_data.get(\"score\", 0)}'}"
+})
+
+workflow.add_node("PythonCodeNode", "medium_processor", {
+    "code": "result = {'processed': f'Medium score processing: {input_data.get(\"score\", 0)}'}"
+})
+
+# Connect nodes
+workflow.connect("data_source", "result", mapping={"router": "input_data"})
+workflow.connect("router", "result", mapping={"high_processor": "input_data"})
+workflow.connect("router", "result", mapping={"medium_processor": "input_data"})
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
-## API Requests
+## HTTPRequestNode - Real API Calls
 ```python
-# Simple GET
-workflow.add_node("api", HTTPRequestNode(),
-    url="https://api.example.com/data",
-    method="GET",
-    headers={"Authorization": "Bearer token"}
-)
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# POST with data
-workflow.add_node("post", HTTPRequestNode(),
-    url="https://api.example.com/submit",
-    method="POST",
-    headers={"Content-Type": "application/json"},
-    body={"key": "value"}
-)
+workflow = WorkflowBuilder()
 
+# HTTP GET request
+workflow.add_node("HTTPRequestNode", "api_get", {
+    "url": "https://httpbin.org/get",
+    "method": "GET",
+    "headers": {"User-Agent": "Kailash-SDK/0.6.0"},
+    "timeout": 30
+})
+
+# HTTP POST request
+workflow.add_node("HTTPRequestNode", "api_post", {
+    "url": "https://httpbin.org/post",
+    "method": "POST",
+    "headers": {"Content-Type": "application/json"},
+    "json_data": {"key": "value", "timestamp": "2024-01-01"},
+    "timeout": 30
+})
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"GET Status: {results['api_get']['result']['status_code']}")
+print(f"POST Status: {results['api_post']['result']['status_code']}")
+```
+
+## LLMAgentNode - AI Integration
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# Data source for LLM processing
+workflow.add_node("PythonCodeNode", "data_prep", {
+    "code": '''
+text = "The quarterly sales report shows 15% growth in revenue."
+result = {"text": text, "task": "analyze"}
+'''
+})
+
+# LLM Agent processing
+workflow.add_node("LLMAgentNode", "llm_agent", {
+    "model": "gpt-3.5-turbo",
+    "system_prompt": "You are a business analyst. Analyze the given text and extract key insights.",
+    "temperature": 0.1,
+    "max_tokens": 200
+})
+
+# Post-process LLM output
+workflow.add_node("PythonCodeNode", "post_process", {
+    "code": '''
+llm_response = input_data.get("response", "")
+result = {
+    "analysis": llm_response,
+    "processed_at": "2024-01-01T10:00:00Z",
+    "confidence": 0.9
+}
+'''
+})
+
+# Connect nodes
+workflow.connect("data_prep", "result.text", mapping={"llm_agent": "prompt"})
+workflow.connect("llm_agent", "result", mapping={"post_process": "input_data"})
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+## API Requests (Simulated)
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# Simple GET (simulated)
+workflow.add_node("PythonCodeNode", "api_get", {
+    "code": '''
+# Simulate API GET response
+result = {
+    'status': 200,
+    'data': {'message': 'GET response simulation'},
+    'headers': {'Content-Type': 'application/json'}
+}
+'''
+})
+
+# POST with data (simulated)
+workflow.add_node("PythonCodeNode", "api_post", {
+    "code": '''
+# Simulate API POST response
+result = {
+    'status': 201,
+    'data': {'message': 'POST successful', 'id': 12345},
+    'headers': {'Content-Type': 'application/json'}
+}
+'''
+})
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Cycles (Advanced)
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
-# Iterative processing with convergence
-workflow = Workflow("example", name="Example")
-workflow.add_node("convergence", PythonCodeNode(
-    name="convergence",
-    code='''
+# Initial value
+workflow.add_node("PythonCodeNode", "initial", {
+    "code": "result = {'value': 1.0, 'iteration': 0}"
+})
+
+# Iterative processing with convergence check
+workflow.add_node("PythonCodeNode", "convergence", {
+    "code": '''
+value = input_data.get('value', 1.0)
+iteration = input_data.get('iteration', 0)
 new_value = value * 0.9  # Example convergence calculation
-converged = abs(new_value - value) < 0.01
-result = {"value": new_value, "converged": converged}
-''',
-    input_types={"value": float}
-))
+converged = abs(new_value - value) < 0.01 or iteration > 10
+result = {
+    "value": new_value,
+    "converged": converged,
+    "iteration": iteration + 1
+}
+'''
+})
 
-# Create cycle
-workflow.connect("convergence", "convergence", mapping={"result.value": "value"})
+# Connect nodes
+workflow.connect("initial", "result", mapping={"convergence": "input_data"})
 
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"Final value: {results['convergence']['result']['value']}")
 ```
 
 ## Next Steps

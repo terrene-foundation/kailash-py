@@ -29,7 +29,7 @@ from kailash.nodes.data import (
 )
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.nodes.transform import DataTransformer
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_customer_360_workflow() -> Workflow:

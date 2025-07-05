@@ -457,7 +457,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         try:
             # Ensure MCP client is initialized
             if not hasattr(self, "_mcp_client"):
-                from kailash.mcp import MCPClient
+                from kailash.mcp_server import MCPClient
 
                 self._mcp_client = MCPClient()
 

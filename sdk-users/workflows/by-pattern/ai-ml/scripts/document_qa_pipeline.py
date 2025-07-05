@@ -21,7 +21,7 @@ from kailash import Workflow
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.data import DocumentSourceNode, QuerySourceNode, RelevanceScorerNode
 from kailash.nodes.transform import DataTransformer, HierarchicalChunkerNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_qa_workflow() -> Workflow:

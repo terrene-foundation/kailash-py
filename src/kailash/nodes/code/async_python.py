@@ -144,7 +144,8 @@ ALLOWED_ASYNC_MODULES = {
     "asyncpg",  # PostgreSQL
     "aiomysql",  # MySQL
     "motor",  # MongoDB
-    "aioredis",  # Redis
+    "redis",  # Redis with asyncio support
+    "redis.asyncio",  # Redis async module
     "aiosqlite",  # SQLite
     # Message queues and streaming
     "aiokafka",  # Kafka

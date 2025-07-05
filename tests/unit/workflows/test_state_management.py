@@ -20,7 +20,7 @@ class NestedModel(BaseModel):
     items: list[str] = Field(default_factory=list)
 
 
-class TestState(BaseModel):
+class StateTestModel(BaseModel):
     """Test state model for state management tests."""
 
     name: str = "test"
@@ -32,13 +32,13 @@ class TestState(BaseModel):
     data: dict[str, str] = Field(default_factory=dict)
 
 
-class TestStateManager:
+class StateTestModelManager:
     """Tests for the StateManager class."""
 
     def test_update_in_top_level(self):
         """Test updating a top-level property."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
 
         # Act
         new_state = StateManager.update_in(state, ["name"], "updated")
@@ -51,7 +51,7 @@ class TestStateManager:
     def test_update_in_nested(self):
         """Test updating a nested property."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
 
         # Act
         new_state = StateManager.update_in(state, ["nested", "value"], "updated_nested")
@@ -64,7 +64,7 @@ class TestStateManager:
     def test_update_in_list(self):
         """Test updating a list property."""
         # Arrange
-        state = TestState(tags=["tag1", "tag2"])
+        state = StateTestModel(tags=["tag1", "tag2"])
 
         # Act
         new_state = StateManager.update_in(state, ["tags"], ["tag3", "tag4"])
@@ -76,7 +76,7 @@ class TestStateManager:
     def test_update_in_nested_list(self):
         """Test updating a nested list property."""
         # Arrange
-        state = TestState(nested=NestedModel(items=["item1", "item2"]))
+        state = StateTestModel(nested=NestedModel(items=["item1", "item2"]))
 
         # Act
         new_state = StateManager.update_in(
@@ -90,7 +90,7 @@ class TestStateManager:
     def test_batch_update(self):
         """Test batch updating multiple properties."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
 
         # Act
         new_state = StateManager.batch_update(
@@ -113,7 +113,7 @@ class TestStateManager:
     def test_get_in_top_level(self):
         """Test getting a top-level property."""
         # Arrange
-        state = TestState(name="test_get")
+        state = StateTestModel(name="test_get")
 
         # Act
         value = StateManager.get_in(state, ["name"])
@@ -124,7 +124,7 @@ class TestStateManager:
     def test_get_in_nested(self):
         """Test getting a nested property."""
         # Arrange
-        state = TestState(nested=NestedModel(value="nested_value"))
+        state = StateTestModel(nested=NestedModel(value="nested_value"))
 
         # Act
         value = StateManager.get_in(state, ["nested", "value"])
@@ -135,7 +135,7 @@ class TestStateManager:
     def test_get_in_invalid_path(self):
         """Test getting an invalid path raises KeyError."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
 
         # Act / Assert
         with pytest.raises(KeyError):
@@ -147,7 +147,7 @@ class TestStateManager:
     def test_merge(self):
         """Test merging updates."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
 
         # Act
         new_state = StateManager.merge(state, name="merged", count=99)
@@ -165,7 +165,7 @@ class TestWorkflowStateWrapper:
     def test_create_wrapper(self):
         """Test creating a wrapper."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
 
         # Act
         wrapper = WorkflowStateWrapper(state)
@@ -176,7 +176,7 @@ class TestWorkflowStateWrapper:
     def test_update_in(self):
         """Test updating state through wrapper."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
         wrapper = WorkflowStateWrapper(state)
 
         # Act
@@ -191,7 +191,7 @@ class TestWorkflowStateWrapper:
     def test_batch_update(self):
         """Test batch updating through wrapper."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
         wrapper = WorkflowStateWrapper(state)
 
         # Act
@@ -208,7 +208,7 @@ class TestWorkflowStateWrapper:
     def test_get_in(self):
         """Test getting value through wrapper."""
         # Arrange
-        state = TestState(
+        state = StateTestModel(
             name="wrapper_test", nested=NestedModel(value="wrapper_nested")
         )
         wrapper = WorkflowStateWrapper(state)
@@ -224,7 +224,7 @@ class TestWorkflowStateWrapper:
     def test_merge(self):
         """Test merging through wrapper."""
         # Arrange
-        state = TestState()
+        state = StateTestModel()
         wrapper = WorkflowStateWrapper(state)
 
         # Act

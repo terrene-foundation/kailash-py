@@ -47,7 +47,7 @@ class Message:
     type: MessageType = MessageType.QUERY
     payload: Any = None
     reply_to: Optional[asyncio.Queue] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -70,8 +70,8 @@ class ConnectionStats:
     total_execution_time: float = 0.0
     health_checks_passed: int = 0
     health_checks_failed: int = 0
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_used_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_used_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     health_score: float = 100.0
 
 

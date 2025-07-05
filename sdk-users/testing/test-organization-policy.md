@@ -113,18 +113,62 @@ class TestAdminIntegration:
 
 ## Prohibited Patterns
 
-### 1. Duplicate Test Directories
+### 1. NO SKIPPED TESTS - ZERO TOLERANCE POLICY
+**Skipped tests are zombie tests that will never run again. They are strictly forbidden.**
+
+- ❌ NEVER use `pytest.skip()` or `@pytest.mark.skip`
+- ❌ NEVER use `@pytest.mark.skipif` conditionally
+- ❌ NEVER create tests that check for availability and skip
+
+**Instead:**
+- ✅ If a test requires external dependencies (DB, API), put it in `integration/` or `e2e/`
+- ✅ If a test is not ready, don't commit it
+- ✅ If a feature is removed, remove its tests
+- ✅ If a test fails intermittently, fix it or remove it
+
+**Examples of FORBIDDEN patterns:**
+```python
+# ❌ NEVER DO THIS
+def test_mysql_feature(self):
+    if not mysql_available:
+        pytest.skip("MySQL not available")  # FORBIDDEN!
+
+# ❌ NEVER DO THIS
+@pytest.mark.skipif(not has_gpu, reason="GPU not available")  # FORBIDDEN!
+def test_gpu_processing():
+    pass
+
+# ❌ NEVER DO THIS
+@pytest.mark.skip(reason="Not implemented yet")  # FORBIDDEN!
+def test_future_feature():
+    pass
+```
+
+**Correct approach:**
+```python
+# ✅ Put in integration/ with proper Docker setup
+@pytest.mark.integration
+@pytest.mark.requires_mysql
+def test_mysql_feature(self):
+    # Test will only run when MySQL Docker is available
+    pass
+
+# ✅ Remove or don't commit unfinished tests
+# Don't create placeholder tests
+```
+
+### 2. Duplicate Test Directories
 Never create these directories:
 - `tests/test_*` (e.g., `tests/test_workflow/`)
 - `tests/middleware/`, `tests/nodes/`, etc. (use `tests/unit/middleware/`)
 - Any test directory outside the three-tier structure
 
-### 2. Misclassified Tests
+### 3. Misclassified Tests
 - Never put slow tests in `unit/`
 - Never put Docker-dependent tests in `unit/` or unmarked `integration/`
 - Always use appropriate pytest markers
 
-### 3. Scattered Test Support Files
+### 4. Scattered Test Support Files
 Keep test support files organized:
 - Test utilities & configs → `tests/utils/`
 - Shared fixtures → `tests/fixtures/`

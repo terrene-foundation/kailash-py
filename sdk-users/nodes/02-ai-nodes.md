@@ -28,7 +28,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -65,7 +65,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -91,11 +91,52 @@ workflow.runtime = LocalRuntime()
 
 ### Working with Local LLMs
 
-Ollama provides excellent local LLM capabilities. For production reliability, use **direct API calls wrapped in PythonCodeNode** rather than LLMAgentNode:
+Ollama provides excellent local LLM capabilities. Starting from v0.6.2, the LLMAgentNode has improved Ollama support with async compatibility and custom backend configuration:
+
+#### Using LLMAgentNode with Ollama (v0.6.2+)
+
+```python
+# Basic usage with improved async support
+node = LLMAgentNode()
+result = await node.execute(
+    provider="ollama",
+    model="llama3.2:3b",
+    prompt="Explain quantum computing",
+    generation_config={
+        "temperature": 0.7,
+        "max_tokens": 500
+    }
+)
+
+# Custom backend configuration for remote Ollama instances
+result = await node.execute(
+    provider="ollama",
+    model="llama3.2:3b",
+    prompt="Write a haiku",
+    backend_config={
+        "host": "gpu-server.local",
+        "port": 11434
+    }
+)
+
+# Or use base_url directly
+result = await node.execute(
+    provider="ollama",
+    model="llama3.2:3b",
+    prompt="Analyze this data",
+    backend_config={
+        "base_url": "http://ollama.company.com:11434"
+    }
+)
+```
+
+#### Alternative: Direct API Calls with PythonCodeNode
+
+For specific use cases or when you need more control, you can also use **direct API calls wrapped in PythonCodeNode**:
 
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 def ollama_generate(prompt="Hello world", model="llama3.2:1b"):
@@ -435,7 +476,7 @@ def test_ollama():
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -470,7 +511,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -506,7 +547,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -547,7 +588,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -585,7 +626,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -622,7 +663,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -660,7 +701,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -699,7 +740,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -741,7 +782,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -785,7 +826,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -828,7 +869,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -870,7 +911,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -912,7 +953,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -933,6 +974,46 @@ workflow.runtime = LocalRuntime()
   )
 
   ```
+
+## Troubleshooting Ollama Integration (v0.6.2+)
+
+### Common Issues and Solutions
+
+1. **Async Compatibility Issues**
+   - **Problem**: `RuntimeError: cannot be used in 'async with' expression`
+   - **Solution**: Update to v0.6.2+ which uses `aiohttp` for proper async support
+
+2. **Connection Errors**
+   - **Problem**: Cannot connect to Ollama service
+   - **Solution**:
+     ```python
+     # Check environment variables
+     export OLLAMA_BASE_URL=http://localhost:11434
+     # Or use backend_config
+     backend_config={"base_url": "http://localhost:11434"}
+     ```
+
+3. **Type Errors in Responses**
+   - **Problem**: `TypeError: unhashable type: 'dict'`
+   - **Solution**: v0.6.2+ includes defensive type checking for all LLM responses
+
+4. **Timeout Issues**
+   - **Problem**: Requests timing out on large models
+   - **Solution**: Configure appropriate timeouts
+     ```python
+     generation_config={
+         "max_tokens": 200,  # Reduce for faster responses
+         "temperature": 0.7
+     }
+     ```
+
+5. **Model Not Found**
+   - **Problem**: Model not available locally
+   - **Solution**: Pull the model first
+     ```bash
+     ollama pull llama3.2:3b
+     ollama pull nomic-embed-text:latest
+     ```
 
 ## Unified AI Provider Architecture
 

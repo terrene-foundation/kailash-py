@@ -182,6 +182,8 @@ class TestResourceRegistry:
         """Test cleanup of a single resource."""
         mock_resource = MagicMock()
         mock_resource.close = AsyncMock()
+        # Ensure aclose doesn't exist so registry falls back to close
+        del mock_resource.aclose
 
         factory = MockFactory()
         factory.resource_value = mock_resource
@@ -208,6 +210,8 @@ class TestResourceRegistry:
         for i in range(3):
             mock_resource = MagicMock()
             mock_resource.close = AsyncMock()
+            # Ensure aclose doesn't exist so registry falls back to close
+            del mock_resource.aclose
             resources.append(mock_resource)
 
             factory = MockFactory()
@@ -247,7 +251,7 @@ class TestResourceRegistry:
 
         assert cleanup_called
 
-    def test_has_resource_and_factory(self, registry):
+    async def test_has_resource_and_factory(self, registry):
         """Test resource and factory existence checks."""
         factory = MockFactory()
         registry.register_factory("test_check", factory)

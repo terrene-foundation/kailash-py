@@ -384,18 +384,26 @@ class TestUnifiedAdminSchema:
         def mock_run(**kwargs):
             query = kwargs.get("query", "")
 
-            # User context query
+            # User context query - first query in _get_user_context
             if "FROM users" in query and "WHERE user_id" in query:
                 return {
                     "data": [
                         {
                             "user_id": "user_123",
                             "email": "user@example.com",
-                            "roles": ["editor", "reviewer"],
                             "attributes": {},
                             "status": "active",
                             "tenant_id": "tenant_1",
                         }
+                    ]
+                }
+
+            # User roles query - second query in _get_user_context
+            elif "FROM user_role_assignments" in query:
+                return {
+                    "data": [
+                        {"role_id": "editor"},
+                        {"role_id": "reviewer"},
                     ]
                 }
 
@@ -470,14 +478,13 @@ class TestUnifiedAdminSchema:
         def mock_run(**kwargs):
             query = kwargs.get("query", "")
 
-            # User context query with attributes
+            # User context query with attributes - first query in _get_user_context
             if "FROM users" in query and "WHERE user_id" in query:
                 return {
                     "data": [
                         {
                             "user_id": "user_123",
                             "email": "user@example.com",
-                            "roles": ["engineer"],
                             "attributes": {
                                 "department": "engineering",
                                 "level": "senior",
@@ -485,6 +492,14 @@ class TestUnifiedAdminSchema:
                             "status": "active",
                             "tenant_id": "tenant_1",
                         }
+                    ]
+                }
+
+            # User roles query - second query in _get_user_context
+            elif "FROM user_role_assignments" in query:
+                return {
+                    "data": [
+                        {"role_id": "engineer"},
                     ]
                 }
 
@@ -659,18 +674,25 @@ class TestUnifiedAdminSchema:
         def mock_run(**kwargs):
             query = kwargs.get("query", "")
 
-            # User context query
-            if "FROM users" in query:
+            # User context query - first query in _get_user_context
+            if "FROM users" in query and "WHERE user_id" in query:
                 return {
                     "data": [
                         {
                             "user_id": "user_123",
                             "email": "user@example.com",
-                            "roles": ["reader"],
                             "attributes": {},
                             "status": "active",
                             "tenant_id": "tenant_1",
                         }
+                    ]
+                }
+
+            # User roles query - second query in _get_user_context
+            elif "FROM user_role_assignments" in query:
+                return {
+                    "data": [
+                        {"role_id": "reader"},
                     ]
                 }
 

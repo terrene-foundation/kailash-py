@@ -499,15 +499,19 @@ class EnterpriseDataGenerator:
 class TestAdminNodesComprehensiveDockerE2E:
     """Comprehensive Docker-based E2E tests for enterprise admin scenarios."""
 
-    @pytest.fixture(autouse=True)
-    async def setup_docker_infrastructure(self):
-        """Ensure Docker services are running."""
-        services_ready = await ensure_docker_services()
-        if not services_ready:
-            pytest.skip("Docker services not available")
-
     def setup_method(self):
         """Set up test environment."""
+        # Check Docker services
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            services_ready = loop.run_until_complete(ensure_docker_services())
+            if not services_ready:
+                pytest.skip("Docker services not available")
+        finally:
+            loop.close()
+
         self.db_config = {
             "connection_string": get_postgres_connection_string(),
             "database_type": "postgresql",
@@ -606,8 +610,8 @@ class TestAdminNodesComprehensiveDockerE2E:
 import json
 
 # Process enterprise structure
-enterprise = inputs.get("enterprise")
-tenant_id = inputs.get("tenant_id")
+enterprise = kwargs.get("enterprise")
+tenant_id = kwargs.get("tenant_id")
 
 # Create role hierarchy
 role_hierarchy = {}
@@ -1307,9 +1311,9 @@ import json
 from datetime import datetime
 
 # Prepare context for AI evaluation
-user = inputs.get("user")
-resource = inputs.get("resource")
-context = inputs.get("context", {})
+user = kwargs.get("user")
+resource = kwargs.get("resource")
+context = kwargs.get("context", {})
 
 # Enrich context with additional signals
 enriched_context = {

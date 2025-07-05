@@ -200,13 +200,21 @@ class AIDataQualityHelper:
 class TestAIPoweredETL:
     """AI-powered ETL tests."""
 
-    @pytest.fixture(autouse=True)
-    async def check_ollama(self):
-        """Check Ollama availability."""
-        available, model_or_error = await AIDataQualityHelper.check_ollama_available()
-        if not available:
-            pytest.skip(f"Ollama not available: {model_or_error}")
-        self.ollama_model = model_or_error
+    def setup_method(self):
+        """Setup test method - check Ollama availability."""
+        # Run async check synchronously
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            available, model_or_error = loop.run_until_complete(
+                AIDataQualityHelper.check_ollama_available()
+            )
+            if not available:
+                pytest.skip(f"Ollama not available: {model_or_error}")
+            self.ollama_model = model_or_error
+        finally:
+            loop.close()
 
     def test_self_correcting_customer_data_pipeline(self, tmp_path):
         """Test AI-powered self-correcting customer data pipeline."""
@@ -428,8 +436,8 @@ metrics = {
     "unique_customers": len(set(r.get("customer_id") for r in cleaned_data))
 }
 
-email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-phone_pattern = re.compile(r'^\+1-\d{3}-\d{3}-\d{4}$')
+email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$')
+phone_pattern = re.compile(r'^\\+1-\\d{3}-\\d{3}-\\d{4}$')
 
 for record in cleaned_data:
     # Check field completeness

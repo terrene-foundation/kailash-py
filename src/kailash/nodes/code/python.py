@@ -236,6 +236,7 @@ class CodeExecutor:
             "zip",
             "print",  # Allow print for debugging
             "hasattr",  # For attribute checking
+            "hash",  # For hashing operations
             # Exception classes for proper error handling
             "Exception",
             "ValueError",
@@ -524,6 +525,25 @@ class FunctionWrapper:
             input_types[param_name] = param_type
         return input_types
 
+    def get_parameter_info(self) -> dict[str, dict[str, Any]]:
+        """Extract detailed parameter information including defaults.
+
+        Returns:
+            Dictionary mapping parameter names to info dict with 'type' and 'has_default'
+        """
+        param_info = {}
+        for param_name, param in self.signature.parameters.items():
+            # Skip self parameter for class methods
+            if param_name == "self":
+                continue
+
+            param_info[param_name] = {
+                "type": self.type_hints.get(param_name, Any),
+                "has_default": param.default is not param.empty,
+                "default": param.default if param.default is not param.empty else None,
+            }
+        return param_info
+
     def get_output_type(self) -> type:
         """Extract output type from function signature.
 
@@ -671,6 +691,25 @@ class ClassWrapper:
             param_type = self.type_hints.get(param_name, Any)
             input_types[param_name] = param_type
         return input_types
+
+    def get_parameter_info(self) -> dict[str, dict[str, Any]]:
+        """Extract detailed parameter information including defaults.
+
+        Returns:
+            Dictionary mapping parameter names to info dict with 'type' and 'has_default'
+        """
+        param_info = {}
+        for param_name, param in self.signature.parameters.items():
+            # Skip self parameter
+            if param_name == "self":
+                continue
+
+            param_info[param_name] = {
+                "type": self.type_hints.get(param_name, Any),
+                "has_default": param.default is not param.empty,
+                "default": param.default if param.default is not param.empty else None,
+            }
+        return param_info
 
     def get_output_type(self) -> type:
         """Extract output type from method signature."""
@@ -938,34 +977,47 @@ class PythonCodeNode(Node):
             )
 
         # If we have a function/class, extract parameter info
+        # This overrides the basic input_types to include default parameter information
         if self.function:
             wrapper = FunctionWrapper(self.function, self.executor)
-            for name, type_ in wrapper.get_input_types().items():
-                if name not in parameters:
-                    # Use Any type for complex types to avoid validation issues
-                    param_type = Any if hasattr(type_, "__origin__") else type_
+            for name, param_info in wrapper.get_parameter_info().items():
+                # Use Any type for complex types to avoid validation issues
+                param_type = param_info["type"]
+                param_type = Any if hasattr(param_type, "__origin__") else param_type
 
-                    parameters[name] = NodeParameter(
-                        name=name,
-                        type=param_type,
-                        required=True,
-                        description=f"Input parameter {name}",
-                    )
+                # Override existing parameter or add new one with correct required flag
+                parameters[name] = NodeParameter(
+                    name=name,
+                    type=param_type,
+                    required=not param_info[
+                        "has_default"
+                    ],  # Fixed: respect default values
+                    description=f"Input parameter {name}",
+                    default=(
+                        param_info["default"] if param_info["has_default"] else None
+                    ),
+                )
         elif self.class_type and self.process_method:
             wrapper = ClassWrapper(
                 self.class_type, self.process_method or "process", self.executor
             )
-            for name, type_ in wrapper.get_input_types().items():
-                if name not in parameters:
-                    # Use Any type for complex types to avoid validation issues
-                    param_type = Any if hasattr(type_, "__origin__") else type_
+            for name, param_info in wrapper.get_parameter_info().items():
+                # Use Any type for complex types to avoid validation issues
+                param_type = param_info["type"]
+                param_type = Any if hasattr(param_type, "__origin__") else param_type
 
-                    parameters[name] = NodeParameter(
-                        name=name,
-                        type=param_type,
-                        required=True,
-                        description=f"Input parameter {name}",
-                    )
+                # Override existing parameter or add new one with correct required flag
+                parameters[name] = NodeParameter(
+                    name=name,
+                    type=param_type,
+                    required=not param_info[
+                        "has_default"
+                    ],  # Fixed: respect default values
+                    description=f"Input parameter {name}",
+                    default=(
+                        param_info["default"] if param_info["has_default"] else None
+                    ),
+                )
 
         return parameters
 

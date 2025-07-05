@@ -40,21 +40,21 @@ class TestWorkflowExporter:
         # Initialize exporter
         exporter = WorkflowExporter()
 
-        # Test that we can call export methods without errors
-        try:
-            # Test to_yaml method which should exist
-            result = exporter.to_yaml(workflow)
-            assert result is not None
-            assert isinstance(result, str)
-            # Basic check that it contains workflow metadata
-            assert "csv_reader" in result  # Check for the node we added
-            assert "CSVReaderNode" in result  # Check for the node type
-        except (AttributeError, NotImplementedError):
-            # Method might not be implemented yet
-            pytest.skip("export methods not implemented")
-        except Exception as e:
-            # For now, just log the error - export may not be fully implemented
-            print(f"Export error (expected): {e}")
+        # Test that exporter has to_yaml method
+        assert hasattr(exporter, "to_yaml")
+
+        # If the method is implemented, test it
+        if callable(getattr(exporter, "to_yaml", None)):
+            try:
+                result = exporter.to_yaml(workflow)
+                assert result is not None
+                assert isinstance(result, str)
+                # Basic check that it contains workflow metadata
+                assert "csv_reader" in result  # Check for the node we added
+                assert "CSVReaderNode" in result  # Check for the node type
+            except NotImplementedError:
+                # Mark as expected behavior if not implemented
+                pass
 
     def test_exporter_error_handling(self):
         """Test error handling in exporter."""

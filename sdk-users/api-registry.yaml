@@ -1,0 +1,601 @@
+# Kailash SDK API Registry
+# Version: 0.6.3
+# Last Updated: 2025-07-03
+
+metadata:
+  version: "0.6.3"
+  last_updated: "2025-07-03"
+  description: "Complete API registry for Kailash SDK components"
+
+core_apis:
+  workflow:
+    class: "kailash.workflow.Workflow"
+    methods:
+      - name: "add_node"
+        description: "Add a node to the workflow"
+        parameters:
+          - name: "node_type"
+            type: "str"
+            required: true
+          - name: "name"
+            type: "str"
+            required: true
+          - name: "config"
+            type: "dict"
+            required: false
+      - name: "add_connection"
+        description: "Add connection between nodes"
+        parameters:
+          - name: "source_node"
+            type: "str"
+            required: true
+          - name: "target_node"
+            type: "str"
+            required: true
+          - name: "source_key"
+            type: "str"
+            required: false
+          - name: "target_key"
+            type: "str"
+            required: false
+      - name: "execute"
+        description: "Execute the workflow"
+        parameters:
+          - name: "inputs"
+            type: "dict"
+            required: false
+          - name: "runtime"
+            type: "Runtime"
+            required: false
+        returns:
+          type: "dict"
+          description: "Execution results"
+
+  workflow_builder:
+    class: "kailash.workflow.WorkflowBuilder"
+    methods:
+      - name: "from_dict"
+        description: "Create workflow from dictionary"
+        parameters:
+          - name: "workflow_dict"
+            type: "dict"
+            required: true
+        returns:
+          type: "Workflow"
+          description: "Constructed workflow"
+      - name: "from_yaml"
+        description: "Create workflow from YAML file"
+        parameters:
+          - name: "file_path"
+            type: "str"
+            required: true
+        returns:
+          type: "Workflow"
+          description: "Constructed workflow"
+
+  async_workflow_builder:
+    class: "kailash.workflow.AsyncWorkflowBuilder"
+    methods:
+      - name: "from_dict"
+        description: "Create async workflow from dictionary"
+        parameters:
+          - name: "workflow_dict"
+            type: "dict"
+            required: true
+        returns:
+          type: "AsyncWorkflow"
+          description: "Constructed async workflow"
+      - name: "execute_async"
+        description: "Execute workflow asynchronously"
+        parameters:
+          - name: "inputs"
+            type: "dict"
+            required: false
+        returns:
+          type: "dict"
+          description: "Execution results"
+
+runtime_apis:
+  local_runtime:
+    class: "kailash.runtime.LocalRuntime"
+    methods:
+      - name: "execute"
+        description: "Execute workflow locally"
+        parameters:
+          - name: "workflow"
+            type: "Workflow"
+            required: true
+          - name: "inputs"
+            type: "dict"
+            required: false
+        returns:
+          type: "dict"
+          description: "Execution results"
+
+  async_local_runtime:
+    class: "kailash.runtime.AsyncLocalRuntime"
+    methods:
+      - name: "execute_async"
+        description: "Execute workflow asynchronously"
+        parameters:
+          - name: "workflow"
+            type: "AsyncWorkflow"
+            required: true
+          - name: "inputs"
+            type: "dict"
+            required: false
+        returns:
+          type: "dict"
+          description: "Execution results"
+
+node_apis:
+  base_node:
+    class: "kailash.nodes.BaseNode"
+    methods:
+      - name: "execute"
+        description: "Execute the node"
+        parameters:
+          - name: "inputs"
+            type: "dict"
+            required: false
+        returns:
+          type: "dict"
+          description: "Node execution results"
+      - name: "get_parameters"
+        description: "Get node parameters"
+        returns:
+          type: "Dict[str, NodeParameter]"
+          description: "Node parameters"
+
+  async_base_node:
+    class: "kailash.nodes.AsyncBaseNode"
+    methods:
+      - name: "execute_async"
+        description: "Execute the node asynchronously"
+        parameters:
+          - name: "inputs"
+            type: "dict"
+            required: false
+        returns:
+          type: "dict"
+          description: "Node execution results"
+
+data_nodes:
+  csv_reader:
+    class: "kailash.nodes.data.CSVReaderNode"
+    description: "Read CSV files"
+    parameters:
+      - name: "file_path"
+        type: "str"
+        required: true
+        description: "Path to CSV file"
+      - name: "delimiter"
+        type: "str"
+        required: false
+        default: ","
+        description: "CSV delimiter"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "CSV data and metadata"
+
+  sql_database:
+    class: "kailash.nodes.data.SQLDatabaseNode"
+    description: "Execute SQL queries"
+    parameters:
+      - name: "connection_string"
+        type: "str"
+        required: true
+        description: "Database connection string"
+      - name: "query"
+        type: "str"
+        required: true
+        description: "SQL query to execute"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Query results and metadata"
+
+  async_sql_database:
+    class: "kailash.nodes.data.AsyncSQLDatabaseNode"
+    description: "Execute SQL queries asynchronously"
+    parameters:
+      - name: "connection_string"
+        type: "str"
+        required: true
+        description: "Database connection string"
+      - name: "query"
+        type: "str"
+        required: true
+        description: "SQL query to execute"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Query results and metadata"
+
+ai_nodes:
+  llm_agent:
+    class: "kailash.nodes.ai.LLMAgentNode"
+    description: "LLM-powered agent"
+    parameters:
+      - name: "model"
+        type: "str"
+        required: true
+        description: "LLM model name"
+      - name: "prompt"
+        type: "str"
+        required: true
+        description: "Prompt template"
+      - name: "temperature"
+        type: "float"
+        required: false
+        default: 0.7
+        description: "Temperature for generation"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "LLM response and metadata"
+
+  embedding_generator:
+    class: "kailash.nodes.ai.EmbeddingGeneratorNode"
+    description: "Generate embeddings"
+    parameters:
+      - name: "model"
+        type: "str"
+        required: true
+        description: "Embedding model name"
+      - name: "text"
+        type: "str"
+        required: true
+        description: "Text to embed"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Embeddings and metadata"
+
+transform_nodes:
+  data_transformer:
+    class: "kailash.nodes.transform.DataTransformerNode"
+    description: "Transform data"
+    parameters:
+      - name: "transformations"
+        type: "list"
+        required: true
+        description: "List of transformations to apply"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Transformed data"
+
+  filter_node:
+    class: "kailash.nodes.transform.FilterNode"
+    description: "Filter data"
+    parameters:
+      - name: "filter_condition"
+        type: "str"
+        required: true
+        description: "Filter condition"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Filtered data"
+
+logic_nodes:
+  switch_node:
+    class: "kailash.nodes.logic.SwitchNode"
+    description: "Route data based on condition"
+    parameters:
+      - name: "condition"
+        type: "str"
+        required: true
+        description: "Routing condition"
+      - name: "routes"
+        type: "dict"
+        required: true
+        description: "Routing configuration"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Routed data"
+
+  merge_node:
+    class: "kailash.nodes.logic.MergeNode"
+    description: "Merge multiple inputs"
+    parameters:
+      - name: "merge_strategy"
+        type: "str"
+        required: false
+        default: "combine"
+        description: "Merge strategy"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Merged data"
+
+api_nodes:
+  http_request:
+    class: "kailash.nodes.api.HTTPRequestNode"
+    description: "Make HTTP requests"
+    parameters:
+      - name: "url"
+        type: "str"
+        required: true
+        description: "Request URL"
+      - name: "method"
+        type: "str"
+        required: false
+        default: "GET"
+        description: "HTTP method"
+      - name: "headers"
+        type: "dict"
+        required: false
+        description: "Request headers"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "HTTP response"
+
+  rest_client:
+    class: "kailash.nodes.api.RESTClientNode"
+    description: "REST API client"
+    parameters:
+      - name: "base_url"
+        type: "str"
+        required: true
+        description: "Base URL for API"
+      - name: "endpoint"
+        type: "str"
+        required: true
+        description: "API endpoint"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "API response"
+
+admin_nodes:
+  user_management:
+    class: "kailash.nodes.admin.UserManagementNode"
+    description: "User management operations"
+    parameters:
+      - name: "operation"
+        type: "str"
+        required: true
+        description: "Operation type (create, read, update, delete)"
+      - name: "user_data"
+        type: "dict"
+        required: false
+        description: "User data for operations"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Operation result"
+
+  role_management:
+    class: "kailash.nodes.admin.RoleManagementNode"
+    description: "Role management operations"
+    parameters:
+      - name: "operation"
+        type: "str"
+        required: true
+        description: "Operation type (create, read, update, delete)"
+      - name: "role_data"
+        type: "dict"
+        required: false
+        description: "Role data for operations"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Operation result"
+
+security_nodes:
+  access_control:
+    class: "kailash.nodes.security.AccessControlNode"
+    description: "Access control validation"
+    parameters:
+      - name: "strategy"
+        type: "str"
+        required: true
+        description: "Access control strategy (rbac, abac, hybrid)"
+      - name: "resource"
+        type: "str"
+        required: true
+        description: "Resource being accessed"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Access control decision"
+
+  authentication:
+    class: "kailash.nodes.security.AuthenticationNode"
+    description: "User authentication"
+    parameters:
+      - name: "auth_method"
+        type: "str"
+        required: true
+        description: "Authentication method"
+      - name: "credentials"
+        type: "dict"
+        required: true
+        description: "User credentials"
+    outputs:
+      - name: "result"
+        type: "dict"
+        description: "Authentication result"
+
+middleware_apis:
+  gateway:
+    class: "kailash.middleware.Gateway"
+    description: "API Gateway for workflow execution"
+    methods:
+      - name: "create_gateway"
+        description: "Create a new gateway instance"
+        parameters:
+          - name: "title"
+            type: "str"
+            required: true
+            description: "Gateway title"
+          - name: "description"
+            type: "str"
+            required: false
+            description: "Gateway description"
+        returns:
+          type: "Gateway"
+          description: "Gateway instance"
+
+  agent_ui_middleware:
+    class: "kailash.middleware.AgentUIMiddleware"
+    description: "Agent UI middleware for real-time communication"
+    methods:
+      - name: "create_session"
+        description: "Create a new session"
+        parameters:
+          - name: "user_id"
+            type: "str"
+            required: true
+            description: "User identifier"
+        returns:
+          type: "str"
+          description: "Session ID"
+      - name: "execute_workflow"
+        description: "Execute workflow in session"
+        parameters:
+          - name: "session_id"
+            type: "str"
+            required: true
+            description: "Session identifier"
+          - name: "workflow_id"
+            type: "str"
+            required: true
+            description: "Workflow identifier"
+        returns:
+          type: "str"
+          description: "Execution ID"
+
+resource_apis:
+  resource_registry:
+    class: "kailash.resources.ResourceRegistry"
+    description: "Resource management registry"
+    methods:
+      - name: "register_resource"
+        description: "Register a new resource"
+        parameters:
+          - name: "name"
+            type: "str"
+            required: true
+            description: "Resource name"
+          - name: "factory"
+            type: "ResourceFactory"
+            required: true
+            description: "Resource factory"
+      - name: "get_resource"
+        description: "Get registered resource"
+        parameters:
+          - name: "name"
+            type: "str"
+            required: true
+            description: "Resource name"
+        returns:
+          type: "Any"
+          description: "Resource instance"
+
+validation_apis:
+  workflow_validator:
+    class: "kailash.validation.WorkflowValidator"
+    description: "Workflow validation"
+    methods:
+      - name: "validate_structure"
+        description: "Validate workflow structure"
+        parameters:
+          - name: "workflow"
+            type: "Workflow"
+            required: true
+            description: "Workflow to validate"
+        returns:
+          type: "ValidationResult"
+          description: "Validation result"
+
+  parameter_validator:
+    class: "kailash.validation.ParameterValidator"
+    description: "Parameter validation"
+    methods:
+      - name: "validate_node_parameters"
+        description: "Validate node parameters"
+        parameters:
+          - name: "node"
+            type: "BaseNode"
+            required: true
+            description: "Node to validate"
+        returns:
+          type: "ValidationResult"
+          description: "Validation result"
+
+testing_apis:
+  async_test_case:
+    class: "kailash.testing.AsyncTestCase"
+    description: "Async test case base class"
+    methods:
+      - name: "setUp"
+        description: "Set up test case"
+      - name: "tearDown"
+        description: "Clean up test case"
+      - name: "assert_workflow_output"
+        description: "Assert workflow output"
+        parameters:
+          - name: "workflow"
+            type: "Workflow"
+            required: true
+            description: "Workflow to test"
+          - name: "expected_output"
+            type: "dict"
+            required: true
+            description: "Expected output"
+
+common_patterns:
+  connection_patterns:
+    - pattern: "dot_notation"
+      description: "Access nested outputs using dot notation"
+      example: "result.data"
+    - pattern: "auto_mapping"
+      description: "Automatic parameter mapping"
+      example: "auto_map_primary=True"
+    - pattern: "workflow_alias"
+      description: "Workflow parameter aliasing"
+      example: "workflow_alias='name'"
+
+  error_handling:
+    - pattern: "try_catch"
+      description: "Exception handling in nodes"
+      example: "try_catch_errors=True"
+    - pattern: "error_propagation"
+      description: "Error propagation through workflow"
+      example: "propagate_errors=True"
+
+  performance_patterns:
+    - pattern: "async_execution"
+      description: "Asynchronous workflow execution"
+      example: "AsyncWorkflowBuilder"
+    - pattern: "resource_pooling"
+      description: "Resource pooling for performance"
+      example: "ResourceRegistry"
+    - pattern: "connection_pooling"
+      description: "Database connection pooling"
+      example: "pool_size=10"
+
+version_info:
+  current_version: "0.6.3"
+  python_requirement: ">=3.12"
+  supported_platforms:
+    - "darwin"
+    - "linux"
+    - "windows"
+  dependencies:
+    required:
+      - "pydantic>=2.0"
+      - "aiofiles"
+      - "asyncio"
+    optional:
+      - "redis[async]"
+      - "asyncpg"
+      - "aiomysql"
+      - "faker"
+      - "ollama"

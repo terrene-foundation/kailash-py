@@ -1,6 +1,6 @@
 # Kailash SDK API Reference
 
-**Version**: 0.1.4 | **Last Updated**: 2025-01-06
+**Version**: 0.6.3 | **Last Updated**: 2025-07-03
 
 This directory contains the complete API reference for the Kailash Python SDK, organized by module and functionality.
 

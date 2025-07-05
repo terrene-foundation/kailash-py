@@ -14,6 +14,7 @@ import os
 from datetime import datetime
 
 import pytest
+import pytest_asyncio
 
 from kailash.client import KailashClient
 from kailash.gateway import (
@@ -28,7 +29,7 @@ from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import AsyncWorkflowBuilder
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def real_resource_registry():
     """Create resource registry with real services."""
     registry = ResourceRegistry()
@@ -36,7 +37,7 @@ async def real_resource_registry():
     await registry.cleanup()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def gateway_with_resources(real_resource_registry):
     """Create gateway with real resources."""
     secret_manager = SecretManager()
@@ -53,8 +54,19 @@ async def gateway_with_resources(real_resource_registry):
     yield gateway
 
     # Cleanup
+    try:
+        await gateway.shutdown()
+    except Exception:
+        pass
+
     if hasattr(gateway, "_runtime"):
-        await gateway._runtime.cleanup()
+        try:
+            await gateway._runtime.cleanup()
+        except Exception:
+            pass
+
+    # Wait for async tasks to complete
+    await asyncio.sleep(0.1)
 
 
 @pytest.mark.integration
@@ -114,8 +126,8 @@ async with db.acquire() as conn:
 """,
                 required_resources=["main_db"],
             )
-            .add_connection("create_table", None, "insert_data", None)
-            .add_connection("insert_data", None, "query_data", None)
+            .add_connection("create_table", "result", "insert_data", "input")
+            .add_connection("insert_data", "result", "query_data", "input")
             .build()
         )
 
@@ -155,11 +167,8 @@ async with db.acquire() as conn:
         assert any(r["name"] == "Bob" for r in query_result["records"])
         assert any(r["name"] == "Charlie" for r in query_result["records"])
 
-        # Cleanup
-        db = await gateway_with_resources.resource_registry.get_resource("db_")
-        if db:
-            async with db.acquire() as conn:
-                await conn.execute("DROP TABLE IF EXISTS gateway_test")
+        # Cleanup - don't try to get db resource directly since it has a hashed name
+        # The resource will be cleaned up automatically by the fixture
 
     @pytest.mark.asyncio
     async def test_multi_resource_workflow(self, gateway_with_resources):
@@ -260,6 +269,7 @@ result = {
                 """
 import asyncio
 import random
+import time
 
 # Simulate some async work
 delay = random.uniform(0.1, 0.3)
@@ -308,12 +318,12 @@ result = {
         # Register a shared database resource
         db_ref = ResourceReference(
             type="database",
-            config={"host": "localhost", "port": 5433, "database": "postgres"},
+            config={"host": "localhost", "port": 5434, "database": "postgres"},
             credentials_ref="db_credentials",
         )
 
-        # Resolve it once to register in registry
-        await gateway_with_resources._resource_resolver.resolve(db_ref)
+        # Store the reference in registry with a name we can use
+        shared_db_name = "shared_db"
 
         # Create workflow that counts connections
         workflow = (
@@ -321,7 +331,8 @@ result = {
             .add_async_code(
                 "check_pool",
                 """
-db = await get_resource("db_")  # Will use the shared pool
+# Use the resource name from the request
+db = await get_resource("shared_db")
 pool_size = db.size if hasattr(db, 'size') else 'unknown'
 result = {
     "workflow_id": workflow_id,
@@ -329,7 +340,7 @@ result = {
     "has_pool": True
 }
 """,
-                required_resources=["db_"],
+                required_resources=["shared_db"],
             )
             .build()
         )
@@ -341,7 +352,7 @@ result = {
         for i in range(5):
             request = WorkflowRequest(
                 inputs={"workflow_id": i},
-                resources={"db_": "@db_"},  # Reference the shared resource
+                resources={"shared_db": db_ref},  # Use the same reference
             )
             response = await gateway_with_resources.execute_workflow(
                 "connection_test", request
@@ -398,9 +409,7 @@ result = {
         request = WorkflowRequest(
             inputs={},
             resources={
-                "api": ResourceReference(
-                    type="http_client", config={"timeout": 10, "connection_limit": 10}
-                )
+                "api": ResourceReference(type="http_client", config={"timeout": 10})
             },
         )
 

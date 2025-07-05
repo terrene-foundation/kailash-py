@@ -245,6 +245,9 @@ class TestMLTrainingPatterns:
 
     def test_ml_training_with_convergence(self):
         """Test iterative ML model training with loss convergence."""
+        # Set seed for reproducible test
+        random.seed(42)
+
         workflow = Workflow("ml_training", "ML training simulation")
 
         # Model training node

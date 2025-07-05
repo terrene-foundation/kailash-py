@@ -95,7 +95,7 @@ class MyNode(Node):
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -125,7 +125,7 @@ class MyNode(Node):
 
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Required by Kailash"""
-        return self.process(inputs)
+        return self.execute(inputs)
 
     def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Your actual logic here"""
@@ -157,7 +157,7 @@ for embedding_dict in embedding_dicts:
 ### LLMAgentNode Interface
 ```python
 # ❌ Wrong - Using process() method
-result = llm_node.process(messages=[{"role": "user", "content": "Hello"}])
+result = llm_node.execute(messages=[{"role": "user", "content": "Hello"}])
 
 # ❌ Wrong - Missing provider
 result = llm_node.execute(messages=[{"role": "user", "content": "Hello"}])
@@ -190,7 +190,7 @@ Before testing your custom node, verify:
 | `'MyNode' object has no attribute 'X'` | Move `self.X = ...` before `super().__init__()` |
 | `'int' object has no attribute 'required'` | Return `NodeParameter` objects from `get_parameters()` |
 | `Can't instantiate abstract class` | Implement `get_parameters()` and `run()` methods |
-| `'LLMAgentNode' has no attribute 'process'` | Use `.run()` instead of `.process()` |
+| `'LLMAgentNode' has no attribute 'process'` | Use `.run()` instead of `.execute()` |
 | `KeyError: 'provider'` | Add `provider="ollama"` to `.run()` calls |
 | `TypeError: unsupported operand type(s) for *: 'dict' and 'dict'` | Extract embeddings with `emb["embedding"]` |
 

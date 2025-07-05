@@ -20,7 +20,7 @@ from examples.utils.data_paths import (
 )
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
 
 

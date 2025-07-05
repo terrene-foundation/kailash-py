@@ -3,7 +3,7 @@
 
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Create a simple workflow to test result handling
 workflow = Workflow("test_result", "Test Result Handling")

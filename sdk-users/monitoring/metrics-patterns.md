@@ -202,7 +202,7 @@ class DataProcessor:
 ### Workflow Instrumentation
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.monitoring import WorkflowMetrics
 
 # Automatic workflow metrics

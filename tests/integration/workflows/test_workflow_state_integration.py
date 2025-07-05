@@ -16,7 +16,7 @@ from kailash.workflow.state import WorkflowStateWrapper
 
 
 # Test state model
-class TestWorkflowState(BaseModel):
+class WorkflowStateModel(BaseModel):
     """Test state model for workflow state tests."""
 
     value: int = 0
@@ -26,7 +26,7 @@ class TestWorkflowState(BaseModel):
 
 # Test nodes
 @register_node(alias="test_inc_node")
-class TestIncrementNode(Node):
+class IncrementTestNode(Node):
     """Test node that increments a value in state."""
 
     def get_parameters(self) -> dict[str, NodeParameter]:
@@ -77,7 +77,7 @@ class TestIncrementNode(Node):
 
 
 @register_node(alias="test_text_node")
-class TestTextNode(Node):
+class TextTestNode(Node):
     """Test node that updates text in state."""
 
     def get_parameters(self) -> dict[str, NodeParameter]:
@@ -114,7 +114,7 @@ class TestTextNode(Node):
 
 
 @register_node(alias="test_mark_processed")
-class TestMarkProcessedNode(Node):
+class MarkProcessedTestNode(Node):
     """Test node that marks state as processed."""
 
     def get_parameters(self) -> dict[str, NodeParameter]:
@@ -137,7 +137,7 @@ class TestMarkProcessedNode(Node):
             ),
             "final_state": NodeParameter(
                 name="final_state",
-                type=TestWorkflowState,
+                type=WorkflowStateModel,
                 required=True,
                 description="Final state",
             ),
@@ -160,7 +160,7 @@ class TestMarkProcessedNode(Node):
         }
 
 
-class TestWorkflowStateIntegration:
+class WorkflowStateModelIntegration:
     """Tests for workflow integration with state management."""
 
     def test_simple_workflow_with_state(self):
@@ -184,7 +184,7 @@ class TestWorkflowStateIntegration:
         )
 
         # Initial state
-        initial_state = TestWorkflowState(value=10)
+        initial_state = WorkflowStateModel(value=10)
 
         # Act
         final_state, results = workflow.execute_with_state(
@@ -217,7 +217,7 @@ class TestWorkflowStateIntegration:
         workflow.connect("increment", "set_text", {"state_wrapper": "state_wrapper"})
 
         # Initial state
-        initial_state = TestWorkflowState(value=5)
+        initial_state = WorkflowStateModel(value=5)
 
         # Act
         final_state, results = workflow.execute_with_state(
@@ -246,7 +246,7 @@ class TestWorkflowStateIntegration:
                 return {
                     "state": NodeParameter(
                         name="state",
-                        type=TestWorkflowState,
+                        type=WorkflowStateModel,
                         required=False,  # Provided by workflow at runtime
                         description="Unwrapped state",
                     )
@@ -256,7 +256,7 @@ class TestWorkflowStateIntegration:
                 return {
                     "state": NodeParameter(
                         name="state",
-                        type=TestWorkflowState,
+                        type=WorkflowStateModel,
                         required=True,
                         description="Updated state",
                     )
@@ -265,7 +265,7 @@ class TestWorkflowStateIntegration:
             def run(self, **kwargs) -> dict[str, Any]:
                 state = kwargs["state"]
                 # Create a new state object with updates
-                new_state = TestWorkflowState(
+                new_state = WorkflowStateModel(
                     value=state.value + 1, text="Unwrapped text", processed=True
                 )
                 return {"state": new_state}
@@ -274,7 +274,7 @@ class TestWorkflowStateIntegration:
         workflow.add_node("unwrapped", TestUnwrappedNode())
 
         # Initial state
-        initial_state = TestWorkflowState(value=20)
+        initial_state = WorkflowStateModel(value=20)
 
         # Act
         final_state, results = workflow.execute_with_state(

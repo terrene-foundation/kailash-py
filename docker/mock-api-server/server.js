@@ -12,6 +12,15 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+// Load test API routes if available
+try {
+    const testApiRoutes = require('./routes/test-api');
+    app.use('/', testApiRoutes);
+    console.log('Test API routes loaded');
+} catch (err) {
+    console.log('Test API routes not available:', err.message);
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
@@ -122,4 +131,14 @@ app.listen(PORT, () => {
     console.log('  POST /send');
     console.log('  POST /enrichment');
     console.log('  POST /webhook');
+    console.log('\nTest API endpoints:');
+    console.log('  GET  /v1/users (paginated)');
+    console.log('  GET  /v1/users/:id');
+    console.log('  POST /v1/users');
+    console.log('  PATCH /v1/users/:id');
+    console.log('  DELETE /v1/users/:id');
+    console.log('  GET  /v1/products');
+    console.log('  GET  /users, /posts, /comments');
+    console.log('  POST /oauth/token');
+    console.log('  POST /graphql');
 });

@@ -47,17 +47,17 @@ pool = WorkflowConnectionPool(
 )
 
 # Initialize pool (do this once at startup)
-await pool.process({"operation": "initialize"})
+await pool.execute({"operation": "initialize"})
 
 # Use in workflows
 async def execute_query(query, params):
     # Acquire connection
-    conn = await pool.process({"operation": "acquire"})
+    conn = await pool.execute({"operation": "acquire"})
     conn_id = conn["connection_id"]
 
     try:
         # Execute query
-        result = await pool.process({
+        result = await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": query,
@@ -67,13 +67,13 @@ async def execute_query(query, params):
         return result["data"]
     finally:
         # Always release connection
-        await pool.process({
+        await pool.execute({
             "operation": "release",
             "connection_id": conn_id
         })
 
 # Monitor pool health
-stats = await pool.process({"operation": "stats"})
+stats = await pool.execute({"operation": "stats"})
 print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
 ```
 
@@ -81,12 +81,12 @@ print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['c
 
 ```python
 async def transfer_funds(from_account, to_account, amount):
-    conn = await pool.process({"operation": "acquire"})
+    conn = await pool.execute({"operation": "acquire"})
     conn_id = conn["connection_id"]
 
     try:
         # Start transaction
-        await pool.process({
+        await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": "BEGIN",
@@ -94,7 +94,7 @@ async def transfer_funds(from_account, to_account, amount):
         })
 
         # Perform operations
-        await pool.process({
+        await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": "UPDATE accounts SET balance = balance - $1 WHERE id = $2",
@@ -102,7 +102,7 @@ async def transfer_funds(from_account, to_account, amount):
             "fetch_mode": "one"
         })
 
-        await pool.process({
+        await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
@@ -111,7 +111,7 @@ async def transfer_funds(from_account, to_account, amount):
         })
 
         # Commit
-        await pool.process({
+        await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": "COMMIT",
@@ -120,7 +120,7 @@ async def transfer_funds(from_account, to_account, amount):
 
     except Exception as e:
         # Rollback on error
-        await pool.process({
+        await pool.execute({
             "operation": "execute",
             "connection_id": conn_id,
             "query": "ROLLBACK",
@@ -128,7 +128,7 @@ async def transfer_funds(from_account, to_account, amount):
         })
         raise
     finally:
-        await pool.process({
+        await pool.execute({
             "operation": "release",
             "connection_id": conn_id
         })
@@ -173,7 +173,7 @@ results = await runtime.execute_workflow(workflow)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -201,7 +201,7 @@ node = AsyncSQLDatabaseNode(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

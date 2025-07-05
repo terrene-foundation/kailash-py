@@ -11,11 +11,11 @@ This directory contains enterprise-specific patterns, architectures, and best pr
 | Component | Purpose | When to Use |
 |-----------|---------|-------------|
 | **[Middleware Patterns](middleware-patterns.md)** | Advanced middleware architecture | Real-time agent-UI applications |
-| **[Session Management](session-management-guide.md)** | Enterprise session handling | Multi-tenant, high-scale systems |
-| **[Security Guide](enterprise-security-guide.md)** | Production security patterns | Enterprise security requirements |
-| **[Performance](performance-optimization.md)** | Scale and optimization | High-throughput workflows |
-| **[Monitoring](monitoring-observability.md)** | Production monitoring | Enterprise observability |
-| **[Deployment](production-deployment.md)** | Production deployment | Container orchestration |
+| **[Session Management](../developer/28-enterprise-security-nodes-guide.md)** | Enterprise session handling | Multi-tenant, high-scale systems |
+| **[Security Guide](../developer/28-enterprise-security-nodes-guide.md)** | Production security patterns | Enterprise security requirements |
+| **[Performance](../developer/04-production.md)** | Scale and optimization | High-throughput workflows |
+| **[Monitoring](../developer/34-monitoring-observability-guide.md)** | Production monitoring | Enterprise observability |
+| **[Deployment](../developer/04-production.md)** | Production deployment | Container orchestration |
 
 ## 🎯 Quick Decision Matrix
 
@@ -64,7 +64,7 @@ gateway.run(host="0.0.0.0", port=8000)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -217,7 +217,7 @@ logger = EnterpriseLogger(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

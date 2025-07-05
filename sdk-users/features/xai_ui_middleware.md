@@ -109,7 +109,7 @@ ui_event = XAIEvent(
 ```python
 from kailash import Workflow
 from kailash.nodes import XAIUIBridgeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Create workflow with XAI-UI bridge
 workflow = Workflow("chat-workflow")
@@ -176,7 +176,7 @@ function ChatInterface() {
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -219,7 +219,7 @@ class StreamingAgentNode(AsyncNode):
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -332,7 +332,7 @@ async def workflow.()  # Type signature example:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -347,7 +347,7 @@ workflow.runtime = LocalRuntime()
 # Before: Simple REST
 @app.post("/api/chat")
 async def workflow.()  # Type signature example:
-    response = agent.process(message)
+    response = agent.execute(message)
     return {"response": response}
 
 # After: XAI-UI

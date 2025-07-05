@@ -717,6 +717,13 @@ class AsyncLocalRuntime(LocalRuntime):
                             # Navigate the path (e.g., "result.data")
                             path_parts = source_path.split(".")
                             current_data = source_data
+
+                            # CRITICAL FIX: Handle paths starting with "result"
+                            # When source_path is "result.field", the node output IS the result
+                            if path_parts[0] == "result" and len(path_parts) > 1:
+                                # Skip the "result" prefix and navigate from the actual data
+                                path_parts = path_parts[1:]
+
                             for part in path_parts:
                                 if (
                                     isinstance(current_data, dict)

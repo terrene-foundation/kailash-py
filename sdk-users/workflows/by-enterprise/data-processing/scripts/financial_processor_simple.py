@@ -26,7 +26,7 @@ from kailash.nodes.api import RESTClientNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.transform import FilterNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_financial_processor_workflow() -> Workflow:

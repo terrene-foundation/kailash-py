@@ -55,14 +55,19 @@ class TestPermissionCheckNode:
     def _get_mock_user(
         self, user_id="user_123", tenant_id="tenant_1", roles=None, attributes=None
     ):
-        """Helper to create properly formatted user data."""
+        """Helper to create properly formatted user data for the new schema."""
         return {
             "user_id": user_id,
             "tenant_id": tenant_id,
             "email": f"{user_id}@example.com",
-            "roles": roles or ["viewer"],
             "attributes": attributes or {},
+            "status": "active",
         }
+
+    def _get_mock_roles(self, roles=None):
+        """Helper to create properly formatted role data for the new schema."""
+        role_list = roles or ["viewer"]
+        return [{"role_id": role} for role in role_list]
 
     def test_check_permission_cache_hit(self):
         """Test permission check with cache hit."""
@@ -99,23 +104,24 @@ class TestPermissionCheckNode:
 
     def test_check_permission_rbac_allowed(self):
         """Test RBAC permission check - allowed."""
-        # Mock database queries
+        # Mock database queries to match _get_user_context method
         self.mock_db.run.side_effect = [
-            # Get user with roles - first call
+            # Get user data - first query in _get_user_context
             {
                 "data": [
                     {
                         "user_id": "user_123",
                         "tenant_id": "tenant_1",
                         "email": "test@example.com",
-                        "roles": ["editor", "reviewer"],
                         "attributes": {},
+                        "status": "active",
                     }
                 ]
             },
-            # Get permissions for editor role
+            # Get user roles - second query in _get_user_context
+            {"data": [{"role_id": "editor"}, {"role_id": "reviewer"}]},
+            # Get permissions for roles - subsequent queries
             {"data": [{"permission": "*:read"}, {"permission": "*:write"}]},
-            # Get permissions for reviewer role
             {"data": [{"permission": "*:read"}, {"permission": "*:review"}]},
         ]
 
@@ -139,22 +145,24 @@ class TestPermissionCheckNode:
 
     def test_check_permission_rbac_denied(self):
         """Test RBAC permission check - denied."""
-        # Mock database queries
+        # Mock database queries to match _get_user_context method
         self.mock_db.run.side_effect = [
-            # Get user with roles
+            # Get user data - first query in _get_user_context
             {
                 "data": [
                     {
                         "user_id": "user_123",
                         "tenant_id": "tenant_1",
                         "email": "test@example.com",
-                        "roles": ["viewer"],
                         "attributes": {},
+                        "status": "active",
                     }
                 ]
             },
-            # Get permissions for viewer role
-            {"data": [{"permission": "*:read"}]},  # No write permission
+            # Get user roles - second query in _get_user_context
+            {"data": [{"role_id": "viewer"}]},
+            # Get permissions for viewer role (no write permission)
+            {"data": [{"permission": "*:read"}]},
         ]
 
         result = self.node.run(
@@ -210,8 +218,10 @@ class TestPermissionCheckNode:
         """Test batch permission checking."""
         # Mock database queries - batch check performs individual checks
         self.mock_db.run.side_effect = [
-            # Get user context
+            # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["editor"])]},
+            # Get user roles - second query in _get_user_context
+            {"data": self._get_mock_roles(["editor"])},
             # For each permission check (6 total: 3 resources × 2 permissions each)
             # doc_1:read
             {"data": [{"permission": "*:read"}]},
@@ -219,11 +229,11 @@ class TestPermissionCheckNode:
             {"data": [{"permission": "*:write"}]},
             # doc_2:read
             {"data": [{"permission": "*:read"}]},
-            # doc_2:write (editor doesn't have delete)
+            # doc_2:write
             {"data": [{"permission": "*:read"}, {"permission": "*:write"}]},
             # doc_3:read
             {"data": [{"permission": "*:read"}]},
-            # doc_3:delete (no permission)
+            # doc_3:write (editor has write)
             {"data": [{"permission": "*:read"}, {"permission": "*:write"}]},
         ]
 
@@ -250,8 +260,10 @@ class TestPermissionCheckNode:
         """Test permission check with delegated permissions."""
         # Mock delegation check
         self.mock_db.run.side_effect = [
-            # Get user (no direct permission)
+            # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["basic_user"])]},
+            # Get user roles - second query in _get_user_context
+            {"data": self._get_mock_roles(["basic_user"])},
             # No role permissions for basic_user
             {"data": []},
         ]
@@ -272,8 +284,10 @@ class TestPermissionCheckNode:
         """Test that permission checks are audited."""
         # Mock permission check with audit
         self.mock_db.run.side_effect = [
-            # Get user
+            # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["admin"])]},
+            # Get user roles - second query in _get_user_context
+            {"data": self._get_mock_roles(["admin"])},
             # Get admin permissions - include exact match for sensitive_doc:delete
             {"data": [{"permission": "sensitive_doc:delete"}, {"permission": "*:*"}]},
         ]
@@ -305,8 +319,10 @@ class TestPermissionCheckNode:
         """Test checking wildcard permissions."""
         # Mock wildcard permission
         self.mock_db.run.side_effect = [
-            # Get user
+            # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["content_manager"])]},
+            # Get user roles - second query in _get_user_context
+            {"data": self._get_mock_roles(["content_manager"])},
             # Get wildcard permissions that match the exact check
             {
                 "data": [

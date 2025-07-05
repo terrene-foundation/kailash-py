@@ -629,7 +629,7 @@ result = {
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -727,7 +727,7 @@ def process_item(item):
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -868,7 +868,7 @@ def perform_database_operation(conn, data):
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -991,7 +991,7 @@ self._prefetcher.stop()
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -1186,7 +1186,7 @@ result = {
 from kailash.nodes.data import WorkflowConnectionPool
 from kailash.nodes.data.query_router import QueryRouterNode
 from kailash import Workflow, WorkflowBuilder
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -1230,7 +1230,7 @@ class DatabaseService:
     async def initialize(self):
         """Initialize the connection pool."""
         if not self._initialized:
-            await self.pool.process({"operation": "initialize"})
+            await self.pool.execute({"operation": "initialize"})
             self._initialized = True
 
             # Start monitoring task
@@ -1239,13 +1239,13 @@ class DatabaseService:
     @asynccontextmanager
     async def get_connection(self):
         """Context manager for safe connection handling."""
-        conn = await self.pool.process({"operation": "acquire"})
+        conn = await self.pool.execute({"operation": "acquire"})
         conn_id = conn["connection_id"]
 
         try:
             yield conn_id
         finally:
-            await self.pool.process({
+            await self.pool.execute({
                 "operation": "release",
                 "connection_id": conn_id
             })
@@ -1261,7 +1261,7 @@ class DatabaseService:
         """
         if use_router:
             # Phase 2: Use router for intelligent routing and caching
-            result = await self.router.process({
+            result = await self.router.execute({
                 "query": query,
                 "parameters": params or [],
                 "fetch_mode": fetch_mode
@@ -1270,7 +1270,7 @@ class DatabaseService:
         else:
             # Direct pool access (for special cases)
             async with self.get_connection() as conn_id:
-                result = await self.pool.process({
+                result = await self.pool.execute({
                     "operation": "execute",
                     "connection_id": conn_id,
                     "query": query,
@@ -1284,7 +1284,7 @@ class DatabaseService:
         async with self.get_connection() as conn_id:
             try:
                 # Start transaction
-                await self.pool.process({
+                await self.pool.execute({
                     "operation": "execute",
                     "connection_id": conn_id,
                     "query": "BEGIN",
@@ -1294,7 +1294,7 @@ class DatabaseService:
                 # Execute operations
                 results = []
                 for op in operations:
-                    result = await self.pool.process({
+                    result = await self.pool.execute({
                         "operation": "execute",
                         "connection_id": conn_id,
                         "query": op["query"],
@@ -1304,7 +1304,7 @@ class DatabaseService:
                     results.append(result["data"])
 
                 # Commit transaction
-                await self.pool.process({
+                await self.pool.execute({
                     "operation": "execute",
                     "connection_id": conn_id,
                     "query": "COMMIT",
@@ -1315,7 +1315,7 @@ class DatabaseService:
 
             except Exception as e:
                 # Rollback on error
-                await self.pool.process({
+                await self.pool.execute({
                     "operation": "execute",
                     "connection_id": conn_id,
                     "query": "ROLLBACK",
@@ -1327,7 +1327,7 @@ class DatabaseService:
         """Background task to monitor pool health."""
         while self._initialized:
             try:
-                stats = await self.pool.process({"operation": "stats"})
+                stats = await self.pool.execute({"operation": "stats"})
 
                 # Log warnings for potential issues
                 if stats["current_state"]["available_connections"] == 0:
@@ -1409,7 +1409,7 @@ results = await asyncio.gather(*[
 ])
 
 # Get pool statistics
-stats = await db_service.pool.process({"operation": "stats"})
+stats = await db_service.pool.execute({"operation": "stats"})
 
 result = {
     "processed_orders": results,
@@ -1511,7 +1511,7 @@ queries = [
 # Execute with router - benefits from caching and optimal routing
 results = {}
 for q in queries:
-    result = await router.process({
+    result = await router.execute({
         "query": q["query"],
         "parameters": q["parameters"],
         "fetch_mode": "all"
@@ -1526,7 +1526,7 @@ for q in queries:
 
 # Get performance insights
 router_metrics = await router.get_metrics()
-pool_stats = await smart_pool.process({"operation": "stats"})
+pool_stats = await smart_pool.execute({"operation": "stats"})
 
 return {
     "results": results,
@@ -1601,7 +1601,7 @@ async def demonstrate_pattern_learning():
             print(f"Recommended pool size: {forecast['recommended_pool_size']}")
 
         # Pool should adapt its size
-        stats = await service.pool.process({"operation": "stats"})
+        stats = await service.pool.execute({"operation": "stats"})
         print(f"Current pool size: {stats['current_state']['total_connections']}")
 ```
 
@@ -1674,7 +1674,7 @@ import json
 from datetime import datetime
 
 # Get pool statistics
-stats = await pool.process({"operation": "stats"})
+stats = await pool.execute({"operation": "stats"})
 
 # Calculate key metrics
 metrics = {

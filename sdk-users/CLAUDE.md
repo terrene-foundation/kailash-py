@@ -10,17 +10,19 @@
 
 **🤖 AI Chat Integration**: Natural language workflow generation, context-aware conversations, automatic workflow creation from user descriptions.
 
-**⚡ Unified Async Runtime**: Production-ready AsyncLocalRuntime with 2-10x performance gains. See [developer/09-unified-async-runtime-guide.md](developer/09-unified-async-runtime-guide.md) for complete guide.
+**⚡ Unified Async Runtime**: Production-ready AsyncLocalRuntime with 2-10x performance gains. See [developer/10-unified-async-runtime-guide.md](developer/10-unified-async-runtime-guide.md) for complete guide.
 
 **🔧 Resource Registry**: Centralized resource management for database pools, HTTP clients, and caches. See [developer/08-resource-registry-guide.md](developer/08-resource-registry-guide.md) for patterns.
 
-**🚀 AsyncWorkflowBuilder**: Async-first workflow builder with 70%+ code reduction. Built-in patterns (retry, rate limit, timeout, batch, circuit breaker). See [developer/08-async-workflow-builder.md](developer/08-async-workflow-builder.md) and [workflows/async/async-workflow-builder-guide.md](workflows/async/async-workflow-builder-guide.md).
+**🚀 AsyncWorkflowBuilder**: Async-first workflow builder with 70%+ code reduction. Built-in patterns (retry, rate limit, timeout, batch, circuit breaker). See [developer/07-async-workflow-builder.md](developer/07-async-workflow-builder.md) and [workflows/async/async-workflow-builder-guide.md](workflows/async/async-workflow-builder-guide.md).
 
 **🔗 Dot Notation Mapping**: Access nested node outputs with `"result.data"`, `"result.metrics"`, `"source.nested.field"` in workflow connections.
 
 **🎯 Auto-Mapping Parameters**: NodeParameter supports `auto_map_primary=True`, `auto_map_from=["alt1"]`, `workflow_alias="name"` for automatic connection discovery.
 
-**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. See [developer/async-testing-framework-guide.md](developer/async-testing-framework-guide.md).
+**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. See [developer/12-testing-production-quality.md](developer/12-testing-production-quality.md).
+
+**🏥 Enterprise MCP Workflows**: Complete healthcare HIPAA, finance SOX, and multi-tenant patterns with 4 production-grade enterprise nodes. See [cheatsheet/040-enterprise-mcp-workflows.md](cheatsheet/040-enterprise-mcp-workflows.md).
 
 ## 🏗️ Architecture Decisions First
 
@@ -38,21 +40,21 @@ The decision matrix provides fast answers to:
 
 | Decision Type | Quick Decisions | Implementation Guide |
 |---------------|-----------------|---------------------|
-| **Workflow Construction** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
-| **Interface Routing** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
-| **Performance Strategy** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/ARCHITECTURAL_GUIDE.md) |
+| **Workflow Construction** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/APP_DEVELOPMENT_GUIDE.md) |
+| **Interface Routing** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/APP_DEVELOPMENT_GUIDE.md) |
+| **Performance Strategy** | [decision-matrix.md](decision-matrix.md) | [Apps Guide](../apps/APP_DEVELOPMENT_GUIDE.md) |
 
 ## 🎯 Quick Navigation Guide
 | I need to... | Go to | Purpose |
 |--------------|-------|---------|
 | **Make architecture decisions** | [decision-matrix.md](decision-matrix.md) | Choose workflow patterns, routing |
-| **Build complete app** | [../apps/ARCHITECTURAL_GUIDE.md](../apps/ARCHITECTURAL_GUIDE.md) | App implementation guide |
+| **Build complete app** | [../apps/APP_DEVELOPMENT_GUIDE.md](../apps/APP_DEVELOPMENT_GUIDE.md) | App implementation guide |
 | **Find a node quickly** | [nodes/node-index.md](nodes/node-index.md) | Minimal 47-line reference |
 | **Choose right node** | [nodes/node-selection-guide.md](nodes/node-selection-guide.md) | Smart node finder with decision trees |
 | Build from scratch | [developer/](developer/) | 6 focused technical guides |
-| **Test workflows** | [developer/async-testing-framework-guide.md](developer/async-testing-framework-guide.md) | Production-certified testing framework ✅ |
+| **Test workflows** | [developer/12-testing-production-quality.md](developer/12-testing-production-quality.md) | Production-certified testing framework ✅ |
 | Quick code snippet | [cheatsheet/](cheatsheet/) | 37 standardized copy-paste patterns |
-| Fix an error | [developer/05-troubleshooting.md](developer/05-troubleshooting.md) | Comprehensive error resolution |
+| Fix an error | [validation/common-mistakes.md](validation/common-mistakes.md) | Comprehensive error resolution |
 | Frontend integration | [frontend-integration/](frontend-integration/) | React/Vue + middleware patterns |
 | Production deployment | [developer/04-production.md](developer/04-production.md) | Security, monitoring, performance |
 | **Enterprise features** | [enterprise/](enterprise/) | Advanced patterns, security, compliance |
@@ -81,7 +83,7 @@ The decision matrix provides fast answers to:
 **Start Here:**
 - [decision-matrix.md](decision-matrix.md) - Architecture decisions
 - [nodes/node-selection-guide.md](nodes/node-selection-guide.md) - Smart node selection
-- [developer/05-troubleshooting.md](developer/05-troubleshooting.md) - Error fixes
+- [validation/common-mistakes.md](validation/common-mistakes.md) - Error fixes
 
 **Quick Access:**
 - [cheatsheet/](cheatsheet/) - 37 copy-paste patterns
@@ -92,7 +94,7 @@ The decision matrix provides fast answers to:
 For validation rules and common mistakes, see:
 - **Root CLAUDE.md** - Critical validation rules
 - **[decision-matrix.md](decision-matrix.md)** - Architecture decision guidelines
-- **[developer/05-troubleshooting.md](developer/05-troubleshooting.md)** - Error fixes
+- **[validation/common-mistakes.md](validation/common-mistakes.md)** - Error fixes
 - **[validation/common-mistakes.md](validation/common-mistakes.md)** - Common mistake database
 
 ## 🤖 Critical Workflow

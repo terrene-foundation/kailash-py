@@ -30,7 +30,7 @@ if os.getenv("SDK_DEV_MODE") == "true":
 from kailash import Workflow
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import FilterNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def main():

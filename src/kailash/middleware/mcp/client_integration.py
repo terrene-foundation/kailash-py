@@ -20,7 +20,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 # Import existing Kailash MCP components
 try:
-    from kailash.mcp import MCPClient
+    from kailash.mcp_server import MCPClient
 
     _KAILASH_MCP_AVAILABLE = True
 except ImportError:
