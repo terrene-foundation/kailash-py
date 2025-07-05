@@ -145,7 +145,7 @@ pool = WorkflowConnectionPool(
 )
 
 # Initialize pool once at startup
-await pool.process({"operation": "initialize"})
+await pool.execute({"operation": "initialize"})
 
 # NEW: Query Router for intelligent routing (Phase 2)
 router = QueryRouterNode(
@@ -158,22 +158,22 @@ router = QueryRouterNode(
 )
 
 # Simple usage with router - no manual connection management!
-result = await router.process({
+result = await router.execute({
     "query": "SELECT * FROM users WHERE active = ?",
     "parameters": [True]
 })
 
 # Transaction support with session affinity
-await router.process({
+await router.execute({
     "query": "BEGIN",
     "session_id": "user_123"
 })
-await router.process({
+await router.execute({
     "query": "UPDATE accounts SET balance = balance - ? WHERE id = ?",
     "parameters": [100, 1],
     "session_id": "user_123"
 })
-await router.process({
+await router.execute({
     "query": "COMMIT",
     "session_id": "user_123"
 })
@@ -182,12 +182,12 @@ await router.process({
 @asynccontextmanager
 async def get_connection():
     """Safely acquire and release connections."""
-    conn = await pool.process({"operation": "acquire"})
+    conn = await pool.execute({"operation": "acquire"})
     conn_id = conn["connection_id"]
     try:
         yield conn_id
     finally:
-        await pool.process({
+        await pool.execute({
             "operation": "release",
             "connection_id": conn_id
         })
@@ -199,7 +199,7 @@ async def execute_batch_queries(queries):
 
     async with get_connection() as conn_id:
         for query in queries:
-            result = await pool.process({
+            result = await pool.execute({
                 "operation": "execute",
                 "connection_id": conn_id,
                 "query": query["sql"],
@@ -211,7 +211,7 @@ async def execute_batch_queries(queries):
     return results
 
 # Monitor pool health
-stats = await pool.process({"operation": "stats"})
+stats = await pool.execute({"operation": "stats"})
 print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
 print(f"Error rate: {stats['queries']['error_rate']:.2%}")
 print(f"Active connections: {stats['current_state']['active_connections']}/{stats['current_state']['total_connections']}")

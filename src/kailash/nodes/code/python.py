@@ -236,6 +236,7 @@ class CodeExecutor:
             "zip",
             "print",  # Allow print for debugging
             "hasattr",  # For attribute checking
+            "hash",  # For hashing operations
             # Exception classes for proper error handling
             "Exception",
             "ValueError",

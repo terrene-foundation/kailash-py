@@ -123,7 +123,7 @@ def create_optimization_workflow():
 import numpy as np
 
 # Initialize or get current state
-if 'parameters' not in locals():
+if 'parameters' not in globals():
     # First iteration - initialize
     parameters = np.random.randn(10)  # 10-dimensional optimization
     best_loss = float('inf')
@@ -417,7 +417,7 @@ def create_feedback_learning_workflow():
 import numpy as np
 
 # Initialize or get model weights
-if 'model_weights' not in locals():
+if 'model_weights' not in globals():
     model_weights = np.random.randn(10, 5) * 0.1  # 10 features, 5 items
     user_feedback_history = []
     iteration = 0
@@ -608,7 +608,7 @@ state = {
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

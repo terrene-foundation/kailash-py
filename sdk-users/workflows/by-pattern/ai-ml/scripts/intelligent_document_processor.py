@@ -22,7 +22,7 @@ from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.data import CSVReaderNode, DocumentSourceNode, RelevanceScorerNode
 from kailash.nodes.logic import MergeNode
 from kailash.nodes.transform import FilterNode, HierarchicalChunkerNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_document_processor_workflow() -> Workflow:

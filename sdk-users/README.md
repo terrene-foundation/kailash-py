@@ -7,8 +7,16 @@ Quick reference with critical rules, common patterns, and navigation guide.
 
 ## 🎯 **Critical for Claude Code Users**
 - **[cheatsheet/000-claude-code-guide.md](cheatsheet/000-claude-code-guide.md)** - **START HERE** Essential success patterns
+- **[cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md)** - MCP (Model Context Protocol) integration
 - **[cheatsheet/038-integration-mastery.md](cheatsheet/038-integration-mastery.md)** - Complete integration guide
 - **[cheatsheet/039-workflow-composition.md](cheatsheet/039-workflow-composition.md)** - Advanced workflow patterns
+
+## 🚀 **MCP (Model Context Protocol) - AI Tool Integration**
+- **[guides/mcp-quickstart.md](guides/mcp-quickstart.md)** - **NEW!** Quick start guide for MCP
+- **[cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md)** - Complete MCP reference with code snippets
+- **[patterns/12-mcp-patterns.md](patterns/12-mcp-patterns.md)** - Production MCP patterns and best practices
+- **[examples/mcp/](examples/mcp/)** - Ready-to-run MCP examples
+- **[developer/22-mcp-development-guide.md](developer/22-mcp-development-guide.md)** - Build custom MCP servers and clients (✅ 100% validated)
 
 ## 📁 Contents
 
@@ -32,6 +40,7 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Document processing workflows
   - Custom node development guide
   - Advanced troubleshooting
+  - **✅ [MCP Development Guide](developer/22-mcp-development-guide.md)** - Build MCP servers and clients (comprehensive validation complete)
 
 ### **Lift Working Examples**
 - **[workflows/](workflows/)** - End-to-end use cases ready to copy
@@ -68,6 +77,7 @@ Quick reference with critical rules, common patterns, and navigation guide.
   - Control flow and data processing
   - Integration and deployment patterns
   - Performance and security patterns
+  - **NEW: [MCP Patterns](patterns/12-mcp-patterns.md)** - Model Context Protocol patterns
 
 - **[workflows/](workflows/)** - Ready-to-use boilerplate code
   - Basic workflows
@@ -89,6 +99,12 @@ Quick reference with critical rules, common patterns, and navigation guide.
 2. Try [workflows/quick-start/](workflows/quick-start/) examples
 3. Use [cheatsheet/](cheatsheet/) for common patterns
 4. Reference [nodes/](nodes/) for available components
+
+### **Building with MCP (Model Context Protocol)?**
+1. Start with [guides/mcp-quickstart.md](guides/mcp-quickstart.md) for basics
+2. Use [cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md) for quick reference
+3. Try [examples/mcp/](examples/mcp/) for working examples
+4. Study [patterns/12-mcp-patterns.md](patterns/12-mcp-patterns.md) for production patterns
 
 ### **Building Complex Workflows?**
 1. Start with [workflows/common-patterns/](workflows/common-patterns/)
@@ -136,12 +152,34 @@ See [../e2e_summary.txt](../e2e_summary.txt) for complete test results and techn
 
 ## ⚠️ Critical Knowledge
 
+### **MCP Integration with LLMAgentNode**
+MCP enables AI agents to use external tools and resources:
+```python
+from kailash.nodes.ai import LLMAgentNode
+
+# LLM with MCP tools
+workflow.add_node("agent", LLMAgentNode())
+results, run_id = runtime.execute(workflow, parameters={
+    "agent": {
+        "provider": "ollama",
+        "model": "llama3.2",
+        "mcp_servers": [{
+            "name": "tools",
+            "transport": "stdio",
+            "command": "mcp-server"
+        }],
+        "auto_discover_tools": True,
+        "auto_execute_tools": True
+    }
+})
+```
+
 ### **PythonCodeNode Input Exclusion**
 Variables passed as inputs are EXCLUDED from outputs!
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

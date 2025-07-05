@@ -28,7 +28,7 @@ from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import KafkaConsumerNode, SQLDatabaseNode
 from kailash.nodes.logic import MergeNode, SwitchNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_financial_processor_workflow() -> Workflow:

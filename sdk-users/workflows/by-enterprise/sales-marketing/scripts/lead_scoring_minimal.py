@@ -21,7 +21,7 @@ from kailash import Workflow
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import DataTransformer
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def main():

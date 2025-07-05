@@ -14,7 +14,7 @@
 ```python
 from kailash import Workflow
 from kailash.nodes.ai import LLMAgentNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Basic usage with improved async support
 workflow = Workflow("ollama_v062", "Ollama with LLMAgentNode")
@@ -53,7 +53,7 @@ result, _ = await runtime.execute_async(workflow, parameters={
 
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 def ollama_generate(prompt="Hello", model="llama3.2:1b"):

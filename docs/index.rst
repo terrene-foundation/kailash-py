@@ -86,7 +86,6 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
    :maxdepth: 1
    :caption: Development
 
-   migration_guide
    changelog
    contributing
    security

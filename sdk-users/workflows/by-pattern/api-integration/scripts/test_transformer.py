@@ -3,7 +3,7 @@
 
 from kailash import Workflow
 from kailash.nodes.transform import DataTransformer
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def test_transformer():

@@ -1,174 +1,115 @@
-# Developer Guide
+# Developer Guide - Navigation Hub
 
-*Comprehensive technical documentation for Kailash SDK development*
+*Complete technical guide for building with Kailash SDK*
 
-## 🚀 Quick Start
+## 🎯 Learning Path
 
-**Building an app?** Start with these in order:
-1. **[01-fundamentals.md](01-fundamentals.md)** - Core concepts and basics
-2. **[02-workflows.md](02-workflows.md)** - Building and connecting workflows
-3. **[12-parameter-passing-guide.md](12-parameter-passing-guide.md)** - **NEW!** Master parameter flow (fixes #1 issue)
+Follow these guides in order for complete mastery:
 
-**Having issues?** Jump to:
-- **[05-troubleshooting.md](05-troubleshooting.md)** - Common errors and solutions
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Critical rules and patterns
-
-## 📚 Complete Guide Index
-
-### Core Development Guides (Start Here)
-1. **[01-fundamentals.md](01-fundamentals.md)** - SDK basics, nodes, LocalRuntime
-2. **[02-workflows.md](02-workflows.md)** - Workflow construction and execution
-3. **[03-advanced-features.md](03-advanced-features.md)** - Cycles, agents, enterprise features
-4. **[04-production.md](04-production.md)** - Deployment, monitoring, security
-5. **[05-troubleshooting.md](05-troubleshooting.md)** - Error resolution guide
-6. **[06-custom-development.md](06-custom-development.md)** - Creating custom nodes
-
-### Specialized Guides
-7. **[07-comprehensive-rag-guide.md](07-comprehensive-rag-guide.md)** - RAG implementation patterns
-8. **[08-async-workflow-builder.md](08-async-workflow-builder.md)** - Async-first workflow patterns
-9. **[09-resource-registry-guide.md](09-resource-registry-guide.md)** - Resource management
-10. **[10-admin-nodes-guide.md](10-admin-nodes-guide.md)** - Administrative node framework
-11. **[11-unified-async-runtime-guide.md](11-unified-async-runtime-guide.md)** - AsyncLocalRuntime (2-10x performance)
-12. **[12-parameter-passing-guide.md](12-parameter-passing-guide.md)** ⭐ - **Complete parameter flow reference**
-13. **[13-testing-production-quality.md](13-testing-production-quality.md)** - Testing strategies
-14. **[14-async-testing-framework-guide.md](14-async-testing-framework-guide.md)** - Production-certified async testing
-15. **[15-connection-pool-guide.md](15-connection-pool-guide.md)** - Database connection management
-16. **[16-enhanced-gateway-guide.md](16-enhanced-gateway-guide.md)** - Enterprise gateway architecture
-17. **[17-enhanced-gateway-user-guide.md](17-enhanced-gateway-user-guide.md)** - Using the gateway
-18. **[18-production-hardening-features.md](18-production-hardening-features.md)** - Production security and hardening
+### Core Fundamentals (Start Here)
+1. **[Fundamentals](01-fundamentals-*.md)** ⭐
+   - Core concepts, parameters, connections, best practices (split into 4 focused files)
+2. **[Workflows](02-workflows-*.md)** ⭐
+   - Creation patterns, connections, execution (split into 2 focused files)
+3. **[Advanced Features](03-advanced-features.md)**
+   - Enterprise patterns, security, resilience
+4. **[Production](04-production.md)**
+   - Deployment, monitoring, security
+5. **[Custom Development](05-custom-development.md)**
+   - Build custom nodes and extensions
 
 ### Specialized Topics
-- **[10-cycle-parameter-passing-guide.md](10-cycle-parameter-passing-guide.md)** - Cycle-specific parameter patterns
-- **[17-intelligent-query-routing.md](17-intelligent-query-routing.md)** - Advanced query routing
-- **[18-testing-async-workflows.md](18-testing-async-workflows.md)** - Async workflow testing patterns
+- **[RAG Guide](06-comprehensive-rag-guide.md)** - Retrieval-augmented generation
+- **[Async Workflow Builder](07-async-workflow-builder.md)** - High-performance patterns
+- **[Resource Registry](08-resource-registry-guide.md)** - Resource management
+- **[Admin Nodes](09-admin-nodes-guide.md)** - User/role management
+- **[Unified Async Runtime](10-unified-async-runtime-guide.md)** - Async execution
+- **[Parameter Passing](11-parameter-passing-guide.md)** - Complete parameter reference
+- **[Testing Guide](12-testing-production-quality.md)** - Production testing
 
-### Quick References
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Critical rules and common patterns
-- **[examples/](examples/)** - Working code examples
+### Troubleshooting
+- **[Common Mistakes](../validation/common-mistakes.md)** ⭐ - Debug common issues quickly
 
-## 🔥 Key Updates (v0.5.1+)
+## ⚡ Quick Start
 
-### Parameter Passing Fix
-Initial parameters in cycles are now preserved throughout ALL iterations:
 ```python
-# These parameters are available in every cycle iteration
-runtime.execute(workflow, parameters={
-    "optimizer": {
-        "learning_rate": 0.01,  # No longer lost after iteration 0!
-        "target": 0.95          # Consistent across all iterations
-    }
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# 1. Create workflow
+workflow = WorkflowBuilder()
+
+# 2. Add nodes
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'processed': True}"
 })
-```
-See [12-parameter-passing-guide.md](12-parameter-passing-guide.md) for complete details.
 
-### Unified Runtime
-```python
-from kailash.runtime.local import LocalRuntime  # Handles sync + async + enterprise
-runtime = LocalRuntime()  # That's it!
+# 3. Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
-### Dot Notation Mapping
-```python
-workflow.connect("processor", "writer", mapping={
-    "result.data": "input_data",
-    "result.stats.count": "record_count"
-})
-```
+## 🔑 Key Concepts
 
-## ⚠️ Critical Rules
+- **WorkflowBuilder**: Use `WorkflowBuilder()` not `Workflow()`
+- **Connections**: `add_connection(from_node, from_output, to_node, to_input)`
+- **PythonCodeNode**: Wrap outputs in `result` key
+- **Dot Notation**: Access nested data with `"result.data"`
 
-### 1. Node Initialization Order
-```python
-class MyNode(Node):
-    def __init__(self, name, **kwargs):
-        # Set attributes FIRST
-        self.threshold = kwargs.get("threshold", 0.8)
-        # Then call super()
-        super().__init__(name=name)
-```
+## 🔗 Navigation
 
-### 2. Declare ALL Parameters
-```python
-def get_parameters(self):
-    return {
-        "data": NodeParameter(type=list, required=True),
-        "config": NodeParameter(type=dict, required=False, default={})
-        # Must declare EVERY parameter the node will use
-    }
-```
+**Need help with something specific?**
+- **Getting started** → [Fundamentals](01-fundamentals-core-concepts.md)
+- **Building workflows** → [Workflows](02-workflows-creation.md)
+- **Fixing errors** → [Common Mistakes](../validation/common-mistakes.md)
+- **Production deployment** → [Production](04-production.md)
+- **Custom nodes** → [Custom Development](05-custom-development.md)
 
-### 3. Use Basic Types Only
-```python
-# ✅ CORRECT
-"items": NodeParameter(type=list, required=True)
+**Advanced patterns:**
+- **AI/RAG systems** → [RAG Guide](06-comprehensive-rag-guide.md)
+- **High performance** → [Async Workflow Builder](07-async-workflow-builder.md)
+- **Enterprise features** → [Admin Nodes](09-admin-nodes-guide.md)
 
-# ❌ WRONG - No generic types!
-"items": NodeParameter(type=List[str], required=True)
-```
+## 📚 Reference
 
-## 🎯 Common Workflows
+- **[Quick Reference](QUICK_REFERENCE.md)** - Cheat sheet for common patterns
+- **[Node Selection Guide](../nodes/node-selection-guide.md)** - Choose the right nodes
+- **[Cheatsheet](../cheatsheet/)** - Copy-paste code patterns
 
-### Data Processing Pipeline
-```python
-workflow = Workflow("data-pipeline")
-workflow.add_node("reader", CSVReaderNode())
-workflow.add_node("processor", DataTransformerNode())
-workflow.add_node("writer", CSVWriterNode())
+## 🗂️ All Available Guides
 
-workflow.connect("reader", "processor")
-workflow.connect("processor", "writer", mapping={"transformed_data": "data"})
-```
+### Core (5 Essential Guides)
+1. **Fundamentals** (split into 4 files):
+   - [Core Concepts](01-fundamentals-core-concepts.md) ⭐
+   - [Parameters](01-fundamentals-parameters.md)
+   - [Connections](01-fundamentals-connections.md)
+   - [Best Practices](01-fundamentals-best-practices.md)
+2. **Workflows** (split into 2 files):
+   - [Creation](02-workflows-creation.md) ⭐
+   - [Connections](02-workflows-connections.md)
+3. [Advanced Features](03-advanced-features.md)
+4. [Production](04-production.md)
+5. [Custom Development](05-custom-development.md)
 
-### Cyclic Optimization
-```python
-workflow = Workflow("optimization")
-workflow.add_node("optimizer", OptimizerNode())
-workflow.connect("optimizer", "optimizer",
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True"
-)
-```
-
-### API Integration
-```python
-workflow = Workflow("api-workflow")
-workflow.add_node("api", HTTPRequestNode())
-workflow.add_node("processor", PythonCodeNode(
-    code="result = {'parsed': json.loads(response.get('body', '{}'))}"
-))
-workflow.connect("api", "processor", mapping={"response": "response"})
-```
-
-## 📋 Development Paths
-
-### Building a Custom Node
-1. Read [06-custom-development.md](06-custom-development.md)
-2. Check parameter declaration in [12-parameter-passing-guide.md](12-parameter-passing-guide.md)
-3. See examples in [../workflows/](../workflows/) for patterns
-
-### Testing Your Workflow
-1. Start with [14-async-testing-framework-guide.md](14-async-testing-framework-guide.md)
-2. Use Docker infrastructure from `tests/docker-compose.test.yml`
-3. Check [13-testing-production-quality.md](13-testing-production-quality.md) for strategies
-
-### Debugging Issues
-1. Check [05-troubleshooting.md](05-troubleshooting.md) first
-2. Review parameter flow in [12-parameter-passing-guide.md](12-parameter-passing-guide.md)
-3. Use debug nodes from [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
-
-### Production Deployment
-1. Read [04-production.md](04-production.md) for deployment guide
-2. Set up monitoring per [16-enhanced-gateway-guide.md](16-enhanced-gateway-guide.md)
-3. Configure connection pools via [15-connection-pool-guide.md](15-connection-pool-guide.md)
-
-## 🔗 Related Resources
-
-- **[Cheatsheets](../cheatsheet/)** - Quick copy-paste patterns
-- **[Node Catalog](../nodes/)** - Complete node reference
-- **[Workflows](../workflows/)** - Production-ready examples
-- **[API Reference](../api/)** - Full API documentation
+### Specialized Features (17 Guides)
+6. [RAG Guide](06-comprehensive-rag-guide.md)
+7. [Async Workflow Builder](07-async-workflow-builder.md)
+8. [Resource Registry](08-resource-registry-guide.md)
+9. [Admin Nodes Guide](09-admin-nodes-guide.md)
+10. [Unified Async Runtime Guide](10-unified-async-runtime-guide.md)
+11. [Parameter Passing Guide](11-parameter-passing-guide.md)
+12. [Testing Production Quality](12-testing-production-quality.md)
+13. [Async Testing Framework](13-async-testing-framework.md)
+14. [Connection Pool Guide](14-connection-pool-guide.md)
+15. [Enhanced Gateway Guide](15-enhanced-gateway-guide.md)
+16. [Production Hardening](16-production-hardening.md)
+17. [MCP Development Guide](17-mcp-development-guide.md)
+18. [Cycle Parameter Passing](18-cycle-parameter-passing.md)
+19. [Intelligent Query Routing](19-intelligent-query-routing.md)
+20. [Testing Async Workflows](20-testing-async-workflows.md)
+21. [MCP Tool Execution](21-mcp-tool-execution.md)
+22. [Workflow Parameter Injection](22-workflow-parameter-injection.md)
 
 ---
 
-*For the latest updates and migration guides, see [migration-guides/](../migration-guides/)*
+**Building with Kailash SDK?** Start with [Fundamentals](01-fundamentals-core-concepts.md) → [Workflows](02-workflows-creation.md) → [Production](04-production.md)

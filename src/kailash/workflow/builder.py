@@ -217,6 +217,28 @@ class WorkflowBuilder:
         self._metadata.update(kwargs)
         return self
 
+    def add_workflow_inputs(
+        self, input_node_id: str, input_mappings: dict
+    ) -> "WorkflowBuilder":
+        """
+        Map workflow-level inputs to a specific node's parameters.
+
+        Args:
+            input_node_id: The node that should receive workflow inputs
+            input_mappings: Dict mapping workflow input names to node parameter names
+
+        Returns:
+            Self for chaining
+        """
+        if input_node_id not in self.nodes:
+            raise WorkflowValidationError(f"Node '{input_node_id}' not found")
+
+        # Store input mappings in metadata
+        if "_workflow_inputs" not in self._metadata:
+            self._metadata["_workflow_inputs"] = {}
+        self._metadata["_workflow_inputs"][input_node_id] = input_mappings
+        return self
+
     def build(self, workflow_id: str | None = None, **kwargs) -> Workflow:
         """
         Build and return a Workflow instance.

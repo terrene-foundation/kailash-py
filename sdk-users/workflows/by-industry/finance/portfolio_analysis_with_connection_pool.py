@@ -26,7 +26,7 @@ from typing import Any, Dict, List
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import WorkflowConnectionPool
 from kailash.nodes.data.query_router import QueryRouterNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow, WorkflowBuilder
 
 
@@ -65,7 +65,7 @@ class PortfolioAnalysisService:
     async def initialize(self):
         """Initialize the connection pool and setup database."""
         if not self._initialized:
-            await self.pool.process({"operation": "initialize"})
+            await self.pool.execute({"operation": "initialize"})
             await self._setup_database()
             self._initialized = True
 
@@ -75,18 +75,18 @@ class PortfolioAnalysisService:
     @asynccontextmanager
     async def get_connection(self):
         """Context manager for safe connection handling."""
-        conn = await self.pool.process({"operation": "acquire"})
+        conn = await self.pool.execute({"operation": "acquire"})
         conn_id = conn["connection_id"]
         try:
             yield conn_id
         finally:
-            await self.pool.process({"operation": "release", "connection_id": conn_id})
+            await self.pool.execute({"operation": "release", "connection_id": conn_id})
 
     async def _setup_database(self):
         """Set up database schema if needed."""
         async with self.get_connection() as conn_id:
             # Check if tables exist
-            result = await self.pool.process(
+            result = await self.pool.execute(
                 {
                     "operation": "execute",
                     "connection_id": conn_id,
@@ -144,7 +144,7 @@ class PortfolioAnalysisService:
         ]
 
         for table_sql in tables:
-            await self.pool.process(
+            await self.pool.execute(
                 {
                     "operation": "execute",
                     "connection_id": conn_id,
@@ -156,7 +156,7 @@ class PortfolioAnalysisService:
     async def analyze_portfolio(self, portfolio_id: str) -> Dict[str, Any]:
         """Analyze a single portfolio using query router for optimal performance."""
         # Get portfolio metadata - router handles connection management
-        portfolio = await self.router.process(
+        portfolio = await self.router.execute(
             {
                 "query": """
                 SELECT p.*,
@@ -176,7 +176,7 @@ class PortfolioAnalysisService:
             return {"error": f"Portfolio {portfolio_id} not found"}
 
         # Get positions with current prices - benefits from caching
-        positions = await self.router.process(
+        positions = await self.router.execute(
             {
                 "query": """
                 SELECT
@@ -251,7 +251,7 @@ class PortfolioAnalysisService:
 
         try:
             # Start transaction with session ID for affinity
-            await self.router.process(
+            await self.router.execute(
                 {
                     "query": "BEGIN",
                     "session_id": session_id,
@@ -260,7 +260,7 @@ class PortfolioAnalysisService:
             )
 
             # Get current positions - same session for transaction
-            positions = await self.router.process(
+            positions = await self.router.execute(
                 {
                     "query": """
                     SELECT pos.*, mp.close_price as current_price
@@ -303,7 +303,7 @@ class PortfolioAnalysisService:
                     )
 
             # Record rebalancing action - same session
-            await self.router.process(
+            await self.router.execute(
                 {
                     "query": """
                     INSERT INTO portfolio_performance
@@ -319,7 +319,7 @@ class PortfolioAnalysisService:
             )
 
             # Update last rebalanced date - same session
-            await self.router.process(
+            await self.router.execute(
                 {
                     "query": """
                     UPDATE portfolio_metadata
@@ -333,7 +333,7 @@ class PortfolioAnalysisService:
             )
 
             # Commit transaction
-            await self.router.process(
+            await self.router.execute(
                 {
                     "query": "COMMIT",
                     "session_id": session_id,
@@ -351,7 +351,7 @@ class PortfolioAnalysisService:
 
         except Exception as e:
             # Rollback on error - same session
-            await self.router.process(
+            await self.router.execute(
                 {
                     "query": "ROLLBACK",
                     "session_id": session_id,
@@ -365,7 +365,7 @@ class PortfolioAnalysisService:
         while self._initialized:
             try:
                 # Pool statistics
-                stats = await self.pool.process({"operation": "stats"})
+                stats = await self.pool.execute({"operation": "stats"})
 
                 # Router metrics (Phase 2)
                 router_metrics = await self.router.get_metrics()
@@ -437,7 +437,7 @@ analyses = await asyncio.gather(*[
 ])
 
 # Get pool statistics
-stats = await service.pool.process({"operation": "stats"})
+stats = await service.pool.execute({"operation": "stats"})
 
 # Get router metrics (Phase 2)
 router_metrics = await service.router.get_metrics()

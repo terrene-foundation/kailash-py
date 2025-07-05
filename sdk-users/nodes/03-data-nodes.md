@@ -88,7 +88,7 @@ This document covers all data input/output nodes including file operations, data
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -207,17 +207,17 @@ workflow.runtime = LocalRuntime()
   )
 
   # Initialize pool
-  await pool.process({"operation": "initialize"})
+  await pool.execute({"operation": "initialize"})
 
   # Use in workflow
   async def process_order(order_id):
       # Acquire connection
-      conn = await pool.process({"operation": "acquire"})
+      conn = await pool.execute({"operation": "acquire"})
       conn_id = conn["connection_id"]
 
       try:
           # Execute query
-          result = await pool.process({
+          result = await pool.execute({
               "operation": "execute",
               "connection_id": conn_id,
               "query": "SELECT * FROM orders WHERE id = $1",
@@ -227,13 +227,13 @@ workflow.runtime = LocalRuntime()
           return result["data"]
       finally:
           # Always release connection
-          await pool.process({
+          await pool.execute({
               "operation": "release",
               "connection_id": conn_id
           })
 
   # Get pool statistics
-  stats = await pool.process({"operation": "stats"})
+  stats = await pool.execute({"operation": "stats"})
   print(f"Active connections: {stats['current_state']['active_connections']}")
   print(f"Pool efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection")
   ```
@@ -277,7 +277,7 @@ workflow.runtime = LocalRuntime()
       adaptive_sizing=True,
       enable_query_routing=True
   )
-  await pool.process({"operation": "initialize"})
+  await pool.execute({"operation": "initialize"})
 
   # Create query router
   router = QueryRouterNode(
@@ -289,24 +289,24 @@ workflow.runtime = LocalRuntime()
   )
 
   # Simple query - no connection management needed!
-  result = await router.process({
+  result = await router.execute({
       "query": "SELECT * FROM users WHERE active = ?",
       "parameters": [True]
   })
 
   # Transaction with session affinity
-  await router.process({
+  await router.execute({
       "query": "BEGIN",
       "session_id": "user_123"
   })
 
-  await router.process({
+  await router.execute({
       "query": "UPDATE accounts SET balance = balance - ? WHERE id = ?",
       "parameters": [100, 1],
       "session_id": "user_123"
   })
 
-  await router.process({
+  await router.execute({
       "query": "COMMIT",
       "session_id": "user_123"
   })
@@ -497,7 +497,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -530,7 +530,7 @@ workflow.runtime = LocalRuntime()
   ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

@@ -1,5 +1,12 @@
 # MCP Integration - Model Context Protocol
 
+## 🎯 MCP Testing Results
+**Comprehensive Testing Complete**: 407 tests across 8 components - 100% pass rate
+- **Unit Tests**: 391 tests covering all MCP functionality
+- **Integration Tests**: 14 real MCP server tests
+- **E2E Tests**: 2 complete workflow scenarios
+- **Test Coverage**: Client, server, tool execution, async handling, error recovery
+
 ## Quick Setup - LLMAgentNode with MCP
 ```python
 from kailash import Workflow
@@ -350,7 +357,71 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ```
 
+## Testing MCP Integration
+
+### Unit Testing Pattern
+```python
+import pytest
+from unittest.mock import MagicMock
+from kailash.nodes.ai import LLMAgentNode
+
+def test_mcp_tool_execution():
+    """Test MCP tool execution with mocked server."""
+    node = LLMAgentNode()
+
+    # Mock MCP response
+    mock_response = {
+        "tools": [{"name": "search", "description": "Search data"}],
+        "result": {"data": "test results"}
+    }
+
+    # Test with mock provider
+    result = node.run(
+        provider="mock",
+        model="gpt-4",
+        messages=[{"role": "user", "content": "Search for data"}],
+        mcp_servers=[{"name": "test", "transport": "stdio", "command": "echo"}],
+        auto_execute_tools=True
+    )
+
+    assert result["success"] is True
+    assert "response" in result
+```
+
+### Integration Testing Pattern
+```python
+@pytest.mark.integration
+def test_real_mcp_server():
+    """Test with real MCP server running in Docker."""
+    node = LLMAgentNode()
+
+    result = node.run(
+        provider="ollama",
+        model="llama3.2",
+        messages=[{"role": "user", "content": "List available tools"}],
+        mcp_servers=[{
+            "name": "test-server",
+            "transport": "stdio",
+            "command": "python",
+            "args": ["-m", "test_mcp_server"]
+        }],
+        auto_discover_tools=True
+    )
+
+    # Verify tool discovery
+    assert result["context"]["tools_available"] is not None
+    assert len(result["context"]["tools_available"]) > 0
+```
+
+### Testing Best Practices
+1. **Mock for Unit Tests**: Use mock providers for fast, reliable tests
+2. **Real Servers for Integration**: Test with actual MCP servers in Docker
+3. **Async Context Handling**: Test both sync and async execution contexts
+4. **Error Recovery**: Test timeout, connection failure, and tool error scenarios
+5. **Tool Execution Verification**: Check both discovery and execution results
+
 ## Next Steps
 - [LLM Workflows](../workflows/by-pattern/ai-ml/llm-workflows.md) - LLM patterns
 - [API Integration](015-workflow-as-rest-api.md) - REST API setup
 - [Production Guide](../developer/04-production.md) - Deployment
+- [MCP Tool Execution Guide](../developer/22-mcp-tool-execution-guide.md) - Advanced patterns

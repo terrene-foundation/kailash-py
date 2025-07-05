@@ -38,7 +38,7 @@ from kailash.nodes.ai.self_organizing import (
     TeamFormationNode,
 )
 from kailash.nodes.mcp import MCPClient
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_specialist_agents() -> list[dict]:

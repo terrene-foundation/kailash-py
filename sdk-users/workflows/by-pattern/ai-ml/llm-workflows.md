@@ -19,7 +19,7 @@ from kailash import Workflow
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
 from kailash.nodes.data import DocumentSourceNode, QuerySourceNode, RelevanceScorerNode
 from kailash.nodes.transform import HierarchicalChunkerNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Document Q&A workflow using proper Kailash nodes
 workflow = Workflow(
@@ -82,7 +82,7 @@ Run powerful LLMs locally with enhanced Ollama support:
 ```python
 from kailash import Workflow
 from kailash.nodes.ai import LLMAgentNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Local LLM workflow with Ollama
 workflow = Workflow(
@@ -862,7 +862,7 @@ workflow.connect("generator", "adapter", mapping={"response": "data"})
 ```python
 # WRONG: Manual LLM API calls
 llm_node = PythonCodeNode(
-    code="response = openai.chat.completions.create(...)"
+    code="response = openai.chat.completions.create(...); result = response"
 )
 
 # CORRECT: Use LLMAgentNode
@@ -877,7 +877,7 @@ llm_node = LLMAgentNode(
 ```python
 # WRONG: Manual embedding calls
 embed_node = PythonCodeNode(
-    code="embeddings = openai.embeddings.create(...)"
+    code="embeddings = openai.embeddings.create(...); result = embeddings"
 )
 
 # CORRECT: Use EmbeddingGeneratorNode
@@ -891,7 +891,7 @@ embed_node = EmbeddingGeneratorNode(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -905,7 +905,7 @@ workflow.runtime = LocalRuntime()
 
 # WRONG: Manual text splitting
 chunk_node = PythonCodeNode(
-    code="chunks = text.split('\\n\\n')"
+    code="chunks = text.split('\\n\\n'); result = chunks"
 )
 
 # CORRECT: Use HierarchicalChunkerNode

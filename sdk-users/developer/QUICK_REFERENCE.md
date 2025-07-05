@@ -103,7 +103,7 @@ workflow.connect(
 builder.connect(node1, node2, mapping={"output": "input"})
 
 # This will fail on Workflow:
-workflow.add_connection("node1", "output", "node2", "input")
+workflow.connect("node1", "output", mapping={"node2": "input"})
 ```
 
 ### Unified Runtime (Enterprise Features)
@@ -194,7 +194,7 @@ class YourNode(Node):
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -226,7 +226,7 @@ processor = PythonCodeNode.from_function(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -251,7 +251,7 @@ node = PythonCodeNode(name="filter", code=code)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -391,7 +391,7 @@ await gateway.agent_ui.register_workflow(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

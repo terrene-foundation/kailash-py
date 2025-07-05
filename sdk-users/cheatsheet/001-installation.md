@@ -5,16 +5,53 @@
 pip install kailash
 ```
 
+## Poetry Installation (Recommended)
+```bash
+# Add to existing project
+poetry add kailash
+
+# Or create new project
+poetry new my-kailash-project
+cd my-kailash-project
+poetry add kailash
+poetry shell
+```
+
+## Virtual Environment Setup
+```bash
+# Create virtual environment
+python -m venv kailash-env
+source kailash-env/bin/activate  # Linux/Mac
+# kailash-env\Scripts\activate  # Windows
+
+# Install in virtual environment
+pip install kailash
+```
+
+## Requirements.txt Installation
+```bash
+# Add to requirements.txt
+echo "kailash>=0.6.0" >> requirements.txt
+
+# Install from requirements
+pip install -r requirements.txt
+```
+
 ## Verify Installation
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Test basic functionality
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-print("✅ Kailash SDK installed successfully!")
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "test", {
+    "code": "result = {'status': 'installed'}"
+})
 
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print("✅ Kailash SDK installed successfully!")
+print(f"Test result: {results['test']['result']['status']}")
 ```
 
 ## Docker Environment (Recommended)
@@ -59,30 +96,29 @@ docker-compose up -d
 
 ## Quick First Workflow
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.code import PythonCodeNode
 
 # Create workflow
-workflow = Workflow("first_workflow", name="My First Workflow")
+workflow = WorkflowBuilder()
 
-# Add nodes
-workflow.add_node("reader", CSVReaderNode(),
-    file_path="data/sample.csv", has_header=True)
+# Add nodes with modern API
+workflow.add_node("PythonCodeNode", "data_generator", {
+    "code": "result = {'data': [1, 2, 3, 4, 5], 'count': 5}"
+})
 
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = {'count': len(data), 'data': data}",
-    input_types={"data": list}
-))
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'processed_count': len(input_data.get('data', [])), 'summary': input_data}"
+})
 
-# Connect and execute
-workflow.connect("reader", "processor", mapping={"data": "data"})
+# Connect nodes with correct syntax
+workflow.connect("data_generator", "result", mapping={"processor": "input_data"})
+
+# Execute workflow
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 print(f"✅ Workflow executed successfully! Run ID: {run_id}")
-
+print(f"Processed {results['processor']['result']['processed_count']} items")
 ```
 
 ## Next Steps

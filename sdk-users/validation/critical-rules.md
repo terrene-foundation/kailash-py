@@ -205,7 +205,7 @@ from kailash.ai import LLMAgentNode           # WRONG: incorrect path
 
 # Incorrect runtime imports
 from kailash import LocalRuntime              # WRONG: incorrect path
-from kailash.runtime import LocalRuntime      # WRONG: missing .local
+from kailash.runtime.local import LocalRuntime      # WRONG: missing .local
 
 ```
 

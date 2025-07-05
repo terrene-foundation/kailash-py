@@ -23,7 +23,7 @@ from kailash import Workflow
 from kailash.nodes.api import RESTClientNode
 from kailash.nodes.logic import SwitchNode, ConvergenceNode
 from kailash.nodes.code import PythonCodeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from datetime import datetime
 import json
 
@@ -2095,7 +2095,7 @@ result = {
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

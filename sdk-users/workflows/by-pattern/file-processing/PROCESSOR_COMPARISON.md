@@ -121,7 +121,7 @@ export OPENAI_API_KEY=your-key-here
 
 ### 1. DataTransformer Dictionary Bug
 **Problem**: DataTransformer only passes dictionary keys, not full dictionaries
-**Solution**: Use workarounds with `locals().get()` or PythonCodeNode
+**Solution**: Use workarounds with `globals().get()` or PythonCodeNode
 
 ### 2. PythonCodeNode Output Format
 **Problem**: Confusion about 'result' key wrapping

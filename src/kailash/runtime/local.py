@@ -42,6 +42,7 @@ from typing import Any, Optional
 import networkx as nx
 
 from kailash.nodes import Node
+from kailash.runtime.parameter_injector import WorkflowParameterInjector
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowExecutionError,
@@ -135,7 +136,7 @@ class LocalRuntime:
         self,
         workflow: Workflow,
         task_manager: TaskManager | None = None,
-        parameters: dict[str, dict[str, Any]] | None = None,
+        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow with unified enterprise capabilities.
 
@@ -172,7 +173,7 @@ class LocalRuntime:
         self,
         workflow: Workflow,
         task_manager: TaskManager | None = None,
-        parameters: dict[str, dict[str, Any]] | None = None,
+        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow asynchronously (for AsyncLocalRuntime compatibility).
 
@@ -197,7 +198,7 @@ class LocalRuntime:
         self,
         workflow: Workflow,
         task_manager: TaskManager | None = None,
-        parameters: dict[str, dict[str, Any]] | None = None,
+        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute workflow synchronously when already in an event loop.
 
@@ -257,7 +258,7 @@ class LocalRuntime:
         self,
         workflow: Workflow,
         task_manager: TaskManager | None = None,
-        parameters: dict[str, dict[str, Any]] | None = None,
+        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Core async execution implementation with enterprise features.
 
@@ -292,8 +293,13 @@ class LocalRuntime:
             if self.enable_security and self.user_context:
                 self._check_workflow_access(workflow)
 
+            # Transform workflow-level parameters if needed
+            processed_parameters = self._process_workflow_parameters(
+                workflow, parameters
+            )
+
             # Validate workflow with runtime parameters (Session 061)
-            workflow.validate(runtime_parameters=parameters)
+            workflow.validate(runtime_parameters=processed_parameters)
 
             # Enterprise Audit: Log workflow execution start
             if self.enable_audit:
@@ -302,7 +308,7 @@ class LocalRuntime:
                     {
                         "workflow_id": workflow.workflow_id,
                         "user_context": self._serialize_user_context(),
-                        "parameters": parameters,
+                        "parameters": processed_parameters,
                     },
                 )
 
@@ -315,7 +321,7 @@ class LocalRuntime:
                     run_id = task_manager.create_run(
                         workflow_name=workflow.name,
                         metadata={
-                            "parameters": parameters,
+                            "parameters": processed_parameters,
                             "debug": self.debug,
                             "runtime": "unified_enterprise",
                             "enterprise_features": self._execution_context,
@@ -335,7 +341,7 @@ class LocalRuntime:
                 try:
                     # Pass run_id to cyclic executor if available
                     cyclic_results, cyclic_run_id = self.cyclic_executor.execute(
-                        workflow, parameters, task_manager, run_id
+                        workflow, processed_parameters, task_manager, run_id
                     )
                     results = cyclic_results
                     # Update run_id if task manager is being used
@@ -354,7 +360,7 @@ class LocalRuntime:
                     workflow=workflow,
                     task_manager=task_manager,
                     run_id=run_id,
-                    parameters=parameters or {},
+                    parameters=processed_parameters or {},
                 )
 
             # Enterprise Audit: Log successful completion
@@ -961,3 +967,80 @@ class LocalRuntime:
         except Exception as e:
             self.logger.warning(f"Failed to serialize user context: {e}")
             return {"user_context": str(self.user_context)}
+
+    def _process_workflow_parameters(
+        self,
+        workflow: Workflow,
+        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
+    ) -> dict[str, dict[str, Any]] | None:
+        """Process workflow parameters to handle both formats intelligently.
+
+        This method detects whether parameters are in workflow-level format
+        (flat dictionary) or node-specific format (nested dictionary) and
+        transforms them appropriately for execution.
+
+        Args:
+            workflow: The workflow being executed
+            parameters: Either workflow-level or node-specific parameters
+
+        Returns:
+            Node-specific parameters ready for execution
+        """
+        if not parameters:
+            return None
+
+        # Check if parameters are already in node-specific format
+        if self._is_node_specific_format(parameters, workflow):
+            return parameters
+
+        # Parameters are in workflow-level format, need transformation
+        injector = WorkflowParameterInjector(workflow, debug=self.debug)
+
+        # Transform workflow parameters to node-specific format
+        transformed = injector.transform_workflow_parameters(parameters)
+
+        # Validate the transformation
+        warnings = injector.validate_parameters(transformed)
+        if warnings and self.debug:
+            for warning in warnings:
+                self.logger.warning(f"Parameter validation: {warning}")
+
+        return transformed
+
+    def _is_node_specific_format(
+        self, parameters: dict[str, Any], workflow: Workflow = None
+    ) -> bool:
+        """Detect if parameters are in node-specific format.
+
+        Node-specific format has structure: {node_id: {param: value}}
+        Workflow-level format has structure: {param: value}
+
+        Args:
+            parameters: Parameters to check
+            workflow: Optional workflow for node ID validation
+
+        Returns:
+            True if node-specific format, False if workflow-level
+        """
+        if not parameters:
+            return True
+
+        # Get node IDs if workflow provided
+        node_ids = set(workflow.graph.nodes()) if workflow else set()
+
+        # If any key is a node ID and its value is a dict, it's node-specific
+        for key, value in parameters.items():
+            if key in node_ids and isinstance(value, dict):
+                return True
+
+        # Additional heuristic: if all values are dicts and keys look like IDs
+        all_dict_values = all(isinstance(v, dict) for v in parameters.values())
+        keys_look_like_ids = any(
+            "_" in k or k.startswith("node") or k in node_ids for k in parameters.keys()
+        )
+
+        if all_dict_values and keys_look_like_ids:
+            return True
+
+        # Default to workflow-level format
+        return False

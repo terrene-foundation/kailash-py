@@ -918,9 +918,9 @@ workflow.add_node("FilterNode", "filter", {"condition": "age > 18"})
 workflow.add_node("DataTransformerNode", "transform", {"transformations": [...]})
 workflow.add_node("SQLDatabaseNode", "save", {"query": "INSERT INTO..."})
 
-workflow.add_connection("csv_reader", "filter", "result", "input_data")
-workflow.add_connection("filter", "transform", "result", "input_data")
-workflow.add_connection("transform", "save", "result", "input_data")
+workflow.connect("csv_reader", "filter", mapping={"result": "input_data"})
+workflow.connect("filter", "transform", mapping={"result": "input_data"})
+workflow.connect("transform", "save", mapping={"result": "input_data"})
 ```
 
 ### Pattern 2: AI Analysis Pipeline
@@ -932,9 +932,9 @@ workflow.add_node("EmbeddingGeneratorNode", "embedder", {"model": "all-minilm"})
 workflow.add_node("LLMAgentNode", "analyzer", {"model": "llama3.2:3b"})
 workflow.add_node("ChartGeneratorNode", "visualizer", {"chart_type": "bar"})
 
-workflow.add_connection("reader", "embedder", "result.content", "text")
-workflow.add_connection("embedder", "analyzer", "result.embeddings", "context")
-workflow.add_connection("analyzer", "visualizer", "result.analysis", "data")
+workflow.connect("reader", "embedder", mapping={"result.content": "text"})
+workflow.connect("embedder", "analyzer", mapping={"result.embeddings": "context"})
+workflow.connect("analyzer", "visualizer", mapping={"result.analysis": "data"})
 ```
 
 ### Pattern 3: Secure API Workflow
@@ -946,9 +946,9 @@ workflow.add_node("AccessControlNode", "acl", {"strategy": "rbac"})
 workflow.add_node("HTTPRequestNode", "api_call", {"url": "https://api.example.com"})
 workflow.add_node("EncryptionNode", "encrypt", {"algorithm": "AES-256"})
 
-workflow.add_connection("auth", "acl", "result.user", "user_context")
-workflow.add_connection("acl", "api_call", "result.authorized", "proceed")
-workflow.add_connection("api_call", "encrypt", "result.data", "plaintext")
+workflow.connect("auth", "acl", mapping={"result.user": "user_context"})
+workflow.connect("acl", "api_call", mapping={"result.authorized": "proceed"})
+workflow.connect("api_call", "encrypt", mapping={"result.data": "plaintext"})
 ```
 
 ## 🔧 Node Development
@@ -983,7 +983,7 @@ class CustomNode(BaseNode):
 ### Dot Notation Mapping
 Access nested node outputs using dot notation:
 ```python
-workflow.add_connection("data_source", "processor", "result.data.items", "input_list")
+workflow.connect("data_source", "processor", mapping={"result.data.items": "input_list"})
 ```
 
 ### Auto-Mapping Parameters

@@ -15,23 +15,26 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
-### [0.6.3] - 2025-07-03
+### [0.6.3] - 2025-07-05
 
-**Critical MCP Namespace Collision Fix**
+**Comprehensive MCP Platform, Testing Infrastructure & Documentation Quality**
+
+**Major Features:**
+- **MCP Testing Infrastructure**: 407 comprehensive tests (391 unit, 14 integration, 2 E2E) with 100% pass rate
+- **MCP Tool Execution**: Complete LLMAgent automatic tool execution with multi-round support
+- **Enterprise MCP Testing**: 4 E2E tests with custom enterprise nodes for real-world scenarios
+- **Documentation Validation**: Framework achieving 100% test pass rate across all patterns
 
 **Fixed:**
-- **MCP Namespace Collision**: Resolved critical import error where local `kailash.mcp` package was shadowing external `mcp.server`, preventing FastMCP imports
-- **API Design**: Consolidated redundant MCP server implementations into clean architecture:
-  - `MCPServerBase`: Abstract base for custom implementations
-  - `MCPServer`: Main concrete server with all production features
-  - `SimpleMCPServer`/`EnhancedMCPServer`: Backward compatibility aliases
-- **Zero Skipped Tests**: Fixed all previously skipped MCP tests to enforce quality policy
-- **Import Paths**: Updated all imports across codebase from `kailash.mcp` to `kailash.mcp_server`
+- **MCP Namespace Collision**: Resolved critical import error (`kailash.mcp` → `kailash.mcp_server`)
+- **Core SDK Issues**: EdgeDiscovery, SSOAuthenticationNode, PythonCodeNode, StreamPublisherNode fixes
+- **Documentation**: 200+ pattern corrections ensuring all examples work correctly
 
 **Enhanced:**
-- Preserved all production features: caching, metrics, formatting, configuration management
-- Maintained full backward compatibility for existing code
-- 50/50 MCP tests now passing (36 unit + 14 integration)
+- **Migration Guide Consolidation**: Unified location at `sdk-users/migration-guides/`
+- **MCP Platform Unification**: Created `apps/mcp_platform/` from 6 scattered directories
+- **Documentation Quality**: 100% coverage (up from 72.7%), all examples validated
+- **API Design**: Clean server hierarchy with backward compatibility
 
 **Breaking Changes:** None - fully backward compatible
 

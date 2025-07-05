@@ -29,7 +29,7 @@ from kailash.nodes.api import RestClientNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.nodes.logic import MergeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_lead_scoring_workflow() -> Workflow:

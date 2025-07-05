@@ -642,7 +642,7 @@ while True:
             server = MCPServer("config-e2e-server", config_file=config_file)
 
             # Verify configuration is loaded
-            assert server.config.get("server.name") == "config-test-server"
+            assert server.config.get("server.name") == "config-e2e-server"
             assert server.config.get("cache.enabled") is True
             assert server.config.get("metrics.enabled") is True
 

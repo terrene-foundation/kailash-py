@@ -816,9 +816,9 @@ result = {
 
 builder.add_async_code("alert_processor", """
 # All connected variables are available
-alerts = locals().get('alerts', [])
-needs_alerting = locals().get('needs_alerting', False)
-metrics = locals().get('metrics', {})
+alerts = globals().get('alerts', [])
+needs_alerting = globals().get('needs_alerting', False)
+metrics = globals().get('metrics', {})
 
 result = {
     "processed_alerts": len(alerts),

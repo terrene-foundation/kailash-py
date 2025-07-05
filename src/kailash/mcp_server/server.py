@@ -585,7 +585,7 @@ class MCPServer:
                 "cache_key": cache_key,
                 "cache_ttl": cache_ttl,
                 "format_response": format_response,
-                "required_permission": required_permission,
+                "required_permission": normalized_permission,
                 "rate_limit": rate_limit,
                 "enable_circuit_breaker": enable_circuit_breaker,
                 "timeout": timeout,
