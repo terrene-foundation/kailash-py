@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 import aiohttp
 import asyncpg
 import pytest
+import pytest_asyncio
 
 try:
     import redis.asyncio as redis
@@ -40,7 +41,7 @@ from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONF
 class TestAsyncWorkflowBuilderE2ERealWorld:
     """End-to-end tests with real infrastructure and AI integration."""
 
-    @pytest.fixture(scope="class")
+    @pytest_asyncio.fixture(scope="class")
     async def infrastructure_setup(self):
         if redis is None:
             pytest.skip("Redis package not available")
@@ -85,7 +86,7 @@ class TestAsyncWorkflowBuilderE2ERealWorld:
         await db_conn.close()
         await redis_client.close()
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def real_resource_registry(self, infrastructure_setup):
         """Create resource registry with real infrastructure connections."""
         registry = ResourceRegistry()

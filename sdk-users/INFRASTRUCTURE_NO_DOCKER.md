@@ -100,7 +100,7 @@ Some examples need modification to work without Docker:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -149,7 +149,7 @@ DATABASE_URL=sqlite:///test.db pytest
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

@@ -1,69 +1,94 @@
 # Kailash SDK Migration Guides
 
+**📍 Single Source of Truth**: All migration guides consolidated into organized categories for improved user experience.
+
 This directory contains all migration guides for SDK users. These guides help you upgrade your code to use the latest SDK features and architectural improvements.
 
-## 📋 Migration Guides by Version
+## 📁 Organized Migration Categories
 
-### v2.1 - SQL Parameter Flexibility ⭐ **NEW**
-**File**: [v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md)
-- SQLDatabaseNode parameter type flexibility (dict and list support)
-- Named parameter syntax recommendations (:param_name format)
-- AsyncSQLDatabaseNode parameter naming clarification (params vs parameters)
-- Improved error handling and validation patterns
-- Fully backward compatible with enhanced developer experience
+### 📅 [version-specific/](version-specific/) - Version Upgrades
+**What**: Version-to-version migration guides
+**When to use**: Upgrading between SDK versions
 
-### v0.6.1 - Parameter Flow Updates
-**File**: [v0.6.1-parameter-flow-updates.md](v0.5.1-parameter-flow-updates.md)
-- Node construction vs runtime validation separation
-- Enhanced parameter flow architecture
-- Clear separation between configuration and runtime parameters
-- Improved error handling and validation
+- **[v2.1-sql-parameter-flexibility.md](version-specific/v2.1-sql-parameter-flexibility.md)** ⭐ **NEW**
+  - SQLDatabaseNode parameter type flexibility (dict and list support)
+  - Named parameter syntax recommendations (:param_name format)
+  - AsyncSQLDatabaseNode parameter naming clarification (params vs parameters)
+  - Improved error handling and validation patterns
+  - Fully backward compatible with enhanced developer experience
 
-### v0.5.0 - Architecture Refactoring
-**File**: [v0.5.0-architecture-refactoring.md](v0.5.0-architecture-refactoring.md)
-- Sync/Async node separation (Node vs AsyncNode)
-- Execute/Run API standardization
-- WorkflowBuilder API unification
-- Resource management with connection pooling
-- Parameter resolution optimization with caching
+- **[v0.6.0-to-v0.6.1-migration.md](version-specific/v0.6.0-to-v0.6.1-migration.md)**
+  - Node construction vs runtime validation separation
+  - Enhanced parameter flow architecture
+  - Clear separation between configuration and runtime parameters
+  - Improved error handling and validation
 
-### API to Middleware Migration
-**File**: [api-to-middleware-migration.md](api-to-middleware-migration.md)
-- Migrate from legacy `kailash.api` and `kailash.mcp` to unified middleware
-- Dynamic workflow creation via REST API
-- Session-based execution with monitoring
-- Real-time communication (WebSocket/SSE)
-- AI chat integration
+- **[v0.5.1-parameter-flow-updates.md](version-specific/v0.5.1-parameter-flow-updates.md)**
+  - Parameter flow architecture improvements
+  - Enhanced validation patterns
 
-### Auth Consolidation Migration
-**File**: [auth-consolidation-migration.md](auth-consolidation-migration.md)
-- JWT authentication consolidation
-- Resolve circular import issues
-- Support for both HS256 and RSA algorithms
-- Dependency injection patterns
+- **[v0.5.0-architecture-refactoring.md](version-specific/v0.5.0-architecture-refactoring.md)**
+  - Sync/Async node separation (Node vs AsyncNode)
+  - Execute/Run API standardization
+  - WorkflowBuilder API unification
+  - Resource management with connection pooling
+  - Parameter resolution optimization with caching
 
-### Middleware Optimization Patterns
-**File**: [middleware-optimization-patterns.md](middleware-optimization-patterns.md)
-- Replace custom middleware code with SDK nodes
-- Use workflows for multi-step operations
-- Leverage enterprise nodes (BatchProcessorNode, DataLineageNode)
-- Performance optimization checklist
+### 🏗️ [architectural/](architectural/) - System Architecture Changes
+**What**: Major architectural migrations and refactoring
+**When to use**: Adopting new architectural patterns
 
-### Database Connection Migration
-**File**: [async-sql-to-workflowconnectionpool.md](async-sql-to-workflowconnectionpool.md)
-- Migrate from AsyncSQLDatabaseNode to WorkflowConnectionPool
-- Production-grade connection pooling with fault tolerance
-- Health monitoring and automatic recycling
-- Performance improvements (10x+ throughput)
-- Step-by-step migration patterns
+- **[api-to-middleware-migration.md](architectural/api-to-middleware-migration.md)**
+  - Migrate from legacy `kailash.api` and `kailash.mcp` to unified middleware
+  - Dynamic workflow creation via REST API
+  - Session-based execution with monitoring
+  - Real-time communication (WebSocket/SSE)
+  - AI chat integration
 
-### Sync to Async Workflow Builder Migration
-**File**: [sync-to-async-workflow-builder.md](sync-to-async-workflow-builder.md) ⭐ **NEW**
-- Migrate from WorkflowBuilder to AsyncWorkflowBuilder
-- Automatic code indentation handling with textwrap.dedent()
-- Built-in async patterns (retry, rate limiting, circuit breaker)
-- Integrated resource management for databases, HTTP, and caches
-- 70%+ code reduction with production-grade reliability
+- **[auth-consolidation-migration.md](architectural/auth-consolidation-migration.md)**
+  - JWT authentication consolidation
+  - Resolve circular import issues
+  - Support for both HS256 and RSA algorithms
+  - Dependency injection patterns
+
+- **[async-sql-to-workflowconnectionpool.md](architectural/async-sql-to-workflowconnectionpool.md)**
+  - Migrate from AsyncSQLDatabaseNode to WorkflowConnectionPool
+  - Production-grade connection pooling with fault tolerance
+  - Health monitoring and automatic recycling
+  - Performance improvements (10x+ throughput)
+  - Step-by-step migration patterns
+
+- **[sync-to-async-workflow-builder.md](architectural/sync-to-async-workflow-builder.md)** ⭐ **NEW**
+  - Migrate from WorkflowBuilder to AsyncWorkflowBuilder
+  - Automatic code indentation handling with textwrap.dedent()
+  - Built-in async patterns (retry, rate limiting, circuit breaker)
+  - Integrated resource management for databases, HTTP, and caches
+  - 70%+ code reduction with production-grade reliability
+
+### 🔧 [specialized/](specialized/) - Domain-Specific Migrations
+**What**: Specialized migration patterns for specific use cases
+**When to use**: Complex domain-specific migrations
+
+- **[mcp-comprehensive-migration.md](specialized/mcp-comprehensive-migration.md)** ⭐ **COMPREHENSIVE** (1,884 lines)
+  - Complete Model Context Protocol migration guide
+  - Migration from REST APIs, Function Calling, Plugin Systems
+  - Data migration, authentication, client migration patterns
+  - Testing migration and rollback strategies
+  - Step-by-step instructions for various scenarios
+
+- **[middleware-optimization-patterns.md](specialized/middleware-optimization-patterns.md)**
+  - Replace custom middleware code with SDK nodes
+  - Use workflows for multi-step operations
+  - Leverage enterprise nodes (BatchProcessorNode, DataLineageNode)
+  - Performance optimization checklist
+
+- **[phase2-intelligent-routing-migration.md](specialized/phase2-intelligent-routing-migration.md)**
+  - Intelligent routing pattern migration
+  - Advanced workflow routing strategies
+
+- **[phase3-production-hardening-migration.md](specialized/phase3-production-hardening-migration.md)**
+  - Production hardening migration patterns
+  - Enterprise-grade reliability improvements
 ## 🚀 Quick Start
 
 1. **Identify your current SDK version**:
@@ -72,28 +97,34 @@ This directory contains all migration guides for SDK users. These guides help yo
    print(kailash.__version__)
    ```
 
-2. **Read migration guides in order** from your current version to the latest
+2. **Choose your migration category**:
+   - **Version upgrade**: Check [version-specific/](version-specific/)
+   - **Architecture change**: Check [architectural/](architectural/)
+   - **Specialized migration**: Check [specialized/](specialized/)
 
-3. **Test thoroughly** after each migration step
+3. **Read migration guides in order** from your current version to the latest
 
-4. **Use the validation tools** provided in each guide
+4. **Test thoroughly** after each migration step
+
+5. **Use the validation tools** provided in each guide
 
 ## 📊 Migration Priority
 
 Based on impact and benefits:
 
-1. **High Priority**:
-   - v0.5.0 Architecture Refactoring (performance & reliability)
-   - Auth Consolidation (security & circular imports)
-   - Database Connection Migration (10x+ performance for production apps)
-   - Sync to Async Workflow Builder (70%+ code reduction, production-grade)
+1. **High Priority** (Production Impact):
+   - [v0.5.0 Architecture Refactoring](version-specific/v0.5.0-architecture-refactoring.md) (performance & reliability)
+   - [Auth Consolidation](architectural/auth-consolidation-migration.md) (security & circular imports)
+   - [Database Connection Migration](architectural/async-sql-to-workflowconnectionpool.md) (10x+ performance for production apps)
+   - [Sync to Async Workflow Builder](architectural/sync-to-async-workflow-builder.md) (70%+ code reduction, production-grade)
 
-2. **Medium Priority**:
-   - API to Middleware Migration (new features)
-   - v0.6.1 Parameter Flow (cleaner code)
+2. **Medium Priority** (New Features):
+   - [API to Middleware Migration](architectural/api-to-middleware-migration.md) (new features)
+   - [v0.6.1 Parameter Flow](version-specific/v0.6.0-to-v0.6.1-migration.md) (cleaner code)
 
-3. **Optimization**:
-   - Middleware Optimization Patterns (performance)
+3. **Specialized** (Domain-Specific):
+   - [MCP Comprehensive Migration](specialized/mcp-comprehensive-migration.md) (complete MCP transformation)
+   - [Middleware Optimization Patterns](specialized/middleware-optimization-patterns.md) (performance)
 
 ## 🔧 Common Migration Patterns
 
@@ -132,10 +163,10 @@ python -m kailash.tools.benchmark your_workflow
 
 | Feature | Deprecated | Removed | Migration Guide |
 |---------|------------|---------|-----------------|
-| `kailash.api` module | v0.4.0 | v1.0.0 | [API to Middleware](api-to-middleware-migration.md) |
-| Auto async detection | v0.5.0 | v1.0.0 | [v0.5.0 Architecture](v0.5.0-architecture-refactoring.md) |
-| `KailashJWTAuthManager` | v0.4.5 | v1.0.0 | [Auth Consolidation](auth-consolidation-migration.md) |
-| Constructor validation | v0.6.1 | v1.1.0 | [v0.6.1 Parameter Flow](v0.5.1-parameter-flow-updates.md) |
+| `kailash.api` module | v0.4.0 | v1.0.0 | [API to Middleware](architectural/api-to-middleware-migration.md) |
+| Auto async detection | v0.5.0 | v1.0.0 | [v0.5.0 Architecture](version-specific/v0.5.0-architecture-refactoring.md) |
+| `KailashJWTAuthManager` | v0.4.5 | v1.0.0 | [Auth Consolidation](architectural/auth-consolidation-migration.md) |
+| Constructor validation | v0.6.1 | v1.1.0 | [v0.6.1 Parameter Flow](version-specific/v0.6.0-to-v0.6.1-migration.md) |
 
 ## 🎯 Migration Checklist Template
 

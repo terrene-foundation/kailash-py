@@ -73,7 +73,7 @@ print(f"Final count: {results['checker']['count']}")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -99,7 +99,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -129,7 +129,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -152,7 +152,7 @@ workflow.  # Method signature)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -240,7 +240,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -485,7 +485,7 @@ class TestCyclicWorkflow(WorkflowTestCase):
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -520,7 +520,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -573,7 +573,7 @@ convergence_check="count >= target_count"
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -624,7 +624,7 @@ Before deploying cyclic workflows:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -682,7 +682,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

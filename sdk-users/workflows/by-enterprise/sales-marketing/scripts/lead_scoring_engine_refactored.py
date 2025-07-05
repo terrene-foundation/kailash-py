@@ -33,7 +33,7 @@ from kailash.nodes.api import RESTClientNode
 from kailash.nodes.data import CSVWriterNode, SQLDatabaseNode
 from kailash.nodes.logic import MergeNode
 from kailash.nodes.transform import DataTransformer, FilterNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_lead_scoring_workflow() -> Workflow:

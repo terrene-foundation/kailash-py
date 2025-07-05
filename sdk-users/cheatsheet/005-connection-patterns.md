@@ -6,7 +6,7 @@
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -28,7 +28,7 @@ workflow.connect("reader", "processor")  # data -> data
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -50,7 +50,7 @@ workflow.connect("source", "target", mapping={"output_field": "input_field"})
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -74,7 +74,7 @@ workflow.connect("analyzer", "reporter", mapping={"result.summary": "summary_dat
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -105,7 +105,7 @@ workflow.connect("router", "low_handler", output_port="low")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -141,7 +141,7 @@ workflow.connect("splitter", "invalid_processor", mapping={"result.invalid": "da
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -168,7 +168,7 @@ workflow.connect("source3", "merge", mapping={"data": "input3"})
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -198,7 +198,7 @@ workflow.connect("source2", "combiner", mapping={"result": "data2"})
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -223,7 +223,7 @@ workflow.connect("analyzer", "reporter", mapping={
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

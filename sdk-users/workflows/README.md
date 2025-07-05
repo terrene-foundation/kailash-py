@@ -1,6 +1,6 @@
 # Kailash SDK Workflow Library
 
-**Version**: Phase 7 Consolidation | **Last Updated**: 2025-01-09
+**Version**: 0.6.3 | **Last Updated**: 2025-07-03
 
 A comprehensive, token-efficient library of production-ready workflows consolidating learnings from 74 documented mistakes, 32 cheatsheets, and 11 pattern categories.
 
@@ -41,10 +41,10 @@ A comprehensive, token-efficient library of production-ready workflows consolida
 ### 🔧 Advanced Patterns (Feature-Specific)
 | File | Focus | Status |
 |------|-------|--------|
-| [cyclic-workflows-complete.md](advanced/cyclic-workflows-complete.md) | Complete cycle mastery | 🔴 Planned |
-| [pythoncode-mastery.md](advanced/pythoncode-mastery.md) | PythonCodeNode expertise | 🔴 Planned |
-| [ai-agent-coordination.md](advanced/ai-agent-coordination.md) | Multi-agent systems | 🔴 Planned |
-| [enterprise-integration.md](advanced/enterprise-integration.md) | Production deployment | 🔴 Planned |
+| [cyclic-workflows-complete.md](advanced/cyclic-workflows-complete.md) | Complete cycle mastery | ✅ Complete |
+| [pythoncode-mastery.md](../cheatsheet/031-pythoncode-best-practices.md) | PythonCodeNode expertise | ✅ Complete |
+| [ai-agent-coordination.md](../patterns/06-ai-agent-patterns.md) | Multi-agent systems | ✅ Complete |
+| [enterprise-integration.md](../enterprise/README.md) | Production deployment | ✅ Complete |
 
 ### 📋 Production Templates (Deployment-Ready)
 | Template | Description | Includes |
@@ -67,8 +67,8 @@ A comprehensive, token-efficient library of production-ready workflows consolida
 
 ### For Advanced Features
 1. **Cycles**: [cyclic-workflows-complete.md](advanced/cyclic-workflows-complete.md) for iterative processes
-2. **AI Agents**: [ai-agent-coordination.md](advanced/ai-agent-coordination.md) for multi-agent systems
-3. **Data Science**: [pythoncode-mastery.md](advanced/pythoncode-mastery.md) for ML/analytics
+2. **AI Agents**: [ai-agent-coordination.md](../patterns/06-ai-agent-patterns.md) for multi-agent systems
+3. **Data Science**: [pythoncode-mastery.md](../cheatsheet/031-pythoncode-best-practices.md) for ML/analytics
 
 ## 🔄 Consolidation Map
 

@@ -349,6 +349,20 @@ class LLMAgentNode(Node):
                 required=False,
                 description="Override default model pricing (per 1K tokens)",
             ),
+            "auto_execute_tools": NodeParameter(
+                name="auto_execute_tools",
+                type=bool,
+                required=False,
+                default=True,
+                description="Automatically execute tool calls from LLM",
+            ),
+            "tool_execution_config": NodeParameter(
+                name="tool_execution_config",
+                type=dict,
+                required=False,
+                default={},
+                description="Configuration for tool execution behavior",
+            ),
         }
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -589,6 +603,8 @@ class LLMAgentNode(Node):
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)
         max_retries = kwargs.get("max_retries", 3)
+        auto_execute_tools = kwargs.get("auto_execute_tools", True)
+        tool_execution_config = kwargs.get("tool_execution_config", {})
 
         # Check monitoring parameters
         enable_monitoring = kwargs.get("enable_monitoring", self.enable_monitoring)
@@ -616,10 +632,11 @@ class LLMAgentNode(Node):
             mcp_context_data = self._retrieve_mcp_context(mcp_servers, mcp_context)
 
             # Discover MCP tools if enabled
+            discovered_mcp_tools = []
             if auto_discover_tools and mcp_servers:
-                mcp_tools = self._discover_mcp_tools(mcp_servers)
+                discovered_mcp_tools = self._discover_mcp_tools(mcp_servers)
                 # Merge MCP tools with existing tools
-                tools = self._merge_tools(tools, mcp_tools)
+                tools = self._merge_tools(tools, discovered_mcp_tools)
 
             # Perform RAG retrieval if configured
             rag_context = self._perform_rag_retrieval(
@@ -656,6 +673,54 @@ class LLMAgentNode(Node):
                 response = self._provider_llm_response(
                     provider, model, enriched_messages, tools, generation_config
                 )
+
+            # Handle tool execution if enabled and tools were called
+            if auto_execute_tools and response.get("tool_calls"):
+                tool_execution_rounds = 0
+                max_rounds = tool_execution_config.get("max_rounds", 5)
+
+                # Keep executing tools until no more tool calls or max rounds reached
+                while response.get("tool_calls") and tool_execution_rounds < max_rounds:
+                    tool_execution_rounds += 1
+
+                    # Execute all tool calls
+                    tool_results = self._execute_tool_calls(
+                        response["tool_calls"],
+                        tools,
+                        mcp_tools=discovered_mcp_tools,  # Track which tools are MCP
+                    )
+
+                    # Add assistant message with tool calls
+                    enriched_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": response.get("content"),
+                            "tool_calls": response["tool_calls"],
+                        }
+                    )
+
+                    # Add tool results as tool messages
+                    for tool_result in tool_results:
+                        enriched_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_result["tool_call_id"],
+                                "content": tool_result["content"],
+                            }
+                        )
+
+                    # Get next response from LLM with tool results
+                    if provider == "mock":
+                        response = self._mock_llm_response(
+                            enriched_messages, tools, generation_config
+                        )
+                    else:
+                        response = self._provider_llm_response(
+                            provider, model, enriched_messages, tools, generation_config
+                        )
+
+                # Update final response metadata
+                response["tool_execution_rounds"] = tool_execution_rounds
 
             # Update conversation memory
             if conversation_id:
@@ -718,6 +783,7 @@ class LLMAgentNode(Node):
                     "mcp_resources_used": len(mcp_context_data),
                     "rag_documents_retrieved": len(rag_context.get("documents", [])),
                     "tools_available": len(tools),
+                    "tools_executed": response.get("tool_execution_rounds", 0),
                     "memory_tokens": conversation_memory.get("token_count", 0),
                 },
                 "metadata": {
@@ -853,6 +919,62 @@ class LLMAgentNode(Node):
             "loaded_from": "mock_storage",
         }
 
+    def _run_async_in_sync_context(self, coro):
+        """
+        Run async coroutine in a synchronous context, handling existing event loops.
+
+        This helper method detects if an event loop is already running and handles
+        the execution appropriately to avoid "RuntimeError: This event loop is already running".
+
+        Args:
+            coro: The coroutine to execute
+
+        Returns:
+            The result of the coroutine execution
+
+        Raises:
+            TimeoutError: If the operation times out (30 seconds)
+            Exception: Any exception raised by the coroutine
+        """
+        import asyncio
+
+        try:
+            # Check if there's already a running event loop
+            loop = asyncio.get_running_loop()
+            # If we're here, there's a running loop - create a new thread
+            import threading
+
+            result = None
+            exception = None
+
+            def run_in_thread():
+                nonlocal result, exception
+                try:
+                    # Create new event loop in thread
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        result = new_loop.run_until_complete(coro)
+                    finally:
+                        new_loop.close()
+                except Exception as e:
+                    exception = e
+
+            thread = threading.Thread(target=run_in_thread)
+            thread.start()
+            thread.join(timeout=30)  # 30 second timeout
+
+            if thread.is_alive():
+                raise TimeoutError("MCP operation timed out after 30 seconds")
+
+            if exception:
+                raise exception
+            return result
+
+        except RuntimeError:
+            # No running event loop, use asyncio.run()
+            return asyncio.run(coro)
+
     def _retrieve_mcp_context(
         self, mcp_servers: list[dict], mcp_context: list[str]
     ) -> list[dict[str, Any]]:
@@ -929,7 +1051,7 @@ class LLMAgentNode(Node):
                 import asyncio
                 from datetime import datetime
 
-                from kailash.mcp import MCPClient
+                from kailash.mcp_server import MCPClient
 
                 # Initialize MCP client if not already done
                 if not hasattr(self, "_mcp_client"):
@@ -939,14 +1061,14 @@ class LLMAgentNode(Node):
                 for server_config in mcp_servers:
                     try:
                         # List resources from server
-                        resources = asyncio.run(
+                        resources = self._run_async_in_sync_context(
                             self._mcp_client.list_resources(server_config)
                         )
 
                         # Read specific resources if requested
                         for uri in mcp_context:
                             try:
-                                resource_data = asyncio.run(
+                                resource_data = self._run_async_in_sync_context(
                                     self._mcp_client.read_resource(server_config, uri)
                                 )
 
@@ -1014,17 +1136,48 @@ class LLMAgentNode(Node):
                                     }
                                 )
 
-                    except Exception as e:
-                        self.logger.debug(f"MCP server connection failed: {e}")
+                    except TimeoutError as e:
+                        self.logger.warning(
+                            f"MCP server '{server_config.get('name', 'unknown')}' timed out after 30 seconds: {e}"
+                        )
                         # Fall back to mock for this server
                         context_data.append(
                             {
                                 "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
-                                "content": "Connection failed, using fallback content",
+                                "content": "MCP server timed out - using fallback content. Check if the server is running and accessible.",
                                 "source": server_config.get("name", "unknown"),
                                 "retrieved_at": datetime.now().isoformat(),
                                 "relevance_score": 0.5,
-                                "metadata": {"error": str(e)},
+                                "metadata": {
+                                    "error": "timeout",
+                                    "error_message": str(e),
+                                },
+                            }
+                        )
+                    except Exception as e:
+                        error_type = type(e).__name__
+                        self.logger.error(
+                            f"MCP server '{server_config.get('name', 'unknown')}' connection failed ({error_type}): {e}"
+                        )
+
+                        # Provide helpful error messages based on exception type
+                        if "coroutine" in str(e).lower() and "await" in str(e).lower():
+                            self.logger.error(
+                                "This appears to be an async/await issue. Please report this bug to the Kailash SDK team."
+                            )
+
+                        # Fall back to mock for this server
+                        context_data.append(
+                            {
+                                "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
+                                "content": f"Connection failed ({error_type}) - using fallback content. Error: {str(e)}",
+                                "source": server_config.get("name", "unknown"),
+                                "retrieved_at": datetime.now().isoformat(),
+                                "relevance_score": 0.5,
+                                "metadata": {
+                                    "error": error_type,
+                                    "error_message": str(e),
+                                },
                             }
                         )
 
@@ -1032,11 +1185,17 @@ class LLMAgentNode(Node):
                 if context_data:
                     return context_data
 
-            except ImportError:
+            except ImportError as e:
                 # MCPClient not available, fall back to mock
+                self.logger.info(
+                    "MCP client not available. Install the MCP SDK with 'pip install mcp' to use real MCP servers."
+                )
                 pass
             except Exception as e:
-                self.logger.debug(f"MCP retrieval error: {e}")
+                self.logger.error(
+                    f"Unexpected error in MCP retrieval: {type(e).__name__}: {e}"
+                )
+                self.logger.info("Falling back to mock MCP implementation.")
 
         # Fallback to mock implementation
         for uri in mcp_context:
@@ -1089,9 +1248,7 @@ class LLMAgentNode(Node):
 
         if use_real_mcp:
             try:
-                import asyncio
-
-                from kailash.mcp import MCPClient
+                from kailash.mcp_server import MCPClient
 
                 # Initialize MCP client if not already done
                 if not hasattr(self, "_mcp_client"):
@@ -1101,7 +1258,7 @@ class LLMAgentNode(Node):
                 for server_config in mcp_servers:
                     try:
                         # Discover tools asynchronously
-                        tools = asyncio.run(
+                        tools = self._run_async_in_sync_context(
                             self._mcp_client.discover_tools(server_config)
                         )
 
@@ -1131,16 +1288,27 @@ class LLMAgentNode(Node):
                                     {"type": "function", "function": function_def}
                                 )
 
+                    except TimeoutError as e:
+                        self.logger.warning(
+                            f"Tool discovery timed out for MCP server '{server_config.get('name', 'unknown')}': {e}"
+                        )
                     except Exception as e:
-                        self.logger.debug(
-                            f"Failed to discover tools from {server_config.get('name', 'unknown')}: {e}"
+                        error_type = type(e).__name__
+                        self.logger.error(
+                            f"Failed to discover tools from '{server_config.get('name', 'unknown')}' ({error_type}): {e}"
                         )
 
             except ImportError:
                 # MCPClient not available, use mock tools
+                self.logger.info(
+                    "MCP client not available for tool discovery. Install with 'pip install mcp' for real MCP tools."
+                )
                 pass
             except Exception as e:
-                self.logger.debug(f"MCP tool discovery error: {e}")
+                self.logger.error(
+                    f"Unexpected error in MCP tool discovery: {type(e).__name__}: {e}"
+                )
+                self.logger.info("Using mock tools as fallback.")
 
         # If no real tools discovered, provide minimal generic tools
         if not discovered_tools:
@@ -1413,6 +1581,13 @@ class LLMAgentNode(Node):
         """Generate mock LLM response for testing."""
         last_user_message = ""
         has_images = False
+        has_tool_results = False
+
+        # Check if we have tool results in the conversation
+        for msg in messages:
+            if msg.get("role") == "tool":
+                has_tool_results = True
+                break
 
         for msg in reversed(messages):
             if msg.get("role") == "user":
@@ -1431,37 +1606,51 @@ class LLMAgentNode(Node):
                 break
 
         # Generate contextual mock response
-        if has_images:
+        if has_tool_results:
+            # We've executed tools, provide final response
+            response_content = "Based on the tool execution results, I've completed the requested task. The tools have been successfully executed and the operation is complete."
+            tool_calls = []  # No more tool calls after execution
+        elif has_images:
             response_content = "I can see the image(s) you've provided. Based on my analysis, [Mock vision response for testing]"
+            tool_calls = []
         elif "analyze" in last_user_message.lower():
             response_content = "Based on the provided data and context, I can see several key patterns: 1) Customer engagement has increased by 15% this quarter, 2) Product A shows the highest conversion rate, and 3) There are opportunities for improvement in the onboarding process."
+            tool_calls = []
         elif (
             "create" in last_user_message.lower()
             or "generate" in last_user_message.lower()
         ):
             response_content = "I'll help you create that. Based on the requirements and available tools, I recommend a structured approach with the following steps..."
+            # Simulate tool calls if tools are available and no tools executed yet
+            tool_calls = []
+            if (
+                tools
+                and not has_tool_results
+                and any(
+                    keyword in last_user_message.lower()
+                    for keyword in ["create", "send", "execute", "run"]
+                )
+            ):
+                for tool in tools[:2]:  # Limit to first 2 tools
+                    tool_name = tool.get("function", {}).get(
+                        "name", tool.get("name", "unknown")
+                    )
+                    tool_calls.append(
+                        {
+                            "id": f"call_{hash(tool_name) % 10000}",
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps({"mock": "arguments"}),
+                            },
+                        }
+                    )
         elif "?" in last_user_message:
             response_content = f"Regarding your question about '{last_user_message[:50]}...', here's what I found from the available context and resources..."
+            tool_calls = []
         else:
             response_content = f"I understand you want me to work with: '{last_user_message[:100]}...'. Based on the context provided, I can help you achieve this goal."
-
-        # Simulate tool calls if tools are available
-        tool_calls = []
-        if tools and any(
-            keyword in last_user_message.lower()
-            for keyword in ["create", "send", "execute", "run"]
-        ):
-            for tool in tools[:2]:  # Limit to first 2 tools
-                tool_calls.append(
-                    {
-                        "id": f"call_{hash(tool['name']) % 10000}",
-                        "type": "function",
-                        "function": {
-                            "name": tool["name"],
-                            "arguments": json.dumps({"mock": "arguments"}),
-                        },
-                    }
-                )
+            tool_calls = []
 
         return {
             "id": f"msg_{hash(last_user_message) % 100000}",
@@ -1665,7 +1854,7 @@ class LLMAgentNode(Node):
         server_config = mcp_tool.get("function", {}).get("mcp_server_config", {})
 
         try:
-            from kailash.mcp import MCPClient
+            from kailash.mcp_server import MCPClient
 
             # Initialize MCP client if not already done
             if not hasattr(self, "_mcp_client"):
@@ -1686,6 +1875,96 @@ class LLMAgentNode(Node):
         except Exception as e:
             self.logger.error(f"MCP tool execution failed: {e}")
             return {"error": str(e), "success": False, "tool_name": tool_name}
+
+    def _execute_tool_calls(
+        self,
+        tool_calls: list[dict[str, Any]],
+        available_tools: list[dict[str, Any]],
+        mcp_tools: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute all tool calls from LLM response.
+
+        Args:
+            tool_calls: List of tool calls from LLM response
+            available_tools: All available tools (MCP + regular)
+            mcp_tools: Tools that came from MCP discovery
+
+        Returns:
+            List of tool results formatted for LLM consumption
+        """
+        tool_results = []
+        mcp_tools = mcp_tools or []
+
+        # Create lookup for MCP tools
+        mcp_tool_names = {
+            tool.get("function", {}).get("name"): tool for tool in mcp_tools
+        }
+
+        for tool_call in tool_calls:
+            try:
+                tool_name = tool_call.get("function", {}).get("name")
+                tool_id = tool_call.get("id")
+
+                # Check if this is an MCP tool
+                if tool_name in mcp_tool_names:
+                    # Execute via MCP
+                    result = self._run_async_in_sync_context(
+                        self._execute_mcp_tool_call(tool_call, mcp_tools)
+                    )
+                else:
+                    # Execute regular tool (future implementation)
+                    result = self._execute_regular_tool(tool_call, available_tools)
+
+                # Format successful result
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_id,
+                        "content": (
+                            json.dumps(result)
+                            if isinstance(result, dict)
+                            else str(result)
+                        ),
+                    }
+                )
+
+            except Exception as e:
+                # Format error result
+                tool_name = tool_call.get("function", {}).get("name", "unknown")
+                self.logger.error(f"Tool execution failed for {tool_name}: {e}")
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call.get("id", "unknown"),
+                        "content": json.dumps(
+                            {"error": str(e), "tool": tool_name, "status": "failed"}
+                        ),
+                    }
+                )
+
+        return tool_results
+
+    def _execute_regular_tool(
+        self, tool_call: dict[str, Any], available_tools: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Execute a regular (non-MCP) tool.
+
+        Args:
+            tool_call: Tool call from LLM
+            available_tools: List of available tools
+
+        Returns:
+            Tool execution result
+        """
+        tool_name = tool_call.get("function", {}).get("name")
+        tool_args = json.loads(tool_call.get("function", {}).get("arguments", "{}"))
+
+        # For now, return a mock result
+        # In future, this could execute actual Python functions
+        return {
+            "status": "success",
+            "tool": tool_name,
+            "result": f"Executed {tool_name} with args: {tool_args}",
+            "note": "Regular tool execution not yet implemented",
+        }
 
     # Monitoring methods
     def _get_pricing(self, model: str) -> Dict[str, float]:

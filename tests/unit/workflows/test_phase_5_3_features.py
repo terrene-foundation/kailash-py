@@ -89,14 +89,10 @@ class TestPhase53Features:
         counter = PythonCodeNode(name="counter", code="result = {'count': 1}")
         workflow.add_node("counter", counter)
 
-        # Create self-loop with proper configuration
-        workflow.connect(
-            "counter",
-            "counter",
-            cycle=True,
-            max_iterations=10,  # Provide max_iterations
-            cycle_id="test_cycle",
-        )
+        # Create self-loop with new API
+        workflow.create_cycle("test_cycle").connect(
+            "counter", "counter"
+        ).max_iterations(10).build()
 
         # Test linter
         linter = CycleLinter(workflow)
@@ -170,14 +166,9 @@ class TestPhase53Features:
         workflow.add_node("accumulator", accumulator)
 
         # Create well-configured cycle
-        workflow.connect(
-            "accumulator",
-            "accumulator",
-            cycle=True,
-            max_iterations=10,
-            convergence_check="done == True",
-            cycle_id="valid_cycle",
-        )
+        workflow.create_cycle("valid_cycle").connect(
+            "accumulator", "accumulator"
+        ).max_iterations(10).converge_when("done == True").build()
 
         # Test linter creation
         linter = CycleLinter(workflow)
@@ -228,8 +219,8 @@ class TestPhase53Features:
         workflow2 = Workflow("with_cycles", "With Cycles")
         counter = PythonCodeNode(name="counter", code="result = {'count': 1}")
         workflow2.add_node("counter", counter)
-        workflow2.connect(
-            "counter", "counter", cycle=True, max_iterations=5, cycle_id="test_cycle"
-        )
+        workflow2.create_cycle("test_cycle").connect(
+            "counter", "counter"
+        ).max_iterations(5).build()
 
         assert workflow2.has_cycles()

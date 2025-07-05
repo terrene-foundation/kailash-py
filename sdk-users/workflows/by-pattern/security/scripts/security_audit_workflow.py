@@ -28,7 +28,7 @@ from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONWriterNode
 from kailash.nodes.logic import MergeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def get_security_targets() -> dict[str, Any]:

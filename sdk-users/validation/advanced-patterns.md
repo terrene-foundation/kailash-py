@@ -52,7 +52,7 @@ result = {
     "current_value": new_value,
     "target": target,
     "converged": converged,
-    "iteration": iteration + 1 if 'iteration' in locals() else 1
+    "iteration": iteration + 1 if 'iteration' in globals() else 1
 }
 ''',
     input_types={"current_value": float, "target": float, "iteration": int}

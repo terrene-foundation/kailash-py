@@ -494,6 +494,30 @@ class SQLDatabaseNode(Node):
             "execution_time": execution_time,
         }
 
+    async def async_run(self, **kwargs) -> dict[str, Any]:
+        """
+        Async wrapper for the run method to maintain backward compatibility.
+
+        This method provides an async interface while maintaining the same
+        functionality as the synchronous run method. The underlying SQLAlchemy
+        operations are still synchronous but wrapped for async compatibility.
+
+        Args:
+            **kwargs: Same parameters as run()
+
+        Returns:
+            Same return format as run()
+
+        Note:
+            This is a compatibility method. The actual database operations
+            are still synchronous underneath.
+        """
+        import asyncio
+
+        # Run the synchronous method in a thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: self.run(**kwargs))
+
     @classmethod
     def get_pool_status(cls) -> dict[str, Any]:
         """Get status of all shared connection pools."""

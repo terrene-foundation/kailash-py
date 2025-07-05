@@ -78,14 +78,9 @@ class TestCyclicWorkflowBasics:
         workflow.add_node("b", node_b)
 
         workflow.connect("a", "b", {"result.value": "value"})
-        workflow.connect(
-            "b",
-            "a",
-            {"result.increment": "increment", "result.final_value": "value"},
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-        )
+        workflow.create_cycle("cycle_b_to_a").connect(
+            "b", "a", {"result.increment": "increment", "result.final_value": "value"}
+        ).max_iterations(10).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         result, _ = runtime.execute(
@@ -109,14 +104,9 @@ class TestCyclicWorkflowBasics:
         )
 
         workflow1.add_node("quality", quality_node)
-        workflow1.connect(
-            "quality",
-            "quality",
-            mapping={"result.quality": "quality"},
-            cycle=True,
-            max_iterations=10,
-            convergence_check="quality >= 0.9",
-        )
+        workflow1.create_cycle("quality_cycle").connect(
+            "quality", "quality", {"result.quality": "quality"}
+        ).max_iterations(10).converge_when("quality >= 0.9").build()
 
         runtime = LocalRuntime()
         result1, _ = runtime.execute(
@@ -132,14 +122,9 @@ class TestCyclicWorkflowBasics:
         )
 
         workflow2.add_node("inf", infinite_node)
-        workflow2.connect(
-            "inf",
-            "inf",
-            mapping={"result.x": "x"},
-            cycle=True,
-            max_iterations=3,
-            convergence_check="converged == True",
-        )
+        workflow2.create_cycle("inf_cycle").connect(
+            "inf", "inf", {"result.x": "x"}
+        ).max_iterations(3).converge_when("converged == True").build()
 
         result2, _ = runtime.execute(
             workflow2, parameters={"inf": {"x": 0}}
@@ -185,14 +170,9 @@ class TestCyclicWorkflowBasics:
 
         accumulator = AccumulatorNode(name="accumulator")
         workflow.add_node("acc", accumulator)
-        workflow.connect(
-            "acc",
-            "acc",
-            mapping={"value": "value"},
-            cycle=True,
-            max_iterations=20,
-            convergence_check="converged == True",
-        )
+        workflow.create_cycle("cycle_acc_to_acc").connect(
+            "acc", "acc", {"value": "value"}
+        ).max_iterations(20).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         result, _ = runtime.execute(workflow, {"acc": {"threshold": 100}})
@@ -212,9 +192,11 @@ class TestCyclicWorkflowBasics:
         workflow.add_node("n1", node1)
         workflow.add_node("n2", node2)
 
-        # Create a valid cycle with cycle=True
+        # Create a valid cycle using CycleBuilder
         workflow.connect("n1", "n2", {"result.x": "x"})
-        workflow.connect("n2", "n1", {"result.x": "x"}, cycle=True, max_iterations=1)
+        workflow.create_cycle("valid_cycle").connect(
+            "n2", "n1", {"result.x": "x"}
+        ).max_iterations(10).build()
 
         # This should work fine - cycles are allowed with cycle=True
         runtime = LocalRuntime()
@@ -249,7 +231,7 @@ class TestCyclicWorkflowBasics:
         )
 
         workflow.add_node("proc", process_node)
-        workflow.connect(
+        workflow.create_cycle("cycle_proc_to_proc").connect(
             "proc",
             "proc",
             {
@@ -257,10 +239,7 @@ class TestCyclicWorkflowBasics:
                 "result.metadata": "metadata",
                 "result.iteration": "iteration",
             },
-            cycle=True,
-            max_iterations=5,
-            convergence_check="converged == True",
-        )
+        ).max_iterations(5).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         result, _ = runtime.execute(
@@ -315,14 +294,9 @@ class TestCyclicWorkflowBasics:
         workflow.connect("source", "proc", {"result.initial_data": "data"})
 
         # Processor cycles on itself
-        workflow.connect(
-            "proc",
-            "proc",
-            {"result.data": "data"},
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-        )
+        workflow.create_cycle("cycle_proc_to_proc").connect(
+            "proc", "proc", {"result.data": "data"}
+        ).max_iterations(10).converge_when("converged == True").build()
 
         # Processor to aggregator when done
         workflow.connect("proc", "agg", {"result.data": "data", "result.sum": "sum"})
@@ -343,13 +317,9 @@ class TestCyclicWorkflowBasics:
             lambda: {"value": 100, "converged": True}, name="immediate"
         )
         workflow1.add_node("n", node1)
-        workflow1.connect(
-            "n",
-            "n",
-            cycle=True,
-            max_iterations=1,
-            convergence_check="converged == True",
-        )
+        workflow1.create_cycle("immediate_cycle").connect("n", "n").max_iterations(
+            1
+        ).converge_when("converged == True").build()
 
         result1, _ = runtime.execute(workflow1)
         assert result1["n"]["result"]["value"] == 100  # Should execute once
@@ -358,9 +328,9 @@ class TestCyclicWorkflowBasics:
         workflow2 = Workflow("min_iter", "Minimum iterations")
         node2 = PythonCodeNode.from_function(lambda x=0: {"x": x + 1}, name="counter")
         workflow2.add_node("n", node2)
-        workflow2.connect(
-            "n", "n", mapping={"result.x": "x"}, cycle=True, max_iterations=1
-        )
+        workflow2.create_cycle("min_iter_cycle").connect(
+            "n", "n", {"result.x": "x"}
+        ).max_iterations(1).build()
 
         result2, _ = runtime.execute(workflow2, parameters={"n": {"x": 0}})
         assert result2["n"]["result"]["x"] == 1  # x=0 -> x+1 = 1
@@ -398,13 +368,9 @@ class TestCyclicWorkflowBasics:
 
         timed = TimedNode(name="timed")
         workflow.add_node("timer", timed)
-        workflow.connect(
-            "timer",
-            "timer",
-            cycle=True,
-            max_iterations=3,
-            convergence_check="converged == True",
-        )
+        workflow.create_cycle("cycle_timer_to_timer").connect(
+            "timer", "timer"
+        ).max_iterations(3).converge_when("converged == True").build()
 
         runtime = LocalRuntime()
         result, _ = runtime.execute(workflow, {"timer": {"delay": 0.01}})

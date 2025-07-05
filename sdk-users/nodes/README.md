@@ -1,10 +1,10 @@
 # Kailash Python SDK - Node Catalog
 
-**Version**: 0.1.4 | **Last Updated**: 2025-01-09
+**Version**: 0.6.3 | **Last Updated**: 2025-07-03
 
 This directory contains the complete node catalog for the Kailash Python SDK, organized by category.
 
-**Total Nodes**: 66+ nodes across 8 categories
+**Total Nodes**: 110+ nodes across 8 categories
 
 ## 🎯 Quick Start
 

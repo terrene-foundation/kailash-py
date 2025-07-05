@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import pytest
+import pytest_asyncio
 
 from kailash.nodes.admin import (
     PermissionCheckNode,
@@ -43,7 +44,7 @@ from tests.utils.docker_config import (
 class TestAdminNodesCompleteWorkflow:
     """Complete E2E workflow tests for admin nodes."""
 
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest_asyncio.fixture(scope="class", autouse=True)
     async def setup_infrastructure(self):
         """Setup complete infrastructure for E2E tests."""
         # Ensure Docker services are available

@@ -17,7 +17,7 @@ from kailash import Workflow
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.nodes.logic import MergeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # Extract-Transform-Load pipeline using proper Kailash nodes (matches basic_etl_pipeline.py)
 workflow = Workflow(
@@ -691,7 +691,7 @@ workflow.connect("transform_unified", "load_unified", mapping={"unified_records"
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -877,7 +877,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -1160,7 +1160,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

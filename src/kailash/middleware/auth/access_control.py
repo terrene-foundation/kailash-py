@@ -60,11 +60,11 @@ class MiddlewareAccessControlManager:
         self.enable_audit = enable_audit
 
         # Kailash nodes for operations
-        self.user_mgmt_node = UserManagementNode("middleware_user_mgmt")
-        self.role_mgmt_node = RoleManagementNode("middleware_role_mgmt")
-        self.permission_check_node = PermissionCheckNode("middleware_perm_check")
-        self.audit_node = AuditLogNode("middleware_audit") if enable_audit else None
-        self.security_event_node = SecurityEventNode("middleware_security")
+        self.user_mgmt_node = UserManagementNode()
+        self.role_mgmt_node = RoleManagementNode()
+        self.permission_check_node = PermissionCheckNode()
+        self.audit_node = AuditLogNode() if enable_audit else None
+        self.security_event_node = SecurityEventNode()
 
     async def check_session_access(
         self, user_context: UserContext, session_id: str, action: str = "access"

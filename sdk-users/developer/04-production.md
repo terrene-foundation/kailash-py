@@ -2,149 +2,93 @@
 
 *Deploy secure, scalable workflows to production with confidence*
 
-## 🎯 **Prerequisites**
+## Prerequisites
+
 - Completed [Fundamentals](01-fundamentals.md) - Core SDK concepts
 - Completed [Workflows](02-workflows.md) - Basic workflow patterns
 - Completed [Advanced Features](03-advanced-features.md) - Enterprise features
 - Understanding of production deployment practices
 
-## 🔗 **Related Guides**
-- **[Quick Reference](QUICK_REFERENCE.md)** - Production patterns and best practices
-- **[Troubleshooting](05-troubleshooting.md)** - Debug production issues
+## Production Readiness Checklist
 
-## 🔍 **Production Readiness Checklist**
-
-### **✅ Code Quality**
+### Code Quality
 - [ ] **PythonCodeNode Functions**: All code >3 lines uses `.from_function()` pattern
-- [ ] **Node Names**: All custom nodes end with "Node" suffix
 - [ ] **Error Handling**: Each function includes try-catch blocks
 - [ ] **Input Validation**: All inputs validated before processing
 - [ ] **Type Hints**: All functions have proper type annotations
+- [ ] **Resource Cleanup**: Proper cleanup of connections and files
+
+### Example: Production-Ready Code
 
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
-# ✅ PRODUCTION READY
 import logging
+from typing import List, Dict, Any
 logger = logging.getLogger(__name__)
 
-def process_customer_data(customers: list, transactions: list) -> dict:
-    """Process customer data with full error handling."""
+def process_customer_data(customers: List[Dict], transactions: List[Dict]) -> Dict[str, Any]:
+    """Process customer data with full error handling and validation."""
     try:
         # Validate inputs
-        if not customers or not transactions:
-            raise ValueError("Missing required input data")
+        if not customers:
+            raise ValueError("No customers provided")
+        if not isinstance(customers, list):
+            raise TypeError("Customers must be a list")
 
         # Process with error handling
-        result = [{"id": c, "processed": True} for c in customers]
-        return {'result': result, 'status': 'success'}
+        processed = []
+        errors = []
+
+        for i, customer in enumerate(customers):
+            try:
+                # Validate customer data
+                if not customer.get('id'):
+                    errors.append(f"Customer at index {i} missing ID")
+                    continue
+
+                # Process customer
+                result = {
+                    "id": customer['id'],
+                    "processed": True,
+                    "transaction_count": len([t for t in transactions
+                                            if t.get('customer_id') == customer['id']])
+                }
+                processed.append(result)
+
+            except Exception as e:
+                logger.error(f"Failed to process customer {i}: {e}")
+                errors.append(f"Customer {i}: {str(e)}")
+
+        return {
+            'result': processed,
+            'status': 'success' if not errors else 'partial',
+            'errors': errors,
+            'processed_count': len(processed),
+            'error_count': len(errors)
+        }
 
     except Exception as e:
         logger.error(f"Processing failed: {e}")
-        return {'result': [], 'status': 'error', 'error': str(e)}
+        return {
+            'result': [],
+            'status': 'error',
+            'error': str(e),
+            'processed_count': 0
+        }
+
+# Use in workflow
+from kailash.nodes.code import PythonCodeNode
 
 processor = PythonCodeNode.from_function(
     name="customer_processor",
     func=process_customer_data
 )
-
 ```
 
-### **✅ Data Management**
-- [ ] **File Paths**: Use centralized `get_input_data_path()` and `get_output_data_path()`
-- [ ] **Data Validation**: Schema validation for all inputs
-- [ ] **Large Files**: Batch processing for datasets >1000 records
-- [ ] **Backup Strategy**: Output files include timestamps
-- [ ] **Clean Up**: Temporary files properly removed
+## Security & Access Control
+
+### Secure Configuration
 
 ```python
-# ✅ PRODUCTION DATA HANDLING
-import os
-from datetime import datetime
-
-# Mock data path functions for example
-def get_input_data_path(filename):
-    return f"/input/{filename}"
-
-def get_output_data_path(filename):
-    return f"/output/{filename}"
-
-class MockPath:
-    def __init__(self, path):
-        self.path = path
-    def exists(self):
-        return True  # Mock exists for example
-
-# Input validation
-input_file_path = get_input_data_path("customers.csv")
-input_file = MockPath(input_file_path)
-if not input_file.exists():
-    raise FileNotFoundError(f"Required input file missing: {input_file_path}")
-
-# Output with timestamp
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_file = get_output_data_path(f"results_{timestamp}.json")
-
-```
-
-### **✅ Workflow Architecture**
-- [ ] **Single Responsibility**: Each node has one clear purpose
-- [ ] **Fail-Fast**: Input validation at workflow start
-- [ ] **Graceful Degradation**: Fallback strategies for failures
-- [ ] **Progress Tracking**: Long-running workflows include progress updates
-- [ ] **Resource Management**: Memory and CPU usage optimized
-
-```python
-# ✅ PRODUCTION WORKFLOW STRUCTURE
-def create_production_workflow():
-    workflow = Workflow("production-etl", "Production ETL Pipeline")
-
-    # 1. Input validation (fail-fast)
-    validator = PythonCodeNode.from_function(
-        name="input_validator",
-        func=validate_all_inputs
-    )
-
-    # 2. Main processing with error handling
-    processor = PythonCodeNode.from_function(
-        name="main_processor",
-        func=process_with_fallback
-    )
-
-    # 3. Results validation
-    result_validator = PythonCodeNode.from_function(
-        name="result_validator",
-        func=validate_outputs
-    )
-
-    # Connect with descriptive mappings
-    workflow.connect("input_validator", "main_processor",
-                    mapping={"result": "validated_inputs"})
-    workflow.connect("main_processor", "result_validator",
-                    mapping={"result": "processed_data"})
-
-    return workflow
-
-```
-
-## 🔒 **Security & Access Control**
-
-### **Environment-Based Configuration**
-```python
-# ✅ SECURE CONFIGURATION
-import os
 from kailash.security import SecurityConfig, set_security_config
 
 # Production security configuration
@@ -160,35 +104,10 @@ security_config = SecurityConfig(
 )
 
 set_security_config(security_config)
-
 ```
 
-### **Credential Management**
-```python
-from kailash.nodes.security import CredentialManagerNode
+### Access Control & Multi-Tenancy
 
-workflow = Workflow("secure_pipeline", name="Secure Pipeline")
-
-# Get credentials securely
-workflow.add_node("get_api_key", CredentialManagerNode(),
-    credential_name="openai",
-    credential_type="api_key",
-    credential_sources=["vault", "aws_secrets", "env"],
-    validate_on_fetch=True,
-    cache_duration_seconds=1800
-)
-
-# Use credentials in another node
-workflow.add_node("llm_call", LLMAgentNode(),
-    prompt="Analyze this data"
-)
-
-# Connect - credentials are passed securely
-workflow.connect("get_api_key", "llm_call", {"credentials.api_key": "api_key"})
-
-```
-
-### **Access Control & Multi-Tenancy**
 ```python
 from kailash.access_control.managers import AccessControlManager
 from kailash.access_control import UserContext, NodePermission
@@ -219,18 +138,41 @@ decision = acm.check_node_access(
 
 if decision.allowed:
     # Execute workflow with user context
-    runtime = LocalRuntime(
-        enable_security=True,
-        enable_audit=True,
-        user_context=user
-    )
+    from kailash.runtime.local import LocalRuntime
+    runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow)
 else:
     print(f"❌ Access denied: {decision.reason}")
-
 ```
 
-### **Data Masking & Compliance**
+### Credential Management
+
+```python
+from kailash.nodes.security import CredentialManagerNode
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+
+# Get credentials securely
+workflow.add_node("CredentialManagerNode", "get_api_key", {
+    "credential_name": "openai",
+    "credential_type": "api_key",
+    "credential_sources": ["vault", "aws_secrets", "env"],
+    "validate_on_fetch": True,
+    "cache_duration_seconds": 1800
+})
+
+# Use credentials in another node
+workflow.add_node("LLMAgentNode", "llm_call", {
+    "prompt": "Analyze this data: {data}"
+})
+
+# Connect - credentials are passed securely
+workflow.connect("get_api_key", "result.api_key", mapping={"llm_call": "api_key"})
+```
+
+### Data Masking & Compliance
+
 ```python
 # Define masking rules based on user attributes
 masking_rules = {
@@ -260,101 +202,83 @@ masked_data = acm.mask_data(
     masking_rules=masking_rules,
     user=user
 )
-print(masked_data)  # {"ssn": "12*****89", "account_balance": "$1M-$10M"}
-
+print(masked_data)  # {"ssn": "***-**-6789", "account_balance": "$1M-$10M"}
 ```
 
-## 🏢 **Unified Runtime for Production**
+## Production Runtime Configuration
 
-### **Enterprise Runtime Configuration**
+### LocalRuntime for Production
+
 ```python
 from kailash.runtime.local import LocalRuntime
-from kailash.access_control import UserContext
 
-# Create user context for multi-tenant isolation
-user_context = UserContext(
-    user_id="analyst_01",
-    tenant_id="acme_corp",
-    email="analyst@acme.com",
-    roles=["data_analyst", "viewer"],
-    attributes={"department": "finance", "clearance": "high"}
-)
-
-# Enterprise runtime with all features
+# Production runtime configuration
 runtime = LocalRuntime(
-    # Performance & Execution
-    enable_async=True,           # Auto-detect and run async nodes
-    max_concurrency=20,          # Parallel execution limit
-    enable_monitoring=True,      # Automatic performance tracking
+    # Basic configuration
+    timeout=300.0,           # 5 minute timeout
+    enable_logging=True,     # Enable comprehensive logging
 
-    # Security & Compliance
-    enable_security=True,        # Access control enforcement
-    enable_audit=True,           # Compliance audit logging
-    user_context=user_context,   # Multi-tenant isolation
-
-    # Resource Management
-    resource_limits={
-        "memory_mb": 4096,       # Memory limit
-        "cpu_cores": 4,          # CPU limit
-        "timeout_seconds": 300   # Execution timeout
-    }
+    # Additional parameters supported by your runtime version
+    # Check runtime documentation for available options
 )
 
-# Execute with automatic enterprise integration
-results, run_id = runtime.execute(workflow, parameters=parameters)
-
+# Execute workflow
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "input_data": production_data
+})
 ```
 
-### **Progressive Feature Adoption**
+### Environment-Based Configuration
+
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+import os
+from dataclasses import dataclass
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+@dataclass
+class ProductionConfig:
+    """Production environment configuration."""
+    timeout_seconds: int = int(os.getenv('TIMEOUT_SECONDS', '300'))
+    log_level: str = os.getenv('LOG_LEVEL', 'INFO')
+    max_file_size_mb: int = int(os.getenv('MAX_FILE_SIZE_MB', '50'))
 
-# Stage 1: Basic development
-runtime = LocalRuntime()
+    # Feature flags
+    enable_monitoring: bool = os.getenv('ENABLE_MONITORING', 'true').lower() == 'true'
+    enable_audit: bool = os.getenv('ENABLE_AUDIT', 'true').lower() == 'true'
+    enable_security: bool = os.getenv('ENABLE_SECURITY', 'true').lower() == 'true'
 
-# Stage 2: Add monitoring
-runtime = LocalRuntime(enable_monitoring=True)
+    def validate(self):
+        """Validate configuration before startup."""
+        if self.timeout_seconds < 30:
+            raise ValueError("TIMEOUT_SECONDS must be at least 30")
+        if self.max_file_size_mb < 1:
+            raise ValueError("MAX_FILE_SIZE_MB must be at least 1")
 
-# Stage 3: Add compliance
-runtime = LocalRuntime(
-    enable_monitoring=True,
-    enable_audit=True,
-    user_context=user_context
-)
+# Use in production
+config = ProductionConfig()
+config.validate()
 
-# Stage 4: Full enterprise
-runtime = LocalRuntime(
-    enable_monitoring=True,
-    enable_audit=True,
-    enable_security=True,
-    enable_async=True,
-    user_context=user_context,
-    resource_limits={"memory_mb": 4096, "cpu_cores": 4}
-)
+# Configure logging
+import logging
+logging.basicConfig(level=getattr(logging, config.log_level))
 
+# Configure security if available
+if config.enable_security:
+    from kailash.security import SecurityConfig, set_security_config
+    security_config = SecurityConfig(
+        max_file_size=config.max_file_size_mb * 1024 * 1024,
+        execution_timeout=float(config.timeout_seconds)
+    )
+    set_security_config(security_config)
 ```
 
-## 📊 **Performance & Monitoring**
+## Performance & Monitoring
 
-### **Phase 3: Production-Grade Connection Management**
+### Circuit Breaker Protection
 
-#### **Circuit Breaker Protection**
 ```python
 from kailash.core.resilience.circuit_breaker import CircuitBreakerManager, CircuitBreakerConfig
 
-# Setup circuit breaker for database operations
+# Setup circuit breaker for external services
 cb_manager = CircuitBreakerManager()
 cb_config = CircuitBreakerConfig(
     failure_threshold=5,        # Open after 5 failures
@@ -363,14 +287,16 @@ cb_config = CircuitBreakerConfig(
     min_calls=10               # Minimum calls before calculating error rate
 )
 
-circuit_breaker = cb_manager.get_or_create("database", cb_config)
+circuit_breaker = cb_manager.get_or_create("external_api", cb_config)
 
-# Use circuit breaker with async operations
-async def protected_db_operation():
-    return db_node.run(query="SELECT * FROM users")
+# Use circuit breaker with operations
+async def protected_api_call(data):
+    """API call protected by circuit breaker."""
+    # Your API call logic here
+    return {"status": "success", "data": data}
 
 try:
-    result = await circuit_breaker.call(protected_db_operation)
+    result = await circuit_breaker.call(lambda: protected_api_call(data))
     print("Operation succeeded:", result)
 except Exception as e:
     if "Circuit breaker is OPEN" in str(e):
@@ -383,606 +309,524 @@ status = circuit_breaker.get_status()
 print(f"State: {status['state']}, Failed calls: {status['metrics']['failed_calls']}")
 ```
 
-#### **Comprehensive Metrics Collection**
-```python
-from kailash.core.monitoring.connection_metrics import ConnectionMetricsCollector
+### Batch Processing for Scale
 
-# Create metrics collector for connection pool
-metrics_collector = ConnectionMetricsCollector("production_pool")
-
-# Track database queries with detailed metrics
-with metrics_collector.track_query("SELECT", "users"):
-    result = db_node.run(query="SELECT * FROM users WHERE active = true")
-
-# Track connection acquisition performance
-with metrics_collector.track_acquisition():
-    # Connection pool operations
-    pass
-
-# Get comprehensive metrics
-all_metrics = metrics_collector.get_all_metrics()
-print(f"Query throughput: {all_metrics['rates']['queries_per_second']:.1f} qps")
-print(f"Average execution time: {all_metrics['percentiles']['query_execution_ms']['p95']:.1f}ms")
-print(f"Error rate: {all_metrics['rates']['error_rate']:.1%}")
-
-# Export to Prometheus format
-prometheus_metrics = metrics_collector.export_prometheus()
-print("Prometheus metrics:", prometheus_metrics)
-```
-
-#### **Query Pipelining for High Performance**
-```python
-from kailash.nodes.data.query_pipeline import QueryPipelineNode
-
-# Create query pipeline with batching
-pipeline = QueryPipelineNode(
-    name="high_performance_pipeline",
-    connection_string="postgresql://user:pass@localhost:5432/db",
-    batch_size=50,              # Process 50 queries per batch
-    flush_interval=1.0,         # Auto-flush every 1 second
-    max_queue_size=1000,        # Queue up to 1000 queries
-    execution_strategy="parallel"  # parallel, sequential, transactional, best_effort
-)
-
-# Add queries to pipeline (non-blocking)
-for user_id in range(1000):
-    pipeline.add_query(
-        f"UPDATE users SET last_seen = NOW() WHERE id = {user_id}",
-        query_type="UPDATE"
-    )
-
-# Execute pipeline with automatic batching
-result = pipeline.run()
-print(f"Processed {result['queries_executed']} queries in {result['batches_processed']} batches")
-print(f"Throughput: {result['queries_per_second']:.1f} qps")
-```
-
-#### **Real-time Monitoring Dashboard**
-```python
-from kailash.nodes.monitoring.connection_dashboard import ConnectionDashboardNode
-
-# Create monitoring dashboard
-dashboard = ConnectionDashboardNode(
-    name="production_dashboard",
-    metrics_collector=metrics_collector,
-    circuit_breaker=circuit_breaker,
-    websocket_port=8765,
-    enable_prometheus_export=True,
-    refresh_interval=5.0
-)
-
-# Start dashboard server (non-blocking)
-dashboard_info = dashboard.run()
-print(f"Dashboard available at: {dashboard_info['dashboard_url']}")
-print(f"WebSocket endpoint: {dashboard_info['websocket_url']}")
-print(f"Prometheus metrics: {dashboard_info['prometheus_url']}")
-
-# Dashboard provides real-time metrics via WebSocket:
-# - Connection pool utilization
-# - Query performance histograms
-# - Circuit breaker status
-# - Error rates and categorization
-# - Throughput trends
-```
-
-### **Performance Optimization**
-```python
-from kailash.tracking import MetricsCollector
-
-metrics = MetricsCollector()
-
-# Monitor execution
-with metrics.timer("workflow_execution"):
-    results, run_id = runtime.execute(workflow, parameters=parameters)
-
-# Track resource usage
-metrics.record_memory_usage()
-metrics.record_processing_time()
-print(f"Workflow completed in {metrics.get_duration('workflow_execution'):.2f}s")
-
-```
-
-### **Batch Processing for Scale**
 ```python
 from kailash.nodes.enterprise.batch_processor import BatchProcessorNode
 
-# Advanced batch processing with rate limiting
-batch_processor = BatchProcessorNode(
-    name="rate_limited_processor",
-    operation="process_data_batches",
-    data_source="api_data",
+# Configure batch processing
+workflow.add_node("BatchProcessorNode", "batch_processor", {
+    "operation": "process_data_batches",
+    "data_source": "large_dataset",
 
-    # Batch optimization
-    batch_size=500,
-    adaptive_batch_sizing=True,
-    min_batch_size=100,
-    max_batch_size=2000,
+    # Batch configuration
+    "batch_size": 1000,
+    "adaptive_batch_sizing": True,
+    "min_batch_size": 100,
+    "max_batch_size": 5000,
 
     # Concurrency control
-    processing_strategy="adaptive_parallel",
-    max_concurrent_batches=15,
-    rate_limit_per_second=50,
+    "processing_strategy": "adaptive_parallel",
+    "max_concurrent_batches": 10,
+    "rate_limit_per_second": 100,
 
     # Error handling
-    error_handling="continue_with_logging",
-    max_retry_attempts=3,
-    retry_delay_seconds=5,
+    "error_handling": "continue_with_logging",
+    "max_retry_attempts": 3,
+    "retry_delay_seconds": 5,
 
-    # Performance monitoring
-    enable_performance_monitoring=True,
-    performance_threshold_ms=5000
-)
-
-workflow.add_node("batch_processor", batch_processor)
-
+    # Monitoring
+    "enable_performance_monitoring": True,
+    "performance_threshold_ms": 5000
+})
 ```
 
-### **Memory-Efficient Processing**
+### Memory-Efficient Processing
+
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+def process_large_dataset(data: List[Dict]) -> Dict[str, Any]:
+    """Process large datasets efficiently."""
+    import gc
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+    chunk_size = 1000
+    processed_count = 0
+    errors = []
 
-# Stream processing for large datasets
-workflow.add_node("stream_processor", "PythonCodeNode",
-    name="stream_processor",
-    code='''
-import gc
-
-# Process data in memory-efficient chunks
-chunk_size = 100
-processed_count = 0
-memory_usage = []
-
-for i in range(0, len(data), chunk_size):
-    chunk = data[i:i + chunk_size]
-
-    # Process chunk
-    for item in chunk:
-        if item.get("process", True):
-            processed_count += 1
-
-    # Memory management
-    if i % (chunk_size * 10) == 0:
-        gc.collect()
-        memory_usage.append(f"Processed {i + len(chunk)} items")
-
-    # Clear chunk reference
-    del chunk
-
-result = {
-    "processed_count": processed_count,
-    "memory_checkpoints": memory_usage,
-    "efficiency_metrics": {
-        "items_per_chunk": chunk_size,
-        "total_chunks": len(range(0, len(data), chunk_size)),
-        "memory_managed": True
-    }
-}
-''',
-    input_types={"data": list}
-))
-
-```
-
-## 🔄 **Error Handling & Recovery**
-
-### **Resilient Workflow Patterns**
-```python
-from kailash.workflow import Workflow, RetryStrategy
-
-workflow = Workflow("resilient_pipeline", name="Resilient Production Pipeline")
-
-# Configure retry policies
-workflow.add_node("api_call", HTTPRequestNode(), url="https://api.example.com/data")
-workflow.configure_retry(
-    "api_call",
-    max_retries=3,
-    strategy=RetryStrategy.EXPONENTIAL,
-    base_delay=2.0,
-    max_delay=30.0,
-    retry_on=[ConnectionError, TimeoutError]
-)
-
-# Add circuit breaker
-workflow.configure_circuit_breaker(
-    "api_call",
-    failure_threshold=5,
-    success_threshold=2,
-    timeout=60.0
-)
-
-# Configure fallback chain
-workflow.add_node("primary_service", LLMAgentNode(), model="gpt-4")
-workflow.add_node("fallback_service", LLMAgentNode(), model="claude-3-sonnet")
-workflow.add_node("minimal_fallback", PythonCodeNode.from_function(
-    name="fallback",
-    func=lambda text: {"result": {"analysis": "Basic analysis", "confidence": 0.5}}
-))
-
-workflow.add_fallback("primary_service", "fallback_service")
-workflow.add_fallback("fallback_service", "minimal_fallback")
-
-```
-
-### **Comprehensive Error Handling**
-```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
-import logging
-from tenacity import retry, stop_after_attempt, wait_exponential
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10)
-)
-def robust_api_call(data: list) -> dict:
-    """API call with automatic retry logic."""
     try:
-        # Mock external API call
-        response = [{"id": i, "processed": True} for i in range(len(data))]
-        logger.info(f"API call successful for {len(data)} records")
-        return {'result': response, 'status': 'success'}
+        # Process in chunks to manage memory
+        for i in range(0, len(data), chunk_size):
+            chunk = data[i:i + chunk_size]
 
-    except APITimeoutError as e:
-        logger.warning(f"API timeout, retrying: {e}")
-        raise  # Will be retried
+            # Process chunk
+            for item in chunk:
+                try:
+                    # Your processing logic here
+                    processed_count += 1
+                except Exception as e:
+                    errors.append(f"Item {i}: {str(e)}")
 
-    except APIRateLimitError as e:
-        logger.warning(f"Rate limit hit, backing off: {e}")
-        raise  # Will be retried with exponential backoff
+            # Explicit garbage collection every 10 chunks
+            if i % (chunk_size * 10) == 0:
+                gc.collect()
+                logger.info(f"Processed {i + len(chunk)} items")
+
+        return {
+            'result': {
+                'processed_count': processed_count,
+                'total_items': len(data),
+                'error_count': len(errors)
+            },
+            'status': 'success' if not errors else 'partial',
+            'errors': errors[:100]  # Limit error list size
+        }
 
     except Exception as e:
-        logger.error(f"Unrecoverable API error: {e}")
-        return {'result': [], 'status': 'error', 'error': str(e)}
+        logger.error(f"Batch processing failed: {e}")
+        return {
+            'result': {'processed_count': processed_count},
+            'status': 'error',
+            'error': str(e)
+        }
 
 # Use in workflow
-workflow.add_node("robust_api", PythonCodeNode.from_function(
-    name="robust_api",
-    func=robust_api_call
-))
-
-```
-
-## 🚀 **Deployment Patterns**
-
-### **Docker Production Deployment**
-```dockerfile
-# Secure Docker deployment
-FROM python:3.12-slim
-
-# Create non-root user
-RUN groupadd -r kailash && useradd -r -g kailash kailash
-
-# Set security-focused environment
-ENV PYTHONPATH=/app
-ENV KAILASH_SECURITY_MODE=strict
-
-# Copy application
-COPY --chown=kailash:kailash . /app
-WORKDIR /app
-
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Switch to non-root user
-USER kailash
-
-# Run with security limits
-CMD ["python", "-m", "kailash", "--security-mode", "strict"]
-```
-
-### **Kubernetes Production Configuration**
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: kailash-app
-spec:
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-    fsGroup: 1000
-  containers:
-  - name: kailash
-    image: kailash:latest
-    securityContext:
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
-      capabilities:
-        drop:
-        - ALL
-    resources:
-      limits:
-        memory: "4Gi"
-        cpu: "2000m"
-      requests:
-        memory: "2Gi"
-        cpu: "1000m"
-    env:
-    - name: KAILASH_SECURITY_MODE
-      value: "strict"
-    - name: MAX_WORKERS
-      value: "8"
-    - name: MEMORY_LIMIT_MB
-      value: "3072"
-```
-
-### **Environment Configuration**
-```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
-import os
-from dataclasses import dataclass
-
-@dataclass
-class ProductionConfig:
-    """Production environment configuration."""
-    max_workers: int = int(os.getenv('MAX_WORKERS', '4'))
-    timeout_seconds: int = int(os.getenv('TIMEOUT_SECONDS', '300'))
-    memory_limit_mb: int = int(os.getenv('MEMORY_LIMIT_MB', '2048'))
-    log_level: str = os.getenv('LOG_LEVEL', 'INFO')
-    enable_audit: bool = os.getenv('ENABLE_AUDIT', 'true').lower() == 'true'
-    enable_security: bool = os.getenv('ENABLE_SECURITY', 'true').lower() == 'true'
-
-    def validate(self):
-        """Validate configuration before startup."""
-        if self.max_workers < 1:
-            raise ValueError("MAX_WORKERS must be positive")
-        if self.timeout_seconds < 30:
-            raise ValueError("TIMEOUT_SECONDS must be at least 30")
-        if self.memory_limit_mb < 512:
-            raise ValueError("MEMORY_LIMIT_MB must be at least 512")
-
-# Use in production
-config = ProductionConfig()
-config.validate()
-
-runtime = LocalRuntime(
-    max_workers=config.max_workers,
-    timeout=config.timeout_seconds,
-    enable_audit=config.enable_audit,
-    enable_security=config.enable_security,
-    resource_limits={
-        "memory_mb": config.memory_limit_mb,
-        "timeout_seconds": config.timeout_seconds
-    }
+batch_processor = PythonCodeNode.from_function(
+    name="efficient_processor",
+    func=process_large_dataset
 )
-
 ```
 
-## 📋 **Monitoring & Health Checks**
 
-### **Health Check Endpoints**
+## Error Handling & Recovery
+
+### Comprehensive Error Handling
+
 ```python
-from flask import Flask, jsonify
-from kailash.monitoring import HealthChecker
+from typing import Optional, Dict, Any
+import time
 
-app = Flask(__name__)
-health_checker = HealthChecker()
+def robust_external_call(
+    endpoint: str,
+    data: Dict[str, Any],
+    max_retries: int = 3
+) -> Dict[str, Any]:
+    """Make external API call with retry logic and error handling."""
 
-@app.route('/health')
-def health_check():
-    """Health check endpoint for load balancers."""
-    status = health_checker.check_all()
+    last_error: Optional[Exception] = None
 
-    return jsonify({
-        'status': 'healthy' if status['overall'] else 'unhealthy',
-        'checks': status['checks'],
-        'timestamp': status['timestamp']
-    }), 200 if status['overall'] else 503
+    for attempt in range(max_retries):
+        try:
+            # Simulated API call
+            if attempt > 0:
+                time.sleep(2 ** attempt)  # Exponential backoff
 
-@app.route('/metrics')
-def metrics():
-    """Metrics endpoint for monitoring systems."""
-    return jsonify({
-        'workflows_executed': metrics.get_counter('workflows_executed'),
-        'average_duration': metrics.get_average('workflow_duration'),
-        'error_rate': metrics.get_rate('workflow_errors'),
-        'memory_usage': metrics.get_current('memory_usage_mb')
-    })
+            # Your actual API call here
+            # response = requests.post(endpoint, json=data)
+            # response.raise_for_status()
 
-@app.route('/ready')
-def readiness_check():
-    """Readiness check for Kubernetes."""
-    return jsonify({'status': 'ready'}), 200
+            # Simulated success
+            return {
+                'result': {'status': 'processed', 'data': data},
+                'attempts': attempt + 1,
+                'status': 'success'
+            }
 
+        except ConnectionError as e:
+            last_error = e
+            logger.warning(f"Connection failed (attempt {attempt + 1}/{max_retries}): {e}")
+
+        except TimeoutError as e:
+            last_error = e
+            logger.warning(f"Request timeout (attempt {attempt + 1}/{max_retries}): {e}")
+
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            return {
+                'result': None,
+                'status': 'error',
+                'error': str(e),
+                'attempts': attempt + 1
+            }
+
+    # All retries exhausted
+    return {
+        'result': None,
+        'status': 'error',
+        'error': f"Failed after {max_retries} attempts: {str(last_error)}",
+        'attempts': max_retries
+    }
+
+# Use in workflow
+api_caller = PythonCodeNode.from_function(
+    name="robust_api_caller",
+    func=robust_external_call
+)
 ```
 
-### **Data Lineage & Compliance Tracking**
+## Data Lineage & Compliance
+
+### Track Data Transformations
+
 ```python
 from kailash.nodes.enterprise.data_lineage import DataLineageNode
 
 # Track data transformations for compliance
-workflow.add_node("lineage_tracker", DataLineageNode(
-    name="lineage_tracker",
-    operation="track_transformation",
-    source_info={
+workflow.add_node("DataLineageNode", "lineage_tracker", {
+    "operation": "track_transformation",
+    "source_info": {
         "system": "CRM",
         "table": "customers",
         "fields": ["name", "email", "purchase_history"]
     },
-    transformation_type="anonymization",
-    target_info={
+    "transformation_type": "anonymization",
+    "target_info": {
         "system": "Analytics",
         "table": "customer_segments"
     },
-    compliance_frameworks=["GDPR", "CCPA"],
-    include_access_patterns=True,
-    audit_trail_enabled=True,
-    data_classification="PII"
-))
+    "compliance_frameworks": ["GDPR", "CCPA"],
+    "include_access_patterns": True,
+    "audit_trail_enabled": True,
+    "data_classification": "PII"
+})
 
 # Generate compliance reports
-compliance_report = DataLineageNode(
-    name="compliance_reporter",
-    operation="generate_compliance_report",
-    compliance_frameworks=["GDPR", "SOX", "HIPAA"],
-    report_format="detailed",
-    include_recommendations=True
-)
-
+workflow.add_node("DataLineageNode", "compliance_reporter", {
+    "operation": "generate_compliance_report",
+    "compliance_frameworks": ["GDPR", "SOX", "HIPAA"],
+    "report_format": "detailed",
+    "include_recommendations": True
+})
 ```
 
-## 🔐 **Credential Rotation & Security**
+## Credential Rotation & Security
 
-### **Automatic Credential Rotation**
+### Automatic Credential Rotation
+
 ```python
 from kailash.nodes.security.rotating_credentials import RotatingCredentialNode
 
-# Enterprise-grade credential rotation
-enterprise_rotator = RotatingCredentialNode(
-    name="enterprise_rotator",
-    operation="start_rotation",
-    credential_name="production_api_key",
+# Configure automatic credential rotation
+workflow.add_node("RotatingCredentialNode", "credential_rotator", {
+    "operation": "start_rotation",
+    "credential_name": "production_api_key",
 
     # Rotation policy
-    check_interval=1800,  # Check every 30 minutes
-    expiration_threshold=172800,  # Rotate 48 hours before expiry
-    rotation_policy="proactive",
+    "check_interval": 3600,  # Check every hour
+    "expiration_threshold": 172800,  # Rotate 48 hours before expiry
+    "rotation_policy": "proactive",
 
-    # Refresh sources (tried in order)
-    refresh_sources=["vault", "aws_secrets", "azure_key_vault"],
-    refresh_config={
+    # Credential sources
+    "refresh_sources": ["vault", "aws_secrets", "env"],
+    "refresh_config": {
         "vault": {"path": "secret/prod/api-keys"},
-        "aws_secrets": {"region": "us-east-1"},
-        "azure_key_vault": {"vault_url": "https://company-kv.vault.azure.net/"}
+        "aws_secrets": {"region": "us-east-1"}
     },
 
     # Zero-downtime rotation
-    zero_downtime=True,
-    rollback_on_failure=True,
+    "zero_downtime": True,
+    "rollback_on_failure": True,
 
     # Notifications
-    notification_webhooks=["https://alerts.company.com/webhook"],
-    notification_emails=["devops@company.com", "security@company.com"],
-
-    # Audit
-    audit_log_enabled=True
-)
-
-workflow.add_node("credential_rotator", enterprise_rotator)
-
+    "notification_webhooks": ["https://alerts.company.com/webhook"],
+    "audit_log_enabled": True
+})
 ```
 
-## 🧪 **Testing & Validation**
+## Deployment Patterns
 
-### **Production Test Suite**
+### Docker Production Deployment
+
+```dockerfile
+# Dockerfile for production deployment
+FROM python:3.11-slim
+
+# Security: Create non-root user
+RUN groupadd -r kailash && useradd -r -g kailash kailash
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY --chown=kailash:kailash . /app
+
+# Security: Switch to non-root user
+USER kailash
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Run application
+CMD ["python", "-m", "kailash.cli", "run", "--config", "production.yaml"]
+```
+
+### Kubernetes Configuration
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kailash-workflow
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kailash-workflow
+  template:
+    metadata:
+      labels:
+        app: kailash-workflow
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: kailash
+        image: kailash:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: TIMEOUT_SECONDS
+          value: "300"
+        - name: ENABLE_MONITORING
+          value: "true"
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: kailash-data
+```
+
+## Health Checks & Monitoring
+
+### Basic Health Check Implementation
+
+```python
+from flask import Flask, jsonify
+from datetime import datetime
+
+app = Flask(__name__)
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for load balancers."""
+    try:
+        # Check critical components
+        checks = {
+            "database": check_database_connection(),
+            "disk_space": check_disk_space(),
+            "memory": check_memory_usage()
+        }
+
+        # Overall health
+        is_healthy = all(checks.values())
+
+        return jsonify({
+            'status': 'healthy' if is_healthy else 'unhealthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'checks': checks
+        }), 200 if is_healthy else 503
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 503
+
+@app.route('/ready')
+def readiness_check():
+    """Readiness check for Kubernetes."""
+    # Check if application is ready to serve traffic
+    return jsonify({'status': 'ready'}), 200
+
+def check_database_connection():
+    """Check database connectivity."""
+    # Your database check logic
+    return True
+
+def check_disk_space():
+    """Check available disk space."""
+    import shutil
+    stat = shutil.disk_usage("/app/data")
+    # Return True if more than 10% free
+    return (stat.free / stat.total) > 0.1
+
+def check_memory_usage():
+    """Check memory usage."""
+    import psutil
+    # Return True if less than 90% memory used
+    return psutil.virtual_memory().percent < 90
+```
+
+## Testing & Validation
+
+### Production Test Suite
+
 ```python
 import pytest
 from unittest.mock import Mock, patch
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 def test_workflow_with_production_data():
     """Test workflow with realistic production data volumes."""
-    # Load production-sized test data
-    large_dataset = load_test_data(size=10000)
+    # Create workflow
+    workflow = WorkflowBuilder()
+
+    # Add your production workflow nodes
+    workflow.add_node("PythonCodeNode", "processor", {
+        "code": """
+result = {
+    'processed': len(data),
+    'status': 'success'
+}
+"""
+    })
+
+    # Test with production-sized data
+    large_dataset = [{"id": i, "value": i * 2} for i in range(10000)]
 
     # Execute workflow
-    runtime = LocalRuntime(enable_monitoring=True)
-    results, run_id = runtime.execute(workflow, parameters={"data": large_dataset})
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(
+        workflow.build(),
+        parameters={"processor": {"data": large_dataset}}
+    )
 
     # Validate results
-    assert results["final_output"]["status"] == "success"
-    assert len(results["final_output"]["result"]) > 0
-    assert all("customer_id" in record for record in results["final_output"]["result"])
+    assert results["processor"]["result"]["status"] == "success"
+    assert results["processor"]["result"]["processed"] == 10000
 
 def test_error_handling():
     """Test workflow handles errors gracefully."""
-    # Test with malformed data
-    bad_data = [{"invalid": "data"}]
+    workflow = WorkflowBuilder()
+
+    # Add node that will fail
+    workflow.add_node("PythonCodeNode", "failing_node", {
+        "code": """
+# This will raise an error
+result = 1 / 0
+"""
+    })
 
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow, parameters={"data": bad_data})
 
-    # Should handle gracefully, not crash
-    assert "error" in results["final_output"]
-    assert results["final_output"]["status"] == "error"
+    # Should not crash, but capture error
+    try:
+        results, run_id = runtime.execute(workflow.build())
+        # Check if error was captured
+        assert "failing_node" in results
+    except Exception as e:
+        # Error should be handled gracefully
+        assert "division by zero" in str(e).lower()
 
-@patch('external_service.api_call')
-def test_external_service_failure(mock_api):
-    """Test workflow handles external service failures."""
-    mock_api.side_effect = ConnectionError("Service unavailable")
+def test_memory_efficiency():
+    """Test workflow handles large datasets efficiently."""
+    workflow = WorkflowBuilder()
+
+    # Add memory-efficient processor
+    workflow.add_node("PythonCodeNode", "chunk_processor", {
+        "code": """
+# Process in chunks
+chunk_size = 1000
+total = 0
+for i in range(0, len(data), chunk_size):
+    chunk = data[i:i+chunk_size]
+    total += len(chunk)
+
+result = {'processed': total}
+"""
+    })
+
+    # Test with very large dataset
+    huge_dataset = list(range(100000))
 
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow, parameters={"data": test_data})
+    results, run_id = runtime.execute(
+        workflow.build(),
+        parameters={"chunk_processor": {"data": huge_dataset}}
+    )
 
-    # Should fallback gracefully
-    assert results["final_output"]["status"] in ["fallback_success", "error"]
-    assert "fallback_applied" in results["final_output"]
-
+    assert results["chunk_processor"]["result"]["processed"] == 100000
 ```
 
-## 📋 **Pre-Deployment Checklist**
+## Pre-Deployment Checklist
 
-### **Code Review**
+### Code Review
 - [ ] All PythonCodeNode uses `.from_function()` for code >3 lines
-- [ ] No hardcoded file paths or credentials
+- [ ] No hardcoded credentials or sensitive data
 - [ ] Error handling implemented for all external calls
 - [ ] Input validation at workflow entry points
 - [ ] Memory usage optimized for large datasets
 
-### **Testing**
-- [ ] Unit tests pass with 90%+ coverage
-- [ ] Integration tests pass with production-sized data
-- [ ] Performance tests meet SLA requirements
-- [ ] Error scenarios tested and handled gracefully
-- [ ] Security scan completed with no critical issues
+### Testing
+- [ ] Unit tests pass with good coverage
+- [ ] Integration tests pass with realistic data
+- [ ] Performance tests meet requirements
+- [ ] Error scenarios tested and handled
+- [ ] Security scan completed
 
-### **Infrastructure**
+### Infrastructure
 - [ ] Environment variables configured
 - [ ] Resource limits set appropriately
 - [ ] Monitoring and alerting configured
-- [ ] Backup and recovery procedures tested
-- [ ] Rollback plan documented and tested
+- [ ] Backup and recovery procedures documented
+- [ ] Rollback plan prepared
 
-### **Documentation**
+### Documentation
 - [ ] API documentation updated
 - [ ] Deployment guide current
-- [ ] Troubleshooting guide includes new workflows
-- [ ] Change log updated
-- [ ] Team training completed
+- [ ] Troubleshooting guide updated
+- [ ] Change log maintained
+- [ ] Team trained on new features
 
-## 🔗 **Next Steps**
+## Best Practices Summary
 
-- **[Troubleshooting](05-troubleshooting.md)** - Debug and solve production issues
-- **[Custom Development](06-custom-development.md)** - Build custom nodes and extensions
+1. **Security First**: Always use proper authentication and access control
+2. **Error Handling**: Implement comprehensive error handling and recovery
+3. **Performance**: Optimize for production workloads with batch processing
+4. **Monitoring**: Enable logging and metrics collection
+5. **Compliance**: Track data lineage and maintain audit trails
+6. **Testing**: Test with production-like data and scenarios
+
+## Related Guides
+
+**Specialized Production Topics:**
+- [Reliability Patterns](04-reliability-patterns.md) - Rate limiting, retry logic, circuit breakers
+- [Streaming Patterns](04-streaming-patterns.md) - Real-time data processing, WebSocket streaming
+
+**Next Steps:**
+- [Troubleshooting](05-troubleshooting.md) - Debug production issues
+- [Custom Development](06-custom-development.md) - Build custom nodes
+
+**Prerequisites:**
+- [Fundamentals](01-fundamentals-core-concepts.md) - Core SDK concepts
+- [Workflows](02-workflows-creation.md) - Basic patterns
+- [Advanced Features](03-advanced-features.md) - Enterprise features
 
 ---
 

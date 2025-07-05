@@ -199,6 +199,92 @@ class EdgeDiscovery:
         self._last_health_check[location.location_id] = datetime.now(UTC)
         logger.info(f"Added edge location: {location.name}")
 
+    async def register_edge(self, edge_config: Dict[str, Any]):
+        """Register an edge location from configuration dictionary.
+
+        Args:
+            edge_config: Dictionary containing edge location configuration
+        """
+        from .location import (
+            ComplianceZone,
+            EdgeCapabilities,
+            EdgeLocation,
+            EdgeRegion,
+            GeographicCoordinates,
+        )
+
+        # Extract basic info
+        location_id = edge_config["id"]
+        region_str = edge_config.get("region", "us-east")
+
+        # Map region string to enum
+        region_map = {
+            "us-east-1": EdgeRegion.US_EAST,
+            "us-west-1": EdgeRegion.US_WEST,
+            "eu-west-1": EdgeRegion.EU_WEST,
+            "eu-central-1": EdgeRegion.EU_CENTRAL,
+            "asia-southeast-1": EdgeRegion.ASIA_SOUTHEAST,
+        }
+        region = region_map.get(region_str, EdgeRegion.US_EAST)
+
+        # Default coordinates based on region
+        coord_map = {
+            EdgeRegion.US_EAST: GeographicCoordinates(39.0458, -76.6413),  # Virginia
+            EdgeRegion.US_WEST: GeographicCoordinates(37.7749, -122.4194),  # California
+            EdgeRegion.EU_WEST: GeographicCoordinates(53.3498, -6.2603),  # Ireland
+            EdgeRegion.EU_CENTRAL: GeographicCoordinates(50.1109, 8.6821),  # Frankfurt
+            EdgeRegion.ASIA_SOUTHEAST: GeographicCoordinates(
+                1.3521, 103.8198
+            ),  # Singapore
+        }
+        coordinates = coord_map.get(region, GeographicCoordinates(39.0458, -76.6413))
+
+        # Create capabilities
+        capabilities = EdgeCapabilities(
+            cpu_cores=edge_config.get("capacity", 1000) // 100,  # Rough mapping
+            memory_gb=edge_config.get("capacity", 1000) // 50,
+            storage_gb=edge_config.get("capacity", 1000) * 2,
+            bandwidth_gbps=10.0,
+            database_support=["postgresql", "redis"],
+            ai_models_available=["llama", "claude"],
+        )
+
+        # Create edge location
+        location = EdgeLocation(
+            location_id=location_id,
+            name=f"Edge {region_str.title()}",
+            region=region,
+            coordinates=coordinates,
+            capabilities=capabilities,
+            endpoint_url=edge_config.get(
+                "endpoint", f"http://{location_id}.edge.local:8080"
+            ),
+        )
+
+        # Set health status
+        from .location import EdgeStatus
+
+        if edge_config.get("healthy", True):
+            location.status = EdgeStatus.ACTIVE
+            self._health_results[location_id] = HealthCheckResult.HEALTHY
+        else:
+            location.status = EdgeStatus.OFFLINE
+            self._health_results[location_id] = HealthCheckResult.UNHEALTHY
+
+        # Update metrics
+        location.metrics.latency_p50_ms = edge_config.get("latency_ms", 10)
+        location.metrics.cpu_utilization = edge_config.get(
+            "current_load", 0
+        ) / edge_config.get("capacity", 1000)
+
+        # Add to locations
+        self.locations[location_id] = location
+        self._last_health_check[location_id] = datetime.now(UTC)
+
+        logger.info(f"Registered edge location: {location_id} in {region_str}")
+
+        return location
+
     def remove_location(self, location_id: str):
         """Remove an edge location from the discovery pool."""
         if location_id in self.locations:

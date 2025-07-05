@@ -15,7 +15,7 @@ In direct execution, you create nodes with all parameters and call `execute()` i
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -53,7 +53,7 @@ In workflow execution, nodes are connected and data flows through the graph.
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -167,7 +167,7 @@ One node output feeds multiple downstream nodes:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -191,7 +191,7 @@ Multiple nodes feed into one downstream node:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -215,7 +215,7 @@ Data flows through multiple processing steps:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

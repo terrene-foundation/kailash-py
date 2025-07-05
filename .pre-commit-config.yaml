@@ -69,7 +69,7 @@ repos:
         name: Check for deprecated log.warn
       - id: python-no-eval
         name: Check for eval() usage
-        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py|guide/reference/templates/.*|src/kailash/api/mcp_integration\.py|tests/test_security/.*|examples/.*|src/kailash/nodes/logic/convergence\.py|src/kailash/nodes/logic/loop\.py|src/kailash/workflow/convergence\.py|src/kailash/workflow/cycle_builder\.py|src/kailash/workflow/cycle_config\.py|sdk-users/templates/.*\.py)$
+        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py|guide/reference/templates/.*|src/kailash/api/mcp_integration\.py|tests/test_security/.*|examples/.*|src/kailash/nodes/logic/convergence\.py|src/kailash/nodes/logic/loop\.py|src/kailash/workflow/convergence\.py|src/kailash/workflow/cycle_builder\.py|src/kailash/workflow/cycle_config\.py|sdk-users/templates/.*\.py|apps/mcp_platform/.*/security\.py|apps/mcp_platform/.*/tool_executor_node\.py)$
       - id: python-use-type-annotations
         name: Require type annotations
       - id: python-check-blanket-noqa

@@ -110,7 +110,11 @@ class TestPerformance:
             # Add nodes if supported
             for i in range(10):
                 try:
-                    builder.add_node("MockNode", f"node_{i}")
+                    builder.add_node(
+                        "PythonCodeNode",
+                        f"node_{i}",
+                        {"code": f"result = {{'node_id': {i}}}"},
+                    )
                 except Exception:
                     break
 

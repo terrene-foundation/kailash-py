@@ -76,15 +76,15 @@ result = {"health_checks": health_checks, "summary": summary}
 
 ```
 
-### Pattern 3: locals() Variable Access
+### Pattern 3: globals() Variable Access
 ```python
 transformation = """
-# WORKAROUND: Use locals() to access mapped variables
-print(f"Available variables: {list(locals().keys())}")
+# WORKAROUND: Use globals() to access mapped variables
+print(f"Available variables: {list(globals().keys())}")
 
-# Access mapped variables directly from locals()
-files_by_type = locals().get("files_by_type", {})
-directory_stats = locals().get("directory_stats", {})
+# Access mapped variables directly from globals()
+files_by_type = globals().get("files_by_type", {})
+directory_stats = globals().get("directory_stats", {})
 
 # Check if variables were properly mapped
 if files_by_type:
@@ -105,13 +105,13 @@ transformation = """
 print(f"=== DATATRANSFORMER DEBUG ===")
 print(f"Input type: {type(data)}")
 print(f"Input content: {data}")
-print(f"Available locals: {list(locals().keys())}")
+print(f"Available locals: {list(globals().keys())}")
 
 # Check for each expected variable
 expected_vars = ["files_by_type", "summary", "results"]
 for var in expected_vars:
-    if var in locals():
-        print(f"✅ {var}: {type(locals()[var])}")
+    if var in globals():
+        print(f"✅ {var}: {type(globals()[var])}")
     else:
         print(f"❌ {var}: MISSING")
 
@@ -161,7 +161,7 @@ if bug_detected:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -187,7 +187,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -245,7 +245,7 @@ except Exception as e:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

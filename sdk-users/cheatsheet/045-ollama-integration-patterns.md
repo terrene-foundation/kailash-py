@@ -5,15 +5,55 @@
 ## 🎯 Quick Overview
 
 **Use Case**: Local LLM processing with Ollama
-**Node Type**: `PythonCodeNode` (NOT `LLMAgentNode`)
+**Node Type**: `LLMAgentNode` (v0.6.2+ with async support) or `PythonCodeNode` (for custom control)
 **Port**: 11434 (default Ollama port)
-**Models**: `llama3.2:1b` (LLM), `nomic-embed-text:latest` (embeddings)
+**Models**: `llama3.2:3b` or `llama3.2:1b` (LLM), `nomic-embed-text:latest` (embeddings)
 
-## 🚀 Basic LLM Generation
+## 🆕 v0.6.2+ LLMAgentNode with Ollama
 
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.nodes.ai import LLMAgentNode
+from kailash.runtime.local import LocalRuntime
+
+# Basic usage with improved async support
+workflow = Workflow("ollama_v062", "Ollama with LLMAgentNode")
+llm_node = LLMAgentNode(name="ollama_llm")
+workflow.add_node("llm", llm_node)
+
+# Execute with async runtime
+runtime = LocalRuntime()
+result, _ = await runtime.execute_async(workflow, parameters={
+    "llm": {
+        "provider": "ollama",
+        "model": "llama3.2:3b",
+        "prompt": "Write a haiku about programming",
+        "generation_config": {
+            "temperature": 0.7,
+            "max_tokens": 300
+        }
+    }
+})
+
+# Remote Ollama server
+result, _ = await runtime.execute_async(workflow, parameters={
+    "llm": {
+        "provider": "ollama",
+        "model": "llama3.2:3b",
+        "prompt": "Explain quantum computing",
+        "backend_config": {
+            "host": "gpu-server.local",
+            "port": 11434
+        }
+    }
+})
+```
+
+## 🚀 Alternative: Direct API with PythonCodeNode
+
+```python
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 def ollama_generate(prompt="Hello", model="llama3.2:1b"):
@@ -340,8 +380,8 @@ def optimized_ollama_request(prompt, model="llama3.2:1b"):
 ## ❌ Common Mistakes to Avoid
 
 ```python
-# ❌ DON'T use LLMAgentNode with Ollama in cycles
-agent = A2AAgentNode(name="agent", agent_role="processor")  # Context conflicts
+# ❌ DON'T use old httpx-based implementations (pre-v0.6.2)
+async with httpx.AsyncClient() as client:  # Fails with TaskGroup
 
 # ❌ DON'T assume embeddings are vectors
 embeddings = result["embeddings"]
@@ -350,10 +390,11 @@ similarity = cosine_similarity(embeddings[0], embeddings[1])  # Fails!
 # ❌ DON'T parse JSON directly from LLM responses
 data = json.loads(llm_response)  # Often fails
 
-# ❌ DON'T use EmbeddingGeneratorNode with Ollama
-embedder = EmbeddingGeneratorNode(provider="ollama")  # Format issues
+# ❌ DON'T forget to configure backend for remote Ollama
+node.execute(provider="ollama", model="llama3.2:3b")  # May fail if not localhost
 
-# ✅ DO use PythonCodeNode for all Ollama operations
+# ✅ DO use LLMAgentNode with v0.6.2+ for async workflows
+# ✅ DO configure backend_config for remote Ollama servers
 # ✅ DO extract embeddings with .get("embedding", [])
 # ✅ DO use regex + fallbacks for JSON parsing
 # ✅ DO test connectivity before workflows
@@ -363,12 +404,14 @@ embedder = EmbeddingGeneratorNode(provider="ollama")  # Format issues
 
 | Operation | Pattern | Key Points |
 |-----------|---------|------------|
-| **LLM Generation** | `PythonCodeNode.from_function()` | Direct API calls, timeout 30s |
+| **LLM Generation (v0.6.2+)** | `LLMAgentNode` with async | Use `backend_config` for remote servers |
+| **LLM Generation (custom)** | `PythonCodeNode.from_function()` | Direct API calls, timeout 30s |
 | **Embeddings** | `requests.post("/api/embeddings")` | Extract with `.get("embedding")` |
 | **Cycles** | Standard cycle patterns | Use `result.field` mapping |
 | **JSON Parsing** | Regex + fallbacks | Never assume clean JSON |
 | **Error Handling** | Try/catch with fallbacks | Always provide error responses |
-| **Performance** | Limit num_predict, use 1B models | Fast models for development |
+| **Performance** | Limit num_predict, use 3B/1B models | Fast models for development |
+| **Remote Servers** | Configure `backend_config` | Set host/port or base_url |
 
 ## 🔗 Related Patterns
 

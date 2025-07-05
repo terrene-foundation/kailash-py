@@ -84,7 +84,7 @@ except Exception as e:
         error_message=str(e),
         error_type=e.__class__.__name__,
         stack_trace=traceback.format_exc(),
-        failed_item_index=i if 'i' in locals() else None
+        failed_item_index=i if 'i' in globals() else None
     )
     result = {"error": str(e)}
 ''',

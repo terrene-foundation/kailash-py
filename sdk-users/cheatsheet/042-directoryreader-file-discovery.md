@@ -25,7 +25,7 @@ workflow.add_node("file_discoverer", dir_reader)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -52,7 +52,7 @@ DirectoryReaderNode(directory_path="./data", pattern="reports/*.pdf")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -113,7 +113,7 @@ DirectoryReaderNode(include_metadata=False)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -137,7 +137,7 @@ workflow.connect("discoverer", "generic_processor", mapping={"discovered_files":
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -153,7 +153,7 @@ workflow.runtime = LocalRuntime()
 csv_extractor = DataTransformer(
     transformations=["""
 # Extract CSV files from discovery results
-files_by_type = locals().get("files_by_type", {})
+files_by_type = globals().get("files_by_type", {})
 csv_files = files_by_type.get("csv", [])
 
 result = {"csv_files": csv_files, "count": len(csv_files)}
@@ -174,12 +174,12 @@ dir_reader = DirectoryReaderNode(directory_path="./uploads")
 
 # 2. Process each file type differently
 csv_processor = DataTransformer(transformations=["""
-csv_files = locals().get("files_by_type", {}).get("csv", [])
+csv_files = globals().get("files_by_type", {}).get("csv", [])
 # Process CSV files...
 """])
 
 json_processor = DataTransformer(transformations=["""
-json_files = locals().get("files_by_type", {}).get("json", [])
+json_files = globals().get("files_by_type", {}).get("json", [])
 # Process JSON files...
 """])
 
@@ -193,7 +193,7 @@ workflow.connect("discoverer", "json_proc", mapping={"files_by_type": "files_by_
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -231,7 +231,7 @@ workflow.  # Method signature
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -273,7 +273,7 @@ big_dir_reader = DirectoryReaderNode(
 ```python
 # Handle permission/access issues in DataTransformer
 file_processor = DataTransformer(transformations=["""
-files = locals().get("files_by_type", {}).get("csv", [])
+files = globals().get("files_by_type", {}).get("csv", [])
 processed = []
 
 for file_info in files:

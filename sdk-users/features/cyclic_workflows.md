@@ -14,7 +14,7 @@ Cyclic workflows enable iterative processing patterns where data flows back thro
 ```python
 # Complete working example of a cyclic workflow
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 # Create workflow with iterative data refinement
@@ -24,9 +24,13 @@ workflow = Workflow("cyclic_example", "Simple cyclic workflow example")
 workflow.add_node("data_source", PythonCodeNode(code="result = [110, 120, 130, 90, 80]"))
 workflow.add_node("processor", PythonCodeNode(code="""
 # Process data, applying feedback if available
-if 'feedback' in locals() and feedback.get('needs_adjustment', False):
-    result = [x * 0.9 for x in data]
-else:
+try:
+    if feedback and feedback.get('needs_adjustment', False):
+        result = [x * 0.9 for x in data]
+    else:
+        result = data
+except NameError:
+    # First iteration - no feedback yet
     result = data
 """))
 workflow.add_node("evaluator", PythonCodeNode(code="""
@@ -37,12 +41,14 @@ feedback = {
     'needs_adjustment': average > 100,
     'quality_score': 1.0 / (average / 100) if average > 0 else 1.0
 }
+# Must set result for PythonCodeNode
+result = feedback
 """))
 
 # Connect nodes with cycle
-workflow.add_connection("data_source", "processor", "result", "data")
-workflow.add_connection("processor", "evaluator", "result", "result")
-workflow.add_connection("evaluator", "processor", "feedback", "feedback",
+workflow.connect("data_source", "processor", mapping={"result": "data"})
+workflow.connect("processor", "evaluator", mapping={"result": "result"})
+workflow.connect("evaluator", "processor", mapping={"result": "feedback"},
     cycle=True,
     max_iterations=5,
     convergence_check="average <= 100")
@@ -62,7 +68,7 @@ Unlike traditional DAGs (Directed Acyclic Graphs), Kailash workflows support cyc
 ```python
 # Creating a cycle requires explicit marking
 workflow = Workflow("example", name="Example")
-workflow.add_connection("validator", "processor", "output", "input",
+workflow.connect("validator", "processor", mapping={"output": "input"},
     cycle=True,                           # Required for cycles
     max_iterations=10,                    # Safety limit
     convergence_check="quality >= 0.9")   # Stop condition
@@ -147,7 +153,7 @@ class IterativeProcessorNode(Node):
 
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 # Create workflow
@@ -157,9 +163,13 @@ workflow = Workflow("refinement_loop", "Iterative refinement example")
 workflow.add_node("source", PythonCodeNode(code="result = [110, 120, 130, 90, 80]"))
 workflow.add_node("processor", PythonCodeNode(code="""
 # Refine data based on feedback
-if 'feedback' in locals():
-    result = [x * 0.9 if feedback.get('adjust', False) else x for x in data]
-else:
+try:
+    if feedback and feedback.get('adjust', False):
+        result = [x * 0.9 for x in data]
+    else:
+        result = data
+except NameError:
+    # First iteration - no feedback yet
     result = data
 """))
 
@@ -167,15 +177,17 @@ workflow.add_node("validator", PythonCodeNode(code="""
 # Check if refinement is needed
 quality = sum(result) / len(result) if result else 0
 feedback = {'adjust': quality > 100, 'quality': quality}
+# Must set result for PythonCodeNode
+result = feedback
 """))
 
 # Connect with cycle
-workflow.add_connection("source", "processor", "result", "data")
-workflow.add_connection("processor", "validator", "result", "result")
-workflow.add_connection("validator", "processor", "feedback", "feedback",
+workflow.connect("source", "processor", mapping={"result": "data"})
+workflow.connect("processor", "validator", mapping={"result": "result"})
+workflow.connect("validator", "processor", mapping={"result": "feedback"},
     cycle=True,
     max_iterations=5,
-    convergence_check="feedback.get('quality', 999) <= 100")
+    convergence_check="quality <= 100")
 
 # Execute
 runtime = LocalRuntime()
@@ -188,7 +200,7 @@ results, run_id = runtime.execute(workflow)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -227,11 +239,11 @@ result = dict(data, **{'score': score, 'converged': score >= 0.9})
 """))
 
 # Create cycle through multiple nodes
-workflow.add_connection("input", "preprocessor", "result", "data")
-workflow.add_connection("preprocessor", "analyzer", "result", "data")
-workflow.add_connection("analyzer", "optimizer", "result", "data")
-workflow.add_connection("optimizer", "evaluator", "result", "data")
-workflow.add_connection("evaluator", "preprocessor", "result", "data",
+workflow.connect("input", "preprocessor", mapping={"result": "data"})
+workflow.connect("preprocessor", "analyzer", mapping={"result": "data"})
+workflow.connect("analyzer", "optimizer", mapping={"result": "data"})
+workflow.connect("optimizer", "evaluator", mapping={"result": "data"})
+workflow.connect("evaluator", "preprocessor", mapping={"result": "data"},
     cycle=True,
     cycle_id="optimization_loop",
     max_iterations=10,
@@ -248,13 +260,13 @@ workflow.add_connection("evaluator", "preprocessor", "result", "data",
 workflow = Workflow("nested_cycles", "Hierarchical iterative process")
 
 # Outer cycle for major iterations
-workflow.add_connection("outer_validator", "outer_processor", "feedback", "input",
+workflow.connect("outer_validator", "outer_processor", mapping={"feedback": "input"},
     cycle=True,
     cycle_id="outer_loop",
     max_iterations=5)
 
 # Inner cycle for fine-tuning
-workflow.add_connection("inner_validator", "inner_processor", "refinement", "input",
+workflow.connect("inner_validator", "inner_processor", mapping={"refinement": "input"},
     cycle=True,
     cycle_id="inner_loop",
     max_iterations=20,
@@ -279,8 +291,8 @@ workflow.add_node("refiner", PythonCodeNode(code="result = {'refined': True, 'da
 workflow.add_node("processor", PythonCodeNode(code="result = process_data(data)"))
 
 # Cycle only when refinement is needed
-workflow.add_connection("conditional_router", "refiner", "refine", "input")
-workflow.add_connection("refiner", "processor", "result", "data",
+workflow.connect("conditional_router", "refiner", mapping={"refine": "input"})
+workflow.connect("refiner", "processor", mapping={"result": "data"},
     cycle=True,
     max_iterations=10)
 
@@ -295,21 +307,21 @@ from kailash.nodes.logic import MergeNode
 workflow = Workflow("parallel_cycles", "Parallel iterative processes")
 
 # Branch A with its own cycle
-workflow.add_connection("validator_a", "processor_a", "feedback_a", "input",
+workflow.connect("validator_a", "processor_a", mapping={"feedback_a": "input"},
     cycle=True,
     cycle_id="cycle_a",
     max_iterations=10)
 
 # Branch B with different convergence criteria
-workflow.add_connection("validator_b", "processor_b", "feedback_b", "input",
+workflow.connect("validator_b", "processor_b", mapping={"feedback_b": "input"},
     cycle=True,
     cycle_id="cycle_b",
     convergence_check="variance < 0.1")
 
 # Merge results after both cycles complete
 workflow.add_node("merger", MergeNode())
-workflow.add_connection("processor_a", "merger", "result", "input_a")
-workflow.add_connection("processor_b", "merger", "result", "input_b")
+workflow.connect("processor_a", "merger", mapping={"result": "input_a"})
+workflow.connect("processor_b", "merger", mapping={"result": "input_b"})
 
 ```
 
@@ -320,7 +332,7 @@ workflow.add_connection("processor_b", "merger", "result", "input_b")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -366,7 +378,7 @@ def custom_convergence(results, iteration, cycle_state):
     return improvement < 0.001
 
 workflow = Workflow("convergence_example", "Custom convergence example")
-workflow.add_connection("validator", "processor", "feedback", "data",
+workflow.connect("validator", "processor", mapping={"feedback": "data"},
     cycle=True,
     convergence_callback=custom_convergence)
 
@@ -377,7 +389,7 @@ workflow.add_connection("validator", "processor", "feedback", "data",
 ```python
 # Combine multiple convergence criteria
 workflow = Workflow("multi_criteria", "Multi-criteria convergence example")
-workflow.add_connection("validator", "processor", "feedback", "data",
+workflow.connect("validator", "processor", mapping={"feedback": "data"},
     cycle=True,
     max_iterations=100,
     convergence_check="converged or quality >= 0.95",
@@ -392,11 +404,11 @@ workflow.add_connection("validator", "processor", "feedback", "data",
 ```python
 # ❌ BAD - No safety limits
 workflow = Workflow("unsafe_cycle", "Unsafe cycle example")
-workflow.add_connection("a", "b", "output", "input", cycle=True)
+workflow.connect("a", "b", mapping={"output": "input"}, cycle=True)
 
 # ✅ GOOD - Multiple safety mechanisms
 workflow = Workflow("safe_cycle", "Safe cycle example")
-workflow.add_connection("a", "b", "output", "input",
+workflow.connect("a", "b", mapping={"output": "input"},
     cycle=True,
     max_iterations=100,      # Iteration limit
     timeout=600.0,          # Time limit
@@ -475,7 +487,7 @@ else:
 metrics['iterations'].append({
     'iteration': iteration,
     'timestamp': time.time(),
-    'quality': locals().get('quality', 0)
+    'quality': globals().get('quality', 0)
 })
 
 result = {'metrics': metrics}
@@ -510,15 +522,15 @@ results, run_id = runtime.execute(workflow,
 ```python
 # ❌ WRONG - Creates illegal cycle
 workflow = Workflow("illegal_cycle", "Unmarked cycle example")
-workflow.add_connection("a", "b", "output", "input")
-workflow.add_connection("b", "c", "output", "input")
-# workflow.add_connection("c", "a", "output", "input")  # Error: Unmarked cycle!
+workflow.connect("a", "b", mapping={"output": "input"})
+workflow.connect("b", "c", mapping={"output": "input"})
+# workflow.connect("c", "a", mapping={"output": "input"})  # Error: Unmarked cycle!
 
 # ✅ CORRECT - Mark the cycle
 workflow = Workflow("marked_cycle", "Properly marked cycle")
-workflow.add_connection("a", "b", "output", "input")
-workflow.add_connection("b", "c", "output", "input")
-workflow.add_connection("c", "a", "output", "input",
+workflow.connect("a", "b", mapping={"output": "input"})
+workflow.connect("b", "c", mapping={"output": "input"})
+workflow.connect("c", "a", mapping={"output": "input"},
     cycle=True,
     max_iterations=10)
 
@@ -572,7 +584,7 @@ class EfficientNode(Node):
 ```python
 # Check multiple convergence criteria for early exit
 workflow = Workflow("early_exit", "Early exit strategies example")
-workflow.add_connection("validator", "processor", "feedback", "data",
+workflow.connect("validator", "processor", mapping={"feedback": "data"},
     cycle=True,
     convergence_check=(
         "quality >= target_quality or "
@@ -627,9 +639,9 @@ result = {'val_loss': val_loss, 'val_loss_improved': val_loss_improved, 'prev_lo
 """))
 
 # Training cycle with early stopping
-workflow.add_connection("data_loader", "trainer", "result", "data")
-workflow.add_connection("trainer", "validator", "result", "model")
-workflow.add_connection("validator", "trainer", "result", "validation",
+workflow.connect("data_loader", "trainer", mapping={"result": "data"})
+workflow.connect("trainer", "validator", mapping={"result": "model"})
+workflow.connect("validator", "trainer", mapping={"result": "validation"},
     cycle=True,
     max_iterations=100,
     convergence_check="val_loss < 0.15")
@@ -667,8 +679,8 @@ result = feedback
 """))
 
 # Refinement cycle
-workflow.add_connection("llm", "evaluator", "result", "document")
-workflow.add_connection("evaluator", "llm", "result", "feedback",
+workflow.connect("llm", "evaluator", mapping={"result": "document"})
+workflow.connect("evaluator", "llm", mapping={"result": "feedback"},
     cycle=True,
     max_iterations=5,
     convergence_check="overall >= 0.9")")
@@ -713,8 +725,8 @@ result = quality_metrics
 """))
 
 # Quality improvement cycle
-workflow.add_connection("cleaner", "quality_checker", "result", "data")
-workflow.add_connection("quality_checker", "cleaner", "result", "data",
+workflow.connect("cleaner", "quality_checker", mapping={"result": "data"})
+workflow.connect("quality_checker", "cleaner", mapping={"result": "data"},
     cycle=True,
     max_iterations=10,
     convergence_check="overall_quality > 0.95")
@@ -840,8 +852,8 @@ result = {
 """))
 
 # Connect nodes with cycle
-workflow.add_connection("text_cleaner", "text_validator", "result", "data")
-workflow.add_connection("text_validator", "text_cleaner", "result", "data",
+workflow.connect("text_cleaner", "text_validator", mapping={"result": "data"})
+workflow.connect("text_validator", "text_cleaner", mapping={"result": "data"},
     cycle=True,
     max_iterations=5,
     convergence_check="converged == True")
@@ -899,11 +911,11 @@ workflow = Workflow("refine_data", "Data refinement workflow")
 workflow.add_node("processor", PythonCodeNode(
     code="result = [x * 0.9 for x in data]"))
 workflow.add_node("evaluator", PythonCodeNode(
-    code="quality = sum(result) / len(result) if result else 0"))
+    code="quality = sum(result) / len(result) if result else 0; result = quality"))
 
 # Create cycle
-workflow.add_connection("processor", "evaluator", "result", "result")
-workflow.add_connection("evaluator", "processor", "quality", "feedback",
+workflow.connect("processor", "evaluator", mapping={"result": "result"})
+workflow.connect("evaluator", "processor", mapping={"quality": "feedback"},
     cycle=True,
     max_iterations=10,
     convergence_check="quality >= 0.9")

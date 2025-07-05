@@ -346,18 +346,27 @@ class Workflow:
         # Validate cycle parameters and issue deprecation warning
         if cycle:
             # Issue deprecation warning for cycle usage via connect()
-            warnings.warn(
-                "Using workflow.connect() with cycle=True is deprecated and will be removed in v0.2.0. "
-                "Use the new CycleBuilder API instead:\n"
-                "  workflow.create_cycle('cycle_name')\\\n"
-                "    .connect(source_node, target_node)\\\n"
-                "    .max_iterations(N)\\\n"
-                "    .converge_when('condition')\\\n"
-                "    .build()\n"
-                "See Phase 5 API documentation for details.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            # Skip warning if called from CycleBuilder (check stack)
+            import inspect
+
+            frame = inspect.currentframe()
+            caller_frame = frame.f_back if frame else None
+            caller_filename = caller_frame.f_code.co_filename if caller_frame else ""
+
+            # Only warn if NOT called from CycleBuilder
+            if "cycle_builder.py" not in caller_filename:
+                warnings.warn(
+                    "Using workflow.connect() with cycle=True is deprecated and will be removed in v0.2.0. "
+                    "Use the new CycleBuilder API instead:\n"
+                    "  workflow.create_cycle('cycle_name')\\\n"
+                    "    .connect(source_node, target_node)\\\n"
+                    "    .max_iterations(N)\\\n"
+                    "    .converge_when('condition')\\\n"
+                    "    .build()\n"
+                    "See Phase 5 API documentation for details.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
 
             # Import enhanced exceptions for better error messaging
             try:
@@ -426,11 +435,20 @@ class Workflow:
             for c in self.connections
             if c.source_node == source_node and c.target_node == target_node
         ]
+        # Allow multiple connections between same nodes for different mappings
+        # Only reject if it's a duplicate mapping, not just any existing connection
         if existing_connections and not cycle:
-            raise ConnectionError(
-                f"Connection already exists between '{source_node}' and '{target_node}'. "
-                f"Existing mappings: {[c.model_dump() for c in existing_connections]}"
-            )
+            # Check if any of the new mappings already exist
+            existing_mappings = set()
+            for conn in existing_connections:
+                existing_mappings.add((conn.source_output, conn.target_input))
+
+            for source_output, target_input in mapping.items():
+                if (source_output, target_input) in existing_mappings:
+                    raise ConnectionError(
+                        f"Duplicate connection already exists: '{source_node}.{source_output}' -> '{target_node}.{target_input}'. "
+                        f"Existing mappings: {[c.model_dump() for c in existing_connections]}"
+                    )
 
         # Create connections (store in self.connections list)
         for source_output, target_input in mapping.items():
@@ -495,7 +513,58 @@ class Workflow:
                 }
             )
 
-        # Add or update the edge (NetworkX will update if edge exists)
+        # CRITICAL FIX: Merge edge data for multiple connections between same nodes
+        # Check if edge already exists and merge mappings
+        existing_edge_data = None
+        if self.graph.has_edge(source_node, target_node):
+            existing_edge_data = self.graph.get_edge_data(source_node, target_node)
+
+        if existing_edge_data and "mapping" in existing_edge_data:
+            # Merge with existing mapping
+            merged_mapping = existing_edge_data["mapping"].copy()
+            merged_mapping.update(mapping)
+            edge_data = {
+                "mapping": merged_mapping,  # Merged mapping dictionary
+            }
+
+            # Update backward compatibility fields
+            if len(merged_mapping) == 1:
+                edge_data["from_output"] = list(merged_mapping.keys())[0]
+                edge_data["to_input"] = list(merged_mapping.values())[0]
+            else:
+                edge_data["from_output"] = list(merged_mapping.keys())
+                edge_data["to_input"] = list(merged_mapping.values())
+
+            # Preserve any existing cycle metadata
+            if existing_edge_data.get("cycle"):
+                edge_data.update(
+                    {
+                        k: v
+                        for k, v in existing_edge_data.items()
+                        if k not in ["mapping", "from_output", "to_input"]
+                    }
+                )
+        else:
+            # No existing edge or no mapping, use new mapping as-is
+            # (edge_data was already set above)
+            pass
+
+        # Add cycle metadata to edge if this is a cycle connection
+        if cycle:
+            edge_data.update(
+                {
+                    "cycle": cycle,
+                    "max_iterations": max_iterations,
+                    "convergence_check": convergence_check,
+                    "cycle_id": cycle_id,
+                    "timeout": timeout,
+                    "memory_limit": memory_limit,
+                    "condition": condition,
+                    "parent_cycle": parent_cycle,
+                }
+            )
+
+        # Add or update the edge with merged data
         self.graph.add_edge(source_node, target_node, **edge_data)
 
         # Enhanced logging for cycles

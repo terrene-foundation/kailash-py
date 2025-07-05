@@ -12,6 +12,7 @@ import time
 from typing import Any, Dict
 
 import psycopg2
+import pytest
 import requests
 
 from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
@@ -31,6 +32,7 @@ except ImportError:
         print("⚠️  Redis not available - some tests will be skipped")
 
 
+@pytest.mark.asyncio
 async def test_postgres():
     """Test PostgreSQL connectivity and basic operations."""
     print("🐘 Testing PostgreSQL...")
@@ -49,10 +51,16 @@ async def test_postgres():
         version = cursor.fetchone()[0]
         print(f"   ✅ PostgreSQL connected: {version[:50]}...")
 
-        # Test table access
-        cursor.execute("SELECT COUNT(*) FROM customers;")
-        customer_count = cursor.fetchone()[0]
-        print(f"   ✅ Test data available: {customer_count} customers")
+        # Test table existence
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+        """
+        )
+        table_count = cursor.fetchone()[0]
+        print(f"   ✅ Database has {table_count} tables")
 
         # Test create table and insert
         cursor.execute(
@@ -75,18 +83,19 @@ async def test_postgres():
         conn.commit()
         cursor.close()
         conn.close()
-        return True
+        print("   ✅ PostgreSQL test passed")
 
     except Exception as e:
         print(f"   ❌ PostgreSQL error: {e}")
-        return False
+        pytest.fail(f"PostgreSQL test failed: {e}")
 
 
+@pytest.mark.asyncio
 async def test_redis():
     """Test Redis connectivity and basic operations."""
     if not REDIS_AVAILABLE:
         print("⚠️  Skipping Redis test - library not available")
-        return True
+        pytest.skip("Redis library not available")
 
     print("🔴 Testing Redis...")
     try:
@@ -113,19 +122,20 @@ async def test_redis():
         print("   ✅ TTL/Expiration working")
 
         client.close()
-        return True
+        print("   ✅ Redis test passed")
 
     except Exception as e:
         print(f"   ❌ Redis error: {e}")
-        return False
+        pytest.fail(f"Redis test failed: {e}")
 
 
+@pytest.mark.asyncio
 async def test_ollama():
     """Test Ollama connectivity and model availability."""
     print("🦙 Testing Ollama...")
     try:
         # Test API health
-        response = requests.get(f"{OLLAMA_CONFIG['host']}/api/tags", timeout=10)
+        response = requests.get(f"{OLLAMA_CONFIG['base_url']}/api/tags", timeout=10)
         if response.status_code != 200:
             raise Exception(f"HTTP {response.status_code}")
 
@@ -147,7 +157,7 @@ async def test_ollama():
         }
 
         response = requests.post(
-            f"{OLLAMA_CONFIG['host']}/api/generate", json=generate_data, timeout=30
+            f"{OLLAMA_CONFIG['base_url']}/api/generate", json=generate_data, timeout=30
         )
 
         if response.status_code == 200:
@@ -157,13 +167,14 @@ async def test_ollama():
         else:
             print(f"   ⚠️  Model generation failed: HTTP {response.status_code}")
 
-        return True
+        print("   ✅ Ollama test passed")
 
     except Exception as e:
         print(f"   ❌ Ollama error: {e}")
-        return False
+        pytest.fail(f"Ollama test failed: {e}")
 
 
+@pytest.mark.asyncio
 async def test_integration():
     """Test cross-service integration scenario."""
     print("🔗 Testing Integration...")
@@ -216,7 +227,7 @@ async def test_integration():
         }
 
         response = requests.post(
-            f"{OLLAMA_CONFIG['host']}/api/generate", json=generate_data, timeout=30
+            f"{OLLAMA_CONFIG['base_url']}/api/generate", json=generate_data, timeout=30
         )
 
         if response.status_code == 200:
@@ -244,11 +255,11 @@ async def test_integration():
 
         cursor.close()
         conn.close()
-        return True
+        print("   ✅ Integration test passed")
 
     except Exception as e:
         print(f"   ❌ Integration test error: {e}")
-        return False
+        pytest.fail(f"Integration test failed: {e}")
 
 
 async def main():

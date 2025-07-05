@@ -21,7 +21,7 @@ from kailash.nodes.ai.self_organizing import (
     SolutionEvaluatorNode,
     TeamFormationNode,
 )
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_simple_agent_pool() -> Workflow:

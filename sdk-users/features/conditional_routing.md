@@ -87,7 +87,7 @@ Route based on multiple possible status values:
 
 ```python
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter

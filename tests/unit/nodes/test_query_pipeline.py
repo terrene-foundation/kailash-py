@@ -54,17 +54,13 @@ class TestQueryPipelineNode:
             name="test_pipeline",
             connection_pool="test_pool",
             batch_size=10,
-            flush_interval=0.1,
+            flush_interval=0,  # Disable auto-flush for tests
             strategy="best_effort",
         )
 
         # Set runtime and mock pool
         node.runtime = mock_runtime
         mock_runtime.resource_registry.get.return_value = mock_pool
-
-        # Cancel auto-flush task
-        if hasattr(node, "_flush_task") and node._flush_task:
-            node._flush_task.cancel()
 
         return node
 
@@ -253,7 +249,7 @@ class TestQueryPipelineNode:
         assert status["queued_queries"] == 2
         assert status["total_queries"] == 2
         assert status["batch_size"] == 10
-        assert status["flush_interval"] == 0.1
+        assert status["flush_interval"] == 0  # Disabled for tests
         assert status["strategy"] == "best_effort"
 
     @pytest.mark.asyncio

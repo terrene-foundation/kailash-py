@@ -391,7 +391,47 @@ class TestCheckpointManager:
         """Test closing checkpoint manager."""
         manager = CheckpointManager()
 
-        # Close should cancel GC task
+        # Close should handle both cases - GC task started or not
         await manager.close()
 
-        assert manager._gc_task.cancelled()
+        # If GC task was started, it should be cancelled
+        if manager._gc_task is not None:
+            assert manager._gc_task.cancelled()
+        else:
+            # GC task was never started, which is also valid
+            assert manager._gc_started is False
+
+    @pytest.mark.asyncio
+    async def test_gc_lazy_initialization(self):
+        """Test that GC task is lazily initialized when needed."""
+        from datetime import UTC, datetime
+
+        from kailash.middleware.gateway.durable_request import Checkpoint, RequestState
+
+        manager = CheckpointManager()
+
+        # Initially, GC task should not be started
+        assert manager._gc_task is None
+        assert manager._gc_started is False
+
+        # Save a checkpoint, which should start GC task
+        checkpoint = Checkpoint(
+            checkpoint_id="test_123",
+            request_id="req_123",
+            sequence=1,
+            name="test_checkpoint",
+            state=RequestState.EXECUTING,
+            data={"test": "data"},
+            workflow_state={"test": "data"},
+            created_at=datetime.now(UTC),
+            size_bytes=100,
+        )
+
+        await manager.save_checkpoint(checkpoint)
+
+        # Now GC task should be started
+        assert manager._gc_started is True
+        assert manager._gc_task is not None
+
+        # Clean up
+        await manager.close()

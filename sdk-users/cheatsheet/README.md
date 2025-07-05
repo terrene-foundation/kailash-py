@@ -1,6 +1,6 @@
 # Kailash SDK Cheatsheet Index
 
-**Version**: 0.2.1 | **Last Updated**: 2025-06-09
+**Version**: 0.6.3 | **Last Updated**: 2025-07-03
 
 Quick reference guides organized by topic. Each file contains focused, actionable code snippets and patterns.
 
@@ -10,6 +10,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | File | Topic | Description |
 |------|-------|-------------|
 | **[000-claude-code-guide](000-claude-code-guide.md)** | **Claude Code Mastery** | **Essential patterns for Claude Code success** |
+| **[025-mcp-integration](025-mcp-integration.md)** | **🚀 MCP Integration** | **Model Context Protocol - Enable AI tool usage** |
 | **[038-integration-mastery](038-integration-mastery.md)** | **Integration Patterns** | **Complete guide for all integration types** |
 | **[039-workflow-composition](039-workflow-composition.md)** | **Workflow Composition** | **Advanced workflow building and data flow** |
 
@@ -54,9 +55,9 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 ### 🤖 **AI/Agent Coordination**
 | File | Topic | Description |
 |------|-------|-------------|
+| **[025-mcp-integration](025-mcp-integration.md)** | **🚀 MCP Integration** | **Enable AI agents to use external tools via MCP** |
 | [023-a2a-agent-coordination](023-a2a-agent-coordination.md) | A2A Agent Coordination | A2A coordination patterns and workflows |
 | [024-self-organizing-agents](024-self-organizing-agents.md) | Self-Organizing Agents | Self-organizing agent pool patterns |
-| [025-mcp-integration](025-mcp-integration.md) | MCP Integration | MCP integration with LLMAgentNode |
 | **[045-ollama-integration-patterns](045-ollama-integration-patterns.md)** | **Ollama Local LLMs** | **Production-ready Ollama integration patterns** |
 
 ### ⚡ **Advanced Patterns**
@@ -65,6 +66,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [026-performance-optimization](026-performance-optimization.md) | Performance Optimization | Memory management, cycle optimization, debugging |
 | [028-developer-tools-advanced](028-developer-tools-advanced.md) | Advanced Developer Tools | CycleDebugger, CycleProfiler, CycleAnalyzer (Phase 5.2) |
 | [029-pythoncode-data-science-patterns](029-pythoncode-data-science-patterns.md) | PythonCodeNode Data Science | DataFrame processing, NumPy arrays, ML workflows |
+| [031-pythoncode-best-practices](031-pythoncode-best-practices.md) | PythonCodeNode Best Practices | Advanced patterns and optimization |
 | [033-workflow-design-process](033-workflow-design-process.md) | Workflow Design Process | Systematic approach to workflow architecture |
 | [034-data-integration-patterns](034-data-integration-patterns.md) | Data Integration Patterns | Multi-source data normalization and merging |
 | [035-production-readiness](035-production-readiness.md) | Production Readiness | Deployment checklist and monitoring patterns |
@@ -72,9 +74,16 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 ### 🔧 **Enhanced Features**
 | File | Topic | Description |
 |------|-------|-------------|
-| [040-pythoncode-best-practices](040-pythoncode-best-practices.md) | PythonCodeNode Best Practices | Advanced patterns and optimization |
+| [036-node-initialization-patterns](036-node-initialization-patterns.md) | Node Initialization Patterns | Proper node setup and configuration |
+| [037-cyclic-workflow-patterns](037-cyclic-workflow-patterns.md) | Cyclic Workflow Patterns | Advanced cycle patterns and optimization |
+| [038-integration-mastery](038-integration-mastery.md) | Integration Mastery | Complete guide for all integration types |
+| [039-workflow-composition](039-workflow-composition.md) | Workflow Composition | Advanced workflow building and data flow |
+| [040-enterprise-mcp-workflows](040-enterprise-mcp-workflows.md) | Enterprise MCP Workflows | Production-ready MCP patterns with compliance |
+| [041-choosing-the-right-node](041-choosing-the-right-node.md) | Choosing the Right Node | Node selection and optimization strategies |
 | [042-directoryreader-file-discovery](042-directoryreader-file-discovery.md) | DirectoryReaderNode File Discovery | Dynamic file discovery and metadata extraction |
 | [043-datatransformer-bug-workarounds](043-datatransformer-bug-workarounds.md) | DataTransformer Bug Workarounds | Bug detection and mitigation patterns |
+| [044-multi-path-conditional-cycle-patterns](044-multi-path-conditional-cycle-patterns.md) | Multi-Path Conditional Cycles | Complex workflows with multiple conditional routing paths |
+| [045-ollama-integration-patterns](045-ollama-integration-patterns.md) | Ollama Local LLMs | Production-ready Ollama integration patterns |
 
 ## 🔗 Related Resources
 
@@ -88,9 +97,16 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 
 ### For Claude Code Users (Recommended Path)
 1. **START HERE** → [000-claude-code-guide](000-claude-code-guide.md) - Essential patterns for success
-2. **Integration work?** → [038-integration-mastery](038-integration-mastery.md) - All integration patterns
-3. **Complex workflows?** → [039-workflow-composition](039-workflow-composition.md) - Advanced composition
-4. **Debugging issues?** → [018-common-mistakes-to-avoid](018-common-mistakes-to-avoid.md) - What to avoid
+2. **AI + Tools?** → [025-mcp-integration](025-mcp-integration.md) - Enable AI to use external tools
+3. **Integration work?** → [038-integration-mastery](038-integration-mastery.md) - All integration patterns
+4. **Complex workflows?** → [039-workflow-composition](039-workflow-composition.md) - Advanced composition
+5. **Debugging issues?** → [018-common-mistakes-to-avoid](018-common-mistakes-to-avoid.md) - What to avoid
+
+### For MCP (Model Context Protocol) Users
+1. **Quick Start** → [025-mcp-integration](025-mcp-integration.md) - Complete MCP reference
+2. **Examples** → [../examples/mcp/](../examples/mcp/) - Ready-to-run MCP examples
+3. **Patterns** → [../patterns/12-mcp-patterns.md](../patterns/12-mcp-patterns.md) - Production patterns
+4. **Guide** → [../guides/mcp-quickstart.md](../guides/mcp-quickstart.md) - Beginner's guide
 
 ### For General Users
 1. **New to Kailash?** Start with [001-installation](001-installation.md) and [002-basic-imports](002-basic-imports.md)

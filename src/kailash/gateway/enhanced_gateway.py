@@ -40,7 +40,7 @@ class WorkflowRequest:
     inputs: Dict[str, Any] = field(default_factory=dict)
     resources: Dict[str, Union[str, ResourceReference]] = field(default_factory=dict)
     context: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON-serializable dict."""

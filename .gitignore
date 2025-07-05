@@ -43,6 +43,14 @@ venv.bak/
 .coverage
 htmlcov/
 test_*.db
+test_shared_*.db
+demo_mcp.db
+mcp_registry.db
+mcp_registry.json
+test-env
+
+# Housekeeping
+.temp_cleanup/
 
 # Documentation builds
 docs/_build/

@@ -4,14 +4,11 @@ from pathlib import Path
 
 import pytest
 
-try:
-    from kailash.workflow.visualization import WorkflowVisualizer
-except ImportError:
-    WorkflowVisualizer = None
-
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import Workflow, WorkflowBuilder
+from kailash.workflow.mermaid_visualizer import MermaidVisualizer
+from kailash.workflow.visualization import WorkflowVisualizer
 
 
 class TestVisualizationIntegration:
@@ -19,39 +16,53 @@ class TestVisualizationIntegration:
 
     def test_visualizer_availability(self):
         """Test that visualizer is available."""
-        if WorkflowVisualizer is None:
-            pytest.skip("Visualization components not available")
-
         assert WorkflowVisualizer is not None
+        assert MermaidVisualizer is not None
 
     def test_simple_workflow_visualization(self, temp_data_dir: Path):
         """Test visualizing a simple workflow."""
-        if WorkflowVisualizer is None:
-            pytest.skip("Visualization components not available")
+        # Create a simple workflow
+        builder = WorkflowBuilder()
+        builder.add_node("CSVReaderNode", "reader", config={"file_path": "test.csv"})
+        builder.add_node(
+            "DataTransformer", "transformer", config={"transformation": "result"}
+        )
+        builder.add_connection("reader", "data", "transformer", "input_data")
+        workflow = builder.build("test_viz")
 
-        try:
-            visualizer = WorkflowVisualizer()
-            assert visualizer is not None
-            # Basic test that visualizer can be used
-            # Note: Actual visualization testing requires complete workflow implementation
-        except Exception:
-            pytest.skip("Visualizer initialization not available")
+        # Test matplotlib visualizer
+        visualizer = WorkflowVisualizer(workflow)
+        output_path = temp_data_dir / "workflow.png"
+        visualizer.visualize(output_path=str(output_path))
+        assert output_path.exists()
+
+        # Test Mermaid visualizer
+        mermaid_viz = MermaidVisualizer(workflow)
+        mermaid_output = temp_data_dir / "workflow.md"
+        mermaid_content = mermaid_viz.generate_markdown()
+        mermaid_output.write_text(mermaid_content)
+        assert mermaid_output.exists()
+        assert "```mermaid" in mermaid_content
 
     def test_basic_visualization_methods(self, temp_data_dir: Path):
         """Test basic visualization methods."""
-        if WorkflowVisualizer is None:
-            pytest.skip("Visualization components not available")
+        # Create test workflow first
+        builder = WorkflowBuilder()
+        builder.add_node("CSVReaderNode", "node1")
+        workflow = builder.build("method_test")
 
-        try:
-            visualizer = WorkflowVisualizer()
+        # Create visualizers with workflow
+        visualizer = WorkflowVisualizer(workflow)
+        mermaid = MermaidVisualizer(workflow)
 
-            # Test that visualizer has expected methods
-            assert hasattr(visualizer, "visualize") or hasattr(
-                visualizer, "draw_workflow"
-            )
+        # Test that visualizers have expected methods
+        assert hasattr(visualizer, "visualize")
+        assert hasattr(mermaid, "generate")
 
-        except Exception:
-            pytest.skip("Visualization methods not available")
+        # Test visualization methods work
+        visualizer.visualize()  # Should not raise
+        mermaid_content = mermaid.generate()  # Should not raise
+        assert mermaid_content  # Should produce content
 
     def test_matplotlib_availability(self):
         """Test that matplotlib is available for visualization."""
@@ -86,16 +97,25 @@ class TestVisualizationIntegration:
         """Test creating workflows that could be visualized."""
         builder = WorkflowBuilder()
 
-        try:
-            # Create workflow with nodes if supported
-            workflow = builder.build("visualization_test")
+        # Create workflow with nodes
+        builder.add_node(
+            "HTTPRequestNode", "api_call", config={"url": "https://api.example.com"}
+        )
+        builder.add_node(
+            "FilterNode",
+            "filter",
+            config={"field": "status", "operator": "==", "value": "200"},
+        )
+        builder.add_connection("api_call", "response", "filter", "data")
 
-            # Verify workflow can be created
-            assert workflow is not None
-            assert workflow.metadata.name == "visualization_test"
+        workflow = builder.build("visualization_test")
 
-        except Exception:
-            pytest.skip("Workflow creation for visualization not available")
+        # Verify workflow can be created
+        assert workflow is not None
+        assert workflow.name.startswith("Workflow-")
+        assert "visualiz" in workflow.name
+        assert len(workflow.nodes) == 2
+        assert len(workflow.connections) == 1
 
     def test_workflow_metadata_for_visualization(self):
         """Test that workflows have metadata needed for visualization."""

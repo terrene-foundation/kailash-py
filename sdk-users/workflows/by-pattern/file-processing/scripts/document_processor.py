@@ -28,7 +28,7 @@ from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import DirectoryReaderNode, JSONWriterNode
 from kailash.nodes.logic import MergeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def ensure_input_data_exists():

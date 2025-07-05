@@ -17,7 +17,7 @@ from kailash.nodes.api import RestClientNode
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.transform import DataTransformer
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 def create_basic_error_handling():
     """Basic error handling with fallback."""
@@ -192,7 +192,7 @@ import time
 import random
 
 # Initialize or update retry state
-if 'retry_state' not in locals():
+if 'retry_state' not in globals():
     retry_state = {
         'attempt': 0,
         'max_attempts': 5,
@@ -330,7 +330,7 @@ OPEN = 'open'      # Failing, reject requests
 HALF_OPEN = 'half_open'  # Testing recovery
 
 # Load or initialize circuit state
-if 'circuit_state' not in locals():
+if 'circuit_state' not in globals():
     circuit_state = {
         'state': CLOSED,
         'failure_count': 0,
@@ -607,7 +607,7 @@ degraded_services = []
 
 # Collect from all sources
 for source in ["database", "api", "file_system", "cache"]:
-    error_report = locals().get(f'{source}_error_report', {})
+    error_report = globals().get(f'{source}_error_report', {})
     if error_report.get('has_error'):
         all_errors.append(error_report)
 
@@ -742,7 +742,7 @@ elif status_code >= 400:
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

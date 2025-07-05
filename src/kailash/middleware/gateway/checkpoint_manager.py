@@ -175,8 +175,32 @@ class CheckpointManager:
         compression_enabled: bool = True,
         compression_threshold_bytes: int = 1024,  # 1KB
         retention_hours: int = 24,
+        # Backward compatibility parameter
+        storage: Optional[DiskStorage] = None,
     ):
-        """Initialize checkpoint manager."""
+        """Initialize checkpoint manager.
+
+        Args:
+            memory_storage: Memory storage backend (optional)
+            disk_storage: Disk storage backend (optional)
+            cloud_storage: Cloud storage backend (optional)
+            compression_enabled: Enable compression for large checkpoints
+            compression_threshold_bytes: Minimum size for compression
+            retention_hours: Hours to retain checkpoints
+            storage: DEPRECATED - Use disk_storage instead
+        """
+        # Handle backward compatibility
+        if storage is not None:
+            import warnings
+
+            warnings.warn(
+                "The 'storage' parameter is deprecated. Use 'disk_storage' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if disk_storage is None:
+                disk_storage = storage
+
         self.memory_storage = memory_storage or MemoryStorage()
         self.disk_storage = disk_storage or DiskStorage()
         self.cloud_storage = cloud_storage  # Optional cloud backend
@@ -189,11 +213,23 @@ class CheckpointManager:
         self.load_count = 0
         self.compression_ratio_sum = 0.0
 
-        # Start garbage collection task
-        self._gc_task = asyncio.create_task(self._garbage_collection_loop())
+        # Initialize garbage collection task (will be started when first used)
+        self._gc_task = None
+        self._gc_started = False
+
+    def _ensure_gc_started(self):
+        """Ensure garbage collection task is started (lazy initialization)."""
+        if not self._gc_started:
+            try:
+                self._gc_task = asyncio.create_task(self._garbage_collection_loop())
+                self._gc_started = True
+            except RuntimeError:
+                # No event loop running, GC will be started later
+                pass
 
     async def save_checkpoint(self, checkpoint: Checkpoint) -> None:
         """Save checkpoint to storage."""
+        self._ensure_gc_started()
         start_time = time.time()
 
         # Serialize checkpoint
@@ -391,8 +427,9 @@ class CheckpointManager:
 
     async def close(self) -> None:
         """Close checkpoint manager and cleanup."""
-        self._gc_task.cancel()
-        try:
-            await self._gc_task
-        except asyncio.CancelledError:
-            pass
+        if self._gc_task is not None:
+            self._gc_task.cancel()
+            try:
+                await self._gc_task
+            except asyncio.CancelledError:
+                pass

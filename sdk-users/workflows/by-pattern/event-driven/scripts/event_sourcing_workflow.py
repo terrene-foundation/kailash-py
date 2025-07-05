@@ -21,7 +21,7 @@ from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import EventGeneratorNode, JSONWriterNode
 from kailash.nodes.transform import DataTransformer
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_event_sourcing_workflow() -> Workflow:

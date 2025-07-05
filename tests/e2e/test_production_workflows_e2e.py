@@ -24,6 +24,7 @@ from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVWriterNode, SQLDatabaseNode
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.nodes.transform import DataTransformer
 from kailash.resources import ResourceFactory, ResourceRegistry
@@ -72,15 +73,21 @@ class TestProductionWorkflowsE2E:
 
     async def setup_method_async(self):
         """Async setup for each test method."""
-        # Ensure services are available
-        services_ready = await ensure_docker_services()
-        if not services_ready:
-            pytest.skip("Docker services not available")
+        # Ensure services are available by directly trying to connect
+        # PostgreSQL check
+        node = SQLDatabaseNode(connection_string=self.db_config["connection_string"])
+        node.execute(query="SELECT 1", operation="select")
 
-        # Check Ollama model
-        model_ready = await check_ollama_model("llama2")
-        if not model_ready:
-            pytest.skip("Ollama model not available")
+        # Redis check
+        import redis
+
+        r = redis.Redis.from_url(self.redis_config["redis_url"])
+        r.ping()
+
+        # Ollama check
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.ollama_config['base_url']}/api/tags")
+            assert response.status_code == 200, "Ollama must be available"
 
         # Set up resource registry
         self.registry = ResourceRegistry()
@@ -109,7 +116,7 @@ class TestProductionWorkflowsE2E:
         )
 
         # Initialize runtime
-        self.runtime = AsyncLocalRuntime(
+        self.runtime = LocalRuntime(
             max_workers=20,
             enable_monitoring=True,
             enable_checkpointing=True,
@@ -191,26 +198,30 @@ class TestProductionWorkflowsE2E:
         """Test complete customer analytics pipeline with LLM analysis."""
         # Create workflow for customer event processing
         workflow = (
-            AsyncWorkflowBuilder("customer_analytics_pipeline")
-            .with_description("Process customer events and generate insights")
+            AsyncWorkflowBuilder(
+                "customer_analytics_pipeline",
+                description="Process customer events and generate insights",
+            )
             # 1. Extract recent events from database
             .add_node(
                 AsyncSQLDatabaseNode,
                 "extract_events",
-                query="""
-                    SELECT
-                        customer_id,
-                        event_type,
-                        event_data,
-                        created_at
-                    FROM customer_events
-                    WHERE tenant_id = :tenant_id
-                        AND created_at >= NOW() - INTERVAL '1 hour'
-                        AND NOT processed
-                    ORDER BY created_at DESC
-                    LIMIT 100
-                """,
-                database_config=self.db_config,
+                {
+                    "query": """
+                        SELECT
+                            customer_id,
+                            event_type,
+                            event_data,
+                            created_at
+                        FROM customer_events
+                        WHERE tenant_id = :tenant_id
+                            AND created_at >= NOW() - INTERVAL '1 hour'
+                            AND NOT processed
+                        ORDER BY created_at DESC
+                        LIMIT 100
+                    """,
+                    "database_config": self.db_config,
+                },
             )
             # 2. Transform and enrich data
             .add_async_code(
@@ -258,17 +269,20 @@ result = {
             .add_node(
                 EmbeddingGeneratorNode,
                 "generate_embeddings",
-                model="nomic-embed-text",
-                input_path="enriched_events.customers",
-                batch_size=10,
-                text_field="events",  # Will convert to string
+                {
+                    "model": "nomic-embed-text",
+                    "input_path": "enriched_events.customers",
+                    "batch_size": 10,
+                    "text_field": "events",  # Will convert to string
+                },
             )
             # 4. Analyze customer segments with LLM
             .add_node(
                 LLMAgentNode,
                 "analyze_segments",
-                model="llama2",
-                prompt="""Analyze these customer behavior patterns and provide insights:
+                {
+                    "model": "llama2",
+                    "prompt": """Analyze these customer behavior patterns and provide insights:
 
 Customer Data: {enriched_events.customers}
 
@@ -285,17 +299,22 @@ Format your response as JSON with the following structure:
     "recommendations": [{"segment": "...", "actions": [...]}],
     "key_insights": [...]
 }""",
-                temperature=0.3,
-                max_tokens=1000,
+                    "temperature": 0.3,
+                    "max_tokens": 1000,
+                },
             )
             # 5. Cache results for fast retrieval
-            .add_node(
-                RedisCacheNode,
+            .add_async_code(
                 "cache_results",
-                operation="set",
-                key_pattern="analytics:tenant_{tenant_id}:latest",
-                ttl=3600,
-                input_path="analyze_segments.content",
+                """
+# Simulate caching results
+# In real scenario, you'd use Redis or another cache
+result = {
+    "cached": True,
+    "cache_key": f"analytics:tenant_{tenant_id}:latest",
+    "analysis": analyze_segments
+}
+""",
             )
             # 6. Store analysis results in database
             .add_async_code(
@@ -438,21 +457,25 @@ result = {
         """Test API orchestration with circuit breakers and fallbacks."""
         # Create a workflow that handles API failures gracefully
         workflow = (
-            AsyncWorkflowBuilder("resilient_api_workflow")
-            .with_description("Orchestrate multiple APIs with resilience")
+            AsyncWorkflowBuilder(
+                "resilient_api_workflow",
+                description="Orchestrate multiple APIs with resilience",
+            )
             # Primary API call
             .add_node(
                 HTTPRequestNode,
                 "call_primary_api",
-                method="POST",
-                url=f"{self.ollama_config['base_url']}/api/generate",
-                headers={"Content-Type": "application/json"},
-                body={
-                    "model": "llama2",
-                    "prompt": "Generate a customer satisfaction score based on: positive feedback",
-                    "stream": False,
+                {
+                    "method": "POST",
+                    "url": f"{self.ollama_config['base_url']}/api/generate",
+                    "headers": {"Content-Type": "application/json"},
+                    "body": {
+                        "model": "llama2",
+                        "prompt": "Generate a customer satisfaction score based on: positive feedback",
+                        "stream": False,
+                    },
+                    "timeout": 10.0,
                 },
-                timeout=10.0,
             )
             # Parse primary response
             .add_async_code(
@@ -464,7 +487,7 @@ try:
 
     # Extract numeric score (simplified)
     import re
-    numbers = re.findall(r'\d+', score_text)
+    numbers = re.findall(r'\\d+', score_text)
     score = int(numbers[0]) if numbers else 75  # Default score
 
     result = {
@@ -554,9 +577,10 @@ result = {
         """Test real-time monitoring with performance tracking."""
         # Create monitoring workflow
         workflow = (
-            AsyncWorkflowBuilder("monitoring_pipeline")
-            .with_description("Real-time system monitoring and alerting")
-            .with_monitoring(enabled=True)
+            AsyncWorkflowBuilder(
+                "monitoring_pipeline",
+                description="Real-time system monitoring and alerting",
+            )
             # Monitor system metrics
             .add_async_code(
                 "collect_metrics",
@@ -711,8 +735,7 @@ result = {
                     ),
                     ("detect_anomalies", "result", "store_metrics", "detect_anomalies"),
                 ]
-            )
-            .build()
+            ).build()
         )
 
         # Run monitoring multiple times

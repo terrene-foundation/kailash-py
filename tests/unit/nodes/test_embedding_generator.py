@@ -163,20 +163,17 @@ class TestEmbeddingGeneratorNode:
                 input_text="Test text for different providers",
             )
 
-            # For Ollama, we check if it's available first
+            # For Ollama, we check result without connecting
             if provider == "ollama":
-                try:
-                    import ollama
-
-                    # Try to connect to Ollama
-                    ollama.list()
-                    assert result["success"] is True
+                # For unit tests, we don't actually connect to Ollama
+                if result["success"]:
                     # Ollama dimensions may vary, so we just check it's positive
                     assert result["dimensions"] > 0
-                except Exception:
+                else:
                     # If Ollama is not available, the test should fail gracefully
-                    assert result["success"] is False or "Ollama" in result.get(
-                        "error", ""
+                    assert (
+                        "Ollama" in result.get("error", "")
+                        or "ollama" in result.get("error", "").lower()
                     )
             else:
                 assert result["success"] is True

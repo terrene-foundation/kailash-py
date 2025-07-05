@@ -200,18 +200,15 @@ class TestLLMAgentNode:
             )
 
             if provider == "ollama":
-                # Check if Ollama is available
-                try:
-                    import ollama
-
-                    # Try to connect to Ollama
-                    ollama.list()
-                    assert result["success"] is True
+                # For unit tests, we don't actually connect to Ollama
+                # Just verify the result structure
+                if result["success"]:
                     assert result["metadata"]["provider"] == provider
-                except Exception:
+                else:
                     # If Ollama is not available, it should fail gracefully
-                    assert result["success"] is False or "Ollama" in result.get(
-                        "error", ""
+                    assert (
+                        "Ollama" in result.get("error", "")
+                        or "ollama" in result.get("error", "").lower()
                     )
             else:
                 assert result["success"] is True

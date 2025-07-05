@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 
 import httpx
 import pytest
+import pytest_asyncio
 
 from kailash.middleware.gateway.durable_gateway import DurableAPIGateway
 from kailash.nodes.ai import LLMAgentNode
@@ -42,7 +43,7 @@ POSTGRES_CONFIG = {
 class TestUserFlows:
     """User flow tests for real-world scenarios."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def test_data_setup(self):
         """Set up test data and environment."""
         pool = WorkflowConnectionPool(
@@ -316,7 +317,7 @@ class TestUserFlows:
                 }
             )
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def gateway_with_workflows(self, test_data_setup):
         """Create gateway with comprehensive workflows."""
         gateway = DurableAPIGateway(

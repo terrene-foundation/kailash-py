@@ -30,8 +30,8 @@ from kailash.nodes.admin.permission_check import PermissionCheckNode
 from kailash.nodes.admin.role_management import RoleManagementNode
 from kailash.nodes.admin.schema_manager import AdminSchemaManager
 from kailash.nodes.admin.user_management import UserManagementNode
+from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.data import SQLDatabaseNode
-from kailash.nodes.llm import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError
 from kailash.workflow import WorkflowBuilder

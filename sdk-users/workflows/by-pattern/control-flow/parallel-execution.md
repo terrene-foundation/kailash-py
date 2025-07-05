@@ -15,7 +15,7 @@ Parallel execution allows workflows to process multiple independent tasks concur
 from kailash import Workflow
 from kailash.nodes.api import RestClientNode
 from kailash.nodes.logic import MergeNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 def create_parallel_api_workflow():
     """Aggregate data from multiple APIs in parallel."""
@@ -155,7 +155,7 @@ all_results = []
 
 # Collect from all processor outputs
 for processor_id in range(4):
-    processor_results = locals().get(f'processor_{processor_id}_results', [])
+    processor_results = globals().get(f'processor_{processor_id}_results', [])
     all_results.extend(processor_results)
 
 # Sort by original index to maintain order
@@ -301,7 +301,7 @@ grouped_data = defaultdict(list)
 
 # Collect from all mappers
 for i in range(4):
-    mapper_results = locals().get(f'mapper_{i}_results', {})
+    mapper_results = globals().get(f'mapper_{i}_results', {})
     mapped_data = mapper_results.get('mapped_data', [])
 
     for item in mapped_data:
@@ -380,7 +380,7 @@ result = {
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -410,7 +410,7 @@ workflow.workflow.connect(f"{db_name}_reader", "data_joiner")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -444,7 +444,7 @@ workflow.workflow.connect(validator, "validation_aggregator")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -471,7 +471,7 @@ workflow.workflow.connect("notification_trigger", f"{channel}_sender")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -502,7 +502,7 @@ workflow.workflow.connect(f"processor_{i}", "results_collector")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -533,7 +533,7 @@ workflow.workflow.add_node("processor_1", PythonCodeNode(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -555,7 +555,7 @@ slow_api = RestClientNode(timeout=10000)   # 10 seconds
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -580,7 +580,7 @@ aggregator = MergeNode(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

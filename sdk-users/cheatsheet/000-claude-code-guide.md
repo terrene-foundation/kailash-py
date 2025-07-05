@@ -28,20 +28,6 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### ❌ Never Use These Patterns
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
 # ❌ WRONG - Missing runtime
 workflow = Workflow("example", name="Example")
 workflow.execute()  # AttributeError - workflows don't have execute()
@@ -65,7 +51,7 @@ result = node.run()
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -95,7 +81,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -129,7 +115,7 @@ workflow.connect("source", "processor",
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -193,7 +179,7 @@ from kailash.nodes.ai import (
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -267,7 +253,7 @@ gateway.run(port=8000)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -342,7 +328,7 @@ ws.onmessage = (event) => {
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -392,7 +378,7 @@ results, run_id = runtime.execute(workflow)
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -424,7 +410,7 @@ workflow.connect("router", "low_handler", output_port="low")
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

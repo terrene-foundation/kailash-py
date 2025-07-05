@@ -1,10 +1,17 @@
 # Basic Imports - Essential Components
 
-## Core Workflow
+## Core Runtime
 ```python
-from kailash import Workflow
+# Essential workflow components
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
+```
 
+## Core Nodes
+```python
+# Essential processing nodes
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.logic import SwitchNode, MergeNode
 ```
 
 ## Common Nodes
@@ -14,7 +21,7 @@ from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode
 
 # Processing
 from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.transform import DataTransformerNode
+from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.nodes.logic import SwitchNode, MergeNode
 
 # AI/LLM
@@ -41,24 +48,28 @@ from kailash.nodes.ai.self_organizing import SelfOrganizingAgentNode
 ## Quick Start Pattern
 ```python
 # Minimal imports for basic workflow
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.code import PythonCodeNode
 
-# Create and execute
-workflow = Workflow("example", name="Example")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow.add_node("process", PythonCodeNode(
-    name="process",
-    code="result = {'count': len(data)}",
-    input_types={"data": list}
-))
-workflow.connect("reader", "process")
+# Create workflow with modern API
+workflow = WorkflowBuilder()
 
+# Add nodes with correct syntax
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'data': [1, 2, 3], 'count': 3}"
+})
+
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'processed_count': len(input_data.get('data', []))}"
+})
+
+# Connect with correct syntax
+workflow.connect("data_source", "result", mapping={"processor": "input_data"})
+
+# Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
-
+results, run_id = runtime.execute(workflow.build())
+print(f"Processed {results['processor']['result']['processed_count']} items")
 ```
 
 ## Next Steps

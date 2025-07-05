@@ -1,140 +1,310 @@
-# Architecture Decision Matrix - Quick Reference
+# Architecture Decision Matrix
 
-## 🚀 Quick Decision Lookup
+**Version**: v0.6.3 | **Quick Decisions for Claude Code**
 
-### Workflow Construction Pattern
+## 🎯 Quick Decision Framework
 
-| Situation | Pattern | Why | Reference |
-|-----------|---------|-----|-----------|
-| Simple CRUD app | **Inline** | Direct config access, rapid development | [ADR-0045](0045-workflow-construction-patterns.md) |
-| Enterprise app with reusable patterns | **Class-based** | Inheritance, formal structure | [ADR-0045](0045-workflow-construction-patterns.md) |
-| Mixed complexity (recommended) | **Hybrid** | Best of both approaches | [ADR-0045](0045-workflow-construction-patterns.md) |
-| Prototyping/unsure | **Hybrid** | Safe default, can refactor later | [ADR-0045](0045-workflow-construction-patterns.md) |
+**Use this matrix to make fast architectural decisions before building any app.**
 
-### Interface Routing Strategy
+### 📊 Decision Lookup Tables
 
-| Situation | Strategy | Why | Reference |
-|-----------|----------|-----|-----------|
-| LLM agents will use this app | **MCP Routing** | Tool discovery, introspection | [ADR-0046](0046-interface-routing-strategies.md) |
-| Need <5ms response time | **Direct Calls** | Minimal overhead | [ADR-0046](0046-interface-routing-strategies.md) |
-| High volume (>1000 req/sec) | **Hybrid** | Direct for high-freq, MCP for features | [ADR-0046](0046-interface-routing-strategies.md) |
-| Standard business app | **MCP Routing** | Automatic features, consistency | [ADR-0046](0046-interface-routing-strategies.md) |
+#### 1. Workflow Pattern Selection
 
-### Performance Strategy
+| Scenario | Pattern | Reasoning |
+|----------|---------|-----------|
+| **Simple automation (< 5 nodes)** | **Inline** | Fast setup, minimal overhead |
+| **Business logic (5-15 nodes)** | **Class-based** | Better structure, reusability |
+| **Complex enterprise (15+ nodes)** | **Hybrid** | Flexibility + maintainability |
+| **Rapid prototyping** | **Inline** | Quick iteration |
+| **Production apps** | **Class-based** | Better testing, maintenance |
+| **Mixed complexity** | **Hybrid** | Best of both worlds |
 
-| Operation Time | Request Volume | Strategy | Reference |
-|----------------|----------------|----------|-----------|
-| <10ms | Any | Direct calls + selective optimization | [ADR-0047](0047-performance-guidelines.md) |
-| 10-50ms | <1000/sec | MCP routing acceptable | [ADR-0047](0047-performance-guidelines.md) |
-| 10-50ms | >1000/sec | Hybrid routing | [ADR-0047](0047-performance-guidelines.md) |
-| >50ms | Any | Full MCP routing with caching | [ADR-0047](0047-performance-guidelines.md) |
+#### 2. Interface Routing Selection
 
-## 📋 Decision Checklist for Claude Code
+| Use Case | Routing | Reasoning |
+|----------|---------|-----------|
+| **AI agents with tools** | **MCP** | Essential for tool integration |
+| **Ultra-low latency (<5ms)** | **Direct** | No protocol overhead |
+| **High throughput (>1000 req/s)** | **Direct** | Performance optimization |
+| **Mixed AI + direct calls** | **Hybrid** | Flexibility for different patterns |
+| **Microservices integration** | **MCP** | Standard protocol support |
+| **Legacy system integration** | **Direct** | Simpler integration path |
 
-Before implementing any app/feature, answer:
+#### 3. Performance Strategy Selection
 
-### Performance Questions
-- [ ] Expected latency requirement: ___ms
-- [ ] Peak request volume: ___/second
-- [ ] Real-time requirements: Y/N
-- [ ] Batch processing needs: Y/N
+| Requirements | Strategy | Implementation |
+|--------------|----------|----------------|
+| **<5ms latency** | **Direct calls** | Skip MCP overhead |
+| **>1000 req/s** | **Connection pooling** | Pre-established connections |
+| **AI-heavy workloads** | **Async runtime** | Non-blocking operations |
+| **Variable load** | **Circuit breakers** | Automatic failure protection |
+| **Enterprise scale** | **Full middleware** | Complete production stack |
 
-### Integration Questions
-- [ ] LLM agent integration needed: Y/N
-- [ ] External API consistency required: Y/N
-- [ ] Automatic caching/metrics needed: Y/N
-- [ ] WebSocket/streaming required: Y/N
+### 🚀 Common Decision Combinations
 
-### Complexity Questions
-- [ ] Workflow complexity: Simple (<5 nodes) / Medium (5-10) / Complex (>10)
-- [ ] Reusable patterns needed: Y/N
-- [ ] Multiple team members: Y/N
-- [ ] Dynamic workflow modification: Y/N
+#### Recommended Patterns by App Type
 
-## 🎯 Recommended Defaults
+| App Type | Workflow | Interface | Performance | Rationale |
+|----------|----------|-----------|-------------|-----------|
+| **AI Assistant** | Class-based | MCP | Async runtime | Structured AI tool integration |
+| **API Gateway** | Hybrid | Hybrid | Full middleware | Maximum flexibility |
+| **Data Pipeline** | Class-based | Direct | Connection pooling | High-throughput processing |
+| **Enterprise App** | Hybrid | MCP | Full middleware | Complete feature set |
+| **Microservice** | Inline | Direct | Circuit breakers | Lightweight + resilient |
+| **Prototype** | Inline | MCP | Basic runtime | Quick setup with AI capability |
 
-**For most applications:**
-- **Workflow Pattern**: Hybrid (inline + templates)
-- **Interface Routing**: MCP routing (unless <5ms required)
-- **Performance Strategy**: Standard with caching
+## 🏗️ Detailed Decision Criteria
 
-**Override defaults only when:**
-- Specific performance requirements demand it
-- Technical constraints require different approach
-- User explicitly requests alternative
+### Workflow Pattern Details
 
-## 🔄 Common Decision Combinations
+#### Inline Workflows
+```python
+# Best for: Simple automation, prototypes
+from kailash.workflow.builder import WorkflowBuilder
 
-### Standard Business App
-```yaml
-Workflow Pattern: Hybrid
-Interface Routing: MCP
-Performance: Standard with caching
-Rationale: Balanced approach with enterprise features
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
+workflow.connect("reader", "result", mapping={"analyzer": "input_data"})
 ```
 
-### High-Performance API
-```yaml
-Workflow Pattern: Inline
-Interface Routing: Hybrid (direct for critical paths)
-Performance: Selective optimization
-Rationale: Performance critical with mixed requirements
+**When to use:**
+- ✅ < 5 nodes
+- ✅ Simple data flow
+- ✅ Rapid prototyping
+- ❌ Complex business logic
+- ❌ Reusable components
+
+#### Class-based Workflows
+```python
+# Best for: Business applications, production systems
+from kailash.workflow.builder import WorkflowBuilder
+
+class CustomerAnalysisWorkflow:
+    def __init__(self):
+        self.workflow = self._build_workflow()
+
+    def _build_workflow(self):
+        workflow = WorkflowBuilder()
+        workflow.add_node("CSVReaderNode", "customer_reader", {
+            "file_path": "customers.csv"
+        })
+        workflow.add_node("LLMAgentNode", "analyzer", {
+            "model": "gpt-4",
+            "system_prompt": "Analyze customer data for insights"
+        })
+        workflow.connect("customer_reader", "analyzer")
+        return workflow.build()
 ```
 
-### Enterprise Admin Tool
-```yaml
-Workflow Pattern: Class-based with templates
-Interface Routing: MCP
-Performance: Full feature stack
-Rationale: Complex workflows, LLM integration, maintainability
+**When to use:**
+- ✅ 5-15 nodes
+- ✅ Business logic encapsulation
+- ✅ Testing requirements
+- ✅ Team development
+- ❌ Very simple tasks
+
+#### Hybrid Workflows
+```python
+# Best for: Complex enterprise applications
+from kailash.workflow.builder import WorkflowBuilder
+
+class EnterpriseWorkflow:
+    def __init__(self):
+        self.core_workflow = self._build_core()  # Class-based
+        self.dynamic_parts = {}  # Inline additions
+
+    def _build_core(self):
+        workflow = WorkflowBuilder()
+        # Core enterprise processing nodes
+        workflow.add_node("SSOAuthenticationNode", "auth", {})
+        workflow.add_node("TenantAssignmentNode", "tenant", {})
+        return workflow
+
+    def add_dynamic_processing(self, processor_type):
+        # Add nodes dynamically based on runtime requirements
+        self.dynamic_parts[processor_type] = WorkflowBuilder()
 ```
 
-### Real-time Processing
-```yaml
-Workflow Pattern: Inline
-Interface Routing: Direct calls
-Performance: Ultra-low latency optimization
-Rationale: Performance is the primary constraint
+**When to use:**
+- ✅ 15+ nodes
+- ✅ Mixed complexity levels
+- ✅ Runtime customization
+- ✅ Enterprise requirements
+
+### Interface Routing Details
+
+#### MCP Routing
+**Pros:**
+- Standard protocol
+- AI agent tool integration
+- Microservices communication
+- Future-proof architecture
+
+**Cons:**
+- Protocol overhead (~1-3ms)
+- Additional complexity
+- Learning curve
+
+**Best for:**
+- AI agents with tools
+- Microservices architecture
+- Standard integrations
+
+#### Direct Routing
+**Pros:**
+- Ultra-low latency
+- Simple integration
+- High throughput
+- Minimal overhead
+
+**Cons:**
+- No AI tool integration
+- Custom protocol handling
+- Less flexible
+
+**Best for:**
+- Performance-critical applications
+- Legacy system integration
+- High-frequency trading
+
+#### Hybrid Routing
+**Pros:**
+- Best of both worlds
+- Route-specific optimization
+- Gradual migration path
+
+**Cons:**
+- Increased complexity
+- More configuration
+
+**Best for:**
+- Mixed requirements
+- Enterprise applications
+- Migration scenarios
+
+### Performance Strategy Details
+
+#### Latency Thresholds
+- **<1ms**: Direct calls only, pre-compiled workflows
+- **<5ms**: Direct calls, minimal middleware
+- **<50ms**: MCP acceptable, basic middleware
+- **<500ms**: Full feature set available
+- **>500ms**: All patterns acceptable
+
+#### Throughput Thresholds
+- **<10 req/s**: Basic runtime sufficient
+- **<100 req/s**: Connection pooling recommended
+- **<1000 req/s**: Async runtime required
+- **>1000 req/s**: Full middleware + optimization
+
+## 🎯 Quick Decision Workflow
+
+### Step 1: Performance Requirements
+```
+Latency requirement: [X]ms
+Throughput requirement: [X] req/s
+AI integration needed: [Y/N]
 ```
 
-## 🚨 Red Flags - When to Reconsider
+### Step 2: Lookup Decision
+Use the tables above to determine:
+- Workflow pattern
+- Interface routing
+- Performance strategy
 
-**Workflow Pattern Red Flags:**
-- Copying workflow code across services → Use templates
-- Can't access service config in workflows → Consider inline
-- Complex inheritance hierarchies → Simplify or use hybrid
+### Step 3: Validate Combination
+Check the "Recommended Patterns" table for your app type.
 
-**Interface Routing Red Flags:**
-- Manual caching/metrics implementation → Use MCP
-- Inconsistent API/CLI behavior → Use MCP
-- Performance bottlenecks in MCP layer → Consider hybrid
+### Step 4: Implementation Plan
+```
+Based on your requirements:
 
-**Performance Red Flags:**
-- Optimizing prematurely → Profile first
-- Sacrificing maintainability for marginal gains → Reconsider
-- Not measuring actual performance → Benchmark first
+Performance Analysis:
+- Expected latency: [X]ms → [Strategy]
+- Request volume: [X]/second → [Optimizations]
+- LLM integration: [Y/N] → [Routing choice]
 
-## 📊 Migration Paths
+Architectural Decisions:
+- Workflow pattern: [inline/class-based/hybrid] because [reason]
+- Interface routing: [MCP/direct/hybrid] because [reason]
+- Performance strategy: [approach] because [reason]
 
-### From Direct to MCP
-1. Create MCP tools wrapping services
-2. Update API/CLI to call MCP tools
-3. Measure performance impact
-4. Optimize if needed
+Trade-offs:
+- [List key trade-offs and implications]
 
-### From Inline to Hybrid
-1. Extract common patterns to templates
-2. Keep service-specific logic inline
-3. Test equivalent behavior
+Implementation path:
+1. [First step]
+2. [Second step]
+3. [Third step]
+```
 
-### From Simple to Enterprise
-1. Add class-based templates for reuse
-2. Implement MCP routing for consistency
-3. Add monitoring and caching
+## 🔄 Migration Patterns
 
-## 🔗 Related Documentation
+### From Simple to Complex
+1. Start with **Inline + MCP + Basic runtime**
+2. Migrate to **Class-based** as complexity grows
+3. Add **Hybrid routing** for performance optimization
+4. Implement **Full middleware** for enterprise features
 
-- **Complete App Guide**: [../apps/ARCHITECTURAL_GUIDE.md](../apps/ARCHITECTURAL_GUIDE.md)
-- **Workflow Patterns**: [../# contrib (removed)/architecture/adr/0045-workflow-construction-patterns.md](../# contrib (removed)/architecture/adr/0045-workflow-construction-patterns.md)
-- **Interface Routing**: [../# contrib (removed)/architecture/adr/0046-interface-routing-strategies.md](../# contrib (removed)/architecture/adr/0046-interface-routing-strategies.md)
-- **Performance Guidelines**: [../# contrib (removed)/architecture/adr/0047-performance-guidelines.md](../# contrib (removed)/architecture/adr/0047-performance-guidelines.md)
+### Performance Optimization Path
+1. **Basic runtime** → Measure performance
+2. **Async runtime** → If CPU-bound operations
+3. **Connection pooling** → If I/O-bound operations
+4. **Circuit breakers** → If reliability required
+5. **Full middleware** → If enterprise features needed
+
+## 🚨 Anti-Patterns to Avoid
+
+### ❌ Wrong Workflow Pattern
+- **Don't use Inline for >10 nodes** → Unmaintainable
+- **Don't use Class-based for <3 nodes** → Over-engineering
+- **Don't use Hybrid without clear need** → Unnecessary complexity
+
+### ❌ Wrong Interface Routing
+- **Don't use MCP for <5ms latency** → Too much overhead
+- **Don't use Direct for AI agents** → Missing tool integration
+- **Don't mix routing without planning** → Inconsistent architecture
+
+### ❌ Wrong Performance Strategy
+- **Don't optimize prematurely** → Wasted effort
+- **Don't ignore performance requirements** → System failure
+- **Don't under-provision for enterprise** → Scalability issues
+
+## 📚 Implementation Guides
+
+After making decisions using this matrix:
+
+1. **Workflow Implementation** → [../apps/APP_DEVELOPMENT_GUIDE.md](../apps/APP_DEVELOPMENT_GUIDE.md)
+2. **MCP Integration** → [cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md)
+3. **Performance Optimization** → [developer/04-production.md](developer/04-production.md)
+4. **Enterprise Features** → [enterprise/README.md](enterprise/README.md)
+
+## 🎯 Quick Examples
+
+### AI Assistant App
+```
+Requirements: AI tools, conversational interface, moderate performance
+Decision: Class-based + MCP + Async runtime
+Rationale: Structured AI integration with good performance
+```
+
+### High-Frequency Trading
+```
+Requirements: <1ms latency, 10,000+ req/s, no AI
+Decision: Inline + Direct + Connection pooling
+Rationale: Maximum performance, minimal overhead
+```
+
+### Enterprise Analytics
+```
+Requirements: Complex workflows, AI + direct data, enterprise features
+Decision: Hybrid + Hybrid + Full middleware
+Rationale: Maximum flexibility and feature set
+```
+
+---
+
+**Next Steps**: Use this matrix to make decisions, then implement using the guides referenced above.
+
+**Remember**: Start simple and evolve. Don't over-engineer from the beginning.

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..resources.registry import ResourceRegistry
 from .enhanced_gateway import (
@@ -37,14 +37,15 @@ class ResourceReferenceModel(BaseModel):
         None, description="Reference to credentials secret"
     )
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "type": "database",
                 "config": {"host": "localhost", "port": 5432, "database": "myapp"},
                 "credentials_ref": "db_credentials",
             }
         }
+    )
 
 
 class WorkflowRequestModel(BaseModel):
@@ -59,8 +60,8 @@ class WorkflowRequestModel(BaseModel):
         None, description="Additional context variables"
     )
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "inputs": {"user_id": 123, "action": "process"},
                 "resources": {
@@ -74,6 +75,7 @@ class WorkflowRequestModel(BaseModel):
                 "context": {"environment": "production", "trace_id": "abc123"},
             }
         }
+    )
 
 
 class WorkflowResponseModel(BaseModel):

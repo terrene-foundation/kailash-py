@@ -24,7 +24,7 @@ from kailash.nodes.data import (
     TextReaderNode,
 )
 from kailash.nodes.transform import DataTransformer
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 def create_simple_document_workflow() -> Workflow:

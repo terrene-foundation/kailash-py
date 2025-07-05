@@ -19,7 +19,7 @@ from kailash import Workflow
 from kailash.nodes.api import RateLimitedAPINode, HTTPRequestNode
 from kailash.nodes.transform import DataTransformer
 from kailash.nodes.data import JSONWriterNode
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 # API integration workflow using proper Kailash nodes
 workflow = Workflow(
@@ -787,7 +787,7 @@ workflow.connect("webhook", "processor", mapping={"request": "data"})
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -846,7 +846,7 @@ pooled_client = HTTPRequestNode(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
@@ -893,7 +893,7 @@ cached_api = RateLimitedAPINode(
 ```python
 # WRONG: Manual HTTP implementation
 api_node = PythonCodeNode(
-    code="response = requests.get('https://api.example.com')"
+    code="response = requests.get('https://api.example.com'); result = response"
 )
 
 # CORRECT: Use HTTPRequestNode or RateLimitedAPINode
@@ -908,7 +908,7 @@ api_node = HTTPRequestNode(
 ```python
 # SDK Setup for example
 from kailash import Workflow
-from kailash.runtime import LocalRuntime
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode

@@ -227,27 +227,49 @@ nodes:
   # AI/ML Nodes
   llm_agent:
     class: kailash.nodes.ai.LLMAgentNode
-    description: "Interact with language models"
+    description: "Advanced LLM agent with tool calling and MCP support"
     import: "from kailash.nodes.ai import LLMAgentNode"
     config:
-      provider: "str - LLM provider ('openai', 'anthropic', 'ollama')"
+      provider: "str - LLM provider ('openai', 'anthropic', 'ollama', 'mock')"
       model: "str - Model name (e.g., 'gpt-4', 'claude-3')"
-      api_key: "str - API key (or use env var)"
-      temperature: "float - Sampling temperature (default: 0.7)"
-      max_tokens: "int - Maximum tokens (default: 1000)"
+      messages: "List[dict] - Conversation messages"
       system_prompt: "str - System prompt (optional)"
-    inputs:
-      prompt: "str - User prompt"
-      context: "Any - Additional context (optional)"
+      tools: "List[dict] - Available tools for function calling"
+      conversation_id: "str - Conversation ID for memory persistence"
+      memory_config: "dict - Memory configuration options"
+      mcp_servers: "List[dict] - MCP server configurations"
+      mcp_context: "List[str] - MCP resource URIs to include"
+      auto_discover_tools: "bool - Auto-discover tools from MCP (default: False)"
+      auto_execute_tools: "bool - Auto-execute tool calls (default: True)"
+      tool_execution_config: "dict - Tool execution configuration"
+      rag_config: "dict - RAG configuration for retrieval"
+      generation_config: "dict - LLM generation parameters"
+      streaming: "bool - Enable streaming responses"
+      timeout: "int - Request timeout in seconds"
+      max_retries: "int - Maximum retry attempts"
+      enable_monitoring: "bool - Enable token usage tracking"
+      budget_limit: "float - Maximum spend allowed in USD"
     outputs:
-      response: "str - Model response"
-      metadata: "dict - Response metadata"
+      success: "bool - Whether operation succeeded"
+      response: "dict - LLM response with content, tool_calls, etc."
+      conversation_id: "str - Conversation identifier"
+      usage: "dict - Token usage and cost metrics"
+      context: "dict - Information about context sources"
+      metadata: "dict - Additional metadata"
     example: |
-      workflow.add_node('llm', LLMAgentNode(),
+      workflow.add_node('agent', LLMAgentNode(),
           provider='openai',
           model='gpt-4',
-          temperature=0.7,
-          system_prompt='You are a helpful assistant.'
+          messages=[{"role": "user", "content": "Analyze data"}],
+          mcp_servers=[{
+              "name": "data-server",
+              "transport": "stdio",
+              "command": "python",
+              "args": ["-m", "data_mcp_server"]
+          }],
+          auto_discover_tools=True,
+          auto_execute_tools=True,
+          tool_execution_config={"max_rounds": 3}
       )
 
   embedding_generator:
