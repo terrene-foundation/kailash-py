@@ -63,7 +63,7 @@ class RealtimeRAGNode(WorkflowNode):
         ])
 
         # Query with real-time data
-        result = await realtime_rag.run(
+        result = await realtime_rag.execute(
             query="What are the latest developments in AI?"
         )
         # Returns most recent relevant information

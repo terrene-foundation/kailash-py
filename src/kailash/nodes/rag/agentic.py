@@ -62,7 +62,7 @@ class AgenticRAGNode(WorkflowNode):
         # 4. Use calculator for growth calculations
         # 5. Synthesize findings with citations
 
-        result = await agentic_rag.run(
+        result = await agentic_rag.execute(
             documents=financial_docs,
             query="Compare the revenue growth of tech companies in 2023 vs 2022"
         )
@@ -219,7 +219,54 @@ def execute_tool(action_string, documents, context):
                 "sum": sum, "len": len, "pow": pow
             })
 
-            result = eval(params, safe_dict)
+            # Enterprise security: Use ast.literal_eval for safe mathematical expressions
+            import ast
+            try:
+                # Try ast.literal_eval first for simple mathematical expressions
+                result = ast.literal_eval(params)
+            except (ValueError, SyntaxError):
+                # Fallback to safe mathematical evaluation
+                import operator
+                import math
+
+                # Define safe operators and functions
+                safe_ops = {
+                    '+': operator.add,
+                    '-': operator.sub,
+                    '*': operator.mul,
+                    '/': operator.truediv,
+                    '**': operator.pow,
+                    'abs': abs,
+                    'max': max,
+                    'min': min,
+                    'round': round,
+                    'sqrt': math.sqrt,
+                    'sin': math.sin,
+                    'cos': math.cos,
+                    'tan': math.tan,
+                    'log': math.log,
+                    'exp': math.exp,
+                    'pi': math.pi,
+                    'e': math.e,
+                }
+                safe_ops.update(safe_dict)
+
+                # Parse and evaluate safely
+                try:
+                    # Simple expression parser for basic math
+                    import re
+                    # Replace function calls and operators with safe alternatives
+                    safe_expr = params
+                    for func in ['sqrt', 'sin', 'cos', 'tan', 'log', 'exp']:
+                        safe_expr = re.sub(rf'\b{func}\(([^)]+)\)', rf'safe_ops["{func}"](\1)', safe_expr)
+
+                    # Only evaluate if it's a simple mathematical expression
+                    if re.match(r'^[0-9+\-*/.() \w]+$', safe_expr.replace('safe_ops', '')):
+                        result = eval(safe_expr, {"__builtins__": {}}, {"safe_ops": safe_ops})
+                    else:
+                        result = f"Cannot evaluate complex expression: {params}"
+                except:
+                    result = f"Invalid mathematical expression: {params}"
             results = {
                 "tool": "calculate",
                 "expression": params,

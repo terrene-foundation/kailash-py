@@ -74,7 +74,7 @@ class SharedMemoryPoolNode(Node):
         >>> memory_pool = SharedMemoryPoolNode()
         >>>
         >>> # Write memory from an agent
-        >>> result = memory_pool.run(
+        >>> result = memory_pool.execute(
         ...     action="write",
         ...     agent_id="researcher_001",
         ...     content="Found correlation between X and Y",
@@ -86,7 +86,7 @@ class SharedMemoryPoolNode(Node):
         >>> assert result["memory_id"] is not None
         >>>
         >>> # Read with attention filter
-        >>> memories = memory_pool.run(
+        >>> memories = memory_pool.execute(
         ...     action="read",
         ...     agent_id="analyst_001",
         ...     attention_filter={
@@ -98,14 +98,14 @@ class SharedMemoryPoolNode(Node):
         >>> assert len(memories["memories"]) > 0
         >>>
         >>> # Subscribe to specific segments
-        >>> memory_pool.run(
+        >>> memory_pool.execute(
         ...     action="subscribe",
         ...     agent_id="monitor_001",
         ...     segments=["findings", "alerts"]
         ... )
         >>>
         >>> # Semantic query across all memories
-        >>> results = memory_pool.run(
+        >>> results = memory_pool.execute(
         ...     action="query",
         ...     query="correlation analysis",
         ...     top_k=3
@@ -530,7 +530,7 @@ class A2AAgentNode(LLMAgentNode):
         >>> agent = A2AAgentNode()
         >>>
         >>> # Execute with A2A features
-        >>> result = agent.run(
+        >>> result = agent.execute(
         ...     agent_id="researcher_001",
         ...     agent_role="research_specialist",
         ...     provider="openai",
@@ -659,7 +659,7 @@ class A2AAgentNode(LLMAgentNode):
         # Read from shared memory if available
         shared_context = []
         if memory_pool:
-            memory_result = memory_pool.run(
+            memory_result = memory_pool.execute(
                 action="read", agent_id=agent_id, attention_filter=attention_filter
             )
             if memory_result.get("success"):
@@ -723,7 +723,7 @@ Relevant shared context from other agents:
                 )
 
                 # Write to memory pool with enhanced context
-                memory_pool.run(
+                memory_pool.execute(
                     action="write",
                     agent_id=agent_id,
                     content=insight["content"],
@@ -1197,7 +1197,7 @@ class A2ACoordinatorNode(CycleAwareNode):
         >>> coordinator = A2ACoordinatorNode()
         >>>
         >>> # Register agents
-        >>> coordinator.run(
+        >>> coordinator.execute(
         ...     action="register",
         ...     agent_info={
         ...         "id": "analyst_001",
@@ -1207,7 +1207,7 @@ class A2ACoordinatorNode(CycleAwareNode):
         ... )
         >>>
         >>> # Delegate task with best match strategy
-        >>> result = coordinator.run(
+        >>> result = coordinator.execute(
         ...     action="delegate",
         ...     task={
         ...         "type": "analysis",
@@ -1225,7 +1225,7 @@ class A2ACoordinatorNode(CycleAwareNode):
         >>> assert result["assigned_agent"] == "analyst_001"
         >>>
         >>> # Build consensus among agents
-        >>> consensus_result = coordinator.run(
+        >>> consensus_result = coordinator.execute(
         ...     action="consensus",
         ...     proposal="Implement new feature X",
         ...     voting_agents=["agent1", "agent2", "agent3"],
@@ -1324,7 +1324,7 @@ class A2ACoordinatorNode(CycleAwareNode):
 
         Examples:
             >>> coordinator = A2ACoordinatorNode()
-            >>> result = coordinator.run(context,
+            >>> result = coordinator.execute(context,
             ...     action=\"delegate\",
             ...     task={\"type\": \"analysis\", \"required_skills\": [\"data\"]},
             ...     coordination_strategy=\"best_match\"

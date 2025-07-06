@@ -16,25 +16,45 @@ This guide provides a comprehensive collection of MCP patterns tested in product
 
 ### Basic Server Pattern
 
+#### Production Server
 ```python
-from kailash.mcp_server.server import EnhancedMCPServer
-from kailash.mcp_server.tools import BaseMCPTool
+from kailash.mcp_server import MCPServer
 
-class MyMCPServer(EnhancedMCPServer):
-    def __init__(self):
-        super().__init__(
-            name="my-server",
-            version="1.0.0"
-        )
-        self.register_tools()
+# Create production server with features
+server = MCPServer(
+    name="my-production-server",
+    enable_cache=True,
+    enable_metrics=True
+)
 
-    def register_tools(self):
-        self.add_tool(WeatherTool())
-        self.add_tool(CalendarTool())
+@server.tool()
+async def get_weather(location: str) -> dict:
+    """Get current weather for a location."""
+    return {"location": location, "temperature": 72, "condition": "sunny"}
+
+@server.tool()
+async def get_calendar(date: str) -> dict:
+    """Get calendar events for a date."""
+    return {"date": date, "events": ["Meeting at 2pm"]}
 
 # Start server
-server = MyMCPServer()
 await server.start()
+```
+
+#### Simple Development Server
+```python
+from kailash.mcp_server import SimpleMCPServer
+
+# Create lightweight server for development
+server = SimpleMCPServer("my-dev-server")
+
+@server.tool("Get weather")
+def get_weather(location: str) -> dict:
+    """Simple weather tool for development."""
+    return {"location": location, "temperature": 72}
+
+# Start server
+server.run()
 ```
 
 ### Tool Registration Patterns
@@ -185,9 +205,9 @@ jwt_auth = JWTAuth(
     expiration_hours=24
 )
 
-server = EnhancedMCPServer(
+server = MCPServer(
     name="secure-server",
-    auth_handler=jwt_auth
+    auth_provider=jwt_auth
 )
 
 # Client-side authentication
@@ -208,9 +228,9 @@ api_auth = APIKeyAuth(
     header_name="X-API-Key"
 )
 
-server = EnhancedMCPServer(
+server = MCPServer(
     name="api-server",
-    auth_handler=api_auth
+    auth_provider=api_auth
 )
 
 # Client-side API key
@@ -331,9 +351,9 @@ metrics = MCPMetrics(
     collect_error_rates=True
 )
 
-server = EnhancedMCPServer(
+server = MCPServer(
     name="monitored-server",
-    metrics=metrics
+    enable_metrics=True
 )
 
 # Access metrics

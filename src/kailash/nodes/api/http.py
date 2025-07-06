@@ -146,7 +146,7 @@ class HTTPRequestNode(Node):
     Examples:
         >>> # Simple GET request
         >>> node = HTTPRequestNode()
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     url="https://api.example.com/users",
         ...     method="GET",
         ...     headers={"Accept": "application/json"}
@@ -155,7 +155,7 @@ class HTTPRequestNode(Node):
         >>> assert isinstance(result["content"], dict)
         >>>
         >>> # POST request with JSON body
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     url="https://api.example.com/users",
         ...     method="POST",
         ...     json_data={"name": "John", "email": "john@example.com"},
@@ -165,7 +165,7 @@ class HTTPRequestNode(Node):
         >>> assert result["headers"]["content-type"].startswith("application/json")
         >>>
         >>> # Form data submission
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     url="https://api.example.com/form",
         ...     method="POST",
         ...     data={"field1": "value1", "field2": "value2"},
@@ -173,7 +173,7 @@ class HTTPRequestNode(Node):
         ... )
         >>>
         >>> # File upload with multipart
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     url="https://api.example.com/upload",
         ...     method="POST",
         ...     files={"file": ("data.csv", b"col1,col2\\n1,2", "text/csv")},
@@ -181,7 +181,7 @@ class HTTPRequestNode(Node):
         ... )
         >>>
         >>> # Error handling example
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     url="https://api.example.com/protected",
         ...     method="GET"
         ... )
@@ -775,26 +775,26 @@ class AsyncHTTPRequestNode(AsyncNode):
         async_run method for better performance.
 
         Args:
-            Same as HTTPRequestNode.run()
+            Same as HTTPRequestNode.execute()
 
         Returns:
-            Same as HTTPRequestNode.run()
+            Same as HTTPRequestNode.execute()
 
         Raises:
             NodeExecutionError: If the request fails or returns an error status
         """
         # For compatibility, create a requests.Session() and use it
         http_node = HTTPRequestNode(**self.config)
-        return http_node.run(**kwargs)
+        return http_node.execute(**kwargs)
 
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute an HTTP request asynchronously.
 
         Args:
-            Same as HTTPRequestNode.run()
+            Same as HTTPRequestNode.execute()
 
         Returns:
-            Same as HTTPRequestNode.run()
+            Same as HTTPRequestNode.execute()
 
         Raises:
             NodeExecutionError: If the request fails or returns an error status

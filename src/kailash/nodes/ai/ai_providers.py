@@ -1624,18 +1624,16 @@ def get_provider(
 
         >>> # Get chat-only provider
         >>> chat_provider = get_provider("anthropic", "chat")
-        response = chat_provider.chat(messages, model="claude-3-sonnet")
+        >>> response = chat_provider.chat(messages, model="claude-3-sonnet")
 
-        Get embedding-only provider:
+        >>> # Get embedding-only provider
+        >>> embed_provider = get_provider("cohere", "embeddings")
+        >>> embeddings = embed_provider.embed(texts, model="embed-english-v3.0")
 
-        embed_provider = get_provider("cohere", "embeddings")
-        embeddings = embed_provider.embed(texts, model="embed-english-v3.0")
-
-        Check provider capabilities:
-
-        provider = get_provider("ollama")
-        capabilities = provider.get_capabilities()
-        print(f"Chat: {capabilities['chat']}, Embeddings: {capabilities['embeddings']}")
+        >>> # Check provider capabilities
+        >>> provider = get_provider("ollama")
+        >>> capabilities = provider.get_capabilities()
+        >>> print(f"Chat: {capabilities['chat']}, Embeddings: {capabilities['embeddings']}")
     """
     provider_class = PROVIDERS.get(provider_name.lower())
     if not provider_class:
@@ -1685,8 +1683,7 @@ def get_available_providers(
         >>> chat_providers = get_available_providers("chat")
 
         >>> # Get only embedding providers
-
-        embed_providers = get_available_providers("embeddings")
+        >>> embed_providers = get_available_providers("embeddings")
     """
     results = {}
 

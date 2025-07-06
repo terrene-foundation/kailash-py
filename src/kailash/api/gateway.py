@@ -29,7 +29,7 @@ Example:
     >>> gateway.register_workflow("analytics", analytics_workflow)
 
     >>> # Start server
-    >>> gateway.run(port=8000)  # doctest: +SKIP
+    >>> gateway.execute(port=8000)  # doctest: +SKIP
 
     >>> # With MCP integration
     >>> from kailash.api.mcp_integration import MCPIntegration

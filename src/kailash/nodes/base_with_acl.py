@@ -101,7 +101,7 @@ class NodeWithAccessControl(Node):
         Execute node with optional access control checks.
 
         If access control is disabled or no user context is present,
-        this behaves exactly like the standard Node.run() method.
+        this behaves exactly like the standard Node.execute() method.
         """
         # Extract runtime context if present
         runtime_context = inputs.pop("_runtime_context", None)
@@ -286,7 +286,7 @@ def make_node_access_controlled(node_class, **acl_config):
 
         def _execute(self, **inputs):
             # Call the original node's run method
-            return node_class.run(self, **inputs)
+            return node_class.execute(self, **inputs)
 
     # Preserve the original class name and module
     AccessControlledNode.__name__ = f"Secure{node_class.__name__}"

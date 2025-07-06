@@ -550,6 +550,16 @@ class LocalRuntime:
                 {**node_instance.config, **parameters.get(node_id, {})}
                 node_instance.config.update(parameters.get(node_id, {}))
 
+                # ENTERPRISE PARAMETER INJECTION FIX: Injected parameters should override connection inputs
+                # This ensures workflow parameters take precedence over connection inputs for the same parameter names
+                injected_params = parameters.get(node_id, {})
+                if injected_params:
+                    inputs.update(injected_params)
+                    if self.debug:
+                        self.logger.debug(
+                            f"Applied parameter injections for {node_id}: {list(injected_params.keys())}"
+                        )
+
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
@@ -979,33 +989,94 @@ class LocalRuntime:
         (flat dictionary) or node-specific format (nested dictionary) and
         transforms them appropriately for execution.
 
+        ENTERPRISE ENHANCEMENT: Handles mixed format parameters where both
+        node-specific and workflow-level parameters are present in the same
+        parameter dictionary - critical for enterprise production workflows.
+
         Args:
             workflow: The workflow being executed
-            parameters: Either workflow-level or node-specific parameters
+            parameters: Either workflow-level, node-specific, or MIXED format parameters
 
         Returns:
-            Node-specific parameters ready for execution
+            Node-specific parameters ready for execution with workflow-level
+            parameters properly injected
         """
         if not parameters:
             return None
 
-        # Check if parameters are already in node-specific format
-        if self._is_node_specific_format(parameters, workflow):
-            return parameters
+        # ENTERPRISE FIX: Handle mixed format parameters
+        # Extract node-specific and workflow-level parameters separately
+        node_specific_params, workflow_level_params = self._separate_parameter_formats(
+            parameters, workflow
+        )
 
-        # Parameters are in workflow-level format, need transformation
-        injector = WorkflowParameterInjector(workflow, debug=self.debug)
+        # Start with node-specific parameters
+        result = node_specific_params.copy() if node_specific_params else {}
 
-        # Transform workflow parameters to node-specific format
-        transformed = injector.transform_workflow_parameters(parameters)
+        # If we have workflow-level parameters, inject them
+        if workflow_level_params:
+            injector = WorkflowParameterInjector(workflow, debug=self.debug)
 
-        # Validate the transformation
-        warnings = injector.validate_parameters(transformed)
-        if warnings and self.debug:
-            for warning in warnings:
-                self.logger.warning(f"Parameter validation: {warning}")
+            # Transform workflow parameters to node-specific format
+            injected_params = injector.transform_workflow_parameters(
+                workflow_level_params
+            )
 
-        return transformed
+            # Merge injected parameters with existing node-specific parameters
+            # IMPORTANT: Node-specific parameters take precedence over workflow-level
+            for node_id, node_params in injected_params.items():
+                if node_id not in result:
+                    result[node_id] = {}
+                # First set workflow-level parameters, then override with node-specific
+                for param_name, param_value in node_params.items():
+                    if param_name not in result[node_id]:  # Only if not already set
+                        result[node_id][param_name] = param_value
+
+            # Validate the transformation
+            warnings = injector.validate_parameters(workflow_level_params)
+            if warnings and self.debug:
+                for warning in warnings:
+                    self.logger.warning(f"Parameter validation: {warning}")
+
+        return result if result else None
+
+    def _separate_parameter_formats(
+        self, parameters: dict[str, Any], workflow: Workflow
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+        """Separate mixed format parameters into node-specific and workflow-level.
+
+        ENTERPRISE CAPABILITY: Intelligently separates complex enterprise parameter
+        patterns where both node-specific and workflow-level parameters coexist.
+
+        Args:
+            parameters: Mixed format parameters
+            workflow: The workflow being executed
+
+        Returns:
+            Tuple of (node_specific_params, workflow_level_params)
+        """
+        node_specific_params = {}
+        workflow_level_params = {}
+
+        # Get node IDs for classification
+        node_ids = set(workflow.graph.nodes()) if workflow else set()
+
+        for key, value in parameters.items():
+            # Node-specific parameter: key is a node ID and value is a dict
+            if key in node_ids and isinstance(value, dict):
+                node_specific_params[key] = value
+            # Workflow-level parameter: key is not a node ID or value is not a dict
+            else:
+                workflow_level_params[key] = value
+
+        if self.debug:
+            self.logger.debug(
+                f"Separated parameters: "
+                f"node_specific={list(node_specific_params.keys())}, "
+                f"workflow_level={list(workflow_level_params.keys())}"
+            )
+
+        return node_specific_params, workflow_level_params
 
     def _is_node_specific_format(
         self, parameters: dict[str, Any], workflow: Workflow = None

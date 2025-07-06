@@ -43,7 +43,7 @@ class TestUserManagementImplementations:
             "last_login_at": None,
         }
         # Default to returning a user for get operations
-        self.mock_db.run.return_value = {"data": [self.default_user]}
+        self.mock_db.execute.return_value = {"data": [self.default_user]}
 
     def test_delete_user_soft_delete(self):
         """Test soft delete user functionality."""
@@ -63,10 +63,10 @@ class TestUserManagementImplementations:
         assert result["result"]["hard_delete"] is False
 
         # Verify database calls
-        assert self.mock_db.run.call_count >= 2  # At least get user and update
+        assert self.mock_db.execute.call_count >= 2  # At least get user and update
         # Check that UPDATE was called
         update_call = None
-        for call in self.mock_db.run.call_args_list:
+        for call in self.mock_db.execute.call_args_list:
             if "UPDATE users" in str(call):
                 update_call = call
                 break
@@ -74,16 +74,8 @@ class TestUserManagementImplementations:
 
     def test_delete_user_hard_delete(self):
         """Test hard delete user functionality."""
-        # Mock successful delete
-        self.mock_db.execute.return_value = {
-            "rows": [
-                {
-                    "user_id": "user123",
-                    "email": "test@example.com",
-                    "username": "testuser",
-                }
-            ]
-        }
+        # Mock successful delete - use the same complete user data as default
+        self.mock_db.execute.return_value = {"data": [self.default_user]}
 
         inputs = {"user_id": "user123", "tenant_id": "test_tenant", "hard_delete": True}
 
@@ -94,12 +86,12 @@ class TestUserManagementImplementations:
         assert result["result"]["hard_delete"] is True
 
         # Verify database calls
-        assert self.mock_db.run.call_count >= 2  # At least get user and delete
+        assert self.mock_db.execute.call_count >= 2  # At least get user and delete
 
     def test_delete_user_not_found(self):
         """Test delete user when user not found."""
         # Mock no results
-        self.mock_db.run.return_value = {"data": []}
+        self.mock_db.execute.return_value = {"data": []}
 
         inputs = {"user_id": "nonexistent", "tenant_id": "test_tenant"}
 
@@ -126,7 +118,7 @@ class TestUserManagementImplementations:
     def test_deactivate_user(self):
         """Test user deactivation."""
         # Mock successful deactivation
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Update user status
             {"data": []},
             # Get updated user
@@ -147,7 +139,7 @@ class TestUserManagementImplementations:
     def test_activate_user(self):
         """Test user activation."""
         # Mock successful activation
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Update user status
             {"data": []},
             # Get updated user
@@ -171,7 +163,7 @@ class TestUserManagementImplementations:
         user_with_roles = {**self.default_user, "roles": ["admin", "editor"]}
 
         # First mock is for _get_user_by_id, second is for role details
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user by id
             {"data": [user_with_roles]},
             # Get role details
@@ -208,7 +200,7 @@ class TestUserManagementImplementations:
     def test_update_profile(self):
         """Test update profile (uses update_user internally)."""
         # Mock getting existing user
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get existing user
             {"data": [self.default_user]},
             # Update query

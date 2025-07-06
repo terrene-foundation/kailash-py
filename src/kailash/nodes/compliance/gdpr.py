@@ -152,7 +152,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         ...     "address": "123 Main St"
         ... }
         >>>
-        >>> result = gdpr_node.run(
+        >>> result = gdpr_node.execute(
         ...     action="check_compliance",
         ...     data_type="user_profile",
         ...     data=data
@@ -160,7 +160,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         >>> print(f"Compliance: {result['compliant']}")
         >>>
         >>> # Process data subject request
-        >>> request_result = gdpr_node.run(
+        >>> request_result = gdpr_node.execute(
         ...     action="process_data_subject_request",
         ...     request_type="erasure",
         ...     user_id="user123"
@@ -515,7 +515,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
     async def execute_async(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for test compatibility."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)
 
     def _check_data_compliance(
         self, data_type: str, data: Dict[str, Any]
@@ -1523,7 +1523,7 @@ RESPONSE FORMAT:
 """
 
             # Run AI analysis
-            ai_response = self.ai_agent.run(
+            ai_response = self.ai_agent.execute(
                 provider="ollama",
                 model=self.ai_model.replace("ollama:", ""),
                 messages=[{"role": "user", "content": prompt}],
@@ -1749,7 +1749,7 @@ RESPONSE FORMAT:
         }
 
         try:
-            self.audit_log_node.run(**audit_entry)
+            self.audit_log_node.execute(**audit_entry)
         except Exception as e:
             self.log_with_context(
                 "WARNING", f"Failed to audit data subject request: {e}"

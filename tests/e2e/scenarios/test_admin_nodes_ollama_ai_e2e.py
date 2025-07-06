@@ -556,7 +556,7 @@ class TestAdminNodesOllamaAIE2E:
         try:
             db_node = SQLDatabaseNode(name="cleanup", **self.db_config)
             for table in ["admin_audit_log", "user_role_assignments", "users", "roles"]:
-                db_node.run(
+                db_node.execute(
                     query=f"DELETE FROM {table} WHERE tenant_id = %s",
                     parameters=[self.test_tenant],
                 )
@@ -570,7 +570,7 @@ class TestAdminNodesOllamaAIE2E:
 
         # Create roles
         self.roles = {
-            "security_analyst": role_mgmt.run(
+            "security_analyst": role_mgmt.execute(
                 operation="create_role",
                 role_data={
                     "name": "Security Analyst",
@@ -588,7 +588,7 @@ class TestAdminNodesOllamaAIE2E:
                 tenant_id=self.test_tenant,
                 database_config=self.db_config,
             )["result"]["role"]["role_id"],
-            "data_scientist": role_mgmt.run(
+            "data_scientist": role_mgmt.execute(
                 operation="create_role",
                 role_data={
                     "name": "Data Scientist",
@@ -599,7 +599,7 @@ class TestAdminNodesOllamaAIE2E:
                 tenant_id=self.test_tenant,
                 database_config=self.db_config,
             )["result"]["role"]["role_id"],
-            "system_admin": role_mgmt.run(
+            "system_admin": role_mgmt.execute(
                 operation="create_role",
                 role_data={
                     "name": "System Administrator",
@@ -627,7 +627,7 @@ class TestAdminNodesOllamaAIE2E:
 
         for profile in user_profiles:
             user_id = profile["name"].lower().replace(" ", "_")
-            user_mgmt.run(
+            user_mgmt.execute(
                 operation="create_user",
                 user_data={
                     "user_id": user_id,
@@ -649,7 +649,7 @@ class TestAdminNodesOllamaAIE2E:
                 database_config=self.db_config,
             )
 
-            role_mgmt.run(
+            role_mgmt.execute(
                 operation="assign_user",
                 user_id=user_id,
                 role_id=self.roles[profile["role"]],
@@ -839,7 +839,7 @@ class TestAdminNodesOllamaAIE2E:
             # Log threat detection result
             if severity in ["high", "critical"]:
                 db_node = SQLDatabaseNode(name="audit", **self.db_config)
-                db_node.run(
+                db_node.execute(
                     query="""
                         INSERT INTO admin_audit_log
                         (user_id, action, resource_type, resource_id, operation, context, success, tenant_id, created_at)
@@ -1049,7 +1049,7 @@ class TestAdminNodesOllamaAIE2E:
             # Create audit entry for denied requests
             if not decision.get("grant_access", False):
                 db_node = SQLDatabaseNode(name="audit", **self.db_config)
-                db_node.run(
+                db_node.execute(
                     query="""
                         INSERT INTO admin_audit_log
                         (user_id, action, resource_type, resource_id, operation, context, success, tenant_id, created_at)
@@ -1420,7 +1420,7 @@ result = {"result": report}
         # Save report to database if valid
         if report and "report_id" in report:
             db_node = SQLDatabaseNode(name="save_report", **self.db_config)
-            db_node.run(
+            db_node.execute(
                 query="""
                     INSERT INTO admin_audit_log
                     (user_id, action, resource_type, resource_id, operation, context, success, tenant_id, created_at)
@@ -1449,7 +1449,7 @@ result = {"result": report}
         for user in ["alice_johnson", "bob_smith", "charlie_davis"]:
             for i in range(10):
                 try:
-                    perm_check.run(
+                    perm_check.execute(
                         operation="check_permission",
                         user_id=user,
                         resource_id=f"resource_{i}",
@@ -1463,7 +1463,7 @@ result = {"result": report}
         # Suspicious activity for Eve
         for i in range(100):  # Excessive access attempts
             try:
-                perm_check.run(
+                perm_check.execute(
                     operation="check_permission",
                     user_id="eve_wilson",
                     resource_id=f"sensitive_resource_{i}",

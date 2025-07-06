@@ -60,6 +60,12 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
 
 .. toctree::
    :maxdepth: 2
+   :caption: Model Context Protocol (MCP)
+
+   mcp/index
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    api/nodes
@@ -95,8 +101,6 @@ Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces 
    adr/0017-llm-provider-architecture
    adr/0017-multi-workflow-api-architecture
    adr/0018-http-rest-client-architecture
-   todos/000-master
-   todos/completed-archive
 
 Overview
 ========

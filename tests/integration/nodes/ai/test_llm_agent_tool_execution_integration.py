@@ -63,7 +63,7 @@ class TestLLMAgentToolExecutionIntegration:
         ]
 
         # Run the agent
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -106,7 +106,7 @@ class TestLLMAgentToolExecutionIntegration:
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
             messages=[{"role": "user", "content": "Execute the problematic tool"}],
@@ -145,7 +145,7 @@ class TestLLMAgentToolExecutionIntegration:
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -175,7 +175,7 @@ class TestLLMAgentToolExecutionIntegration:
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
             messages=[{"role": "user", "content": "Execute recursive operations"}],
@@ -208,7 +208,7 @@ class TestLLMAgentToolExecutionIntegration:
         loop = asyncio.get_event_loop()
 
         def run_agent():
-            return self.node.run(
+            return self.node.execute(
                 provider="mock",
                 model="gpt-4",
                 messages=[{"role": "user", "content": "Execute async tool"}],
@@ -234,7 +234,7 @@ class TestLLMAgentToolExecutionIntegration:
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
             messages=[{"role": "user", "content": "Create something with tools"}],

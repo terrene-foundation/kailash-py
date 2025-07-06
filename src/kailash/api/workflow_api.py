@@ -58,7 +58,7 @@ class WorkflowAPI:
         >>> # For any workflow
         >>> from my_workflows import rag_workflow
         >>> api = WorkflowAPI(rag_workflow)
-        >>> api.run(port=8000)
+        >>> api.execute(port=8000)
     """
 
     def __init__(
@@ -388,7 +388,7 @@ def create_workflow_api(
 
     Example:
         >>> api = create_workflow_api(my_workflow, api_type="rag")
-        >>> api.run(port=8000)
+        >>> api.execute(port=8000)
     """
     api_classes = {
         "generic": WorkflowAPI,

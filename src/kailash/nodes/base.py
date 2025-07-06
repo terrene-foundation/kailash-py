@@ -1065,9 +1065,15 @@ class Node(ABC):
 
             # Handle nested config case (for nodes that store parameters in config['config'])
             if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):
-                # Extract nested config
+                # Extract nested config but preserve runtime input precedence
                 nested_config = merged_inputs["config"]
-                merged_inputs.update(nested_config)
+                # ENTERPRISE PARAMETER INJECTION FIX: Runtime inputs should take precedence over config dict
+                # First apply config dict values, then re-apply runtime inputs to ensure they override
+                for key, value in nested_config.items():
+                    if (
+                        key not in runtime_inputs
+                    ):  # Only use config values if not overridden by runtime
+                        merged_inputs[key] = value
                 # Don't remove the config key as some nodes might need it
 
             # Validate inputs

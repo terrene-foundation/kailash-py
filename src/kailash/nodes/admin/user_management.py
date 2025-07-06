@@ -208,7 +208,7 @@ class UserManagementNode(Node):
         ...     },
         ...     tenant_id="company"
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> user_id = result["user"]["user_id"]
 
         >>> # Update user profile
@@ -221,7 +221,7 @@ class UserManagementNode(Node):
         ...     },
         ...     tenant_id="company"
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
 
         >>> # Bulk create users
         >>> node = UserManagementNode(
@@ -232,7 +232,7 @@ class UserManagementNode(Node):
         ...     ],
         ...     tenant_id="company"
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> created_count = result["bulk_result"]["created_count"]
     """
 
@@ -511,7 +511,7 @@ class UserManagementNode(Node):
         """
 
         try:
-            self._db_node.run(
+            self._db_node.execute(
                 query=insert_query,
                 parameters=[
                     user.user_id,
@@ -561,7 +561,7 @@ class UserManagementNode(Node):
         WHERE user_id = $1 AND tenant_id = $2
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=query, parameters=[user_id, tenant_id], result_format="dict"
         )
 
@@ -624,7 +624,7 @@ class UserManagementNode(Node):
         WHERE email = $1 AND tenant_id = $2
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=query, parameters=[email, tenant_id], result_format="dict"
         )
 
@@ -661,7 +661,7 @@ class UserManagementNode(Node):
         WHERE username = $1 AND tenant_id = $2
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=query, parameters=[username, tenant_id], result_format="dict"
         )
 
@@ -751,7 +751,7 @@ class UserManagementNode(Node):
         """
 
         try:
-            self._db_node.run(query=update_query, parameters=parameters)
+            self._db_node.execute(query=update_query, parameters=parameters)
 
             # Get updated user
             updated_user = self._get_user_by_id(user_id, tenant_id)
@@ -788,7 +788,7 @@ class UserManagementNode(Node):
             """
 
         try:
-            self._db_node.run(query=delete_query, parameters=[user_id, tenant_id])
+            self._db_node.execute(query=delete_query, parameters=[user_id, tenant_id])
 
             return {
                 "result": {
@@ -845,12 +845,12 @@ class UserManagementNode(Node):
 
         try:
             # Get users
-            result = self._db_node.run(
+            result = self._db_node.execute(
                 query=list_query, parameters=parameters, result_format="dict"
             )
 
             # Get total count
-            count_result = self._db_node.run(
+            count_result = self._db_node.execute(
                 query=count_query, parameters=parameters[:-2], result_format="dict"
             )
 
@@ -920,7 +920,7 @@ class UserManagementNode(Node):
         """
 
         try:
-            self._db_node.run(
+            self._db_node.execute(
                 query=update_query, parameters=[new_status.value, user_id, tenant_id]
             )
 
@@ -952,7 +952,7 @@ class UserManagementNode(Node):
         """
 
         try:
-            self._db_node.run(
+            self._db_node.execute(
                 query=update_query, parameters=[password_hash, user_id, tenant_id]
             )
 
@@ -1141,7 +1141,7 @@ class UserManagementNode(Node):
             WHERE role_id IN ({placeholders}) AND tenant_id = ${len(user.roles) + 1}
             """
 
-            result = self._db_node.run(
+            result = self._db_node.execute(
                 query=role_query,
                 parameters=user.roles + [tenant_id],
                 result_format="dict",
@@ -1207,7 +1207,7 @@ class UserManagementNode(Node):
         search_pattern = f"%{search_query}%"
 
         try:
-            result = self._db_node.run(
+            result = self._db_node.execute(
                 query=query,
                 parameters=[tenant_id, search_pattern, limit, offset],
                 result_format="dict",
@@ -1350,7 +1350,7 @@ class UserManagementNode(Node):
         )
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             operation="execute",
             query=store_token_query,
             parameters={
@@ -1387,7 +1387,7 @@ class UserManagementNode(Node):
         AND expires_at > CURRENT_TIMESTAMP
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             operation="query",
             query=verify_query,
             parameters={"token": token, "tenant_id": tenant_id},
@@ -1408,7 +1408,7 @@ class UserManagementNode(Node):
         AND tenant_id = :tenant_id
         """
 
-        update_result = self._db_node.run(
+        update_result = self._db_node.execute(
             operation="execute",
             query=update_query,
             parameters={
@@ -1424,7 +1424,7 @@ class UserManagementNode(Node):
         WHERE session_id = :token
         """
 
-        self._db_node.run(
+        self._db_node.execute(
             operation="execute", query=delete_token_query, parameters={"token": token}
         )
 
@@ -1461,7 +1461,7 @@ class UserManagementNode(Node):
         else:
             raise NodeValidationError("Either username or email must be provided")
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             operation="query", query=auth_query, parameters=params
         )
 
@@ -1487,7 +1487,7 @@ class UserManagementNode(Node):
         WHERE user_id = :user_id
         """
 
-        self._db_node.run(
+        self._db_node.execute(
             operation="execute",
             query=update_login_query,
             parameters={"user_id": user_data["user_id"]},

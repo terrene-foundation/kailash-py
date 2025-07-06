@@ -145,7 +145,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         ... )
         >>>
         >>> # Setup MFA for user
-        >>> setup_result = mfa_node.run(
+        >>> setup_result = mfa_node.execute(
         ...     action="setup",
         ...     user_id="user123",
         ...     method="totp",
@@ -154,7 +154,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         >>> print(f"QR Code: {setup_result['qr_code_url']}")
         >>>
         >>> # Verify MFA code
-        >>> verify_result = mfa_node.run(
+        >>> verify_result = mfa_node.execute(
         ...     action="verify",
         ...     user_id="user123",
         ...     code="123456",
@@ -2246,7 +2246,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Also use the audit log node if available
         if hasattr(self, "audit_log_node") and self.audit_log_node:
             try:
-                self.audit_log_node.run(
+                self.audit_log_node.execute(
                     action=event_type,
                     user_id=metadata.get("user_id"),
                     metadata=metadata,

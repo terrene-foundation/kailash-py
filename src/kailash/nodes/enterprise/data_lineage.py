@@ -494,4 +494,4 @@ class DataLineageNode(Node):
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

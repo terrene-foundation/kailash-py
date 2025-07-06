@@ -108,7 +108,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         ...     "user_agent": "Mozilla/5.0..."
         ... }
         >>>
-        >>> result = session_mgr.run(
+        >>> result = session_mgr.execute(
         ...     action="create",
         ...     user_id="user123",
         ...     ip_address="192.168.1.100",
@@ -117,7 +117,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         >>> print(f"Session ID: {result['session_id']}")
         >>>
         >>> # Validate session
-        >>> validation = session_mgr.run(
+        >>> validation = session_mgr.execute(
         ...     action="validate",
         ...     session_id=result['session_id']
         ... )
@@ -1051,7 +1051,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         }
 
         try:
-            self.audit_log_node.run(**audit_entry)
+            self.audit_log_node.execute(**audit_entry)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to audit session operation: {e}")
 
@@ -1076,7 +1076,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         }
 
         try:
-            self.security_event_node.run(**security_event)
+            self.security_event_node.execute(**security_event)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to log security event: {e}")
 
@@ -1090,4 +1090,4 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

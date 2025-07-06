@@ -243,7 +243,7 @@ class SwitchNode(Node):
 
         Examples:
             >>> switch = SwitchNode()
-            >>> result = switch.run(
+            >>> result = switch.execute(
             ...     input_data={"score": 85},
             ...     condition_field="score",
             ...     operator=">=",

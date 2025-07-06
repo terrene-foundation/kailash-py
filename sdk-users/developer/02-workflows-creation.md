@@ -25,7 +25,8 @@ workflow.add_node("CSVReaderNode", "data_reader", {
 
 workflow.add_node("PythonCodeNode", "processor", {
     "code": '''
-# Process the input data
+# Process the data - parameters are injected directly
+# NOTE: In PythonCodeNode, input_data comes from the connected node
 processed = [item for item in input_data if item.get('amount', 0) > 100]
 result = {'processed_items': processed, 'count': len(processed)}
 '''

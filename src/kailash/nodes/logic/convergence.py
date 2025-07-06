@@ -619,7 +619,7 @@ class MultiCriteriaConvergenceNode(CycleAwareNode):
             }
 
             # Run individual convergence check
-            result = checker.run(context=mock_context, **checker_params)
+            result = checker.execute(context=mock_context, **checker_params)
 
             results[metric_name] = {
                 "converged": result["converged"],

@@ -255,7 +255,7 @@ class RotatingCredentialNode(Node):
         """Check if a credential is approaching expiration."""
         try:
             # Get current credential
-            credential_result = self._credential_manager.run(
+            credential_result = self._credential_manager.execute(
                 operation="get_credential", credential_name=credential_name
             )
 
@@ -314,7 +314,7 @@ class RotatingCredentialNode(Node):
             # Try each refresh source in order
             for source in refresh_sources:
                 try:
-                    refresh_result = self._credential_manager.run(
+                    refresh_result = self._credential_manager.execute(
                         operation="get_credential",
                         credential_name=credential_name,
                         credential_sources=[source],
@@ -363,7 +363,7 @@ class RotatingCredentialNode(Node):
             # Step 1: Get current credential (for rollback if needed)
             current_credential = None
             if rollback_on_failure:
-                current_result = self._credential_manager.run(
+                current_result = self._credential_manager.execute(
                     operation="get_credential", credential_name=credential_name
                 )
                 if current_result.get("success"):
@@ -390,7 +390,7 @@ class RotatingCredentialNode(Node):
             new_credential = refresh_result["credential"]
 
             # Step 3: Validate new credential
-            validation_result = self._credential_manager.run(
+            validation_result = self._credential_manager.execute(
                 operation="validate_credential",
                 credential_name=credential_name,
                 credential_data=new_credential,
@@ -422,7 +422,7 @@ class RotatingCredentialNode(Node):
 
                 temp_credential_name = f"{credential_name}_rotating_{int(time.time())}"
 
-                store_result = self._credential_manager.run(
+                store_result = self._credential_manager.execute(
                     operation="store_credential",
                     credential_name=temp_credential_name,
                     credential_data=new_credential,
@@ -445,7 +445,7 @@ class RotatingCredentialNode(Node):
                 # For this example, we'll assume it passes
 
                 # Atomic switch
-                final_store_result = self._credential_manager.run(
+                final_store_result = self._credential_manager.execute(
                     operation="store_credential",
                     credential_name=credential_name,
                     credential_data=new_credential,
@@ -454,7 +454,7 @@ class RotatingCredentialNode(Node):
                 if not final_store_result.get("success"):
                     # Rollback if requested
                     if rollback_on_failure and current_credential:
-                        self._credential_manager.run(
+                        self._credential_manager.execute(
                             operation="store_credential",
                             credential_name=credential_name,
                             credential_data=current_credential,
@@ -476,13 +476,13 @@ class RotatingCredentialNode(Node):
                     }
 
                 # Clean up temporary credential
-                self._credential_manager.run(
+                self._credential_manager.execute(
                     operation="delete_credential", credential_name=temp_credential_name
                 )
 
             else:
                 # Direct replacement
-                store_result = self._credential_manager.run(
+                store_result = self._credential_manager.execute(
                     operation="store_credential",
                     credential_name=credential_name,
                     credential_data=new_credential,
@@ -491,7 +491,7 @@ class RotatingCredentialNode(Node):
                 if not store_result.get("success"):
                     # Rollback if requested
                     if rollback_on_failure and current_credential:
-                        self._credential_manager.run(
+                        self._credential_manager.execute(
                             operation="store_credential",
                             credential_name=credential_name,
                             credential_data=current_credential,
@@ -757,4 +757,4 @@ class RotatingCredentialNode(Node):
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

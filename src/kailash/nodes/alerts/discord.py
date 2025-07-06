@@ -100,7 +100,7 @@ class DiscordAlertNode(AlertNode):
     Examples:
         >>> # Simple text alert
         >>> node = DiscordAlertNode()
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     webhook_url="${DISCORD_ALERTS_WEBHOOK}",
         ...     title="Deployment Complete",
         ...     message="Version 1.2.3 deployed successfully",
@@ -108,7 +108,7 @@ class DiscordAlertNode(AlertNode):
         ... )
         >>>
         >>> # Rich embed with context
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     webhook_url=webhook_url,
         ...     title="Error in Data Pipeline",
         ...     message="Failed to process customer data",
@@ -123,7 +123,7 @@ class DiscordAlertNode(AlertNode):
         ... )
         >>>
         >>> # Mention users and post to thread
-        >>> result = node.run(
+        >>> result = node.execute(
         ...     webhook_url=webhook_url,
         ...     title="Critical: Database Connection Lost",
         ...     alert_type="critical",
@@ -438,7 +438,7 @@ class DiscordAlertNode(AlertNode):
 
         for attempt in range(max_retries):
             try:
-                response = self.http_client.run(
+                response = self.http_client.execute(
                     url=url,
                     method="POST",
                     json_data=payload,

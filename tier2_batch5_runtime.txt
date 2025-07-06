@@ -1,0 +1,100 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-8.4.1, pluggy-1.6.0 -- ./repos/projects/kailash_python_sdk/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: ./repos/projects/kailash_python_sdk
+configfile: pytest.ini
+plugins: anyio-4.9.0, Faker-37.4.0, xdist-3.8.0, timeout-2.4.0, cov-6.2.1, split-0.10.0, asyncio-1.0.0
+timeout: 180.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 25 items
+
+tests/integration/runtime/test_async_runtime_integration.py::TestAsyncRuntimeRealWorld::test_database_etl_pipeline PASSED [  4%]
+tests/integration/runtime/test_async_runtime_integration.py::TestAsyncRuntimeRealWorld::test_llm_enhanced_data_processing PASSED [  8%]
+tests/integration/runtime/test_async_runtime_integration.py::TestAsyncRuntimeRealWorld::test_real_time_data_pipeline PASSED [ 12%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_dag_workflow_detection PASSED [ 16%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_cyclic_workflow_detection PASSED [ 20%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_mixed_workflow_execution PASSED [ 24%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestLocalRuntimeCycleDetection::test_cycle_disabled_runtime PASSED [ 28%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_parallel_dag_execution PASSED [ 32%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_parallel_cyclic_execution PASSED [ 36%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_worker_count_configuration PASSED [ 40%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestParallelCyclicRuntime::test_async_configuration PASSED [ 44%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestRuntimeConfiguration::test_debug_mode_configuration PASSED [ 48%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestRuntimeConfiguration::test_runtime_interface_compatibility PASSED [ 52%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestRuntimeConfiguration::test_runtime_error_handling PASSED [ 56%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestTaskTrackingIntegration::test_local_runtime_tracking PASSED [ 60%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestTaskTrackingIntegration::test_parallel_runtime_tracking PASSED [ 64%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestTaskTrackingIntegration::test_cyclic_workflow_tracking PASSED [ 68%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestPerformanceBenchmarking::test_dag_performance_comparison PASSED [ 72%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestPerformanceBenchmarking::test_parallel_workflow_speedup PASSED [ 76%]
+tests/integration/runtime/test_enhanced_runtime_integration.py::TestPerformanceBenchmarking::test_cyclic_performance_scaling PASSED [ 80%]
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_sql_node_basic FAILED [ 84%]
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_node_lifecycle FAILED [ 88%]
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_multiple_deferred_nodes FAILED [ 92%]
+tests/integration/runtime/test_parameter_injector_integration.py::TestWorkflowParameterInjectorIntegration::test_parameter_injection_with_redis FAILED [ 96%]
+tests/integration/runtime/test_parameter_injector_integration.py::TestWorkflowParameterInjectorIntegration::test_complex_parameter_propagation FAILED [100%]
+
+=================================== FAILURES ===================================
+________ TestDeferredConfigNodeIntegration.test_deferred_sql_node_basic ________
+tests/integration/runtime/test_parameter_injector_integration.py:89: in test_deferred_sql_node_basic
+    builder = WorkflowBuilder(name="Deferred SQL Test")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: WorkflowBuilder.__init__() got an unexpected keyword argument 'name'
+________ TestDeferredConfigNodeIntegration.test_deferred_node_lifecycle ________
+tests/integration/runtime/test_parameter_injector_integration.py:148: in test_deferred_node_lifecycle
+    builder = WorkflowBuilder(name="Lifecycle Test")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: WorkflowBuilder.__init__() got an unexpected keyword argument 'name'
+________ TestDeferredConfigNodeIntegration.test_multiple_deferred_nodes ________
+tests/integration/runtime/test_parameter_injector_integration.py:175: in test_multiple_deferred_nodes
+    builder = WorkflowBuilder(name="Multi Deferred Test")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: WorkflowBuilder.__init__() got an unexpected keyword argument 'name'
+_ TestWorkflowParameterInjectorIntegration.test_parameter_injection_with_redis _
+tests/integration/runtime/test_parameter_injector_integration.py:241: in test_parameter_injection_with_redis
+    await ensure_docker_services(["redis"])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ensure_docker_services() takes 0 positional arguments but 1 was given
+_ TestWorkflowParameterInjectorIntegration.test_complex_parameter_propagation __
+tests/integration/runtime/test_parameter_injector_integration.py:335: in test_complex_parameter_propagation
+    await ensure_docker_services(["postgres", "redis"])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ensure_docker_services() takes 0 positional arguments but 1 was given
+=============================== warnings summary ===============================
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_sql_node_basic
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/_pytest/fixtures.py:1181: PytestRemovedIn9Warning: 'test_deferred_sql_node_basic' requested an async fixture 'setup_test_data' with autouse=True, with no plugin or hook that handled it. This is usually an error, as pytest does not natively support it. This will turn into an error in pytest 9.
+  See: https://docs.pytest.org/en/stable/deprecations.html#sync-test-depending-on-async-fixture
+    warnings.warn(
+
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_sql_node_basic
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:723: PytestDeprecationWarning: asyncio test 'test_deferred_sql_node_basic' requested async @pytest.fixture 'setup_test_data' in strict mode. You might want to use @pytest_asyncio.fixture or switch to auto mode. This will become an error in future versions of flake8-asyncio.
+    warnings.warn(
+
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_node_lifecycle
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/_pytest/fixtures.py:1181: PytestRemovedIn9Warning: 'test_deferred_node_lifecycle' requested an async fixture 'setup_test_data' with autouse=True, with no plugin or hook that handled it. This is usually an error, as pytest does not natively support it. This will turn into an error in pytest 9.
+  See: https://docs.pytest.org/en/stable/deprecations.html#sync-test-depending-on-async-fixture
+    warnings.warn(
+
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_node_lifecycle
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:723: PytestDeprecationWarning: asyncio test 'test_deferred_node_lifecycle' requested async @pytest.fixture 'setup_test_data' in strict mode. You might want to use @pytest_asyncio.fixture or switch to auto mode. This will become an error in future versions of flake8-asyncio.
+    warnings.warn(
+
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_multiple_deferred_nodes
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/_pytest/fixtures.py:1181: PytestRemovedIn9Warning: 'test_multiple_deferred_nodes' requested an async fixture 'setup_test_data' with autouse=True, with no plugin or hook that handled it. This is usually an error, as pytest does not natively support it. This will turn into an error in pytest 9.
+  See: https://docs.pytest.org/en/stable/deprecations.html#sync-test-depending-on-async-fixture
+    warnings.warn(
+
+tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_multiple_deferred_nodes
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:723: PytestDeprecationWarning: asyncio test 'test_multiple_deferred_nodes' requested async @pytest.fixture 'setup_test_data' in strict mode. You might want to use @pytest_asyncio.fixture or switch to auto mode. This will become an error in future versions of flake8-asyncio.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_sql_node_basic
+FAILED tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_deferred_node_lifecycle
+FAILED tests/integration/runtime/test_parameter_injector_integration.py::TestDeferredConfigNodeIntegration::test_multiple_deferred_nodes
+FAILED tests/integration/runtime/test_parameter_injector_integration.py::TestWorkflowParameterInjectorIntegration::test_parameter_injection_with_redis
+FAILED tests/integration/runtime/test_parameter_injector_integration.py::TestWorkflowParameterInjectorIntegration::test_complex_parameter_propagation
+=================== 5 failed, 20 passed, 6 warnings in 1.59s ===================

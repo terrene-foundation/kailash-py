@@ -109,7 +109,7 @@ class AsyncWorkflowFixtures:
 
         if engine == "postgresql":
             # Start PostgreSQL container
-            container = client.containers.run(
+            container = client.containers.execute(
                 f"postgres:{tag}",
                 environment={
                     "POSTGRES_DB": database,
@@ -162,7 +162,7 @@ class AsyncWorkflowFixtures:
 
         elif engine == "mysql":
             # Start MySQL container
-            container = client.containers.run(
+            container = client.containers.execute(
                 f"mysql:{tag}",
                 environment={
                     "MYSQL_ROOT_PASSWORD": password,

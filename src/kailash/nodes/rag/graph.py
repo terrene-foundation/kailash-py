@@ -60,7 +60,7 @@ class GraphRAGNode(WorkflowNode):
         # 3. Traverse graph to find influence paths
         # 4. Synthesize multi-hop connections
 
-        result = await graph_rag.run(
+        result = await graph_rag.execute(
             documents=research_papers,
             query="How did key researchers influence the development of transformers?"
         )
@@ -474,7 +474,7 @@ class GraphBuilderNode(Node):
             similarity_threshold=0.85
         )
 
-        graph = await builder.run(
+        graph = await builder.execute(
             documents=documents,
             existing_graph=previous_graph  # Optional: update existing
         )
@@ -599,7 +599,7 @@ class GraphQueryNode(Node):
         querier = GraphQueryNode()
 
         # Find influence paths
-        result = await querier.run(
+        result = await querier.execute(
             graph=knowledge_graph,
             query_type="path",
             source_entity="BERT",

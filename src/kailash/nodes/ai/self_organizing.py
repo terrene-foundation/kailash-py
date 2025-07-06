@@ -101,7 +101,7 @@ class AgentPoolManagerNode(Node):
         >>> assert "agent_id" in params
         >>>
         >>> # Test simple registration
-        >>> result = pool_manager.run(
+        >>> result = pool_manager.execute(
         ...     action="register",
         ...     agent_id="test_agent",
         ...     capabilities=["analysis"]
@@ -1481,7 +1481,7 @@ class SolutionEvaluatorNode(Node):
     Examples:
         >>> evaluator = SolutionEvaluatorNode()
         >>>
-        >>> result = evaluator.run(
+        >>> result = evaluator.execute(
         ...     solution={
         ...         "approach": "Clustering analysis",
         ...         "findings": ["3 distinct customer segments identified"],

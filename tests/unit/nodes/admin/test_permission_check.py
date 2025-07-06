@@ -40,7 +40,7 @@ class TestPermissionCheckNode:
         self.node._cache_client = self.mock_cache
 
         # Set up default user query response
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "user_id": "user_123",
@@ -87,7 +87,7 @@ class TestPermissionCheckNode:
         self.node._permission_cache[cache_key] = cached_result
         self.node._cache_timestamps[cache_key] = datetime.now(timezone.utc)
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -100,12 +100,12 @@ class TestPermissionCheckNode:
         assert result["result"]["check"]["decision_path"]["method"] == "rbac"
 
         # Verify no database call was made
-        self.mock_db.run.assert_not_called()
+        self.mock_db.execute.assert_not_called()
 
     def test_check_permission_rbac_allowed(self):
         """Test RBAC permission check - allowed."""
         # Mock database queries to match _get_user_context method
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user data - first query in _get_user_context
             {
                 "data": [
@@ -125,7 +125,7 @@ class TestPermissionCheckNode:
             {"data": [{"permission": "*:read"}, {"permission": "*:review"}]},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -146,7 +146,7 @@ class TestPermissionCheckNode:
     def test_check_permission_rbac_denied(self):
         """Test RBAC permission check - denied."""
         # Mock database queries to match _get_user_context method
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user data - first query in _get_user_context
             {
                 "data": [
@@ -165,7 +165,7 @@ class TestPermissionCheckNode:
             {"data": [{"permission": "*:read"}]},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -183,7 +183,7 @@ class TestPermissionCheckNode:
     def test_check_permission_abac_attributes(self):
         """Test ABAC permission check with attributes."""
         # Mock database queries
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user with roles and attributes
             {
                 "data": [
@@ -201,7 +201,7 @@ class TestPermissionCheckNode:
             {"data": []},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -217,7 +217,7 @@ class TestPermissionCheckNode:
     def test_batch_permission_check(self):
         """Test batch permission checking."""
         # Mock database queries - batch check performs individual checks
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["editor"])]},
             # Get user roles - second query in _get_user_context
@@ -237,7 +237,7 @@ class TestPermissionCheckNode:
             {"data": [{"permission": "*:read"}, {"permission": "*:write"}]},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="batch_check",
             user_id="user_123",
             resource_ids=["doc_1", "doc_2", "doc_3"],
@@ -259,7 +259,7 @@ class TestPermissionCheckNode:
     def test_check_permission_with_delegation(self):
         """Test permission check with delegated permissions."""
         # Mock delegation check
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["basic_user"])]},
             # Get user roles - second query in _get_user_context
@@ -268,7 +268,7 @@ class TestPermissionCheckNode:
             {"data": []},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -283,7 +283,7 @@ class TestPermissionCheckNode:
     def test_audit_permission_check(self):
         """Test that permission checks are audited."""
         # Mock permission check with audit
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["admin"])]},
             # Get user roles - second query in _get_user_context
@@ -292,7 +292,7 @@ class TestPermissionCheckNode:
             {"data": [{"permission": "sensitive_doc:delete"}, {"permission": "*:*"}]},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="sensitive_doc",
@@ -307,7 +307,7 @@ class TestPermissionCheckNode:
     def test_permission_cache_invalidation(self):
         """Test cache invalidation on permission change."""
         # Clear cache operation
-        result = self.node.run(
+        result = self.node.execute(
             operation="clear_cache", user_id="user_123", tenant_id="tenant_1"
         )
 
@@ -318,7 +318,7 @@ class TestPermissionCheckNode:
     def test_check_wildcard_permission(self):
         """Test checking wildcard permissions."""
         # Mock wildcard permission
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get user data - first query in _get_user_context
             {"data": [self._get_mock_user(roles=["content_manager"])]},
             # Get user roles - second query in _get_user_context
@@ -333,7 +333,7 @@ class TestPermissionCheckNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="article_789",
@@ -348,7 +348,7 @@ class TestPermissionCheckNode:
         """Test validation errors for permission operations."""
         # Missing required parameters should raise NodeExecutionError or KeyError
         try:
-            self.node.run(
+            self.node.execute(
                 operation="check_permission",
                 resource_id="doc_456",
                 permission="read",
@@ -361,7 +361,7 @@ class TestPermissionCheckNode:
             pass  # Expected
 
         try:
-            self.node.run(
+            self.node.execute(
                 operation="check_permission",
                 user_id="user_123",
                 resource_id="doc_456",
@@ -377,7 +377,7 @@ class TestPermissionCheckNode:
 
         # Invalid operation should raise ValueError or NodeExecutionError
         try:
-            self.node.run(
+            self.node.execute(
                 operation="invalid_operation", user_id="user_123", tenant_id="tenant_1"
             )
             # If no exception, fail the test
@@ -390,12 +390,12 @@ class TestPermissionCheckNode:
     def test_permission_check_error_handling(self):
         """Test error handling during permission checks."""
         # Mock database error
-        self.mock_db.run.side_effect = Exception("Database connection lost")
+        self.mock_db.execute.side_effect = Exception("Database connection lost")
 
         with pytest.raises(
             NodeExecutionError, match="Permission check operation failed"
         ):
-            self.node.run(
+            self.node.execute(
                 operation="check_permission",
                 user_id="user_123",
                 resource_id="doc_456",

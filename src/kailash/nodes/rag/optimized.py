@@ -57,13 +57,13 @@ class CacheOptimizedRAGNode(WorkflowNode):
         )
 
         # First query: ~500ms (goes to retrieval)
-        result1 = await cached_rag.run(query="What is deep learning?")
+        result1 = await cached_rag.execute(query="What is deep learning?")
 
         # Exact match: ~10ms (from cache)
-        result2 = await cached_rag.run(query="What is deep learning?")
+        result2 = await cached_rag.execute(query="What is deep learning?")
 
         # Similar query: ~15ms (semantic cache)
-        result3 = await cached_rag.run(query="Explain deep learning")
+        result3 = await cached_rag.execute(query="Explain deep learning")
 
     Parameters:
         cache_ttl: Time-to-live in seconds
@@ -306,7 +306,7 @@ class AsyncParallelRAGNode(WorkflowNode):
         )
 
         # Runs all 4 strategies in parallel, takes time of slowest
-        result = await parallel_rag.run(
+        result = await parallel_rag.execute(
             documents=documents,
             query="Complex technical question requiring precision"
         )
@@ -700,7 +700,7 @@ class BatchOptimizedRAGNode(WorkflowNode):
         # Process 100 queries efficiently
         queries = ["query1", "query2", ..., "query100"]
 
-        results = await batch_rag.run(
+        results = await batch_rag.execute(
             queries=queries,
             documents=documents
         )

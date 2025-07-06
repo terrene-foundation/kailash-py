@@ -60,7 +60,7 @@ def main():
 
     # Example 1: Tool execution enabled (default)
     print("=== Example 1: Automatic Tool Execution ===")
-    result = agent.run(
+    result = agent.execute(
         provider="mock",
         model="gpt-4",
         messages=[
@@ -83,7 +83,7 @@ def main():
 
     # Example 2: Tool execution disabled
     print("=== Example 2: Tool Calls Without Execution ===")
-    result = agent.run(
+    result = agent.execute(
         provider="mock",
         model="gpt-4",
         messages=[{"role": "user", "content": "Calculate 10 * 5"}],
@@ -101,7 +101,7 @@ def main():
 
     # Example 3: MCP server integration (mock)
     print("=== Example 3: MCP Server Tool Discovery ===")
-    result = agent.run(
+    result = agent.execute(
         provider="mock",
         model="gpt-4",
         messages=[{"role": "user", "content": "Use MCP tools to create a report"}],
@@ -134,7 +134,7 @@ def main():
         },
     ]
 
-    result = agent.run(
+    result = agent.execute(
         provider="mock",
         model="gpt-4",
         messages=conversation,

@@ -41,7 +41,7 @@ class TestLLMAgentToolExecution(unittest.TestCase):
         ]
 
         # Call the agent with a message that triggers tool use
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[
@@ -82,7 +82,7 @@ class TestLLMAgentToolExecution(unittest.TestCase):
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Please execute the test tool"}],
@@ -125,7 +125,7 @@ class TestLLMAgentToolExecution(unittest.TestCase):
             )
 
             # Test with MCP server config
-            result = self.node.run(
+            result = self.node.execute(
                 provider="mock",
                 model="test-model",
                 messages=[{"role": "user", "content": "Execute MCP search for data"}],
@@ -159,7 +159,7 @@ class TestLLMAgentToolExecution(unittest.TestCase):
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Execute iterative operations"}],
@@ -190,7 +190,7 @@ class TestLLMAgentToolExecution(unittest.TestCase):
                 }
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="mock",
                 model="test-model",
                 messages=[{"role": "user", "content": "Execute the failing tool"}],
@@ -285,7 +285,7 @@ class TestLLMAgentToolExecution(unittest.TestCase):
                 }
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="mock",
                 model="test-model",
                 messages=[{"role": "user", "content": "Execute both tools"}],

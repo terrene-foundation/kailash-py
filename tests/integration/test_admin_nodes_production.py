@@ -55,7 +55,7 @@ class TestAdminNodesProduction:
         db_node = SQLDatabaseNode(
             name="test", connection_string=get_postgres_connection_string()
         )
-        db_node.run(query="SELECT 1", operation="select")
+        db_node.execute(query="SELECT 1", operation="select")
 
         # Check Redis
         import redis
@@ -102,7 +102,7 @@ class TestAdminNodesProduction:
                     "users",
                     "roles",
                 ]:
-                    db_node.run(
+                    db_node.execute(
                         query=f"DELETE FROM {table} WHERE tenant_id = %s",
                         parameters=[tenant],
                     )
@@ -142,7 +142,7 @@ class TestAdminNodesProduction:
         # Create roles with hierarchy - store role IDs for assignment
         role_ids = {}
         for role in roles:
-            role_result = role_mgmt.run(
+            role_result = role_mgmt.execute(
                 operation="create_role",
                 role_data=role,
                 tenant_id=self.tenant_a,
@@ -163,7 +163,7 @@ class TestAdminNodesProduction:
             "attributes": {"department": "engineering", "reports_count": 25},
         }
 
-        user_result = user_mgmt.run(
+        user_result = user_mgmt.execute(
             operation="create_user",
             user_data=user_data,
             tenant_id=self.tenant_a,
@@ -175,7 +175,7 @@ class TestAdminNodesProduction:
         assert user_result["result"]["user"]["user_id"] == user_data["user_id"]
 
         # Assign director role to user
-        assign_result = role_mgmt.run(
+        assign_result = role_mgmt.execute(
             operation="assign_user",
             user_id=user_data["user_id"],
             role_id=role_ids["director"],
@@ -186,7 +186,7 @@ class TestAdminNodesProduction:
         assert "result" in assign_result
 
         # First permission check - should inherit "company:read" from employee role
-        direct_result = perm_check.run(
+        direct_result = perm_check.execute(
             operation="check_permission",
             user_id=user_data["user_id"],
             resource_id="company_info",
@@ -205,7 +205,7 @@ class TestAdminNodesProduction:
         assert direct_result["result"]["check"]["cache_hit"] is False
 
         # Second permission check - should hit cache regardless of permission result
-        cached_result = perm_check.run(
+        cached_result = perm_check.execute(
             operation="check_permission",
             user_id=user_data["user_id"],
             resource_id="company_info",
@@ -228,7 +228,7 @@ class TestAdminNodesProduction:
         for tenant in [self.tenant_a, self.tenant_b]:
             # Use unique role name per tenant to avoid ID conflicts
             role_name = f"data_analyst_{tenant.split('_')[1]}"
-            role_result = role_mgmt.run(
+            role_result = role_mgmt.execute(
                 operation="create_role",
                 role_data={
                     "name": role_name,
@@ -255,7 +255,7 @@ class TestAdminNodesProduction:
                 # Since user_id is globally unique, include tenant identifier
                 tenant_suffix = tenant.split("_")[1]  # 'a' or 'b'
                 user_id = f"analyst_{tenant_suffix}_{tenant.split('_')[-1]}_{i}"
-                user = user_mgmt.run(
+                user = user_mgmt.execute(
                     operation="create_user",
                     user_data={
                         "user_id": user_id,
@@ -273,7 +273,7 @@ class TestAdminNodesProduction:
                 users_by_tenant[tenant].append(created_user_id)
 
                 # Assign role using the correct role ID
-                assign_result = role_mgmt.run(
+                assign_result = role_mgmt.execute(
                     operation="assign_user",
                     user_id=created_user_id,
                     role_id=role_ids_by_tenant[tenant],
@@ -296,7 +296,7 @@ class TestAdminNodesProduction:
         def check_permission(user_id, tenant_id, expected_result):
             """Check permission for a user in a tenant."""
             try:
-                result = perm_check.run(
+                result = perm_check.execute(
                     operation="check_permission",
                     user_id=user_id,
                     resource_id="analytics_dashboard",
@@ -386,7 +386,7 @@ class TestAdminNodesProduction:
                 # Create hierarchy - each role inherits from previous
                 parent_roles = [created_roles[i - 1]["name"]]
 
-            role_result = role_mgmt.run(
+            role_result = role_mgmt.execute(
                 operation="create_role",
                 role_data={
                     "name": f"role_{i:03d}",
@@ -406,7 +406,7 @@ class TestAdminNodesProduction:
         start_time = time.time()
 
         for i in range(num_users):
-            user_result = user_mgmt.run(
+            user_result = user_mgmt.execute(
                 operation="create_user",
                 user_data={
                     "user_id": f"load_user_{i:04d}",
@@ -424,7 +424,7 @@ class TestAdminNodesProduction:
 
             # Assign multiple roles for complex permission inheritance
             for j in range(min(3, i % num_roles)):
-                role_mgmt.run(
+                role_mgmt.execute(
                     operation="assign_user",
                     user_id=created_users[-1],
                     role_id=created_roles[j]["role_id"],
@@ -442,7 +442,7 @@ class TestAdminNodesProduction:
 
         def perform_check(user_id, resource_id, permission):
             start = time.time()
-            result = perm_check.run(
+            result = perm_check.execute(
                 operation="check_permission",
                 user_id=user_id,
                 resource_id=resource_id,
@@ -505,21 +505,19 @@ class TestAdminNodesProduction:
         try:
             # Check if Ollama is available by testing a simple call
             llm_agent = LLMAgentNode(
-                model="llama3.2:latest",  # Use available model
-                api_config={"base_url": "http://localhost:11435"},
+                model="llama3.2:1b",  # Use available model
             )
 
             # Generate some test data
-            ai_result = llm_agent.run(
+            ai_result = llm_agent.execute(
                 messages=[
                     {
                         "role": "user",
                         "content": "Generate a simple JSON with 3 role names for a company: {'roles': ['role1', 'role2', 'role3']}",
                     }
                 ],
-                provider="ollama",  # Required parameter for LLMAgentNode
-                model="llama3.2:latest",  # Use available model
-                backend_config={"host": "localhost", "port": 11435},
+                provider="mock",  # Use mock provider for reliable testing
+                model="gpt-4",  # Mock provider doesn't care about model
             )
 
             # Extract roles from AI response (basic parsing)
@@ -559,7 +557,7 @@ class TestAdminNodesProduction:
         # Create a simple role to verify admin node integration
         role_mgmt = RoleManagementNode(database_url=self.db_config["connection_string"])
 
-        role_result = role_mgmt.run(
+        role_result = role_mgmt.execute(
             operation="create_role",
             role_data={
                 "name": "ai_generated_analyst",
@@ -600,7 +598,7 @@ class TestAdminNodesProduction:
         }
 
         # Perform audited operations
-        user_result = user_mgmt.run(
+        user_result = user_mgmt.execute(
             operation="create_user",
             user_data=privileged_user,
             tenant_id=self.tenant_a,
@@ -609,7 +607,7 @@ class TestAdminNodesProduction:
         assert "result" in user_result
 
         # Create security role
-        role_result = role_mgmt.run(
+        role_result = role_mgmt.execute(
             operation="create_role",
             role_data={
                 "name": "security_admin",
@@ -622,7 +620,7 @@ class TestAdminNodesProduction:
         assert "result" in role_result
 
         # Perform permission check with audit enabled
-        perm_result = perm_check.run(
+        perm_result = perm_check.execute(
             operation="check_permission",
             user_id=privileged_user["user_id"],
             resource_id="security_console",
@@ -644,7 +642,7 @@ class TestAdminNodesProduction:
             LIMIT 100
         """
 
-        audit_result = db_node.run(
+        audit_result = db_node.execute(
             query=audit_query,
             parameters=[self.tenant_a],
             result_format="dict",
@@ -677,7 +675,7 @@ class TestAdminNodesProduction:
 
         # Create role with permissions that will grant access to specific datasets
         # Using wildcard permissions that should work with RBAC
-        abac_role = role_mgmt.run(
+        abac_role = role_mgmt.execute(
             operation="create_role",
             role_data={
                 "name": "data_scientist_restricted",
@@ -750,7 +748,7 @@ class TestAdminNodesProduction:
             print(f"\nTesting scenario: {scenario['name']}")
 
             # Create user
-            user_result = user_mgmt.run(
+            user_result = user_mgmt.execute(
                 operation="create_user",
                 user_data=scenario["user"],
                 tenant_id=self.tenant_a,
@@ -759,7 +757,7 @@ class TestAdminNodesProduction:
             assert "result" in user_result
 
             # Assign role to user
-            assign_result = role_mgmt.run(
+            assign_result = role_mgmt.execute(
                 operation="assign_user",
                 user_id=scenario["user"]["user_id"],
                 role_id=role_id,
@@ -769,7 +767,7 @@ class TestAdminNodesProduction:
             assert "result" in assign_result
 
             # Test permissions after role assignment
-            user_perms_result = perm_check.run(
+            user_perms_result = perm_check.execute(
                 operation="get_user_permissions",
                 user_id=scenario["user"]["user_id"],
                 tenant_id=self.tenant_a,
@@ -781,7 +779,7 @@ class TestAdminNodesProduction:
             print(f"  User effective permissions: {user_permissions}")
 
             # Check permission with context for ABAC evaluation
-            result = perm_check.run(
+            result = perm_check.execute(
                 operation="check_permission",
                 user_id=scenario["user"]["user_id"],
                 resource_id=scenario["resource_id"],

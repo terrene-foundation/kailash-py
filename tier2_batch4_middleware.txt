@@ -1,0 +1,149 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-8.4.1, pluggy-1.6.0 -- ./repos/projects/kailash_python_sdk/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: ./repos/projects/kailash_python_sdk
+configfile: pytest.ini
+plugins: anyio-4.9.0, Faker-37.4.0, xdist-3.8.0, timeout-2.4.0, cov-6.2.1, split-0.10.0, asyncio-1.0.0
+timeout: 180.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 75 items
+
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_data_transformer_has_execute_not_process PASSED [  1%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_session_creation_endpoint_with_execute PASSED [  2%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_data_transformer_execute_in_session_flow PASSED [  4%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_error_handling_with_execute PASSED [  5%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_api_endpoints_no_process_calls[/api/sessions-post] PASSED [  6%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_api_endpoints_no_process_calls[/api/sessions/test-123-get] PASSED [  8%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestAPIGatewayExecuteFix::test_concurrent_session_creation_with_execute PASSED [  9%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestMiddlewareComponentsExecuteFix::test_ai_chat_middleware_uses_execute PASSED [ 10%]
+tests/integration/middleware/test_api_gateway_execute_fix.py::TestMiddlewareComponentsExecuteFix::test_access_control_uses_execute PASSED [ 12%]
+tests/integration/middleware/test_basic_integration.py::test_middleware_imports PASSED [ 13%]
+tests/integration/middleware/test_basic_integration.py::test_auth_uses_sdk_nodes PASSED [ 14%]
+tests/integration/middleware/test_basic_integration.py::test_agent_ui_uses_sdk_runtime PASSED [ 16%]
+tests/integration/middleware/test_basic_integration.py::test_realtime_uses_sdk_http_node PASSED [ 17%]
+tests/integration/middleware/test_basic_integration.py::test_event_system_basic_functionality PASSED [ 18%]
+tests/integration/middleware/test_basic_integration.py::test_database_repos_use_sdk_nodes PASSED [ 20%]
+tests/integration/middleware/test_basic_integration.py::test_ai_chat_uses_sdk_vector_nodes PASSED [ 21%]
+tests/integration/middleware/test_basic_integration.py::test_workflow_creation_integration PASSED [ 22%]
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_basic_echo PASSED [ 24%]
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_durability_status PASSED [ 25%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_high_volume_concurrent_analytics PASSED [ 26%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_ai_customer_insights_pipeline PASSED [ 28%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_sentiment_analysis_batch_processing PASSED [ 29%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_gateway_performance_under_load PASSED [ 30%]
+tests/integration/middleware/test_durable_gateway_production.py::TestDurableGatewayProduction::test_system_resilience_and_recovery PASSED [ 32%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_simple_compute_workflow PASSED [ 33%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_multi_step_workflow PASSED [ 34%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_concurrent_executions PASSED [ 36%]
+tests/integration/middleware/test_durable_gateway_simple.py::TestDurableGatewaySimple::test_durability_features PASSED [ 37%]
+tests/integration/middleware/test_event_store.py::TestRequestEvent::test_event_creation PASSED [ 38%]
+tests/integration/middleware/test_event_store.py::TestRequestEvent::test_event_serialization PASSED [ 40%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_append_event PASSED [ 41%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_sequence_numbers PASSED [ 42%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_buffer_flush_on_size PASSED [ 44%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_events PASSED [ 45%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_events_with_filters PASSED [ 46%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_replay_events PASSED [ 48%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_stream_events PASSED [ 49%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_stream_events_with_filter PASSED [ 50%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_projections PASSED [ 52%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_async_projection PASSED [ 53%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_storage_backend PASSED [ 54%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_load_from_storage PASSED [ 56%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_stats PASSED [ 57%]
+tests/integration/middleware/test_event_store.py::TestEventStore::test_close PASSED [ 58%]
+tests/integration/middleware/test_event_store.py::TestProjections::test_request_state_projection PASSED [ 60%]
+tests/integration/middleware/test_event_store.py::TestProjections::test_performance_metrics_projection PASSED [ 61%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_end_to_end_workflow_execution PASSED [ 62%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_multiple_workflow_orchestration PASSED [ 64%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_realtime_communication_integration PASSED [ 65%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_session_isolation_and_cleanup PASSED [ 66%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_middleware_stack_health_monitoring PASSED [ 68%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management PASSED [ 69%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_error_handling_and_recovery PASSED [ 70%]
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_middleware_performance_characteristics PASSED [ 72%]
+tests/integration/middleware/test_real_integration.py::TestRealAuthMiddleware::test_auth_middleware_uses_real_sdk_nodes PASSED [ 73%]
+tests/integration/middleware/test_real_integration.py::TestRealAuthMiddleware::test_real_user_registration_workflow PASSED [ 74%]
+tests/integration/middleware/test_real_integration.py::TestRealAuthMiddleware::test_credential_manager_real_functionality PASSED [ 76%]
+tests/integration/middleware/test_real_integration.py::TestRealDatabaseRepositories::test_repository_uses_real_sql_node PASSED [ 77%]
+tests/integration/middleware/test_real_integration.py::TestRealDatabaseRepositories::test_real_database_operations PASSED [ 78%]
+tests/integration/middleware/test_real_integration.py::TestRealRealtimeMiddleware::test_webhook_manager_uses_real_http_node PASSED [ 80%]
+tests/integration/middleware/test_real_integration.py::TestRealRealtimeMiddleware::test_real_http_request_execution PASSED [ 81%]
+tests/integration/middleware/test_real_integration.py::TestRealRealtimeMiddleware::test_real_event_system PASSED [ 82%]
+tests/integration/middleware/test_real_integration.py::TestRealAgentUIMiddleware::test_agent_ui_uses_real_runtime PASSED [ 84%]
+tests/integration/middleware/test_real_integration.py::TestRealAgentUIMiddleware::test_real_workflow_creation PASSED [ 85%]
+tests/integration/middleware/test_real_integration.py::TestRealAIChatMiddleware::test_ai_chat_uses_real_sdk_nodes PASSED [ 86%]
+tests/integration/middleware/test_real_integration.py::TestRealAIChatMiddleware::test_real_chat_session_management PASSED [ 88%]
+tests/integration/middleware/test_real_integration.py::TestRealAIChatMiddleware::test_real_workflow_generation_attempt PASSED [ 89%]
+tests/integration/middleware/test_real_integration.py::TestEndToEndRealScenarios::test_complete_middleware_integration PASSED [ 90%]
+tests/integration/middleware/test_real_integration.py::TestEndToEndRealScenarios::test_all_middleware_components_importable PASSED [ 92%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_user_creation_through_middleware PASSED [ 93%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_role_management_with_access_control PASSED [ 94%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_permission_check_through_gateway PASSED [ 96%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_bulk_user_operations PASSED [ 97%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_admin_node_execute_method PASSED [ 98%]
+tests/integration/middleware/test_user_management_middleware_integration.py::TestUserManagementMiddlewareIntegration::test_middleware_access_control_integration PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_basic_echo
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/integration/middleware/test_durable_gateway_basic.py::TestDurableGatewayBasic::test_basic_echo
+  ./repos/projects/kailash_python_sdk/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:17: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+tests/integration/middleware/test_event_store.py::TestEventStore::test_get_stats
+  ./repos/projects/kailash_python_sdk/src/kailash/middleware/gateway/event_store.py:128: RuntimeWarning: coroutine 'EventStore._flush_loop' was never awaited
+    self._flush_task = None
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_end_to_end_workflow_execution
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:168: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_multiple_workflow_orchestration
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:239: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec1_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_multiple_workflow_orchestration
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:243: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec2_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_realtime_communication_integration
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:305: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_session_isolation_and_cleanup
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:355: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec1_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_session_isolation_and_cleanup
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:361: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    exec2_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_concurrent_session_management
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:453: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_error_handling_and_recovery
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:539: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    error_execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py::TestMiddlewareGatewayIntegration::test_error_handling_and_recovery
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:544: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    success_execution_id = await agent_ui.execute_workflow(
+
+tests/integration/middleware/test_gateway_integration.py: 10 warnings
+  ./repos/projects/kailash_python_sdk/tests/integration/middleware/test_gateway_integration.py:604: DeprecationWarning: execute_workflow() is deprecated and will be removed in version 1.0.0. Use execute() instead for consistency with runtime API.
+    execution_id = await agent_ui.execute_workflow(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 75 passed, 26 warnings in 27.72s =======================

@@ -140,21 +140,57 @@ mcp_servers = [{
 
 Here's a minimal MCP server in Python:
 
+### Quick Prototype Server
+
 ```python
-# my_mcp_server.py
-from kailash.mcp_server import MCPServer
+# my_simple_server.py
+from kailash.mcp_server import SimpleMCPServer
 
-# Create server
-server = MCPServer("my-tools")
+# Create lightweight server for prototyping
+server = SimpleMCPServer("my-tools")
 
-# Add a simple tool
-@server.tool()
+# Add simple tools
+@server.tool("Add numbers")
 def add_numbers(a: int, b: int) -> dict:
     """Add two numbers together."""
     return {"result": a + b}
 
-@server.tool()
+@server.tool("Get weather")
 def get_weather(city: str) -> dict:
+    """Get weather for a city."""
+    # In real implementation, call weather API
+    return {
+        "city": city,
+        "temperature": 72,
+        "conditions": "sunny"
+    }
+
+# Run the server (no configuration needed)
+if __name__ == "__main__":
+    server.run()
+```
+
+### Production Server
+
+```python
+# my_production_server.py
+from kailash.mcp_server import MCPServer
+
+# Create production server with features
+server = MCPServer(
+    "my-tools-prod",
+    enable_cache=True,
+    enable_metrics=True
+)
+
+# Add production tools with caching
+@server.tool(cache_ttl=300)  # Cache for 5 minutes
+async def add_numbers(a: int, b: int) -> dict:
+    """Add two numbers together."""
+    return {"result": a + b}
+
+@server.tool(cache_ttl=600)  # Cache for 10 minutes
+async def get_weather(city: str) -> dict:
     """Get weather for a city."""
     # In real implementation, call weather API
     return {
@@ -167,6 +203,15 @@ def get_weather(city: str) -> dict:
 if __name__ == "__main__":
     server.run()
 ```
+
+### When to Use Which Server
+
+| Use Case | Server Type | Why |
+|----------|-------------|-----|
+| **Learning MCP** | `SimpleMCPServer` | Focus on concepts, not infrastructure |
+| **Prototyping** | `SimpleMCPServer` | Fast iteration, minimal setup |
+| **Production** | `MCPServer` | Authentication, caching, monitoring |
+| **Enterprise** | `MCPServer` | Full production features required |
 
 ## Key MCP Parameters
 

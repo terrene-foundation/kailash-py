@@ -91,12 +91,16 @@ from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
 from kailash.nodes.data.directory import DirectoryReaderNode
 from kailash.nodes.data.event_generation import EventGeneratorNode
 from kailash.nodes.data.file_discovery import FileDiscoveryNode
+from kailash.nodes.data.query_router import QueryRouterNode
 from kailash.nodes.data.readers import (
     CSVReaderNode,
     DocumentProcessorNode,
     JSONReaderNode,
     TextReaderNode,
 )
+
+# Redis
+from kailash.nodes.data.redis import RedisNode
 from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNode
 from kailash.nodes.data.sharepoint_graph import (
     SharePointGraphReader,
@@ -115,6 +119,7 @@ from kailash.nodes.data.vector_db import (
     TextSplitterNode,
     VectorDatabaseNode,
 )
+from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 from kailash.nodes.data.writers import CSVWriterNode, JSONWriterNode, TextWriterNode
 
 __all__ = [
@@ -143,6 +148,8 @@ __all__ = [
     "HybridRetrieverNode",
     # SQL
     "SQLDatabaseNode",
+    # Redis
+    "RedisNode",
     # Vector DB
     "EmbeddingNode",
     "VectorDatabaseNode",
@@ -157,4 +164,7 @@ __all__ = [
     "AsyncConnectionManager",
     "get_connection_manager",
     "AsyncPostgreSQLVectorNode",
+    # Connection Pool & Query Routing
+    "WorkflowConnectionPool",
+    "QueryRouterNode",
 ]

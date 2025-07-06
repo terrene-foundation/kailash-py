@@ -56,7 +56,7 @@ class QueryExpansionNode(Node):
         # - "deep learning optimization"
         # - "AI optimization techniques"
 
-        expanded = await expander.run(query="ML optimization")
+        expanded = await expander.execute(query="ML optimization")
 
     Parameters:
         expansion_method: Algorithm (llm, wordnet, custom)
@@ -236,7 +236,7 @@ class QueryDecompositionNode(Node):
         # 4. "How are CNNs used in vision?"
         # 5. "What are the key differences?"
 
-        plan = await decomposer.run(
+        plan = await decomposer.execute(
             query="Compare transformer and CNN architectures for NLP and vision"
         )
 
@@ -426,7 +426,7 @@ class QueryRewritingNode(Node):
         #   technical: "neural network training process Keras implementation"
         #   simplified: "train neural network keras"
 
-        rewritten = await rewriter.run(
+        rewritten = await rewriter.execute(
             query="how 2 trian nueral netwrk wit keras"
         )
 
@@ -656,7 +656,7 @@ class QueryIntentClassifierNode(Node):
         #   requirements: ["needs_examples", "needs_code"]
         #   recommended_strategy: "statistical"
 
-        intent = await classifier.run(
+        intent = await classifier.execute(
             query="Show me Python code to implement gradient descent"
         )
 
@@ -924,7 +924,7 @@ class MultiHopQueryPlannerNode(Node):
         # Hop 3: "What BERT innovations are used in modern models?"
         # Hop 4: "How do modern models improve on BERT?"
 
-        plan = await planner.run(
+        plan = await planner.execute(
             query="How has BERT influenced modern NLP architectures?"
         )
 
@@ -1179,7 +1179,7 @@ class AdaptiveQueryProcessorNode(Node):
         # - Decomposition (if complex)
         # - Multi-hop planning (if required)
 
-        optimized = await processor.run(
+        optimized = await processor.execute(
             query="compair transfomer vs lstm for sequnce tasks"
         )
         # Corrects spelling, decomposes comparison, plans retrieval

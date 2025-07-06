@@ -9,13 +9,14 @@
 
 ## Quick Setup - LLMAgentNode with MCP
 ```python
-from kailash import Workflow
+from kailash import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
 # Single node with integrated MCP
-workflow = Workflow("mcp-example")
-workflow.add_node("agent", LLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("LLMAgentNode", "agent", {})
+workflow = builder.build()
 
 # Execute with MCP servers
 runtime = LocalRuntime()
@@ -44,8 +45,9 @@ results, run_id = runtime.execute(workflow, parameters={
 ## Tool Execution with MCP
 ```python
 # Automatic tool execution
-workflow = Workflow("tool-execution")
-workflow.add_node("agent", LLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("LLMAgentNode", "agent", {})
+workflow = builder.build()
 
 results, run_id = runtime.execute(workflow, parameters={
     "agent": {
@@ -73,26 +75,64 @@ print(f"Tools executed: {results['agent']['context']['tools_executed']}")
 ```
 
 ## MCP Server Creation
+
+### Production Server (MCPServer)
 ```python
 from kailash.mcp_server import MCPServer
 
-# Production server with caching
-server = MCPServer("my-server")
+# Production server with all features
+server = MCPServer(
+    "my-server",
+    enable_cache=True,
+    enable_metrics=True,
+    cache_backend="memory",
+    cache_ttl=600
+)
 
 @server.tool(cache_key="expensive", cache_ttl=600)
 async def expensive_operation(data: str) -> dict:
     """Cached operation."""
     return {"processed": data}
 
-@server.tool(format_response="markdown")
+@server.tool()
 async def get_status(service: str) -> dict:
-    """Returns markdown-formatted status."""
+    """Get service status."""
     return {"service": service, "status": "healthy"}
 
 if __name__ == "__main__":
     server.run()
-
 ```
+
+### Simple Server for Prototyping (SimpleMCPServer)
+```python
+from kailash.mcp_server import SimpleMCPServer
+
+# Lightweight server for development/prototyping
+server = SimpleMCPServer("my-prototype", "Development prototype")
+
+@server.tool()
+def hello(name: str) -> str:
+    """Basic tool without advanced features."""
+    return f"Hello, {name}!"
+
+@server.tool()
+def echo(data: dict) -> dict:
+    """Echo data for testing."""
+    return {"echoed": data}
+
+if __name__ == "__main__":
+    server.run()
+```
+
+### When to Use Which Server
+
+| Use Case | Server Type | Features |
+|----------|-------------|----------|
+| **Production APIs** | `MCPServer` | Auth, caching, metrics, rate limiting |
+| **Quick prototyping** | `SimpleMCPServer` | Basic MCP functionality only |
+| **Development/testing** | `SimpleMCPServer` | Fast setup, no dependencies |
+| **Learning MCP** | `SimpleMCPServer` | Focus on concepts |
+| **Enterprise apps** | `MCPServer` | Full production features |
 
 ## Server Configuration
 
@@ -132,12 +172,12 @@ mcp_servers = [
 
 ## Tool Discovery
 ```python
-from kailash import Workflow
+from kailash import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.ai import LLMAgentNode
 
-workflow = Workflow("tool-discovery")
-workflow.add_node("agent", LLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("LLMAgentNode", "agent", {})
+workflow = builder.build()
 runtime = LocalRuntime()
 
 # Define mcp_servers first
@@ -171,12 +211,12 @@ if results["agent"]["success"]:
 
 ## Resource Access
 ```python
-from kailash import Workflow
+from kailash import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.ai import LLMAgentNode
 
-workflow = Workflow("resource-access")
-workflow.add_node("agent", LLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("LLMAgentNode", "agent", {})
+workflow = builder.build()
 runtime = LocalRuntime()
 
 # Access MCP resources
@@ -198,12 +238,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Tool Calling
 ```python
-from kailash import Workflow
+from kailash import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.ai import LLMAgentNode
 
-workflow = Workflow("tool-calling")
-workflow.add_node("agent", LLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("LLMAgentNode", "agent", {})
+workflow = builder.build()
 runtime = LocalRuntime()
 
 # Define mcp_servers
@@ -233,12 +273,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Error Handling
 ```python
-from kailash import Workflow
+from kailash import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.ai import LLMAgentNode
 
-workflow = Workflow("error-handling")
-workflow.add_node("agent", LLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("LLMAgentNode", "agent", {})
+workflow = builder.build()
 runtime = LocalRuntime()
 
 # Graceful failure handling
@@ -330,12 +370,12 @@ mcp_servers = [
 
 ### Iterative MCP Usage
 ```python
-from kailash import Workflow
+from kailash import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
 
-workflow = Workflow("iterative-mcp")
-workflow.add_node("iterative", IterativeLLMAgentNode())
+builder = WorkflowBuilder()
+builder.add_node("IterativeLLMAgentNode", "iterative", {})
+workflow = builder.build()
 runtime = LocalRuntime()
 
 # Define mcp_servers
@@ -376,7 +416,7 @@ def test_mcp_tool_execution():
     }
 
     # Test with mock provider
-    result = node.run(
+    result = node.execute(
         provider="mock",
         model="gpt-4",
         messages=[{"role": "user", "content": "Search for data"}],
@@ -395,7 +435,7 @@ def test_real_mcp_server():
     """Test with real MCP server running in Docker."""
     node = LLMAgentNode()
 
-    result = node.run(
+    result = node.execute(
         provider="ollama",
         model="llama3.2",
         messages=[{"role": "user", "content": "List available tools"}],

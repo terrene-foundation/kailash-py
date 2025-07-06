@@ -57,7 +57,7 @@ class AdminSchemaManager:
                 schema_sql = f.read()
 
             # Execute schema creation
-            self.db_node.run(query=schema_sql)
+            self.db_node.execute(query=schema_sql)
 
             # Verify schema creation
             tables = self._get_existing_tables()
@@ -113,7 +113,7 @@ class AdminSchemaManager:
 
             # Check schema version
             try:
-                version_result = self.db_node.run(
+                version_result = self.db_node.execute(
                     query="SELECT version FROM admin_schema_version ORDER BY created_at DESC LIMIT 1",
                     result_format="dict",
                 )
@@ -225,14 +225,14 @@ class AdminSchemaManager:
 
         for table in tables_to_drop:
             try:
-                self.db_node.run(query=f"DROP TABLE IF EXISTS {table} CASCADE")
+                self.db_node.execute(query=f"DROP TABLE IF EXISTS {table} CASCADE")
             except Exception as e:
                 self.logger.warning(f"Could not drop table {table}: {e}")
 
     def _get_existing_tables(self) -> List[str]:
         """Get list of existing tables in the database."""
         try:
-            result = self.db_node.run(
+            result = self.db_node.execute(
                 query="""
                 SELECT table_name
                 FROM information_schema.tables
@@ -252,7 +252,7 @@ class AdminSchemaManager:
     def _get_existing_indexes(self) -> List[str]:
         """Get list of existing indexes."""
         try:
-            result = self.db_node.run(
+            result = self.db_node.execute(
                 query="""
                 SELECT indexname
                 FROM pg_indexes
@@ -280,11 +280,11 @@ class AdminSchemaManager:
         )
         """
 
-        self.db_node.run(query=version_table_sql)
+        self.db_node.execute(query=version_table_sql)
 
     def _record_schema_version(self):
         """Record the current schema version."""
-        self.db_node.run(
+        self.db_node.execute(
             query="""
             INSERT INTO admin_schema_version (version, migration_notes)
             VALUES ($1, $2)
@@ -298,7 +298,7 @@ class AdminSchemaManager:
     def _get_current_schema_version(self) -> Optional[str]:
         """Get the current schema version."""
         try:
-            result = self.db_node.run(
+            result = self.db_node.execute(
                 query="SELECT version FROM admin_schema_version ORDER BY created_at DESC LIMIT 1",
                 result_format="dict",
             )
@@ -350,7 +350,7 @@ class AdminSchemaManager:
     def _get_table_columns(self, table_name: str) -> List[str]:
         """Get column names for a table."""
         try:
-            result = self.db_node.run(
+            result = self.db_node.execute(
                 query="""
                 SELECT column_name
                 FROM information_schema.columns
@@ -370,7 +370,7 @@ class AdminSchemaManager:
     def _get_table_info(self) -> Dict[str, Any]:
         """Get detailed table information."""
         try:
-            result = self.db_node.run(
+            result = self.db_node.execute(
                 query="""
                 SELECT
                     t.table_name,
@@ -398,7 +398,7 @@ class AdminSchemaManager:
 
         for table in tables:
             try:
-                result = self.db_node.run(
+                result = self.db_node.execute(
                     query=f"SELECT COUNT(*) as count FROM {table}",
                     result_format="dict",
                 )
@@ -411,11 +411,11 @@ class AdminSchemaManager:
     def _get_database_info(self) -> Dict[str, Any]:
         """Get general database information."""
         try:
-            version_result = self.db_node.run(
+            version_result = self.db_node.execute(
                 query="SELECT version()", result_format="dict"
             )
 
-            size_result = self.db_node.run(
+            size_result = self.db_node.execute(
                 query="SELECT pg_size_pretty(pg_database_size(current_database())) as size",
                 result_format="dict",
             )

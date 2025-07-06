@@ -58,6 +58,13 @@ QDRANT_CONFIG = {
     "port": int(os.getenv("QDRANT_PORT", "6333")),
 }
 
+# Mock API configuration - Port 8888 (LOCKED-IN)
+MOCK_API_CONFIG = {
+    "host": os.getenv("MOCK_API_HOST", "localhost"),
+    "port": int(os.getenv("MOCK_API_PORT", "8888")),
+    "base_url": os.getenv("MOCK_API_BASE_URL", "http://localhost:8888"),
+}
+
 
 # Connection string helpers
 def get_postgres_connection_string(database=None):
@@ -82,6 +89,11 @@ def get_redis_url():
     return f"redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}"
 
 
+def get_redis_connection_params():
+    """Get Redis connection parameters for direct client setup."""
+    return REDIS_CONFIG
+
+
 def get_mysql_connection_string(database=None):
     """Get MySQL connection string for the Docker setup."""
     db = database or MYSQL_CONFIG["database"]
@@ -89,6 +101,11 @@ def get_mysql_connection_string(database=None):
         f"mysql://{MYSQL_CONFIG['user']}:{MYSQL_CONFIG['password']}"
         f"@{MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/{db}"
     )
+
+
+def get_mock_api_url():
+    """Get Mock API URL for the Docker setup."""
+    return MOCK_API_CONFIG["base_url"]
 
 
 # Test database names
@@ -135,6 +152,15 @@ async def ensure_docker_services():
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}/api/tags",
+                timeout=5.0,
+            )
+            if response.status_code != 200:
+                return False
+
+        # Check Mock API
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MOCK_API_CONFIG['base_url']}/health",
                 timeout=5.0,
             )
             if response.status_code != 200:

@@ -26,7 +26,7 @@ def find_deprecated_patterns(file_path: Path) -> List[Dict]:
                         "type": "incorrect_llm_run",
                         "line": line_num,
                         "content": line.strip(),
-                        "description": "LLMAgentNode.run() should be .execute() - run() is internal method",
+                        "description": "LLMAgentNode.execute() should be .execute() - run() is internal method",
                     }
                 )
 

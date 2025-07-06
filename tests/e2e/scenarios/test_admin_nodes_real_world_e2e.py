@@ -142,7 +142,7 @@ class TestAdminNodesRealWorldE2E:
 
         for query in cleanup_queries:
             try:
-                self.db_node.run(query=query)
+                self.db_node.execute(query=query)
             except Exception:
                 pass  # Ignore cleanup errors
 
@@ -180,7 +180,7 @@ class TestAdminNodesRealWorldE2E:
         Include at least 4 departments with 2-3 teams each."""
 
         # Generate company structure
-        llm_result = self.llm_node.run(
+        llm_result = self.llm_node.execute(
             prompt=company_prompt,
             response_format="json",
             max_tokens=1000,
@@ -221,7 +221,7 @@ class TestAdminNodesRealWorldE2E:
 
         # Create C-level roles
         for role_id, role_data in role_hierarchy.items():
-            result = self.role_node.run(
+            result = self.role_node.execute(
                 operation="create_role",
                 role_data={
                     "name": role_data["name"],
@@ -247,7 +247,7 @@ class TestAdminNodesRealWorldE2E:
             parent_role = "cto" if "tech" in dept["name"].lower() else "ceo"
 
             # Create department head role
-            dept_result = self.role_node.run(
+            dept_result = self.role_node.execute(
                 operation="create_role",
                 role_data={
                     "name": f"{dept['name']} Head",
@@ -269,7 +269,7 @@ class TestAdminNodesRealWorldE2E:
                 team_role_id = team["name"].lower().replace(" ", "_") + "_lead"
 
                 # Create team lead role
-                team_result = self.role_node.run(
+                team_result = self.role_node.execute(
                     operation="create_role",
                     role_data={
                         "name": f"{team['name']} Lead",
@@ -291,7 +291,7 @@ class TestAdminNodesRealWorldE2E:
                 for role_name in team.get("roles", []):
                     ic_role_id = role_name.lower().replace(" ", "_")
 
-                    ic_result = self.role_node.run(
+                    ic_result = self.role_node.execute(
                         operation="create_role",
                         role_data={
                             "name": role_name,
@@ -331,7 +331,7 @@ class TestAdminNodesRealWorldE2E:
         }}"""
 
         # Generate employees
-        employee_result = self.llm_node.run(
+        employee_result = self.llm_node.execute(
             prompt=employee_prompt,
             response_format="json",
             max_tokens=2000,
@@ -347,7 +347,7 @@ class TestAdminNodesRealWorldE2E:
         created_users = []
         for i, emp in enumerate(employees[:20]):  # Limit to 20 for testing
             # Create user
-            user_result = self.user_node.run(
+            user_result = self.user_node.execute(
                 operation="create_user",
                 user_data={
                     "user_id": f"emp_{i+1}",
@@ -402,7 +402,7 @@ class TestAdminNodesRealWorldE2E:
                 )
 
             if role_to_assign in created_roles:
-                self.role_node.run(
+                self.role_node.execute(
                     operation="assign_user",
                     user_id=user_result["result"]["user"]["user_id"],
                     role_id=role_to_assign,
@@ -416,7 +416,7 @@ class TestAdminNodesRealWorldE2E:
 
         # Test CEO has access to everything
         ceo_user = created_users[0]  # Assuming first user is CEO
-        perm_check = self.permission_node.run(
+        perm_check = self.permission_node.execute(
             operation="check_permission",
             user_id=ceo_user["user_id"],
             resource_id="finance",
@@ -437,7 +437,7 @@ class TestAdminNodesRealWorldE2E:
             None,
         )
         if eng_user:
-            perm_check = self.permission_node.run(
+            perm_check = self.permission_node.execute(
                 operation="check_permission",
                 user_id=eng_user["user_id"],
                 resource_id="finance",
@@ -450,7 +450,7 @@ class TestAdminNodesRealWorldE2E:
             print("✓ Department isolation working correctly")
 
         # Test hierarchical permissions
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="validate_hierarchy",
             tenant_id=tenant_id,
         )
@@ -512,7 +512,7 @@ class TestAdminNodesRealWorldE2E:
         FROM admin_audit_log
         WHERE tenant_id = $1 AND action = 'permission_check'
         """
-        audit_result = self.db_node.run(
+        audit_result = self.db_node.execute(
             query=audit_query, parameters=[tenant_id], result_format="dict"
         )
         # Note: Audit logging may be disabled by default in tests
@@ -548,7 +548,7 @@ class TestAdminNodesRealWorldE2E:
             # Create standard roles
             roles = ["admin", "manager", "employee", "viewer"]
             for role_name in roles:
-                role_result = self.role_node.run(
+                role_result = self.role_node.execute(
                     operation="create_role",
                     role_data={
                         "name": role_name,
@@ -565,7 +565,7 @@ class TestAdminNodesRealWorldE2E:
 
             # Create users
             for i in range(10):
-                user_result = self.user_node.run(
+                user_result = self.user_node.execute(
                     operation="create_user",
                     user_data={
                         "user_id": f"{tenant['id']}_user_{i}",
@@ -585,7 +585,7 @@ class TestAdminNodesRealWorldE2E:
 
                 # Assign random role
                 role = random.choice(tenant["roles"])
-                self.role_node.run(
+                self.role_node.execute(
                     operation="assign_user",
                     user_id=user_result["result"]["user"]["user_id"],
                     role_id=role["role_id"],
@@ -667,7 +667,7 @@ class TestAdminNodesRealWorldE2E:
             FROM users
             WHERE tenant_id = $1
             """
-            user_result = self.db_node.run(
+            user_result = self.db_node.execute(
                 query=user_query, parameters=[tenant["id"]], result_format="dict"
             )
             assert user_result["data"][0]["user_count"] == len(tenant["users"])
@@ -678,7 +678,7 @@ class TestAdminNodesRealWorldE2E:
             FROM roles
             WHERE tenant_id = $1
             """
-            role_result = self.db_node.run(
+            role_result = self.db_node.execute(
                 query=role_query, parameters=[tenant["id"]], result_format="dict"
             )
             assert role_result["data"][0]["role_count"] == len(tenant["roles"])
@@ -748,7 +748,7 @@ class TestAdminNodesRealWorldE2E:
         # Create roles with ABAC attributes
         created_roles = {}
         for role_config in roles_with_conditions:
-            result = self.role_node.run(
+            result = self.role_node.execute(
                 operation="create_role",
                 role_data={
                     "name": role_config["name"],
@@ -881,7 +881,7 @@ class TestAdminNodesRealWorldE2E:
         # Execute test scenarios
         for scenario in test_scenarios:
             # Create user
-            user_result = self.user_node.run(
+            user_result = self.user_node.execute(
                 operation="create_user",
                 user_data=scenario["user"],
                 tenant_id=tenant_id,
@@ -889,7 +889,7 @@ class TestAdminNodesRealWorldE2E:
             user_id = user_result["result"]["user"]["user_id"]
 
             # Assign role
-            self.role_node.run(
+            self.role_node.execute(
                 operation="assign_user",
                 user_id=user_id,
                 role_id=scenario["role"],
@@ -908,7 +908,7 @@ class TestAdminNodesRealWorldE2E:
                     **test_case["context"],
                 }
 
-                result = self.permission_node.run(
+                result = self.permission_node.execute(
                     operation="check_permission",
                     user_id=user_id,
                     resource_id=test_case["resource"],
@@ -959,7 +959,7 @@ class TestAdminNodesRealWorldE2E:
         # Create department roles
         for dept_idx in range(num_departments):
             dept_name = f"Department_{dept_idx}"
-            dept_role_result = self.role_node.run(
+            dept_role_result = self.role_node.execute(
                 operation="create_role",
                 role_data={
                     "name": f"{dept_name}_Manager",
@@ -974,7 +974,7 @@ class TestAdminNodesRealWorldE2E:
             # Create team roles
             for team_idx in range(num_teams_per_dept):
                 team_name = f"{dept_name}_Team_{team_idx}"
-                team_role_result = self.role_node.run(
+                team_role_result = self.role_node.execute(
                     operation="create_role",
                     role_data={
                         "name": f"{team_name}_Lead",
@@ -991,7 +991,7 @@ class TestAdminNodesRealWorldE2E:
                 user_ids = []
                 for user_idx in range(num_users_per_team):
                     user_id = f"user_{dept_idx}_{team_idx}_{user_idx}"
-                    user_result = self.user_node.run(
+                    user_result = self.user_node.execute(
                         operation="create_user",
                         user_data={
                             "user_id": user_id,
@@ -1009,7 +1009,7 @@ class TestAdminNodesRealWorldE2E:
                     all_users.append(user_id)
 
                 # Bulk assign users to team role
-                self.role_node.run(
+                self.role_node.execute(
                     operation="bulk_assign",
                     role_id=team_role_id,
                     user_ids=user_ids,
@@ -1079,7 +1079,7 @@ class TestAdminNodesRealWorldE2E:
                     resource = f"resource_{random.randint(1, 50)}"
                     permission = random.choice(["read", "write", "execute", "delete"])
 
-                    result = self.permission_node.run(
+                    result = self.permission_node.execute(
                         operation="check_permission",
                         user_id=user,
                         resource_id=resource,
@@ -1103,7 +1103,7 @@ class TestAdminNodesRealWorldE2E:
                     role = random.choice(all_roles)
                     new_permission = f"new_perm_{op_idx}"
 
-                    result = self.role_node.run(
+                    result = self.role_node.execute(
                         operation="add_permission",
                         role_id=role,
                         permission=new_permission,
@@ -1117,7 +1117,7 @@ class TestAdminNodesRealWorldE2E:
                 else:  # user_update
                     user = random.choice(all_users)
 
-                    result = self.user_node.run(
+                    result = self.user_node.execute(
                         operation="update_user",
                         user_id=user,
                         updates={
@@ -1214,21 +1214,21 @@ class TestAdminNodesRealWorldE2E:
         print("\n🔍 Verifying system stability...")
 
         # Check database connections
-        db_status = self.db_node.run(
+        db_status = self.db_node.execute(
             query="SELECT count(*) as conn_count FROM pg_stat_activity WHERE datname = 'kailash_admin'",
             result_format="dict",
         )
         print(f"✓ Active DB connections: {db_status['data'][0]['conn_count']}")
 
         # Verify data integrity
-        user_count = self.db_node.run(
+        user_count = self.db_node.execute(
             query="SELECT COUNT(*) as count FROM users WHERE tenant_id = $1",
             parameters=[tenant_id],
             result_format="dict",
         )
         assert user_count["data"][0]["count"] == total_users, "User count mismatch"
 
-        role_count = self.db_node.run(
+        role_count = self.db_node.execute(
             query="SELECT COUNT(*) as count FROM roles WHERE tenant_id = $1",
             parameters=[tenant_id],
             result_format="dict",
@@ -1407,7 +1407,7 @@ class TestAdminNodesRealWorldE2E:
     ) -> Tuple[Dict[str, Any], str, str]:
         """Safely check permission and return result with tenant info."""
         try:
-            result = self.permission_node.run(
+            result = self.permission_node.execute(
                 operation="check_permission",
                 user_id=user_id,
                 resource_id=resource,

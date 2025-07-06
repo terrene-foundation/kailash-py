@@ -106,7 +106,7 @@ print("Workflow executed successfully!")
 
 ```python
 # server/auth_server.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
@@ -164,7 +164,7 @@ async def secure_tool(data: str, user_id: str = Depends(verify_token)) -> dict:
 
 ```python
 # server/oauth2_server.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 from starlette.requests import Request
@@ -212,7 +212,7 @@ async def google_callback(request: Request):
 
 ```python
 # server/api_key_server.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from fastapi import Header, HTTPException
 import hashlib
 
@@ -256,7 +256,7 @@ async def protected_tool(
 
 ```python
 # tools/web_search.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import aiohttp
 from typing import List, Dict
 
@@ -327,7 +327,7 @@ async def search_news(
 
 ```python
 # tools/database_tool.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import asyncpg
 from typing import List, Dict, Any
 
@@ -431,7 +431,7 @@ async def get_table_schema(table_name: str) -> Dict[str, Any]:
 
 ```python
 # tools/filesystem_tool.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import aiofiles
 import os
 from pathlib import Path
@@ -555,7 +555,7 @@ async def list_directory(
 
 ```python
 # tools/llm_tool.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from openai import AsyncOpenAI
 import anthropic
 from typing import List, Dict, Any, Literal
@@ -700,7 +700,7 @@ async def embedding_search(
 
 ```python
 # patterns/tool_chaining.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, List
 
 mcp = FastMCP("Tool Chaining Example")
@@ -790,7 +790,7 @@ async def compare_topics(topics: List[str]) -> Dict[str, Any]:
 
 ```python
 # patterns/streaming.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
@@ -882,7 +882,7 @@ async def process_large_dataset_stream(
 
 ```python
 # patterns/caching.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import redis
 import hashlib
 import json
@@ -1052,7 +1052,7 @@ def limited_api_call(endpoint: str, user_id: str = "anonymous") -> dict:
 
 ```python
 # integrations/slack_integration.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from slack_sdk.web.async_client import AsyncWebClient
 from typing import Dict, Any, List
 
@@ -1154,7 +1154,7 @@ async def create_slack_reminder(
 
 ```python
 # integrations/github_integration.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from github import Github
 from typing import Dict, Any, List
 
@@ -1279,7 +1279,7 @@ async def analyze_github_repo(repo: str) -> Dict[str, Any]:
 
 ```python
 # error_handling/comprehensive.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any
 import traceback
 import logging
@@ -1430,7 +1430,7 @@ async def parse_json_safely(json_string: str) -> Dict[str, Any]:
 
 ```python
 # error_handling/resilience.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import asyncio
 from typing import Dict, Any
 from datetime import datetime, timedelta
@@ -1540,7 +1540,7 @@ async def resilient_api_call(
 
 ```python
 # performance/batch_processing.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import asyncio
 from typing import List, Dict, Any
 
@@ -1614,7 +1614,7 @@ async def process_single_item(item: Dict[str, Any]) -> Dict[str, Any]:
 
 ```python
 # performance/connection_pooling.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import aiohttp
 import asyncpg
 from typing import Dict, Any
@@ -1692,7 +1692,7 @@ async def efficient_db_query(query: str) -> Dict[str, Any]:
 
 ```python
 # security/input_sanitization.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import html
 import re
 from typing import Dict, Any
@@ -1810,7 +1810,7 @@ async def validate_file_path(path: str) -> Dict[str, Any]:
 
 ```python
 # monitoring/structured_logging.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 import logging
 import json
 from datetime import datetime
@@ -1915,7 +1915,7 @@ async def monitored_tool(input_data: str) -> Dict[str, Any]:
 
 ```python
 # monitoring/metrics.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
 from typing import Dict, Any
 import time
@@ -1993,7 +1993,7 @@ async def metrics_example(data: str) -> Dict[str, Any]:
 
 ```python
 # production/complete_server.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware

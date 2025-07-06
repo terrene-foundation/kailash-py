@@ -63,7 +63,7 @@ class TestRealWorldDataPipelines:
                     import docker
 
                     client = docker.from_env()
-                    self.redis_container = client.containers.run(
+                    self.redis_container = client.containers.execute(
                         "redis:7-alpine",
                         ports={"6379/tcp": None},
                         detach=True,
@@ -818,7 +818,7 @@ result = {
                     import docker
 
                     client = docker.from_env()
-                    self.redis_container = client.containers.run(
+                    self.redis_container = client.containers.execute(
                         "redis:7-alpine",
                         ports={"6379/tcp": None},
                         detach=True,

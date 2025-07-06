@@ -217,7 +217,7 @@ class AsyncMergeNode(AsyncNode):
         # This will be properly wrapped by the execute() method
         # which will call it in a sync context
         raise RuntimeError(
-            "AsyncMergeNode.run() was called directly. Use execute() or execute_async() instead."
+            "AsyncMergeNode.execute() was called directly. Use execute() or execute_async() instead."
         )
 
     async def _async_concat(self, data_inputs: list[Any], chunk_size: int) -> Any:
@@ -642,7 +642,7 @@ class AsyncSwitchNode(AsyncNode):
         # This will be properly wrapped by the execute() method
         # which will call it in a sync context
         raise RuntimeError(
-            "AsyncSwitchNode.run() was called directly. Use execute() or execute_async() instead."
+            "AsyncSwitchNode.execute() was called directly. Use execute() or execute_async() instead."
         )
 
     async def _evaluate_condition(

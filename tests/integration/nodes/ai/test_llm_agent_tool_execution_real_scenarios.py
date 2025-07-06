@@ -237,7 +237,7 @@ result = json.dumps(data)
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=messages,
@@ -326,7 +326,7 @@ result = json.dumps(data)
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -371,7 +371,7 @@ result = json.dumps(data)
 
         start_time = time.time()
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -417,7 +417,7 @@ result = json.dumps(data)
                         }
                     )
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -467,7 +467,7 @@ result = json.dumps(data)
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -504,7 +504,7 @@ result = json.dumps(data)
             }
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -600,7 +600,7 @@ result = json.dumps(data)
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -680,7 +680,7 @@ result = json.dumps(data)
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="mock",
             model="gpt-4",
             messages=[
@@ -714,7 +714,7 @@ class TestAsyncToolExecution:
         loop = asyncio.get_event_loop()
 
         def run_agent():
-            return agent.run(
+            return agent.execute(
                 provider="mock",
                 model="gpt-4",
                 messages=[{"role": "user", "content": "Execute async operation"}],

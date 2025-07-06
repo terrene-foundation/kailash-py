@@ -96,7 +96,7 @@ class TransactionHelper:
 
         while time.time() - start_time < timeout_seconds:
             try:
-                result = self.db_node.run(
+                result = self.db_node.execute(
                     query=verification_query, result_format="dict"
                 )
                 data = result.get("data", [])
@@ -136,7 +136,7 @@ class TransactionHelper:
             from .user_management import UserManagementNode
 
             user_mgmt = UserManagementNode(database_url=self.db_node.connection_string)
-            return user_mgmt.run(
+            return user_mgmt.execute(
                 operation="create_user", user_data=user_data, tenant_id=tenant_id
             )
 
@@ -179,7 +179,7 @@ class TransactionHelper:
             from .role_management import RoleManagementNode
 
             role_mgmt = RoleManagementNode(database_url=self.db_node.connection_string)
-            return role_mgmt.run(
+            return role_mgmt.execute(
                 operation="assign_user",
                 user_id=user_id,
                 role_id=role_id,

@@ -1,0 +1,2069 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-8.4.1, pluggy-1.6.0 -- ./repos/projects/kailash_python_sdk/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: ./repos/projects/kailash_python_sdk
+configfile: pytest.ini
+plugins: anyio-4.9.0, Faker-37.4.0, xdist-3.8.0, timeout-2.4.0, cov-6.2.1, split-0.10.0, asyncio-1.0.0
+timeout: 180.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 95 items
+
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_malformed_tool_definition_missing_type PASSED [  1%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_malformed_tool_definition_invalid_parameters PASSED [  2%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_circular_tool_dependencies PASSED [  3%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_tool_execution_timeout PASSED [  4%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_tool_execution_exception PASSED [  5%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_llm_calls_nonexistent_tool PASSED [  6%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_llm_provides_invalid_json_arguments PASSED [  7%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_massive_tool_catalog PASSED [  8%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_deeply_nested_tool_arguments PASSED [  9%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_concurrent_tool_calls_with_failures PASSED [ 10%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_tool_execution_memory_limits PASSED [ 11%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_tools_with_unicode_and_special_chars PASSED [ 12%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_edge_cases.py::TestLLMAgentToolExecutionEdgeCases::test_tool_execution_state_corruption PASSED [ 13%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_integration.py::TestLLMAgentToolExecutionIntegration::test_complete_tool_execution_flow PASSED [ 14%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_integration.py::TestLLMAgentToolExecutionIntegration::test_tool_execution_with_errors PASSED [ 15%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_integration.py::TestLLMAgentToolExecutionIntegration::test_mixed_mcp_and_regular_tools PASSED [ 16%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_integration.py::TestLLMAgentToolExecutionIntegration::test_tool_execution_respects_max_rounds PASSED [ 17%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_integration.py::TestLLMAgentToolExecutionIntegration::test_async_tool_execution PASSED [ 18%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_integration.py::TestLLMAgentToolExecutionIntegration::test_tool_execution_disabled_returns_tool_calls PASSED [ 20%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_ollama.py::TestLLMAgentToolExecutionOllama::test_ollama_basic_tool_execution SKIPPED [ 21%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_ollama.py::TestLLMAgentToolExecutionOllama::test_ollama_multi_tool_scenario SKIPPED [ 22%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_ollama.py::TestLLMAgentToolExecutionOllama::test_ollama_tool_execution_with_mcp_tools SKIPPED [ 23%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_ollama.py::TestLLMAgentToolExecutionOllama::test_ollama_tool_error_handling SKIPPED [ 24%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_ollama.py::TestLLMAgentToolExecutionOllama::test_ollama_workflow_integration SKIPPED [ 25%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_ollama.py::TestLLMAgentToolExecutionOllama::test_ollama_complex_multi_round_scenario SKIPPED [ 26%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_tool_execution_in_workflow PASSED [ 27%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_multi_node_workflow_with_tools PASSED [ 28%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_customer_support_scenario PASSED [ 29%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_data_analysis_pipeline PASSED [ 30%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_concurrent_tool_execution_performance PASSED [ 31%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_large_tool_catalog PASSED [ 32%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_tool_execution_error_recovery PASSED [ 33%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_timeout_handling PASSED [ 34%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_research_assistant_scenario PASSED [ 35%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestLLMAgentToolExecutionRealScenarios::test_workflow_automation_scenario PASSED [ 36%]
+tests/integration/nodes/ai/test_llm_agent_tool_execution_real_scenarios.py::TestAsyncToolExecution::test_async_tool_execution_handling PASSED [ 37%]
+tests/integration/nodes/code/test_pythoncode_integration.py::TestPythonCodeDatabaseIntegration::test_pythoncode_with_sql_workflow PASSED [ 38%]
+tests/integration/nodes/code/test_pythoncode_integration.py::TestPythonCodeDatabaseIntegration::test_pythoncode_error_handling_with_db PASSED [ 40%]
+tests/integration/nodes/code/test_pythoncode_integration.py::TestPythonCodeRedisIntegration::test_pythoncode_with_redis_caching PASSED [ 41%]
+tests/integration/nodes/code/test_pythoncode_integration.py::TestPythonCodeComplexIntegration::test_multi_service_workflow PASSED [ 42%]
+tests/integration/nodes/code/test_pythoncode_integration.py::TestPythonCodeComplexIntegration::test_parameter_injection_patterns PASSED [ 43%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_http_request_node_with_real_api PASSED [ 44%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_rest_client_with_pagination PASSED [ 45%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_oauth2_node_with_real_flow PASSED [ 46%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_graphql_client_with_complex_query PASSED [ 47%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_error_handling_with_real_errors PASSED [ 48%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPINodesWithRealData::test_rest_client_crud_operations PASSED [ 49%]
+tests/integration/nodes/test_api_with_real_data.py::TestAPIWithOllamaGeneration::test_generate_api_responses_with_ollama PASSED [ 50%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_http_request_node_with_real_api ERROR [ 51%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_rest_client_with_pagination ERROR [ 52%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_oauth2_node_with_real_flow ERROR [ 53%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_graphql_client_with_complex_query ERROR [ 54%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_error_handling_with_real_errors ERROR [ 55%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_rest_client_crud_operations ERROR [ 56%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_api_aggregation_endpoints ERROR [ 57%]
+tests/integration/nodes/test_api_with_real_docker_services.py::TestAPIWithOllamaGeneration::test_generate_and_test_api_responses ERROR [ 58%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_async_sql_with_connection_pooling PASSED [ 60%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_vector_node_operations PASSED [ 61%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_vector_similarity_search PASSED [ 62%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_connection_manager_pooling PASSED [ 63%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_abac_with_async_nodes PASSED [ 64%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_migration_framework PASSED [ 65%]
+tests/integration/nodes/test_async_database_integration.py::TestAsyncDatabaseIntegration::test_workflow_with_async_nodes PASSED [ 66%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_simple_alert FAILED [ 67%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_workflow_with_alert FAILED [ 68%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_conditional_alerts PASSED [ 69%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_rate_limiting FAILED [ 70%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_complex_embeds FAILED [ 71%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_error_reporting_workflow FAILED [ 72%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_async_workflow_alerts PASSED [ 73%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_a2a_coordination_alerts FAILED [ 74%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_batch_alerts FAILED [ 75%]
+tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_validation_and_sanitization FAILED [ 76%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_postgres_real_connection PASSED [ 77%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_mysql_real_connection FAILED [ 78%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_async_postgres_operations PASSED [ 80%]
+tests/integration/nodes/test_sql_database_docker.py::TestSQLWithOllamaGeneration::test_generate_complex_queries_with_ollama PASSED [ 81%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_basic_connection_and_select ERROR [ 82%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_crud_operations ERROR [ 83%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_result_formats ERROR [ 84%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_parameterized_queries_security ERROR [ 85%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_transaction_rollback ERROR [ 86%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_connection_pooling ERROR [ 87%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_complex_joins ERROR [ 88%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_mysql_specific_features ERROR [ 89%]
+tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_mysql_charset_unicode ERROR [ 90%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_basic_queries PASSED [ 91%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_jsonb_operations PASSED [ 92%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_array_operations PASSED [ 93%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_cte_and_window_functions PASSED [ 94%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_transactions PASSED [ 95%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_full_text_search PASSED [ 96%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_upsert_operations PASSED [ 97%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_custom_types_and_enums PASSED [ 98%]
+tests/integration/nodes/test_sql_database_postgres_integration.py::TestSQLDatabaseNodePostgreSQL::test_postgres_specific_functions PASSED [100%]
+
+==================================== ERRORS ====================================
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_http_request_node_with_real_api _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_rest_client_with_pagination _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_oauth2_node_with_real_flow _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_graphql_client_with_complex_query _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_error_handling_with_real_errors _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_rest_client_crud_operations _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPINodesWithRealDockerServices.test_api_aggregation_endpoints _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestAPIWithOllamaGeneration.test_generate_and_test_api_responses _
+.venv/lib/python3.12/site-packages/urllib3/connection.py:198: in _new_conn
+    sock = connection.create_connection(
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+.venv/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+.venv/lib/python3.12/site-packages/urllib3/connection.py:494: in request
+    self.endheaders()
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1333: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1093: in _send_output
+    self.send(msg)
+../../../.pyenv/versions/3.12.9/lib/python3.12/http/client.py:1037: in send
+    self.connect()
+.venv/lib/python3.12/site-packages/urllib3/connection.py:325: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/urllib3/connection.py:213: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused
+
+The above exception was the direct cause of the following exception:
+.venv/lib/python3.12/site-packages/requests/adapters.py:667: in send
+    resp = conn.urlopen(
+.venv/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+.venv/lib/python3.12/site-packages/urllib3/util/retry.py:519: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:33: in ensure_mock_api_server
+    response = requests.get(f"{MOCK_API_BASE_URL}/health", timeout=5)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:73: in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/requests/adapters.py:700: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8888): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10fc5ec60>: Failed to establish a new connection: [Errno 61] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+tests/integration/nodes/test_api_with_real_docker_services.py:40: in ensure_mock_api_server
+    raise ConnectionError(
+E   ConnectionError: Mock API server not available. Run: docker-compose -f tests/utils/docker-compose.test.yml up mock-api
+_ ERROR at setup of TestSQLDatabaseNodeMySQL.test_basic_connection_and_select __
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+_______ ERROR at setup of TestSQLDatabaseNodeMySQL.test_crud_operations ________
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+________ ERROR at setup of TestSQLDatabaseNodeMySQL.test_result_formats ________
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+_ ERROR at setup of TestSQLDatabaseNodeMySQL.test_parameterized_queries_security _
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+_____ ERROR at setup of TestSQLDatabaseNodeMySQL.test_transaction_rollback _____
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+______ ERROR at setup of TestSQLDatabaseNodeMySQL.test_connection_pooling ______
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+________ ERROR at setup of TestSQLDatabaseNodeMySQL.test_complex_joins _________
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+___ ERROR at setup of TestSQLDatabaseNodeMySQL.test_mysql_specific_features ____
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+____ ERROR at setup of TestSQLDatabaseNodeMySQL.test_mysql_charset_unicode _____
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_mysql_integration.py:38: in mysql_setup
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+=================================== FAILURES ===================================
+________________ TestDiscordAlertIntegration.test_simple_alert _________________
+src/kailash/nodes/alerts/discord.py:441: in send_alert
+    response = self.http_client.execute(
+src/kailash/nodes/base.py:1081: in execute
+    validated_outputs = self.validate_outputs(outputs)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/base.py:927: in validate_outputs
+    raise NodeValidationError(
+E   kailash.sdk_exceptions.NodeValidationError: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_discord_alert_integration.py:73: in test_simple_alert
+    result = node.execute(
+src/kailash/nodes/base.py:1078: in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/alerts/base.py:197: in run
+    result = self.send_alert(
+src/kailash/nodes/alerts/discord.py:494: in send_alert
+    raise NodeExecutionError(
+E   kailash.sdk_exceptions.NodeExecutionError: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+_____________ TestDiscordAlertIntegration.test_workflow_with_alert _____________
+tests/integration/nodes/test_discord_alert_integration.py:93: in test_workflow_with_alert
+    self._run_workflow_test(webhook_url)
+tests/integration/nodes/test_discord_alert_integration.py:181: in _run_workflow_test
+    assert (
+E   AssertionError: Alert failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+E   assert 'error' not in {'error': "Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content", 'error_type': 'NodeExecutionError', 'failed': True}
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.code.python:PythonCodeNode 'format_message' contains 12 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution
+INFO:kailash.runtime.local:Execution order: ['generate_data', 'format_message', 'send_alert']
+INFO:kailash.runtime.local:Executing node: generate_data
+WARNING:kailash.nodes.code.python:Module seaborn not available
+WARNING:kailash.nodes.code.python:Could not set memory limit - continuing without limit
+INFO:kailash.runtime.local:Node generate_data completed successfully in 0.001s
+INFO:kailash.runtime.local:Executing node: format_message
+WARNING:kailash.nodes.code.python:Module seaborn not available
+WARNING:kailash.nodes.code.python:Could not set memory limit - continuing without limit
+INFO:kailash.runtime.local:Node format_message completed successfully in 0.002s
+INFO:kailash.runtime.local:Executing node: send_alert
+WARNING:kailash.nodes.send_alert:Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING:kailash.nodes.send_alert:Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+ERROR:kailash.runtime.local:Node send_alert failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.code.python:python.py:993 PythonCodeNode 'format_message' contains 12 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+INFO     kailash.runtime.local:local.py:355 Standard DAG workflow detected, using unified enterprise execution
+INFO     kailash.runtime.local:local.py:470 Execution order: ['generate_data', 'format_message', 'send_alert']
+INFO     kailash.runtime.local:local.py:483 Executing node: generate_data
+WARNING  kailash.nodes.code.python:python.py:423 Module seaborn not available
+WARNING  kailash.nodes.code.python:python.py:440 Could not set memory limit - continuing without limit
+INFO     kailash.runtime.local:local.py:594 Node generate_data completed successfully in 0.001s
+INFO     kailash.runtime.local:local.py:483 Executing node: format_message
+WARNING  kailash.nodes.code.python:python.py:423 Module seaborn not available
+WARNING  kailash.nodes.code.python:python.py:440 Could not set memory limit - continuing without limit
+INFO     kailash.runtime.local:local.py:594 Node format_message completed successfully in 0.002s
+INFO     kailash.runtime.local:local.py:483 Executing node: send_alert
+WARNING  kailash.nodes.send_alert:discord.py:488 Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING  kailash.nodes.send_alert:discord.py:488 Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+ERROR    kailash.runtime.local:local.py:600 Node send_alert failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+________________ TestDiscordAlertIntegration.test_rate_limiting ________________
+src/kailash/nodes/alerts/discord.py:450: in send_alert
+    if response["status_code"] == 204:
+       ^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'Mock' object is not subscriptable
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_discord_alert_integration.py:365: in test_rate_limiting
+    result = node.execute(
+src/kailash/nodes/base.py:1078: in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/alerts/base.py:197: in run
+    result = self.send_alert(
+src/kailash/nodes/alerts/discord.py:494: in send_alert
+    raise NodeExecutionError(
+E   kailash.sdk_exceptions.NodeExecutionError: Failed to send Discord alert after 3 attempts: 'Mock' object is not subscriptable
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+_______________ TestDiscordAlertIntegration.test_complex_embeds ________________
+src/kailash/nodes/alerts/discord.py:450: in send_alert
+    if response["status_code"] == 204:
+       ^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'Mock' object is not subscriptable
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_discord_alert_integration.py:413: in test_complex_embeds
+    result = node.execute(
+src/kailash/nodes/base.py:1078: in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/alerts/base.py:197: in run
+    result = self.send_alert(
+src/kailash/nodes/alerts/discord.py:494: in send_alert
+    raise NodeExecutionError(
+E   kailash.sdk_exceptions.NodeExecutionError: Failed to send Discord alert after 3 attempts: 'Mock' object is not subscriptable
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+__________ TestDiscordAlertIntegration.test_error_reporting_workflow ___________
+tests/integration/nodes/test_discord_alert_integration.py:539: in test_error_reporting_workflow
+    assert outputs["error_report"]["success"] is True
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'success'
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.code.python:PythonCodeNode 'detect_errors' contains 13 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+WARNING:kailash.nodes.code.python:PythonCodeNode 'format_error_report' contains 18 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution
+INFO:kailash.runtime.local:Execution order: ['detect_errors', 'format_error_report', 'error_report']
+INFO:kailash.runtime.local:Executing node: detect_errors
+WARNING:kailash.nodes.code.python:Module seaborn not available
+WARNING:kailash.nodes.code.python:Could not set memory limit - continuing without limit
+INFO:kailash.runtime.local:Node detect_errors completed successfully in 0.001s
+INFO:kailash.runtime.local:Executing node: format_error_report
+WARNING:kailash.nodes.code.python:Module seaborn not available
+WARNING:kailash.nodes.code.python:Could not set memory limit - continuing without limit
+INFO:kailash.runtime.local:Node format_error_report completed successfully in 0.002s
+INFO:kailash.runtime.local:Executing node: error_report
+WARNING:kailash.nodes.error_report:Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING:kailash.nodes.error_report:Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+ERROR:kailash.runtime.local:Node error_report failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.code.python:python.py:993 PythonCodeNode 'detect_errors' contains 13 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+WARNING  kailash.nodes.code.python:python.py:993 PythonCodeNode 'format_error_report' contains 18 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+INFO     kailash.runtime.local:local.py:355 Standard DAG workflow detected, using unified enterprise execution
+INFO     kailash.runtime.local:local.py:470 Execution order: ['detect_errors', 'format_error_report', 'error_report']
+INFO     kailash.runtime.local:local.py:483 Executing node: detect_errors
+WARNING  kailash.nodes.code.python:python.py:423 Module seaborn not available
+WARNING  kailash.nodes.code.python:python.py:440 Could not set memory limit - continuing without limit
+INFO     kailash.runtime.local:local.py:594 Node detect_errors completed successfully in 0.001s
+INFO     kailash.runtime.local:local.py:483 Executing node: format_error_report
+WARNING  kailash.nodes.code.python:python.py:423 Module seaborn not available
+WARNING  kailash.nodes.code.python:python.py:440 Could not set memory limit - continuing without limit
+INFO     kailash.runtime.local:local.py:594 Node format_error_report completed successfully in 0.002s
+INFO     kailash.runtime.local:local.py:483 Executing node: error_report
+WARNING  kailash.nodes.error_report:discord.py:488 Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING  kailash.nodes.error_report:discord.py:488 Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+ERROR    kailash.runtime.local:local.py:600 Node error_report failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+___________ TestDiscordAlertIntegration.test_a2a_coordination_alerts ___________
+tests/integration/nodes/test_discord_alert_integration.py:779: in test_a2a_coordination_alerts
+    assert outputs["coordination_alert"]["success"] is True
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'success'
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.code.python:PythonCodeNode 'mock_coordination' contains 11 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+WARNING:kailash.nodes.code.python:PythonCodeNode 'format_coordination' contains 18 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution
+INFO:kailash.runtime.local:Execution order: ['mock_coordination', 'format_coordination', 'coordination_alert']
+INFO:kailash.runtime.local:Executing node: mock_coordination
+WARNING:kailash.nodes.code.python:Module seaborn not available
+WARNING:kailash.nodes.code.python:Could not set memory limit - continuing without limit
+INFO:kailash.runtime.local:Node mock_coordination completed successfully in 0.001s
+INFO:kailash.runtime.local:Executing node: format_coordination
+WARNING:kailash.nodes.code.python:Module seaborn not available
+WARNING:kailash.nodes.code.python:Could not set memory limit - continuing without limit
+INFO:kailash.runtime.local:Node format_coordination completed successfully in 0.002s
+INFO:kailash.runtime.local:Executing node: coordination_alert
+WARNING:kailash.nodes.coordination_alert:Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING:kailash.nodes.coordination_alert:Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+ERROR:kailash.runtime.local:Node coordination_alert failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.code.python:python.py:993 PythonCodeNode 'mock_coordination' contains 11 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+WARNING  kailash.nodes.code.python:python.py:993 PythonCodeNode 'format_coordination' contains 18 lines of code, exceeding the recommended maximum of 10 lines. Consider using PythonCodeNode.from_function() or from_file() for better code organization and IDE support.
+INFO     kailash.runtime.local:local.py:355 Standard DAG workflow detected, using unified enterprise execution
+INFO     kailash.runtime.local:local.py:470 Execution order: ['mock_coordination', 'format_coordination', 'coordination_alert']
+INFO     kailash.runtime.local:local.py:483 Executing node: mock_coordination
+WARNING  kailash.nodes.code.python:python.py:423 Module seaborn not available
+WARNING  kailash.nodes.code.python:python.py:440 Could not set memory limit - continuing without limit
+INFO     kailash.runtime.local:local.py:594 Node mock_coordination completed successfully in 0.001s
+INFO     kailash.runtime.local:local.py:483 Executing node: format_coordination
+WARNING  kailash.nodes.code.python:python.py:423 Module seaborn not available
+WARNING  kailash.nodes.code.python:python.py:440 Could not set memory limit - continuing without limit
+INFO     kailash.runtime.local:local.py:594 Node format_coordination completed successfully in 0.002s
+INFO     kailash.runtime.local:local.py:483 Executing node: coordination_alert
+WARNING  kailash.nodes.coordination_alert:discord.py:488 Discord webhook attempt 1 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+WARNING  kailash.nodes.coordination_alert:discord.py:488 Discord webhook attempt 2 failed: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+ERROR    kailash.runtime.local:local.py:600 Node coordination_alert failed: Failed to send Discord alert after 3 attempts: Required output 'response' not provided. Description: HTTP response data including status, headers, and content
+________________ TestDiscordAlertIntegration.test_batch_alerts _________________
+src/kailash/nodes/alerts/discord.py:450: in send_alert
+    if response["status_code"] == 204:
+       ^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'Mock' object is not subscriptable
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_discord_alert_integration.py:820: in test_batch_alerts
+    result = node.execute(
+src/kailash/nodes/base.py:1078: in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/alerts/base.py:197: in run
+    result = self.send_alert(
+src/kailash/nodes/alerts/discord.py:494: in send_alert
+    raise NodeExecutionError(
+E   kailash.sdk_exceptions.NodeExecutionError: Failed to send Discord alert after 3 attempts: 'Mock' object is not subscriptable
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+_________ TestDiscordAlertIntegration.test_validation_and_sanitization _________
+src/kailash/nodes/alerts/discord.py:450: in send_alert
+    if response["status_code"] == 204:
+       ^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'Mock' object is not subscriptable
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_discord_alert_integration.py:869: in test_validation_and_sanitization
+    raise e
+tests/integration/nodes/test_discord_alert_integration.py:856: in test_validation_and_sanitization
+    result = node.execute(
+src/kailash/nodes/base.py:1078: in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/alerts/base.py:197: in run
+    result = self.send_alert(
+src/kailash/nodes/alerts/discord.py:494: in send_alert
+    raise NodeExecutionError(
+E   kailash.sdk_exceptions.NodeExecutionError: Failed to send Discord alert after 3 attempts: 'Mock' object is not subscriptable
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING:kailash.nodes.DiscordAlertNode:Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 1 failed: 'Mock' object is not subscriptable
+WARNING  kailash.nodes.DiscordAlertNode:discord.py:488 Discord webhook attempt 2 failed: 'Mock' object is not subscriptable
+_____________ TestSQLDatabaseWithDocker.test_mysql_real_connection _____________
+.venv/lib/python3.12/site-packages/pymysql/connections.py:649: in connect
+    sock = socket.create_connection(
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:865: in create_connection
+    raise exceptions[0]
+../../../.pyenv/versions/3.12.9/lib/python3.12/socket.py:850: in create_connection
+    sock.connect(sa)
+E   ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+
+The above exception was the direct cause of the following exception:
+src/kailash/nodes/data/sql.py:410: in run
+    with engine.connect() as conn:
+         ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3273: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2436: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py:3297: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:449: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:1264: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:713: in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:179: in _do_get
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py:177: in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:390: in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:675: in __init__
+    self.__connect()
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:901: in __connect
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py:897: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py:646: in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:625: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pymysql/connections.py:361: in __init__
+    self.connect()
+.venv/lib/python3.12/site-packages/pymysql/connections.py:716: in connect
+    raise exc
+E   sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+The above exception was the direct cause of the following exception:
+tests/integration/nodes/test_sql_database_docker.py:154: in test_mysql_real_connection
+    node.execute(query="DROP TABLE IF EXISTS products;", operation="execute")
+src/kailash/nodes/base.py:1078: in execute
+    outputs = self.run(**validated_inputs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/kailash/nodes/data/sql.py:462: in run
+    raise NodeExecutionError(error_msg) from e
+E   kailash.sdk_exceptions.NodeExecutionError: Database error: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured stderr call -----------------------------
+WARNING:kailash.nodes.SQLDatabaseNode:Query contains potentially dangerous keyword: DROP
+ERROR:kailash.nodes.SQLDatabaseNode:Database error: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+------------------------------ Captured log call -------------------------------
+WARNING  kailash.nodes.SQLDatabaseNode:sql.py:602 Query contains potentially dangerous keyword: DROP
+ERROR    kailash.nodes.SQLDatabaseNode:sql.py:461 Database error: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on 'localhost' ([Errno 61] Connection refused)")
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+=========================== short test summary info ============================
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_simple_alert
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_workflow_with_alert
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_rate_limiting
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_complex_embeds
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_error_reporting_workflow
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_a2a_coordination_alerts
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_batch_alerts
+FAILED tests/integration/nodes/test_discord_alert_integration.py::TestDiscordAlertIntegration::test_validation_and_sanitization
+FAILED tests/integration/nodes/test_sql_database_docker.py::TestSQLDatabaseWithDocker::test_mysql_real_connection
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_http_request_node_with_real_api
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_rest_client_with_pagination
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_oauth2_node_with_real_flow
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_graphql_client_with_complex_query
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_error_handling_with_real_errors
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_rest_client_crud_operations
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPINodesWithRealDockerServices::test_api_aggregation_endpoints
+ERROR tests/integration/nodes/test_api_with_real_docker_services.py::TestAPIWithOllamaGeneration::test_generate_and_test_api_responses
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_basic_connection_and_select
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_crud_operations
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_result_formats
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_parameterized_queries_security
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_transaction_rollback
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_connection_pooling
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_complex_joins
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_mysql_specific_features
+ERROR tests/integration/nodes/test_sql_database_mysql_integration.py::TestSQLDatabaseNodeMySQL::test_mysql_charset_unicode
+============= 9 failed, 63 passed, 6 skipped, 17 errors in 55.33s ==============

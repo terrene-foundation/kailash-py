@@ -19,30 +19,30 @@ The Model Context Protocol (MCP) enables standardized communication between AI a
 
 ## Basic MCP Server Setup
 
-### Simple MCP Server
+### Prototyping with SimpleMCPServer
 
 ```python
-from kailash.mcp_server import MCPServer
+from kailash.mcp_server import SimpleMCPServer
 
-# Create basic MCP server
-server = MCPServer("my-mcp-server")
+# Create lightweight server for prototyping
+server = SimpleMCPServer("my-prototype")
 
 # Register a simple tool
-@server.tool()
+@server.tool("Calculate sum")
 def calculate_sum(a: int, b: int) -> dict:
     """Calculate the sum of two numbers."""
     return {"result": a + b}
 
-# Start server
-await server.start(host="0.0.0.0", port=8080)
+# Start server (no configuration needed)
+server.run()
 ```
 
-### MCP Server with Configuration
+### Production with MCPServer
 
 ```python
 from kailash.mcp_server import MCPServer
 
-# Create server with configuration
+# Create production server with features
 server = MCPServer(
     "production-server",
     enable_cache=True,
@@ -51,6 +51,29 @@ server = MCPServer(
     enable_http_transport=True,
     enable_monitoring=True
 )
+
+# Register production tool with caching
+@server.tool(cache_ttl=600)
+async def calculate_sum_cached(a: int, b: int) -> dict:
+    """Calculate sum with caching."""
+    return {"result": a + b}
+
+# Start server
+await server.start(host="0.0.0.0", port=8080)
+```
+
+### Server Type Selection
+
+```python
+# Choose server type based on use case
+def choose_server_type(use_case: str):
+    if use_case in ["prototype", "development", "learning"]:
+        return SimpleMCPServer("dev-server")
+    elif use_case in ["production", "enterprise"]:
+        return MCPServer("prod-server", enable_cache=True, enable_metrics=True)
+    elif use_case == "middleware":
+        from kailash.middleware.mcp import MiddlewareMCPServer
+        return MiddlewareMCPServer()
 ```
 
 ## MCP Tool Registration

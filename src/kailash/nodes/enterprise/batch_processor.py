@@ -404,8 +404,27 @@ class BatchProcessorNode(Node):
         # Call progress callback if provided
         if progress_callback:
             try:
-                callback_func = eval(progress_callback)
-                callback_func(progress_info)
+                # Enterprise security: Use safe callback resolution instead of eval
+                if callable(progress_callback):
+                    # Direct callable
+                    progress_callback(progress_info)
+                elif isinstance(progress_callback, str):
+                    # String callback - validate against safe functions only
+                    import importlib
+
+                    parts = progress_callback.split(".")
+                    if len(parts) >= 2:
+                        module_name = ".".join(parts[:-1])
+                        func_name = parts[-1]
+                        try:
+                            # Only allow importlib for known safe modules
+                            if module_name in ["logging", "sys", "json"]:
+                                module = importlib.import_module(module_name)
+                                callback_func = getattr(module, func_name)
+                                if callable(callback_func):
+                                    callback_func(progress_info)
+                        except (ImportError, AttributeError):
+                            pass
             except:
                 pass  # Ignore callback errors
 
@@ -738,4 +757,4 @@ result = results
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

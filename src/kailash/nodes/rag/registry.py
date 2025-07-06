@@ -448,7 +448,7 @@ performance_monitor = registry.create_utility("performance_monitor")
 ```python
 # Use strategy directly
 semantic_rag = registry.create_strategy("semantic")
-result = semantic_rag.run(documents=docs, operation="index")
+result = semantic_rag.execute(documents=docs, operation="index")
 ```
 
 ### In Workflows:

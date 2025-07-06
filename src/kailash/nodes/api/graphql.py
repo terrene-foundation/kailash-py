@@ -309,7 +309,7 @@ class GraphQLClientNode(Node):
             "retry_backoff": retry_backoff,
         }
 
-        http_result = self.http_node.run(**http_params)
+        http_result = self.http_node.execute(**http_params)
 
         # Process GraphQL-specific response
         response = http_result["response"]
@@ -387,26 +387,26 @@ class AsyncGraphQLClientNode(AsyncNode):
         async_run method for better performance.
 
         Args:
-            Same as GraphQLClientNode.run()
+            Same as GraphQLClientNode.execute()
 
         Returns:
-            Same as GraphQLClientNode.run()
+            Same as GraphQLClientNode.execute()
 
         Raises:
             NodeValidationError: If required parameters are missing or invalid
             NodeExecutionError: If the request fails
         """
         # Forward to the synchronous GraphQL node
-        return self.graphql_node.run(**kwargs)
+        return self.graphql_node.execute(**kwargs)
 
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute a GraphQL query or mutation asynchronously.
 
         Args:
-            Same as GraphQLClientNode.run()
+            Same as GraphQLClientNode.execute()
 
         Returns:
-            Same as GraphQLClientNode.run()
+            Same as GraphQLClientNode.execute()
 
         Raises:
             NodeValidationError: If required parameters are missing or invalid

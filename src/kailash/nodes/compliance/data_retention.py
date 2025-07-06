@@ -122,7 +122,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         ...     {"id": "session_456", "type": "session_logs", "created": "2022-01-01", "size": 512}
         ... ]
         >>>
-        >>> result = retention_node.run(
+        >>> result = retention_node.execute(
         ...     action="apply_policy",
         ...     data_type="user_data",
         ...     data_records=data_records
@@ -130,7 +130,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         >>> print(f"Actions taken: {result['actions_taken']}")
         >>>
         >>> # Scan for expired data
-        >>> scan_result = retention_node.run(
+        >>> scan_result = retention_node.execute(
         ...     action="scan_expired",
         ...     data_types=["user_data", "session_logs"]
         ... )
@@ -430,11 +430,11 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async wrapper for run method."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)
 
     async def execute_async(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for test compatibility."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)
 
     def _apply_retention_policy(
         self, data_type: str, data_records: List[Dict[str, Any]]
@@ -1351,7 +1351,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         }
 
         try:
-            self.audit_log_node.run(**audit_entry)
+            self.audit_log_node.execute(**audit_entry)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to audit retention action: {e}")
 
@@ -1375,7 +1375,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         }
 
         try:
-            self.security_event_node.run(**security_event)
+            self.security_event_node.execute(**security_event)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to log security event: {e}")
 

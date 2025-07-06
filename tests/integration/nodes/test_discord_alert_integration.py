@@ -28,9 +28,10 @@ from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.mark.integration
-# Removed @pytest.mark.skipif to prevent skipped tests
-# Tests will use mock webhook when real one isn't available
-@patch("kailash.nodes.api.http.HTTPRequestNode.run")
+@pytest.mark.skipif(
+    not os.getenv("DISCORD_TEST_WEBHOOK"),
+    reason="DISCORD_TEST_WEBHOOK environment variable not set",
+)
 class TestDiscordAlertIntegration:
     """Integration tests for Discord alerts with real webhook.
 
@@ -53,19 +54,8 @@ class TestDiscordAlertIntegration:
             # Use a mock webhook URL for testing when real one isn't available
             return "https://discord.com/api/webhooks/123456789/mock-webhook-for-testing"
 
-    @pytest.fixture
-    def mock_http_client(self):
-        """Mock HTTP client for Discord webhook requests."""
-        mock = Mock()
-        # Simulate successful Discord webhook response
-        mock.run.return_value = {"status_code": 204, "content": "", "headers": {}}
-        return mock
-
-    def test_simple_alert(self, mock_run, webhook_url: str, mock_http_client):
+    def test_simple_alert(self, webhook_url: str):
         """Test sending a simple alert to Discord."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         # Create node
         node = DiscordAlertNode(name="discord_test")
 
@@ -84,11 +74,8 @@ class TestDiscordAlertIntegration:
         assert "webhook_url" in result
         assert "status_code" in result
 
-    def test_workflow_with_alert(self, mock_run, webhook_url: str, mock_http_client):
+    def test_workflow_with_alert(self, webhook_url: str):
         """Test Discord alert in a workflow context."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
 
         self._run_workflow_test(webhook_url)
 
@@ -185,11 +172,8 @@ result = {'title': '🚨 System Alert 🚨', 'message': message}
         assert alert_result["alert_type"] == "info"  # Default
         assert "webhook_url" in alert_result
 
-    def test_conditional_alerts(self, mock_run, webhook_url: str, mock_http_client):
+    def test_conditional_alerts(self, webhook_url: str):
         """Test conditional Discord alerts based on conditions."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         # Build workflow with conditional logic
         builder = WorkflowBuilder()
 
@@ -330,11 +314,8 @@ result = {'title': title, 'message': message}
         # At least we should have run the check
         assert "check_system" in outputs
 
-    def test_rate_limiting(self, mock_run, webhook_url: str, mock_http_client):
+    def test_rate_limiting(self, webhook_url: str):
         """Test rate limiting functionality."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         # Skip this test if using real webhook to avoid rate limits
         if "mock-webhook-for-testing" not in webhook_url:
             pytest.skip("Skipping rate limit test with real webhook")
@@ -375,11 +356,8 @@ result = {'title': title, 'message': message}
         # Check that we hit the rate limit and retried
         assert mock_http_client.run.call_count == 4  # 3 initial + 1 retry
 
-    def test_complex_embeds(self, mock_run, webhook_url: str, mock_http_client):
+    def test_complex_embeds(self, webhook_url: str):
         """Test sending complex embeds with multiple fields."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         node = DiscordAlertNode(name="embed_test")
 
         # Mock HTTP client if using mock webhook
@@ -426,13 +404,8 @@ result = {'title': title, 'message': message}
         assert result["alert_type"] == "success"
         assert "webhook_url" in result
 
-    def test_error_reporting_workflow(
-        self, mock_run, webhook_url: str, mock_http_client
-    ):
+    def test_error_reporting_workflow(self, webhook_url: str):
         """Test a complete error reporting workflow."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         builder = WorkflowBuilder()
 
         # Simulate error detection
@@ -540,13 +513,8 @@ result = {'title': title, 'message': '\\n'.join(message_parts)}
         assert outputs["error_report"]["alert_type"] == "error"
 
     @pytest.mark.asyncio
-    async def test_async_workflow_alerts(
-        self, mock_run, webhook_url: str, mock_http_client
-    ):
+    async def test_async_workflow_alerts(self, webhook_url: str):
         """Test Discord alerts in async workflow context."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         from kailash.runtime.async_local import AsyncLocalRuntime
         from kailash.workflow.async_builder import AsyncWorkflowBuilder
 
@@ -669,13 +637,8 @@ result = {'title': title, 'message': message}
         assert isinstance(outputs, dict)
         # Alert may or may not trigger based on hash-based health checks
 
-    def test_a2a_coordination_alerts(
-        self, mock_run, webhook_url: str, mock_http_client
-    ):
+    def test_a2a_coordination_alerts(self, webhook_url: str):
         """Test Discord alerts with A2A agent coordination."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         builder = WorkflowBuilder()
 
         # Mock coordination result (in real scenario, this would come from A2A)
@@ -779,11 +742,8 @@ result = {'title': title, 'message': '\\n'.join(message_parts)}
         assert outputs["coordination_alert"]["success"] is True
         assert outputs["coordination_alert"]["alert_type"] == "info"
 
-    def test_batch_alerts(self, mock_run, webhook_url: str, mock_http_client):
+    def test_batch_alerts(self, webhook_url: str):
         """Test batching multiple alerts into one message."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         # Collect multiple events
         events = []
         for i in range(5):
@@ -829,13 +789,8 @@ result = {'title': title, 'message': '\\n'.join(message_parts)}
         assert result["success"] is True
         assert result["alert_type"] == "info"
 
-    def test_validation_and_sanitization(
-        self, mock_run, webhook_url: str, mock_http_client
-    ):
+    def test_validation_and_sanitization(self, webhook_url: str):
         """Test input validation and sanitization."""
-        # Configure mock for Discord webhook
-        if "mock-webhook-for-testing" in webhook_url:
-            mock_run.return_value = {"status_code": 204, "content": "", "headers": {}}
         node = DiscordAlertNode(name="validation_test")
 
         # Mock HTTP client if using mock webhook

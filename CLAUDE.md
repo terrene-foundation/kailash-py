@@ -1,5 +1,38 @@
 # Kailash SDK - Development Guide
 
+## 🚀 ESSENTIAL PATTERNS - COPY THESE FIRST
+
+### Basic Workflow (Required Foundation)
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})  # All classes end with "Node"
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
+```
+
+### ❌ NEVER
+- `workflow.execute(runtime)` → Use `runtime.execute(workflow)`
+- `workflow.addNode()` → Use `workflow.add_node()`
+- `inputs={}` → Use `parameters={}`
+- String code in PythonCodeNode → Use `.from_function()` (step 4)
+
+### 🎯 Multi-Step Strategy (Enterprise Workflow)
+1. **First implementation** → Copy basic pattern above
+2. **Architecture decisions** → [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md)
+3. **Node selection** → [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md)
+4. **Security & access control** → [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) (User management, RBAC, auth)
+5. **Enterprise integration** → [sdk-users/enterprise/gateway-patterns.md](sdk-users/enterprise/gateway-patterns.md) (API gateways, external systems)
+6. **Custom logic** → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
+7. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
+8. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
+9. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
+10. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+
+---
+
 ## 📁 Quick Access
 | **SDK Users** | **SDK Contributors** | **Shared** |
 |---------------|---------------------|-----------|
@@ -9,29 +42,13 @@
 | [sdk-users/migration-guides/](sdk-users/migration-guides/) | [# contrib (removed)/architecture/migration-guides/](# contrib (removed)/architecture/migration-guides/) | |
 
 ## ⚠️ MUST FOLLOW
-1. **SDK-First Development**: Use SDK components, NO custom orchestration
-    - ✅ Check [node selection guide](sdk-users/nodes/node-selection-guide.md) before PythonCodeNode
-    - ✅ Use `LocalRuntime` (includes async + enterprise features)
-    - ✅ Use `WorkflowBuilder.from_dict()` for dynamic workflows
-    - 🚨 **NEVER** manual database/FastAPI - use `create_gateway()` from middleware
-
-2. **Real Solutions Only**: Never simplify examples or use mock data
-    - ✅ Fix complex examples, delete simple test versions
-    - ❌ Mock data to make failing examples pass
-    - ✅ Use built-in infrastructure: docker and ollama
-
-3. **Node Development Rules**:
-    - ✅ Names end with "Node" (`CSVReaderNode` ✓)
-    - ✅ Set attributes BEFORE `super().__init__()`
-    - ✅ `get_parameters()` returns `Dict[str, NodeParameter]`
-
-4. **PythonCodeNode Patterns**:
-    - ✅ Wrap outputs: `{"result": data}`
-    - ✅ Use dot notation: `"result.data"` in connections
-    - ✅ Use `.from_function()` for multi-line code
-
-5. **Middleware**: Use `create_gateway()` for production apps
-    - ✅ Real-time communication, AI chat, session management included
+1. **🚨 Node Execution**: ALWAYS use `.execute()` - NEVER `.run()`, `.process()`, or `.call()`
+2. **SDK-First Development**: Use SDK components, NO custom orchestration
+3. **Real Solutions Only**: Never simplify examples or use mock data
+4. **Node Development Rules**: Names end with "Node", set attributes BEFORE `super().__init__()`
+5. **PythonCodeNode Patterns**: Use `.from_function()` for multi-line code
+6. **Middleware**: Use `create_gateway()` for production apps
+7. **Git Safety**: NEVER destroy uncommitted work
 
 6. **Git Safety**: NEVER destroy uncommitted work
     - ❌ **FORBIDDEN**: `git reset --hard`, `git clean -fd`, `rm -rf` on code
@@ -42,7 +59,7 @@
 ## ⚡ Critical Patterns
 1. **Data Paths**: `get_input_data_path()`, `get_output_data_path()`
 2. **Access Control**: `AccessControlManager(strategy="rbac"|"abac"|"hybrid")`
-3. **Execution**: Use `.execute()` not `.process()` or `.call()`
+3. **Execution**: Use `.execute()` not `.run()` or `.process()` or `.call()`
 4. **Ollama Embeddings**: Extract with `[emb["embedding"] for emb in result["embeddings"]]`
 5. **Cyclic Workflows**: Preserve state with `set_cycle_state()`, explicit parameter mapping
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`

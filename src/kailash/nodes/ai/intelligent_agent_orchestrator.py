@@ -95,7 +95,7 @@ class IntelligentCacheNode(Node):
         >>> cache = IntelligentCacheNode()
         >>>
         >>> # Cache an expensive MCP tool call result
-        >>> result = cache.run(
+        >>> result = cache.execute(
         ...     action="cache",
         ...     cache_key="weather_api_nyc_20240106",
         ...     data={"temperature": 72, "humidity": 65, "conditions": "sunny"},
@@ -110,7 +110,7 @@ class IntelligentCacheNode(Node):
         >>> assert result["success"] == True
         >>>
         >>> # Direct cache hit by key
-        >>> cached = cache.run(
+        >>> cached = cache.execute(
         ...     action="get",
         ...     cache_key="weather_api_nyc_20240106"
         ... )
@@ -118,7 +118,7 @@ class IntelligentCacheNode(Node):
         >>> assert cached["data"]["temperature"] == 72
         >>>
         >>> # Semantic similarity hit (uses simple string matching in this mock implementation)
-        >>> similar = cache.run(
+        >>> similar = cache.execute(
         ...     action="get",
         ...     query="weather nyc",  # Simple match
         ...     similarity_threshold=0.3
@@ -127,7 +127,7 @@ class IntelligentCacheNode(Node):
         >>> has_hit = similar.get("hit", False)
         >>>
         >>> # Cache statistics
-        >>> stats = cache.run(action="stats")
+        >>> stats = cache.execute(action="stats")
         >>> assert "stats" in stats
         >>> assert "hit_rate" in stats["stats"]
     """
@@ -704,7 +704,7 @@ class MCPAgentNode(SelfOrganizingAgentNode):
 
         try:
             client = server_info["client"]
-            result = client.run(
+            result = client.execute(
                 server_config=server_info["config"],
                 operation="call_tool",
                 tool_name=tool_name,
@@ -789,7 +789,7 @@ class QueryAnalysisNode(Node):
         >>> analyzer = QueryAnalysisNode()
         >>>
         >>> # Analyze a complex multi-domain query
-        >>> result = analyzer.run(
+        >>> result = analyzer.execute(
         ...     query="Analyze our Q4 sales data, identify underperforming regions, and create a recovery strategy with timeline",
         ...     context={
         ...         "domain": "business_strategy",
@@ -810,7 +810,7 @@ class QueryAnalysisNode(Node):
         >>> assert result["analysis"]["team_suggestion"]["suggested_size"] >= 3
         >>>
         >>> # Simple query analysis
-        >>> simple = analyzer.run(
+        >>> simple = analyzer.execute(
         ...     query="What is the current temperature?",
         ...     context={"domain": "weather"}
         ... )
@@ -1402,7 +1402,7 @@ class OrchestrationManagerNode(Node):
     def _analyze_query(self, query: str, context: dict, mcp_servers: list) -> dict:
         """Analyze the incoming query."""
         analyzer = QueryAnalysisNode()
-        return analyzer.run(query=query, context=context, mcp_servers=mcp_servers)
+        return analyzer.execute(query=query, context=context, mcp_servers=mcp_servers)
 
     def _setup_infrastructure(
         self, pool_size: int, mcp_servers: list, enable_caching: bool
@@ -1503,7 +1503,7 @@ class OrchestrationManagerNode(Node):
             spec = agent_specializations[i % len(agent_specializations)]
 
             # Register agent with pool manager
-            registration = pool_manager.run(
+            registration = pool_manager.execute(
                 action="register",
                 agent_id=f"agent_{spec['role']}_{i:03d}",
                 capabilities=spec["capabilities"],
@@ -1543,7 +1543,7 @@ class OrchestrationManagerNode(Node):
 
         team_formation = TeamFormationNode()
 
-        return team_formation.run(
+        return team_formation.execute(
             problem_analysis=analysis,
             available_agents=agent_pool,
             formation_strategy=strategy,
@@ -1577,7 +1577,7 @@ class OrchestrationManagerNode(Node):
                 information_results.append(agent_result)
 
                 # Store in memory
-                solution_memory.run(
+                solution_memory.execute(
                     action="write",
                     agent_id=agent["id"],
                     content=agent_result,
@@ -1593,7 +1593,7 @@ class OrchestrationManagerNode(Node):
                 for cap in ["analysis", "machine_learning", "processing"]
             ):
                 # Get previous information
-                memory_result = solution_memory.run(
+                memory_result = solution_memory.execute(
                     action="read",
                     agent_id=agent["id"],
                     attention_filter={"tags": ["information"], "threshold": 0.3},
@@ -1605,7 +1605,7 @@ class OrchestrationManagerNode(Node):
                 )
                 analysis_results.append(agent_result)
 
-                solution_memory.run(
+                solution_memory.execute(
                     action="write",
                     agent_id=agent["id"],
                     content=agent_result,
@@ -1621,7 +1621,7 @@ class OrchestrationManagerNode(Node):
                 for cap in ["synthesis", "writing", "coordination"]
             ):
                 # Get all previous work
-                memory_result = solution_memory.run(
+                memory_result = solution_memory.execute(
                     action="read",
                     agent_id=agent["id"],
                     attention_filter={"threshold": 0.2},
@@ -1661,7 +1661,7 @@ class OrchestrationManagerNode(Node):
         cache_key = f"{agent_id}_{hashlib.md5(task.encode()).hexdigest()[:8]}"
 
         if cache:
-            cached_result = cache.run(
+            cached_result = cache.execute(
                 action="get", cache_key=cache_key, query=task, similarity_threshold=0.7
             )
 
@@ -1693,7 +1693,7 @@ class OrchestrationManagerNode(Node):
 
         # Cache the result
         if cache:
-            cache.run(
+            cache.execute(
                 action="cache",
                 cache_key=cache_key,
                 data=result,
@@ -1729,7 +1729,7 @@ class OrchestrationManagerNode(Node):
         """Evaluate solution quality."""
         evaluator = SolutionEvaluatorNode()
 
-        return evaluator.run(
+        return evaluator.execute(
             solution=solution["final_solution"],
             problem_requirements={
                 "quality_threshold": quality_threshold,
@@ -1848,7 +1848,7 @@ class ConvergenceDetectorNode(Node):
         >>> detector = ConvergenceDetectorNode()
         >>>
         >>> # Typical convergence detection scenario
-        >>> result = detector.run(
+        >>> result = detector.execute(
         ...     solution_history=[
         ...         {
         ...             "iteration": 1,
@@ -1888,7 +1888,7 @@ class ConvergenceDetectorNode(Node):
         ...     {"evaluation": {"overall_score": 0.71}, "duration": 95},
         ...     {"evaluation": {"overall_score": 0.715}, "duration": 90}
         ... ]
-        >>> result2 = detector.run(
+        >>> result2 = detector.execute(
         ...     solution_history=stagnant_history,
         ...     quality_threshold=0.9,
         ...     improvement_threshold=0.05,

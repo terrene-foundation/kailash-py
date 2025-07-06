@@ -54,7 +54,7 @@ class TestLLMAgentToolExecutionOllama:
             }
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",  # Fast model for testing
             messages=[
@@ -143,7 +143,7 @@ class TestLLMAgentToolExecutionOllama:
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[
@@ -219,7 +219,7 @@ class TestLLMAgentToolExecutionOllama:
 
         all_tools = mcp_tools + regular_tools
 
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[
@@ -275,7 +275,7 @@ class TestLLMAgentToolExecutionOllama:
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[
@@ -439,7 +439,7 @@ class TestLLMAgentToolExecutionOllama:
             },
         ]
 
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[

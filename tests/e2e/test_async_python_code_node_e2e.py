@@ -23,10 +23,10 @@ from kailash.workflow import WorkflowBuilder
 POSTGRES_CONFIG = {
     "database_type": "postgresql",
     "host": "localhost",
-    "port": 5433,
+    "port": 5434,
     "database": "kailash_test",
-    "user": "admin",
-    "password": "admin",
+    "user": "test_user",
+    "password": "test_password",
 }
 
 
@@ -126,7 +126,7 @@ class TestAsyncPythonCodeNodeE2E:
         # Start gateway in background thread
         port = 18082
         server_thread = threading.Thread(
-            target=lambda: gateway.run(port=port, log_level="warning"), daemon=True
+            target=lambda: gateway.run(host="localhost", port=port), daemon=True
         )
         server_thread.start()
 
@@ -164,24 +164,27 @@ class TestAsyncPythonCodeNodeE2E:
                 "code": """
 import asyncio
 import json
+import asyncpg
 
-# Get database connection
-conn = await pool.process({"operation": "acquire"})
-conn_id = conn["connection_id"]
+# Connect to database
+conn = await asyncpg.connect(
+    host="localhost",
+    port=5434,
+    database="kailash_test",
+    user="test_user",
+    password="test_password"
+)
 
 try:
     # Fetch data with category filter
-    result = await pool.process({
-        "operation": "execute",
-        "connection_id": conn_id,
-        "query": "SELECT * FROM async_test_data WHERE data->>'category' = $1",
-        "params": [category],
-        "fetch_mode": "all"
-    })
+    rows = await conn.fetch(
+        "SELECT id, data, status, created_at FROM async_test_data WHERE data->>'category' = $1",
+        category
+    )
 
-    # Extract records
+    # Convert to records
     records = []
-    for row in result.get("rows", []):
+    for row in rows:
         record = {
             "id": row[0],
             "data": row[1],
@@ -190,14 +193,10 @@ try:
         }
         records.append(record)
 
-    result = {"records": records, "count": len(records)}
+    result = {"result": {"records": records, "count": len(records)}}
 
 finally:
-    # Always release connection
-    await pool.process({
-        "operation": "release",
-        "connection_id": conn_id
-    })
+    await conn.close()
 """
             },
         )
@@ -219,7 +218,10 @@ async def process_record(record):
     # Simulate some async work
     await asyncio.sleep(0.01)
 
+    # Parse JSON data if it's a string
     data = record["data"]
+    if isinstance(data, str):
+        data = json.loads(data)
     value = data.get("value", 0)
 
     # Apply transformation
@@ -241,7 +243,7 @@ processed_records = await asyncio.gather(*tasks)
 total_original = sum(r["original_value"] for r in processed_records)
 total_processed = sum(r["processed_value"] for r in processed_records)
 
-result = {
+result = {"result": {
     "processed_records": processed_records,
     "summary": {
         "record_count": len(processed_records),
@@ -249,7 +251,7 @@ result = {
         "total_processed": total_processed,
         "multiplier": multiplier
     }
-}
+}}
 """
             },
         )
@@ -263,49 +265,43 @@ result = {
 import asyncio
 import json
 import uuid
+import asyncpg
 
-# Get database connection
-conn = await pool.process({"operation": "acquire"})
-conn_id = conn["connection_id"]
+# Connect to database
+conn = await asyncpg.connect(
+    host="localhost",
+    port=5434,
+    database="kailash_test",
+    user="test_user",
+    password="test_password"
+)
 
 try:
     # Store processing results
     processing_result = process_result
     result_id = f"result_{uuid.uuid4().hex[:12]}"
 
-    await pool.process({
-        "operation": "execute",
-        "connection_id": conn_id,
-        "query": '''
-            INSERT INTO async_test_data (id, data, status)
-            VALUES ($1, $2, 'completed')
-        ''',
-        "params": [result_id, json.dumps(processing_result)],
-        "fetch_mode": "one"
-    })
+    # Insert processing result
+    await conn.execute(
+        "INSERT INTO async_test_data (id, data, status) VALUES ($1, $2, 'completed')",
+        result_id, json.dumps(processing_result)
+    )
 
     # Update status of original records
     for record in processing_result["processed_records"]:
-        await pool.process({
-            "operation": "execute",
-            "connection_id": conn_id,
-            "query": "UPDATE async_test_data SET status = 'processed' WHERE id = $1",
-            "params": [record["id"]],
-            "fetch_mode": "one"
-        })
+        await conn.execute(
+            "UPDATE async_test_data SET status = 'processed' WHERE id = $1",
+            record["id"]
+        )
 
-    result = {
+    result = {"result": {
         "result_id": result_id,
         "records_updated": len(processing_result["processed_records"]),
         "success": True
-    }
+    }}
 
 finally:
-    # Always release connection
-    await pool.process({
-        "operation": "release",
-        "connection_id": conn_id
-    })
+    await conn.close()
 """
             },
         )
@@ -323,11 +319,11 @@ finally:
         """Test complete async workflow execution."""
         port = async_gateway._test_port
 
-        # Execute workflow with inputs
+        # Execute workflow with inputs (pool is available in global context)
         workflow_inputs = {
-            "fetch_data": {"pool": test_database, "category": "A"},
+            "fetch_data": {"category": "A"},
             "process_data": {"multiplier": 1.5},
-            "store_results": {"pool": test_database},
+            "store_results": {},
         }
 
         async with httpx.AsyncClient() as client:
@@ -365,11 +361,10 @@ finally:
         # Execute with invalid category to trigger empty results
         workflow_inputs = {
             "fetch_data": {
-                "pool": test_database,
                 "category": "Z",  # Non-existent category
             },
             "process_data": {"multiplier": 2.0},
-            "store_results": {"pool": test_database},
+            "store_results": {},
         }
 
         async with httpx.AsyncClient() as client:
@@ -395,9 +390,9 @@ finally:
         # Create multiple concurrent requests
         async def execute_workflow(category, multiplier):
             workflow_inputs = {
-                "fetch_data": {"pool": test_database, "category": category},
+                "fetch_data": {"category": category},
                 "process_data": {"multiplier": multiplier},
-                "store_results": {"pool": test_database},
+                "store_results": {},
             }
 
             async with httpx.AsyncClient() as client:

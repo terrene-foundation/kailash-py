@@ -309,7 +309,7 @@ class SecurityTestHelper:
 
         for scenario in scenarios:
             try:
-                result = tester.run(
+                result = tester.execute(
                     credential_type=credential_type,
                     scenario=scenario,
                     mock_data=(
@@ -442,7 +442,7 @@ class NodeTestHelper:
             except (NodeValidationError, WorkflowExecutionError):
                 return {}
         else:
-            result = node.run(**inputs)
+            result = node.execute(**inputs)
 
             # Check expected output keys
             for key in expected_keys:

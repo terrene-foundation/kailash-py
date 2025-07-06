@@ -1,1 +1,1 @@
-"""Unit tests for MCP server implementation."""
+"""Integration tests for MCP server implementation."""

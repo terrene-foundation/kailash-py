@@ -819,7 +819,7 @@ def create_gateway(
         >>> # Or use default auth
         >>> gateway = create_gateway(title="My App")
         >>>
-        >>> gateway.run(port=8000)
+        >>> gateway.execute(port=8000)
     """
     # Pass auth_manager to APIGateway
     if auth_manager is not None:

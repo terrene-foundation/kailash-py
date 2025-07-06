@@ -117,7 +117,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         ...     time.sleep(0.1)  # Simulate work
         ...     return "completed"
         >>>
-        >>> result = perf_node.run(
+        >>> result = perf_node.execute(
         ...     action="benchmark",
         ...     operation_name="test_operation",
         ...     operation_func=my_operation
@@ -125,7 +125,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         >>> print(f"Execution time: {result['execution_time_ms']}ms")
         >>>
         >>> # Monitor continuous performance
-        >>> monitor_result = perf_node.run(
+        >>> monitor_result = perf_node.execute(
         ...     action="monitor",
         ...     operations=["api_response", "db_query"],
         ...     duration_seconds=60
@@ -233,8 +233,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 name="operations",
                 type=list,
                 description="List of operations to monitor",
-                required=False,
-                default=[],
+                required=True,
             ),
             "duration_seconds": NodeParameter(
                 name="duration_seconds",
@@ -268,6 +267,63 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 description="Time range for querying metrics",
                 required=False,
             ),
+            "enable_monitoring": NodeParameter(
+                name="enable_monitoring",
+                type=bool,
+                description="Enable continuous monitoring",
+                required=False,
+                default=True,
+            ),
+            "performance_targets": NodeParameter(
+                name="performance_targets",
+                type=dict,
+                description="Performance targets for monitoring",
+                required=False,
+                default={},
+            ),
+            "alert_thresholds": NodeParameter(
+                name="alert_thresholds",
+                type=dict,
+                description="Alert thresholds for performance metrics",
+                required=False,
+                default={},
+            ),
+            "enable_mcp_metrics": NodeParameter(
+                name="enable_mcp_metrics",
+                type=bool,
+                description="Enable MCP metrics collection",
+                required=False,
+                default=False,
+            ),
+        }
+
+    def get_output_schema(self) -> Dict[str, NodeParameter]:
+        """Get node output schema for validation and documentation.
+
+        Returns:
+            Dictionary mapping output field names to NodeParameter objects
+        """
+        return {
+            "results": NodeParameter(
+                name="results",
+                type=list,
+                description="List of benchmark results",
+            ),
+            "summary": NodeParameter(
+                name="summary",
+                type=dict,
+                description="Summary statistics of benchmark results",
+            ),
+            "alerts": NodeParameter(
+                name="alerts",
+                type=list,
+                description="Performance alerts triggered during benchmarking",
+            ),
+            "recommendations": NodeParameter(
+                name="recommendations",
+                type=list,
+                description="Performance optimization recommendations",
+            ),
         }
 
     def execute(self, **kwargs) -> Dict[str, Any]:
@@ -279,6 +335,13 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         Returns:
             Performance benchmark results
         """
+        # If action is not provided, infer it from the parameters
+        if "action" not in kwargs:
+            if "operations" in kwargs:
+                kwargs["action"] = "benchmark"
+            else:
+                kwargs["action"] = "monitor"
+
         return self.run(**kwargs)
 
     def run(
@@ -326,15 +389,78 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
             # Route to appropriate action handler
             if action == "benchmark":
-                if not operation_name or not operation_func:
+                # Handle single operation or list of operations
+                if operations and len(operations) > 0:
+                    # Handle list of operations
+                    all_results = []
+                    for i, operation in enumerate(operations):
+                        if callable(operation):
+                            op_name = getattr(operation, "__name__", f"operation_{i}")
+                            result = self._benchmark_operation(
+                                op_name, operation, kwargs
+                            )
+                            # Extract individual results from the benchmark operation
+                            if result.get("success", False):
+                                detailed_results = result.get("detailed_results", [])
+                                all_results.extend(detailed_results)
+                            else:
+                                # Add failed operation result
+                                all_results.append(
+                                    {
+                                        "operation_name": op_name,
+                                        "success": False,
+                                        "error_message": result.get(
+                                            "error", "Benchmark failed"
+                                        ),
+                                        "execution_time_ms": 0,
+                                        "memory_used_mb": 0,
+                                        "cpu_usage_percent": 0,
+                                        "metadata": {},
+                                        "timestamp": datetime.now(UTC),
+                                    }
+                                )
+                        else:
+                            # String operation name - would need to look up the function
+                            all_results.append(
+                                {
+                                    "operation_name": str(operation),
+                                    "success": False,
+                                    "error_message": "Operation function not provided",
+                                    "execution_time_ms": 0,
+                                    "memory_used_mb": 0,
+                                    "cpu_usage_percent": 0,
+                                    "metadata": {},
+                                    "timestamp": datetime.now(UTC),
+                                }
+                            )
+
+                    # Return combined results
+                    result = {
+                        "results": all_results,
+                        "summary": {
+                            "total_operations": len(all_results),
+                            "successful_operations": sum(
+                                1 for r in all_results if r.get("success", False)
+                            ),
+                            "failed_operations": sum(
+                                1 for r in all_results if not r.get("success", False)
+                            ),
+                        },
+                        "alerts": [],
+                        "recommendations": [],
+                    }
+                    self.perf_stats["total_benchmarks"] += len(operations)
+                elif operation_name and operation_func:
+                    # Handle single operation
+                    result = self._benchmark_operation(
+                        operation_name, operation_func, kwargs
+                    )
+                    self.perf_stats["total_benchmarks"] += 1
+                else:
                     return {
                         "success": False,
-                        "error": "operation_name and operation_func required for benchmark",
+                        "error": "Either operations list or operation_name and operation_func required for benchmark",
                     }
-                result = self._benchmark_operation(
-                    operation_name, operation_func, kwargs
-                )
-                self.perf_stats["total_benchmarks"] += 1
                 if result.get("success", False):
                     self.perf_stats["successful_benchmarks"] += 1
                 else:
@@ -1514,7 +1640,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         }
 
         try:
-            self.security_event_node.run(**security_event)
+            self.security_event_node.execute(**security_event)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to log performance alert: {e}")
 

@@ -239,6 +239,38 @@ class WorkflowBuilder:
         self._metadata["_workflow_inputs"][input_node_id] = input_mappings
         return self
 
+    def update_node(
+        self, node_id: str, config_updates: dict[str, Any]
+    ) -> "WorkflowBuilder":
+        """
+        Update the configuration of an existing node.
+
+        This is essential for enterprise scenarios like:
+        - Dynamic environment-specific configuration
+        - Runtime parameter injection
+        - Security context updates
+        - A/B testing and feature flags
+
+        Args:
+            node_id: ID of the node to update
+            config_updates: Dictionary of configuration updates to apply
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            WorkflowValidationError: If node doesn't exist
+        """
+        if node_id not in self.nodes:
+            raise WorkflowValidationError(f"Node '{node_id}' not found in workflow")
+
+        # Deep merge the configuration updates
+        if "config" not in self.nodes[node_id]:
+            self.nodes[node_id]["config"] = {}
+
+        self.nodes[node_id]["config"].update(config_updates)
+        return self
+
     def build(self, workflow_id: str | None = None, **kwargs) -> Workflow:
         """
         Build and return a Workflow instance.
@@ -360,32 +392,63 @@ class WorkflowBuilder:
             if key not in ["nodes", "connections"]:
                 builder._metadata[key] = value
 
-        # Add nodes
-        for node_config in config.get("nodes", []):
-            node_id = node_config.get("id")
-            node_type = node_config.get("type")
-            node_params = node_config.get("config", {})
+        # Add nodes - handle both dict and list formats
+        nodes_config = config.get("nodes", [])
 
-            if not node_id:
-                raise WorkflowValidationError("Node ID is required")
-            if not node_type:
-                raise WorkflowValidationError(
-                    f"Node type is required for node '{node_id}'"
+        if isinstance(nodes_config, dict):
+            # Dict format: {node_id: {type: "...", parameters: {...}}}
+            for node_id, node_config in nodes_config.items():
+                node_type = node_config.get("type")
+                node_params = node_config.get(
+                    "parameters", node_config.get("config", {})
                 )
 
-            builder.add_node(node_type, node_id, node_params)
+                if not node_type:
+                    raise WorkflowValidationError(
+                        f"Node type is required for node '{node_id}'"
+                    )
 
-        # Add connections
+                builder.add_node(node_type, node_id, node_params)
+        else:
+            # List format: [{id: "...", type: "...", config: {...}}]
+            for node_config in nodes_config:
+                node_id = node_config.get("id")
+                node_type = node_config.get("type")
+                node_params = node_config.get("config", {})
+
+                if not node_id:
+                    raise WorkflowValidationError("Node ID is required")
+                if not node_type:
+                    raise WorkflowValidationError(
+                        f"Node type is required for node '{node_id}'"
+                    )
+
+                builder.add_node(node_type, node_id, node_params)
+
+        # Add connections - handle both full and simple formats
         for conn in config.get("connections", []):
+            # Try full format first: {from_node, from_output, to_node, to_input}
             from_node = conn.get("from_node")
             from_output = conn.get("from_output")
             to_node = conn.get("to_node")
             to_input = conn.get("to_input")
 
-            if not all([from_node, from_output, to_node, to_input]):
+            # Handle simple format: {from, to} with default outputs/inputs
+            if not from_node:
+                from_node = conn.get("from")
+                from_output = conn.get("from_output", "result")  # Default output
+            if not to_node:
+                to_node = conn.get("to")
+                to_input = conn.get("to_input", "input")  # Default input
+
+            if not all([from_node, to_node]):
                 raise WorkflowValidationError(
-                    f"Invalid connection: missing required fields. Connection data: {conn}"
+                    f"Invalid connection: missing from_node and to_node. Connection data: {conn}"
                 )
+
+            # Use defaults if not specified
+            from_output = from_output or "result"
+            to_input = to_input or "input"
 
             builder.add_connection(from_node, from_output, to_node, to_input)
 
