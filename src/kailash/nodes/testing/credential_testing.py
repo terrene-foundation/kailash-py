@@ -39,7 +39,7 @@ class CredentialTestingNode(Node):
     Example:
         >>> # Test OAuth2 token expiration
         >>> tester = CredentialTestingNode()
-        >>> result = tester.run(
+        >>> result = tester.execute(
         ...     credential_type='oauth2',
         ...     scenario='expired',
         ...     mock_data={'client_id': 'test_client'}
@@ -48,7 +48,7 @@ class CredentialTestingNode(Node):
         >>> assert 'expired_token' in result['error_details']
         >>>
         >>> # Test successful API key validation
-        >>> result = tester.run(
+        >>> result = tester.execute(
         ...     credential_type='api_key',
         ...     scenario='success',
         ...     validation_rules={'key_length': 32}

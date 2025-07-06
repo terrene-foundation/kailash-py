@@ -75,7 +75,7 @@ class TestUnifiedAdminSchema:
         mock_sql_node_class.return_value = mock_db_instance
 
         # Mock database responses
-        mock_db_instance.run.side_effect = [
+        mock_db_instance.execute.side_effect = [
             # Schema version query
             {"data": [{"version": "1.0.0"}]},
         ]
@@ -199,12 +199,12 @@ class TestUnifiedAdminSchema:
             # Default response
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = RoleManagementNode()
         node._db_node = mock_db_instance
 
-        result = node.run(
+        result = node.execute(
             operation="create_role",
             role_data={
                 "name": "senior_editor",
@@ -278,12 +278,12 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = RoleManagementNode()
         node._db_node = mock_db_instance
 
-        result = node.run(
+        result = node.execute(
             operation="get_effective_permissions",
             role_id="child_role",
             tenant_id="tenant_1",
@@ -340,7 +340,7 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         # Mock cache hit
         node = PermissionCheckNode()
@@ -354,7 +354,7 @@ class TestUnifiedAdminSchema:
         }
         node._cache_timestamps[cache_key] = datetime.now(timezone.utc)
 
-        result = node.run(
+        result = node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="resource_456",
@@ -420,11 +420,11 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = PermissionCheckNode()
 
-        result = node.run(
+        result = node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="document_789",
@@ -540,11 +540,11 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = PermissionCheckNode()
 
-        result = node.run(
+        result = node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -557,7 +557,7 @@ class TestUnifiedAdminSchema:
         assert result["result"]["check"]["allowed"] is True
 
         # Now test with ABAC context - this should also pass since we have permissions
-        result_with_context = node.run(
+        result_with_context = node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -617,12 +617,12 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = PermissionCheckNode()
 
         # Try to access user from tenant A with correct tenant
-        result = node.run(
+        result = node.execute(
             operation="check_permission",
             user_id="user_a1",
             resource_id="resource",
@@ -638,7 +638,7 @@ class TestUnifiedAdminSchema:
         node2 = PermissionCheckNode()
 
         with pytest.raises(NodeExecutionError, match="User not found"):
-            node2.run(
+            node2.execute(
                 operation="check_permission",
                 user_id="user_a1",
                 resource_id="resource",
@@ -706,12 +706,12 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = PermissionCheckNode()
 
         # Perform operation with audit enabled
-        result = node.run(
+        result = node.execute(
             operation="check_permission",
             user_id="user_123",
             resource_id="doc_456",
@@ -725,7 +725,7 @@ class TestUnifiedAdminSchema:
         # Verify audit log was created
         audit_calls = [
             call
-            for call in mock_db_instance.run.call_args_list
+            for call in mock_db_instance.execute.call_args_list
             if "INSERT INTO admin_audit_log" in str(call)
         ]
         assert len(audit_calls) > 0
@@ -783,12 +783,12 @@ class TestUnifiedAdminSchema:
 
             return {"data": []}
 
-        mock_db_instance.run.side_effect = mock_run
+        mock_db_instance.execute.side_effect = mock_run
 
         node = RoleManagementNode()
         node._db_node = mock_db_instance
 
-        result = node.run(
+        result = node.execute(
             operation="update_role",
             role_id="role_123",
             role_data={
@@ -814,7 +814,7 @@ class TestUnifiedAdminSchema:
     def test_concurrent_permission_checks(self):
         """Test handling of concurrent permission checks."""
         mock_db = Mock()
-        mock_db.run.return_value = {"data": [{"allowed": True}]}
+        mock_db.execute.return_value = {"data": [{"allowed": True}]}
 
         node = PermissionCheckNode()
         node._db_node = mock_db
@@ -857,7 +857,7 @@ class TestSchemaOperations:
     def test_schema_version_tracking(self):
         """Test schema version tracking."""
         mock_db = Mock()
-        mock_db.run.return_value = {"data": [{"version": "1.0.0"}]}
+        mock_db.execute.return_value = {"data": [{"version": "1.0.0"}]}
 
         manager = AdminSchemaManager(self.db_config)
         manager.db_node = mock_db
@@ -870,7 +870,7 @@ class TestSchemaOperations:
         mock_db = Mock()
 
         # Mock column information
-        mock_db.run.return_value = {
+        mock_db.execute.return_value = {
             "data": [
                 {"column_name": "user_id"},
                 {"column_name": "email"},
@@ -902,7 +902,7 @@ class TestErrorHandling:
         """Test handling of schema creation errors."""
         mock_db = Mock()
         mock_sql_node_class.return_value = mock_db
-        mock_db.run.side_effect = Exception("Database connection failed")
+        mock_db.execute.side_effect = Exception("Database connection failed")
 
         manager = AdminSchemaManager(self.db_config)
 
@@ -916,7 +916,7 @@ class TestErrorHandling:
         node._db_node.run.side_effect = Exception("Query failed")
 
         with pytest.raises(NodeExecutionError):
-            node.run(
+            node.execute(
                 operation="check_permission",
                 user_id="user_123",
                 resource_id="res_456",
@@ -929,7 +929,7 @@ class TestErrorHandling:
         node = RoleManagementNode()
 
         with pytest.raises(NodeExecutionError, match="Missing required field"):
-            node.run(
+            node.execute(
                 operation="create_role",
                 role_data={},  # Missing required fields
                 tenant_id="tenant_1",

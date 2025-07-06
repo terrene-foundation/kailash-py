@@ -47,4 +47,6 @@ pytest tests/e2e/ -m "requires_docker"
 - ❌ Putting slow tests in unit/
 - ❌ Forgetting Docker requirement markers
 - ❌ Duplicating tests across tiers
+- ❌ Using `node.run()` instead of `node.execute()`
 - ✅ Always organize by tier and component
+- ✅ Always use `node.execute()` in tests

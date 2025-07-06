@@ -169,7 +169,7 @@ class EnterpriseAuditLogNode(Node):
         ...         "ip_address": "192.168.1.100"
         ...     }
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> event_id = result["event"]["event_id"]
 
         >>> # Query security events
@@ -184,7 +184,7 @@ class EnterpriseAuditLogNode(Node):
         ...     },
         ...     pagination={"page": 1, "size": 50}
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> events = result["events"]
 
         >>> # Generate compliance report
@@ -196,7 +196,7 @@ class EnterpriseAuditLogNode(Node):
         ...     },
         ...     export_format="json"
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> report = result["report"]
     """
 
@@ -436,7 +436,7 @@ class EnterpriseAuditLogNode(Node):
             }
         )
 
-        db_result = self._db_node.run()
+        db_result = self._db_node.execute()
 
         return {
             "result": {
@@ -571,14 +571,14 @@ class EnterpriseAuditLogNode(Node):
         self._db_node.config.update(
             {"query": count_query, "params": params, "fetch_mode": "one"}
         )
-        count_result = self._db_node.run()
+        count_result = self._db_node.execute()
         total_count = count_result["result"]["data"]["total"]
 
         # Execute data query
         self._db_node.config.update(
             {"query": data_query, "params": params, "fetch_mode": "all"}
         )
-        data_result = self._db_node.run()
+        data_result = self._db_node.execute()
         logs = data_result["result"]["data"]
 
         # Calculate pagination info

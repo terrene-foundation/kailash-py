@@ -68,7 +68,7 @@ class FilterNode(Node):
     Examples:
         >>> # Filter list of numbers
         >>> filter_node = FilterNode()
-        >>> result = filter_node.run(
+        >>> result = filter_node.execute(
         ...     data=[1, 2, 3, 4, 5],
         ...     operator=">",
         ...     value=3
@@ -81,7 +81,7 @@ class FilterNode(Node):
         ...     {"name": "Bob", "age": 25},
         ...     {"name": "Charlie", "age": 35}
         ... ]
-        >>> result = filter_node.run(
+        >>> result = filter_node.execute(
         ...     data=users,
         ...     field="age",
         ...     operator=">=",
@@ -96,7 +96,7 @@ class FilterNode(Node):
         ...     {"title": "Java Development"},
         ...     {"title": "Python for Data Science"}
         ... ]
-        >>> result = filter_node.run(
+        >>> result = filter_node.execute(
         ...     data=items,
         ...     field="title",
         ...     operator="contains",
@@ -110,7 +110,7 @@ class FilterNode(Node):
         ...     {"value": None},
         ...     {"value": 20}
         ... ]
-        >>> result = filter_node.run(
+        >>> result = filter_node.execute(
         ...     data=data_with_nulls,
         ...     field="value",
         ...     operator="!=",
@@ -570,7 +570,7 @@ class ContextualCompressorNode(Node):
         ...     compression_ratio=0.6,
         ...     relevance_threshold=0.7
         ... )
-        >>> result = compressor.run(
+        >>> result = compressor.execute(
         ...     query="machine learning algorithms",
         ...     retrieved_docs=[{"content": "...", "metadata": {}}],
         ...     compression_target=1500

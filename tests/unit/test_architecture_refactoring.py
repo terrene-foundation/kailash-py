@@ -177,11 +177,11 @@ class TestSyncAsyncSeparation:
         with pytest.raises(NodeExecutionError):
             node.execute()
 
-    def test_async_node_cannot_implement_run(self):
-        """Test that AsyncNode's run() method raises error."""
+    def test_async_node_execute_calls_async_run(self):
+        """Test that AsyncNode's execute() properly calls async_run()."""
         node = SimpleAsyncNode()
-        with pytest.raises(NotImplementedError, match="should implement async_run"):
-            node.run(value="test")
+        result = node.execute(value="test")
+        assert result == {"async_result": "async_test"}
 
 
 class TestExecuteRunStandardization:

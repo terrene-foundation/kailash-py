@@ -53,7 +53,7 @@ class DenseRetrievalNode(Node):
         )
 
         # Finds semantically similar content even without exact keywords
-        results = await dense_retriever.run(
+        results = await dense_retriever.execute(
             query="How to make AI systems more intelligent",
             documents=documents
         )
@@ -189,7 +189,7 @@ class SparseRetrievalNode(Node):
         )
 
         # Excellent for technical queries with specific terms
-        results = await sparse_retriever.run(
+        results = await sparse_retriever.execute(
             query="sklearn RandomForestClassifier hyperparameters",
             documents=technical_docs
         )
@@ -478,7 +478,7 @@ class ColBERTRetrievalNode(Node):
         )
 
         # Excellent for queries with multiple specific requirements
-        results = await colbert.run(
+        results = await colbert.execute(
             query="transformer architecture with attention mechanism for NLP tasks",
             documents=research_papers
         )
@@ -739,7 +739,7 @@ class MultiVectorRetrievalNode(Node):
         multi_vector = MultiVectorRetrievalNode()
 
         # Retrieves based on full content + summary + keywords
-        results = await multi_vector.run(
+        results = await multi_vector.execute(
             query="machine learning optimization techniques",
             documents=long_documents
         )
@@ -1037,7 +1037,7 @@ class CrossEncoderRerankNode(Node):
         )
 
         # Reranks initial results for maximum precision
-        reranked = await reranker.run(
+        reranked = await reranker.execute(
             initial_results=fast_retrieval_results,
             query="specific implementation details of BERT fine-tuning"
         )
@@ -1277,7 +1277,7 @@ class HybridFusionNode(Node):
         )
 
         # Combines dense and sparse retrieval results optimally
-        fused = await fusion.run(
+        fused = await fusion.execute(
             retrieval_results=[dense_results, sparse_results]
         )
 
@@ -1568,7 +1568,7 @@ class PropositionBasedRetrievalNode(Node):
         proposition_rag = PropositionBasedRetrievalNode()
 
         # Retrieves specific facts without surrounding noise
-        facts = await proposition_rag.run(
+        facts = await proposition_rag.execute(
             documents=knowledge_base,
             query="What is the speed of light in vacuum?"
         )

@@ -2,6 +2,53 @@
 
 *Building solutions WITH the Kailash SDK*
 
+## ⚡ CORE IMPLEMENTATION PATTERNS
+
+### Enterprise Workflow (Complete Pattern)
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "api", {"url": "https://api.example.com/data"})
+workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
+workflow.connect("api", "response", mapping={"analyzer": "input_data"})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Enterprise App Architecture
+```python
+from kailash.middleware.gateway import create_gateway
+
+app = create_gateway({
+    "enable_real_time": True,
+    "enable_ai_chat": True,
+    "enable_session_management": True
+})
+```
+
+### Node Selection Priority
+```python
+# ✅ ALWAYS use specialized nodes first
+from kailash.nodes.ai import LLMAgentNode        # NOT custom API calls
+from kailash.nodes.api import HTTPRequestNode    # NOT requests library
+from kailash.nodes.admin import UserManagementNode  # NOT custom auth
+from kailash.nodes.data import CSVReaderNode     # NOT PythonCodeNode for files
+```
+
+### Parameter Patterns
+```python
+# Dot notation for nested outputs
+workflow.connect("processor", "result.data", mapping={"analyzer": "input"})
+
+# Runtime overrides
+runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
+```
+
+---
+
 ## 🚀 Enterprise Middleware Architecture
 
 **🌉 Complete Middleware Stack**: Production-ready enterprise platform with `create_gateway()` - single function creates full app with real-time communication, AI chat, and session management.

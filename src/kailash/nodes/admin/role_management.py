@@ -171,7 +171,7 @@ class RoleManagementNode(Node):
         ...         }
         ...     }
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> role_id = result["role"]["role_id"]
 
         >>> # Bulk user assignment
@@ -181,7 +181,7 @@ class RoleManagementNode(Node):
         ...     user_ids=["user1", "user2", "user3"],
         ...     validate_hierarchy=True
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> assigned_count = result["stats"]["assigned"]
     """
 
@@ -500,7 +500,7 @@ class RoleManagementNode(Node):
         """
 
         # Execute database insert
-        db_result = self._db_node.run(
+        db_result = self._db_node.execute(
             query=insert_query,
             parameters=[
                 role_record["role_id"],
@@ -563,7 +563,7 @@ class RoleManagementNode(Node):
         WHERE user_id = $1 AND role_id = $2 AND tenant_id = $3 AND is_active = true
         """
 
-        existing = self._db_node.run(
+        existing = self._db_node.execute(
             query=existing_query,
             parameters=[user_id, role_id, tenant_id],
             result_format="dict",
@@ -594,7 +594,7 @@ class RoleManagementNode(Node):
             is_active = true
         """
 
-        db_result = self._db_node.run(
+        db_result = self._db_node.execute(
             query=insert_query,
             parameters=[
                 user_id,
@@ -740,7 +740,9 @@ class RoleManagementNode(Node):
 
         params = [tenant_id] + list(parent_roles)
 
-        result = self._db_node.run(query=query, parameters=params, result_format="dict")
+        result = self._db_node.execute(
+            query=query, parameters=params, result_format="dict"
+        )
         existing_roles = {row["role_id"] for row in result.get("data", [])}
 
         missing_roles = parent_roles - existing_roles
@@ -798,7 +800,7 @@ class RoleManagementNode(Node):
             query += " AND role_id != $2"
             params.append(exclude_role)
 
-        result = self._db_node.run(query=query, parameters=params, fetch_mode="all")
+        result = self._db_node.execute(query=query, parameters=params, fetch_mode="all")
         roles_data = result.get("data", [])
 
         # Convert to hierarchy dict
@@ -841,7 +843,7 @@ class RoleManagementNode(Node):
         WHERE role_id = $1 AND tenant_id = $2
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=query, parameters=[role_id, tenant_id], result_format="dict"
         )
         data = result.get("data", [])
@@ -865,7 +867,7 @@ class RoleManagementNode(Node):
             WHERE role_id = $1 AND tenant_id = $2
             """
 
-            result = self._db_node.run(
+            result = self._db_node.execute(
                 query=get_query,
                 parameters=[parent_role_id, tenant_id],
                 result_format="dict",
@@ -893,7 +895,7 @@ class RoleManagementNode(Node):
                 WHERE role_id = $3 AND tenant_id = $4
                 """
 
-                self._db_node.run(
+                self._db_node.execute(
                     query=update_query,
                     parameters=[
                         json.dumps(current_child_roles),
@@ -964,7 +966,7 @@ class RoleManagementNode(Node):
         RETURNING role_id, name, description, permissions, parent_roles, attributes, is_active, updated_at
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=update_query, parameters=params, fetch_mode="one"
         )
         updated_role = result.get("data", [])
@@ -1027,7 +1029,7 @@ class RoleManagementNode(Node):
             ) AND tenant_id = $2 AND is_active = true
             """
 
-            child_result = self._db_node.run(
+            child_result = self._db_node.execute(
                 query=child_roles_query,
                 parameters=[role_id, tenant_id],
                 fetch_mode="all",
@@ -1046,7 +1048,7 @@ class RoleManagementNode(Node):
             WHERE role_id = $1 AND tenant_id = $2
             """
 
-            user_result = self._db_node.run(
+            user_result = self._db_node.execute(
                 query=user_assignments_query,
                 parameters=[role_id, tenant_id],
                 fetch_mode="one",
@@ -1067,7 +1069,7 @@ class RoleManagementNode(Node):
             DELETE FROM user_role_assignments WHERE role_id = $1 AND tenant_id = $2
             """
 
-            self._db_node.run(
+            self._db_node.execute(
                 query=delete_assignments_query, parameters=[role_id, tenant_id]
             )
 
@@ -1092,7 +1094,7 @@ class RoleManagementNode(Node):
         ) AND tenant_id = $3
         """
 
-        self._db_node.run(
+        self._db_node.execute(
             query=update_children_query,
             parameters=[role_id, datetime.now(UTC), tenant_id],
         )
@@ -1102,7 +1104,7 @@ class RoleManagementNode(Node):
         DELETE FROM roles WHERE role_id = $1 AND tenant_id = $2
         """
 
-        self._db_node.run(query=delete_query, parameters=[role_id, tenant_id])
+        self._db_node.execute(query=delete_query, parameters=[role_id, tenant_id])
 
         return {
             "result": {
@@ -1170,7 +1172,7 @@ class RoleManagementNode(Node):
             base_query += f" OFFSET ${param_count}"
             params.append(offset)
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=base_query, parameters=params, fetch_mode="all"
         )
         roles_data = result.get("data", [])
@@ -1182,7 +1184,7 @@ class RoleManagementNode(Node):
         WHERE {' AND '.join(where_conditions)}
         """
 
-        count_result = self._db_node.run(
+        count_result = self._db_node.execute(
             query=count_query,
             parameters=(
                 params[: param_count - 2] if limit > 0 else params
@@ -1309,7 +1311,7 @@ class RoleManagementNode(Node):
             ORDER BY ur.assigned_at DESC
             """
 
-            users_result = self._db_node.run(
+            users_result = self._db_node.execute(
                 query=users_query, parameters=[role_id, tenant_id], fetch_mode="all"
             )
             users_data = users_result.get("data", [])
@@ -1349,7 +1351,7 @@ class RoleManagementNode(Node):
         WHERE user_id = $1 AND role_id = $2 AND tenant_id = $3
         """
 
-        existing = self._db_node.run(
+        existing = self._db_node.execute(
             query=check_query,
             parameters=[user_id, role_id, tenant_id],
             fetch_mode="one",
@@ -1377,7 +1379,9 @@ class RoleManagementNode(Node):
         WHERE user_id = $1 AND role_id = $2 AND tenant_id = $3
         """
 
-        self._db_node.run(query=delete_query, parameters=[user_id, role_id, tenant_id])
+        self._db_node.execute(
+            query=delete_query, parameters=[user_id, role_id, tenant_id]
+        )
 
         return {
             "result": {
@@ -1436,7 +1440,7 @@ class RoleManagementNode(Node):
         RETURNING permissions
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=update_query,
             parameters=[
                 json.dumps(new_permissions),
@@ -1496,7 +1500,7 @@ class RoleManagementNode(Node):
         RETURNING permissions
         """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=update_query,
             parameters=[
                 json.dumps(new_permissions),
@@ -1600,7 +1604,7 @@ class RoleManagementNode(Node):
 
         roles_query += " ORDER BY ur.assigned_at DESC"
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=roles_query, parameters=params, fetch_mode="all"
         )
         roles_data = result.get("data", [])
@@ -1699,7 +1703,7 @@ class RoleManagementNode(Node):
             LIMIT $3 OFFSET $4
             """
 
-        result = self._db_node.run(
+        result = self._db_node.execute(
             query=users_query,
             parameters=[role_id, tenant_id, limit, offset],
             fetch_mode="all",
@@ -1713,7 +1717,7 @@ class RoleManagementNode(Node):
         WHERE role_id = $1 AND tenant_id = $2
         """
 
-        count_result = self._db_node.run(
+        count_result = self._db_node.execute(
             query=count_query, parameters=[role_id, tenant_id], fetch_mode="one"
         )
         total_count = count_result.get("data", [{}])[0].get("total", 0)
@@ -1921,7 +1925,7 @@ class RoleManagementNode(Node):
         WHERE role_id = $3 AND tenant_id = $4
         """
 
-        self._db_node.run(
+        self._db_node.execute(
             query=update_query,
             parameters=[
                 orphaned_child_id,
@@ -1951,7 +1955,7 @@ class RoleManagementNode(Node):
         ))
         """
 
-        self._db_node.run(
+        self._db_node.execute(
             query=add_child_query,
             parameters=[child_role_id, datetime.now(UTC), parent_role_id, tenant_id],
         )

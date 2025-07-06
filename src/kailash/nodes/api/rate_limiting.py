@@ -360,7 +360,7 @@ class RateLimitedAPINode(Node):
 
         # If rate limiting is disabled, just pass through
         if not respect_rate_limits:
-            result = self.wrapped_node.run(**kwargs)
+            result = self.wrapped_node.execute(**kwargs)
             result["rate_limit_metadata"] = {"rate_limiting_active": False}
             return result
 
@@ -375,7 +375,7 @@ class RateLimitedAPINode(Node):
                 if self.rate_limiter.consume():
                     start_time = time.time()
                     try:
-                        result = self.wrapped_node.run(**kwargs)
+                        result = self.wrapped_node.execute(**kwargs)
                         execution_time = time.time() - start_time
 
                         # Add rate limiting metadata
@@ -482,9 +482,9 @@ class AsyncRateLimitedAPINode(AsyncNode):
             **kwargs: Parameters for the wrapped node
 
         Returns:
-            Same as RateLimitedAPINode.run()
+            Same as RateLimitedAPINode.execute()
         """
-        return self.sync_node.run(**kwargs)
+        return self.sync_node.execute(**kwargs)
 
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute the wrapped async node with rate limiting.

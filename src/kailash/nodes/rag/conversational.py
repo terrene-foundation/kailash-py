@@ -62,19 +62,19 @@ class ConversationalRAGNode(WorkflowNode):
         session = await conv_rag.create_session(user_id="user123")
 
         # First turn
-        response1 = await conv_rag.run(
+        response1 = await conv_rag.execute(
             query="What is transformer architecture?",
             session_id=session.id
         )
 
         # Follow-up with context
-        response2 = await conv_rag.run(
+        response2 = await conv_rag.execute(
             query="How does its attention mechanism work?",  # "its" refers to transformer
             session_id=session.id
         )
 
         # Topic switch with smooth transition
-        response3 = await conv_rag.run(
+        response3 = await conv_rag.execute(
             query="Now tell me about BERT",
             session_id=session.id
         )

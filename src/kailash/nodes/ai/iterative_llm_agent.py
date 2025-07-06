@@ -92,14 +92,14 @@ class IterativeLLMAgentNode(LLMAgentNode):
     Examples:
         >>> # Basic iterative agent
         >>> agent = IterativeLLMAgentNode()
-        >>> result = agent.run(
+        >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Find and analyze healthcare AI trends"}],
         ...     mcp_servers=["http://localhost:8080"],
         ...     max_iterations=3
         ... )
 
         >>> # Advanced iterative agent with custom convergence
-        >>> result = agent.run(
+        >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Research and recommend AI implementation strategy"}],
         ...     mcp_servers=["http://ai-registry:8080", "http://knowledge-base:8081"],
         ...     max_iterations=5,

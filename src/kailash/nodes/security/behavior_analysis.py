@@ -107,7 +107,7 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         ...     "data_volume_mb": 15.5
         ... }
         >>>
-        >>> result = behavior_analyzer.run(
+        >>> result = behavior_analyzer.execute(
         ...     action="analyze",
         ...     user_id="user123",
         ...     recent_activity=[activity]
@@ -417,7 +417,7 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # Create audit log entry
             if result.get("success", False):
                 try:
-                    self.audit_log_node.run(
+                    self.audit_log_node.execute(
                         action="behavior_analysis",
                         user_id=user_id or "unknown",
                         result="success",
@@ -1185,7 +1185,7 @@ RESPONSE FORMAT:
 """
 
             # Run AI analysis
-            ai_response = self.ai_agent.run(
+            ai_response = self.ai_agent.execute(
                 provider="ollama",
                 model=self.ai_model.replace("ollama:", ""),
                 messages=[{"role": "user", "content": prompt}],
@@ -1370,7 +1370,7 @@ RESPONSE FORMAT:
         }
 
         try:
-            self.security_event_node.run(**security_event)
+            self.security_event_node.execute(**security_event)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to log anomaly event: {e}")
 
@@ -1890,4 +1890,4 @@ RESPONSE FORMAT:
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

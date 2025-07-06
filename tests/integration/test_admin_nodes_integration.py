@@ -72,7 +72,7 @@ class TestRoleManagementNodeIntegration:
                             "parent_roles": [],
                             "attributes": {},
                             "is_active": True,
-                            "updated_at": datetime.now(),
+                            "updated_at": datetime.now().isoformat(),
                         }
                     ],
                     "row_count": 1,
@@ -115,8 +115,8 @@ class TestRoleManagementNodeIntegration:
                                 "parent_roles": ["analyst"],
                                 "attributes": {},
                                 "is_active": True,
-                                "created_at": datetime.now(),
-                                "updated_at": datetime.now(),
+                                "created_at": datetime.now().isoformat(),
+                                "updated_at": datetime.now().isoformat(),
                             }
                         ],
                         "row_count": 1,
@@ -146,8 +146,8 @@ class TestRoleManagementNodeIntegration:
                                 "parent_roles": [],
                                 "attributes": {},
                                 "is_active": True,
-                                "created_at": datetime.now(),
-                                "updated_at": datetime.now(),
+                                "created_at": datetime.now().isoformat(),
+                                "updated_at": datetime.now().isoformat(),
                             }
                         ],
                         "row_count": 1,
@@ -252,7 +252,7 @@ class TestRoleManagementNodeIntegration:
         # Add database configuration using our Docker infrastructure
         from tests.utils.docker_config import get_postgres_connection_string
 
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="create_role",
             role_data=role_data,
             tenant_id="test_tenant",
@@ -291,7 +291,7 @@ class TestRoleManagementNodeIntegration:
             "attributes": {"seniority": "senior"},
         }
 
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="create_role",
             role_data=role_data,
             validate_hierarchy=True,
@@ -321,7 +321,7 @@ class TestRoleManagementNodeIntegration:
         }
 
         # With validate_hierarchy=False, it should succeed even with non-existent parent
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="create_role",
             role_data=role_data,
             validate_hierarchy=False,  # Skip hierarchy validation
@@ -333,7 +333,7 @@ class TestRoleManagementNodeIntegration:
 
     def test_assign_user_to_role(self):
         """Test user role assignment."""
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="assign_user",
             user_id="user123",
             role_id="analyst",
@@ -356,7 +356,7 @@ class TestRoleManagementNodeIntegration:
 
     def test_bulk_assign_users(self):
         """Test bulk user assignment."""
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="bulk_assign",
             role_id="analyst",
             user_ids=["user1", "user2", "user3"],
@@ -374,7 +374,7 @@ class TestRoleManagementNodeIntegration:
         # For this test, we'll simplify and just test that the operation works
         # The actual permission inheritance logic is tested in unit tests
 
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="get_effective_permissions",
             role_id="test_role",  # This will match our default mock
             include_inherited=True,
@@ -393,7 +393,7 @@ class TestRoleManagementNodeIntegration:
 
     def test_update_role(self):
         """Test role update operation."""
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="update_role",
             role_id="test_role",
             role_data={
@@ -416,7 +416,7 @@ class TestRoleManagementNodeIntegration:
     def test_validate_hierarchy(self):
         """Test role hierarchy validation."""
         # Basic test that validate_hierarchy operation works
-        result = self.role_node.run(
+        result = self.role_node.execute(
             operation="validate_hierarchy",
             tenant_id="test_tenant",
             fix_issues=False,
@@ -572,7 +572,7 @@ class TestPermissionCheckNodeIntegration:
 
     def test_check_permission_basic(self):
         """Test basic permission check."""
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="check_permission",
             user_id="test_user",
             resource_id="sensitive_data",
@@ -592,7 +592,7 @@ class TestPermissionCheckNodeIntegration:
 
     def test_check_permission_with_explanation(self):
         """Test permission check with detailed explanation."""
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="check_permission",
             user_id="test_user",
             resource_id="data",  # Using "data" since mock user has "data:read" permission
@@ -610,7 +610,7 @@ class TestPermissionCheckNodeIntegration:
 
     def test_batch_permission_check(self):
         """Test batch permission checking."""
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="batch_check",
             user_id="test_user",
             resource_ids=["data1", "data2", "data3"],
@@ -636,7 +636,7 @@ class TestPermissionCheckNodeIntegration:
 
     def test_bulk_user_permission_check(self):
         """Test checking permission for multiple users."""
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="bulk_user_check",
             user_ids=["user1", "user2", "user3"],
             resource_id="workflow_execute",
@@ -661,7 +661,7 @@ class TestPermissionCheckNodeIntegration:
 
     def test_get_user_permissions(self):
         """Test retrieving all user permissions."""
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="get_user_permissions",
             user_id="test_user",
             include_inherited=True,
@@ -686,7 +686,7 @@ class TestPermissionCheckNodeIntegration:
     def test_explain_permission_detailed(self):
         """Test detailed permission explanation."""
         # Simplified test - just check that explain_permission operation works
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="explain_permission",
             user_id="test_user",
             resource_id="data",  # Use "data" since mock user has "data:read"
@@ -713,7 +713,7 @@ class TestPermissionCheckNodeIntegration:
             },
         ]
 
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="validate_conditions",
             conditions=valid_conditions,
             validate_syntax=True,
@@ -736,7 +736,7 @@ class TestPermissionCheckNodeIntegration:
             }
         ]
 
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="validate_conditions",
             conditions=invalid_conditions,
             validate_syntax=True,
@@ -750,7 +750,7 @@ class TestPermissionCheckNodeIntegration:
 
     def test_hierarchical_permission_check(self):
         """Test hierarchical resource permission checking."""
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="check_hierarchical",
             user_id="test_user",
             resource_id="org/analytics/team/project/workflow",
@@ -780,7 +780,7 @@ class TestPermissionCheckNodeIntegration:
     def test_permission_caching(self):
         """Test permission result caching."""
         # First call should hit database
-        result1 = self.permission_node.run(
+        result1 = self.permission_node.execute(
             operation="check_permission",
             user_id="test_user",
             resource_id="cached_resource",
@@ -791,7 +791,7 @@ class TestPermissionCheckNodeIntegration:
         )
 
         # Second identical call should use cache
-        result2 = self.permission_node.run(
+        result2 = self.permission_node.execute(
             operation="check_permission",
             user_id="test_user",
             resource_id="cached_resource",
@@ -811,7 +811,7 @@ class TestPermissionCheckNodeIntegration:
     def test_clear_cache(self):
         """Test cache clearing operation."""
         # Add something to cache first
-        self.permission_node.run(
+        self.permission_node.execute(
             operation="check_permission",
             user_id="test_user",
             resource_id="cached_resource",
@@ -821,7 +821,7 @@ class TestPermissionCheckNodeIntegration:
         )
 
         # Clear cache
-        result = self.permission_node.run(
+        result = self.permission_node.execute(
             operation="clear_cache", database_config=self.database_config
         )
 
@@ -922,8 +922,8 @@ class TestAdminNodesIntegrationWorkflow:
                             "parent_roles": [],
                             "attributes": {"department": "analytics"},
                             "is_active": True,
-                            "created_at": datetime.now(),
-                            "updated_at": datetime.now(),
+                            "created_at": datetime.now().isoformat(),
+                            "updated_at": datetime.now().isoformat(),
                         }
                     ],
                     "row_count": 1,
@@ -962,7 +962,7 @@ class TestAdminNodesIntegrationWorkflow:
         """Test role hierarchy and inherited permissions workflow."""
         # Simplified test - just test creating roles without hierarchy validation
         # Create base role
-        base_role_result = self.role_node.run(
+        base_role_result = self.role_node.execute(
             operation="create_role",
             role_data={
                 "name": "Junior Analyst",
@@ -977,7 +977,7 @@ class TestAdminNodesIntegrationWorkflow:
         assert base_role_result["result"]["success"] is True
 
         # Create senior role without parent validation
-        senior_role_result = self.role_node.run(
+        senior_role_result = self.role_node.execute(
             operation="create_role",
             role_data={
                 "name": "Senior Analyst",
@@ -995,7 +995,7 @@ class TestAdminNodesIntegrationWorkflow:
     def test_multi_tenant_isolation(self):
         """Test that tenant isolation works correctly."""
         # Create role in tenant A
-        role_a_result = self.role_node.run(
+        role_a_result = self.role_node.execute(
             operation="create_role",
             role_data={
                 "name": "Manager",
@@ -1007,7 +1007,7 @@ class TestAdminNodesIntegrationWorkflow:
         )
 
         # Try to access role from tenant B
-        permission_result = self.permission_node.run(
+        permission_result = self.permission_node.execute(
             operation="check_permission",
             user_id="user_from_tenant_b",
             resource_id="team",
@@ -1025,7 +1025,7 @@ class TestAdminNodesIntegrationWorkflow:
 
         # Bulk assign multiple users
         start_time = time.time()
-        bulk_result = self.role_node.run(
+        bulk_result = self.role_node.execute(
             operation="bulk_assign",
             role_id="data_analyst",
             user_ids=[f"user_{i}" for i in range(50)],
@@ -1039,7 +1039,7 @@ class TestAdminNodesIntegrationWorkflow:
 
         # Batch check permissions
         start_time = time.time()
-        batch_result = self.permission_node.run(
+        batch_result = self.permission_node.execute(
             operation="batch_check",
             user_id="analyst_user",
             resource_ids=[f"resource_{i}" for i in range(20)],
@@ -1056,7 +1056,7 @@ class TestAdminNodesIntegrationWorkflow:
         """Test comprehensive error handling."""
         # Test role creation with missing description still works (might have default)
         try:
-            result = self.role_node.run(
+            result = self.role_node.execute(
                 operation="create_role",
                 role_data={"name": "Incomplete Role"},  # Missing description
                 database_config=self.database_config,
@@ -1069,6 +1069,6 @@ class TestAdminNodesIntegrationWorkflow:
 
         # Test invalid operation
         with pytest.raises(NodeExecutionError):
-            self.role_node.run(
+            self.role_node.execute(
                 operation="invalid_operation", database_config=self.database_config
             )

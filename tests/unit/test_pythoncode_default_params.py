@@ -28,11 +28,11 @@ def test_function_with_default_parameters():
     assert params["threshold"].default == 0.5
 
     # Test execution with default parameter
-    result = node.run(data=[0.1, 0.6, 0.3, 0.8])
+    result = node.execute(data=[0.1, 0.6, 0.3, 0.8])
     assert result["result"]["result"] == [0.6, 0.8]
 
     # Test execution with custom parameter
-    result = node.run(data=[0.1, 0.6, 0.3, 0.8], threshold=0.7)
+    result = node.execute(data=[0.1, 0.6, 0.3, 0.8], threshold=0.7)
     assert result["result"]["result"] == [0.8]
 
 
@@ -70,14 +70,14 @@ def test_function_with_multiple_defaults():
     assert params["normalize"].default is True
 
     # Test with only required parameter
-    result = node.run(data=[0.5, 1.5, -0.5, 0.75])
+    result = node.execute(data=[0.5, 1.5, -0.5, 0.75])
     assert result["result"]["result"] == [
         0.0,
         1.0,
     ]  # normalized [0.5, 0.75] -> [0.0, 1.0]
 
     # Test with some optional parameters
-    result = node.run(data=[0.5, 1.5, -0.5, 0.75], normalize=False)
+    result = node.execute(data=[0.5, 1.5, -0.5, 0.75], normalize=False)
     assert result["result"]["result"] == [0.5, 0.75]
 
 
@@ -105,7 +105,7 @@ def test_class_method_with_defaults():
     assert params["multiplier"].default == 2.0
 
     # Test execution
-    result = node.run(data=[1, 2, 3])
+    result = node.execute(data=[1, 2, 3])
     assert result["result"]["result"] == [2, 4, 6]
     assert result["result"]["count"] == 1
 
@@ -126,7 +126,7 @@ def test_no_defaults_still_required():
 
     # Should fail without required parameters
     with pytest.raises(Exception):  # Will raise validation error
-        node.run(x=5)  # Missing y parameter
+        node.execute(x=5)  # Missing y parameter
 
 
 def test_complex_type_with_default():
@@ -146,11 +146,11 @@ def test_complex_type_with_default():
     assert params["prefix"].default == "processed_"
 
     # Test with default
-    result = node.run(data={"a": 1, "b": 2})
+    result = node.execute(data={"a": 1, "b": 2})
     assert result["result"]["result"] == {"processed_a": 1, "processed_b": 2}
 
     # Test with custom prefix
-    result = node.run(data={"a": 1, "b": 2}, prefix="custom_")
+    result = node.execute(data={"a": 1, "b": 2}, prefix="custom_")
     assert result["result"]["result"] == {"custom_a": 1, "custom_b": 2}
 
 

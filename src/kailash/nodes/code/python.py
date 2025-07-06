@@ -145,14 +145,44 @@ class SafeCodeChecker(ast.NodeVisitor):
                         "message": f"Import from module '{module_name}' is not allowed",
                     }
                 )
+            else:
+                # Check for dangerous function imports from allowed modules
+                dangerous_imports = {
+                    "os": {"system", "popen", "execv", "execl", "spawn"},
+                    "subprocess": {"run", "call", "check_call", "Popen"},
+                    "__builtin__": {"eval", "exec", "compile", "__import__"},
+                    "builtins": {"eval", "exec", "compile", "__import__"},
+                }
+
+                if module_name in dangerous_imports:
+                    for alias in node.names:
+                        import_name = alias.name
+                        if import_name in dangerous_imports[module_name]:
+                            self.violations.append(
+                                {
+                                    "type": "dangerous_import",
+                                    "module": module_name,
+                                    "function": import_name,
+                                    "line": node.lineno,
+                                    "message": f"Import of dangerous function '{import_name}' from module '{module_name}' is not allowed",
+                                }
+                            )
         self.generic_visit(node)
 
     def visit_Call(self, node):
         """Check function calls."""
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
-            # Check for dangerous built-in functions
-            if func_name in {"eval", "exec", "compile"}:
+            # Check for dangerous built-in functions and imported dangerous functions
+            dangerous_functions = {
+                "eval",
+                "exec",
+                "compile",  # Built-in dangerous functions
+                "system",
+                "popen",  # os module dangerous functions
+                "__import__",  # Dynamic import function
+            }
+            if func_name in dangerous_functions:
                 self.violations.append(
                     {
                         "type": "function_call",
@@ -450,15 +480,29 @@ class CodeExecutor:
         Raises:
             NodeExecutionError: If function execution fails
         """
+        # Sanitize inputs for security
+        sanitized_inputs = validate_node_parameters(inputs, self.security_config)
+
         try:
             # Get function signature
             sig = inspect.signature(func)
 
             # Map inputs to function parameters
             kwargs = {}
+            extra_kwargs = {}
+
+            # Check if function accepts **kwargs
+            accepts_var_keyword = any(
+                param.kind == inspect.Parameter.VAR_KEYWORD
+                for param in sig.parameters.values()
+            )
+
             for param_name, param in sig.parameters.items():
-                if param_name in inputs:
-                    kwargs[param_name] = inputs[param_name]
+                if param.kind == inspect.Parameter.VAR_KEYWORD:
+                    # This is **kwargs parameter, skip it
+                    continue
+                elif param_name in sanitized_inputs:
+                    kwargs[param_name] = sanitized_inputs[param_name]
                 elif param.default is not param.empty:
                     # Use default value
                     continue
@@ -466,6 +510,15 @@ class CodeExecutor:
                     raise NodeExecutionError(
                         f"Missing required parameter: {param_name}"
                     )
+
+            # Collect extra parameters if function accepts **kwargs
+            if accepts_var_keyword:
+                for key, value in sanitized_inputs.items():
+                    if key not in kwargs:
+                        extra_kwargs[key] = value
+
+                # Merge regular kwargs and extra kwargs
+                kwargs.update(extra_kwargs)
 
             # Execute function
             return func(**kwargs)
@@ -521,6 +574,10 @@ class FunctionWrapper:
             if param_name == "self":
                 continue
 
+            # Skip **kwargs parameter - it's handled separately
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                continue
+
             param_type = self.type_hints.get(param_name, Any)
             input_types[param_name] = param_type
         return input_types
@@ -537,12 +594,23 @@ class FunctionWrapper:
             if param_name == "self":
                 continue
 
+            # Skip **kwargs parameter - it's handled separately
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                continue
+
             param_info[param_name] = {
                 "type": self.type_hints.get(param_name, Any),
                 "has_default": param.default is not param.empty,
                 "default": param.default if param.default is not param.empty else None,
             }
         return param_info
+
+    def accepts_var_keyword(self) -> bool:
+        """Check if function accepts **kwargs."""
+        return any(
+            param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in self.signature.parameters.values()
+        )
 
     def get_output_type(self) -> type:
         """Extract output type from function signature.
@@ -704,12 +772,23 @@ class ClassWrapper:
             if param_name == "self":
                 continue
 
+            # Skip **kwargs parameter - it's handled separately
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                continue
+
             param_info[param_name] = {
                 "type": self.type_hints.get(param_name, Any),
                 "has_default": param.default is not param.empty,
                 "default": param.default if param.default is not param.empty else None,
             }
         return param_info
+
+    def accepts_var_keyword(self) -> bool:
+        """Check if method accepts **kwargs."""
+        return any(
+            param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in self.signature.parameters.values()
+        )
 
     def get_output_type(self) -> type:
         """Extract output type from method signature."""
@@ -868,6 +947,7 @@ class PythonCodeNode(Node):
         output_schema: dict[str, "NodeParameter"] | None = None,
         description: str | None = None,
         max_code_lines: int = 10,
+        validate_security: bool = False,
         **kwargs,
     ):
         """Initialize a Python code node.
@@ -884,6 +964,7 @@ class PythonCodeNode(Node):
             output_schema: Explicit output parameter schema for validation
             description: Node description
             max_code_lines: Maximum lines before warning (default: 10)
+            validate_security: If True, validate code security at creation time (default: False)
             **kwargs: Additional node parameters
         """
         # Validate inputs
@@ -927,6 +1008,10 @@ class PythonCodeNode(Node):
 
         # Initialize executor
         self.executor = CodeExecutor()
+
+        # Validate code security if requested
+        if validate_security and self.code:
+            self.executor.check_code_safety(self.code)
 
         # Create metadata (avoiding conflicts with kwargs)
         if "metadata" not in kwargs:
@@ -1035,6 +1120,21 @@ class PythonCodeNode(Node):
         """
         # If using code string, pass through all inputs
         if self.code:
+            return kwargs
+
+        # Check if function/class accepts **kwargs
+        accepts_var_keyword = False
+        if self.function:
+            wrapper = FunctionWrapper(self.function, self.executor)
+            accepts_var_keyword = wrapper.accepts_var_keyword()
+        elif self.class_type:
+            wrapper = ClassWrapper(
+                self.class_type, self.process_method or "process", self.executor
+            )
+            accepts_var_keyword = wrapper.accepts_var_keyword()
+
+        # If function accepts **kwargs, pass through all inputs
+        if accepts_var_keyword:
             return kwargs
 
         # Otherwise use standard validation for function/class nodes
@@ -1481,12 +1581,24 @@ class PythonCodeNode(Node):
 
                 # Add suggestions from violations
                 for violation in violations:
-                    if violation["type"] in ["import", "import_from"]:
-                        module_info = self.check_module_availability(
-                            violation["module"]
-                        )
+                    if violation["type"] in [
+                        "import",
+                        "import_from",
+                        "dangerous_import",
+                    ]:
+                        module = violation.get("module", "unknown")
+                        module_info = self.check_module_availability(module)
                         result["suggestions"].extend(module_info["suggestions"])
 
+        except SafetyViolationError as e:
+            # Safety violations should mark code as invalid, not just warnings
+            result["valid"] = False
+            result["safety_violations"].append(
+                {"type": "safety_error", "message": str(e), "line": 1}
+            )
+            result["suggestions"].append(
+                "Fix security violations before using this code."
+            )
         except Exception as e:
             result["warnings"].append(f"Could not complete safety check: {e}")
 

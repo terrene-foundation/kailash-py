@@ -6,16 +6,16 @@ A comprehensive, production-grade test environment for the Kailash SDK that prov
 
 ```bash
 # Initial setup (downloads models, initializes databases)
-./test-env setup
+./tests/utils/test-env setup
 
 # Start all services
-./test-env up
+./tests/utils/test-env up
 
 # Run tier 2 tests
-./test-env test tier2
+./tests/utils/test-env test tier2
 
 # Check service status
-./test-env status
+./tests/utils/test-env status
 
 # Note: test-env script is located in tests/utils/ with a symlink in project root
 ```
@@ -41,27 +41,27 @@ A comprehensive, production-grade test environment for the Kailash SDK that prov
 
 ### Service Management
 ```bash
-./test-env up       # Start all services
-./test-env down     # Stop all services
-./test-env restart  # Restart all services
-./test-env status   # Show service status
-./test-env logs     # View service logs
-./test-env logs -f  # Follow service logs
+./tests/utils/test-env up       # Start all services
+./tests/utils/test-env down     # Stop all services
+./tests/utils/test-env restart  # Restart all services
+./tests/utils/test-env status   # Show service status
+./tests/utils/test-env logs     # View service logs
+./tests/utils/test-env logs -f  # Follow service logs
 ```
 
 ### Running Tests
 ```bash
-./test-env test tier1              # Run unit tests
-./test-env test tier2              # Run integration tests
-./test-env test tier3              # Run e2e tests
-./test-env test all                # Run all tests
-./test-env test tests/specific.py  # Run specific test file
+./tests/utils/test-env test tier1              # Run unit tests
+./tests/utils/test-env test tier2              # Run integration tests
+./tests/utils/test-env test tier3              # Run e2e tests
+./tests/utils/test-env test all                # Run all tests
+./tests/utils/test-env test tests/specific.py  # Run specific test file
 ```
 
 ### Maintenance
 ```bash
-./test-env setup   # Initial setup with model downloads
-./test-env clean   # Remove all data and volumes (⚠️ destructive)
+./tests/utils/test-env setup   # Initial setup with model downloads
+./tests/utils/test-env clean   # Remove all data and volumes (⚠️ destructive)
 ```
 
 ## 🔧 Configuration

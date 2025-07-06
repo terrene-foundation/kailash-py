@@ -23,6 +23,7 @@ Example:
 
 import asyncio
 import logging
+import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -61,6 +62,15 @@ class CircuitBreakerConfig:
     window_size: int = 100  # Rolling window for error rate
     excluded_exceptions: List[type] = field(default_factory=list)  # Don't count these
 
+    # Enhanced configurable thresholds
+    min_calls_before_evaluation: int = 10  # Min calls before evaluating error rate
+    slow_call_threshold: float = 5.0  # Seconds to consider a call slow
+    slow_call_rate_threshold: float = 0.8  # Rate of slow calls to trigger open
+    max_wait_duration_in_half_open: int = 60  # Max wait in half-open state
+    exponential_backoff_multiplier: float = 2.0  # Backoff multiplier for recovery
+    jitter_enabled: bool = True  # Add jitter to recovery timeout
+    max_jitter_percentage: float = 0.1  # Maximum jitter as percentage of timeout
+
 
 @dataclass
 class CircuitBreakerMetrics:
@@ -70,35 +80,58 @@ class CircuitBreakerMetrics:
     successful_calls: int = 0
     failed_calls: int = 0
     rejected_calls: int = 0
+    slow_calls: int = 0  # New: Track slow calls
     state_transitions: List[Dict[str, Any]] = field(default_factory=list)
     last_failure_time: Optional[float] = None
     consecutive_failures: int = 0
     consecutive_successes: int = 0
+    avg_call_duration: float = 0.0  # New: Average call duration
+    total_call_duration: float = 0.0  # New: Total duration for average calculation
 
-    def record_success(self):
+    def record_success(self, duration: float = 0.0):
         """Record successful call."""
         self.total_calls += 1
         self.successful_calls += 1
         self.consecutive_successes += 1
         self.consecutive_failures = 0
+        self._update_duration(duration)
 
-    def record_failure(self):
+    def record_failure(self, duration: float = 0.0):
         """Record failed call."""
         self.total_calls += 1
         self.failed_calls += 1
         self.consecutive_failures += 1
         self.consecutive_successes = 0
         self.last_failure_time = time.time()
+        self._update_duration(duration)
 
     def record_rejection(self):
         """Record rejected call (circuit open)."""
         self.rejected_calls += 1
+
+    def record_slow_call(self):
+        """Record slow call."""
+        self.slow_calls += 1
+
+    def _update_duration(self, duration: float):
+        """Update duration metrics."""
+        if duration > 0:
+            self.total_call_duration += duration
+            # Update rolling average
+            if self.total_calls > 0:
+                self.avg_call_duration = self.total_call_duration / self.total_calls
 
     def get_error_rate(self) -> float:
         """Calculate current error rate."""
         if self.total_calls == 0:
             return 0.0
         return self.failed_calls / self.total_calls
+
+    def get_slow_call_rate(self) -> float:
+        """Calculate current slow call rate."""
+        if self.total_calls == 0:
+            return 0.0
+        return self.slow_calls / self.total_calls
 
 
 class ConnectionCircuitBreaker(Generic[T]):
@@ -159,14 +192,21 @@ class ConnectionCircuitBreaker(Generic[T]):
         start_time = time.time()
         try:
             result = await func(*args, **kwargs)
-            await self._record_success()
+            execution_time = time.time() - start_time
+
+            # Check if this was a slow call
+            is_slow = execution_time > self.config.slow_call_threshold
+
+            await self._record_success(execution_time, is_slow)
             return result
         except Exception as e:
+            execution_time = time.time() - start_time
+
             # Check if this exception should be counted
             if not any(
                 isinstance(e, exc_type) for exc_type in self.config.excluded_exceptions
             ):
-                await self._record_failure(e)
+                await self._record_failure(e, execution_time)
             raise
 
     async def _check_state_transition(self):
@@ -191,6 +231,10 @@ class ConnectionCircuitBreaker(Generic[T]):
 
     def _should_open(self) -> bool:
         """Determine if circuit should open based on failures."""
+        # Only evaluate if we have minimum number of calls
+        if self.metrics.total_calls < self.config.min_calls_before_evaluation:
+            return False
+
         # Check consecutive failures
         if self.metrics.consecutive_failures >= self.config.failure_threshold:
             return True
@@ -202,22 +246,32 @@ class ConnectionCircuitBreaker(Generic[T]):
             if error_rate >= self.config.error_rate_threshold:
                 return True
 
+        # Check slow call rate
+        slow_call_rate = self.metrics.get_slow_call_rate()
+        if slow_call_rate >= self.config.slow_call_rate_threshold:
+            return True
+
         return False
 
-    async def _record_success(self):
+    async def _record_success(self, duration: float = 0.0, is_slow: bool = False):
         """Record successful execution."""
         async with self._lock:
-            self.metrics.record_success()
+            self.metrics.record_success(duration)
+            if is_slow:
+                self.metrics.record_slow_call()
             self._rolling_window.append(True)
 
             if self.state == CircuitState.HALF_OPEN:
                 if self.metrics.consecutive_successes >= self.config.success_threshold:
                     await self._transition_to(CircuitState.CLOSED)
 
-    async def _record_failure(self, error: Exception):
+    async def _record_failure(self, error: Exception, duration: float = 0.0):
         """Record failed execution."""
         async with self._lock:
-            self.metrics.record_failure()
+            self.metrics.record_failure(duration)
+            # Consider slow failures as additional burden
+            if duration > self.config.slow_call_threshold:
+                self.metrics.record_slow_call()
             self._rolling_window.append(False)
 
             if self.state == CircuitState.HALF_OPEN:
@@ -280,11 +334,31 @@ class ConnectionCircuitBreaker(Generic[T]):
         return "Unknown reason"
 
     def _time_until_recovery(self) -> float:
-        """Calculate seconds until recovery attempt."""
+        """Calculate seconds until recovery attempt with jitter and backoff."""
         if self.state != CircuitState.OPEN:
             return 0.0
+
         elapsed = time.time() - self._last_state_change
-        remaining = self.config.recovery_timeout - elapsed
+
+        # Apply exponential backoff based on number of state transitions to OPEN
+        open_transitions = sum(
+            1
+            for t in self.metrics.state_transitions
+            if t.get("to") == CircuitState.OPEN.value
+        )
+        backoff_multiplier = self.config.exponential_backoff_multiplier ** max(
+            0, open_transitions - 1
+        )
+
+        base_timeout = self.config.recovery_timeout * backoff_multiplier
+
+        # Add jitter if enabled
+        if self.config.jitter_enabled:
+            jitter_range = base_timeout * self.config.max_jitter_percentage
+            jitter = random.uniform(-jitter_range, jitter_range)
+            base_timeout += jitter
+
+        remaining = base_timeout - elapsed
         return max(0.0, remaining)
 
     async def force_open(self, reason: str = "Manual override"):
@@ -331,7 +405,10 @@ class ConnectionCircuitBreaker(Generic[T]):
                 "successful_calls": self.metrics.successful_calls,
                 "failed_calls": self.metrics.failed_calls,
                 "rejected_calls": self.metrics.rejected_calls,
+                "slow_calls": self.metrics.slow_calls,
                 "error_rate": self.metrics.get_error_rate(),
+                "slow_call_rate": self.metrics.get_slow_call_rate(),
+                "avg_call_duration": self.metrics.avg_call_duration,
                 "consecutive_failures": self.metrics.consecutive_failures,
                 "consecutive_successes": self.metrics.consecutive_successes,
             },
@@ -340,6 +417,11 @@ class ConnectionCircuitBreaker(Generic[T]):
                 "success_threshold": self.config.success_threshold,
                 "recovery_timeout": self.config.recovery_timeout,
                 "error_rate_threshold": self.config.error_rate_threshold,
+                "slow_call_threshold": self.config.slow_call_threshold,
+                "slow_call_rate_threshold": self.config.slow_call_rate_threshold,
+                "min_calls_before_evaluation": self.config.min_calls_before_evaluation,
+                "exponential_backoff_multiplier": self.config.exponential_backoff_multiplier,
+                "jitter_enabled": self.config.jitter_enabled,
             },
             "time_until_recovery": (
                 self._time_until_recovery() if self.state == CircuitState.OPEN else None

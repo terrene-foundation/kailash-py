@@ -165,7 +165,7 @@ class PermissionCheckNode(Node):
         ...     cache_ttl=300,
         ...     explain=True
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> allowed = result["check"]["allowed"]
         >>> explanation = result["explanation"]
 
@@ -177,7 +177,7 @@ class PermissionCheckNode(Node):
         ...     permissions=["read", "write", "delete"],
         ...     cache_level="full"
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> results = result["batch_results"]
 
         >>> # Bulk user permission check
@@ -187,7 +187,7 @@ class PermissionCheckNode(Node):
         ...     resource_id="workflow_execute",
         ...     permission="execute"
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> access_matrix = result["access_matrix"]
     """
 
@@ -738,7 +738,7 @@ class PermissionCheckNode(Node):
 
         try:
             # Get user data - strict tenant check
-            user_result = self._db_node.run(
+            user_result = self._db_node.execute(
                 query=user_query, parameters=[user_id, tenant_id], result_format="dict"
             )
 
@@ -758,7 +758,7 @@ class PermissionCheckNode(Node):
                 return None
 
             # Get assigned roles - also with strict tenant isolation
-            roles_result = self._db_node.run(
+            roles_result = self._db_node.execute(
                 query=roles_query, parameters=[user_id, tenant_id], result_format="dict"
             )
 
@@ -888,7 +888,7 @@ class PermissionCheckNode(Node):
         """
 
         try:
-            result = self._db_node.run(
+            result = self._db_node.execute(
                 query=query,
                 parameters=[role_id, tenant_id, tenant_id, tenant_id],
                 result_format="dict",
@@ -1246,7 +1246,7 @@ class PermissionCheckNode(Node):
         """
 
         try:
-            result = self._db_node.run(
+            result = self._db_node.execute(
                 query=query, parameters=[role_id, tenant_id], result_format="dict"
             )
             role_rows = result.get("data", [])
@@ -1709,7 +1709,7 @@ class PermissionCheckNode(Node):
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """
 
-            self._db_node.run(
+            self._db_node.execute(
                 query=audit_query,
                 parameters=[
                     user_id,

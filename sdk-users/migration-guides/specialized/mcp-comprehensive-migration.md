@@ -171,7 +171,7 @@ for phase in plan:
 
 ```python
 # migration/rest_to_mcp.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, Optional
 import aiohttp
 from pydantic import BaseModel
@@ -322,7 +322,7 @@ adapter.migrate_openapi_spec(openapi_spec)
 
 ```python
 # migration/gradual_migration.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, Callable
 import asyncio
 
@@ -523,7 +523,7 @@ print(f"Migration report: {report}")
 
 ```python
 # migration/openai_to_mcp.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, List
 import json
 
@@ -703,7 +703,7 @@ print(code)
 
 ```python
 # migration/anthropic_to_mcp.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, List
 
 class AnthropicToolMigrator:
@@ -811,7 +811,7 @@ class AnthropicToolMigrator:
 
 ```python
 # migration/plugin_to_mcp.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, List, Callable
 import inspect
 
@@ -978,7 +978,7 @@ migrator.migrate_actions_to_tools()
 
 ```python
 # migration/legacy_migration.py
-from fastmcp import FastMCP
+from mcp.server import FastMCP
 from typing import Dict, Any, List, Protocol
 import asyncio
 from abc import ABC, abstractmethod

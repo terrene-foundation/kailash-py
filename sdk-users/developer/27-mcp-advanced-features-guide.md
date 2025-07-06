@@ -21,9 +21,9 @@ Create tools with validated, schema-enforced outputs for reliable client consump
 
 ```python
 from kailash.mcp_server.advanced_features import StructuredTool
-from kailash.mcp_server.server import EnhancedMCPServer
+from kailash.mcp_server import MCPServer
 
-server = EnhancedMCPServer("advanced-server")
+server = MCPServer("advanced-server", enable_cache=True, enable_metrics=True)
 
 # Tool with structured output schema
 @StructuredTool(

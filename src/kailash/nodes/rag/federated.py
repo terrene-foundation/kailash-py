@@ -60,7 +60,7 @@ class FederatedRAGNode(WorkflowNode):
         )
 
         # Query across all federated sources
-        result = await federated_rag.run(
+        result = await federated_rag.execute(
             query="Latest treatment protocols for condition X",
             node_endpoints={
                 "hospital_a": "https://hospitalA.api/rag",
@@ -598,7 +598,7 @@ class EdgeRAGNode(Node):
             update_strategy="incremental"
         )
 
-        result = await edge_rag.run(
+        result = await edge_rag.execute(
             query="Local sensor anomaly detection",
             local_data=sensor_readings,
             sync_with_cloud=False
@@ -848,7 +848,7 @@ class CrossSiloRAGNode(Node):
             audit_mode="comprehensive"
         )
 
-        result = await cross_silo_rag.run(
+        result = await cross_silo_rag.execute(
             query="Industry-wide trend analysis",
             requester_org="org_a",
             access_permissions=["read_aggregated", "no_raw_data"]

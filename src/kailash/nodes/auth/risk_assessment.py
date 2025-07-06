@@ -87,7 +87,7 @@ class RiskAssessmentNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         ...     "timestamp": datetime.now(UTC).isoformat()
         ... }
         >>>
-        >>> result = risk_node.run(action="assess", context=context)
+        >>> result = risk_node.execute(action="assess", context=context)
         >>> print(f"Risk level: {result['risk_level']}")
     """
 
@@ -240,7 +240,7 @@ class RiskAssessmentNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
     async def execute_async(self, **inputs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**inputs)
+        return self.execute(**inputs)
 
     def _assess_risk(
         self, context: Dict[str, Any], include_mitigation: bool = False

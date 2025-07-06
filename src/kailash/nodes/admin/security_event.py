@@ -214,7 +214,7 @@ class EnterpriseSecurityEventNode(Node):
         ...         "detection_method": "geolocation_analysis"
         ...     }
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> event_id = result["security_event"]["event_id"]
 
         >>> # Analyze threats in time window
@@ -226,7 +226,7 @@ class EnterpriseSecurityEventNode(Node):
         ...         "risk_threshold": 7.0
         ...     }
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> threats = result["threat_analysis"]["high_risk_events"]
 
         >>> # Monitor user behavior for anomalies
@@ -238,7 +238,7 @@ class EnterpriseSecurityEventNode(Node):
         ...         "anomaly_threshold": 0.8
         ...     }
         ... )
-        >>> result = node.run()
+        >>> result = node.execute()
         >>> anomalies = result["behavior_analysis"]["anomalies"]
     """
 
@@ -487,7 +487,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        db_result = self._db_node.run()
+        db_result = self._db_node.execute()
 
         # Log to audit trail
         audit_event_data = {
@@ -504,7 +504,7 @@ class EnterpriseSecurityEventNode(Node):
             },
         }
 
-        self._audit_node.run(
+        self._audit_node.execute(
             operation="log_event", event_data=audit_event_data, tenant_id=tenant_id
         )
 
@@ -552,7 +552,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         events = result.get("result", {}).get("data", [])
 
         # Analyze threats
@@ -600,7 +600,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         events = result.get("result", {}).get("data", [])
 
         # Analyze behavior patterns
@@ -829,7 +829,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        self._db_node.run()
+        self._db_node.execute()
 
         return incident_id
 
@@ -869,7 +869,7 @@ class EnterpriseSecurityEventNode(Node):
             {"query": query, "params": params, "fetch_mode": "all"}
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         events = result.get("result", {}).get("data", [])
 
         # Perform anomaly detection
@@ -917,7 +917,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         high_risk_events = result.get("result", {}).get("data", [])
 
         # Generate alerts
@@ -995,7 +995,7 @@ class EnterpriseSecurityEventNode(Node):
             {"query": query, "params": params, "fetch_mode": "all"}
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         incidents = result.get("result", {}).get("data", [])
 
         return {
@@ -1071,7 +1071,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        self._db_node.run()
+        self._db_node.execute()
 
         return {
             "result": {
@@ -1127,7 +1127,7 @@ class EnterpriseSecurityEventNode(Node):
 
         self._db_node.config.update({"query": query, "params": params})
 
-        self._db_node.run()
+        self._db_node.execute()
 
         return {
             "result": {
@@ -1217,7 +1217,7 @@ class EnterpriseSecurityEventNode(Node):
             }
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         events = result.get("result", {}).get("data", [])
 
         # Calculate risk metrics
@@ -1347,7 +1347,7 @@ class EnterpriseSecurityEventNode(Node):
             {"query": query, "params": params, "fetch_mode": "all"}
         )
 
-        result = self._db_node.run()
+        result = self._db_node.execute()
         events = result.get("result", {}).get("data", [])
 
         # Perform forensic analysis

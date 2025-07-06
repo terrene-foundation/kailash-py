@@ -59,7 +59,7 @@ class TenantIsolationManager:
         users_query = """
             SELECT user_id FROM users WHERE tenant_id = $1 AND status = 'active'
         """
-        users_result = self.db_node.run(
+        users_result = self.db_node.execute(
             query=users_query, parameters=[tenant_id], result_format="dict"
         )
         user_ids = {row["user_id"] for row in users_result.get("data", [])}
@@ -68,7 +68,7 @@ class TenantIsolationManager:
         roles_query = """
             SELECT role_id FROM roles WHERE tenant_id = $1 AND is_active = true
         """
-        roles_result = self.db_node.run(
+        roles_result = self.db_node.execute(
             query=roles_query, parameters=[tenant_id], result_format="dict"
         )
         role_ids = {row["role_id"] for row in roles_result.get("data", [])}
@@ -85,7 +85,7 @@ class TenantIsolationManager:
             FROM roles
             WHERE tenant_id = $1 AND is_active = true
         """
-        permissions_result = self.db_node.run(
+        permissions_result = self.db_node.execute(
             query=permissions_query, parameters=[tenant_id], result_format="dict"
         )
         permissions = {row["permission"] for row in permissions_result.get("data", [])}

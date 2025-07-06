@@ -12,6 +12,95 @@ Parameter injection allows dynamic configuration of workflows at runtime, enabli
 - Understanding of [Workflows](02-workflows.md)
 - Familiarity with dependency injection concepts
 
+## Important E2E Test Findings
+
+### WorkflowBuilder Parameter Injection
+
+Based on extensive E2E testing, the WorkflowBuilder supports parameter injection through `add_workflow_inputs`:
+
+```python
+from kailash.workflow import WorkflowBuilder
+
+# Create workflow
+workflow_builder = WorkflowBuilder()
+
+# Add nodes
+workflow_builder.add_node("UserManagementNode", "create_user", {
+    "operation": "create_user",
+    "tenant_id": "default",
+    "database_config": db_config
+})
+
+# Map workflow-level parameters to node parameters
+workflow_builder.add_workflow_inputs("create_user", {
+    "user_data": "user_data",      # workflow param -> node param
+    "tenant_id": "tenant_id",      # can override node config
+    "database_config": "database_config"
+})
+
+# Build and execute
+workflow = workflow_builder.build("user_workflow")
+runtime = LocalRuntime()
+
+# Parameters are injected at runtime
+results, _ = runtime.execute(workflow, parameters={
+    "user_data": {
+        "email": "user@example.com",
+        "username": "user123",
+        "status": "active"  # Important for permission checks
+    },
+    "tenant_id": "production"  # Overrides default
+})
+```
+
+### PythonCodeNode Parameter Access
+
+**CRITICAL**: In PythonCodeNode, parameters are passed directly to the namespace, NOT as `input_data`:
+
+```python
+# ❌ WRONG - This will cause "input_data is not defined" error
+workflow_builder.add_node("PythonCodeNode", "validator", {
+    "code": """
+enterprise = input_data.get("enterprise")  # ERROR!
+"""
+})
+
+# ✅ CORRECT - Parameters are in the namespace directly
+workflow_builder.add_node("PythonCodeNode", "validator", {
+    "code": """
+# Parameters are injected directly into namespace
+if not enterprise or not tenant_id:
+    raise ValueError("Missing required parameters")
+
+result = {"validated": True, "enterprise": enterprise}
+"""
+})
+```
+
+### Dot Notation for Nested Parameters
+
+The parameter injector supports dot notation for accessing nested data:
+
+```python
+# Map nested workflow parameters
+workflow_builder.add_workflow_inputs("processor", {
+    "user_id": "data.user_id",        # Access nested field
+    "role_name": "data.role_name",    # Access nested field
+    "config": "settings.processing"    # Deep nesting
+})
+
+# Execute with nested parameters
+results, _ = runtime.execute(workflow, parameters={
+    "data": {
+        "user_id": "user123",
+        "role_name": "admin"
+    },
+    "settings": {
+        "processing": {"mode": "fast"}
+    }
+})
+```
+
 ## Basic Parameter Injection
 
 ### Runtime Parameter Injection

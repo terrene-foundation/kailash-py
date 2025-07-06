@@ -106,7 +106,7 @@ class LLMAgentNode(Node):
     Examples:
         >>> # Basic Q&A agent with OpenAI
         >>> agent = LLMAgentNode()
-        >>> result = agent.run(
+        >>> result = agent.execute(
         ...     provider="openai",
         ...     model="gpt-4",
         ...     messages=[
@@ -118,7 +118,7 @@ class LLMAgentNode(Node):
 
         >>> # Tool-calling agent
         >>> tool_agent = LLMAgentNode()
-        >>> result = tool_agent.run(
+        >>> result = tool_agent.execute(
         ...     provider="anthropic",
         ...     model="claude-3-sonnet",
         ...     messages=[{"role": "user", "content": "Create a report and email it"}],
@@ -139,7 +139,7 @@ class LLMAgentNode(Node):
 
         >>> # RAG agent with MCP integration
         >>> rag_agent = LLMAgentNode()
-        >>> result = rag_agent.run(
+        >>> result = rag_agent.execute(
         ...     provider="azure",
         ...     model="gpt-4-turbo",
         ...     messages=[{"role": "user", "content": "What are the compliance requirements?"}],
@@ -407,7 +407,7 @@ class LLMAgentNode(Node):
             Basic usage with OpenAI:
 
             >>> agent = LLMAgentNode()
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="openai",
             ...     model="gpt-4",
             ...     messages=[
@@ -425,7 +425,7 @@ class LLMAgentNode(Node):
 
             Using Ollama with custom model:
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="ollama",
             ...     model="llama3.1:8b-instruct-q8_0",
             ...     messages=[
@@ -441,7 +441,7 @@ class LLMAgentNode(Node):
 
             With system prompt and conversation memory:
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="anthropic",
             ...     model="claude-3-sonnet-20240229",
             ...     system_prompt="You are a helpful coding assistant.",
@@ -458,7 +458,7 @@ class LLMAgentNode(Node):
 
             With tool calling:
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="openai",
             ...     model="gpt-4-turbo",
             ...     messages=[
@@ -489,7 +489,7 @@ class LLMAgentNode(Node):
 
             With RAG (Retrieval Augmented Generation):
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="openai",
             ...     model="gpt-4",
             ...     messages=[
@@ -512,7 +512,7 @@ class LLMAgentNode(Node):
 
             With MCP (Model Context Protocol) integration:
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="anthropic",
             ...     model="claude-3-opus-20240229",
             ...     messages=[
@@ -536,7 +536,7 @@ class LLMAgentNode(Node):
 
             Advanced configuration with all features:
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="openai",
             ...     model="gpt-4-turbo",
             ...     messages=[
@@ -573,7 +573,7 @@ class LLMAgentNode(Node):
 
             Error handling:
 
-            >>> result = agent.run(
+            >>> result = agent.execute(
             ...     provider="openai",
             ...     model="gpt-4",
             ...     messages=[{"role": "user", "content": "Hello"}]
@@ -2190,4 +2190,4 @@ class LLMAgentNode(Node):
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

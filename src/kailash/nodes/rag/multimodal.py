@@ -62,7 +62,7 @@ class MultimodalRAGNode(WorkflowNode):
         # 3. Code implementations with visual outputs
         # 4. Combine into comprehensive answer with images
 
-        result = await multimodal_rag.run(
+        result = await multimodal_rag.execute(
             documents=mixed_media_docs,  # Contains text and image paths
             query="Show me the architecture diagram for transformers"
         )
@@ -446,7 +446,7 @@ class VisualQuestionAnsweringNode(Node):
     Example:
         vqa = VisualQuestionAnsweringNode()
 
-        result = await vqa.run(
+        result = await vqa.execute(
             image_path="architecture_diagram.png",
             question="What components are shown in this diagram?"
         )
@@ -569,7 +569,7 @@ class ImageTextMatchingNode(Node):
     Example:
         matcher = ImageTextMatchingNode()
 
-        matches = await matcher.run(
+        matches = await matcher.execute(
             query="neural network architecture",
             image_collection=image_database
         )

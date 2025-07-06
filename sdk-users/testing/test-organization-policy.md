@@ -97,7 +97,7 @@ class TestAdminIntegration:
             "database_type": "postgresql"
         }
         user_mgmt = UserManagementNode()
-        result = user_mgmt.run(database_config=db_config, ...)
+        result = user_mgmt.execute(database_config=db_config, ...)
 ```
 
 **Example of INCORRECT Integration Test:**

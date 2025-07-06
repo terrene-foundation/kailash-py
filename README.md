@@ -21,16 +21,16 @@
 
 ---
 
-## 🔥 Latest Release: v0.6.1 (January 26, 2025)
+## 🔥 Latest Release: v0.6.3 (July 5, 2025)
 
-**Critical patch fixing middleware compatibility issues from v0.6.0**
+**Comprehensive MCP Platform & Documentation Improvements**
 
-- 🚨 **Fixed**: All middleware components now use `.execute()` method
-- 🔧 **Fixed**: DataTransformer string transformation validation
-- 🧹 **Fixed**: EventStore async task cleanup preventing crashes
-- 🐳 **New**: Standardized Docker test environment (`./test-env`)
+- 🚀 **MCP Testing**: 407 tests with 100% pass rate across 8 MCP components
+- 📚 **Documentation**: Fixed 200+ code examples, all now execute correctly
+- 🏢 **Enterprise**: Complete MCP platform integration with production workflows
+- 🔧 **Platform**: Resolved namespace collision (kailash.mcp → kailash.mcp_server)
 
-[Full Changelog](changelogs/releases/v0.6.1-2025-01-26.md) | [Migration Guide](sdk-users/migration-guides/v0.6.0-to-v0.6.1-migration.md)
+[Full Changelog](changelogs/releases/v0.6.3-2025-07-05.md) | [Previous Release](changelogs/releases/v0.6.1-2025-01-26.md)
 
 ## ✨ Highlights
 

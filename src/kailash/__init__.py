@@ -3,8 +3,8 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.4.2: Bug fixes including circular import resolution and JWT implementation
-consolidation. Improved changelog organization with individual release files.
+New in v0.6.4: Enterprise-grade parameter injection system, comprehensive E2E test
+improvements achieving 100% pass rate, and enhanced documentation based on test findings.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
@@ -33,7 +33,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.6.3"
+__version__ = "0.6.4"
 
 __all__ = [
     # Core workflow components

@@ -45,7 +45,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         ...     {"type": "login", "user": "admin", "ip": "192.168.1.100", "failed": True}
         ... ]
         >>>
-        >>> threats = threat_detector.run(events=events)
+        >>> threats = threat_detector.execute(events=events)
         >>> print(f"Detected {len(threats['threats'])} threats")
     """
 
@@ -661,7 +661,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             prompt = self._create_ai_analysis_prompt(event_summary, context)
 
             # Run AI analysis
-            ai_response = self.ai_agent.run(
+            ai_response = self.ai_agent.execute(
                 provider="ollama",
                 model=self.ai_model.replace("ollama:", ""),
                 messages=[{"role": "user", "content": prompt}],
@@ -923,7 +923,7 @@ If no threats are detected, return an empty array: []
             "source_ip": threat.get("source_ip", "unknown"),
         }
 
-        self.security_event_node.run(**alert_event)
+        self.security_event_node.execute(**alert_event)
 
     def _block_ip(self, threat: Dict[str, Any]) -> None:
         """Block IP address associated with threat.
@@ -949,7 +949,7 @@ If no threats are detected, return an empty array: []
                 "source_ip": ip,
             }
 
-            self.security_event_node.run(**block_event)
+            self.security_event_node.execute(**block_event)
 
     def _lock_account(self, threat: Dict[str, Any]) -> None:
         """Lock user account associated with threat.
@@ -974,7 +974,7 @@ If no threats are detected, return an empty array: []
                 "source_ip": threat.get("source_ip", "unknown"),
             }
 
-            self.security_event_node.run(**lock_event)
+            self.security_event_node.execute(**lock_event)
 
     def _quarantine_resource(self, threat: Dict[str, Any]) -> None:
         """Quarantine resource associated with threat.
@@ -996,7 +996,7 @@ If no threats are detected, return an empty array: []
             "source_ip": threat.get("source_ip", "unknown"),
         }
 
-        self.security_event_node.run(**quarantine_event)
+        self.security_event_node.execute(**quarantine_event)
 
     def _log_threat(self, threat: Dict[str, Any]) -> None:
         """Log threat to audit trail.
@@ -1014,7 +1014,7 @@ If no threats are detected, return an empty array: []
             "ip_address": threat.get("source_ip", "unknown"),
         }
 
-        self.audit_log_node.run(**log_entry)
+        self.audit_log_node.execute(**log_entry)
 
     def _update_stats(
         self, events_processed: int, threats_detected: int, processing_time_ms: float
@@ -1100,4 +1100,4 @@ If no threats are detected, return an empty array: []
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

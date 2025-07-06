@@ -49,7 +49,7 @@ class TestProductionDatabaseScenarios:
                 SELECT
                     COUNT(*) as total_users,
                     COUNT(CASE WHEN created_at > NOW() - INTERVAL '30 days' THEN 1 END) as new_users,
-                    COUNT(CASE WHEN last_login > NOW() - INTERVAL '7 days' THEN 1 END) as active_users
+                    COUNT(CASE WHEN last_login_at > NOW() - INTERVAL '7 days' THEN 1 END) as active_users
                 FROM users
             """,
             },

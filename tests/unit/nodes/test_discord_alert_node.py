@@ -195,7 +195,7 @@ class TestDiscordAlertNode:
     @patch("kailash.nodes.alerts.discord.time.sleep")
     def test_send_alert_success(self, mock_sleep, discord_node, mock_http_response):
         """Test successful alert sending."""
-        discord_node.http_client.run = Mock(return_value=mock_http_response)
+        discord_node.http_client.execute = Mock(return_value=mock_http_response)
 
         result = discord_node.send_alert(
             severity=AlertSeverity.SUCCESS,
@@ -212,15 +212,15 @@ class TestDiscordAlertNode:
         assert "thread_id" in result
 
         # Verify HTTP call
-        discord_node.http_client.run.assert_called_once()
-        call_args = discord_node.http_client.run.call_args[1]
+        discord_node.http_client.execute.assert_called_once()
+        call_args = discord_node.http_client.execute.call_args[1]
         assert call_args["method"] == "POST"
         assert "json_data" in call_args
 
     @patch("kailash.nodes.alerts.discord.time.sleep")
     def test_send_alert_plain_text(self, mock_sleep, discord_node, mock_http_response):
         """Test plain text alert sending."""
-        discord_node.http_client.run = Mock(return_value=mock_http_response)
+        discord_node.http_client.execute = Mock(return_value=mock_http_response)
 
         result = discord_node.send_alert(
             severity=AlertSeverity.ERROR,
@@ -235,7 +235,7 @@ class TestDiscordAlertNode:
         assert result["success"] is True
 
         # Check payload
-        call_args = discord_node.http_client.run.call_args[1]
+        call_args = discord_node.http_client.execute.call_args[1]
         payload = call_args["json_data"]
         assert "content" in payload
         assert "@here" in payload["content"]
@@ -245,7 +245,7 @@ class TestDiscordAlertNode:
     @patch("kailash.nodes.alerts.discord.time.sleep")
     def test_send_alert_with_thread(self, mock_sleep, discord_node, mock_http_response):
         """Test alert sending to a thread."""
-        discord_node.http_client.run = Mock(return_value=mock_http_response)
+        discord_node.http_client.execute = Mock(return_value=mock_http_response)
 
         result = discord_node.send_alert(
             severity=AlertSeverity.INFO,
@@ -259,7 +259,7 @@ class TestDiscordAlertNode:
         assert result["thread_id"] == "9876543210"
 
         # Check URL includes thread_id
-        call_args = discord_node.http_client.run.call_args[1]
+        call_args = discord_node.http_client.execute.call_args[1]
         assert "thread_id=9876543210" in call_args["url"]
 
     @patch("kailash.nodes.alerts.discord.time.sleep")
@@ -267,7 +267,7 @@ class TestDiscordAlertNode:
         """Test handling of rate limit responses."""
         # First call returns 429 (rate limited)
         # Second call succeeds
-        discord_node.http_client.run = Mock(
+        discord_node.http_client.execute = Mock(
             side_effect=[
                 {
                     "status_code": 429,
@@ -296,7 +296,7 @@ class TestDiscordAlertNode:
     def test_send_alert_retry_on_error(self, mock_sleep, discord_node):
         """Test retry logic on errors."""
         # First two calls fail, third succeeds
-        discord_node.http_client.run = Mock(
+        discord_node.http_client.execute = Mock(
             side_effect=[
                 Exception("Network error"),
                 {"status_code": 500, "content": "Server error"},
@@ -314,12 +314,14 @@ class TestDiscordAlertNode:
 
         assert result["success"] is True
         assert result["attempt"] == 3
-        assert discord_node.http_client.run.call_count == 3
+        assert discord_node.http_client.execute.call_count == 3
 
     @patch("kailash.nodes.alerts.discord.time.sleep")
     def test_send_alert_max_retries_exceeded(self, mock_sleep, discord_node):
         """Test failure after max retries."""
-        discord_node.http_client.run = Mock(side_effect=Exception("Persistent error"))
+        discord_node.http_client.execute = Mock(
+            side_effect=Exception("Persistent error")
+        )
 
         with pytest.raises(
             NodeExecutionError, match="Failed to send Discord alert after 3 attempts"
@@ -332,16 +334,16 @@ class TestDiscordAlertNode:
                 webhook_url="https://discord.com/api/webhooks/123/abc",
             )
 
-        assert discord_node.http_client.run.call_count == 3
+        assert discord_node.http_client.execute.call_count == 3
 
     def test_run_method_integration(self, discord_node, mock_http_response):
         """Test the run method integration."""
-        discord_node.http_client.run = Mock(return_value=mock_http_response)
+        discord_node.http_client.execute = Mock(return_value=mock_http_response)
 
         with patch.dict(
             os.environ, {"TEST_WEBHOOK": "https://discord.com/api/webhooks/123/abc"}
         ):
-            result = discord_node.run(
+            result = discord_node.execute(
                 webhook_url="${TEST_WEBHOOK}",
                 title="Integration Test",
                 message="Testing full flow",
@@ -356,7 +358,7 @@ class TestDiscordAlertNode:
         assert result["title"] == "Integration Test"
 
         # Check payload structure
-        call_args = discord_node.http_client.run.call_args[1]
+        call_args = discord_node.http_client.execute.call_args[1]
         payload = call_args["json_data"]
         assert payload["username"] == "Test Bot"
         assert "embeds" in payload

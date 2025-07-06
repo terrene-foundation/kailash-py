@@ -306,7 +306,7 @@ class TestAdminNodesPerformanceE2E:
         cache_hits = 0
 
         for user_id, resource_id, permission in hit_test_checks:
-            result = self.permission_node.run(
+            result = self.permission_node.execute(
                 operation="check_permission",
                 user_id=user_id,
                 resource_id=resource_id,
@@ -367,7 +367,7 @@ class TestAdminNodesPerformanceE2E:
         # Re-test original entries
         post_eviction_hits = 0
         for user_id, resource_id, permission in hit_test_checks:
-            result = self.permission_node.run(
+            result = self.permission_node.execute(
                 operation="check_permission",
                 user_id=user_id,
                 resource_id=resource_id,
@@ -403,7 +403,7 @@ class TestAdminNodesPerformanceE2E:
 
         for i in range(1000):
             try:
-                self.permission_node.run(
+                self.permission_node.execute(
                     operation="check_permission",
                     user_id=f"pressure_user_{self.test_run_id}_{i}",
                     resource_id=f"pressure_resource_{i}",
@@ -517,7 +517,7 @@ class TestAdminNodesPerformanceE2E:
 
         for i in range(100):
             try:
-                result = self.permission_node.run(
+                result = self.permission_node.execute(
                     operation="check_permission",
                     user_id=f"user_{self.test_run_id}_{i % self.num_users}",
                     resource_id="test_resource",
@@ -969,7 +969,7 @@ class TestAdminNodesPerformanceE2E:
                 [roles[-1]] if roles and i % 5 != 0 and len(roles) > 0 else []
             )
 
-            result = self.role_node.run(
+            result = self.role_node.execute(
                 operation="create_role",
                 role_data={
                     "name": f"Role_{i}",
@@ -990,7 +990,7 @@ class TestAdminNodesPerformanceE2E:
         for i in range(num_users):
             if i % 3 == 0 and len(roles) > 1:  # Every 3rd user gets additional role
                 try:
-                    self.role_node.run(
+                    self.role_node.execute(
                         operation="assign_user",
                         user_id=f"user_{i}",
                         role_id=roles[(i + 1) % len(roles)],
@@ -1068,7 +1068,7 @@ class TestAdminNodesPerformanceE2E:
             """
 
             try:
-                db_node.run(query=insert_query, parameters=params)
+                db_node.execute(query=insert_query, parameters=params)
             except Exception as e:
                 print(f"⚠️  Warning creating user batch {i//batch_size + 1}: {e}")
 
@@ -1084,7 +1084,7 @@ class TestAdminNodesPerformanceE2E:
             if operation_type == "permission_check":
                 # Use modulo to select from existing users (match _create_test_users pattern)
                 user_index = index % min(100, getattr(self, "num_users", 100))
-                result = self.permission_node.run(
+                result = self.permission_node.execute(
                     operation="check_permission",
                     user_id=f"user_{user_index}",
                     resource_id=f"resource_{index % 50}",
@@ -1095,7 +1095,7 @@ class TestAdminNodesPerformanceE2E:
             elif operation_type == "role_assignment":
                 user_index = index % min(100, getattr(self, "num_users", 100))
                 role_index = index % 10  # Assume we have at least 10 roles
-                result = self.role_node.run(
+                result = self.role_node.execute(
                     operation="assign_user",
                     user_id=f"user_{user_index}",
                     role_id=f"Role_{role_index}",  # Match role creation pattern from _create_performance_test_data
@@ -1104,7 +1104,7 @@ class TestAdminNodesPerformanceE2E:
                 )
             elif operation_type == "permission_update":
                 role_index = index % 10  # Assume we have at least 10 roles
-                result = self.role_node.run(
+                result = self.role_node.execute(
                     operation="add_permission",
                     role_id=f"Role_{role_index}",  # Match role creation pattern
                     permission=f"new_perm_{index}",
@@ -1113,7 +1113,7 @@ class TestAdminNodesPerformanceE2E:
                 )
             elif operation_type == "get_user_permissions":
                 user_index = index % min(100, getattr(self, "num_users", 100))
-                result = self.permission_node.run(
+                result = self.permission_node.execute(
                     operation="get_user_permissions",
                     user_id=f"user_{user_index}",
                     tenant_id=tenant_id,
@@ -1121,7 +1121,7 @@ class TestAdminNodesPerformanceE2E:
                 )
             elif operation_type == "batch_check":
                 user_index = index % min(100, getattr(self, "num_users", 100))
-                result = self.permission_node.run(
+                result = self.permission_node.execute(
                     operation="batch_check",
                     user_id=f"user_{user_index}",
                     resource_ids=[f"resource_{i}" for i in range(5)],
@@ -1131,7 +1131,7 @@ class TestAdminNodesPerformanceE2E:
                 )
             elif operation_type == "get_effective_permissions":
                 role_index = index % 10  # Assume we have at least 10 roles
-                result = self.role_node.run(
+                result = self.role_node.execute(
                     operation="get_effective_permissions",
                     role_id=f"Role_{role_index}",
                     tenant_id=tenant_id,
@@ -1160,7 +1160,7 @@ class TestAdminNodesPerformanceE2E:
         """Simulate a long-running database operation."""
         try:
             # This would be a complex query in real scenario
-            result = self.role_node.run(
+            result = self.role_node.execute(
                 operation="get_effective_permissions",
                 role_id=f"role_{getattr(self, 'test_run_id', 'default')}_0",
                 tenant_id=tenant_id,
@@ -1231,7 +1231,7 @@ class TestAdminNodesPerformanceE2E:
                 WHERE table_name = $1 AND column_name = 'tenant_id'
                 """
 
-                result = self._db_node.run(
+                result = self._db_node.execute(
                     query=check_query, parameters=[table], result_format="dict"
                 )
 
@@ -1239,19 +1239,19 @@ class TestAdminNodesPerformanceE2E:
                     # Table has tenant_id column, clear test data
                     for tenant in test_tenants:
                         if "%" in tenant:
-                            self._db_node.run(
+                            self._db_node.execute(
                                 query=f"DELETE FROM {table} WHERE tenant_id LIKE $1",
                                 parameters=[tenant],
                             )
                         else:
-                            self._db_node.run(
+                            self._db_node.execute(
                                 query=f"DELETE FROM {table} WHERE tenant_id = $1",
                                 parameters=[tenant],
                             )
                 else:
                     # Table doesn't have tenant_id, try to clear all data if it's a test table
                     if table in ["user_sessions", "permission_cache"]:
-                        self._db_node.run(query=f"TRUNCATE TABLE {table} CASCADE")
+                        self._db_node.execute(query=f"TRUNCATE TABLE {table} CASCADE")
             except Exception as e:
                 # Table might not exist or have different structure
                 print(f"Note: Could not clear {table}: {e}")
@@ -1262,7 +1262,7 @@ class TestAdminNodesPerformanceE2E:
             print("🏗️  Creating unified admin schema...")
 
             # Create users table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id VARCHAR(255) PRIMARY KEY,
@@ -1291,7 +1291,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create roles table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS roles (
                     role_id VARCHAR(255) PRIMARY KEY,
@@ -1316,7 +1316,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create user_role_assignments table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS user_role_assignments (
                     id SERIAL PRIMARY KEY,
@@ -1336,7 +1336,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create permissions table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS permissions (
                     permission_id VARCHAR(255) PRIMARY KEY,
@@ -1357,7 +1357,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create permission_cache table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS permission_cache (
                     cache_key VARCHAR(512) PRIMARY KEY,
@@ -1377,7 +1377,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create user_attributes table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS user_attributes (
                     id SERIAL PRIMARY KEY,
@@ -1400,7 +1400,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create resource_attributes table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS resource_attributes (
                     id SERIAL PRIMARY KEY,
@@ -1424,7 +1424,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create user_sessions table - simplified without gen_random_uuid()
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS user_sessions (
                     session_id VARCHAR(255) PRIMARY KEY,
@@ -1446,7 +1446,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create admin_audit_log table
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS admin_audit_log (
                     id SERIAL PRIMARY KEY,
@@ -1472,7 +1472,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Create admin_schema_version table (needed by schema manager)
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 CREATE TABLE IF NOT EXISTS admin_schema_version (
                     id SERIAL PRIMARY KEY,
@@ -1485,7 +1485,7 @@ class TestAdminNodesPerformanceE2E:
             )
 
             # Insert initial schema version if not exists
-            self._db_node.run(
+            self._db_node.execute(
                 query="""
                 INSERT INTO admin_schema_version (version, description)
                 SELECT '1.0.0', 'Initial performance test schema'
@@ -1532,7 +1532,7 @@ class TestAdminNodesPerformanceE2E:
             for table_name, constraint_name, constraint_sql in constraints_to_check:
                 try:
                     # Check if constraint already exists
-                    check_result = self._db_node.run(
+                    check_result = self._db_node.execute(
                         query="""
                         SELECT constraint_name
                         FROM information_schema.table_constraints
@@ -1544,7 +1544,7 @@ class TestAdminNodesPerformanceE2E:
 
                     if not check_result.get("data"):
                         # Constraint doesn't exist, try to add it
-                        self._db_node.run(query=constraint_sql)
+                        self._db_node.execute(query=constraint_sql)
                         print(f"✓ Added constraint: {constraint_name}")
                     else:
                         print(f"✓ Constraint already exists: {constraint_name}")
@@ -1603,7 +1603,7 @@ class TestAdminNodesPerformanceE2E:
                     # Check if all required columns exist in the table
                     columns_exist = True
                     for column in required_columns:
-                        check_result = self._db_node.run(
+                        check_result = self._db_node.execute(
                             query="""
                             SELECT column_name
                             FROM information_schema.columns
@@ -1622,7 +1622,7 @@ class TestAdminNodesPerformanceE2E:
 
                     if columns_exist:
                         # All columns exist, create the index
-                        self._db_node.run(query=index_sql)
+                        self._db_node.execute(query=index_sql)
                         print(f"✓ Created index on {table_name}")
 
                 except Exception as e:

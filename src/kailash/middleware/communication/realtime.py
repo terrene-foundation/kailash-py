@@ -378,7 +378,7 @@ class WebhookManager:
 
         try:
             # Use HTTPRequestNode for delivery (it handles retries internally)
-            response = self.http_node.run(
+            response = self.http_node.execute(
                 url=url, method="POST", json_data=payload, headers=headers
             )
 

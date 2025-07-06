@@ -10,6 +10,8 @@ Design Philosophy:
 3. Safe parameterized queries
 4. Flexible result formats
 5. Transaction support
+6. Enterprise-grade concurrency control with optimistic locking
+7. Advanced retry mechanisms and conflict resolution
 """
 
 import base64
@@ -28,6 +30,17 @@ from sqlalchemy.pool import QueuePool
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
+
+# Import optimistic locking for enterprise concurrency control
+try:
+    from kailash.nodes.data.optimistic_locking import (
+        ConflictResolution,
+        OptimisticLockingNode,
+    )
+
+    OPTIMISTIC_LOCKING_AVAILABLE = True
+except ImportError:
+    OPTIMISTIC_LOCKING_AVAILABLE = False
 
 
 @register_node()
@@ -174,11 +187,11 @@ class SQLDatabaseNode(Node):
         >>> sql_node = SQLDatabaseNode(connection='customer_db')
         >>>
         >>> # Execute multiple queries with the same node
-        >>> result1 = sql_node.run(
+        >>> result1 = sql_node.execute(
         ...     query='SELECT * FROM customers WHERE active = ?',
         ...     parameters=[True]
         ... )
-        >>> result2 = sql_node.run(
+        >>> result2 = sql_node.execute(
         ...     query='SELECT COUNT(*) as total FROM orders'
         ... )
         >>> # result1['data'] = [
@@ -306,6 +319,41 @@ class SQLDatabaseNode(Node):
                 required=False,
                 description="User context for access control",
             ),
+            # Optimistic Locking Parameters
+            "optimistic_locking": NodeParameter(
+                name="optimistic_locking",
+                type=bool,
+                required=False,
+                default=False,
+                description="Enable optimistic locking for updates",
+            ),
+            "version_field": NodeParameter(
+                name="version_field",
+                type=str,
+                required=False,
+                default="version",
+                description="Name of the version field for optimistic locking",
+            ),
+            "expected_version": NodeParameter(
+                name="expected_version",
+                type=int,
+                required=False,
+                description="Expected version for optimistic locking (required for updates with locking)",
+            ),
+            "conflict_resolution": NodeParameter(
+                name="conflict_resolution",
+                type=str,
+                required=False,
+                default="retry",
+                description="Conflict resolution strategy (fail_fast, retry, merge, last_writer_wins)",
+            ),
+            "max_retries": NodeParameter(
+                name="max_retries",
+                type=int,
+                required=False,
+                default=3,
+                description="Maximum retry attempts for optimistic locking conflicts",
+            ),
         }
 
     @staticmethod
@@ -387,6 +435,10 @@ class SQLDatabaseNode(Node):
 
         # Validate query safety
         self._validate_query_safety(query)
+
+        # Check if optimistic locking should be used
+        if self._should_use_optimistic_locking(kwargs):
+            return self._execute_with_optimistic_locking(kwargs)
 
         # Mask password in connection string for logging
         masked_connection = SQLDatabaseNode._mask_connection_password(
@@ -516,7 +568,7 @@ class SQLDatabaseNode(Node):
 
         # Run the synchronous method in a thread pool to avoid blocking
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, lambda: self.run(**kwargs))
+        return await loop.run_in_executor(None, lambda: self.execute(**kwargs))
 
     @classmethod
     def get_pool_status(cls) -> dict[str, Any]:
@@ -943,3 +995,262 @@ class SQLDatabaseNode(Node):
                 }
                 result.append(serialized_dict)
             return result
+
+    def _should_use_optimistic_locking(self, kwargs: dict) -> bool:
+        """Check if optimistic locking should be used for this operation."""
+        return (
+            OPTIMISTIC_LOCKING_AVAILABLE
+            and kwargs.get("optimistic_locking", False)
+            and self._is_update_query(kwargs.get("query", ""))
+        )
+
+    def _is_update_query(self, query: str) -> bool:
+        """Check if the query is an UPDATE statement."""
+        query_upper = query.strip().upper()
+        return query_upper.startswith("UPDATE")
+
+    def _execute_with_optimistic_locking(self, **kwargs) -> dict[str, Any]:
+        """Execute query with optimistic locking support."""
+        if not OPTIMISTIC_LOCKING_AVAILABLE:
+            raise NodeExecutionError(
+                "Optimistic locking requested but OptimisticLockingNode not available"
+            )
+
+        query = kwargs.get("query", "")
+        expected_version = kwargs.get("expected_version")
+
+        if expected_version is None:
+            raise NodeExecutionError(
+                "expected_version parameter is required when optimistic_locking=True"
+            )
+
+        # Extract table name and record ID from UPDATE query
+        table_info = self._extract_update_info(query, kwargs.get("parameters"))
+
+        if not table_info:
+            raise NodeExecutionError(
+                "Could not extract table and record information from UPDATE query for optimistic locking"
+            )
+
+        # Create optimistic locking node
+        locking_node = OptimisticLockingNode(
+            version_field=kwargs.get("version_field", "version"),
+            max_retries=kwargs.get("max_retries", 3),
+            default_conflict_resolution=kwargs.get("conflict_resolution", "retry"),
+        )
+
+        # Get database connection for the locking node
+        engine = self._get_shared_engine()
+
+        try:
+            with engine.connect() as conn:
+                with conn.begin() as trans:
+                    # Use optimistic locking node to handle the update
+                    locking_result = locking_node.run(
+                        action="update_with_version",
+                        connection=conn,
+                        table_name=table_info["table_name"],
+                        record_id=table_info["record_id"],
+                        update_data=table_info["update_data"],
+                        expected_version=expected_version,
+                        conflict_resolution=kwargs.get("conflict_resolution", "retry"),
+                        version_field=kwargs.get("version_field", "version"),
+                        id_field=table_info.get("id_field", "id"),
+                    )
+
+                    if not locking_result.get("success", False):
+                        # Handle optimistic locking conflicts
+                        status = locking_result.get("status", "unknown_error")
+                        if status == "version_conflict":
+                            raise NodeExecutionError(
+                                f"Version conflict: expected version {expected_version}, "
+                                f"current version {locking_result.get('current_version', 'unknown')}"
+                            )
+                        elif status == "retry_exhausted":
+                            raise NodeExecutionError(
+                                f"Maximum retries exhausted for optimistic locking. "
+                                f"Conflict resolution: {kwargs.get('conflict_resolution', 'retry')}"
+                            )
+                        else:
+                            raise NodeExecutionError(
+                                f"Optimistic locking failed: {locking_result.get('error', 'Unknown error')}"
+                            )
+
+                    # Return enhanced result with locking information
+                    return {
+                        "data": [],  # UPDATE queries typically don't return data
+                        "row_count": locking_result.get("rows_affected", 0),
+                        "columns": [],
+                        "execution_time": locking_result.get("execution_time", 0),
+                        "optimistic_locking": {
+                            "used": True,
+                            "old_version": expected_version,
+                            "new_version": locking_result.get("new_version"),
+                            "retry_count": locking_result.get("retry_count", 0),
+                            "conflict_resolution": kwargs.get(
+                                "conflict_resolution", "retry"
+                            ),
+                            "status": locking_result.get("status", "success"),
+                        },
+                    }
+
+        except Exception as e:
+            if "Version conflict" in str(e) or "retry exhausted" in str(e):
+                # Re-raise optimistic locking specific errors
+                raise
+            else:
+                # Wrap other database errors
+                raise NodeExecutionError(
+                    f"Database error during optimistic locking: {str(e)}"
+                )
+
+    def _extract_update_info(self, query: str, parameters: Any) -> Optional[dict]:
+        """Extract table name, record ID, and update data from UPDATE query.
+
+        This is a simplified parser for common UPDATE patterns.
+        For production use, consider using a proper SQL parser.
+        """
+        import re
+
+        # Simple regex to extract UPDATE table_name SET ... WHERE id = ?
+        # This is a basic implementation - for production, use a proper SQL parser
+        update_pattern = r"UPDATE\s+(\w+)\s+SET\s+(.*?)\s+WHERE\s+(\w+)\s*=\s*[?$:]"
+
+        match = re.search(update_pattern, query.upper(), re.IGNORECASE | re.DOTALL)
+        if not match:
+            return None
+
+        table_name = match.group(1).lower()
+        set_clause = match.group(2)
+        id_field = match.group(3).lower()
+
+        # Extract update data from SET clause
+        # This is simplified - assumes basic "field = ?" patterns
+        update_data = {}
+        set_parts = [part.strip() for part in set_clause.split(",")]
+
+        param_index = 0
+        for part in set_parts:
+            if "=" in part:
+                field_name = part.split("=")[0].strip()
+                # Skip version field as it's handled by optimistic locking
+                if field_name.lower() != "version":
+                    if isinstance(parameters, list) and param_index < len(parameters):
+                        update_data[field_name] = parameters[param_index]
+                        param_index += 1
+                    elif isinstance(parameters, dict):
+                        # For named parameters, this gets more complex
+                        # For now, we'll skip this case
+                        pass
+
+        # Extract record ID from parameters
+        # Assume the WHERE clause parameter is the last one for positional params
+        record_id = None
+        if isinstance(parameters, list) and parameters:
+            record_id = parameters[-1]  # Assume last parameter is the ID
+        elif isinstance(parameters, dict):
+            # Look for common ID field names in parameters
+            for id_candidate in ["id", id_field, "record_id"]:
+                if id_candidate in parameters:
+                    record_id = parameters[id_candidate]
+                    break
+
+        if record_id is None:
+            return None
+
+        return {
+            "table_name": table_name,
+            "record_id": record_id,
+            "update_data": update_data,
+            "id_field": id_field,
+        }
+
+    def _execute_with_optimistic_locking(self, kwargs: dict) -> dict:
+        """Execute query using optimistic locking for enhanced concurrency control."""
+        if not OPTIMISTIC_LOCKING_AVAILABLE:
+            raise NodeExecutionError(
+                "OptimisticLockingNode not available. Cannot use optimistic locking."
+            )
+
+        query = kwargs.get("query")
+        parameters = kwargs.get("parameters")
+
+        # Extract update information from the query
+        update_info = self._extract_update_info(query, parameters)
+        if not update_info:
+            raise NodeExecutionError(
+                "Could not extract update information for optimistic locking. "
+                "Query might be too complex or not an UPDATE statement."
+            )
+
+        # Get database connection
+        engine = self._get_shared_engine()
+
+        try:
+            with engine.connect() as conn:
+                # Create optimistic locking node instance
+                locking_node = OptimisticLockingNode(
+                    version_field=kwargs.get("version_field", "version"),
+                    max_retries=kwargs.get("max_retries", 3),
+                    default_conflict_resolution=ConflictResolution(
+                        kwargs.get("conflict_resolution", "retry")
+                    ),
+                )
+
+                # First, read the current record with version
+                read_kwargs = {
+                    "action": "read_with_version",
+                    "connection": conn,
+                    "table_name": update_info["table_name"],
+                    "record_id": update_info["record_id"],
+                    "version_field": kwargs.get("version_field", "version"),
+                    "id_field": update_info["id_field"],
+                }
+
+                # Execute synchronously by calling async_run directly
+                import asyncio
+
+                read_result = asyncio.run(locking_node.async_run(**read_kwargs))
+
+                if not read_result.get("success"):
+                    raise NodeExecutionError(
+                        f"Failed to read record for optimistic locking: {read_result.get('error')}"
+                    )
+
+                current_version = read_result["version"]
+
+                # Now perform the update with version check
+                update_kwargs = {
+                    "action": "update_with_version",
+                    "connection": conn,
+                    "table_name": update_info["table_name"],
+                    "record_id": update_info["record_id"],
+                    "update_data": update_info["update_data"],
+                    "expected_version": current_version,
+                    "conflict_resolution": kwargs.get("conflict_resolution", "retry"),
+                    "version_field": kwargs.get("version_field", "version"),
+                    "id_field": update_info["id_field"],
+                }
+
+                # Execute the update with optimistic locking
+                update_result = asyncio.run(locking_node.async_run(**update_kwargs))
+
+                if not update_result.get("success"):
+                    raise NodeExecutionError(
+                        f"Optimistic locking update failed: {update_result.get('error')}"
+                    )
+
+                # Return result in SQLDatabaseNode format
+                return {
+                    "data": [],  # UPDATE queries don't return data
+                    "row_count": update_result.get("rows_affected", 1),
+                    "columns": [],
+                    "execution_time": update_result.get("execution_time", 0.0),
+                    "optimistic_locking_used": True,
+                    "version_before": current_version,
+                    "version_after": update_result.get("new_version"),
+                    "retry_count": update_result.get("retry_count", 0),
+                }
+
+        except Exception as e:
+            raise NodeExecutionError(f"Optimistic locking execution failed: {str(e)}")

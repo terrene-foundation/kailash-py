@@ -201,14 +201,50 @@ class MCPServerBase(ABC):
     def _init_mcp(self):
         """Initialize the FastMCP instance."""
         try:
-            from mcp.server import FastMCP
+            # Try independent FastMCP package first (when available)
+            from fastmcp import FastMCP
 
             self._mcp = FastMCP(self.name)
         except ImportError:
-            logger.error(
-                "FastMCP not available. Install with: pip install 'mcp[server]'"
-            )
-            raise
+            logger.warning("FastMCP not available, using fallback mode")
+            # Use same fallback as MCPServer
+            self._mcp = self._create_fallback_server()
+
+    def _create_fallback_server(self):
+        """Create a fallback server when FastMCP is not available."""
+
+        class FallbackMCPServer:
+            def __init__(self, name: str):
+                self.name = name
+                self._tools = {}
+                self._resources = {}
+                self._prompts = {}
+
+            def tool(self, *args, **kwargs):
+                def decorator(func):
+                    self._tools[func.__name__] = func
+                    return func
+
+                return decorator
+
+            def resource(self, uri):
+                def decorator(func):
+                    self._resources[uri] = func
+                    return func
+
+                return decorator
+
+            def prompt(self, name):
+                def decorator(func):
+                    self._prompts[name] = func
+                    return func
+
+                return decorator
+
+            def run(self, **kwargs):
+                raise NotImplementedError("FastMCP not available")
+
+        return FallbackMCPServer(self.name)
 
     def start(self):
         """Start the MCP server.
@@ -470,21 +506,85 @@ class MCPServer:
             return
 
         try:
-            # Now we can safely import from external mcp.server (no namespace collision)
-            from mcp.server import FastMCP
+            # Try independent FastMCP package first (when available)
+            from fastmcp import FastMCP
 
             self._mcp = FastMCP(self.name)
             logger.info(f"Initialized FastMCP server: {self.name}")
-        except ImportError as e:
-            logger.error(
-                f"FastMCP import failed with: {e}. Details: {type(e).__name__}"
-            )
-            logger.error(
-                "FastMCP not available. Install with: pip install 'mcp[server]'"
-            )
-            raise ImportError(
-                "FastMCP not available. Install with: pip install 'mcp[server]'"
-            ) from e
+        except ImportError as e1:
+            logger.warning(f"Independent FastMCP not available: {e1}")
+            try:
+                # Fallback to official MCP FastMCP (when fixed)
+                from mcp.server import FastMCP
+
+                self._mcp = FastMCP(self.name)
+                logger.info(f"Initialized official FastMCP server: {self.name}")
+            except ImportError as e2:
+                logger.warning(f"Official FastMCP not available: {e2}")
+                # Final fallback: Create a minimal FastMCP-compatible wrapper
+                logger.info(f"Using low-level MCP Server fallback for: {self.name}")
+                self._mcp = self._create_fallback_server()
+
+    def _create_fallback_server(self):
+        """Create a fallback server when FastMCP is not available."""
+        logger.info("Creating fallback server implementation")
+
+        class FallbackMCPServer:
+            """Minimal FastMCP-compatible server for when FastMCP is unavailable."""
+
+            def __init__(self, name: str):
+                self.name = name
+                self._tools = {}
+                self._resources = {}
+                self._prompts = {}
+                logger.info(f"Fallback MCP server '{name}' initialized")
+
+            def tool(self, *args, **kwargs):
+                """Tool decorator that stores tool registration."""
+
+                def decorator(func):
+                    tool_name = func.__name__
+                    self._tools[tool_name] = func
+                    logger.debug(f"Registered fallback tool: {tool_name}")
+                    return func
+
+                return decorator
+
+            def resource(self, uri):
+                """Resource decorator that stores resource registration."""
+
+                def decorator(func):
+                    self._resources[uri] = func
+                    logger.debug(f"Registered fallback resource: {uri}")
+                    return func
+
+                return decorator
+
+            def prompt(self, name):
+                """Prompt decorator that stores prompt registration."""
+
+                def decorator(func):
+                    self._prompts[name] = func
+                    logger.debug(f"Registered fallback prompt: {name}")
+                    return func
+
+                return decorator
+
+            def run(self, **kwargs):
+                """Placeholder run method."""
+                logger.warning(
+                    f"Fallback server '{self.name}' run() called - FastMCP features limited"
+                )
+                logger.info(
+                    f"Registered: {len(self._tools)} tools, {len(self._resources)} resources, {len(self._prompts)} prompts"
+                )
+                # In a real implementation, we would set up low-level MCP protocol here
+                raise NotImplementedError(
+                    "Full MCP protocol not implemented in fallback mode. "
+                    "Install 'fastmcp>=2.10.0' or wait for official MCP package fix."
+                )
+
+        return FallbackMCPServer(self.name)
 
     def tool(
         self,
@@ -1534,6 +1634,131 @@ class MCPServer:
             self._running = False
 
 
-# Backward compatibility aliases
-EnhancedMCPServer = MCPServer  # For backward compatibility
-SimpleMCPServer = MCPServer  # For backward compatibility
+class SimpleMCPServer(MCPServerBase):
+    """Simple MCP Server for prototyping and development.
+
+    This is a lightweight version of MCPServer without authentication,
+    metrics, caching, or other production features. Perfect for:
+    - Quick prototyping
+    - Development and testing
+    - Simple use cases without advanced features
+
+    Example:
+        >>> server = SimpleMCPServer("my-prototype")
+        >>> @server.tool()
+        ... def hello(name: str) -> str:
+        ...     return f"Hello, {name}!"
+        >>> server.run()
+    """
+
+    def __init__(self, name: str, description: str = None):
+        """Initialize simple MCP server.
+
+        Args:
+            name: Server name
+            description: Server description
+        """
+        super().__init__(name, description)
+
+        # Disable all advanced features for simplicity
+        self.enable_cache = False
+        self.enable_metrics = False
+        self.enable_http_transport = False
+        self.rate_limit_config = None
+        self.circuit_breaker_config = None
+        self.auth_provider = None
+
+        # Simple in-memory storage
+        self._simple_tools = {}
+        self._simple_resources = {}
+        self._simple_prompts = {}
+
+        logger.info(f"SimpleMCPServer '{name}' initialized for prototyping")
+
+    def setup(self):
+        """Setup method - no additional setup needed for SimpleMCPServer."""
+        pass
+
+    def tool(self, description: str = None):
+        """Register a simple tool (no auth, caching, or metrics).
+
+        Args:
+            description: Tool description
+
+        Returns:
+            Decorator function
+        """
+
+        def decorator(func):
+            # Initialize MCP if needed
+            if self._mcp is None:
+                self._init_mcp()
+
+            tool_name = func.__name__
+            self._simple_tools[tool_name] = {
+                "function": func,
+                "description": description or f"Tool: {tool_name}",
+                "created_at": time.time(),
+            }
+
+            # Register with FastMCP
+            self._mcp.tool(description or f"Tool: {tool_name}")(func)
+
+            logger.debug(f"SimpleMCPServer: Registered tool '{tool_name}'")
+            return func
+
+        return decorator
+
+    def resource(self, uri: str, description: str = None):
+        """Register a simple resource.
+
+        Args:
+            uri: Resource URI
+            description: Resource description
+
+        Returns:
+            Decorator function
+        """
+
+        def decorator(func):
+            # Initialize MCP if needed
+            if self._mcp is None:
+                self._init_mcp()
+
+            self._simple_resources[uri] = {
+                "function": func,
+                "description": description or f"Resource: {uri}",
+                "created_at": time.time(),
+            }
+
+            # Register with FastMCP
+            self._mcp.resource(uri, description or f"Resource: {uri}")(func)
+
+            logger.debug(f"SimpleMCPServer: Registered resource '{uri}'")
+            return func
+
+        return decorator
+
+    def get_stats(self) -> dict:
+        """Get simple server statistics.
+
+        Returns:
+            Dictionary with basic stats
+        """
+        return {
+            "server_name": self.name,
+            "server_type": "SimpleMCPServer",
+            "tools_count": len(self._simple_tools),
+            "resources_count": len(self._simple_resources),
+            "prompts_count": len(self._simple_prompts),
+            "features": {
+                "authentication": False,
+                "caching": False,
+                "metrics": False,
+                "rate_limiting": False,
+                "circuit_breaker": False,
+            },
+        }
+
+
+# Note: EnhancedMCPServer alias removed - use MCPServer directly

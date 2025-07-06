@@ -110,7 +110,7 @@ class TestMCPBugFixUserFlow:
         agent = LLMAgentNode(name="mcp_context_agent")
 
         # User configures with MCP servers and context
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[
@@ -143,7 +143,7 @@ class TestMCPBugFixUserFlow:
         agent = LLMAgentNode(name="multi_mcp_agent")
 
         # User configures multiple MCP servers
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[{"role": "user", "content": "Analyze this data"}],
@@ -167,7 +167,7 @@ class TestMCPBugFixUserFlow:
         agent = LLMAgentNode(name="error_recovery_agent")
 
         # User provides invalid MCP configuration
-        result = agent.run(
+        result = agent.execute(
             provider="ollama",
             model="llama3.2:1b",
             messages=[{"role": "user", "content": "This should still work"}],

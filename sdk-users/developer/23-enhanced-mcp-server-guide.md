@@ -1,10 +1,20 @@
-# Enhanced MCP Server Guide
+# Production MCP Server Guide
 
 *Enterprise-grade MCP server with authentication, caching, and monitoring*
 
 ## Overview
 
-The Enhanced MCP Server (`MCPServer`) provides production-ready Model Context Protocol server capabilities built on Anthropic's FastMCP framework. It includes enterprise features like authentication, caching, metrics, circuit breakers, and advanced content handling.
+The Production MCP Server (`MCPServer`) provides enterprise-ready Model Context Protocol server capabilities with a hybrid implementation that uses the best available MCP backend. It includes production features like authentication, caching, metrics, circuit breakers, and advanced content handling.
+
+For prototyping and development, see the [SimpleMCPServer](#simple-server-for-prototyping) section or the [MCP Integration Cheatsheet](../cheatsheet/025-mcp-integration.md).
+
+## Server Types
+
+| Server Type | Use Case | Features |
+|-------------|----------|----------|
+| **MCPServer** | Production, enterprise | Auth, caching, metrics, rate limiting, circuit breakers |
+| **SimpleMCPServer** | Prototyping, learning | Basic MCP functionality only |
+| **MiddlewareMCPServer** | Kailash integration | SDK nodes, workflows, events |
 
 ## Prerequisites
 
@@ -369,6 +379,75 @@ server.update_tool_config("analytics_tool", {
     "cache_ttl": 1800,  # 30 minutes
     "timeout": 60.0
 })
+```
+
+## Simple Server for Prototyping
+
+### SimpleMCPServer Overview
+
+For prototyping, learning, and development scenarios, use `SimpleMCPServer` which provides basic MCP functionality without enterprise features:
+
+```python
+from kailash.mcp_server import SimpleMCPServer
+
+# Lightweight server for development
+server = SimpleMCPServer("my-prototype")
+
+@server.tool("Simple greeting")
+def hello(name: str) -> str:
+    """Basic tool for prototyping."""
+    return f"Hello, {name}!"
+
+@server.tool("Echo data")
+def echo(data: dict) -> dict:
+    """Echo data for testing."""
+    return {"echoed": data, "received_at": time.time()}
+
+if __name__ == "__main__":
+    server.run()
+```
+
+### When to Use SimpleMCPServer
+
+```python
+# Use SimpleMCPServer for:
+# ✅ Prototyping new MCP tools
+# ✅ Learning MCP concepts
+# ✅ Development and testing
+# ✅ Simple use cases
+# ✅ Fast iteration
+
+# Use MCPServer for:
+# ✅ Production deployments
+# ✅ Enterprise applications
+# ✅ Authentication required
+# ✅ Performance monitoring needed
+# ✅ Caching and rate limiting required
+```
+
+### Migration from Simple to Production
+
+```python
+# Step 1: Start with SimpleMCPServer
+simple_server = SimpleMCPServer("prototype")
+
+@simple_server.tool()
+def my_tool(data: str) -> dict:
+    return {"result": data}
+
+# Step 2: Upgrade to MCPServer for production
+from kailash.mcp_server.auth import APIKeyAuth
+
+production_server = MCPServer(
+    "production",
+    enable_cache=True,
+    auth_provider=APIKeyAuth({"prod-key": "secret"})
+)
+
+# Same tool, now with production features
+@production_server.tool(cache_ttl=300, required_permission="data.process")
+async def my_tool(data: str) -> dict:
+    return {"result": data}
 ```
 
 ## Error Handling

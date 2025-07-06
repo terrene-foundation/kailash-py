@@ -171,13 +171,13 @@ async def example_1_basic_strategy_usage():
 
         try:
             # Index documents
-            index_result = await strategy_node.run(
+            index_result = await strategy_node.execute(
                 documents=documents, operation="index"
             )
             print(f"✅ Indexing completed: {index_result.get('status', 'unknown')}")
 
             # Test retrieval
-            retrieval_result = await strategy_node.run(
+            retrieval_result = await strategy_node.execute(
                 query="How to train a machine learning model?", operation="retrieve"
             )
             print(f"✅ Retrieved {len(retrieval_result.get('results', []))} documents")
@@ -367,7 +367,7 @@ async def example_3_llm_driven_routing():
 
     try:
         # Get strategy recommendation
-        routing_result = await rag_router.run(
+        routing_result = await rag_router.execute(
             documents=documents,
             query="How do I implement and evaluate machine learning models?",
             user_preferences={"priority": "accuracy", "domain": "machine_learning"},
@@ -392,8 +392,10 @@ async def example_3_llm_driven_routing():
         print(f"\n🎯 Executing {recommended_strategy} strategy...")
 
         # Index and retrieve
-        index_result = await strategy_node.run(documents=documents, operation="index")
-        retrieval_result = await strategy_node.run(
+        index_result = await strategy_node.execute(
+            documents=documents, operation="index"
+        )
+        retrieval_result = await strategy_node.execute(
             query="How do I implement and evaluate machine learning models?",
             operation="retrieve",
         )
@@ -430,7 +432,7 @@ async def example_4_adaptive_workflow():
 
     try:
         # Let the adaptive system handle everything
-        result = await adaptive_rag.run(
+        result = await adaptive_rag.execute(
             documents=documents,
             query="Explain machine learning implementation best practices",
         )
@@ -492,7 +494,7 @@ async def example_5_performance_monitoring():
 
         try:
             # Index documents
-            await strategy_node.run(documents=documents, operation="index")
+            await strategy_node.execute(documents=documents, operation="index")
 
             strategy_performance = []
 
@@ -502,17 +504,19 @@ async def example_5_performance_monitoring():
                 start_time = time.time()
 
                 # Retrieve results
-                rag_result = await strategy_node.run(query=query, operation="retrieve")
+                rag_result = await strategy_node.execute(
+                    query=query, operation="retrieve"
+                )
 
                 execution_time = time.time() - start_time
 
                 # Analyze quality
-                quality_result = await quality_analyzer.run(
+                quality_result = await quality_analyzer.execute(
                     rag_results=rag_result, query=query
                 )
 
                 # Monitor performance
-                performance_result = await performance_monitor.run(
+                performance_result = await performance_monitor.execute(
                     rag_results=rag_result,
                     execution_time=execution_time,
                     strategy_used=strategy_name,

@@ -58,7 +58,7 @@ class PrivacyPreservingRAGNode(WorkflowNode):
         )
 
         # Query with sensitive information
-        result = await private_rag.run(
+        result = await private_rag.execute(
             query="What is John Smith's diagnosis based on symptoms X, Y, Z?",
             documents=medical_records,
             user_consent={"data_usage": True, "retention_days": 7}
@@ -608,7 +608,7 @@ class SecureMultiPartyRAGNode(Node):
         )
 
         # Each party contributes encrypted data
-        result = await smpc_rag.run(
+        result = await smpc_rag.execute(
             query="Average treatment success rate",
             party_data={
                 "hospital_a": encrypted_data_a,
@@ -800,7 +800,7 @@ class ComplianceRAGNode(Node):
             default_retention_days=30
         )
 
-        result = await compliance_rag.run(
+        result = await compliance_rag.execute(
             query="Patient symptoms analysis",
             user_consent={
                 "purpose": "medical_diagnosis",

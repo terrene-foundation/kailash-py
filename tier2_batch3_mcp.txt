@@ -1,0 +1,77 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-8.4.1, pluggy-1.6.0 -- ./repos/projects/kailash_python_sdk/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: ./repos/projects/kailash_python_sdk
+configfile: pytest.ini
+plugins: anyio-4.9.0, Faker-37.4.0, xdist-3.8.0, timeout-2.4.0, cov-6.2.1, split-0.10.0, asyncio-1.0.0
+timeout: 180.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 55 items
+
+tests/integration/mcp_server/test_fastmcp_integration.py::TestFastMCPImportFix::test_enhanced_mcp_server_import_no_error PASSED [  1%]
+tests/integration/mcp_server/test_fastmcp_integration.py::TestFastMCPImportFix::test_enhanced_mcp_server_creation PASSED [  3%]
+tests/integration/mcp_server/test_fastmcp_integration.py::TestFastMCPImportFix::test_init_mcp_method_exists_and_correct PASSED [  5%]
+tests/integration/mcp_server/test_fastmcp_integration.py::TestFastMCPImportFix::test_tool_decorator_available PASSED [  7%]
+tests/integration/mcp_server/test_fastmcp_integration.py::TestFastMCPImportFix::test_resource_decorator_available PASSED [  9%]
+tests/integration/mcp_server/test_fastmcp_integration.py::TestFastMCPImportFix::test_error_scenario_user_reported PASSED [ 10%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_in_sync_context PASSED [ 12%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_in_async_context PASSED [ 14%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_in_jupyter_like_environment PASSED [ 16%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_concurrent_calls PASSED [ 18%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_timeout_behavior PASSED [ 20%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_error_recovery PASSED [ 21%]
+tests/integration/mcp_server/test_llm_agent_integration.py::TestLLMAgentMCPRealIntegration::test_mcp_with_real_llm SKIPPED [ 23%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_server_creation PASSED [ 25%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_server_tool_registration PASSED [ 27%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_server_resource_registration PASSED [ 29%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_client_creation PASSED [ 30%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_client_connection_handling PASSED [ 32%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_authentication_integration PASSED [ 34%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_service_discovery_integration PASSED [ 36%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_service_discovery_with_filters PASSED [ 38%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_convenience_functions PASSED [ 40%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_error_handling_integration PASSED [ 41%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_server_with_real_auth PASSED [ 43%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_metrics_collection PASSED [ 45%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_with_docker_services SKIPPED [ 47%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_server_lifecycle PASSED [ 49%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPServerIntegration::test_mcp_client_server_communication PASSED [ 50%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_with_multiple_backends PASSED [ 52%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_health_monitoring PASSED [ 54%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_load_balancing PASSED [ 56%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_service_mesh PASSED [ 58%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_configuration_validation PASSED [ 60%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_error_recovery PASSED [ 61%]
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_concurrent_operations PASSED [ 63%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_mcp_server_with_redis_cache SKIPPED [ 65%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_service_discovery_with_file_backend PASSED [ 67%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_mcp_server_with_http_api PASSED [ 69%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_oauth_with_real_tokens PASSED [ 70%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_websocket_transport_localhost PASSED [ 72%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_streamable_http_with_real_endpoints SKIPPED [ 74%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestRealMCPServerIntegration::test_file_based_discovery_concurrent_access PASSED [ 76%]
+tests/integration/mcp_server/test_mcp_real_server_integration.py::TestMCPHealthChecking::test_http_health_check PASSED [ 78%]
+tests/integration/mcp_server/test_mcp_stress_testing.py::TestMCPStressTesting::test_concurrent_tool_execution PASSED [ 80%]
+tests/integration/mcp_server/test_mcp_stress_testing.py::TestMCPStressTesting::test_memory_pressure_handling PASSED [ 81%]
+tests/integration/mcp_server/test_mcp_stress_testing.py::TestMCPStressTesting::test_connection_pool_exhaustion PASSED [ 83%]
+tests/integration/mcp_server/test_mcp_stress_testing.py::TestMCPStressTesting::test_cache_stampede_prevention PASSED [ 85%]
+tests/integration/mcp_server/test_mcp_stress_testing.py::TestMCPStressTesting::test_graceful_degradation PASSED [ 87%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_mcp_server_with_real_tools SKIPPED [ 89%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_mcp_server_with_real_auth SKIPPED [ 90%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_mcp_server_discovery_integration SKIPPED [ 92%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_mcp_server_with_real_cache SKIPPED [ 94%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_llm_agent_mcp_integration_real SKIPPED [ 96%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_mcp_server_error_handling_real SKIPPED [ 98%]
+tests/integration/mcp_server/test_server_integration.py::TestMCPServerIntegrationCompliant::test_mcp_server_metrics_real SKIPPED [100%]
+
+=============================== warnings summary ===============================
+tests/integration/mcp_server/test_mcp_comprehensive_integration.py::TestMCPAdvancedIntegration::test_mcp_health_monitoring
+  ./repos/projects/kailash_python_sdk/src/kailash/mcp_server/discovery.py:970: RuntimeWarning: coroutine 'HealthChecker.stop' was never awaited
+    self.health_checker.stop()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 44 passed, 11 skipped, 1 warning in 9.53s ===================

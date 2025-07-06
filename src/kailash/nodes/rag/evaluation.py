@@ -57,7 +57,7 @@ class RAGEvaluationNode(WorkflowNode):
         )
 
         # Evaluate a RAG system
-        results = await evaluator.run(
+        results = await evaluator.execute(
             test_queries=[
                 {"query": "What is transformer architecture?",
                  "reference": "Transformers use self-attention..."},
@@ -461,7 +461,7 @@ class RAGBenchmarkNode(Node):
             concurrent_users=[1, 5, 10]
         )
 
-        results = await benchmark.run(
+        results = await benchmark.execute(
             rag_systems={"system_a": rag_a, "system_b": rag_b},
             test_queries=queries
         )
@@ -674,7 +674,7 @@ class TestDatasetGeneratorNode(Node):
             difficulty_levels=["easy", "medium", "hard"]
         )
 
-        dataset = generator.run(
+        dataset = generator.execute(
             num_samples=100,
             domain="machine learning"
         )

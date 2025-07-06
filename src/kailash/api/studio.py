@@ -908,7 +908,7 @@ def main():
 
     # Create and run API
     api = WorkflowStudioAPI(tenant_id=args.tenant_id)
-    api.run(host=args.host, port=args.port)
+    api.execute(host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

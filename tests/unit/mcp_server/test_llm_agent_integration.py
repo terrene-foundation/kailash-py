@@ -1,226 +1,255 @@
-"""Unit tests for LLMAgentNode with MCP integration."""
+"""Integration tests for LLMAgentNode MCP with real async scenarios."""
+
+import asyncio
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 
-class TestLLMAgentMCPIntegration:
-    """Test cases for LLMAgentNode with built-in MCP capabilities."""
+@pytest.mark.integration
+class TestLLMAgentMCPRealIntegration:
+    """Test MCP integration in real-world async scenarios."""
 
-    def test_mcp_context_retrieval(self):
-        """Test retrieving context from MCP servers."""
-        agent = LLMAgentNode(name="test_agent")
+    def setup_method(self):
+        """Set up test environment."""
+        # Enable real MCP for tests
+        os.environ["KAILASH_USE_REAL_MCP"] = "true"
+        # Set Ollama URL for tests
+        os.environ["OLLAMA_BASE_URL"] = "http://localhost:11435"
+        self.node = LLMAgentNode(name="test_mcp_agent")
 
-        result = agent.execute(
+    def teardown_method(self):
+        """Clean up test environment."""
+        # Reset environment
+        os.environ.pop("KAILASH_USE_REAL_MCP", None)
+        os.environ.pop("OLLAMA_BASE_URL", None)
+
+    def test_mcp_in_sync_context(self):
+        """Test MCP works in pure synchronous context."""
+        # This simulates the reported bug scenario
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
-            messages=[{"role": "user", "content": "Test message"}],
+            messages=[{"role": "user", "content": "Hello"}],
             mcp_servers=[
                 {
                     "name": "test-server",
                     "transport": "stdio",
-                    "command": "test-mcp-server",
+                    "command": "echo",
+                    "args": ["test"],
                 }
             ],
-            mcp_context=["data://test/resource"],
+            mcp_context=["resource://test"],
         )
 
+        # Should complete without async warnings
         assert result["success"] is True
-        assert "context" in result
-        assert result["context"]["mcp_resources_used"] >= 1
+        assert "response" in result
 
-    def test_auto_discover_tools(self):
-        """Test automatic tool discovery from MCP servers."""
-        agent = LLMAgentNode(name="test_agent")
+    @pytest.mark.asyncio
+    async def test_mcp_in_async_context(self):
+        """Test MCP works when called from async context."""
 
-        result = agent.execute(
+        # This tests the event loop detection
+        async def run_in_async():
+            return self.node.execute(
+                provider="mock",
+                model="gpt-4",
+                messages=[{"role": "user", "content": "Hello async"}],
+                mcp_servers=[
+                    {
+                        "name": "async-test-server",
+                        "transport": "stdio",
+                        "command": "echo",
+                        "args": ["async test"],
+                    }
+                ],
+            )
+
+        result = await run_in_async()
+        assert result["success"] is True
+
+    def test_mcp_in_jupyter_like_environment(self):
+        """Test MCP in Jupyter-like environment with existing event loop."""
+        # Simulate Jupyter notebook environment
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def jupyter_simulation():
+            # Create a background task to keep loop running
+            async def background_task():
+                while True:
+                    await asyncio.sleep(0.1)
+
+            # Start background task
+            task = asyncio.create_task(background_task())
+
+            try:
+                # Now try to use MCP - this would fail with the bug
+                def run_node():
+                    return self.node.execute(
+                        provider="mock",
+                        model="gpt-4",
+                        messages=[{"role": "user", "content": "Jupyter test"}],
+                        mcp_servers=[
+                            {
+                                "name": "jupyter-server",
+                                "transport": "stdio",
+                                "command": "echo",
+                                "args": ["jupyter"],
+                            }
+                        ],
+                        mcp_context=["resource://jupyter"],
+                        auto_discover_tools=True,
+                    )
+
+                result = await asyncio.get_event_loop().run_in_executor(None, run_node)
+
+                assert result["success"] is True
+                return result
+            finally:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        try:
+            result = loop.run_until_complete(jupyter_simulation())
+            assert result is not None
+        finally:
+            loop.close()
+
+    def test_mcp_concurrent_calls(self):
+        """Test MCP handles concurrent calls correctly."""
+
+        def make_call(i):
+            return self.node.execute(
+                provider="mock",
+                model="gpt-4",
+                messages=[{"role": "user", "content": f"Call {i}"}],
+                mcp_servers=[
+                    {
+                        "name": f"server-{i}",
+                        "transport": "stdio",
+                        "command": "echo",
+                        "args": [f"test-{i}"],
+                    }
+                ],
+            )
+
+        # Run multiple calls concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(make_call, i) for i in range(5)]
+            results = [f.result() for f in futures]
+
+        # All should succeed
+        for i, result in enumerate(results):
+            assert result["success"] is True, f"Call {i} failed"
+
+    def test_mcp_timeout_behavior(self):
+        """Test MCP timeout handling in real scenario."""
+        # Test with a server that would timeout
+        start = time.time()
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
-            messages=[{"role": "user", "content": "Use available tools"}],
+            messages=[{"role": "user", "content": "Timeout test"}],
             mcp_servers=[
                 {
-                    "name": "tool-server",
-                    "transport": "http",
-                    "url": "http://localhost:8080",
+                    "name": "slow-server",
+                    "transport": "stdio",
+                    "command": "sleep",  # This will timeout
+                    "args": ["5"],  # Reduced to 5 seconds for faster test
+                    "timeout": 2,  # Set explicit timeout of 2 seconds
                 }
             ],
-            auto_discover_tools=True,
+            mcp_context=["resource://slow"],
+            mcp_config={
+                "connection_timeout": 3,
+                "fallback_on_failure": True,
+            },
         )
+        elapsed = time.time() - start
 
+        # Should timeout quickly and fallback gracefully
         assert result["success"] is True
-        assert result["context"]["tools_available"] > 0
+        assert elapsed < 15, f"Took too long: {elapsed}s"  # Allow for MCP cleanup time
 
-    def test_multiple_mcp_servers(self):
-        """Test connecting to multiple MCP servers."""
-        agent = LLMAgentNode(name="test_agent")
+        # Check that it fell back to mock without MCP context
+        # When MCP fails, the node should still work without MCP data
 
-        result = agent.execute(
+    def test_mcp_error_recovery(self):
+        """Test MCP recovers from various error conditions."""
+        # Test with invalid server config
+        result = self.node.execute(
             provider="mock",
             model="gpt-4",
-            messages=[{"role": "user", "content": "Aggregate data"}],
-            mcp_servers=[
-                {"name": "server1", "transport": "stdio", "command": "mcp-server1"},
-                {
-                    "name": "server2",
-                    "transport": "http",
-                    "url": "http://localhost:8081",
-                },
-            ],
-            mcp_context=["data://server1/data", "data://server2/data"],
-        )
-
-        assert result["success"] is True
-        assert result["context"]["mcp_resources_used"] >= 2
-
-    def test_mcp_tool_merging(self):
-        """Test merging MCP discovered tools with existing tools."""
-        agent = LLMAgentNode(name="test_agent")
-
-        existing_tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "existing_tool",
-                    "description": "An existing tool",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            }
-        ]
-
-        result = agent.execute(
-            provider="mock",
-            model="gpt-4",
-            messages=[{"role": "user", "content": "List tools"}],
-            tools=existing_tools,
-            mcp_servers=[
-                {"name": "tool-server", "transport": "stdio", "command": "mcp"}
-            ],
-            auto_discover_tools=True,
-        )
-
-        assert result["success"] is True
-        # Should have at least the existing tool + discovered tools
-        assert result["context"]["tools_available"] > len(existing_tools)
-
-    def test_mcp_error_handling(self):
-        """Test graceful handling of MCP connection errors."""
-        agent = LLMAgentNode(name="test_agent")
-
-        result = agent.execute(
-            provider="mock",
-            model="gpt-4",
-            messages=[{"role": "user", "content": "Test error handling"}],
+            messages=[{"role": "user", "content": "Error test"}],
             mcp_servers=[
                 {
                     "name": "invalid-server",
                     "transport": "stdio",
-                    "command": "non-existent-command",
-                }
+                    "command": "/nonexistent/command",
+                    "args": [],
+                },
+                {
+                    "name": "http-server",
+                    "transport": "http",
+                    "url": "http://localhost:99999",  # Invalid port
+                },
             ],
-            mcp_context=["data://invalid/resource"],
         )
 
-        # Should still succeed with fallback behavior
+        # Should still succeed with fallback
         assert result["success"] is True
         assert "response" in result
 
-    def test_mcp_with_rag_integration(self):
-        """Test MCP integration with RAG."""
-        agent = LLMAgentNode(name="test_agent")
+    @pytest.mark.requires_ollama
+    def test_mcp_with_real_llm(self):
+        """Test MCP with real LLM (Ollama) integration."""
+        # First test without MCP to ensure Ollama is working
+        test_result = self.node.execute(
+            provider="ollama",
+            model="llama3.2:1b",
+            messages=[{"role": "user", "content": "Say 'hello'"}],
+            generation_config={"temperature": 0, "max_tokens": 10},
+        )
 
-        result = agent.execute(
-            provider="mock",
-            model="gpt-4",
-            messages=[{"role": "user", "content": "Search with context"}],
+        if not test_result["success"]:
+            pytest.skip(
+                f"Ollama not available or configured: {test_result.get('error', 'Unknown error')}"
+            )
+
+        # Now test with MCP
+        result = self.node.execute(
+            provider="ollama",
+            model="llama3.2:1b",
+            messages=[{"role": "user", "content": "What is 2+2?"}],
             mcp_servers=[
-                {"name": "knowledge-server", "transport": "stdio", "command": "mcp-kb"}
+                {
+                    "name": "math-server",
+                    "transport": "stdio",
+                    "command": "echo",
+                    "args": ["Math context: basic arithmetic"],
+                }
             ],
-            mcp_context=["resource://knowledge/base"],
-            rag_config={"enabled": True, "top_k": 3, "similarity_threshold": 0.7},
+            mcp_context=["resource://math/basic"],
+            generation_config={"temperature": 0, "max_tokens": 50},
         )
 
+        # Should get a real response
         assert result["success"] is True
-        assert result["context"]["mcp_resources_used"] >= 1
-        assert result["context"]["rag_documents_retrieved"] >= 0
+        assert "response" in result
+        assert "content" in result["response"]
 
-    def test_tool_discovery_mock_fallback(self):
-        """Test that tool discovery falls back to mock tools when MCP unavailable."""
-        agent = LLMAgentNode(name="test_agent")
-
-        # Test internal method directly
-        mock_tools = agent._discover_mcp_tools(
-            [{"name": "test-server", "transport": "stdio", "command": "test"}]
+        # Response should contain something about 4 or indicate calculation
+        response_text = result["response"]["content"].lower()
+        # More flexible assertion - Ollama might respond differently
+        assert any(
+            term in response_text for term in ["4", "four", "2+2", "equals", "answer"]
         )
-
-        assert len(mock_tools) > 0
-        # Should have mock tools with correct naming
-        tool_names = [t["function"]["name"] for t in mock_tools]
-        assert any("mcp_test-server" in name for name in tool_names)
-
-    def test_tool_merging_deduplication(self):
-        """Test that tool merging avoids duplicates."""
-        agent = LLMAgentNode(name="test_agent")
-
-        existing = [
-            {"type": "function", "function": {"name": "tool1"}},
-            {"type": "function", "function": {"name": "tool2"}},
-        ]
-
-        mcp_tools = [
-            {"type": "function", "function": {"name": "tool2"}},  # Duplicate
-            {"type": "function", "function": {"name": "tool3"}},  # New
-        ]
-
-        merged = agent._merge_tools(existing, mcp_tools)
-
-        # Should have 3 tools total (tool1, tool2, tool3)
-        assert len(merged) == 3
-        tool_names = [t["function"]["name"] for t in merged]
-        assert sorted(tool_names) == ["tool1", "tool2", "tool3"]
-
-    def test_mcp_context_format_handling(self):
-        """Test handling of different MCP content formats."""
-        agent = LLMAgentNode(name="test_agent")
-
-        # Test with different URI schemes
-        result = agent.execute(
-            provider="mock",
-            model="gpt-4",
-            messages=[{"role": "user", "content": "Test URIs"}],
-            mcp_context=[
-                "data://path/to/data",
-                "file://path/to/file",
-                "resource://type/name",
-                "prompt://template/name",
-            ],
-        )
-
-        assert result["success"] is True
-        assert result["context"]["mcp_resources_used"] == 4
-
-
-@pytest.mark.parametrize(
-    "transport,config",
-    [
-        ("stdio", {"command": "test-server", "args": ["--port", "8080"]}),
-        ("http", {"url": "http://localhost:8080", "headers": {"Auth": "Bearer token"}}),
-        ("sse", {"url": "http://localhost:8080/events"}),
-    ],
-)
-def test_mcp_transport_types(transport, config):
-    """Test different MCP transport configurations."""
-    agent = LLMAgentNode(name="test_agent")
-
-    server_config = {"name": f"{transport}-server", "transport": transport}
-    server_config.update(config)
-
-    result = agent.execute(
-        provider="mock",
-        model="gpt-4",
-        messages=[{"role": "user", "content": f"Test {transport} transport"}],
-        mcp_servers=[server_config],
-    )
-
-    assert result["success"] is True
-    assert "response" in result

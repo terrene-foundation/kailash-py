@@ -63,7 +63,7 @@ class EmbeddingGeneratorNode(Node):
     Examples:
         >>> # Single text embedding
         >>> embedder = EmbeddingGeneratorNode()
-        >>> result = embedder.run(
+        >>> result = embedder.execute(
         ...     provider="openai",
         ...     model="text-embedding-3-large",
         ...     input_text="This is a sample document to embed",
@@ -72,7 +72,7 @@ class EmbeddingGeneratorNode(Node):
 
         >>> # Batch document embedding
         >>> batch_embedder = EmbeddingGeneratorNode()
-        >>> result = batch_embedder.run(
+        >>> result = batch_embedder.execute(
         ...     provider="huggingface",
         ...     model="sentence-transformers/all-MiniLM-L6-v2",
         ...     input_texts=[
@@ -87,24 +87,23 @@ class EmbeddingGeneratorNode(Node):
 
         >>> # Similarity calculation
         >>> similarity = EmbeddingGeneratorNode()
-        >>> result = similarity.run(
+        >>> result = similarity.execute(
         ...     operation="calculate_similarity",
         ...     embedding_1=[0.1, 0.2, 0.3],  # ... removed for doctest
         ...     embedding_2=[0.15, 0.25, 0.35],  # ... removed for doctest
         ...     similarity_metric="cosine"
         ... )
 
-        Cached embedding with MCP integration::
-
-            mcp_embedder = EmbeddingGeneratorNode()
-            result = mcp_embedder.run(
-                provider="azure",
-                model="text-embedding-3-small",
-                mcp_resource_uri="data://documents/knowledge_base.json",
-                operation="embed_mcp_resource",
-                cache_ttl=3600,
-                chunk_size=512
-            )
+        >>> # Cached embedding with MCP integration
+        >>> mcp_embedder = EmbeddingGeneratorNode()
+        >>> result = mcp_embedder.execute(
+        ...     provider="azure",
+        ...     model="text-embedding-3-small",
+        ...     mcp_resource_uri="data://documents/knowledge_base.json",
+        ...     operation="embed_mcp_resource",
+        ...     cache_ttl=3600,
+        ...     chunk_size=512
+        ... )
     """
 
     def get_parameters(self) -> dict[str, NodeParameter]:

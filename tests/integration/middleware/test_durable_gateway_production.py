@@ -301,7 +301,7 @@ result = {"analytics_data": analytics_summary}
         db_node = SQLDatabaseNode(name="setup", connection_string=conn_string)
 
         # Create tables
-        db_node.run(
+        db_node.execute(
             query="""
                 CREATE TABLE IF NOT EXISTS transactions (
                     id SERIAL PRIMARY KEY,
@@ -317,7 +317,7 @@ result = {"analytics_data": analytics_summary}
             operation="execute",
         )
 
-        db_node.run(
+        db_node.execute(
             query="""
                 CREATE TABLE IF NOT EXISTS analytics_reports (
                     id SERIAL PRIMARY KEY,
@@ -332,7 +332,7 @@ result = {"analytics_data": analytics_summary}
 
         # Insert test data
         for i in range(50):
-            db_node.run(
+            db_node.execute(
                 query="""
                     INSERT INTO transactions
                     (transaction_id, user_id, product_id, amount, status, payment_method)
@@ -358,10 +358,10 @@ result = {"analytics_data": analytics_summary}
 
         db_node = SQLDatabaseNode(name="cleanup", connection_string=conn_string)
 
-        db_node.run(
+        db_node.execute(
             query="DROP TABLE IF EXISTS transactions CASCADE", operation="execute"
         )
 
-        db_node.run(
+        db_node.execute(
             query="DROP TABLE IF EXISTS analytics_reports CASCADE", operation="execute"
         )

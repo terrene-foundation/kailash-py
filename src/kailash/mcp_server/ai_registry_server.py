@@ -13,8 +13,33 @@ import json
 import os
 from typing import Any
 
-from mcp.server import Server
-from mcp.types import Resource, TextContent, Tool
+# Use low-level server implementation with fallback
+try:
+    from mcp.server.lowlevel import Server
+    from mcp.types import Resource, TextContent, Tool
+except ImportError:
+    # Fallback if official MCP is broken
+    print("Warning: Official MCP server not available, using fallback")
+    from kailash.mcp_server.server import MCPServerBase as Server
+
+    # Minimal type definitions for fallback
+    class Resource:
+        def __init__(self, uri, name, description, mimeType=None):
+            self.uri = uri
+            self.name = name
+            self.description = description
+            self.mimeType = mimeType
+
+    class TextContent:
+        def __init__(self, type, text):
+            self.type = type
+            self.text = text
+
+    class Tool:
+        def __init__(self, name, description, inputSchema):
+            self.name = name
+            self.description = description
+            self.inputSchema = inputSchema
 
 
 class AIRegistryServer:

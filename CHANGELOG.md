@@ -15,6 +15,27 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.6.4] - 2025-07-06
+
+**Enterprise Parameter Injection & E2E Test Excellence**
+
+**Major Features:**
+- **Enterprise Parameter Injection**: WorkflowBuilder `add_workflow_inputs()` with dot notation support
+- **E2E Test Excellence**: 100% pass rate on all comprehensive E2E tests
+- **Documentation Quality**: Updated based on E2E test findings with correct patterns
+
+**Fixed:**
+- **Permission Check Structure**: Fixed nested result structure (`result.check.allowed`)
+- **PythonCodeNode Parameters**: Direct namespace injection now working correctly
+- **Integration Test Stability**: Improved cache handling and async node behavior
+
+**Enhanced:**
+- **Test Infrastructure**: Achieved 100% E2E test pass rate with improved stability
+- **Documentation Updates**: Comprehensive updates based on E2E test findings
+- **Parameter Injection**: Enterprise-grade system with complex workflow support
+
+**Breaking Changes:** None - fully backward compatible
+
 ### [0.6.3] - 2025-07-05
 
 **Comprehensive MCP Platform, Testing Infrastructure & Documentation Quality**

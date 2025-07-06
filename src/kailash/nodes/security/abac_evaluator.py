@@ -194,7 +194,7 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
         ...     "network": "corporate"
         ... }
         >>>
-        >>> result = evaluator.run(
+        >>> result = evaluator.execute(
         ...     user_context=user_context,
         ...     resource_context=resource_context,
         ...     environment_context=env_context,
@@ -770,7 +770,7 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
 
     async def execute_async(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for test compatibility."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)
 
     def _evaluate_permission(
         self, context: ABACContext, permission: str
@@ -1026,7 +1026,7 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
             )
 
             # Run AI analysis
-            ai_response = self.ai_agent.run(
+            ai_response = self.ai_agent.execute(
                 provider="ollama",
                 model=self.ai_model.replace("ollama:", ""),
                 messages=[{"role": "user", "content": prompt}],
@@ -1275,7 +1275,7 @@ Return a JSON object with this structure:
         }
 
         try:
-            self.audit_log_node.run(**audit_entry)
+            self.audit_log_node.execute(**audit_entry)
         except Exception as e:
             self.log_with_context(
                 "WARNING", f"Failed to audit permission decision: {e}"
@@ -1355,7 +1355,7 @@ RESPONSE FORMAT:
 }}
 """
 
-            ai_response = self.ai_agent.run(
+            ai_response = self.ai_agent.execute(
                 provider="ollama",
                 model=self.ai_model.replace("ollama:", ""),
                 messages=[{"role": "user", "content": prompt}],
@@ -1408,4 +1408,4 @@ RESPONSE FORMAT:
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Async execution method for enterprise integration."""
-        return self.run(**kwargs)
+        return self.execute(**kwargs)

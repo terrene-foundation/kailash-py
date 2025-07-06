@@ -10,14 +10,13 @@ The Model Context Protocol (MCP) provides a standardized way for AI applications
    overview
    quickstart
    server_development
-   client_development
-   agent_integration
-   authentication
-   service_discovery
+   architecture
    deployment
-   api_reference
+   monitoring
+   security
    examples
    troubleshooting
+   api-reference
 
 Overview
 --------
@@ -86,4 +85,4 @@ Next Steps
 - :doc:`quickstart` - Get started in 5 minutes
 - :doc:`server_development` - Build your first MCP server
 - :doc:`examples` - See complete examples
-- :doc:`api_reference` - Detailed API documentation
+- :doc:`api-reference` - Detailed API documentation

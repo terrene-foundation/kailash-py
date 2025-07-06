@@ -89,7 +89,7 @@ class RESTClientNode(Node):
         >>> client = RESTClientNode()
         >>>
         >>> # Get a single resource
-        >>> result = client.run(
+        >>> result = client.execute(
         ...     base_url="https://api.example.com/v1",
         ...     resource="users/{id}",
         ...     method="GET",
@@ -101,7 +101,7 @@ class RESTClientNode(Node):
         >>> assert user["id"] == 123
         >>>
         >>> # List resources with pagination
-        >>> result = client.run(
+        >>> result = client.execute(
         ...     base_url="https://api.example.com/v1",
         ...     resource="products",
         ...     method="GET",
@@ -110,7 +110,7 @@ class RESTClientNode(Node):
         >>> assert len(result["content"]) <= 20
         >>>
         >>> # Create a new resource
-        >>> result = client.run(
+        >>> result = client.execute(
         ...     base_url="https://api.example.com/v1",
         ...     resource="posts",
         ...     method="POST",
@@ -121,7 +121,7 @@ class RESTClientNode(Node):
         >>> assert "id" in result["content"]
         >>>
         >>> # Update a resource
-        >>> result = client.run(
+        >>> result = client.execute(
         ...     base_url="https://api.example.com/v1",
         ...     resource="users/{id}",
         ...     method="PATCH",
@@ -131,7 +131,7 @@ class RESTClientNode(Node):
         >>> assert result["status_code"] == 200
         >>>
         >>> # Delete a resource
-        >>> result = client.run(
+        >>> result = client.execute(
         ...     base_url="https://api.example.com/v1",
         ...     resource="comments/{id}",
         ...     method="DELETE",
@@ -588,7 +588,7 @@ class RESTClientNode(Node):
 
         # Execute the HTTP request
         self.logger.info(f"Making REST {method} request to {url}")
-        result = self.http_node.run(**http_params)
+        result = self.http_node.execute(**http_params)
 
         # Extract response data
         response = result.get("response")
@@ -694,7 +694,7 @@ class RESTClientNode(Node):
             resource_path = resource
             path_params = kwargs.pop("path_params", {})
 
-        return self.run(
+        return self.execute(
             base_url=base_url,
             resource=resource_path,
             method="GET",
@@ -716,7 +716,7 @@ class RESTClientNode(Node):
         Returns:
             API response dictionary
         """
-        return self.run(
+        return self.execute(
             base_url=base_url, resource=resource, method="POST", data=data, **kwargs
         )
 
@@ -745,7 +745,7 @@ class RESTClientNode(Node):
         path_params = kwargs.pop("path_params", {})
         path_params["id"] = resource_id
 
-        return self.run(
+        return self.execute(
             base_url=base_url,
             resource=f"{resource}/{{id}}",
             method="PATCH" if partial else "PUT",
@@ -771,7 +771,7 @@ class RESTClientNode(Node):
         path_params = kwargs.pop("path_params", {})
         path_params["id"] = resource_id
 
-        return self.run(
+        return self.execute(
             base_url=base_url,
             resource=f"{resource}/{{id}}",
             method="DELETE",
@@ -1162,25 +1162,25 @@ class AsyncRESTClientNode(AsyncNode):
         async_run method for better performance.
 
         Args:
-            Same as RESTClientNode.run()
+            Same as RESTClientNode.execute()
 
         Returns:
-            Same as RESTClientNode.run()
+            Same as RESTClientNode.execute()
 
         Raises:
             NodeExecutionError: If the request fails or returns an error status
         """
         # Forward to the synchronous REST node
-        return self.rest_node.run(**kwargs)
+        return self.rest_node.execute(**kwargs)
 
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute a REST API request asynchronously.
 
         Args:
-            Same as RESTClientNode.run()
+            Same as RESTClientNode.execute()
 
         Returns:
-            Same as RESTClientNode.run()
+            Same as RESTClientNode.execute()
 
         Raises:
             NodeValidationError: If required parameters are missing or invalid

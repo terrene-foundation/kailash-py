@@ -32,7 +32,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
 
     def test_tool_execution_can_be_disabled(self):
         """Test that tool execution can be disabled."""
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Do something"}],
@@ -44,7 +44,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
     def test_tool_execution_config_parameter(self):
         """Test tool_execution_config parameter handling."""
         config = {"max_rounds": 3, "timeout": 60}
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Test"}],
@@ -190,7 +190,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         ):
             tools = [{"type": "function", "function": {"name": "calculator"}}]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test-model",
                 messages=[{"role": "user", "content": "Calculate 5 + 3"}],
@@ -248,7 +248,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
                 {"type": "function", "function": {"name": "process_data"}},
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test-model",
                 messages=[{"role": "user", "content": "Get and process data"}],
@@ -284,7 +284,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         ):
             tools = [{"type": "function", "function": {"name": "infinite_tool"}}]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test-model",
                 messages=[{"role": "user", "content": "Infinite loop test"}],
@@ -500,7 +500,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         with patch.object(
             self.node, "_provider_llm_response", side_effect=capture_messages
         ):
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test-model",
                 messages=[{"role": "user", "content": "Test"}],
@@ -552,7 +552,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
                 },
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test-model",
                 messages=initial_messages,
@@ -578,7 +578,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
 
         # Disable tool execution
         start_time = time.time()
-        result1 = self.node.run(
+        result1 = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Test"}],
@@ -588,7 +588,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
 
         # Enable tool execution (but mock won't return tools)
         start_time = time.time()
-        result2 = self.node.run(
+        result2 = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Test"}],
@@ -626,7 +626,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         ]
 
         # Should handle without issues
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test-model",
             messages=[{"role": "user", "content": "Test with many tools"}],

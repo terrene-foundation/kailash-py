@@ -35,7 +35,7 @@ class TestRoleManagementNode:
     def test_create_role_basic(self):
         """Test basic role creation."""
         # Mock successful role creation
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "role_id": "role_123",
@@ -48,7 +48,7 @@ class TestRoleManagementNode:
             ]
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="create_role",
             role_data={
                 "name": "editor",
@@ -65,7 +65,7 @@ class TestRoleManagementNode:
     def test_create_role_with_parent(self):
         """Test role creation with parent roles."""
         # Mock role creation with hierarchy
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Check parent role exists
             {"data": [{"role_id": "editor"}]},
             # Insert new role (returns empty for INSERT)
@@ -76,7 +76,7 @@ class TestRoleManagementNode:
             {"data": []},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="create_role",
             role_data={
                 "name": "senior_editor",
@@ -94,14 +94,14 @@ class TestRoleManagementNode:
     def test_create_role_duplicate_name(self):
         """Test creating role with duplicate name."""
         # Mock duplicate key error
-        self.mock_db.run.side_effect = Exception(
+        self.mock_db.execute.side_effect = Exception(
             "duplicate key value violates unique constraint"
         )
 
         with pytest.raises(
             NodeExecutionError, match="Role management operation failed"
         ):
-            self.node.run(
+            self.node.execute(
                 operation="create_role",
                 role_data={
                     "name": "existing_role",
@@ -114,7 +114,7 @@ class TestRoleManagementNode:
     def test_update_role(self):
         """Test role update operation."""
         # Mock successful update - need to provide all required fields
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "role_id": "role_123",
@@ -131,7 +131,7 @@ class TestRoleManagementNode:
             ]
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="update_role",
             role_id="role_123",
             role_data={
@@ -148,7 +148,7 @@ class TestRoleManagementNode:
     def test_delete_role_with_reassignment(self):
         """Test role deletion with force flag (no reassignment in actual implementation)."""
         # Mock role deletion with force - actual implementation doesn't support reassignment
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # _get_role_by_id - Check role exists
             {
                 "data": [
@@ -178,7 +178,7 @@ class TestRoleManagementNode:
             {"data": []},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="delete_role",
             role_id="role_to_delete",
             force=True,  # Use force instead of reassign_to
@@ -192,7 +192,7 @@ class TestRoleManagementNode:
     def test_assign_user_to_role(self):
         """Test assigning user to role."""
         # Mock successful assignment
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Check user exists
             {"data": [{"user_id": "user_123"}]},
             # Check existing assignment (since validate_hierarchy=False, no role validation)
@@ -210,7 +210,7 @@ class TestRoleManagementNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="assign_user",
             user_id="user_123",
             role_id="role_456",
@@ -227,7 +227,7 @@ class TestRoleManagementNode:
         expires_at = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59)
 
         # Mock assignment with expiry
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Check user exists
             {"data": [{"user_id": "user_123"}]},
             # Check existing assignment (skip role validation)
@@ -247,7 +247,7 @@ class TestRoleManagementNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="assign_user",
             user_id="user_123",
             role_id="temp_role",
@@ -263,7 +263,7 @@ class TestRoleManagementNode:
     def test_revoke_user_role(self):
         """Test revoking user role assignment."""
         # Mock successful revocation
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "id": 1,
@@ -274,7 +274,7 @@ class TestRoleManagementNode:
             ]
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="unassign_user",
             user_id="user_123",
             role_id="role_456",
@@ -287,7 +287,7 @@ class TestRoleManagementNode:
     def test_get_role_users(self):
         """Test getting all users with a specific role."""
         # Mock multiple database calls needed by get_role_users
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # _get_role_by_id call - get role data first
             {
                 "data": [
@@ -336,7 +336,7 @@ class TestRoleManagementNode:
             {"data": [{"total": 2}]},
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="get_role_users", role_id="role_123", tenant_id="tenant_1"
         )
 
@@ -350,7 +350,7 @@ class TestRoleManagementNode:
     def test_add_permission_to_role(self):
         """Test adding permission to existing role."""
         # Mock permission addition
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get current role data
             {
                 "data": [
@@ -387,7 +387,7 @@ class TestRoleManagementNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="add_permission",
             role_id="role_123",
             permission="delete",
@@ -400,7 +400,7 @@ class TestRoleManagementNode:
     def test_remove_permission_from_role(self):
         """Test removing permission from role."""
         # Mock permission removal
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get current role data
             {
                 "data": [
@@ -437,7 +437,7 @@ class TestRoleManagementNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="remove_permission",
             role_id="role_123",
             permission="delete",
@@ -450,7 +450,7 @@ class TestRoleManagementNode:
     def test_get_effective_permissions(self):
         """Test getting effective permissions including inherited."""
         # Mock database calls for effective permissions
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Get role hierarchy first
             {
                 "data": [
@@ -494,7 +494,7 @@ class TestRoleManagementNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="get_effective_permissions",
             role_id="child_role",
             tenant_id="tenant_1",
@@ -509,7 +509,7 @@ class TestRoleManagementNode:
     def test_role_conditions_abac(self):
         """Test role assignment with ABAC conditions."""
         # ABAC conditions in role assignment is not standard, simplify to basic assignment
-        self.mock_db.run.side_effect = [
+        self.mock_db.execute.side_effect = [
             # Check user exists
             {"data": [{"user_id": "user_123"}]},
             # Check existing assignment
@@ -528,7 +528,7 @@ class TestRoleManagementNode:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="assign_user",
             user_id="user_123",
             role_id="conditional_role",
@@ -543,7 +543,7 @@ class TestRoleManagementNode:
     def test_list_roles_with_filters(self):
         """Test listing roles with various filters."""
         # Mock filtered role list with all required fields including child_roles
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "role_id": "role1",
@@ -578,7 +578,7 @@ class TestRoleManagementNode:
             ]
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="list_roles",
             filters={
                 "role_type": "system",
@@ -595,7 +595,7 @@ class TestRoleManagementNode:
     def test_role_validation_missing_name(self):
         """Test role creation validation - missing name."""
         with pytest.raises(NodeExecutionError, match="Missing required field: name"):
-            self.node.run(
+            self.node.execute(
                 operation="create_role",
                 role_data={"description": "Test role", "permissions": ["read"]},
                 tenant_id="tenant_1",
@@ -604,7 +604,7 @@ class TestRoleManagementNode:
     def test_role_validation_invalid_permission(self):
         """Test role creation with invalid permission format."""
         # Invalid permission format is handled internally, so create a valid role
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "role_id": "test_role",
@@ -615,7 +615,7 @@ class TestRoleManagementNode:
             ]
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="create_role",
             role_data={
                 "name": "test",
@@ -630,7 +630,7 @@ class TestRoleManagementNode:
     def test_multi_tenant_isolation(self):
         """Test that role operations are isolated by tenant."""
         # Test role creation in different tenants
-        self.mock_db.run.return_value = {
+        self.mock_db.execute.return_value = {
             "data": [
                 {
                     "role_id": "role_123",
@@ -641,7 +641,7 @@ class TestRoleManagementNode:
             ]
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             operation="create_role",
             role_data={
                 "name": "admin",
@@ -655,7 +655,7 @@ class TestRoleManagementNode:
         assert result["result"]["role"]["tenant_id"] == "tenant_a"
 
         # Verify queries include tenant_id
-        call_args = self.mock_db.run.call_args[1]
+        call_args = self.mock_db.execute.call_args[1]
         assert "tenant_id" in call_args["query"] or "tenant_a" in str(
             call_args.get("parameters", [])
         )

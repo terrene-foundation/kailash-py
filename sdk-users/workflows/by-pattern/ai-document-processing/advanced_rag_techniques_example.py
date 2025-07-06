@@ -265,7 +265,7 @@ async def example_1_self_correcting_rag():
         print(f"\n--- Test Query {i}: {query} ---")
 
         try:
-            result = await self_correcting_rag.run(documents=documents, query=query)
+            result = await self_correcting_rag.execute(documents=documents, query=query)
 
             quality = result.get("quality_assessment", {})
             metadata = result.get("self_correction_metadata", {})
@@ -323,7 +323,7 @@ async def example_2_rag_fusion():
         print(f"\n--- Fusion Test {i}: {query} ---")
 
         try:
-            result = await rag_fusion.run(documents=documents, query=query)
+            result = await rag_fusion.execute(documents=documents, query=query)
 
             metadata = result.get("fusion_metadata", {})
             variations = result.get("query_variations", [])
@@ -390,7 +390,7 @@ async def example_3_hyde():
         print(f"\n--- HyDE Test {i}: {query} ---")
 
         try:
-            result = await hyde.run(documents=documents, query=query)
+            result = await hyde.execute(documents=documents, query=query)
 
             hypotheses = result.get("hypotheses_generated", [])
             metadata = result.get("hyde_metadata", {})
@@ -455,7 +455,7 @@ async def example_4_step_back_rag():
         print(f"\n--- Step-Back Test {i}: {query} ---")
 
         try:
-            result = await step_back_rag.run(documents=documents, query=query)
+            result = await step_back_rag.execute(documents=documents, query=query)
 
             specific_query = result.get("specific_query")
             abstract_query = result.get("abstract_query")
@@ -539,12 +539,12 @@ async def example_5_comparative_analysis():
             start_time = time.time()
 
             # Execute technique
-            result = await rag_node.run(documents=documents, query=test_query)
+            result = await rag_node.execute(documents=documents, query=test_query)
 
             execution_time = time.time() - start_time
 
             # Analyze quality
-            quality_result = await quality_analyzer.run(
+            quality_result = await quality_analyzer.execute(
                 rag_results=result, query=test_query
             )
 

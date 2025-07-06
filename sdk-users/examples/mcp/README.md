@@ -90,6 +90,45 @@ mcp_servers = [{
 }]
 ```
 
+## Creating Your Own MCP Server
+
+### Simple Server for Prototyping
+```python
+from kailash.mcp_server import SimpleMCPServer
+
+server = SimpleMCPServer("my-tools")
+
+@server.tool("Add numbers")
+def add_numbers(a: int, b: int) -> dict:
+    return {"result": a + b}
+
+if __name__ == "__main__":
+    server.run()
+```
+
+### Production Server
+```python
+from kailash.mcp_server import MCPServer
+
+server = MCPServer("production-tools", enable_cache=True, enable_metrics=True)
+
+@server.tool(cache_ttl=300)
+async def expensive_operation(data: str) -> dict:
+    # Expensive operation with caching
+    return {"processed": data}
+
+if __name__ == "__main__":
+    server.run()
+```
+
+### Server Type Selection
+
+| Use Case | Server Type |
+|----------|-------------|
+| Learning/prototyping | `SimpleMCPServer` |
+| Production deployment | `MCPServer` |
+| Kailash SDK integration | `MiddlewareMCPServer` |
+
 ## Tips for Running Examples
 
 1. **Check Requirements**: Each example lists its requirements at the top

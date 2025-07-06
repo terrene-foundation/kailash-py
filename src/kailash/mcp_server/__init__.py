@@ -202,7 +202,7 @@ from .registry_integration import (
 )
 
 # Enhanced server with production features
-from .server import EnhancedMCPServer, MCPServer, MCPServerBase, SimpleMCPServer
+from .server import MCPServer, MCPServerBase, SimpleMCPServer
 
 # Enhanced Transport Layer
 from .transports import (
@@ -221,9 +221,8 @@ __all__ = [
     "MCPClient",
     "MCPServer",
     "MCPServerBase",
-    # Backward compatibility
+    # Prototyping server
     "SimpleMCPServer",
-    "EnhancedMCPServer",
     # Service Discovery System
     "ServiceRegistry",
     "ServerInfo",

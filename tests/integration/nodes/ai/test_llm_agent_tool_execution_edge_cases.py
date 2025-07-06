@@ -43,7 +43,7 @@ class TestLLMAgentToolExecutionEdgeCases:
         ]
 
         # Should handle gracefully
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[{"role": "user", "content": "Test"}],
@@ -67,7 +67,7 @@ class TestLLMAgentToolExecutionEdgeCases:
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[{"role": "user", "content": "Test"}],
@@ -98,7 +98,7 @@ class TestLLMAgentToolExecutionEdgeCases:
             },
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[{"role": "user", "content": "Use the tools"}],
@@ -134,7 +134,7 @@ class TestLLMAgentToolExecutionEdgeCases:
                 }
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="mock",
                 model="test",
                 messages=[{"role": "user", "content": "Run slow tool"}],
@@ -174,7 +174,7 @@ class TestLLMAgentToolExecutionEdgeCases:
                     ],
                 }
 
-                result = self.node.run(
+                result = self.node.execute(
                     provider="test",
                     model="test",
                     messages=[{"role": "user", "content": "Use crashing tool"}],
@@ -216,7 +216,7 @@ class TestLLMAgentToolExecutionEdgeCases:
                 {"content": "Tool not found, proceeding without it", "tool_calls": []},
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test",
                 messages=[{"role": "user", "content": "Do something"}],
@@ -260,7 +260,7 @@ class TestLLMAgentToolExecutionEdgeCases:
                 {"content": "Handled the error", "tool_calls": []},
             ]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="test",
                 model="test",
                 messages=[{"role": "user", "content": "Use the tool"}],
@@ -298,7 +298,7 @@ class TestLLMAgentToolExecutionEdgeCases:
                 }
             )
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[{"role": "user", "content": "Find and use tool_500"}],
@@ -345,7 +345,7 @@ class TestLLMAgentToolExecutionEdgeCases:
             },
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[{"role": "user", "content": "Use nested tool"}],
@@ -397,7 +397,7 @@ class TestLLMAgentToolExecutionEdgeCases:
                     {"content": "Processed results", "tool_calls": []},
                 ]
 
-                result = self.node.run(
+                result = self.node.execute(
                     provider="test",
                     model="test",
                     messages=[{"role": "user", "content": "Use all tools"}],
@@ -425,7 +425,7 @@ class TestLLMAgentToolExecutionEdgeCases:
             },
         }
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[{"role": "user", "content": "Use memory tool with 1000 MB"}],
@@ -456,7 +456,7 @@ class TestLLMAgentToolExecutionEdgeCases:
             }
         ]
 
-        result = self.node.run(
+        result = self.node.execute(
             provider="mock",
             model="test",
             messages=[
@@ -486,7 +486,7 @@ class TestLLMAgentToolExecutionEdgeCases:
 
             mock_execute.side_effect = [corrupt_state, []]
 
-            result = self.node.run(
+            result = self.node.execute(
                 provider="mock",
                 model="test",
                 messages=[{"role": "user", "content": "Test"}],

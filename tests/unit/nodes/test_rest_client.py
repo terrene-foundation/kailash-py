@@ -74,10 +74,10 @@ class TestRESTClient(unittest.TestCase):
         )
         self.assertEqual(url, "https://api.example.com/v1/users/123")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_get_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_get_operation(self, mock_http_execute):
         """Test GET operation for single resource."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 200,
             "response": {
@@ -99,15 +99,15 @@ class TestRESTClient(unittest.TestCase):
         self.assertEqual(result["data"], {"id": 123, "name": "Test User"})
 
         # Verify HTTP client was called correctly
-        mock_http_run.assert_called_once()
-        call_args = mock_http_run.call_args[1]
+        mock_http_execute.assert_called_once()
+        call_args = mock_http_execute.call_args[1]
         self.assertEqual(call_args["method"], "GET")
         self.assertEqual(call_args["url"], "https://api.example.com/users/123")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_list_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_list_operation(self, mock_http_execute):
         """Test LIST operation for collection."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 200,
             "response": {
@@ -141,10 +141,10 @@ class TestRESTClient(unittest.TestCase):
         # The headers are passed through in metadata
         self.assertEqual(result["metadata"]["headers"]["x-total-count"], "50")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_create_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_create_operation(self, mock_http_execute):
         """Test CREATE operation."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 201,
             "response": {
@@ -172,17 +172,17 @@ class TestRESTClient(unittest.TestCase):
         # Message handling tested separately
 
         # Verify HTTP client was called with POST
-        call_args = mock_http_run.call_args[1]
+        call_args = mock_http_execute.call_args[1]
         self.assertEqual(call_args["method"], "POST")
         self.assertEqual(
             call_args.get("json_data") or call_args.get("data"),
             {"name": "New User", "email": "new@example.com"},
         )
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_update_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_update_operation(self, mock_http_execute):
         """Test UPDATE operation (PUT)."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 200,
             "response": {
@@ -210,14 +210,14 @@ class TestRESTClient(unittest.TestCase):
         self.assertEqual(result["data"]["name"], "Updated User")
 
         # Verify HTTP client was called with PUT
-        call_args = mock_http_run.call_args[1]
+        call_args = mock_http_execute.call_args[1]
         self.assertEqual(call_args["method"], "PUT")
         self.assertEqual(call_args["url"], "https://api.example.com/users/123")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_patch_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_patch_operation(self, mock_http_execute):
         """Test PATCH operation."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 200,
             "response": {
@@ -241,13 +241,13 @@ class TestRESTClient(unittest.TestCase):
         self.assertEqual(result["data"]["status"], "inactive")
 
         # Verify HTTP client was called with PATCH
-        call_args = mock_http_run.call_args[1]
+        call_args = mock_http_execute.call_args[1]
         self.assertEqual(call_args["method"], "PATCH")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_delete_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_delete_operation(self, mock_http_execute):
         """Test DELETE operation."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 204,
             "response": {
@@ -272,13 +272,13 @@ class TestRESTClient(unittest.TestCase):
         self.assertEqual(result["data"], "")
 
         # Verify HTTP client was called with DELETE
-        call_args = mock_http_run.call_args[1]
+        call_args = mock_http_execute.call_args[1]
         self.assertEqual(call_args["method"], "DELETE")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_error_handling_404(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_error_handling_404(self, mock_http_execute):
         """Test 404 error handling."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": False,
             "status_code": 404,
             "response": {
@@ -301,10 +301,10 @@ class TestRESTClient(unittest.TestCase):
         # RESTClientNode now returns generic error types
         self.assertIn("error", result)
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_error_handling_401(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_error_handling_401(self, mock_http_execute):
         """Test 401 authentication error handling."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": False,
             "status_code": 401,
             "response": {
@@ -323,10 +323,10 @@ class TestRESTClient(unittest.TestCase):
         self.assertEqual(result["status_code"], 401)
         self.assertIn("error", result)
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_error_handling_validation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_error_handling_validation(self, mock_http_execute):
         """Test 400 validation error handling."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": False,
             "status_code": 400,
             "response": {
@@ -420,10 +420,10 @@ class TestRESTClient(unittest.TestCase):
         self.assertEqual(links["posts"], "/api/users/123/posts")
         self.assertEqual(links["avatar"], "/api/users/123/avatar")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_authentication_passthrough(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_authentication_passthrough(self, mock_http_execute):
         """Test authentication parameters are passed through."""
-        mock_http_run.return_value = {
+        mock_http_execute.return_value = {
             "success": True,
             "status_code": 200,
             "body": {"authenticated": True},
@@ -439,15 +439,15 @@ class TestRESTClient(unittest.TestCase):
         )
 
         # Verify auth params were passed to HTTPRequestNode
-        call_args = mock_http_run.call_args[1]
+        call_args = mock_http_execute.call_args[1]
         self.assertEqual(call_args.get("auth_type"), "bearer")
         self.assertEqual(call_args.get("auth_token"), "secret-token")
 
-    @patch("kailash.nodes.api.http.HTTPRequestNode.run")
-    def test_invalid_operation(self, mock_http_run):
+    @patch("kailash.nodes.api.http.HTTPRequestNode.execute")
+    def test_invalid_operation(self, mock_http_execute):
         """Test error handling for invalid operations."""
         # Mock the HTTP node returning an error for invalid method
-        mock_http_run.side_effect = NodeValidationError(
+        mock_http_execute.side_effect = NodeValidationError(
             "Invalid HTTP method: INVALID_METHOD. Supported methods: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS"
         )
 
@@ -520,7 +520,7 @@ class TestRESTClientAsyncUpgrade:
             mock_instance = Mock()  # Use Mock, not AsyncMock for sync method
             mock_http.return_value = mock_instance
 
-            mock_instance.run.return_value = {
+            mock_instance.execute.return_value = {
                 "success": True,
                 "status_code": 200,
                 "response": {

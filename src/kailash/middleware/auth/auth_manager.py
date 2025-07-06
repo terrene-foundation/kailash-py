@@ -229,7 +229,7 @@ class MiddlewareAuthManager:
         api_key = f"sk_{secrets.token_urlsafe(32)}"
 
         # Store API key metadata using credential manager
-        result = self.credential_manager.run(
+        result = self.credential_manager.execute(
             operation="store_credential",
             credential_name=api_key,
             credential_data={
@@ -274,7 +274,7 @@ class MiddlewareAuthManager:
 
         try:
             # Verify using credential manager since rotating credential node doesn't have verify
-            result = self.credential_manager.run(
+            result = self.credential_manager.execute(
                 operation="get_credential", credential_name=api_key
             )
 
@@ -309,7 +309,7 @@ class MiddlewareAuthManager:
         Returns:
             True if permission is granted
         """
-        result = self.permission_checker.run(
+        result = self.permission_checker.execute(
             user_context={"user_id": user_id},
             permission=permission,
             resource=resource or {},

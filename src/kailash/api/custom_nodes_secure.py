@@ -317,7 +317,7 @@ async def _execute_python_node(
         )
 
         # Run the node
-        result = python_node.run(**test_data)
+        result = python_node.execute(**test_data)
 
     return result
 
@@ -369,9 +369,9 @@ async def _execute_api_node(
         # Prepare request data
         if api_config.get("method") in ["POST", "PUT", "PATCH"]:
             # Include test data in body
-            result = await http_node.run(json_data=test_data)
+            result = await http_node.execute(json_data=test_data)
         else:
             # Include test data as query params
-            result = await http_node.run(params=test_data)
+            result = await http_node.execute(params=test_data)
 
     return result

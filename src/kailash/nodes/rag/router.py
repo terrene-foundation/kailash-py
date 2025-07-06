@@ -88,7 +88,7 @@ class RAGStrategyRouterNode(Node):
         )
 
         try:
-            llm_response = self.llm_agent.run(
+            llm_response = self.llm_agent.execute(
                 messages=[{"role": "user", "content": llm_input}]
             )
 

@@ -70,8 +70,22 @@ class AsyncNode(Node):
             # Windows requires special handling
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-        # Run the async method in a new event loop
-        return asyncio.run(self.execute_async(**runtime_inputs))
+        # Run the async method - handle existing event loop
+        try:
+            # Try to get current event loop
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run()
+            return asyncio.run(self.execute_async(**runtime_inputs))
+        else:
+            # Event loop is running, create a task
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run, self.execute_async(**runtime_inputs)
+                )
+                return future.result()
 
     def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous run is not supported for AsyncNode.

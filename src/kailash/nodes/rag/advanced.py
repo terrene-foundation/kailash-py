@@ -255,7 +255,7 @@ Respond with JSON only:
         )
 
         try:
-            verification_response = self.verifier_agent.run(
+            verification_response = self.verifier_agent.execute(
                 messages=[{"role": "user", "content": verification_input}]
             )
 
@@ -447,7 +447,7 @@ class RAGFusionNode(Node):
         # - "tuning neural network hyperparameters"
         # - "neural network training optimization"
 
-        result = await rag_fusion.run(
+        result = await rag_fusion.execute(
             documents=documents,
             query="How to optimize neural networks"
         )
@@ -628,7 +628,7 @@ Original Query: {original_query}
 Generate {self.num_query_variations} high-quality variations that will improve retrieval coverage:
 """
 
-            response = self.query_generator.run(
+            response = self.query_generator.execute(
                 messages=[{"role": "user", "content": generation_input}]
             )
 
@@ -919,7 +919,7 @@ class HyDENode(Node):
         # 3. "Cryptographic systems must evolve to be quantum-resistant..."
         # Then retrieves documents similar to these hypotheses
 
-        result = await hyde.run(
+        result = await hyde.execute(
             documents=documents,
             query="What are the implications of quantum computing for cryptography?"
         )
@@ -1077,7 +1077,7 @@ Query: {query}
 Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed hypothetical answer(s) that could help find relevant documents:
 """
 
-            response = self.hypothesis_generator.run(
+            response = self.hypothesis_generator.execute(
                 messages=[{"role": "user", "content": hypothesis_input}]
             )
 
@@ -1250,7 +1250,7 @@ class StepBackRAGNode(Node):
         #   - Abstract docs about normalization concepts
         # Combines both for comprehensive answer
 
-        result = await step_back.run(
+        result = await step_back.execute(
             documents=documents,
             query="Why does batch normalization help neural networks?"
         )
@@ -1394,7 +1394,7 @@ Specific Query: {specific_query}
 Generate a broader, more abstract version that would help retrieve relevant background information:
 """
 
-            response = self.abstraction_generator.run(
+            response = self.abstraction_generator.execute(
                 messages=[{"role": "user", "content": abstraction_input}]
             )
 

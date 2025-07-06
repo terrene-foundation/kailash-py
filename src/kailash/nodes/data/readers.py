@@ -105,7 +105,7 @@ class CSVReaderNode(Node):
     Examples:
         >>> # Basic CSV reading with headers
         >>> reader = CSVReaderNode()
-        >>> result = reader.run(
+        >>> result = reader.execute(
         ...     file_path="customers.csv",
         ...     headers=True
         ... )
@@ -118,28 +118,28 @@ class CSVReaderNode(Node):
         >>> # ]
         >>>
         >>> # Reading with custom delimiter
-        >>> result = reader.run(
+        >>> result = reader.execute(
         ...     file_path="data.tsv",
         ...     delimiter="\\t",
         ...     headers=True
         ... )
         >>>
         >>> # Reading without headers (returns list of lists)
-        >>> result = reader.run(
+        >>> result = reader.execute(
         ...     file_path="data.csv",
         ...     headers=False
         ... )
         >>> assert all(isinstance(row, list) for row in result["data"])
         >>>
         >>> # Reading with specific encoding
-        >>> result = reader.run(
+        >>> result = reader.execute(
         ...     file_path="european_data.csv",
         ...     encoding="iso-8859-1",
         ...     headers=True
         ... )
         >>>
         >>> # Handling quoted fields
-        >>> result = reader.run(
+        >>> result = reader.execute(
         ...     file_path="complex.csv",
         ...     headers=True,
         ...     quotechar='"'
@@ -349,7 +349,7 @@ class CSVReaderNode(Node):
             import aiofiles
         except ImportError:
             # Fallback to sync version if async dependencies not available
-            return self.run(**kwargs)
+            return self.execute(**kwargs)
 
         file_path = kwargs.get("file_path")
         encoding = kwargs.get("encoding", "utf-8")
@@ -591,7 +591,7 @@ class JSONReaderNode(Node):
             import aiofiles
         except ImportError:
             # Fallback to sync version if async dependencies not available
-            return self.run(**kwargs)
+            return self.execute(**kwargs)
 
         file_path = kwargs.get("file_path") or self.config.get("file_path")
 
@@ -808,7 +808,7 @@ class DocumentProcessorNode(Node):
         ...     extract_metadata=True,
         ...     preserve_structure=True
         ... )
-        >>> result = processor.run(
+        >>> result = processor.execute(
         ...     file_path="document.pdf"
         ... )
         >>> content = result["content"]

@@ -412,7 +412,7 @@ class SemanticRAGNode(Node):
             self.workflow_node = create_semantic_rag_workflow(self.config)
 
         # Delegate to WorkflowNode
-        return self.workflow_node.run(**kwargs)
+        return self.workflow_node.execute(**kwargs)
 
 
 @register_node()
@@ -458,7 +458,7 @@ class StatisticalRAGNode(Node):
         if not self.workflow_node:
             self.workflow_node = create_statistical_rag_workflow(self.config)
 
-        return self.workflow_node.run(**kwargs)
+        return self.workflow_node.execute(**kwargs)
 
 
 @register_node()
@@ -517,7 +517,7 @@ class HybridRAGNode(Node):
             self.fusion_method = fusion_method
             self.workflow_node = create_hybrid_rag_workflow(self.config, fusion_method)
 
-        return self.workflow_node.run(**kwargs)
+        return self.workflow_node.execute(**kwargs)
 
 
 @register_node()
@@ -563,4 +563,4 @@ class HierarchicalRAGNode(Node):
         if not self.workflow_node:
             self.workflow_node = create_hierarchical_rag_workflow(self.config)
 
-        return self.workflow_node.run(**kwargs)
+        return self.workflow_node.execute(**kwargs)

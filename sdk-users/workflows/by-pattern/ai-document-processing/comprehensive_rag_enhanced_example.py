@@ -176,7 +176,7 @@ async def example_1_similarity_comparison():
     for name, node in approaches.items():
         print(f"\n--- Testing {name} Retrieval ---")
         try:
-            result = await node.run(documents=documents, query=query)
+            result = await node.execute(documents=documents, query=query)
 
             results[name] = result
             print(f"✅ {name}: Retrieved {len(result.get('results', []))} documents")
@@ -197,7 +197,7 @@ async def example_1_similarity_comparison():
 
     valid_results = [r for r in results.values() if r is not None]
     if valid_results:
-        fused = await fusion_node.run(retrieval_results=valid_results)
+        fused = await fusion_node.execute(retrieval_results=valid_results)
         print(
             f"✅ Fusion completed: {len(fused.get('fused_results', {}).get('results', []))} final results"
         )
@@ -221,7 +221,7 @@ async def example_2_query_processing_pipeline():
 
     # Step 1: Query rewriting
     rewriter = QueryRewritingNode()
-    rewritten = await rewriter.run(query=original_query)
+    rewritten = await rewriter.execute(query=original_query)
 
     print("\nQuery Rewriting:")
     print(
@@ -236,7 +236,7 @@ async def example_2_query_processing_pipeline():
 
     # Step 2: Query intent classification
     classifier = QueryIntentClassifierNode()
-    intent = await classifier.run(query=corrected_query)
+    intent = await classifier.execute(query=corrected_query)
 
     print("\nIntent Classification:")
     print(f"  Type: {intent['routing_decision']['intent_analysis']['query_type']}")
@@ -250,7 +250,7 @@ async def example_2_query_processing_pipeline():
 
     # Step 3: Query decomposition (for complex comparative query)
     decomposer = QueryDecompositionNode()
-    decomposed = await decomposer.run(query=corrected_query)
+    decomposed = await decomposer.execute(query=corrected_query)
 
     print("\nQuery Decomposition:")
     for i, sq in enumerate(decomposed["execution_plan"]["sub_questions"]):
@@ -258,7 +258,7 @@ async def example_2_query_processing_pipeline():
 
     # Step 4: Query expansion
     expander = QueryExpansionNode(num_expansions=3)
-    expanded = await expander.run(query=corrected_query)
+    expanded = await expander.execute(query=corrected_query)
 
     print("\nQuery Expansion:")
     for exp in expanded["expanded_query"]["expansions"]:
@@ -280,7 +280,7 @@ async def example_3_advanced_rag_techniques():
         max_corrections=2, confidence_threshold=0.85
     )
 
-    sc_result = await self_correcting.run(documents=documents, query=query)
+    sc_result = await self_correcting.execute(documents=documents, query=query)
 
     print("✅ Self-correction completed")
     print(f"   Final confidence: {sc_result['quality_assessment']['confidence']:.3f}")
@@ -291,7 +291,7 @@ async def example_3_advanced_rag_techniques():
     print("\n--- RAG-Fusion ---")
     rag_fusion = RAGFusionNode(num_query_variations=4, fusion_method="rrf")
 
-    fusion_result = await rag_fusion.run(documents=documents, query=query)
+    fusion_result = await rag_fusion.execute(documents=documents, query=query)
 
     print("✅ RAG-Fusion completed")
     print(f"   Query variations generated: {len(fusion_result['query_variations'])}")
@@ -305,7 +305,7 @@ async def example_3_advanced_rag_techniques():
     print("\n--- HyDE (Hypothetical Document Embeddings) ---")
     hyde = HyDENode(use_multiple_hypotheses=True, num_hypotheses=2)
 
-    hyde_result = await hyde.run(documents=documents, query=query)
+    hyde_result = await hyde.execute(documents=documents, query=query)
 
     print("✅ HyDE completed")
     print(f"   Hypotheses generated: {len(hyde_result['hypotheses_generated'])}")
@@ -316,7 +316,7 @@ async def example_3_advanced_rag_techniques():
     print("\n--- Step-Back RAG ---")
     step_back = StepBackRAGNode()
 
-    sb_result = await step_back.run(documents=documents, query=query)
+    sb_result = await step_back.execute(documents=documents, query=query)
 
     print("✅ Step-Back RAG completed")
     print(f"   Specific query: {sb_result['specific_query']}")
@@ -340,7 +340,7 @@ async def example_4_performance_optimization():
     import time
 
     start = time.time()
-    result1 = await cached_rag.run(
+    result1 = await cached_rag.execute(
         documents=documents, query="What is transformer architecture?"
     )
     time1 = time.time() - start
@@ -350,7 +350,7 @@ async def example_4_performance_optimization():
 
     # Same query (cache hit)
     start = time.time()
-    result2 = await cached_rag.run(
+    result2 = await cached_rag.execute(
         documents=documents, query="What is transformer architecture?"
     )
     time2 = time.time() - start
@@ -364,7 +364,7 @@ async def example_4_performance_optimization():
     parallel_rag = AsyncParallelRAGNode(strategies=["semantic", "sparse", "hyde"])
 
     start = time.time()
-    parallel_result = await parallel_rag.run(
+    parallel_result = await parallel_rag.execute(
         documents=documents, query="How to optimize transformer training?"
     )
     parallel_time = time.time() - start
@@ -393,7 +393,7 @@ async def example_4_performance_optimization():
     ]
 
     start = time.time()
-    batch_result = await batch_rag.run(queries=queries, documents=documents)
+    batch_result = await batch_rag.execute(queries=queries, documents=documents)
     batch_time = time.time() - start
 
     print(f"✅ Batch processing: {batch_time:.3f}s for {len(queries)} queries")
