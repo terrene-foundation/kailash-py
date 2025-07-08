@@ -115,10 +115,13 @@ class TestLRUCache:
 
         # Fill cache to capacity
         cache.set("key1", "value1")
+        time.sleep(0.001)  # Ensure distinct timestamps
         cache.set("key2", "value2")
+        time.sleep(0.001)  # Ensure distinct timestamps
 
         # Access key1 to make it recently used
         cache.get("key1")
+        time.sleep(0.001)  # Ensure distinct timestamps
 
         # Add third key, should evict key2 (least recently used)
         cache.set("key3", "value3")
@@ -133,11 +136,15 @@ class TestLRUCache:
         cache = LRUCache(max_size=3)
 
         cache.set("key1", "value1")
+        time.sleep(0.001)  # Ensure distinct timestamps
         cache.set("key2", "value2")
+        time.sleep(0.001)  # Ensure distinct timestamps
         cache.set("key3", "value3")
+        time.sleep(0.001)  # Ensure distinct timestamps
 
         # Access key1 to make it recently used
         cache.get("key1")
+        time.sleep(0.001)  # Ensure distinct timestamps
 
         # Add fourth key, should evict key2 (oldest unaccessed)
         cache.set("key4", "value4")
