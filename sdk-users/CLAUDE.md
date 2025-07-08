@@ -63,6 +63,8 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 **🚀 AsyncWorkflowBuilder**: Async-first workflow builder with 70%+ code reduction. Built-in patterns (retry, rate limit, timeout, batch, circuit breaker). See [developer/07-async-workflow-builder.md](developer/07-async-workflow-builder.md) and [workflows/async/async-workflow-builder-guide.md](workflows/async/async-workflow-builder-guide.md).
 
+**🛡️ Enterprise Resilience Patterns**: Production-grade fault tolerance with circuit breakers, bulkhead isolation, and health monitoring. Circuit breakers prevent cascade failures with configurable thresholds. Bulkhead isolation partitions resources by operation type. Health monitoring provides real-time infrastructure status with alerting. See [enterprise/resilience-patterns.md](enterprise/resilience-patterns.md).
+
 **🔗 Dot Notation Mapping**: Access nested node outputs with `"result.data"`, `"result.metrics"`, `"source.nested.field"` in workflow connections.
 
 **🎯 Auto-Mapping Parameters**: NodeParameter supports `auto_map_primary=True`, `auto_map_from=["alt1"]`, `workflow_alias="name"` for automatic connection discovery.

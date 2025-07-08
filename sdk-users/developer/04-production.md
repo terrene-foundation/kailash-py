@@ -273,40 +273,209 @@ if config.enable_security:
 
 ## Performance & Monitoring
 
-### Circuit Breaker Protection
+### Enterprise Resilience Patterns
+
+The SDK provides three core resilience patterns for production:
+
+#### 1. Circuit Breaker Protection
 
 ```python
-from kailash.core.resilience.circuit_breaker import CircuitBreakerManager, CircuitBreakerConfig
+from kailash.core.resilience.circuit_breaker import get_circuit_breaker
 
-# Setup circuit breaker for external services
-cb_manager = CircuitBreakerManager()
-cb_config = CircuitBreakerConfig(
-    failure_threshold=5,        # Open after 5 failures
-    recovery_timeout=30,        # Wait 30s before trying half-open
-    error_rate_threshold=0.5,   # Open at 50% error rate
-    min_calls=10               # Minimum calls before calculating error rate
+# Create circuit breaker for external services
+api_breaker = get_circuit_breaker(
+    "external_api",
+    failure_threshold=5,      # Open after 5 failures
+    success_threshold=2,      # Close after 2 successes
+    timeout=30,              # 30 second timeout
+    half_open_max_calls=3    # Test calls when half-open
 )
 
-circuit_breaker = cb_manager.get_or_create("external_api", cb_config)
-
-# Use circuit breaker with operations
-async def protected_api_call(data):
+# Use as decorator
+@api_breaker
+async def call_external_api(data):
     """API call protected by circuit breaker."""
-    # Your API call logic here
-    return {"status": "success", "data": data}
+    node = HTTPRequestNode()
+    return node.execute(url="https://api.example.com", json_data=data)
 
-try:
-    result = await circuit_breaker.call(lambda: protected_api_call(data))
-    print("Operation succeeded:", result)
-except Exception as e:
-    if "Circuit breaker is OPEN" in str(e):
-        print("Circuit breaker prevented operation - system is recovering")
-    else:
-        print("Operation failed:", e)
+# Or use with context manager
+async with api_breaker:
+    result = await call_external_api(data)
 
 # Monitor circuit breaker status
-status = circuit_breaker.get_status()
-print(f"State: {status['state']}, Failed calls: {status['metrics']['failed_calls']}")
+if api_breaker.state == CircuitState.OPEN:
+    logger.warning("Circuit breaker is OPEN - using fallback")
+    result = use_cached_data()
+```
+
+#### 2. Bulkhead Isolation
+
+```python
+from kailash.core.resilience.bulkhead import (
+    get_bulkhead_manager,
+    execute_with_bulkhead,
+    PartitionConfig,
+    PartitionType
+)
+
+# Configure resource partitions
+manager = get_bulkhead_manager()
+
+# Database operations partition
+manager.configure_partition(PartitionConfig(
+    name="database",
+    partition_type=PartitionType.DATABASE,
+    max_concurrent_operations=20,
+    max_connections=10,
+    timeout=30,
+    priority=1  # Highest priority
+))
+
+# API calls partition
+manager.configure_partition(PartitionConfig(
+    name="api",
+    partition_type=PartitionType.API,
+    max_concurrent_operations=50,
+    max_threads=25,
+    timeout=15,
+    priority=2
+))
+
+# Use bulkhead isolation
+async def process_critical_operation(data):
+    # Database operation isolated in its partition
+    db_result = await execute_with_bulkhead(
+        "database",
+        lambda: database_node.execute(query="SELECT * FROM orders")
+    )
+
+    # API call isolated separately
+    api_result = await execute_with_bulkhead(
+        "api",
+        lambda: api_node.execute(url="https://api.example.com")
+    )
+
+    return {"db": db_result, "api": api_result}
+```
+
+#### 3. Health Monitoring
+
+```python
+from kailash.core.resilience.health_monitor import (
+    get_health_monitor,
+    DatabaseHealthCheck,
+    RedisHealthCheck,
+    HTTPHealthCheck,
+    HealthStatus
+)
+
+# Configure health monitoring
+monitor = get_health_monitor()
+
+# Register critical services
+monitor.register_check(
+    "primary_database",
+    DatabaseHealthCheck(
+        "primary_database",
+        connection_string=os.getenv("DATABASE_URL"),
+        critical=True
+    )
+)
+
+monitor.register_check(
+    "cache",
+    RedisHealthCheck(
+        "cache",
+        redis_config={"host": "localhost", "port": 6379},
+        critical=True
+    )
+)
+
+monitor.register_check(
+    "payment_api",
+    HTTPHealthCheck(
+        "payment_api",
+        url="https://payments.example.com/health",
+        expected_status=[200, 204],
+        critical=True
+    )
+)
+
+# Set up alerting
+def handle_critical_alert(alert):
+    if alert.level == AlertLevel.CRITICAL:
+        # Send to PagerDuty
+        send_page(alert.message)
+    # Log all alerts
+    logger.error(f"Health Alert: {alert.service_name} - {alert.message}")
+
+monitor.register_alert_callback(handle_critical_alert)
+
+# Check health before critical operations
+async def process_payment(payment_data):
+    # Check payment API health first
+    health = await monitor.get_health_status("payment_api")
+    if not health.is_healthy:
+        return {"status": "queued", "reason": "payment_api_unavailable"}
+
+    # Process payment with protection
+    return await execute_with_bulkhead(
+        "api",
+        lambda: payment_node.execute(**payment_data)
+    )
+```
+
+#### Complete Resilient Workflow Example
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Build resilient workflow
+workflow = WorkflowBuilder()
+
+# Add health check as first step
+workflow.add_node("HealthCheckNode", "health_check", {
+    "services": [
+        {
+            "name": "database",
+            "type": "database",
+            "connection_string": db_url,
+            "critical": True
+        },
+        {
+            "name": "api",
+            "type": "http",
+            "url": "https://api.example.com/health",
+            "critical": False
+        }
+    ],
+    "fail_fast": True
+})
+
+# Route based on health
+workflow.add_node("SwitchNode", "health_router", {
+    "condition": "overall_status == 'healthy'"
+})
+
+# Connect health check to router
+workflow.connect("health_check", "overall_status",
+                mapping={"health_router": "condition"})
+
+# Main processing with resilience
+@get_circuit_breaker("main_process", failure_threshold=3)
+async def resilient_process(workflow_data):
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow.build(), parameters=workflow_data)
+    return results
+
+# Execute with full protection
+try:
+    results = await resilient_process(production_data)
+except Exception as e:
+    logger.error(f"Workflow failed with resilience: {e}")
+    # Use fallback strategy
+    results = minimal_fallback_process(production_data)
 ```
 
 ### Batch Processing for Scale

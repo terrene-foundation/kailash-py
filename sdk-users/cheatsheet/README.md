@@ -70,6 +70,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [033-workflow-design-process](033-workflow-design-process.md) | Workflow Design Process | Systematic approach to workflow architecture |
 | [034-data-integration-patterns](034-data-integration-patterns.md) | Data Integration Patterns | Multi-source data normalization and merging |
 | [035-production-readiness](035-production-readiness.md) | Production Readiness | Deployment checklist and monitoring patterns |
+| **[046-resilience-patterns](046-resilience-patterns.md)** | **🛡️ Resilience Patterns** | **Circuit breakers, bulkhead isolation, health monitoring** |
 
 ### 🔧 **Enhanced Features**
 | File | Topic | Description |
@@ -84,6 +85,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [043-datatransformer-bug-workarounds](043-datatransformer-bug-workarounds.md) | DataTransformer Bug Workarounds | Bug detection and mitigation patterns |
 | [044-multi-path-conditional-cycle-patterns](044-multi-path-conditional-cycle-patterns.md) | Multi-Path Conditional Cycles | Complex workflows with multiple conditional routing paths |
 | [045-ollama-integration-patterns](045-ollama-integration-patterns.md) | Ollama Local LLMs | Production-ready Ollama integration patterns |
+| **[047-asyncsql-enterprise-patterns](047-asyncsql-enterprise-patterns.md)** | **🚀 AsyncSQL Enterprise** | **Production async SQL with transactions & optimistic locking** |
 
 ## 🔗 Related Resources
 
