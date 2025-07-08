@@ -65,6 +65,7 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
 7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/cheatsheet/025-mcp-integration.md)
 8. **Documentation**: Comprehensive validation across 9 critical phases, 100% pass rates achieved - see [SDK Users](sdk-users/) navigation hub
+9. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/enterprise/resilience-patterns.md)
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)

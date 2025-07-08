@@ -70,6 +70,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [033-workflow-design-process](033-workflow-design-process.md) | Workflow Design Process | Systematic approach to workflow architecture |
 | [034-data-integration-patterns](034-data-integration-patterns.md) | Data Integration Patterns | Multi-source data normalization and merging |
 | [035-production-readiness](035-production-readiness.md) | Production Readiness | Deployment checklist and monitoring patterns |
+| **[046-resilience-patterns](046-resilience-patterns.md)** | **🛡️ Resilience Patterns** | **Circuit breakers, bulkhead isolation, health monitoring** |
 
 ### 🔧 **Enhanced Features**
 | File | Topic | Description |
