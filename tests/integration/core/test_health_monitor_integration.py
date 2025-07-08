@@ -61,7 +61,7 @@ class TestHealthMonitorPostgreSQLIntegration:
         # Verify results
         assert result.service_name == "postgres_test"
         assert result.status == HealthStatus.HEALTHY
-        assert result.is_healthy == True
+        assert result.is_healthy
         assert result.response_time_ms > 0
         assert "query_executed" in result.details
         assert result.details["rows_returned"] == 1
@@ -83,7 +83,7 @@ class TestHealthMonitorPostgreSQLIntegration:
 
         assert result.service_name == "invalid_postgres"
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.is_healthy == False
+        assert not result.is_healthy
         assert result.error_message is not None
 
     @pytest.mark.asyncio
@@ -166,10 +166,10 @@ class TestHealthMonitorRedisIntegration:
         # Verify results
         assert result.service_name == "redis_test"
         assert result.status == HealthStatus.HEALTHY
-        assert result.is_healthy == True
+        assert result.is_healthy
         assert result.response_time_ms > 0
         assert "ping_successful" in result.details
-        assert result.details["ping_successful"] == True
+        assert result.details["ping_successful"]
         assert "redis_version" in result.details
 
     @pytest.mark.asyncio
@@ -189,7 +189,7 @@ class TestHealthMonitorRedisIntegration:
 
         assert result.service_name == "invalid_redis"
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.is_healthy == False
+        assert not result.is_healthy
         assert result.error_message is not None
 
     @pytest.mark.asyncio
@@ -369,11 +369,11 @@ class TestGlobalHealthMonitorIntegration:
 
         # Use quick health check function
         is_healthy = await quick_health_check("global_postgres")
-        assert is_healthy == True
+        assert is_healthy
 
         # Verify through direct check
         result = await monitor.get_health_status("global_postgres")
-        assert result.is_healthy == True
+        assert result.is_healthy
 
     @pytest.mark.asyncio
     async def test_global_health_monitor_service_isolation(
@@ -404,5 +404,5 @@ class TestGlobalHealthMonitorIntegration:
         working_healthy = await quick_health_check("global_working")
         failing_healthy = await quick_health_check("global_failing")
 
-        assert working_healthy == True
-        assert failing_healthy == False
+        assert working_healthy
+        assert not failing_healthy

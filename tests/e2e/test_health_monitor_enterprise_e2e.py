@@ -205,7 +205,7 @@ class TestEnterpriseHealthMonitoringE2E:
         # Verify cache operations succeeded
         cache_results = [results[1], results[3]]
         for result in cache_results:
-            assert result["cached"] == True
+            assert result["cached"]
 
         # Enterprise performance requirement
         assert execution_time < 10.0  # All operations within 10 seconds

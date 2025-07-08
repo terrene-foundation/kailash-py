@@ -36,8 +36,8 @@ class TestPartitionConfig:
         assert config.timeout == 30
         assert config.priority == 1
         assert config.queue_size == 100
-        assert config.circuit_breaker_enabled == True
-        assert config.metrics_enabled == True
+        assert config.circuit_breaker_enabled
+        assert config.metrics_enabled
 
     def test_custom_config(self):
         """Test custom partition configuration."""
@@ -57,7 +57,7 @@ class TestPartitionConfig:
         assert config.timeout == 60
         assert config.priority == 10
         assert config.queue_size == 50
-        assert config.circuit_breaker_enabled == False
+        assert not config.circuit_breaker_enabled
 
 
 class TestPartitionMetrics:
