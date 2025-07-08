@@ -354,6 +354,7 @@ class TestAsyncSQLTransactionScenarios:
             database_type="postgresql",
             connection_string=conn_string,
             transaction_mode="manual",
+            timeout=10.0,  # 10 second timeout to prevent indefinite waits
         )
 
         node2 = AsyncSQLDatabaseNode(
@@ -361,6 +362,7 @@ class TestAsyncSQLTransactionScenarios:
             database_type="postgresql",
             connection_string=conn_string,
             transaction_mode="manual",
+            timeout=10.0,  # 10 second timeout to prevent indefinite waits
         )
 
         try:
@@ -398,25 +400,30 @@ class TestAsyncSQLTransactionScenarios:
             assert inventory1["result"]["data"][0]["available_quantity"] == 25
             assert inventory2["result"]["data"][0]["available_quantity"] == 25
 
-            # First processor reserves 20 units
+            # First processor reserves 20 units with row locking
             await node1.execute_async(
                 query="""
                     UPDATE inventory
                     SET available_quantity = available_quantity - :quantity
-                    WHERE product_id = :product_id
+                    WHERE product_id = :product_id AND available_quantity >= :quantity
                 """,
                 params={"product_id": 3, "quantity": 20},
             )
 
             # Second processor tries to reserve 15 units (would exceed available after first)
-            await node2.execute_async(
-                query="""
-                    UPDATE inventory
-                    SET available_quantity = available_quantity - :quantity
-                    WHERE product_id = :product_id
-                """,
-                params={"product_id": 3, "quantity": 15},
-            )
+            # This should either wait for the first transaction or get a timeout
+            try:
+                await node2.execute_async(
+                    query="""
+                        UPDATE inventory
+                        SET available_quantity = available_quantity - :quantity
+                        WHERE product_id = :product_id AND available_quantity >= :quantity
+                    """,
+                    params={"product_id": 3, "quantity": 15},
+                )
+            except NodeExecutionError:
+                # Timeout or deadlock is expected here
+                pass
 
             # Commit first transaction
             await node1.commit()

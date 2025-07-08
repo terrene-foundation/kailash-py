@@ -2164,7 +2164,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
         # Add version check to the query
         if expected_version is not None:
             # Ensure version field is in params
-            params[self._version_field] = expected_version
+            if "expected_version" in query:
+                # Query already uses :expected_version, just ensure it's set
+                params["expected_version"] = expected_version
+            else:
+                # Use standard version field
+                params[self._version_field] = expected_version
 
             # For UPDATE queries, also add version increment
             if "UPDATE" in query.upper() and "SET" in query.upper():
@@ -2181,11 +2186,20 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             + query[set_match.end(2) :]
                         )
 
-            # Modify query to include version check
-            if "WHERE" in query.upper():
-                query += f" AND {self._version_field} = :{self._version_field}"
-            else:
-                query += f" WHERE {self._version_field} = :{self._version_field}"
+            # Modify query to include version check in WHERE clause (only if not already present)
+            # Check for version condition in WHERE clause specifically, not just anywhere in query
+            where_clause_pattern = (
+                r"WHERE\s+.*?" + re.escape(self._version_field) + r"\s*="
+            )
+            has_version_check_in_where = (
+                re.search(where_clause_pattern, query, re.IGNORECASE) is not None
+                or ":expected_version" in query
+            )
+            if not has_version_check_in_where:
+                if "WHERE" in query.upper():
+                    query += f" AND {self._version_field} = :{self._version_field}"
+                else:
+                    query += f" WHERE {self._version_field} = :{self._version_field}"
 
         # Try to execute with version check
         retry_count = 0
@@ -2195,19 +2209,22 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
                 # Check if any rows were affected
                 rows_affected = 0
+                rows_affected_found = False
                 if isinstance(result.get("result"), dict):
                     # Check if we have data array with rows_affected
                     data = result["result"].get("data", [])
                     if data and isinstance(data, list) and len(data) > 0:
                         if isinstance(data[0], dict) and "rows_affected" in data[0]:
                             rows_affected = data[0]["rows_affected"]
+                            rows_affected_found = True
 
-                    # Also check direct keys
-                    if rows_affected == 0:
+                    # Only check direct keys if we haven't found rows_affected in data
+                    if not rows_affected_found:
                         rows_affected = (
                             result["result"].get("rows_affected", 0)
                             or result["result"].get("rowcount", 0)
                             or result["result"].get("affected_rows", 0)
+                            or result["result"].get("row_count", 0)
                         )
 
                 if rows_affected == 0 and expected_version is not None:

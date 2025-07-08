@@ -85,6 +85,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [043-datatransformer-bug-workarounds](043-datatransformer-bug-workarounds.md) | DataTransformer Bug Workarounds | Bug detection and mitigation patterns |
 | [044-multi-path-conditional-cycle-patterns](044-multi-path-conditional-cycle-patterns.md) | Multi-Path Conditional Cycles | Complex workflows with multiple conditional routing paths |
 | [045-ollama-integration-patterns](045-ollama-integration-patterns.md) | Ollama Local LLMs | Production-ready Ollama integration patterns |
+| **[047-asyncsql-enterprise-patterns](047-asyncsql-enterprise-patterns.md)** | **🚀 AsyncSQL Enterprise** | **Production async SQL with transactions & optimistic locking** |
 
 ## 🔗 Related Resources
 
