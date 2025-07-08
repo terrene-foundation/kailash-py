@@ -64,7 +64,7 @@ class TestHealthCheckResult:
         assert result.service_name == "test-service"
         assert result.status == HealthStatus.HEALTHY
         assert result.response_time_ms == 50.0
-        assert result.is_healthy == True
+        assert result.is_healthy
         assert isinstance(result.timestamp, datetime)
 
     def test_unhealthy_result_creation(self):
@@ -78,7 +78,7 @@ class TestHealthCheckResult:
         )
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.is_healthy == False
+        assert not result.is_healthy
         assert result.error_message == "Connection failed"
 
     def test_degraded_result_is_healthy(self):
@@ -91,7 +91,7 @@ class TestHealthCheckResult:
         )
 
         assert result.status == HealthStatus.DEGRADED
-        assert result.is_healthy == True  # Degraded is still considered healthy
+        assert result.is_healthy  # Degraded is still considered healthy
 
 
 class TestHealthMetrics:
@@ -127,7 +127,7 @@ class TestHealthAlert:
         assert alert.service_name == "test-service"
         assert alert.level == AlertLevel.CRITICAL
         assert alert.message == "Service is down"
-        assert alert.resolved == False
+        assert not alert.resolved
         assert alert.resolved_at is None
         assert isinstance(alert.timestamp, datetime)
         assert len(alert.alert_id) > 0
@@ -171,14 +171,14 @@ class TestHealthCheck:
 
         assert check.name == "test-service"
         assert check.timeout == 5.0  # Default timeout
-        assert check.critical == True  # Default critical
+        assert check.critical  # Default critical
 
     def test_health_check_custom_params(self):
         """Test health check with custom parameters."""
         check = MockHealthCheck("test-service", timeout=10.0, critical=False)
 
         assert check.timeout == 10.0
-        assert check.critical == False
+        assert not check.critical
 
     @pytest.mark.asyncio
     async def test_health_check_success(self):
@@ -189,7 +189,7 @@ class TestHealthCheck:
         assert result.service_name == "test-service"
         assert result.status == HealthStatus.HEALTHY
         assert result.response_time_ms == 25.0
-        assert result.is_healthy == True
+        assert result.is_healthy
 
     @pytest.mark.asyncio
     async def test_health_check_failure(self):
@@ -210,7 +210,7 @@ class TestDatabaseHealthCheck:
         assert check.name == "postgres"
         assert check.connection_string == "postgresql://user:pass@host/db"
         assert check.timeout == 5.0
-        assert check.critical == True
+        assert check.critical
 
     @pytest.mark.asyncio
     async def test_database_health_check_success(self):
@@ -234,7 +234,7 @@ class TestDatabaseHealthCheck:
 
         assert result.service_name == "postgres"
         assert result.status == HealthStatus.HEALTHY
-        assert result.is_healthy == True
+        assert result.is_healthy
         assert "query_executed" in result.details
         assert result.details["rows_returned"] == 1
 
@@ -250,7 +250,7 @@ class TestDatabaseHealthCheck:
 
         assert result.service_name == "postgres"
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.is_healthy == False
+        assert not result.is_healthy
         assert "timed out" in result.error_message
 
     @pytest.mark.asyncio
@@ -266,7 +266,7 @@ class TestDatabaseHealthCheck:
 
         assert result.service_name == "postgres"
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.is_healthy == False
+        assert not result.is_healthy
         assert result.error_message == "Connection failed"
 
 
@@ -310,8 +310,8 @@ class TestRedisHealthCheck:
 
         assert result.service_name == "redis"
         assert result.status == HealthStatus.HEALTHY
-        assert result.is_healthy == True
-        assert result.details["ping_successful"] == True
+        assert result.is_healthy
+        assert result.details["ping_successful"]
         assert result.details["connected_clients"] == 5
 
     @pytest.mark.asyncio
@@ -358,7 +358,7 @@ class TestHTTPHealthCheck:
 
         assert result.service_name == "api"
         assert result.status == HealthStatus.HEALTHY
-        assert result.is_healthy == True
+        assert result.is_healthy
         assert result.details["status_code"] == 200
 
     @pytest.mark.asyncio
@@ -382,7 +382,7 @@ class TestHTTPHealthCheck:
 
         assert result.service_name == "api"
         assert result.status == HealthStatus.DEGRADED
-        assert result.is_healthy == True
+        assert result.is_healthy
 
     @pytest.mark.asyncio
     async def test_http_health_check_unhealthy(self):
@@ -403,7 +403,7 @@ class TestHTTPHealthCheck:
 
         assert result.service_name == "api"
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.is_healthy == False
+        assert not result.is_healthy
 
 
 class TestHealthMonitor:
@@ -654,7 +654,7 @@ class TestGlobalHealthMonitor:
 
         is_healthy = await quick_health_check("test-service")
 
-        assert is_healthy == True
+        assert is_healthy
 
     @pytest.mark.asyncio
     async def test_quick_health_check_failure(self):
@@ -670,7 +670,7 @@ class TestGlobalHealthMonitor:
 
         is_healthy = await quick_health_check("test-service")
 
-        assert is_healthy == False
+        assert not is_healthy
 
     @pytest.mark.asyncio
     async def test_quick_health_check_unregistered(self):
@@ -682,4 +682,4 @@ class TestGlobalHealthMonitor:
 
         is_healthy = await quick_health_check("unknown-service")
 
-        assert is_healthy == False
+        assert not is_healthy

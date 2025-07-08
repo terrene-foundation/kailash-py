@@ -37,7 +37,7 @@ class TestAsyncSQLFeatureParity:
 
         assert node.config["pool_size"] == 5
         assert node.config["max_pool_size"] == 10
-        assert node._share_pool is True
+        assert node._share_pool
 
     def test_pool_sharing_key_generation(self):
         """Test pool sharing key generation logic."""
@@ -228,7 +228,7 @@ class TestAsyncSQLFeatureParity:
             version_retry_attempts=5,
         )
 
-        assert node._enable_optimistic_locking is True
+        assert node._enable_optimistic_locking
         assert node._version_field == "version_num"
         assert node._conflict_resolution == "retry"
         assert node._version_retry_attempts == 5
@@ -272,7 +272,7 @@ class TestAsyncSQLFeatureParity:
                 )
 
                 assert result["status"] == LockStatus.SUCCESS
-                assert result["version_checked"] == True
+                assert result["version_checked"]
 
     def test_retry_configuration_parity(self):
         """Test retry configuration matches sync version."""
@@ -602,8 +602,8 @@ class TestAsyncSQLFeatureParity:
             assert node.config["pool_size"] == 20
             assert node.config["max_pool_size"] == 50
             assert node.config["timeout"] == 60.0
-            assert node._validate_queries is True
-            assert node._allow_admin is False
+            assert node._validate_queries
+            assert not node._allow_admin
 
         finally:
             os.unlink(config_path)
