@@ -317,49 +317,253 @@ workflow.runtime = LocalRuntime()
   print(f"Avg routing time: {metrics['router_metrics']['avg_routing_time_ms']}ms")
   ```
 
-### AsyncSQLDatabaseNode
+### AsyncSQLDatabaseNode ⭐ **ENHANCED**
 - **Module**: `kailash.nodes.data.async_sql`
-- **Purpose**: Asynchronous SQL execution with connection reuse
+- **Purpose**: Production-grade asynchronous SQL execution with enterprise features
 - **Key Features**:
-  - Database-specific parameter handling (PostgreSQL, MySQL, SQLite)
-  - Named parameter support with `:param_name` syntax
-  - Async connection pooling per database type
-  - Different result format: `{"result": {"data": [...]}}`
-- **Constructor Parameters**:
-  - `database_type`: Database type (postgresql, mysql, sqlite)
-  - `host`: Database host
-  - `port`: Database port
-  - `database`: Database name
-  - `user`: Database user
-  - `password`: Database password
-  - `connection_string`: Full connection string (alternative to individual params)
-- **Runtime Parameters** (passed to `async_run()`):
-  - `query`: SQL query to execute
-  - `params`: Query parameters (note: different from SQLDatabaseNode's `parameters`)
-  - `operation`: Operation type ("execute", "fetch_all", "fetch_one")
-  - `fetch_mode`: "one", "all", "many", or "iterator"
-- **Parameter Format Examples**:
-  ```python
-  # Named parameters
-  result = await node.async_run(
-      query="SELECT * FROM users WHERE active = :active",
-      params={"active": True},
-      operation="fetch_all"
-  )
-  # Access data: result["result"]["data"]
+  - **✅ Transaction Management**: Auto, manual, and none modes for precise control
+  - **✅ Optimistic Locking**: Version-based concurrency control with conflict resolution
+  - **✅ Connection Pool Sharing**: Efficient resource utilization across workflows
+  - **✅ Advanced Parameter Handling**: Database-specific parameter conversion (PostgreSQL ANY(), etc.)
+  - **✅ Intelligent Retry Logic**: Exponential backoff with DNS/network error handling
+  - **✅ Security Validation**: Query validation with configurable admin operation control
+  - **✅ Performance Monitoring**: Comprehensive metrics and connection health tracking
+  - **✅ Multiple Result Formats**: DataFrame serialization for complex data structures
 
-  # Positional parameters (PostgreSQL auto-converts to $1, $2)
-  result = await node.async_run(
-      query="SELECT * FROM users WHERE id = :user_id",
-      params={"user_id": 123},
-      operation="fetch_one"
+- **Constructor Parameters**:
+  - `database_type`: Database type (`postgresql`, `mysql`, `sqlite`)
+  - `host`: Database host (required unless using connection_string)
+  - `port`: Database port (optional, uses defaults)
+  - `database`: Database name (required)
+  - `user`: Database user (required)
+  - `password`: Database password (required)
+  - `connection_string`: Full connection string (alternative to individual params)
+  - `transaction_mode`: Transaction handling mode (`"auto"`, `"manual"`, `"none"`)
+  - `share_pool`: Enable connection pool sharing across instances (default: `True`)
+  - `validate_queries`: Enable security query validation (default: `True`)
+  - `allow_admin`: Allow admin operations (CREATE, DROP, etc.) (default: `False`)
+  - `retry_config`: Retry configuration object (optional)
+  - `timeout`: Query timeout in seconds (default: 30.0)
+
+- **Transaction Management Modes**:
+  ```python
+  # AUTO MODE (default) - Each query in its own transaction
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      user="dbuser",
+      password="dbpass",
+      transaction_mode="auto"  # Default
+  )
+
+  # MANUAL MODE - Explicit transaction control
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      user="dbuser",
+      password="dbpass",
+      transaction_mode="manual"
+  )
+
+  # Begin transaction
+  await node.begin_transaction()
+  try:
+      await node.async_run(query="UPDATE accounts SET balance = balance - 100 WHERE id = 1")
+      await node.async_run(query="UPDATE accounts SET balance = balance + 100 WHERE id = 2")
+      await node.commit()
+  except Exception:
+      await node.rollback()
+      raise
+
+  # NONE MODE - No transaction wrapping (for read-only operations)
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      user="dbuser",
+      password="dbpass",
+      transaction_mode="none"
   )
   ```
+
+- **Optimistic Locking Integration** ⭐ **NEW**:
+  ```python
+  # Read with version tracking
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      user="dbuser",
+      password="dbpass"
+  )
+
+  # Enable optimistic locking mode
+  result = await node.async_run(
+      query="SELECT *, version FROM users WHERE id = :user_id",
+      params={"user_id": 123},
+      fetch_mode="one",
+      enable_optimistic_locking=True
+  )
+
+  # Update with version check
+  update_result = await node.async_run(
+      query="UPDATE users SET name = :name, version = version + 1 WHERE id = :id AND version = :expected_version",
+      params={
+          "name": "John Updated",
+          "id": 123,
+          "expected_version": result["result"]["data"]["version"]
+      },
+      enable_optimistic_locking=True,
+      conflict_resolution="retry"
+  )
+  ```
+
+- **Advanced Parameter Handling** ⭐ **ENHANCED**:
+  ```python
+  # PostgreSQL ANY() array operations
+  await node.async_run(
+      query="SELECT * FROM users WHERE id = ANY(:user_ids)",
+      params={"user_ids": [1, 2, 3, 4, 5]},  # Automatically converted
+      fetch_mode="all"
+  )
+
+  # Named parameters with type conversion
+  result = await node.async_run(
+      query="SELECT * FROM orders WHERE created_date >= :start_date AND status = :status",
+      params={
+          "start_date": "2024-01-01",  # Converted to appropriate date type
+          "status": "active"
+      },
+      fetch_mode="all"
+  )
+
+  # Complex data types (JSON, arrays)
+  await node.async_run(
+      query="INSERT INTO events (data, tags) VALUES (:event_data, :tags)",
+      params={
+          "event_data": {"user_id": 123, "action": "login"},  # JSON serialized
+          "tags": ["auth", "security", "user"]  # Array handling
+      }
+  )
+  ```
+
+- **Connection Pool Sharing** ⭐ **ENHANCED**:
+  ```python
+  # Multiple nodes sharing the same connection pool
+  node1 = AsyncSQLDatabaseNode(
+      name="reader",
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      share_pool=True  # Default
+  )
+
+  node2 = AsyncSQLDatabaseNode(
+      name="writer",
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      share_pool=True  # Shares pool with node1
+  )
+  ```
+
+- **Retry Logic with Error Handling** ⭐ **ENHANCED**:
+  ```python
+  from kailash.nodes.data.async_sql import RetryConfig
+
+  # Custom retry configuration
+  retry_config = RetryConfig(
+      max_retries=5,
+      base_delay=0.5,
+      max_delay=10.0,
+      backoff_multiplier=2.0,
+      jitter=True
+  )
+
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      retry_config=retry_config
+  )
+
+  # Automatically retries on:
+  # - Connection failures
+  # - DNS resolution errors
+  # - Network timeouts
+  # - Temporary database locks
+  # - Connection pool exhaustion
+  ```
+
+- **Security and Query Validation** ⭐ **ENHANCED**:
+  ```python
+  # Secure configuration for production
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      validate_queries=True,   # Enable security validation
+      allow_admin=False       # Disable admin operations
+  )
+
+  # Admin operations require explicit permission
+  admin_node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      validate_queries=True,
+      allow_admin=True  # Required for CREATE, DROP, ALTER, etc.
+  )
+
+  await admin_node.async_run(
+      query="CREATE TEMPORARY TABLE temp_analysis AS SELECT * FROM users WHERE active = :active",
+      params={"active": True}
+  )
+  ```
+
+- **Result Format and Data Access**:
+  ```python
+  # Standard result format
+  result = await node.async_run(
+      query="SELECT id, name, email FROM users WHERE active = :active",
+      params={"active": True},
+      fetch_mode="all"
+  )
+
+  # Access data: result["result"]["data"]
+  users = result["result"]["data"]  # List of dictionaries
+
+  # Single record fetch
+  user = await node.async_run(
+      query="SELECT * FROM users WHERE id = :user_id",
+      params={"user_id": 123},
+      fetch_mode="one"
+  )
+  user_data = user["result"]["data"]  # Single dictionary or None
+
+  # Iterator for large datasets
+  async for batch in await node.async_run(
+      query="SELECT * FROM large_table",
+      fetch_mode="iterator",
+      fetch_size=1000
+  ):
+      process_batch(batch["result"]["data"])
+  ```
+
 - **Best For**:
-  - Simple async database operations
-  - Single connection workflows
-  - Development and testing
-- **Note**: For production use, prefer WorkflowConnectionPool for better connection management
+  - Production applications requiring transaction control
+  - Concurrent workflows needing optimistic locking
+  - Applications with complex parameter handling needs
+  - Systems requiring comprehensive error handling and retries
+  - Enterprise applications needing security validation
+
+- **Performance Considerations**:
+  - Connection pool sharing reduces resource usage
+  - Retry logic handles transient failures gracefully
+  - Transaction modes optimize for different use cases
+  - Parameter conversion minimizes database-specific code
 
 ### SQLDatabaseNode
 - **Module**: `kailash.nodes.data.sql`
@@ -400,6 +604,191 @@ workflow.runtime = LocalRuntime()
   )
   ```
 - **Best For**: Production applications requiring connection pooling and parameter flexibility
+
+### OptimisticLockingNode ⭐ **NEW - ENTERPRISE CONCURRENCY**
+- **Module**: `kailash.nodes.data.optimistic_locking`
+- **Purpose**: Enterprise-grade concurrency control with version-based conflict detection
+- **Key Features**:
+  - **✅ Version-Based Concurrency**: Prevents lost updates in concurrent environments
+  - **✅ Conflict Resolution Strategies**: Fail-fast, retry, merge, last-writer-wins
+  - **✅ Automatic Retry Logic**: Configurable retry with exponential backoff
+  - **✅ Performance Metrics**: Lock contention monitoring and conflict analysis
+  - **✅ Database Integration**: Seamless integration with AsyncSQLDatabaseNode
+  - **✅ Batch Operations**: Support for multiple record updates with conflict handling
+
+- **Constructor Parameters**:
+  - `version_field`: Version column name (default: `"version"`)
+  - `max_retries`: Maximum retry attempts (default: 3)
+  - `retry_delay`: Initial retry delay in seconds (default: 0.1)
+  - `retry_backoff_multiplier`: Backoff multiplier for retries (default: 2.0)
+  - `default_conflict_resolution`: Default conflict strategy (default: `ConflictResolution.RETRY`)
+
+- **Conflict Resolution Strategies**:
+  ```python
+  from kailash.nodes.data.optimistic_locking import ConflictResolution, OptimisticLockingNode
+
+  # FAIL_FAST - Immediately fail on version conflict
+  lock_manager = OptimisticLockingNode(
+      default_conflict_resolution=ConflictResolution.FAIL_FAST
+  )
+
+  # RETRY - Automatically retry operation with updated version
+  lock_manager = OptimisticLockingNode(
+      default_conflict_resolution=ConflictResolution.RETRY,
+      max_retries=5,
+      retry_delay=0.2
+  )
+
+  # MERGE - Attempt to merge non-conflicting changes
+  lock_manager = OptimisticLockingNode(
+      default_conflict_resolution=ConflictResolution.MERGE
+  )
+
+  # LAST_WRITER_WINS - Override with new data (use with caution)
+  lock_manager = OptimisticLockingNode(
+      default_conflict_resolution=ConflictResolution.LAST_WRITER_WINS
+  )
+  ```
+
+- **Basic Usage Examples**:
+  ```python
+  # Initialize lock manager
+  lock_manager = OptimisticLockingNode(
+      version_field="version",
+      max_retries=3
+  )
+
+  # Read with version tracking
+  result = await lock_manager.execute(
+      action="read_with_version",
+      table_name="users",
+      record_id=123,
+      connection=db_connection
+  )
+
+  current_data = result["data"]
+  current_version = result["version"]
+
+  # Update with version check
+  update_result = await lock_manager.execute(
+      action="update_with_version",
+      table_name="users",
+      record_id=123,
+      update_data={"name": "John Updated", "email": "john@example.com"},
+      expected_version=current_version,
+      conflict_resolution="retry",
+      connection=db_connection
+  )
+
+  if update_result["lock_status"] == "success":
+      print(f"Update successful. New version: {update_result['new_version']}")
+  else:
+      print(f"Update failed: {update_result['lock_status']}")
+  ```
+
+- **Batch Operations** ⭐ **ADVANCED**:
+  ```python
+  # Batch update with conflict handling
+  batch_updates = [
+      {"record_id": 1, "update_data": {"status": "active"}, "expected_version": 5},
+      {"record_id": 2, "update_data": {"status": "inactive"}, "expected_version": 3},
+      {"record_id": 3, "update_data": {"status": "pending"}, "expected_version": 7}
+  ]
+
+  batch_result = await lock_manager.execute(
+      action="batch_update",
+      table_name="users",
+      batch_updates=batch_updates,
+      conflict_resolution="retry",
+      connection=db_connection
+  )
+
+  # Results per record
+  for record_result in batch_result["results"]:
+      if record_result["lock_status"] == "success":
+          print(f"Record {record_result['record_id']} updated successfully")
+      else:
+          print(f"Record {record_result['record_id']} failed: {record_result['lock_status']}")
+  ```
+
+- **Integration with AsyncSQLDatabaseNode**:
+  ```python
+  # Combined optimistic locking with async SQL operations
+  async_sql_node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      transaction_mode="manual"  # Manual mode for precise control
+  )
+
+  lock_manager = OptimisticLockingNode()
+
+  # Get connection from SQL node
+  await async_sql_node.connect()
+  connection = async_sql_node._adapter
+
+  # Begin transaction
+  transaction = await connection.begin_transaction()
+
+  try:
+      # Read current state
+      user = await lock_manager.execute(
+          action="read_with_version",
+          table_name="users",
+          record_id=user_id,
+          connection=connection,
+          transaction=transaction
+      )
+
+      # Business logic
+      updated_data = process_user_data(user["data"])
+
+      # Update with version check
+      result = await lock_manager.execute(
+          action="update_with_version",
+          table_name="users",
+          record_id=user_id,
+          update_data=updated_data,
+          expected_version=user["version"],
+          connection=connection,
+          transaction=transaction
+      )
+
+      await connection.commit_transaction(transaction)
+
+  except Exception as e:
+      await connection.rollback_transaction(transaction)
+      raise
+  ```
+
+- **Performance Monitoring**:
+  ```python
+  # Get lock contention metrics
+  metrics = lock_manager.get_metrics()
+
+  print(f"Total operations: {metrics['total_operations']}")
+  print(f"Success rate: {metrics['successful_operations'] / metrics['total_operations']:.2%}")
+  print(f"Version conflicts: {metrics['version_conflicts']}")
+  print(f"Average retries: {metrics['avg_retry_count']:.1f}")
+
+  # Conflict history analysis
+  recent_conflicts = lock_manager.get_conflict_history(limit=10)
+  for conflict in recent_conflicts:
+      print(f"Conflict in {conflict['table_name']} record {conflict['record_id']} at {conflict['timestamp']}")
+  ```
+
+- **Best For**:
+  - High-concurrency applications with frequent updates
+  - E-commerce systems (inventory, orders, payments)
+  - Financial applications requiring data consistency
+  - Multi-tenant applications with shared data
+  - Enterprise systems with audit requirements
+
+- **Performance Considerations**:
+  - Version fields should be indexed for performance
+  - Retry logic reduces conflict impact in high-concurrency scenarios
+  - Conflict monitoring helps identify hotspot records
+  - Batch operations reduce network round-trips
 
 ### SQLQueryBuilderNode
 - **Module**: `kailash.nodes.data.sql`

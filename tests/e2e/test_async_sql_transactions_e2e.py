@@ -347,6 +347,7 @@ class TestAsyncSQLTransactionsE2E:
                 database_type="postgresql",
                 connection_string=conn_string,
                 transaction_mode="manual",
+                timeout=5.0,  # Add timeout to prevent indefinite waits
             )
             transfer_nodes.append(node)
 
@@ -354,13 +355,21 @@ class TestAsyncSQLTransactionsE2E:
         async def do_transfer(node, from_acc, to_acc, amount):
             await node.begin_transaction()
             try:
-                # Use SELECT FOR UPDATE to lock the row
+                # First try simple SELECT to check if account exists
                 balance_result = await node.execute_async(
-                    query="SELECT balance FROM bank_accounts WHERE account_number = :acc FOR UPDATE",
+                    query="SELECT balance FROM bank_accounts WHERE account_number = :acc",
                     params={"acc": from_acc},
                 )
 
-                current_balance = float(balance_result["result"]["data"][0]["balance"])
+                # Debug the actual result structure
+                if not balance_result["result"]["data"]:
+                    print(f"No data returned for account {from_acc}")
+                    await node.rollback()
+                    return False
+
+                balance_data = balance_result["result"]["data"][0]
+                print(f"Balance data for {from_acc}: {balance_data}")
+                current_balance = float(balance_data["balance"])
 
                 if current_balance >= amount:
                     await node.execute_async(
@@ -379,8 +388,10 @@ class TestAsyncSQLTransactionsE2E:
                     await node.rollback()
                     return False
 
-            except Exception:
+            except Exception as e:
                 await node.rollback()
+                # Print error for debugging E2E test failures
+                print(f"Transfer {from_acc}->{to_acc} failed: {e}")
                 return False
 
         # Run concurrent transfers

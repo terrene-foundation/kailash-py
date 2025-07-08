@@ -15,6 +15,8 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 | REST API calls | `requests` library | `RESTClientNode` |
 | GraphQL queries | GraphQL libraries | `GraphQLClientNode` |
 | SQL queries | `cursor.execute()` | `SQLDatabaseNode` |
+| **Enterprise async SQL** | **Manual pooling/transactions** | **`AsyncSQLDatabaseNode` ⭐⭐⭐** |
+| **Concurrency control** | **Custom version checking** | **`OptimisticLockingNode` ⭐⭐ NEW** |
 | **High-perf SQL** | **Manual pooling** | **`QueryRouterNode` + Pool` ⭐NEW** |
 | Filter data | `df[df['x'] > y]` | `FilterNode` |
 | Map function | `[f(x) for x in data]` | `Map` |
@@ -46,8 +48,9 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 │  └─ Multiple files in directory → DirectoryReaderNode
 ├─ 🗄️ Database data?
 │  ├─ Production with pooling → WorkflowConnectionPool ⭐
+│  ├─ **Enterprise async SQL** → **AsyncSQLDatabaseNode ⭐⭐⭐ ENHANCED**
+│  ├─ **Concurrency control** → **OptimisticLockingNode ⭐⭐ NEW**
 │  ├─ Simple SQL queries → SQLDatabaseNode
-│  ├─ Async SQL queries → AsyncSQLDatabaseNode
 │  ├─ Vector embeddings → VectorDatabaseNode
 │  └─ Intelligent routing → QueryRouterNode ⭐⭐⭐
 ├─ 🌐 API data?
@@ -119,9 +122,10 @@ JSONReaderNode, JSONWriterNode
 TextReaderNode, TextWriterNode
 
 # Database
+AsyncSQLDatabaseNode    # ⭐⭐⭐ Enterprise async SQL with transactions
+OptimisticLockingNode   # ⭐⭐ Concurrency control NEW
 QueryRouterNode         # ⭐⭐⭐ Intelligent query routing
 WorkflowConnectionPool  # ⭐⭐ Production connection pooling
-AsyncSQLDatabaseNode    # Async queries with reuse
 SQLDatabaseNode         # Simple sync queries
 VectorDatabaseNode      # Vector/embedding storage
 
@@ -255,7 +259,7 @@ PagerDutyAlertNode, WebhookAlertNode
 ## Quick Tips
 
 - **File operations**: Always use dedicated reader/writer nodes
-- **Database work**: Use QueryRouterNode for production, SQLDatabaseNode for simple cases
+- **Database work**: Use AsyncSQLDatabaseNode for enterprise/production, QueryRouterNode for high-performance routing, OptimisticLockingNode for concurrent updates, SQLDatabaseNode for simple cases
 - **API calls**: Use RESTClientNode for REST, HTTPRequestNode for simple HTTP
 - **AI tasks**: Use LLMAgentNode family, avoid direct SDK calls
 - **Control flow**: Use SwitchNode for conditions, MergeNode for combining data

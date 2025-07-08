@@ -668,6 +668,7 @@ class TestAsyncSQLComprehensiveIntegration:
             name="data_type_test",
             database_type="postgresql",
             connection_string=conn_string,
+            allow_admin=True,
         )
 
         try:

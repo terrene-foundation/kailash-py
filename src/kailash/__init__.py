@@ -3,8 +3,8 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.6.4: Enterprise-grade parameter injection system, comprehensive E2E test
-improvements achieving 100% pass rate, and enhanced documentation based on test findings.
+New in v0.6.5: Enterprise AsyncSQL enhancements with optimistic locking, comprehensive
+testing improvements, and production-grade documentation.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter

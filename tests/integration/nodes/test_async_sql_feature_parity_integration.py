@@ -232,7 +232,7 @@ class TestAsyncSQLFeatureParityIntegration:
                 table_name="versioned_records",
             )
 
-            new_version = update_result["result"]["data"][0]["version"]
+            new_version = update_result["result"]["result"]["data"][0]["version"]
             assert new_version == initial_version + 1
 
             # Test version conflict detection
@@ -546,12 +546,16 @@ class TestAsyncSQLFeatureParityIntegration:
                 params={"pattern": "fetch_test_%"},
             )
 
-            # Should return only one record
-            assert (
-                len(one_result["result"]["data"]) == 1
-                if one_result["result"]["data"]
-                else True
-            )
+            # Should return only one record (as a dict, not a list)
+            one_data = one_result["result"]["data"]
+            if one_data is not None:
+                # In 'one' mode, data should be a single dict, not a list
+                assert isinstance(
+                    one_data, dict
+                ), f"Expected dict, got {type(one_data)}"
+            else:
+                # No data returned, which is also valid for 'one' mode
+                assert True
 
             # Test 'all' mode (default)
             all_node = AsyncSQLDatabaseNode(
