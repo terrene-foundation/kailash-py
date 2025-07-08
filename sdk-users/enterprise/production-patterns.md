@@ -606,8 +606,7 @@ def create_monitored_enterprise_workflow():
     })
 
     workflow.add_node("DeadlockDetectorNode", "deadlock_monitor", {
-        "operation": "monitor_transaction",
-        "transaction_id": "enterprise_workflow"
+        "operation": "start_monitoring"
     })
 
     workflow.add_node("PerformanceAnomalyNode", "anomaly_monitor", {

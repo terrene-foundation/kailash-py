@@ -73,6 +73,8 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 **🏥 Enterprise MCP Workflows**: Complete healthcare HIPAA, finance SOX, and multi-tenant patterns with 4 production-grade enterprise nodes. See [cheatsheet/040-enterprise-mcp-workflows.md](cheatsheet/040-enterprise-mcp-workflows.md).
 
+**📊 Transaction Monitoring**: Enterprise-grade transaction metrics, deadlock detection, race condition analysis, and performance anomaly detection with 5 production-tested monitoring nodes. See [cheatsheet/048-transaction-monitoring.md](cheatsheet/048-transaction-monitoring.md) and [nodes/monitoring-nodes.md](nodes/monitoring-nodes.md).
+
 ## 🏗️ Architecture Decisions First
 
 **⚠️ STOP! Before building any app, make these critical decisions:**
