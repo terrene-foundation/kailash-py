@@ -1852,6 +1852,17 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if "pool is closed" in str(e).lower() or "connection" in str(e).lower():
                     try:
                         # Clear existing adapter to force reconnection
+                        if self._share_pool and self._pool_key:
+                            # Remove from shared pools to force recreation
+                            async with self._get_pool_lock():
+                                if self._pool_key in self._shared_pools:
+                                    _, ref_count = self._shared_pools[self._pool_key]
+                                    if ref_count <= 1:
+                                        del self._shared_pools[self._pool_key]
+                                    else:
+                                        # This shouldn't happen with a closed pool
+                                        del self._shared_pools[self._pool_key]
+
                         self._adapter = None
                         self._connected = False
                         adapter = await self._get_adapter()
@@ -1912,6 +1923,17 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if "pool is closed" in str(e).lower() or "connection" in str(e).lower():
                     try:
                         # Clear existing adapter to force reconnection
+                        if self._share_pool and self._pool_key:
+                            # Remove from shared pools to force recreation
+                            async with self._get_pool_lock():
+                                if self._pool_key in self._shared_pools:
+                                    _, ref_count = self._shared_pools[self._pool_key]
+                                    if ref_count <= 1:
+                                        del self._shared_pools[self._pool_key]
+                                    else:
+                                        # This shouldn't happen with a closed pool
+                                        del self._shared_pools[self._pool_key]
+
                         self._adapter = None
                         self._connected = False
                         adapter = await self._get_adapter()

@@ -100,7 +100,9 @@ class TestAsyncSQLRetryIntegration:
         )
 
         # Mock execute to simulate deadlock on first attempt
-        original_execute = node._adapter.execute
+        # Now the adapter should be initialized from the insert above
+        adapter = node._adapter
+        original_execute = adapter.execute
         call_count = 0
 
         async def mock_execute(*args, **kwargs):
@@ -110,7 +112,7 @@ class TestAsyncSQLRetryIntegration:
                 raise Exception("deadlock detected")
             return await original_execute(*args, **kwargs)
 
-        node._adapter.execute = mock_execute
+        adapter.execute = mock_execute
 
         # Should succeed after retry
         result = await node.execute_async(
@@ -120,6 +122,9 @@ class TestAsyncSQLRetryIntegration:
 
         assert len(result["result"]["data"]) == 1
         assert call_count == 2  # First attempt failed, second succeeded
+
+        # Restore original execute method
+        adapter.execute = original_execute
 
         await node.cleanup()
 
@@ -224,7 +229,9 @@ class TestAsyncSQLRetryIntegration:
 
         # Track retry attempts and delays
         retry_times = []
-        original_execute = node._adapter.execute
+        # First initialize the adapter
+        adapter = await node._get_adapter()
+        original_execute = adapter.execute
 
         async def mock_execute(*args, **kwargs):
             retry_times.append(time.time())
@@ -232,7 +239,7 @@ class TestAsyncSQLRetryIntegration:
                 raise Exception("connection reset")
             return await original_execute(*args, **kwargs)
 
-        node._adapter.execute = mock_execute
+        adapter.execute = mock_execute
 
         # Execute query that will retry
         start_time = time.time()
@@ -248,6 +255,9 @@ class TestAsyncSQLRetryIntegration:
         # Second retry after ~0.2s (0.1 * 2^1)
         second_delay = retry_times[2] - retry_times[1]
         assert 0.18 < second_delay < 0.25
+
+        # Restore original execute method
+        adapter.execute = original_execute
 
         await node.cleanup()
 
@@ -265,20 +275,26 @@ class TestAsyncSQLRetryIntegration:
 
         # Try to query non-existent table (non-retryable error)
         call_count = 0
-        original_execute = node._adapter.execute
+
+        # First initialize the adapter
+        adapter = await node._get_adapter()
+        original_execute = adapter.execute
 
         async def mock_execute(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             return await original_execute(*args, **kwargs)
 
-        node._adapter.execute = mock_execute
+        adapter.execute = mock_execute
 
         with pytest.raises(NodeExecutionError):
             await node.execute_async(query="SELECT * FROM non_existent_table")
 
         # Should fail immediately without retries
         assert call_count == 1
+
+        # Restore original execute method
+        adapter.execute = original_execute
 
         await node.cleanup()
 
@@ -300,7 +316,10 @@ class TestAsyncSQLRetryIntegration:
 
         # Mock to throw custom error
         call_count = 0
-        original_execute = node._adapter.execute
+
+        # First initialize the adapter
+        adapter = await node._get_adapter()
+        original_execute = adapter.execute
 
         async def mock_execute(*args, **kwargs):
             nonlocal call_count
@@ -309,7 +328,7 @@ class TestAsyncSQLRetryIntegration:
                 raise Exception("This is a custom_error that should retry")
             return await original_execute(*args, **kwargs)
 
-        node._adapter.execute = mock_execute
+        adapter.execute = mock_execute
 
         # Should retry on custom error
         result = await node.execute_async(query="SELECT 1")
@@ -323,13 +342,16 @@ class TestAsyncSQLRetryIntegration:
             call_count += 1
             raise Exception("This is not a retryable error")
 
-        node._adapter.execute = mock_execute_non_retryable
+        adapter.execute = mock_execute_non_retryable
 
         # Should not retry on non-matching error
         with pytest.raises(NodeExecutionError):
             await node.execute_async(query="SELECT 1")
 
         assert call_count == 1
+
+        # Restore original execute method
+        adapter.execute = original_execute
 
         await node.cleanup()
 
@@ -353,7 +375,9 @@ class TestAsyncSQLRetryIntegration:
         # Simulate intermittent failures
         async def insert_with_retry(node, value):
             # Mock to fail first attempt
-            original_execute = node._adapter.execute
+            # Initialize the adapter for this node
+            adapter = await node._get_adapter()
+            original_execute = adapter.execute
             attempts = 0
 
             async def mock_execute(*args, **kwargs):
@@ -363,7 +387,7 @@ class TestAsyncSQLRetryIntegration:
                     raise Exception("connection reset")
                 return await original_execute(*args, **kwargs)
 
-            node._adapter.execute = mock_execute
+            adapter.execute = mock_execute
 
             result = await node.execute_async(
                 query="INSERT INTO retry_test (value) VALUES (:value) RETURNING id",
