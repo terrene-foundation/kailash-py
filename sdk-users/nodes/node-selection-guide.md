@@ -23,6 +23,9 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 | **Race conditions** | **Manual thread tracking** | **`RaceConditionDetectorNode` ⭐NEW** |
 | **Performance anomalies** | **Manual baselines** | **`PerformanceAnomalyNode` ⭐NEW** |
 | **Real-time monitoring** | **Custom tracing** | **`TransactionMonitorNode` ⭐NEW** |
+| **Distributed transactions** | **Manual 2PC/Saga** | **`DistributedTransactionManagerNode` ⭐NEW** |
+| **Saga pattern** | **Custom compensation** | **`SagaCoordinatorNode` ⭐NEW** |
+| **Two-phase commit** | **Manual 2PC protocol** | **`TwoPhaseCommitCoordinatorNode` ⭐NEW** |
 | Filter data | `df[df['x'] > y]` | `FilterNode` |
 | Map function | `[f(x) for x in data]` | `Map` |
 | Sort data | `sorted()` or `df.sort()` | `Sort` |
@@ -136,6 +139,26 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
    ├─ Threshold alerts → TransactionMonitorNode (alert_thresholds)
    ├─ Anomaly alerts → PerformanceAnomalyNode (anomaly detection)
    └─ Deadlock alerts → DeadlockDetectorNode (automatic resolution)
+```
+
+### 5. Transaction Management Decision Tree
+
+```
+🔄 Need distributed transactions?
+├─ 🤖 Automatic pattern selection?
+│  ├─ Mixed participant capabilities → DistributedTransactionManagerNode
+│  ├─ Requirements may change → DistributedTransactionManagerNode
+│  └─ Unified interface needed → DistributedTransactionManagerNode
+├─ 🔄 Long-running processes?
+│  ├─ High availability priority → SagaCoordinatorNode
+│  ├─ Compensation logic needed → SagaCoordinatorNode
+│  └─ Eventual consistency OK → SagaCoordinatorNode
+├─ ⚡ Strong consistency required?
+│  ├─ ACID properties needed → TwoPhaseCommitCoordinatorNode
+│  ├─ Financial transactions → TwoPhaseCommitCoordinatorNode
+│  └─ Immediate consistency → TwoPhaseCommitCoordinatorNode
+└─ 🔧 Individual saga steps?
+   └─ Custom step logic → SagaStepNode
 ```
 
 ## Node Categories at a Glance
@@ -261,6 +284,19 @@ RaceConditionDetectorNode # Concurrent access analysis
 PerformanceAnomalyNode    # Baseline learning & anomaly detection
 ```
 
+### 🔄 Distributed Transactions (4+ nodes)
+```python
+# Automatic pattern selection
+DistributedTransactionManagerNode  # Auto-select Saga/2PC based on requirements
+
+# Saga pattern (High availability)
+SagaCoordinatorNode               # Saga orchestration with compensation
+SagaStepNode                      # Individual saga steps
+
+# Two-Phase Commit (Strong consistency)
+TwoPhaseCommitCoordinatorNode     # ACID transactions with 2PC protocol
+```
+
 ### 📢 Alerts & Notifications (5+ nodes)
 ```python
 # Alert channels
@@ -300,6 +336,7 @@ PagerDutyAlertNode, WebhookAlertNode
 
 - **File operations**: Always use dedicated reader/writer nodes
 - **Database work**: Use AsyncSQLDatabaseNode for enterprise/production, QueryRouterNode for high-performance routing, OptimisticLockingNode for concurrent updates, SQLDatabaseNode for simple cases
+- **Distributed transactions**: Use DistributedTransactionManagerNode for automatic pattern selection, SagaCoordinatorNode for high availability, TwoPhaseCommitCoordinatorNode for strong consistency
 - **API calls**: Use RESTClientNode for REST, HTTPRequestNode for simple HTTP
 - **AI tasks**: Use LLMAgentNode family, avoid direct SDK calls
 - **Control flow**: Use SwitchNode for conditions, MergeNode for combining data

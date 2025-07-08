@@ -28,8 +28,10 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 6. **Custom logic** → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
 7. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
 8. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
-9. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
-10. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+9. **Enterprise resilience** → [sdk-users/enterprise/resilience-patterns.md](sdk-users/enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
+10. **Distributed transactions** → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
+11. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
+12. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
 
 ---
 
@@ -67,6 +69,7 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 8. **Documentation**: Comprehensive validation across 9 critical phases, 100% pass rates achieved - see [SDK Users](sdk-users/) navigation hub
 9. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/enterprise/resilience-patterns.md)
 10. **Transaction Monitoring**: 5 production-tested nodes for metrics, deadlock detection, race conditions - see [Transaction Monitoring](sdk-users/cheatsheet/048-transaction-monitoring.md)
+11. **Distributed Transactions**: Automatic pattern selection (Saga/2PC), compensation logic, recovery - see [Distributed Transactions](sdk-users/cheatsheet/049-distributed-transactions.md)
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
@@ -78,6 +81,7 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Enterprise**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
 **Monitoring**: TransactionMetricsNode, TransactionMonitorNode, DeadlockDetectorNode, RaceConditionDetectorNode, PerformanceAnomalyNode - see [Monitoring Guide](sdk-users/nodes/monitoring-nodes.md)
+**Transactions**: DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode - see [Transaction Guide](sdk-users/nodes/transaction-nodes.md)
 **Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md) (2194 lines - use sparingly)
 
 ## 📂 Directory Navigation Convention
@@ -105,6 +109,7 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 | **Fix an error** | [sdk-users/developer/05-troubleshooting.md](sdk-users/developer/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) |
 | **Find patterns** | [sdk-users/patterns/](sdk-users/patterns/) | - |
 | **Learn from workflows** | [sdk-users/workflows/](sdk-users/workflows/) - Production workflows | - |
+| **Distributed transactions** | [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) - Saga/2PC patterns | - |
 | **Run tests**   | [tests/README.md](tests/README.md) - Test guide | [tests/](tests/) - Full test suite |
 | **SDK development** | [examples/](examples/) - Feature validation | - |
 | **Train LLMs**  | - | [# contrib (removed)/training/](# contrib (removed)/training/) |
@@ -132,9 +137,10 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 - **Examples**: [examples/](examples/) - Feature validation
 
 **Testing:**
-- **Test Suite**: 2,250+ tests (Unit: 1,484, Integration: 202, E2E: 16 core)
+- **Test Suite**: 2,395+ tests (Unit: 1,606, Integration: 225, E2E: 16 core)
 - **MCP Testing**: 407 comprehensive tests across 8 components (100% pass rate)
 - **Transaction Monitoring**: 219 unit tests, 8 integration tests, comprehensive E2E (100% pass rate)
+- **Distributed Transactions**: 122 unit tests, 23 integration tests, comprehensive E2E (100% pass rate)
 - **Test Guide**: [tests/README.md](tests/README.md) - 3-tier testing strategy
 - **CI/CD**: Sub-10 minute test execution with Docker infrastructure
 
