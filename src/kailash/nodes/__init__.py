@@ -16,6 +16,7 @@ from kailash.nodes import (
     monitoring,
     security,
     testing,
+    transaction,
     transform,
 )
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry, register_node
@@ -48,5 +49,6 @@ __all__ = [
     "monitoring",
     "security",
     "testing",
+    "transaction",
     "transform",
 ]

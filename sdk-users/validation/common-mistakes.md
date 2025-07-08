@@ -15,6 +15,7 @@ from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 from kailash.nodes.logic import SwitchNode, MergeNode, WorkflowNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.transform import DataTransformerNode
+from kailash.nodes.transaction import DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode
 from kailash.nodes.base import Node, NodeParameter
 ```
 
@@ -425,6 +426,84 @@ workflow.connect("api", "llm", mapping={"response": "prompt"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow)
 
+```
+
+### **Mistake #15: Distributed Transaction Pattern Selection**
+
+```python
+# ❌ WRONG - Hard-coding pattern choice when capabilities are mixed
+coordinator = TwoPhaseCommitCoordinatorNode(...)  # Will fail if participants don't support 2PC
+# or
+coordinator = SagaCoordinatorNode(...)  # Sub-optimal for services that support 2PC
+
+# ✅ CORRECT - Use DTM for automatic pattern selection
+manager = DistributedTransactionManagerNode(
+    transaction_name="mixed_services",
+    state_storage="redis",
+    storage_config={"redis_client": redis_client}
+)
+
+# DTM will automatically select the best pattern
+await manager.async_run(
+    operation="create_transaction",
+    requirements={"consistency": "strong", "availability": "high"}
+)
+```
+
+### **Mistake #16: Saga Compensation Logic**
+
+```python
+# ❌ WRONG - Not providing compensation for saga steps
+coordinator = SagaCoordinatorNode(saga_name="order_processing")
+coordinator.execute(
+    operation="add_step",
+    name="payment",
+    node_id="PaymentNode"
+    # Missing compensation_node_id!
+)
+
+# ✅ CORRECT - Always provide compensation for saga steps
+coordinator.execute(
+    operation="add_step",
+    name="payment",
+    node_id="PaymentNode",
+    compensation_node_id="RefundNode",
+    compensation_parameters={"action": "refund_payment"}
+)
+```
+
+### **Mistake #17: Async/Sync Method Confusion**
+
+```python
+# ❌ WRONG - Using sync execute on async transaction nodes
+coordinator = TwoPhaseCommitCoordinatorNode(...)
+result = coordinator.execute(operation="execute_transaction")  # Will fail
+
+# ✅ CORRECT - Use async_run for transaction nodes
+result = await coordinator.async_run(operation="execute_transaction")
+```
+
+### **Mistake #18: Missing Transaction Recovery**
+
+```python
+# ❌ WRONG - Not implementing recovery for failed transactions
+coordinator = SagaCoordinatorNode(...)
+try:
+    await coordinator.async_run(operation="execute_saga")
+except Exception:
+    pass  # Transaction state is lost!
+
+# ✅ CORRECT - Always implement recovery patterns
+try:
+    result = await coordinator.async_run(operation="execute_saga")
+except Exception as e:
+    # Attempt to recover the transaction
+    recovery_result = await coordinator.async_run(
+        operation="load_saga",
+        saga_id=coordinator.saga_id
+    )
+    if recovery_result["status"] == "success":
+        await coordinator.async_run(operation="resume")
 ```
 
 ## 🔗 **Next Steps**

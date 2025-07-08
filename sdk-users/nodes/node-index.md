@@ -19,6 +19,9 @@
 | Detect Deadlocks | `DeadlockDetectorNode` | ❌ Custom detection |
 | Detect Race Conditions | `RaceConditionDetectorNode` | ❌ Manual analysis |
 | Performance Anomalies | `PerformanceAnomalyNode` | ❌ Manual thresholds |
+| Distributed Transactions | `DistributedTransactionManagerNode` | ❌ Manual 2PC/Saga |
+| Saga Pattern | `SagaCoordinatorNode`, `SagaStepNode` | ❌ Custom compensation |
+| Two-Phase Commit | `TwoPhaseCommitCoordinatorNode` | ❌ Manual 2PC protocol |
 | Manage Roles/Permissions | `RoleManagementNode`, `PermissionCheckNode` | ❌ Custom RBAC |
 | Check User Access | `PermissionCheckNode` | ❌ Manual checks |
 
@@ -35,6 +38,7 @@
 | **Security** | 15+ | AuthenticationNode, EncryptionNode, ThreatDetectionNode | ✅ 100% Pass | [security-nodes.md](security-nodes.md) |
 | **Enterprise** | 10+ | MultiFactorAuthNode, ComplianceNode, DataGovernanceNode | ✅ 100% Pass | [enterprise-nodes.md](enterprise-nodes.md) |
 | **Monitoring** | 5+ | TransactionMetricsNode, DeadlockDetectorNode, RaceConditionDetectorNode | ✅ 100% Pass | [monitoring-nodes.md](monitoring-nodes.md) |
+| **Transaction** | 10+ | DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode | ✅ 100% Pass | [transaction-nodes.md](transaction-nodes.md) |
 | **Alerts** | 5+ | DiscordAlertNode, EmailSenderNode, SlackAlertNode | [09-alert-nodes.md](09-alert-nodes.md) |
 | **Security** | 10+ | OAuth2Node, JWTValidatorNode, EncryptionNode | [08-utility-nodes.md](08-utility-nodes.md) |
 | **Code** | 6+ | PythonCodeNode, MCPToolNode, ScriptRunnerNode | [07-code-nodes.md](07-code-nodes.md) |
