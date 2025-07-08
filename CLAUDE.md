@@ -66,6 +66,7 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/cheatsheet/025-mcp-integration.md)
 8. **Documentation**: Comprehensive validation across 9 critical phases, 100% pass rates achieved - see [SDK Users](sdk-users/) navigation hub
 9. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/enterprise/resilience-patterns.md)
+10. **Transaction Monitoring**: 5 production-tested nodes for metrics, deadlock detection, race conditions - see [Transaction Monitoring](sdk-users/cheatsheet/048-transaction-monitoring.md)
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
@@ -76,6 +77,7 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Enterprise**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
+**Monitoring**: TransactionMetricsNode, TransactionMonitorNode, DeadlockDetectorNode, RaceConditionDetectorNode, PerformanceAnomalyNode - see [Monitoring Guide](sdk-users/nodes/monitoring-nodes.md)
 **Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md) (2194 lines - use sparingly)
 
 ## 📂 Directory Navigation Convention
@@ -130,8 +132,9 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 - **Examples**: [examples/](examples/) - Feature validation
 
 **Testing:**
-- **Test Suite**: 1,950+ tests (Unit: 1,265, Integration: 194, E2E: 16 core)
+- **Test Suite**: 2,250+ tests (Unit: 1,484, Integration: 202, E2E: 16 core)
 - **MCP Testing**: 407 comprehensive tests across 8 components (100% pass rate)
+- **Transaction Monitoring**: 219 unit tests, 8 integration tests, comprehensive E2E (100% pass rate)
 - **Test Guide**: [tests/README.md](tests/README.md) - 3-tier testing strategy
 - **CI/CD**: Sub-10 minute test execution with Docker infrastructure
 

@@ -18,6 +18,11 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 | **Enterprise async SQL** | **Manual pooling/transactions** | **`AsyncSQLDatabaseNode` ⭐⭐⭐** |
 | **Concurrency control** | **Custom version checking** | **`OptimisticLockingNode` ⭐⭐ NEW** |
 | **High-perf SQL** | **Manual pooling** | **`QueryRouterNode` + Pool` ⭐NEW** |
+| **Transaction metrics** | **Manual timing/counting** | **`TransactionMetricsNode` ⭐NEW** |
+| **Deadlock detection** | **Custom lock graphs** | **`DeadlockDetectorNode` ⭐NEW** |
+| **Race conditions** | **Manual thread tracking** | **`RaceConditionDetectorNode` ⭐NEW** |
+| **Performance anomalies** | **Manual baselines** | **`PerformanceAnomalyNode` ⭐NEW** |
+| **Real-time monitoring** | **Custom tracing** | **`TransactionMonitorNode` ⭐NEW** |
 | Filter data | `df[df['x'] > y]` | `FilterNode` |
 | Map function | `[f(x) for x in data]` | `Map` |
 | Sort data | `sorted()` or `df.sort()` | `Sort` |
@@ -110,6 +115,27 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
    ├─ Nested workflows → WorkflowNode
    ├─ Parallel execution → AsyncParallelNode
    └─ Error handling → ErrorHandlerNode
+```
+
+### 4. Monitoring & Observability Decision Tree
+
+```
+📊 Need monitoring/observability?
+├─ 📈 Performance metrics?
+│  ├─ Transaction metrics → TransactionMetricsNode
+│  ├─ Real-time monitoring → TransactionMonitorNode
+│  └─ Performance anomalies → PerformanceAnomalyNode
+├─ 🔍 Concurrency issues?
+│  ├─ Deadlock detection → DeadlockDetectorNode
+│  └─ Race conditions → RaceConditionDetectorNode
+├─ 📊 Export formats?
+│  ├─ Prometheus metrics → TransactionMetricsNode (export_format="prometheus")
+│  ├─ CloudWatch metrics → TransactionMetricsNode (export_format="cloudwatch")
+│  └─ OpenTelemetry → TransactionMonitorNode (distributed tracing)
+└─ 🚨 Alerting needs?
+   ├─ Threshold alerts → TransactionMonitorNode (alert_thresholds)
+   ├─ Anomaly alerts → PerformanceAnomalyNode (anomaly detection)
+   └─ Deadlock alerts → DeadlockDetectorNode (automatic resolution)
 ```
 
 ## Node Categories at a Glance
@@ -219,6 +245,20 @@ SecurityScannerNode, AuditLogNode
 # Compliance
 GDPRComplianceNode, ComplianceNode
 DataGovernanceNode
+```
+
+### 📊 Monitoring & Observability (5+ nodes)
+```python
+# Transaction monitoring
+TransactionMetricsNode    # Metrics collection & aggregation
+TransactionMonitorNode    # Real-time tracing & alerting
+
+# Issue detection
+DeadlockDetectorNode      # Database deadlock detection
+RaceConditionDetectorNode # Concurrent access analysis
+
+# Performance analysis
+PerformanceAnomalyNode    # Baseline learning & anomaly detection
 ```
 
 ### 📢 Alerts & Notifications (5+ nodes)
