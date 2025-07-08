@@ -50,12 +50,6 @@ jobs:
           # Verify uv is working
           uv --version
 
-      - name: Install dependencies
-        run: |
-          # Create virtual environment in workspace
-          uv venv .venv --python python3
-          uv sync
-
       - name: Install GNU tar for local runner
         run: |
           # Check if gtar is available, install if needed
@@ -70,6 +64,12 @@ jobs:
           fi
           # Verify gtar is now available
           gtar --version || tar --version
+
+      - name: Install dependencies
+        run: |
+          # Create virtual environment in workspace
+          uv venv .venv --python python3
+          uv sync
 
       - name: Build documentation
         run: |
