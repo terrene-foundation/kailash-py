@@ -6,7 +6,11 @@
 
 ### Latest Versions
 
-- **[v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md)** ⭐ **NEW**
+- **[v0.6.5-shared-workflow-fix.md](v0.6.5-shared-workflow-fix.md)** ⭐ **NEW**
+  - AgentUIMiddleware shared workflow execution fix
+  - execute_workflow() deprecated in favor of execute()
+
+- **[v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md)**
   - SQLDatabaseNode parameter type flexibility
   - Backward compatible enhancements
 
@@ -38,6 +42,7 @@
 | v0.4.x | v0.5.0 | [v0.5.0-architecture-refactoring.md](v0.5.0-architecture-refactoring.md) | HIGH |
 | v0.5.0 | v0.5.1 | [v0.5.1-parameter-flow-updates.md](v0.5.1-parameter-flow-updates.md) | MEDIUM |
 | v0.6.0 | v0.6.1 | [v0.6.0-to-v0.6.1-migration.md](v0.6.0-to-v0.6.1-migration.md) | MEDIUM |
+| v0.6.x | v0.6.5+ | [v0.6.5-shared-workflow-fix.md](v0.6.5-shared-workflow-fix.md) | LOW |
 | v2.0.x | v2.1 | [v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md) | LOW |
 
 ---
