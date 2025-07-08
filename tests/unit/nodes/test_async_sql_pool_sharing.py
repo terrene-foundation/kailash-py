@@ -224,7 +224,7 @@ class TestAsyncSQLPoolSharing:
             assert metrics["pools"][0]["reference_count"] == 1
 
             # Adapter disconnect should not have been called yet
-            mock_adapter.disconnect.assert_not_called()
+            assert mock_adapter.disconnect.call_count == 0
 
             # Cleanup second node
             await node2.cleanup()
@@ -232,7 +232,7 @@ class TestAsyncSQLPoolSharing:
             # Pool should be removed and disconnected
             metrics = await AsyncSQLDatabaseNode.get_pool_metrics()
             assert metrics["total_pools"] == 0
-            mock_adapter.disconnect.assert_called_once()
+            assert mock_adapter.disconnect.call_count == 1
 
     @pytest.mark.asyncio
     async def test_pool_info_method(self):
@@ -325,7 +325,7 @@ class TestAsyncSQLPoolSharing:
 
             # All adapters should be disconnected
             for adapter in mock_adapters:
-                adapter.disconnect.assert_called_once()
+                assert adapter.disconnect.call_count == 1
 
     @pytest.mark.asyncio
     async def test_pool_sharing_different_pool_sizes(self):

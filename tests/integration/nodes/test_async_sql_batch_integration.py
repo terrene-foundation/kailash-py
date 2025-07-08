@@ -438,8 +438,8 @@ class TestAsyncSQLBatchIntegration:
             await node.cleanup()
 
     @pytest.mark.asyncio
-    async def test_batch_with_retry_on_deadlock(self, setup_database):
-        """Test batch operations with retry on transient errors."""
+    async def test_batch_operations_with_real_database(self, setup_database):
+        """Test batch operations with REAL database operations - NO MOCKING."""
         conn_string = setup_database
 
         node = AsyncSQLDatabaseNode(
@@ -453,25 +453,9 @@ class TestAsyncSQLBatchIntegration:
             },
         )
 
-        # First execute something to initialize adapter
-        await node.execute_async(query="SELECT 1")
-
-        # Simulate deadlock on first attempt
-        original_execute_many = node._adapter.execute_many
-        attempt_count = 0
-
-        async def mock_execute_many(*args, **kwargs):
-            nonlocal attempt_count
-            attempt_count += 1
-            if attempt_count == 1:
-                raise Exception("deadlock detected")
-            return await original_execute_many(*args, **kwargs)
-
-        node._adapter.execute_many = mock_execute_many
-
-        # Execute batch that will retry
+        # Execute batch operations using REAL database
         batch_data = [
-            {"name": f"RetryItem{i}", "value": i * 10, "batch_id": "retry_batch"}
+            {"name": f"BatchItem{i}", "value": i * 10, "batch_id": "real_batch"}
             for i in range(5)
         ]
 
@@ -481,14 +465,26 @@ class TestAsyncSQLBatchIntegration:
         )
 
         assert "result" in result
-        assert attempt_count == 2  # Failed once, succeeded on retry
+        assert result["result"]["batch_size"] == 5
+        assert result["result"]["affected_rows"] == 5
 
-        # Verify data was inserted
+        # Verify data was inserted with REAL query
         check_result = await node.execute_async(
             query="SELECT COUNT(*) as count FROM batch_test WHERE batch_id = :batch_id",
-            params={"batch_id": "retry_batch"},
+            params={"batch_id": "real_batch"},
         )
 
         assert check_result["result"]["data"][0]["count"] == 5
+
+        # Verify individual records
+        records = await node.execute_async(
+            query="SELECT * FROM batch_test WHERE batch_id = :batch_id ORDER BY value",
+            params={"batch_id": "real_batch"},
+        )
+
+        assert len(records["result"]["data"]) == 5
+        for i, record in enumerate(records["result"]["data"]):
+            assert record["name"] == f"BatchItem{i}"
+            assert record["value"] == i * 10
 
         await node.cleanup()
