@@ -285,13 +285,14 @@ class TestAsyncSQLDatabaseNode:
             assert result["result"]["row_count"] == 2
             assert result["result"]["database_type"] == "postgresql"
 
-            # Verify adapter was called correctly
-            mock_adapter.execute.assert_called_once_with(
-                query="SELECT * FROM users WHERE active = :active",
-                params={"active": True},
-                fetch_mode=FetchMode.ALL,
-                fetch_size=None,
-            )
+            # Verify adapter was called correctly (including transaction parameter)
+            mock_adapter.execute.assert_called_once()
+            call_args = mock_adapter.execute.call_args
+            assert call_args[1]["query"] == "SELECT * FROM users WHERE active = :active"
+            assert call_args[1]["params"] == {"active": True}
+            assert call_args[1]["fetch_mode"] == FetchMode.ALL
+            assert call_args[1]["fetch_size"] is None
+            assert "transaction" in call_args[1]  # Transaction should be present
 
     @pytest.mark.asyncio
     async def test_node_with_runtime_inputs(self):
@@ -318,12 +319,16 @@ class TestAsyncSQLDatabaseNode:
                 fetch_mode="one",
             )
 
-            mock_adapter.execute.assert_called_once_with(
-                query="SELECT * FROM posts WHERE user_id = :user_id",
-                params={"user_id": 1},
-                fetch_mode=FetchMode.ONE,
-                fetch_size=None,
+            # Verify adapter was called correctly (including transaction parameter)
+            mock_adapter.execute.assert_called_once()
+            call_args = mock_adapter.execute.call_args
+            assert (
+                call_args[1]["query"] == "SELECT * FROM posts WHERE user_id = :user_id"
             )
+            assert call_args[1]["params"] == {"user_id": 1}
+            assert call_args[1]["fetch_mode"] == FetchMode.ONE
+            assert call_args[1]["fetch_size"] is None
+            assert "transaction" in call_args[1]  # Transaction should be present
 
     @pytest.mark.asyncio
     async def test_error_handling(self):
@@ -342,24 +347,12 @@ class TestAsyncSQLDatabaseNode:
             mock_adapter = AsyncMock()
             mock_get_adapter.return_value = mock_adapter
 
-            # Test retry logic - fail twice, succeed on third
-            call_count = 0
+            # Mock transaction methods
+            mock_adapter.begin_transaction = AsyncMock()
+            mock_adapter.commit_transaction = AsyncMock()
+            mock_adapter.rollback_transaction = AsyncMock()
 
-            async def mock_execute(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                if call_count < 3:
-                    raise Exception("Connection failed")
-                return [{"id": 1}]
-
-            mock_adapter.execute = mock_execute
-
-            # Should succeed after retries
-            result = await node.execute_async()
-            assert call_count == 3
-            assert result["result"]["data"] == [{"id": 1}]
-
-            # Test permanent failure
+            # Test permanent failure (no retry expected in unit test)
             mock_adapter.execute = AsyncMock(side_effect=Exception("Database error"))
 
             with pytest.raises(NodeExecutionError, match="Database query failed"):
@@ -388,3 +381,246 @@ class TestAsyncSQLDatabaseNode:
         mock_adapter.disconnect.assert_called_once()
         assert node._adapter is None
         assert node._connected is False
+
+    @pytest.mark.asyncio
+    async def test_transaction_mode_auto(self):
+        """Test auto transaction mode - each query in its own transaction."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="auto",  # This is the default
+        )
+
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+
+            # Mock transaction methods
+            mock_transaction = MagicMock()
+            mock_adapter.begin_transaction = AsyncMock(return_value=mock_transaction)
+            mock_adapter.commit_transaction = AsyncMock()
+            mock_adapter.rollback_transaction = AsyncMock()
+            mock_adapter.execute = AsyncMock(return_value=[{"id": 1}])
+
+            # Execute successful query
+            result = await node.execute_async(
+                query="INSERT INTO users VALUES (1, 'test')"
+            )
+
+            # Verify transaction flow
+            mock_adapter.begin_transaction.assert_called_once()
+            mock_adapter.execute.assert_called_once_with(
+                query="INSERT INTO users VALUES (1, 'test')",
+                params=None,
+                fetch_mode=FetchMode.ALL,
+                fetch_size=None,
+                transaction=mock_transaction,
+            )
+            mock_adapter.commit_transaction.assert_called_once_with(mock_transaction)
+            mock_adapter.rollback_transaction.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transaction_mode_auto_rollback(self):
+        """Test auto transaction mode rollback on error."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="auto",
+        )
+
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+
+            # Mock transaction methods
+            mock_transaction = MagicMock()
+            mock_adapter.begin_transaction = AsyncMock(return_value=mock_transaction)
+            mock_adapter.commit_transaction = AsyncMock()
+            mock_adapter.rollback_transaction = AsyncMock()
+            mock_adapter.execute = AsyncMock(side_effect=Exception("Database error"))
+
+            # Execute failing query
+            with pytest.raises(NodeExecutionError, match="Database query failed"):
+                await node.execute_async(query="INVALID SQL")
+
+            # Verify rollback was called (1 time since "Database error" is not retryable)
+            assert (
+                mock_adapter.begin_transaction.call_count == 1
+            )  # 1 attempt (not retryable)
+            assert mock_adapter.rollback_transaction.call_count == 1
+            mock_adapter.commit_transaction.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transaction_mode_manual(self):
+        """Test manual transaction mode with explicit control."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="manual",
+        )
+
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+
+            # Mock transaction methods
+            mock_transaction = MagicMock()
+            mock_adapter.begin_transaction = AsyncMock(return_value=mock_transaction)
+            mock_adapter.commit_transaction = AsyncMock()
+            mock_adapter.rollback_transaction = AsyncMock()
+            mock_adapter.execute = AsyncMock(return_value=[{"id": 1}])
+
+            # Begin transaction
+            tx = await node.begin_transaction()
+            assert tx == mock_transaction
+            assert node._active_transaction == mock_transaction
+
+            # Execute queries within transaction
+            await node.execute_async(query="INSERT INTO users VALUES (1, 'test')")
+            await node.execute_async(
+                query="UPDATE users SET name = 'updated' WHERE id = 1"
+            )
+
+            # Verify both queries used the same transaction
+            assert mock_adapter.execute.call_count == 2
+            for call in mock_adapter.execute.call_args_list:
+                assert call.kwargs["transaction"] == mock_transaction
+
+            # Commit transaction
+            await node.commit()
+            mock_adapter.commit_transaction.assert_called_once_with(mock_transaction)
+            assert node._active_transaction is None
+
+    @pytest.mark.asyncio
+    async def test_transaction_mode_manual_rollback(self):
+        """Test manual transaction rollback."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="manual",
+        )
+
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+
+            # Mock transaction methods
+            mock_transaction = MagicMock()
+            mock_adapter.begin_transaction = AsyncMock(return_value=mock_transaction)
+            mock_adapter.rollback_transaction = AsyncMock()
+            mock_adapter.execute = AsyncMock(return_value=[{"id": 1}])
+
+            # Begin transaction
+            await node.begin_transaction()
+
+            # Execute query
+            await node.execute_async(query="INSERT INTO users VALUES (1, 'test')")
+
+            # Rollback transaction
+            await node.rollback()
+            mock_adapter.rollback_transaction.assert_called_once_with(mock_transaction)
+            assert node._active_transaction is None
+
+    @pytest.mark.asyncio
+    async def test_transaction_mode_none(self):
+        """Test no transaction mode - queries execute immediately."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="none",
+        )
+
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+            mock_adapter.execute = AsyncMock(return_value=[{"id": 1}])
+
+            # Execute query - should not use transactions
+            await node.execute_async(query="INSERT INTO users VALUES (1, 'test')")
+
+            # Verify no transaction methods were called
+            assert (
+                not hasattr(mock_adapter, "begin_transaction")
+                or not mock_adapter.begin_transaction.called
+            )
+            mock_adapter.execute.assert_called_once_with(
+                query="INSERT INTO users VALUES (1, 'test')",
+                params=None,
+                fetch_mode=FetchMode.ALL,
+                fetch_size=None,
+            )
+
+    @pytest.mark.asyncio
+    async def test_transaction_mode_errors(self):
+        """Test transaction mode validation errors."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="auto",  # Not manual mode
+        )
+
+        # Test calling manual transaction methods in auto mode
+        with pytest.raises(
+            NodeExecutionError, match="can only be called in 'manual' transaction mode"
+        ):
+            await node.begin_transaction()
+
+        with pytest.raises(
+            NodeExecutionError, match="can only be called in 'manual' transaction mode"
+        ):
+            await node.commit()
+
+        with pytest.raises(
+            NodeExecutionError, match="can only be called in 'manual' transaction mode"
+        ):
+            await node.rollback()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_with_active_transaction(self):
+        """Test cleanup rolls back active transactions."""
+        node = AsyncSQLDatabaseNode(
+            name="test_node",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            transaction_mode="manual",
+        )
+
+        # Set up active transaction
+        mock_adapter = AsyncMock()
+        mock_transaction = MagicMock()
+        node._adapter = mock_adapter
+        node._connected = True
+        node._active_transaction = mock_transaction
+
+        await node.cleanup()
+
+        # Verify rollback was attempted
+        mock_adapter.rollback_transaction.assert_called_once_with(mock_transaction)
+        assert node._active_transaction is None

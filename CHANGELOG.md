@@ -15,6 +15,29 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.6.5] - 2025-07-08
+
+**Enterprise AsyncSQL Enhancements & Production Testing**
+
+**Major Features:**
+- **AsyncSQL Transaction Management**: Auto, manual, and none modes for precise control
+- **Optimistic Locking**: Version-based concurrency control with conflict resolution
+- **Advanced Parameter Handling**: PostgreSQL ANY(), JSON, arrays, date/datetime support
+- **100% Test Pass Rate**: All AsyncSQL tests passing with strict policy compliance
+
+**Fixed:**
+- **PostgreSQL ANY() Parameters**: Fixed list parameter conversion for array operations
+- **DNS/Network Error Retries**: Added missing error patterns for network failures
+- **Optimistic Locking Version Check**: Fixed WHERE clause detection for version validation
+- **E2E Transaction Timeouts**: Added timeout configurations to prevent deadlocks
+
+**Enhanced:**
+- **Testing Infrastructure**: Removed ALL mocks from integration tests (policy compliance)
+- **Documentation Quality**: Complete AsyncSQL enterprise patterns with validated examples
+- **Connection Pool Sharing**: Event loop management for shared pools across instances
+
+**Breaking Changes:** None - fully backward compatible
+
 ### [0.6.4] - 2025-07-06
 
 **Enterprise Parameter Injection & E2E Test Excellence**
