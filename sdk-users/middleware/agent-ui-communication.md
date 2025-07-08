@@ -118,7 +118,7 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # Execute workflow with monitoring
-execution_id = await agent_ui.execute_workflow(
+execution_id = await agent_ui.execute(
     session_id=session_id,
     workflow_id=workflow_id,
     inputs={"custom_param": "value"},
@@ -246,6 +246,33 @@ await agent_ui.register_workflow(
 
 ```
 
+### Shared Workflow Behavior
+
+When using `make_shared=True`, the workflow becomes available to all sessions:
+
+```python
+# Register a shared workflow
+await agent_ui.register_workflow(
+    workflow_id="shared_analyzer",
+    workflow=builder,
+    make_shared=True
+)
+
+# Any session can now execute this workflow
+session1_id = await agent_ui.create_session()
+session2_id = await agent_ui.create_session()
+
+# Both sessions can execute the shared workflow
+exec1 = await agent_ui.execute(session1_id, "shared_analyzer", inputs)
+exec2 = await agent_ui.execute(session2_id, "shared_analyzer", inputs)
+```
+
+**Important Notes:**
+- Shared workflows are automatically copied to a session when first executed
+- Session-specific workflows take priority over shared workflows with the same ID
+- Shared workflows are ideal for common processing patterns used across multiple sessions
+- Each session maintains its own execution state, ensuring proper isolation
+
 ### Template Workflows
 ```python
 # Register workflow template
@@ -368,7 +395,7 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # Start execution
-execution_id = await agent_ui.execute_workflow(
+execution_id = await agent_ui.execute(
     session_id=session_id,
     workflow_id=workflow_id,
     inputs={"data": "input_value"}
@@ -459,7 +486,7 @@ print(f"Subscribers: {event_stats['subscribers']}")
 import time
 
 start_time = time.time()
-execution_id = await agent_ui.execute_workflow(
+execution_id = await agent_ui.execute(
     session_id=session_id,
     workflow_id=workflow_id
 )
@@ -505,7 +532,7 @@ try:
     )
 
     # Execution operations
-    execution_id = await agent_ui.execute_workflow(
+    execution_id = await agent_ui.execute(
         session_id=session_id,
         workflow_id=workflow_id
     )
@@ -552,7 +579,7 @@ except WorkflowValidationError as e:
 
 # Handle execution errors
 try:
-    execution_id = await agent_ui.execute_workflow(
+    execution_id = await agent_ui.execute(
         session_id=session_id,
         workflow_id="non_existent_workflow"
     )
@@ -647,7 +674,7 @@ async with with_session("user123") as session_id:
 async def robust_execution(session_id, workflow_id, max_retries=3):
     for attempt in range(max_retries):
         try:
-            execution_id = await agent_ui.execute_workflow(
+            execution_id = await agent_ui.execute(
                 session_id=session_id,
                 workflow_id=workflow_id
             )
@@ -689,7 +716,7 @@ for config in workflows_to_create:
 
 # Execute in parallel
 execution_tasks = [
-    agent_ui.execute_workflow(session_id, wf_id)
+    agent_ui.execute(session_id, wf_id)
     for wf_id in workflow_ids
 ]
 execution_ids = await asyncio.gather(*execution_tasks)
