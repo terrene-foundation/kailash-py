@@ -15,6 +15,23 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.6.6] - 2025-07-08
+
+**AgentUIMiddleware Shared Workflow Fix & API Standardization**
+
+**Fixed:**
+- **AgentUIMiddleware Shared Workflow Execution**: Shared workflows registered with `make_shared=True` couldn't be executed from sessions. Now automatically copied to sessions when first executed.
+
+**Changed:**
+- **API Method Standardization**: Deprecated `AgentUIMiddleware.execute_workflow()` in favor of `execute()` for consistency with runtime API
+
+**Enhanced:**
+- **Documentation**: Updated Agent-UI communication guide with shared workflow behavior section
+- **Testing**: Added 4 comprehensive integration tests for shared workflow functionality
+- **Migration Guide**: Added v0.6.5+ migration guide explaining the fix
+
+**Breaking Changes:** None - fully backward compatible
+
 ### [0.6.5] - 2025-07-08
 
 **Enterprise AsyncSQL Enhancements & Production Testing**
