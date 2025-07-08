@@ -331,9 +331,12 @@ class TestAsyncSQLResultFormatIntegration:
 
                 assert result["result"]["format"] == "dataframe"
                 assert result["result"]["row_count"] == 2
-                # In a real scenario with pandas, this would be a DataFrame
-                # For testing, we just verify the structure
-                assert len(result["result"]["data"]) == 2
+                # Check serialized DataFrame structure
+                data = result["result"]["data"]
+                assert isinstance(data, dict)
+                assert data["_type"] == "dataframe"
+                assert len(data["dataframe"]) == 2
+                assert data["columns"] == ["id", "name", "age"]
 
     @pytest.mark.asyncio
     async def test_empty_result_formatting(self):

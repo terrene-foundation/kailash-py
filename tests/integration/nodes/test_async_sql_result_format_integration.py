@@ -1,6 +1,7 @@
 """Integration tests for AsyncSQLDatabaseNode result format with REAL PostgreSQL."""
 
 import asyncio
+import json
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -94,8 +95,14 @@ class TestAsyncSQLResultFormatIntegration:
             assert first_row["age"] == 30
             assert first_row["salary"] == 75000.5  # Decimal converted to float
             assert first_row["active"] is True
-            assert isinstance(first_row["metadata"], dict)
-            assert first_row["metadata"]["dept"] == "Engineering"
+            # Metadata is returned as JSON string, parse it
+            metadata = (
+                json.loads(first_row["metadata"])
+                if isinstance(first_row["metadata"], str)
+                else first_row["metadata"]
+            )
+            assert isinstance(metadata, dict)
+            assert metadata["dept"] == "Engineering"
 
             # Check date/time serialization
             assert isinstance(first_row["hire_date"], str)
@@ -168,12 +175,13 @@ class TestAsyncSQLResultFormatIntegration:
             try:
                 import pandas as pd
 
-                # If pandas is available, check DataFrame
-                df = result["result"]["data"]
-                assert isinstance(df, pd.DataFrame)
-                assert len(df) == 3
-                assert list(df.columns) == ["id", "name", "age", "salary"]
-                assert df.iloc[0]["name"] == "John Doe"
+                # If pandas is available, check DataFrame structure
+                data = result["result"]["data"]
+                assert isinstance(data, dict)
+                assert data["_type"] == "dataframe"
+                assert len(data["dataframe"]) == 3
+                assert data["columns"] == ["id", "name", "age", "salary"]
+                assert data["dataframe"][0]["name"] == "John Doe"
             except ImportError:
                 # If pandas not available, should fall back to dict format
                 data = result["result"]["data"]
@@ -211,7 +219,10 @@ class TestAsyncSQLResultFormatIntegration:
                     try:
                         import pandas as pd
 
-                        assert isinstance(data, pd.DataFrame) and len(data) == 0
+                        # Check serialized DataFrame structure
+                        assert isinstance(data, dict)
+                        assert data["_type"] == "dataframe"
+                        assert len(data["dataframe"]) == 0
                     except ImportError:
                         assert data == []
                 else:

@@ -1,6 +1,7 @@
 """Integration tests for AsyncSQLDatabaseNode parameter handling with REAL PostgreSQL."""
 
 import asyncio
+import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -210,7 +211,8 @@ class TestAsyncSQLParameterHandlingIntegration:
             assert (
                 data["updated_at"] == test_datetime.isoformat()
             )  # datetime -> ISO string
-            assert data["metadata"] == test_json  # JSONB preserved
+            # JSONB is returned as string, need to parse it
+            assert json.loads(data["metadata"]) == test_json
             assert data["binary_data"] == "QmluYXJ5IGRhdGEgaGVyZQ=="  # bytes -> base64
             assert data["tags"] == test_array  # Array preserved
             assert data["uuid_field"] == str(test_uuid)  # UUID -> string

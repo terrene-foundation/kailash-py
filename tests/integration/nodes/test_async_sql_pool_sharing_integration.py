@@ -25,6 +25,7 @@ class TestAsyncSQLPoolSharingIntegration:
             name="setup",
             database_type="postgresql",
             connection_string=conn_string,
+            allow_admin=True,
         )
 
         await setup_node.execute_async(query="DROP TABLE IF EXISTS pool_test")

@@ -267,6 +267,7 @@ class TestAsyncSQLFeatureParityIntegration:
             connection_string=conn_string,
             max_retries=3,
             retry_delay=0.1,  # Fast retry for testing
+            allow_admin=True,  # Allow ALTER TABLE for constraint tests
         )
 
         try:
