@@ -6,6 +6,7 @@ from .health_check import HealthCheckNode
 from .log_processor import LogProcessorNode
 from .metrics_collector import MetricsCollectorNode
 from .performance_benchmark import PerformanceBenchmarkNode
+from .race_condition_detector import RaceConditionDetectorNode
 from .transaction_metrics import TransactionMetricsNode
 from .transaction_monitor import TransactionMonitorNode
 
@@ -16,6 +17,7 @@ __all__ = [
     "LogProcessorNode",
     "MetricsCollectorNode",
     "PerformanceBenchmarkNode",
+    "RaceConditionDetectorNode",
     "TransactionMetricsNode",
     "TransactionMonitorNode",
 ]
