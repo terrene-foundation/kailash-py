@@ -12,15 +12,25 @@ Kailash Python SDK API Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-Welcome to the Kailash Python SDK v0.4.0 documentation! This release introduces the
-**Enterprise Middleware Architecture** with real-time communication and production-ready features.
+Welcome to the Kailash Python SDK v0.6.6 documentation! This release fixes critical
+AgentUIMiddleware bugs and continues our enterprise-grade evolution.
 
-**Latest Updates (v0.4.0):**
-- 🌉 **Enterprise Middleware Architecture** - Complete refactor from monolithic to composable middleware
-- 🔄 **Real-time Communication** - WebSocket/SSE with comprehensive event streaming
-- 🤖 **AI Chat Integration** - Built-in chat middleware with natural language workflow generation
-- ✅ **Test Excellence** - 799 tests passing (100% pass rate), CI optimization
-- 🚀 **Production Ready** - Health checks, metrics, graceful shutdown, connection pooling
+**Latest Updates (v0.6.6):**
+- 🐛 **AgentUIMiddleware Shared Workflow Fix** - Shared workflows now execute properly across sessions
+- 🔧 **API Standardization** - `execute()` method replaces `execute_workflow()` for consistency
+- ✅ **Enhanced Testing** - Comprehensive integration tests for middleware functionality
+- 📚 **Documentation Updates** - Migration guides and updated patterns
+
+**Recent Updates (v0.6.5):**
+- 🔄 **AsyncSQL Transaction Management** - Auto, manual, and none modes for precise control
+- 🔒 **Optimistic Locking** - Version-based concurrency control with conflict resolution
+- 🚀 **Advanced Parameter Handling** - PostgreSQL ANY(), JSON, arrays, date/datetime support
+- ✅ **100% Test Pass Rate** - All AsyncSQL tests passing with strict policy compliance
+
+**Recent Updates (v0.6.4):**
+- 💉 **Enterprise Parameter Injection** - WorkflowBuilder `add_workflow_inputs()` with dot notation
+- ✅ **E2E Test Excellence** - 100% pass rate on all comprehensive E2E tests
+- 📊 **Documentation Quality** - Updated based on E2E test findings
 
 **Previous Updates (v0.3.2):**
 - 🛡️ **Admin Tool Framework** - Complete enterprise admin infrastructure with React UI, RBAC, audit logging
