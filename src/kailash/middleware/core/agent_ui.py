@@ -135,6 +135,7 @@ Author: Kailash SDK Team
 """
 
 import asyncio
+import copy
 import logging
 import time
 import uuid
@@ -563,6 +564,8 @@ class AgentUIMiddleware:
             workflow = session.workflows[workflow_id]
         elif workflow_id in self.shared_workflows:
             workflow = self.shared_workflows[workflow_id]
+            # FIX: Copy shared workflow to session before execution
+            session.add_workflow(workflow_id, workflow)
         else:
             raise ValueError(f"Workflow {workflow_id} not found")
 
@@ -658,6 +661,8 @@ class AgentUIMiddleware:
             workflow = session.workflows[workflow_id]
         elif workflow_id in self.shared_workflows:
             workflow = self.shared_workflows[workflow_id]
+            # FIX: Copy shared workflow to session before execution
+            session.add_workflow(workflow_id, workflow)
         else:
             raise ValueError(f"Workflow {workflow_id} not found")
 
