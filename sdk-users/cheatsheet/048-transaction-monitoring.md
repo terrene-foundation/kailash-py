@@ -18,9 +18,9 @@ result = metrics.execute(
 
 # Complete transaction
 result = metrics.execute(
-    operation="complete_transaction",
+    operation="end_transaction",
     transaction_id="txn_001",
-    success=True
+    status="success"
 )
 
 # Get aggregated metrics
@@ -49,19 +49,21 @@ result = monitor.execute(
     }
 )
 
-# Add transaction for monitoring
+# Create trace for monitoring
 result = monitor.execute(
-    operation="track_transaction",
-    transaction_id="txn_002",
-    operation_type="api_call",
-    start_time=time.time(),
+    operation="create_trace",
+    trace_id="trace_002",
+    operation_name="api_call",
     metadata={"endpoint": "/api/users", "method": "POST"}
 )
 
-# Get real-time status
-result = monitor.execute(operation="get_monitoring_status")
-print(f"Active transactions: {result['active_count']}")
-print(f"Current error rate: {result['current_error_rate']}")
+# Get alerts
+result = monitor.execute(operation="get_alerts")
+print(f"Active alerts: {len(result.get('alerts', []))}")
+
+# Get trace information
+result = monitor.execute(operation="get_trace", trace_id="trace_002")
+print(f"Trace status: {result.get('monitoring_status', 'unknown')}")
 ```
 
 ## Deadlock Detection - Quick Start
@@ -69,20 +71,15 @@ print(f"Current error rate: {result['current_error_rate']}")
 ```python
 from kailash.nodes.monitoring import DeadlockDetectorNode
 
-# Initialize deadlock detector
+# Start deadlock monitoring
 detector = DeadlockDetectorNode()
-result = detector.execute(
-    operation="initialize",
-    detection_interval=5.0,
-    timeout_threshold=30.0
-)
+result = detector.execute(operation="start_monitoring")
 
-# Report resource acquisition
+# Register lock acquisition
 result = detector.execute(
-    operation="acquire_resource",
+    operation="register_lock",
     transaction_id="txn_003",
     resource_id="table_users",
-    resource_type="database_table",
     lock_type="EXCLUSIVE"
 )
 
@@ -101,27 +98,19 @@ from kailash.nodes.monitoring import RaceConditionDetectorNode
 
 # Start race condition monitoring
 detector = RaceConditionDetectorNode()
-result = detector.execute(
-    operation="start_monitoring",
-    detection_window=10.0,
-    confidence_threshold=0.8
-)
+result = detector.execute(operation="start_monitoring")
 
-# Report concurrent operation
+# Register resource access
 result = detector.execute(
-    operation="report_operation",
-    operation_id="op_001",
+    operation="register_access",
+    access_id="access_001",
     resource_id="shared_counter",
-    operation_type="READ_WRITE",
-    thread_id="thread_1",
-    process_id="proc_123"
+    access_type="read_write",
+    thread_id="thread_1"
 )
 
-# Analyze for race conditions
-result = detector.execute(
-    operation="analyze_races",
-    time_window=60.0
-)
+# Detect race conditions
+result = detector.execute(operation="detect_races")
 for race in result["races_detected"]:
     print(f"Race condition: {race['race_type']}")
     print(f"Confidence: {race['confidence']}")
@@ -190,29 +179,35 @@ metrics.execute(
     metadata={"user_id": "user123", "order_value": 150.00}
 )
 
-# Track in real-time monitor
+# Create trace in real-time monitor
 monitor.execute(
-    operation="track_transaction",
-    transaction_id=txn_id,
-    operation_type="order_processing",
-    start_time=time.time()
+    operation="create_trace",
+    trace_id=f"trace_{txn_id}",
+    operation_name="order_processing",
+    metadata={"user_id": "user123", "order_value": 150.00}
 )
 
 # ... business logic ...
 
 # Complete transaction
 metrics.execute(
-    operation="complete_transaction",
+    operation="end_transaction",
     transaction_id=txn_id,
-    success=True,
-    metadata={"items_processed": 3, "payment_method": "credit_card"}
+    status="success",
+    custom_metrics={"items_processed": 3, "payment_method": "credit_card"}
 )
 
-# Update monitor
+# Add and finish span in monitor
 monitor.execute(
-    operation="complete_transaction",
-    transaction_id=txn_id,
-    success=True
+    operation="add_span",
+    trace_id=f"trace_{txn_id}",
+    span_id=f"span_{txn_id}",
+    operation_name="order_processing"
+)
+
+monitor.execute(
+    operation="finish_span",
+    span_id=f"span_{txn_id}"
 )
 ```
 
@@ -227,36 +222,40 @@ deadlock_detector = DeadlockDetectorNode()
 race_detector = RaceConditionDetectorNode()
 
 # Start monitoring
-deadlock_detector.execute(operation="initialize")
+deadlock_detector.execute(operation="start_monitoring")
 race_detector.execute(operation="start_monitoring")
 
 # Database operation with monitoring
 def monitored_db_operation(query, params, txn_id):
-    # Report resource acquisition
+    # Register lock acquisition
     deadlock_detector.execute(
-        operation="acquire_resource",
+        operation="register_lock",
         transaction_id=txn_id,
         resource_id="table_orders",
-        resource_type="database_table",
         lock_type="SHARED"
     )
 
-    # Report concurrent operation
+    # Register resource access
     race_detector.execute(
-        operation="report_operation",
-        operation_id=f"db_op_{txn_id}",
+        operation="register_access",
+        access_id=f"db_access_{txn_id}",
         resource_id="table_orders",
-        operation_type="READ",
-        thread_id=threading.current_thread().ident
+        access_type="read",
+        thread_id=str(threading.current_thread().ident)
     )
 
     # Execute query
     db_node = SQLDatabaseNode(connection_string="postgresql://...")
     result = db_node.execute(query=query, params=params)
 
-    # Release resource
+    # End access and release lock
+    race_detector.execute(
+        operation="end_access",
+        access_id=f"db_access_{txn_id}"
+    )
+
     deadlock_detector.execute(
-        operation="release_resource",
+        operation="release_lock",
         transaction_id=txn_id,
         resource_id="table_orders"
     )
@@ -286,8 +285,8 @@ for metric in ["api_latency", "cpu_usage", "memory_usage"]:
 def monitor_performance():
     # Get current metrics
     current_metrics = metrics.execute(
-        operation="get_current_metrics",
-        metric_types=["latency", "resource_usage"]
+        operation="get_metrics",
+        metric_types=["latency", "throughput"]
     )
 
     # Feed to anomaly detector
@@ -346,15 +345,14 @@ workflow.add_node("LLMAgentNode", "processor", {
 
 # Monitor for deadlocks during processing
 workflow.add_node("DeadlockDetectorNode", "deadlock_monitor", {
-    "operation": "monitor_transaction",
-    "transaction_id": "workflow_001"
+    "operation": "start_monitoring"
 })
 
 # Complete transaction tracking
 workflow.add_node("TransactionMetricsNode", "complete_metrics", {
-    "operation": "complete_transaction",
+    "operation": "end_transaction",
     "transaction_id": "workflow_001",
-    "success": True
+    "status": "success"
 })
 
 # Connect nodes
@@ -432,10 +430,10 @@ TransactionMetricsNode({
 ```python
 try:
     result = metrics.execute(
-        operation="complete_transaction",
+        operation="end_transaction",
         transaction_id=txn_id,
-        success=False,
-        error_details={"error_type": "timeout", "error_code": "DB_TIMEOUT"}
+        status="failed",
+        error="DB_TIMEOUT: Database operation timed out"
     )
 except Exception as e:
     # Handle monitoring system failure
@@ -497,9 +495,9 @@ def test_transaction_lifecycle():
 
     # Complete transaction
     result = metrics.execute(
-        operation="complete_transaction",
+        operation="end_transaction",
         transaction_id="test_001",
-        success=True
+        status="success"
     )
     assert result["status"] == "success"
 
@@ -514,30 +512,32 @@ def test_transaction_lifecycle():
 ```python
 def test_deadlock_scenario():
     detector = DeadlockDetectorNode()
-    detector.execute(operation="initialize")
+    detector.execute(operation="start_monitoring")
 
     # Create potential deadlock scenario
-    # Transaction 1 acquires A, wants B
+    # Transaction 1 acquires A, waits for txn2
     detector.execute(
-        operation="acquire_resource",
+        operation="register_lock",
         transaction_id="txn1",
         resource_id="resource_A"
     )
     detector.execute(
-        operation="request_resource",
+        operation="register_wait",
         transaction_id="txn1",
+        waiting_for_transaction_id="txn2",
         resource_id="resource_B"
     )
 
-    # Transaction 2 acquires B, wants A
+    # Transaction 2 acquires B, waits for txn1
     detector.execute(
-        operation="acquire_resource",
+        operation="register_lock",
         transaction_id="txn2",
         resource_id="resource_B"
     )
     detector.execute(
-        operation="request_resource",
+        operation="register_wait",
         transaction_id="txn2",
+        waiting_for_transaction_id="txn1",
         resource_id="resource_A"
     )
 
@@ -608,10 +608,10 @@ def monitored_db_operation():
 
     try:
         result = execute_database_query()
-        metrics.execute(operation="complete_transaction", success=True)
+        metrics.execute(operation="end_transaction", transaction_id="db_op", status="success")
         return result
     except Exception as e:
-        metrics.execute(operation="complete_transaction", success=False)
+        metrics.execute(operation="end_transaction", transaction_id="db_op", status="failed")
         raise
 ```
 
