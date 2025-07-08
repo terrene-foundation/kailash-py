@@ -35,27 +35,6 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           configuration-path: .github/labeler.yml
 
-  update-project-status:
-    name: Update Project Card Status
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Move to In Review
-        if: github.event.action == 'ready_for_review'
-        uses: alex-page/github-project-automation-plus@v0.8.3
-        with:
-          project: Kailash SDK Development
-          column: In Review
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Move to Done
-        if: github.event.action == 'closed' && github.event.pull_request.merged
-        uses: alex-page/github-project-automation-plus@v0.8.3
-        with:
-          project: Kailash SDK Development
-          column: Done
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
   session-milestone:
     name: Create Session Milestone
     runs-on: ubuntu-latest

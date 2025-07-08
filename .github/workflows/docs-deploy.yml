@@ -53,11 +53,17 @@ jobs:
             if command -v brew &> /dev/null; then
               echo "Installing GNU tar via Homebrew..."
               brew install gnu-tar
+              # Add GNU tar to PATH persistently
+              echo "/opt/homebrew/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+              echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
             else
               echo "Homebrew not available, creating gtar symlink..."
               sudo ln -sf /usr/bin/tar /usr/local/bin/gtar || true
             fi
           fi
+          # Also add common paths where gtar might be
+          echo "/opt/homebrew/bin" >> $GITHUB_PATH
+          echo "/usr/local/bin" >> $GITHUB_PATH
           # Verify gtar is now available
           gtar --version || tar --version
 
@@ -76,6 +82,16 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Ensure GNU tar is in PATH
+        run: |
+          # Export PATH to include GNU tar location
+          if command -v brew &> /dev/null; then
+            export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          fi
+          # Verify gtar is available
+          which gtar || which tar
+          gtar --version || tar --version
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
