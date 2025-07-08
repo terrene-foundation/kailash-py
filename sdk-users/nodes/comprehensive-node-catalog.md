@@ -1,12 +1,12 @@
 # Comprehensive Node Catalog - Kailash SDK
 
-> **⚠️ Note**: This is the exhaustive 2194-line reference. For most use cases, start with:
+> **⚠️ Note**: This is the exhaustive 2455-line reference. For most use cases, start with:
 > - **[node-index.md](node-index.md)** - 47-line quick reference
 > - **[node-selection-guide.md](node-selection-guide.md)** - 436-line smart selection guide
 
 This reference guide lists all available nodes in the Kailash SDK and their primary use cases. **Always prefer using these specialized nodes over PythonCodeNode when possible.**
 
-*Total: 110+ specialized nodes across 12 categories*
+*Total: 115+ specialized nodes across 13 categories*
 
 ## 🔗 **See Also**
 - **[Fundamentals](../developer/01-fundamentals.md)** - Core concepts and node usage patterns
@@ -2091,6 +2091,266 @@ workflow.runtime = LocalRuntime()
   node = AuditLogNode(compliance_tags=["SOC2", "HIPAA"])
 
   ```
+
+## Monitoring & Observability Nodes
+
+### TransactionMetricsNode
+
+**Purpose**: Collect and aggregate transaction performance metrics with enterprise export formats.
+
+**Use cases**:
+- Transaction timing and latency tracking
+- Success rate monitoring
+- Throughput measurement
+- Custom metric collection
+- Export to Prometheus, CloudWatch, DataDog, OpenTelemetry
+
+**Example**:
+```python
+from kailash.nodes.monitoring import TransactionMetricsNode
+
+# Initialize metrics collector
+metrics = TransactionMetricsNode({
+    "aggregation_window": 60,    # 1-minute windows
+    "retention_period": 3600,    # Keep 1 hour of data
+    "export_format": "prometheus",
+    "custom_percentiles": [50, 75, 90, 95, 99]
+})
+
+# Track transaction
+result = metrics.execute(
+    operation="start_transaction",
+    transaction_id="order_123",
+    operation_type="order_processing"
+)
+
+# Complete with metrics
+result = metrics.execute(
+    operation="end_transaction",
+    transaction_id="order_123",
+    status="success",
+    custom_metrics={"items": 5, "total": 150.00}
+)
+
+# Get aggregated metrics
+result = metrics.execute(
+    operation="get_metrics",
+    metric_types=["latency", "throughput", "success_rate"],
+    export_format="prometheus"
+)
+```
+
+### TransactionMonitorNode
+
+**Purpose**: Real-time transaction monitoring with distributed tracing and alerting.
+
+**Use cases**:
+- Live transaction tracing
+- Distributed tracing (OpenTelemetry compatible)
+- Real-time alerting on thresholds
+- Transaction correlation
+- Performance bottleneck identification
+
+**Example**:
+```python
+from kailash.nodes.monitoring import TransactionMonitorNode
+
+# Initialize monitor with alerts
+monitor = TransactionMonitorNode()
+
+result = monitor.execute(
+    operation="start_monitoring",
+    monitoring_interval=1.0,
+    alert_thresholds={
+        "latency_ms": 1000,
+        "error_rate": 0.05,
+        "concurrent_transactions": 100
+    }
+)
+
+# Create trace
+result = monitor.execute(
+    operation="create_trace",
+    trace_id="trace_001",
+    operation_name="api_request",
+    metadata={"endpoint": "/api/orders", "method": "POST"}
+)
+
+# Add spans
+result = monitor.execute(
+    operation="add_span",
+    trace_id="trace_001",
+    span_id="db_query",
+    operation_name="database_query",
+    start_time=time.time()
+)
+
+# Get alerts
+result = monitor.execute(operation="get_alerts")
+```
+
+### DeadlockDetectorNode
+
+**Purpose**: Detect and resolve database deadlocks using wait-for graph analysis.
+
+**Use cases**:
+- Database deadlock detection
+- Lock dependency graph visualization
+- Automatic victim selection
+- Deadlock prevention strategies
+- Lock timeout management
+
+**Example**:
+```python
+from kailash.nodes.monitoring import DeadlockDetectorNode
+
+# Initialize detector
+detector = DeadlockDetectorNode({
+    "detection_interval": 5.0,
+    "timeout_threshold": 30.0,
+    "victim_selection": "youngest"  # or "oldest", "lowest_cost"
+})
+
+# Start monitoring
+result = detector.execute(operation="start_monitoring")
+
+# Register lock acquisition
+result = detector.execute(
+    operation="register_lock",
+    transaction_id="txn_001",
+    resource_id="table_orders",
+    lock_type="EXCLUSIVE"
+)
+
+# Register wait condition
+result = detector.execute(
+    operation="register_wait",
+    transaction_id="txn_001",
+    waiting_for_transaction_id="txn_002",
+    resource_id="table_users"
+)
+
+# Detect deadlocks
+result = detector.execute(operation="detect_deadlocks")
+
+if result["deadlocks_detected"] > 0:
+    # Automatic resolution
+    detector.execute(
+        operation="resolve_deadlock",
+        deadlock_id=result["deadlocks"][0]["deadlock_id"],
+        resolution_strategy="abort_victim"
+    )
+```
+
+### RaceConditionDetectorNode
+
+**Purpose**: Detect race conditions in concurrent resource access patterns.
+
+**Use cases**:
+- Concurrent access analysis
+- Race condition identification
+- Thread safety validation
+- Resource contention detection
+- Access pattern visualization
+
+**Example**:
+```python
+from kailash.nodes.monitoring import RaceConditionDetectorNode
+
+# Initialize detector
+detector = RaceConditionDetectorNode({
+    "detection_window": 10.0,
+    "confidence_threshold": 0.8
+})
+
+# Start monitoring
+result = detector.execute(operation="start_monitoring")
+
+# Register resource access
+result = detector.execute(
+    operation="register_access",
+    access_id="access_001",
+    resource_id="shared_counter",
+    access_type="read_write",  # or "read", "write"
+    thread_id="thread_1"
+)
+
+# End access
+result = detector.execute(
+    operation="end_access",
+    access_id="access_001"
+)
+
+# Detect race conditions
+result = detector.execute(operation="detect_races")
+
+for race in result.get("races_detected", []):
+    print(f"Race condition: {race['race_type']}")
+    print(f"Confidence: {race['confidence']}")
+    print(f"Resources: {race['resources']}")
+```
+
+### PerformanceAnomalyNode
+
+**Purpose**: Detect performance anomalies using statistical baselines and ML techniques.
+
+**Use cases**:
+- Performance baseline learning
+- Anomaly detection (statistical & ML)
+- Trend analysis
+- Seasonal pattern recognition
+- Automatic alerting
+
+**Example**:
+```python
+from kailash.nodes.monitoring import PerformanceAnomalyNode
+
+# Initialize detector
+detector = PerformanceAnomalyNode()
+
+# Initialize baseline
+result = detector.execute(
+    operation="initialize_baseline",
+    metric_name="api_response_time",
+    sensitivity=0.8,
+    min_samples=30,
+    detection_window=300  # 5 minutes
+)
+
+# Feed metric data
+for value in response_times:
+    result = detector.execute(
+        operation="add_metric",
+        metric_name="api_response_time",
+        value=value,
+        tags={"endpoint": "/api/users", "method": "GET"}
+    )
+
+# Detect anomalies
+result = detector.execute(
+    operation="detect_anomalies",
+    metric_names=["api_response_time"],
+    detection_methods=["statistical", "threshold_based", "iqr"]
+)
+
+# Handle anomalies
+for anomaly in result.get("anomalies_detected", []):
+    if anomaly["severity"] == "critical":
+        # Trigger emergency response
+        send_alert(anomaly)
+```
+
+**Best Practices**:
+- Layer multiple monitoring nodes for comprehensive coverage
+- Set thresholds based on baseline performance
+- Monitor the monitors (keep overhead < 5%)
+- Use appropriate sampling rates for high-volume systems
+- Regularly update performance baselines
+
+**See Also**:
+- [Transaction Monitoring Cheatsheet](../cheatsheet/048-transaction-monitoring.md)
+- [Monitoring Guide](monitoring-nodes.md)
+- [Enterprise Production Patterns](../enterprise/production-patterns.md)
 
 ## Middleware Nodes
 
