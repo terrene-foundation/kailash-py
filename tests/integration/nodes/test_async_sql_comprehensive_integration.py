@@ -2,9 +2,11 @@
 
 import asyncio
 import gc
+import json
 import os
 import time
-from datetime import datetime
+import uuid
+from datetime import date, datetime
 
 import psutil
 import pytest
@@ -693,11 +695,11 @@ class TestAsyncSQLComprehensiveIntegration:
                 "integer_field": 42,
                 "decimal_field": 123.45,
                 "boolean_field": True,
-                "date_field": "2024-01-15",
-                "timestamp_field": "2024-01-15 10:30:00",
+                "date_field": date(2024, 1, 15),
+                "timestamp_field": datetime(2024, 1, 15, 10, 30, 0),
                 "json_field": {"key": "value", "nested": {"array": [1, 2, 3]}},
                 "array_field": [1, 2, 3, 4, 5],
-                "uuid_field": "550e8400-e29b-41d4-a716-446655440000",
+                "uuid_field": uuid.UUID("550e8400-e29b-41d4-a716-446655440000"),
             }
 
             insert_result = await node.execute_async(
@@ -730,9 +732,11 @@ class TestAsyncSQLComprehensiveIntegration:
                 test_data["decimal_field"]
             )
             assert retrieved_data["boolean_field"] == test_data["boolean_field"]
-            assert retrieved_data["json_field"] == test_data["json_field"]
+            # JSON field is returned as string, need to parse it
+            assert json.loads(retrieved_data["json_field"]) == test_data["json_field"]
             assert retrieved_data["array_field"] == test_data["array_field"]
-            assert str(retrieved_data["uuid_field"]) == test_data["uuid_field"]
+            # UUID field comparison - PostgreSQL returns as string, convert to UUID
+            assert uuid.UUID(retrieved_data["uuid_field"]) == test_data["uuid_field"]
 
             # Test NULL handling
             null_result = await node.execute_async(

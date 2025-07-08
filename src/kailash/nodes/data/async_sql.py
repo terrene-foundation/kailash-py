@@ -98,7 +98,7 @@ class QueryValidator:
 
     # Patterns that should only appear in admin queries
     ADMIN_ONLY_PATTERNS = [
-        r"\b(CREATE|ALTER|DROP)\s+(TABLE|INDEX|VIEW|PROCEDURE|FUNCTION|TRIGGER)",
+        r"\b(CREATE|ALTER|DROP)\s+(?:\w+\s+)*(TABLE|INDEX|VIEW|PROCEDURE|FUNCTION|TRIGGER)",
         r"\b(GRANT|REVOKE)\b",
         r"\bTRUNCATE\b",
     ]
@@ -1604,9 +1604,30 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if isinstance(result[0], dict):
                     columns = list(result[0].keys())
 
+            # Handle DataFrame serialization for JSON compatibility
+            if result_format == "dataframe":
+                try:
+                    import pandas as pd
+
+                    if isinstance(formatted_data, pd.DataFrame):
+                        # Convert DataFrame to JSON-compatible format
+                        serializable_data = {
+                            "dataframe": formatted_data.to_dict("records"),
+                            "columns": formatted_data.columns.tolist(),
+                            "index": formatted_data.index.tolist(),
+                            "_type": "dataframe",
+                        }
+                    else:
+                        # pandas not available, use regular data
+                        serializable_data = formatted_data
+                except ImportError:
+                    serializable_data = formatted_data
+            else:
+                serializable_data = formatted_data
+
             result_dict = {
                 "result": {
-                    "data": formatted_data,
+                    "data": serializable_data,
                     "row_count": row_count,
                     "query": query,
                     "database_type": self.config["database_type"],
