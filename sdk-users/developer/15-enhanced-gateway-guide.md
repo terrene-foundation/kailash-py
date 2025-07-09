@@ -4,7 +4,9 @@
 
 ## Overview
 
-The Enhanced Gateway extends Kailash's DurableAPIGateway with advanced resource management capabilities, enabling seamless integration of non-serializable objects (databases, HTTP clients, caches) into async workflows through JSON-serializable resource references.
+The Enhanced Gateway architecture leverages Kailash's redesigned server classes (`EnterpriseWorkflowServer`) with advanced resource management capabilities, enabling seamless integration of non-serializable objects (databases, HTTP clients, caches) into async workflows through JSON-serializable resource references.
+
+**NEW: Nexus Multi-Channel Integration** - This guide focuses on single-channel API gateway patterns. For unified API + CLI + MCP orchestration, see [Nexus Patterns](../enterprise/nexus-patterns.md).
 
 ## Prerequisites
 
@@ -46,21 +48,28 @@ The Enhanced Gateway extends Kailash's DurableAPIGateway with advanced resource 
 The main gateway class extending DurableAPIGateway:
 
 ```python
-from kailash.gateway import EnhancedDurableAPIGateway
+from kailash.servers.gateway import create_gateway
 from kailash.gateway.security import SecretManager
 from kailash.resources.registry import ResourceRegistry
 
-# Create enhanced gateway
-gateway = EnhancedDurableAPIGateway(
+# Create enhanced gateway with redesigned architecture
+gateway = create_gateway(
+    title="Production Gateway",
+    description="Enterprise workflow orchestration",
+    server_type="enterprise",  # Uses EnterpriseWorkflowServer
+
+    # Resource management
     resource_registry=ResourceRegistry(),
     secret_manager=SecretManager(),
-    enable_durability=True,  # Enable checkpoint persistence
-    title="Production Gateway",
-    description="Enterprise workflow orchestration"
+
+    # Enhanced features
+    enable_durability=True,
+    enable_resource_management=True,
+    enable_async_execution=True
 )
 
 # Start the gateway
-await gateway.start()
+gateway.run(host="0.0.0.0", port=8000)
 ```
 
 ### Resource References

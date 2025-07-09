@@ -79,7 +79,7 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 ├─ 💬 Chat/LLM?
 │  ├─ Simple chat → LLMAgentNode
 │  ├─ With monitoring → MonitoredLLMAgentNode
-│  ├─ Multi-turn → IterativeLLMAgentNode
+│  ├─ Multi-turn → IterativeLLMAgentNode (use_real_mcp=True)
 │  └─ Local LLM → PythonCodeNode + Ollama
 ├─ 🔗 Agent coordination?
 │  ├─ Agent-to-agent → A2AAgentNode
@@ -201,7 +201,7 @@ ContextFormatterNode
 ### 🤖 AI/ML (20+ nodes)
 ```python
 # LLM Agents
-LLMAgentNode, IterativeLLMAgentNode
+LLMAgentNode, IterativeLLMAgentNode  # Real MCP execution (v0.6.5+)
 MonitoredLLMAgentNode
 
 # Coordination
@@ -338,7 +338,7 @@ PagerDutyAlertNode, WebhookAlertNode
 - **Database work**: Use AsyncSQLDatabaseNode for enterprise/production, QueryRouterNode for high-performance routing, OptimisticLockingNode for concurrent updates, SQLDatabaseNode for simple cases
 - **Distributed transactions**: Use DistributedTransactionManagerNode for automatic pattern selection, SagaCoordinatorNode for high availability, TwoPhaseCommitCoordinatorNode for strong consistency
 - **API calls**: Use RESTClientNode for REST, HTTPRequestNode for simple HTTP
-- **AI tasks**: Use LLMAgentNode family, avoid direct SDK calls
+- **AI tasks**: Use LLMAgentNode family, **IterativeLLMAgentNode** for real MCP execution (use_real_mcp=True), avoid direct SDK calls
 - **Control flow**: Use SwitchNode for conditions, MergeNode for combining data
 - **Security**: Use dedicated auth/permission nodes, never roll your own
 

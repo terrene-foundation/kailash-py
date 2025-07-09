@@ -199,9 +199,12 @@ class MiddlewareMCPServer:
         # Tool Registration Workflow
         self.tool_register_workflow = WorkflowBuilder()
 
-        validator = PythonCodeNode(
-            name="validate_tool",
-            code="""
+        # Use proper WorkflowBuilder syntax with string class names
+        self.tool_register_workflow.add_node(
+            "PythonCodeNode",
+            "validate_tool",
+            {
+                "code": """
 # Validate tool registration using Kailash patterns
 tool_data = input_data.get('tool_data', {})
 
@@ -220,12 +223,15 @@ else:
         'tool_data': tool_data,
         'validation_passed': True
     }
-""",
+"""
+            },
         )
 
-        register_handler = PythonCodeNode(
-            name="register_tool",
-            code="""
+        self.tool_register_workflow.add_node(
+            "PythonCodeNode",
+            "register_tool",
+            {
+                "code": """
 # Register tool using Kailash patterns
 validation_result = input_data.get('validation_result', {})
 
@@ -243,11 +249,10 @@ else:
         'tool_registered': True,
         'registration_time': datetime.now().isoformat()
     }
-""",
+"""
+            },
         )
 
-        self.tool_register_workflow.add_node(validator)
-        self.tool_register_workflow.add_node(register_handler)
         self.tool_register_workflow.add_connection(
             "validate_tool", "result", "register_tool", "validation_result"
         )
@@ -255,9 +260,11 @@ else:
         # Tool Execution Workflow
         self.tool_execute_workflow = WorkflowBuilder()
 
-        executor = PythonCodeNode(
-            name="execute_tool",
-            code="""
+        self.tool_execute_workflow.add_node(
+            "PythonCodeNode",
+            "execute_tool",
+            {
+                "code": """
 # Execute MCP tool using Kailash patterns
 tool_name = input_data.get('tool_name')
 tool_args = input_data.get('arguments', {})
@@ -272,10 +279,9 @@ execution_result = {
 }
 
 result = {'execution_result': execution_result}
-""",
+"""
+            },
         )
-
-        self.tool_execute_workflow.add_node(executor)
 
     async def register_tool(
         self,

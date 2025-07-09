@@ -23,6 +23,23 @@ try:
         AIChatMiddleware,
         APIGateway,
         RealtimeMiddleware,
+    )
+
+    # Import Nexus multi-channel framework (v0.6.7+)
+    from kailash.nexus import NexusGateway, create_nexus
+
+    # Import new server classes (v0.6.7+)
+    from kailash.servers import (
+        DurableWorkflowServer,
+        EnterpriseWorkflowServer,
+        WorkflowServer,
+    )
+
+    # Import updated create_gateway function with enterprise defaults
+    from kailash.servers.gateway import (
+        create_basic_gateway,
+        create_durable_gateway,
+        create_enterprise_gateway,
         create_gateway,
     )
 
@@ -50,14 +67,26 @@ __all__ = [
     "LocalRuntime",
 ]
 
-# Add middleware to exports if available
+# Add middleware and servers to exports if available
 if _MIDDLEWARE_AVAILABLE:
     __all__.extend(
         [
+            # Legacy middleware
             "AgentUIMiddleware",
             "RealtimeMiddleware",
             "APIGateway",
             "AIChatMiddleware",
+            # New server classes
+            "WorkflowServer",
+            "DurableWorkflowServer",
+            "EnterpriseWorkflowServer",
+            # Gateway creation functions
             "create_gateway",
+            "create_enterprise_gateway",
+            "create_durable_gateway",
+            "create_basic_gateway",
+            # Nexus multi-channel framework
+            "NexusGateway",
+            "create_nexus",
         ]
     )

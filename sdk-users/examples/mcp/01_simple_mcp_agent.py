@@ -27,6 +27,8 @@ def main():
                 # Use mock provider for testing (no API key needed)
                 "provider": "mock",
                 "model": "gpt-4",
+                # Use mock MCP execution for this example
+                "use_real_mcp": False,
                 # User message
                 "messages": [
                     {"role": "user", "content": "What tools do you have available?"}

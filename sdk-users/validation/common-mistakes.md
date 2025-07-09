@@ -10,7 +10,7 @@ All examples in this guide assume these imports:
 from kailash import Workflow
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode
-from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
+from kailash.nodes.ai import LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 from kailash.nodes.logic import SwitchNode, MergeNode, WorkflowNode
 from kailash.nodes.code import PythonCodeNode
@@ -504,6 +504,54 @@ except Exception as e:
     )
     if recovery_result["status"] == "success":
         await coordinator.async_run(operation="resume")
+```
+
+### **Mistake #19: IterativeLLMAgent Mock Execution**
+
+```python
+# ❌ WRONG - Disabling real MCP execution (reverts to mock)
+agent = IterativeLLMAgentNode()
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}],
+    mcp_servers=[{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
+    use_real_mcp=False  # This causes mock execution!
+)
+
+# ✅ CORRECT - Use real MCP execution (default behavior)
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}],
+    mcp_servers=[{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
+    use_real_mcp=True  # Default: True (real tool execution)
+)
+```
+
+```python
+# ❌ WRONG - No MCP servers but expecting tool execution
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}]
+    # Missing mcp_servers!
+)
+
+# ✅ CORRECT - Always provide MCP servers for tool execution
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}],
+    mcp_servers=[{
+        "name": "data-server",
+        "transport": "stdio",
+        "command": "python",
+        "args": ["-m", "data_mcp_server"]
+    }],
+    auto_discover_tools=True,
+    auto_execute_tools=True
+)
 ```
 
 ## 🔗 **Next Steps**

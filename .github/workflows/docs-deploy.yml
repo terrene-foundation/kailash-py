@@ -48,24 +48,27 @@ jobs:
 
       - name: Install GNU tar for local runner
         run: |
-          # Check if gtar is available, install if needed
-          if ! command -v gtar &> /dev/null; then
-            if command -v brew &> /dev/null; then
-              echo "Installing GNU tar via Homebrew..."
-              brew install gnu-tar
-              # Add GNU tar to PATH persistently
-              echo "/opt/homebrew/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
-              echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+          # Install GNU tar via Homebrew and create reliable symlink
+          if command -v brew &> /dev/null; then
+            echo "Installing GNU tar via Homebrew..."
+            brew install gnu-tar || echo "GNU tar might already be installed"
+
+            # Create reliable symlink in standard location
+            if [ -f "/opt/homebrew/bin/gtar" ]; then
+              sudo ln -sf /opt/homebrew/bin/gtar /usr/local/bin/gtar
+            elif [ -f "/usr/local/bin/gtar" ]; then
+              echo "GNU tar already available at /usr/local/bin/gtar"
             else
-              echo "Homebrew not available, creating gtar symlink..."
-              sudo ln -sf /usr/bin/tar /usr/local/bin/gtar || true
+              echo "Warning: Could not find gtar after Homebrew installation"
             fi
+          else
+            echo "Homebrew not available, creating fallback gtar symlink..."
+            sudo ln -sf /usr/bin/tar /usr/local/bin/gtar
           fi
-          # Also add common paths where gtar might be
-          echo "/opt/homebrew/bin" >> $GITHUB_PATH
-          echo "/usr/local/bin" >> $GITHUB_PATH
-          # Verify gtar is now available
-          gtar --version || tar --version
+
+          # Verify gtar is accessible
+          /usr/local/bin/gtar --version || echo "Warning: gtar symlink verification failed"
+          which gtar || echo "gtar not in PATH, but symlink should work"
 
       - name: Install dependencies
         run: |
@@ -82,16 +85,6 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
-
-      - name: Ensure GNU tar is in PATH
-        run: |
-          # Export PATH to include GNU tar location
-          if command -v brew &> /dev/null; then
-            export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-          fi
-          # Verify gtar is available
-          which gtar || which tar
-          gtar --version || tar --version
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
