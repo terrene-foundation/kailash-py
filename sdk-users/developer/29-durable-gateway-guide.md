@@ -6,6 +6,8 @@
 
 The Durable Gateway provides enterprise-grade reliability features including request persistence across restarts, automatic deduplication, event sourcing, circuit breaker protection, and connection pool management. These features ensure high availability and fault tolerance for production applications.
 
+**NEW: Redesigned Server Architecture** - This guide now uses the updated `create_gateway()` function with redesigned server classes (`DurableWorkflowServer`) for improved naming and enterprise defaults.
+
 ## Prerequisites
 
 - Completed [Enhanced MCP Server Guide](23-enhanced-mcp-server-guide.md)
@@ -14,18 +16,20 @@ The Durable Gateway provides enterprise-grade reliability features including req
 
 ## Core Durability Features
 
-### DurableAPIGateway
+### Durable Gateway Creation
 
-The main gateway class with comprehensive durability features.
+The main gateway with comprehensive durability features using redesigned architecture.
 
 ```python
-from kailash.middleware.gateway.durable_gateway import DurableAPIGateway
+from kailash.servers.gateway import create_gateway
 from kailash.middleware.gateway.checkpoint_manager import CheckpointManager
 from kailash.middleware.gateway.event_store import EventStore
 
-# Initialize durable gateway
-gateway = DurableAPIGateway(
-    name="production_gateway",
+# Initialize durable gateway with redesigned architecture
+gateway = create_gateway(
+    title="Production Durable Gateway",
+    description="Enterprise gateway with persistence and reliability",
+    server_type="durable",  # Uses DurableWorkflowServer
 
     # Persistence configuration
     checkpoint_manager=CheckpointManager(
@@ -49,19 +53,20 @@ gateway = DurableAPIGateway(
         enable_projections=True
     ),
 
-    # Request durability
+    # Durability features (enabled by default for durable server)
+    enable_durability=True,
     enable_request_persistence=True,
     enable_deduplication=True,
     idempotency_window_minutes=60,
 
     # Performance settings
-    max_concurrent_requests=1000,
+    max_workers=50,
     request_timeout_seconds=300,
     graceful_shutdown_timeout=30
 )
 
 # Start the gateway
-await gateway.start()
+gateway.run(host="0.0.0.0", port=8000)
 ```
 
 ### Request Persistence

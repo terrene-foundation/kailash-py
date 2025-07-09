@@ -1,6 +1,6 @@
 # Architecture Decision Matrix
 
-**Version**: v0.6.3 | **Quick Decisions for Claude Code**
+**Version**: v0.6.6+ | **Quick Decisions for Claude Code**
 
 ## 🎯 Quick Decision Framework
 
@@ -47,6 +47,7 @@
 | App Type | Workflow | Interface | Performance | Rationale |
 |----------|----------|-----------|-------------|-----------|
 | **AI Assistant** | Class-based | MCP | Async runtime | Structured AI tool integration |
+| **Iterative AI Agent** | Class-based | MCP | Async runtime | **IterativeLLMAgent** with `use_real_mcp=True` |
 | **API Gateway** | Hybrid | Hybrid | Full middleware | Maximum flexibility |
 | **Data Pipeline** | Class-based | Direct | Connection pooling | High-throughput processing |
 | **Enterprise App** | Hybrid | MCP | Full middleware | Complete feature set |

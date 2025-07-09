@@ -11,6 +11,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 |------|-------|-------------|
 | **[000-claude-code-guide](000-claude-code-guide.md)** | **Claude Code Mastery** | **Essential patterns for Claude Code success** |
 | **[025-mcp-integration](025-mcp-integration.md)** | **🚀 MCP Integration** | **Model Context Protocol - Enable AI tool usage** |
+| **[050-validation-testing-patterns](050-validation-testing-patterns.md)** | **🧪 Validation & Testing** | **NEW: Test-driven convergence & comprehensive validation** |
 | **[038-integration-mastery](038-integration-mastery.md)** | **Integration Patterns** | **Complete guide for all integration types** |
 | **[039-workflow-composition](039-workflow-composition.md)** | **Workflow Composition** | **Advanced workflow building and data flow** |
 
@@ -87,6 +88,7 @@ Quick reference guides organized by topic. Each file contains focused, actionabl
 | [045-ollama-integration-patterns](045-ollama-integration-patterns.md) | Ollama Local LLMs | Production-ready Ollama integration patterns |
 | **[047-asyncsql-enterprise-patterns](047-asyncsql-enterprise-patterns.md)** | **🚀 AsyncSQL Enterprise** | **Production async SQL with transactions & optimistic locking** |
 | **[048-transaction-monitoring](048-transaction-monitoring.md)** | **📊 Transaction Monitoring** | **Enterprise monitoring: performance metrics, deadlock detection, anomaly analysis** |
+| **[050-validation-testing-patterns](050-validation-testing-patterns.md)** | **🧪 Validation & Testing** | **NEW: Comprehensive validation framework with test-driven convergence** |
 
 ## 🔗 Related Resources
 

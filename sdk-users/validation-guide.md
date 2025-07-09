@@ -2,7 +2,20 @@
 
 *Complete validation framework for Kailash SDK workflows and patterns*
 
-Version: 0.6.3 | Last Updated: 2025-07-03
+Version: 0.6.6 | Last Updated: 2025-07-08
+
+## 🚨 **NEW**: Comprehensive Validation Framework
+
+**⚡ The Kailash SDK now includes a complete validation framework with specialized nodes:**
+
+- **[CodeValidationNode](developer/13-validation-framework-guide.md#codevalidationnode-deep-dive)** - Multi-level code validation with sandbox execution
+- **[WorkflowValidationNode](developer/13-validation-framework-guide.md#workflowvalidationnode-deep-dive)** - Complete workflow definition validation
+- **[TestSuiteExecutorNode](developer/13-validation-framework-guide.md#testsuiteexecutornode-deep-dive)** - Comprehensive test suite execution
+- **[Enhanced IterativeLLMAgentNode](developer/13-validation-framework-guide.md#enhanced-iterativellmagentnode)** - Test-driven convergence
+
+**📚 Complete Documentation:**
+- **[Validation Framework Guide](developer/13-validation-framework-guide.md)** - Comprehensive technical guide
+- **[Validation Patterns Cheatsheet](cheatsheet/050-validation-testing-patterns.md)** - Quick reference patterns
 
 ## 🎯 Overview
 
@@ -10,9 +23,12 @@ This guide provides comprehensive validation strategies for Kailash SDK workflow
 
 ## 📋 Quick Reference
 
-| Validation Type | Purpose | Documentation |
-|----------------|---------|---------------|
-| **Workflow Validation** | Ensure workflow correctness | [Workflow Validation](#workflow-validation) |
+| Validation Type | Purpose | New Framework Documentation |
+|----------------|---------|----------------------------|
+| **Code Validation** | Validate generated code | [CodeValidationNode Guide](developer/13-validation-framework-guide.md#codevalidationnode-deep-dive) |
+| **Workflow Validation** | Ensure workflow correctness | [WorkflowValidationNode Guide](developer/13-validation-framework-guide.md#workflowvalidationnode-deep-dive) |
+| **Test Execution** | Run comprehensive test suites | [TestSuiteExecutorNode Guide](developer/13-validation-framework-guide.md#testsuiteexecutornode-deep-dive) |
+| **Test-Driven Development** | TDD with validation framework | [TDD Patterns](cheatsheet/050-validation-testing-patterns.md#test-driven-development) |
 | **Node Parameter Validation** | Validate node inputs/outputs | [Parameter Validation](#parameter-validation) |
 | **Connection Validation** | Verify node connections | [Connection Validation](#connection-validation) |
 | **Runtime Validation** | Validate execution environment | [Runtime Validation](#runtime-validation) |
