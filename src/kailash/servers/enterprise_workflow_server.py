@@ -225,7 +225,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                         self._workflow_resources.get(resource_name, set())
                     ),
                 }
-            except KeyError:
+            except (KeyError, Exception) as e:
                 from fastapi import HTTPException
 
                 raise HTTPException(status_code=404, detail="Resource not found")
@@ -422,14 +422,14 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         if not self.enable_resource_management:
             raise RuntimeError("Resource management disabled")
 
-        self.resource_registry.register_resource(name, resource)
+        self.resource_registry.register_factory(name, lambda: resource)
         logger.info(f"Registered enterprise resource: {name}")
 
     def _register_root_endpoints(self):
         """Override to add enterprise info to root endpoint."""
-        super()._register_root_endpoints()
+        # Don't call super() to avoid duplicate endpoint registration
 
-        # Override the root endpoint to include enterprise info
+        # Register the enterprise root endpoint
         @self.app.get("/")
         async def root():
             """Server information with enterprise details."""

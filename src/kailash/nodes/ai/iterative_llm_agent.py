@@ -895,8 +895,33 @@ class IterativeLLMAgentNode(LLMAgentNode):
         """Build mapping from tool names to server configurations."""
         tool_server_map = {}
 
-        # Get MCP servers from kwargs
+        # Get MCP servers from kwargs with platform adapter support
         mcp_servers = kwargs.get("mcp_servers", [])
+
+        # Check if we have platform-format server configurations
+        if "server_config" in kwargs or "server_configs" in kwargs:
+            from kailash.adapters import MCPPlatformAdapter
+
+            try:
+                platform_config = {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k in ["server_config", "server_configs"]
+                }
+                translated_config = MCPPlatformAdapter.translate_llm_agent_config(
+                    platform_config
+                )
+                if "mcp_servers" in translated_config:
+                    mcp_servers = translated_config["mcp_servers"]
+                    self.logger.debug(
+                        f"Translated platform MCP servers: {len(mcp_servers)} servers"
+                    )
+            except Exception as e:
+                self.logger.warning(f"Failed to translate platform MCP config: {e}")
+                # Continue with original mcp_servers
+
+        # Create fallback server config if we have mcp_servers
+        fallback_server = mcp_servers[0] if mcp_servers else None
 
         # Process discovered tools to map them to servers
         for tool in discoveries.get("new_tools", []):
@@ -909,12 +934,35 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     tool_name = tool.get("name", "unknown")
                     server_config = tool.get("mcp_server_config")
 
+                # Skip tools with unknown names
+                if tool_name == "unknown":
+                    self.logger.warning(f"Skipping tool with unknown name: {tool}")
+                    continue
+
                 # Find matching server configuration
                 if server_config:
                     tool_server_map[tool_name] = server_config
-                elif mcp_servers:
-                    # Use first available server as fallback
-                    tool_server_map[tool_name] = mcp_servers[0]
+                elif fallback_server:
+                    # Use fallback server and log the mapping
+                    tool_server_map[tool_name] = fallback_server
+                    self.logger.debug(
+                        f"Mapped tool '{tool_name}' to fallback server: {fallback_server.get('name', 'unnamed')}"
+                    )
+                else:
+                    # No server available for this tool
+                    self.logger.warning(
+                        f"No MCP server configuration available for tool: {tool_name}"
+                    )
+
+        # Also map any tools that might be explicitly listed in mcp_servers
+        for server in mcp_servers:
+            server_tools = server.get("tools", [])
+            for tool_name in server_tools:
+                if tool_name not in tool_server_map:
+                    tool_server_map[tool_name] = server
+                    self.logger.debug(
+                        f"Pre-mapped tool '{tool_name}' from server configuration"
+                    )
 
         return tool_server_map
 
@@ -930,15 +978,67 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 user_query = msg.get("content", "")
                 break
 
-        # Generate basic arguments based on action and user query
+        # Check if explicit tool arguments are provided in kwargs
+        tool_args_key = f"{tool_name}_args"
+        if tool_args_key in kwargs:
+            explicit_args = kwargs[tool_args_key]
+            if isinstance(explicit_args, dict):
+                return explicit_args
+
+        # Check if there are general tool parameters provided
+        if "tool_parameters" in kwargs and isinstance(kwargs["tool_parameters"], dict):
+            tool_params = kwargs["tool_parameters"]
+            if tool_name in tool_params and isinstance(tool_params[tool_name], dict):
+                return tool_params[tool_name]
+
+        # Try to extract structured parameters from the action string
+        import re
+
+        # Look for JSON-like structures in action
+        json_match = re.search(r"\{[^}]+\}", action)
+        if json_match:
+            try:
+                import json
+
+                parsed_params = json.loads(json_match.group())
+                if isinstance(parsed_params, dict):
+                    return parsed_params
+            except (json.JSONDecodeError, ValueError):
+                # Fall through to default behavior
+                pass
+
+        # Look for key=value pairs in action
+        param_matches = re.findall(r'(\w+)=(["\']?)([^,\s]+)\2', action)
+        if param_matches:
+            extracted_params = {}
+            for key, _, value in param_matches:
+                # Try to convert to appropriate type
+                if value.lower() in ("true", "false"):
+                    extracted_params[key] = value.lower() == "true"
+                elif value.isdigit():
+                    extracted_params[key] = int(value)
+                else:
+                    extracted_params[key] = value
+
+            # Add default parameters
+            extracted_params.update({"query": user_query, "action": action})
+            return extracted_params
+
+        # Generate basic arguments based on action and user query (fallback)
         if action == "gather_data":
-            return {"query": user_query, "action": "search"}
+            return {"query": user_query, "action": "search", "source": "default"}
         elif action == "perform_analysis":
-            return {"data": user_query, "action": "analyze"}
+            return {"data": user_query, "action": "analyze", "format": "structured"}
         elif action == "generate_insights":
-            return {"input": user_query, "action": "generate"}
+            return {"input": user_query, "action": "generate", "type": "insights"}
+        elif "search" in action.lower():
+            return {"query": user_query, "search_type": "general"}
+        elif "file" in action.lower() or "read" in action.lower():
+            return {"path": user_query, "operation": "read"}
+        elif "write" in action.lower() or "create" in action.lower():
+            return {"content": user_query, "operation": "write"}
         else:
-            return {"query": user_query, "action": action}
+            return {"query": user_query, "action": action, "context": "default"}
 
     def _run_async_in_sync_context(self, coro):
         """Run async coroutine in sync context using existing pattern from parent class."""
@@ -1762,28 +1862,143 @@ class IterativeLLMAgentNode(LLMAgentNode):
         execution_results = iteration_state.execution_results or {}
         tool_outputs = execution_results.get("tool_outputs", {})
 
-        # Look for validation tool outputs
+        # Look for validation tool outputs with expanded keyword matching
+        validation_keywords = [
+            "validate",
+            "test",
+            "check",
+            "verify",
+            "assert",
+            "confirm",
+            "audit",
+            "review",
+            "inspect",
+            "examine",
+            "eval",
+            "run",
+        ]
+
         for tool_name, output in tool_outputs.items():
-            if any(
-                keyword in tool_name.lower()
-                for keyword in ["validate", "test", "check"]
-            ):
-                if isinstance(output, dict):
+            is_validation_tool = any(
+                keyword in tool_name.lower() for keyword in validation_keywords
+            )
+
+            if isinstance(output, dict):
+                # Check for validation-related content in the output structure
+                has_validation_content = any(
+                    key in output
+                    for key in [
+                        "validation_results",
+                        "test_results",
+                        "validated",
+                        "passed",
+                        "failed",
+                        "success",
+                        "errors",
+                        "warnings",
+                        "status",
+                        "result",
+                    ]
+                )
+
+                if is_validation_tool or has_validation_content:
                     if "validation_results" in output:
                         # Standard validation node output
-                        validation_results.extend(output["validation_results"])
-                    elif "validated" in output:
+                        results = output["validation_results"]
+                        if isinstance(results, list):
+                            validation_results.extend(results)
+                        elif isinstance(results, dict):
+                            validation_results.append(results)
+                    elif "test_results" in output:
+                        # Test suite output
+                        results = output["test_results"]
+                        if isinstance(results, list):
+                            validation_results.extend(results)
+                        elif isinstance(results, dict):
+                            validation_results.append(results)
+                    elif "validated" in output or "passed" in output:
                         # Simple validation result
+                        passed = output.get("validated", output.get("passed", False))
                         validation_results.append(
                             {
                                 "test_name": tool_name,
-                                "passed": output["validated"],
+                                "passed": passed,
                                 "details": output,
                             }
                         )
-                    elif "test_results" in output:
-                        # Test suite output
-                        validation_results.extend(output["test_results"])
+                    elif "success" in output or "status" in output:
+                        # Status-based validation
+                        success = output.get(
+                            "success", output.get("status") == "success"
+                        )
+                        validation_results.append(
+                            {
+                                "test_name": tool_name,
+                                "passed": success,
+                                "details": output,
+                            }
+                        )
+                    elif "result" in output:
+                        # Generic result output - try to extract validation info
+                        result = output["result"]
+                        if isinstance(result, dict):
+                            # Check if result contains validation data
+                            if any(
+                                key in result
+                                for key in ["passed", "failed", "success", "errors"]
+                            ):
+                                validation_results.append(
+                                    {
+                                        "test_name": tool_name,
+                                        "passed": result.get(
+                                            "passed", result.get("success", False)
+                                        ),
+                                        "details": result,
+                                    }
+                                )
+                            else:
+                                # Treat non-empty result as successful validation
+                                validation_results.append(
+                                    {
+                                        "test_name": tool_name,
+                                        "passed": bool(result),
+                                        "details": output,
+                                    }
+                                )
+                        elif isinstance(result, (str, bool, int)):
+                            # Simple result types
+                            validation_results.append(
+                                {
+                                    "test_name": tool_name,
+                                    "passed": bool(result)
+                                    and result != "false"
+                                    and result != 0,
+                                    "details": output,
+                                }
+                            )
+            elif isinstance(output, str):
+                # String output - look for validation patterns
+                if is_validation_tool:
+                    # Simple heuristic: look for success/fail indicators in string
+                    success_indicators = ["pass", "success", "ok", "valid", "true"]
+                    failure_indicators = ["fail", "error", "invalid", "false"]
+
+                    output_lower = output.lower()
+                    has_success = any(
+                        indicator in output_lower for indicator in success_indicators
+                    )
+                    has_failure = any(
+                        indicator in output_lower for indicator in failure_indicators
+                    )
+
+                    if has_success or has_failure:
+                        validation_results.append(
+                            {
+                                "test_name": tool_name,
+                                "passed": has_success and not has_failure,
+                                "details": {"output": output},
+                            }
+                        )
 
         return validation_results
 

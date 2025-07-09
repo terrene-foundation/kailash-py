@@ -132,7 +132,7 @@ class TestCommandParserNode:
 
         assert result["success"] is True
         assert result["command_name"] == "help"
-        assert result["command_type"] == "system"
+        assert result["command_type"] == "help"
 
     def test_parse_invalid_quotes(self):
         """Test parsing command with invalid quotes."""

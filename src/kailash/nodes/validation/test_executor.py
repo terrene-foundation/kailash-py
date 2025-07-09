@@ -41,7 +41,7 @@ class ValidationResult:
     execution_time: float = 0.0
 
 
-class TestExecutor:
+class ValidationTestExecutor:
     """Execute validation tests for IterativeLLMAgent deliverables."""
 
     def __init__(self, sandbox_enabled: bool = True, timeout: int = 30):

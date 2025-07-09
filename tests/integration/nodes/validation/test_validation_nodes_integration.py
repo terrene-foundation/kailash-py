@@ -11,7 +11,7 @@ import pytest
 
 from kailash.nodes.validation import (
     CodeValidationNode,
-    TestSuiteExecutorNode,
+    ValidationTestSuiteExecutorNode,
     WorkflowValidationNode,
 )
 from kailash.runtime.local import LocalRuntime
@@ -209,8 +209,8 @@ workflow.connect("generator", "doubler", {"result.numbers": "numbers"})
         assert "run_id" in result["validation_details"]
 
     def test_test_suite_executor_node(self):
-        """Test TestSuiteExecutorNode with real test execution."""
-        node = TestSuiteExecutorNode()
+        """Test ValidationTestSuiteExecutorNode with real test execution."""
+        node = ValidationTestSuiteExecutorNode()
 
         # Code to test
         code = """
@@ -250,8 +250,8 @@ else:
         assert result["summary"]["failed"] == 0
 
     def test_test_suite_with_failures(self):
-        """Test TestSuiteExecutorNode with failing tests."""
-        node = TestSuiteExecutorNode()
+        """Test ValidationTestSuiteExecutorNode with failing tests."""
+        node = ValidationTestSuiteExecutorNode()
 
         # Buggy code
         code = """

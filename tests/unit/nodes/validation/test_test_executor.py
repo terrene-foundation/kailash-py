@@ -9,28 +9,28 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kailash.nodes.validation.test_executor import (
-    TestExecutor,
     ValidationLevel,
     ValidationResult,
+    ValidationTestExecutor,
 )
 
 
-class TestTestExecutor:
+class TestValidationTestExecutor:
     """Test the TestExecutor class."""
 
     def test_init(self):
         """Test TestExecutor initialization."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         assert executor.sandbox_enabled is True
         assert executor.timeout == 30
 
-        executor = TestExecutor(sandbox_enabled=False, timeout=60)
+        executor = ValidationTestExecutor(sandbox_enabled=False, timeout=60)
         assert executor.sandbox_enabled is False
         assert executor.timeout == 60
 
     def test_validate_python_syntax_valid(self):
         """Test syntax validation with valid code."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         code = """
 def hello_world():
     print("Hello, World!")
@@ -49,7 +49,7 @@ def hello_world():
 
     def test_validate_python_syntax_invalid(self):
         """Test syntax validation with invalid code."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         code = """
 def broken_function()  # Missing colon
     print("This won't work")
@@ -67,7 +67,7 @@ def broken_function()  # Missing colon
 
     def test_validate_imports_valid(self):
         """Test import validation with standard library imports."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         code = """
 import os
 import sys
@@ -83,7 +83,7 @@ from datetime import datetime
 
     def test_validate_imports_invalid(self):
         """Test import validation with non-existent module."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         code = """
 import os
 import nonexistent_module_xyz
@@ -105,7 +105,7 @@ from fake_package import something
         mock_result.stdout = '{"success": true, "results": {"result": 10}}'
         mock_run.return_value = mock_result
 
-        executor = TestExecutor(sandbox_enabled=True)
+        executor = ValidationTestExecutor(sandbox_enabled=True)
         code = "result = 5 + 5"
         result = executor.execute_code_safely(code)
 
@@ -123,7 +123,7 @@ from fake_package import something
         mock_result.stdout = '{"success": false, "error": "NameError: name \'undefined\' is not defined", "error_type": "NameError"}'
         mock_run.return_value = mock_result
 
-        executor = TestExecutor(sandbox_enabled=True)
+        executor = ValidationTestExecutor(sandbox_enabled=True)
         code = "result = undefined + 5"
         result = executor.execute_code_safely(code)
 
@@ -133,7 +133,7 @@ from fake_package import something
 
     def test_execute_code_safely_direct_success(self):
         """Test code execution in direct mode with success."""
-        executor = TestExecutor(sandbox_enabled=False)
+        executor = ValidationTestExecutor(sandbox_enabled=False)
         code = "result = {'value': 42}"
         result = executor.execute_code_safely(code)
 
@@ -144,7 +144,7 @@ from fake_package import something
 
     def test_execute_code_safely_direct_error(self):
         """Test code execution in direct mode with error."""
-        executor = TestExecutor(sandbox_enabled=False)
+        executor = ValidationTestExecutor(sandbox_enabled=False)
         code = "result = 1 / 0"
         result = executor.execute_code_safely(code)
 
@@ -154,7 +154,7 @@ from fake_package import something
 
     def test_validate_output_schema_valid(self):
         """Test schema validation with matching output."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         output = {"name": "test", "value": 42, "items": [1, 2, 3]}
         schema = {"name": str, "value": int, "items": [int]}
 
@@ -166,7 +166,7 @@ from fake_package import something
 
     def test_validate_output_schema_invalid(self):
         """Test schema validation with mismatched output."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         output = {"name": "test", "value": "not_a_number"}
         schema = {"name": str, "value": int, "missing_key": str}
 
@@ -179,7 +179,7 @@ from fake_package import something
 
     def test_run_test_suite_all_pass(self):
         """Test running a test suite where all tests pass."""
-        executor = TestExecutor(sandbox_enabled=False)
+        executor = ValidationTestExecutor(sandbox_enabled=False)
         code = """
 def double(x):
     result = x * 2
@@ -198,7 +198,7 @@ def double(x):
 
     def test_run_test_suite_with_failures(self):
         """Test running a test suite with failures."""
-        executor = TestExecutor(sandbox_enabled=False)
+        executor = ValidationTestExecutor(sandbox_enabled=False)
         code = """
 result = undefined_variable
 """
@@ -211,7 +211,7 @@ result = undefined_variable
 
     def test_extract_error_line(self):
         """Test error line extraction from traceback."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         traceback = """Traceback (most recent call last):
   File "test.py", line 42, in <module>
     result = 1 / 0
@@ -222,7 +222,7 @@ ZeroDivisionError: division by zero"""
 
     def test_get_error_suggestions(self):
         """Test error suggestion generation."""
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
 
         # Test NameError suggestions
         suggestions = executor._get_error_suggestions(

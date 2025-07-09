@@ -3,9 +3,9 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.6.6: AgentUIMiddleware shared workflow fix, execute() method standardization.
-Previous v0.6.5: Enterprise AsyncSQL enhancements with optimistic locking, comprehensive
-testing improvements, and production-grade documentation.
+New in v0.7.0: Complete DataFlow and Nexus application frameworks, distributed transaction
+management, enterprise monitoring, QueryBuilder/QueryCache with Redis, and real MCP execution.
+Previous v0.6.6: AgentUIMiddleware shared workflow fix, execute() method standardization.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
@@ -51,7 +51,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.6.6"
+__version__ = "0.7.0"
 
 __all__ = [
     # Core workflow components

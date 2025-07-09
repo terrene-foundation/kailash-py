@@ -8,7 +8,7 @@ from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
-from .test_executor import TestExecutor, ValidationLevel
+from .test_executor import ValidationLevel, ValidationTestExecutor
 
 
 @register_node()
@@ -84,7 +84,7 @@ class CodeValidationNode(Node):
         timeout = kwargs.get("timeout", 30)
         sandbox = kwargs.get("sandbox", True)
 
-        executor = TestExecutor(sandbox_enabled=sandbox, timeout=timeout)
+        executor = ValidationTestExecutor(sandbox_enabled=sandbox, timeout=timeout)
         validation_results = []
 
         # Run requested validation levels
@@ -238,7 +238,7 @@ class WorkflowValidationNode(Node):
             validation_results["execution_valid"] = False
 
         # First validate syntax
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         syntax_result = executor.validate_python_syntax(workflow_code)
         validation_results["syntax_valid"] = syntax_result.passed
 
@@ -380,7 +380,7 @@ class WorkflowValidationNode(Node):
 
 
 @register_node()
-class TestSuiteExecutorNode(Node):
+class ValidationTestSuiteExecutorNode(Node):
     """Execute a test suite against generated code.
 
     This node runs multiple test cases against code to ensure
@@ -432,7 +432,7 @@ class TestSuiteExecutorNode(Node):
         test_suite = kwargs["test_suite"]
         kwargs.get("stop_on_failure", False)
 
-        executor = TestExecutor()
+        executor = ValidationTestExecutor()
         result = executor.run_test_suite(code, test_suite)
 
         return {

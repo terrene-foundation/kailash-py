@@ -52,6 +52,26 @@ from kailash.nodes.ai import LLMAgentNode        # NOT custom API calls
 from kailash.nodes.api import HTTPRequestNode    # NOT requests library
 from kailash.nodes.admin import UserManagementNode  # NOT custom auth
 from kailash.nodes.data import CSVReaderNode     # NOT PythonCodeNode for files
+from kailash.nodes.data import QueryBuilder     # NOT raw SQL strings
+from kailash.nodes.data import QueryCache       # NOT manual Redis
+```
+
+### Query Builder & Cache (New v0.6.6+)
+```python
+from kailash.nodes.data.query_builder import QueryBuilder, create_query_builder
+from kailash.nodes.data.query_cache import QueryCache, CacheInvalidationStrategy
+
+# MongoDB-style query building
+builder = create_query_builder("postgresql")
+builder.table("users").where("age", "$gt", 18).where("status", "$eq", "active")
+sql, params = builder.build_select(["name", "email"])
+
+# Redis query caching with pattern-based invalidation
+cache = QueryCache(
+    redis_host="localhost",
+    redis_port=6379,
+    invalidation_strategy=CacheInvalidationStrategy.PATTERN_BASED
+)
 ```
 
 ### Parameter Patterns
@@ -98,6 +118,10 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 **🧪 Comprehensive Validation Framework**: Test-driven development with multi-level code validation, workflow validation, and comprehensive test execution. Features enhanced IterativeLLMAgentNode with **real MCP tool execution** (v0.6.5+) and test-driven convergence that only stops when deliverables actually work. Includes sandbox execution, schema validation, and automated quality gates. See [developer/13-validation-framework-guide.md](developer/13-validation-framework-guide.md) and [cheatsheet/050-validation-testing-patterns.md](cheatsheet/050-validation-testing-patterns.md).
 
 **🔌 Nexus Multi-Channel Framework**: Complete multi-channel orchestration platform supporting API, CLI, and MCP interfaces with unified session management. Features cross-channel event routing, synchronized state management, and comprehensive channel abstraction. **MCP initialization issues fully resolved** - fixes WorkflowBuilder syntax, parameter passing, and initialization order. See [cheatsheet/051-nexus-multi-channel-patterns.md](cheatsheet/051-nexus-multi-channel-patterns.md) and [enterprise/nexus-patterns.md](enterprise/nexus-patterns.md).
+
+**🗄️ MongoDB-Style Query Builder**: Production-ready query builder with MongoDB-style operators ($eq, $ne, $lt, $gt, $in, $regex, etc.) that generates optimized SQL for PostgreSQL, MySQL, and SQLite. Includes automatic tenant isolation, multi-database support, and comprehensive validation. Complete with 33 unit tests, 8 integration tests, and real Redis caching. See [cheatsheet/052-query-builder-patterns.md](cheatsheet/052-query-builder-patterns.md) and [nodes/03-data-nodes.md](nodes/03-data-nodes.md).
+
+**⚡ Redis Query Cache**: Enterprise-grade query result caching with Redis backend. Features automatic cache key generation, TTL management, pattern-based invalidation, tenant isolation, and comprehensive health monitoring. Supports multiple invalidation strategies (TTL, pattern-based, event-based) with production-tested performance. Complete with 40 unit tests and 8 integration tests. See [cheatsheet/053-query-cache-patterns.md](cheatsheet/053-query-cache-patterns.md) and [developer/16-query-cache-guide.md](developer/16-query-cache-guide.md).
 
 ## 🏗️ Architecture Decisions First
 

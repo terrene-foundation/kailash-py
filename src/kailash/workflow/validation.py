@@ -390,6 +390,49 @@ class CycleLinter:
                                 )
                             )
 
+                        # Check for potentially problematic mappings
+                        if source_param in [
+                            "result",
+                            "output",
+                            "data",
+                        ] and target_param in ["result", "output", "data"]:
+                            if source_param != target_param:
+                                self.issues.append(
+                                    ValidationIssue(
+                                        severity=IssueSeverity.INFO,
+                                        category="parameter_mapping",
+                                        code="CYC010A",
+                                        message=f"Generic parameter mapping '{source_param}' -> '{target_param}' in cycle {cycle_id}",
+                                        cycle_id=cycle_id,
+                                        suggestion="Consider using more specific parameter names for clarity",
+                                        documentation_link="guide/mistakes/063-cyclic-parameter-propagation-multi-fix.md",
+                                    )
+                                )
+
+                        # Check for dot notation in mappings
+                        if (
+                            "." in source_param
+                            and target_param == source_param.split(".")[-1]
+                        ):
+                            # This is actually a good pattern - dot notation to specific field
+                            pass
+                        elif "." not in source_param and "." not in target_param:
+                            # Simple mapping - check if it makes sense
+                            if source_param.startswith(
+                                "temp_"
+                            ) or target_param.startswith("temp_"):
+                                self.issues.append(
+                                    ValidationIssue(
+                                        severity=IssueSeverity.INFO,
+                                        category="parameter_mapping",
+                                        code="CYC010B",
+                                        message=f"Temporary parameter mapping '{source_param}' -> '{target_param}' in cycle {cycle_id}",
+                                        cycle_id=cycle_id,
+                                        suggestion="Consider using permanent parameter names for production workflows",
+                                        documentation_link="guide/mistakes/063-cyclic-parameter-propagation-multi-fix.md",
+                                    )
+                                )
+
                     # Check for missing parameter propagation
                     if not mapping and len(cycle_nodes) > 1:
                         self.issues.append(
@@ -589,20 +632,53 @@ class CycleLinter:
 
     def _has_unsafe_parameter_access(self, code: str) -> bool:
         """Check if PythonCodeNode has unsafe parameter access."""
-        # Look for direct parameter access without try/except
+        import re
+
+        # Look for direct parameter access without try/except or safety checks
         lines = code.split("\n")
+
+        # Common parameter names that might be unsafe
+        unsafe_patterns = [
+            r"\b(data|input|params|context|kwargs|args)\[",  # Direct indexing
+            r"\b(data|input|params|context|kwargs|args)\.",  # Direct attribute access
+            r"\b(data|input|params|context|kwargs|args)\.get\(",  # .get() without default
+        ]
+
+        # Safety patterns that indicate safe access
+        safety_patterns = [
+            r"try\s*:",
+            r"except\s*:",
+            r"if\s+.*\s+is\s+not\s+None\s*:",
+            r"if\s+.*\s+in\s+",
+            r"\.get\(.*,.*\)",  # .get() with default value
+            r"isinstance\s*\(",
+            r"hasattr\s*\(",
+        ]
+
+        has_unsafe_access = False
+        has_safety_checks = False
 
         for line in lines:
             line = line.strip()
             if line and not line.startswith("#"):
-                # Check for variable access that might be parameters
-                if re.match(r"^[a-zA-Z_]\w*\s*=", line):
-                    var_name = line.split("=")[0].strip()
-                    # If variable is used before definition, might be parameter
-                    if not self._is_defined_before_use(var_name, code):
-                        return True
+                # Check for unsafe patterns
+                for pattern in unsafe_patterns:
+                    if re.search(pattern, line):
+                        has_unsafe_access = True
+                        break
 
-        return False
+                # Check for safety patterns
+                for pattern in safety_patterns:
+                    if re.search(pattern, line):
+                        has_safety_checks = True
+                        break
+
+        # Also check for undefined variables (potential parameters)
+        undefined_vars = self._find_undefined_variables(code)
+        if undefined_vars:
+            has_unsafe_access = True
+
+        return has_unsafe_access and not has_safety_checks
 
     def _is_defined_before_use(self, var_name: str, code: str) -> bool:
         """Check if variable is defined before use in code."""
@@ -618,6 +694,66 @@ class CycleLinter:
                 return False
 
         return True
+
+    def _find_undefined_variables(self, code: str) -> list[str]:
+        """Find variables that are used but not defined in the code."""
+        import re
+
+        lines = code.split("\n")
+        defined_vars = set()
+        used_vars = set()
+
+        # Built-in variables and functions that don't need definition
+        builtin_vars = {
+            "len",
+            "sum",
+            "min",
+            "max",
+            "dict",
+            "list",
+            "set",
+            "str",
+            "int",
+            "float",
+            "bool",
+            "sorted",
+            "print",
+            "isinstance",
+            "type",
+            "hasattr",
+            "getattr",
+            "True",
+            "False",
+            "None",
+            "range",
+            "enumerate",
+            "zip",
+            "any",
+            "all",
+        }
+
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                # Find variable definitions
+                if (
+                    "=" in line
+                    and not line.startswith("if")
+                    and not line.startswith("elif")
+                ):
+                    var_match = re.match(r"^([a-zA-Z_]\w*)\s*=", line)
+                    if var_match:
+                        defined_vars.add(var_match.group(1))
+
+                # Find variable uses
+                variables = re.findall(r"\b([a-zA-Z_]\w*)\b", line)
+                for var in variables:
+                    if var not in builtin_vars and not var.startswith("_"):
+                        used_vars.add(var)
+
+        # Return variables that are used but not defined
+        undefined = used_vars - defined_vars
+        return list(undefined)
 
     def _is_valid_condition_syntax(self, condition: str) -> bool:
         """Check if convergence condition has valid Python syntax."""

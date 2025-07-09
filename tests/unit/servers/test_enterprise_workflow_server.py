@@ -7,7 +7,7 @@ Tests the enterprise workflow server functionality including:
 - Enterprise-specific endpoints
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -153,8 +153,8 @@ class TestEnterpriseWorkflowServer:
         mock_registry = Mock()
         mock_resource = Mock()
         mock_resource.__class__.__name__ = "DatabaseConnection"
-        mock_registry.get_resource.return_value = mock_resource
-        mock_registry.check_health.return_value = {"status": "healthy"}
+        mock_registry.get_resource = AsyncMock(return_value=mock_resource)
+        mock_registry.check_health = AsyncMock(return_value={"status": "healthy"})
         mock_registry_class.return_value = mock_registry
 
         server = EnterpriseWorkflowServer(title="Resource Info Test Server")

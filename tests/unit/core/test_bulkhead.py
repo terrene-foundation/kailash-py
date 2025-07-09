@@ -105,12 +105,22 @@ class TestBulkheadPartition:
     @pytest.fixture
     def io_partition(self, io_partition_config):
         """Create I/O partition for testing."""
-        return BulkheadPartition(io_partition_config)
+        partition = BulkheadPartition(io_partition_config)
+        yield partition
+        # Clean up any remaining operations
+        partition._active_operations.clear()
+        partition.metrics = PartitionMetrics()
 
     @pytest.fixture
     def cpu_partition(self, cpu_partition_config):
         """Create CPU partition for testing."""
-        return BulkheadPartition(cpu_partition_config)
+        partition = BulkheadPartition(cpu_partition_config)
+        yield partition
+        # Clean up any remaining operations
+        partition._active_operations.clear()
+        partition.metrics = PartitionMetrics()
+        if hasattr(partition, "_thread_pool") and partition._thread_pool:
+            partition._thread_pool.shutdown(wait=False)
 
     def test_partition_initialization_io(self, io_partition_config):
         """Test I/O partition initialization."""
@@ -191,11 +201,16 @@ class TestBulkheadPartition:
 
         async def slow_task():
             # Mock a slow operation without actual delay
-            await asyncio.create_task(asyncio.sleep(0))  # Immediate return
+            await asyncio.sleep(0)  # Immediate return
             return "completed"
 
         # Test with very short timeout to trigger timeout in test
-        with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
+        async def mock_wait_for(coro, timeout):
+            # Properly await the coroutine and then raise timeout
+            await coro
+            raise asyncio.TimeoutError()
+
+        with patch("asyncio.wait_for", side_effect=mock_wait_for):
             with pytest.raises(asyncio.TimeoutError):
                 await io_partition.execute(slow_task, timeout=0.001)
 

@@ -9,16 +9,34 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Mock pandas for unit tests
-mock_pandas = MagicMock()
-mock_pandas.DataFrame = type("DataFrame", (), {})
-mock_pandas.Series = type("Series", (), {})
-sys.modules["pandas"] = mock_pandas
+# Store original pandas module if it exists
+_original_pandas = sys.modules.get("pandas")
 
+
+@pytest.fixture(autouse=True)
+def mock_pandas_for_validation():
+    """Mock pandas for validation tests and clean up afterward."""
+    # Mock pandas for unit tests
+    mock_pandas = MagicMock()
+    mock_pandas.DataFrame = type("DataFrame", (), {})
+    mock_pandas.Series = type("Series", (), {})
+    sys.modules["pandas"] = mock_pandas
+
+    yield mock_pandas
+
+    # Clean up: restore original pandas module
+    if _original_pandas is not None:
+        sys.modules["pandas"] = _original_pandas
+    else:
+        sys.modules.pop("pandas", None)
+
+
+# Import after mock setup to avoid import issues
+# ruff: noqa: E402
 from kailash.nodes.validation.test_executor import ValidationLevel, ValidationResult
 from kailash.nodes.validation.validation_nodes import (
     CodeValidationNode,
-    TestSuiteExecutorNode,
+    ValidationTestSuiteExecutorNode,
     WorkflowValidationNode,
 )
 
@@ -50,7 +68,7 @@ class TestCodeValidationNode:
         assert "timeout" in params
         assert params["timeout"].default == 30
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_run_syntax_validation_only(self, mock_executor_class):
         """Test running only syntax validation."""
         # Setup mock
@@ -76,7 +94,7 @@ class TestCodeValidationNode:
         assert result["summary"]["passed"] == 1
         mock_executor.validate_python_syntax.assert_called_once()
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_run_syntax_validation_failure(self, mock_executor_class):
         """Test syntax validation failure stops early."""
         # Setup mock
@@ -106,7 +124,7 @@ class TestCodeValidationNode:
         mock_executor.validate_imports.assert_not_called()
         mock_executor.execute_code_safely.assert_not_called()
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_run_multiple_validations(self, mock_executor_class):
         """Test running multiple validation levels."""
         # Setup mock
@@ -165,7 +183,7 @@ class TestWorkflowValidationNode:
         assert "expected_nodes" in params
         assert "required_connections" in params
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_validate_workflow_syntax_error(self, mock_executor_class):
         """Test workflow validation with syntax error."""
         # Setup mock
@@ -190,7 +208,7 @@ class TestWorkflowValidationNode:
         assert result["error_count"] == 1
         assert "Syntax error" in result["validation_details"]["errors"][0]
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_validate_workflow_structure(self, mock_executor_class):
         """Test workflow structure validation."""
         # Setup mocks
@@ -231,17 +249,17 @@ class TestWorkflowValidationNode:
         assert result["validation_details"]["node_count"] == 2
 
 
-class TestTestSuiteExecutorNode:
+class TestValidationTestSuiteExecutorNode:
     """Test the TestSuiteExecutorNode class."""
 
     def test_node_registration(self):
         """Test that node is properly registered."""
-        node = TestSuiteExecutorNode()
-        assert node.__class__.__name__ == "TestSuiteExecutorNode"
+        node = ValidationTestSuiteExecutorNode()
+        assert node.__class__.__name__ == "ValidationTestSuiteExecutorNode"
 
     def test_get_parameters(self):
         """Test parameter definitions."""
-        node = TestSuiteExecutorNode()
+        node = ValidationTestSuiteExecutorNode()
         params = node.get_parameters()
 
         assert "code" in params
@@ -254,7 +272,7 @@ class TestTestSuiteExecutorNode:
         assert "stop_on_failure" in params
         assert params["stop_on_failure"].default is False
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_run_test_suite(self, mock_executor_class):
         """Test running a test suite."""
         # Setup mock
@@ -278,7 +296,7 @@ class TestTestSuiteExecutorNode:
         mock_executor.run_test_suite.return_value = mock_result
 
         # Run node
-        node = TestSuiteExecutorNode()
+        node = ValidationTestSuiteExecutorNode()
         test_suite = [
             {"name": "test1", "inputs": {"x": 1}},
             {"name": "test2", "inputs": {"x": 2}},
@@ -292,7 +310,7 @@ class TestTestSuiteExecutorNode:
         assert result["summary"]["passed"] == 2
         mock_executor.run_test_suite.assert_called_once()
 
-    @patch("kailash.nodes.validation.validation_nodes.TestExecutor")
+    @patch("kailash.nodes.validation.validation_nodes.ValidationTestExecutor")
     def test_run_test_suite_with_failures(self, mock_executor_class):
         """Test running a test suite with failures."""
         # Setup mock
@@ -318,7 +336,7 @@ class TestTestSuiteExecutorNode:
         mock_executor.run_test_suite.return_value = mock_result
 
         # Run node
-        node = TestSuiteExecutorNode()
+        node = ValidationTestSuiteExecutorNode()
         result = node.execute(code="def f(x): raise Error", test_suite=[])
 
         # Verify

@@ -399,9 +399,21 @@ class WorkflowBuilder:
             # Dict format: {node_id: {type: "...", parameters: {...}}}
             for node_id, node_config in nodes_config.items():
                 node_type = node_config.get("type")
-                node_params = node_config.get(
-                    "parameters", node_config.get("config", {})
-                )
+
+                # Handle parameter naming inconsistencies - prefer 'parameters' over 'config'
+                if "parameters" in node_config:
+                    node_params = node_config["parameters"]
+                elif "config" in node_config:
+                    node_params = node_config["config"]
+                else:
+                    node_params = {}
+
+                # Ensure node_params is a dictionary
+                if not isinstance(node_params, dict):
+                    logger.warning(
+                        f"Node '{node_id}' parameters must be a dict, got {type(node_params)}. Using empty dict."
+                    )
+                    node_params = {}
 
                 if not node_type:
                     raise WorkflowValidationError(
@@ -414,7 +426,21 @@ class WorkflowBuilder:
             for node_config in nodes_config:
                 node_id = node_config.get("id")
                 node_type = node_config.get("type")
-                node_params = node_config.get("config", {})
+
+                # Handle parameter naming inconsistencies - prefer 'parameters' over 'config'
+                if "parameters" in node_config:
+                    node_params = node_config["parameters"]
+                elif "config" in node_config:
+                    node_params = node_config["config"]
+                else:
+                    node_params = {}
+
+                # Ensure node_params is a dictionary
+                if not isinstance(node_params, dict):
+                    logger.warning(
+                        f"Node '{node_id}' parameters must be a dict, got {type(node_params)}. Using empty dict."
+                    )
+                    node_params = {}
 
                 if not node_id:
                     raise WorkflowValidationError("Node ID is required")
