@@ -54,28 +54,26 @@ nexus = create_nexus(
 # Access same workflows via API, CLI, or MCP with unified sessions
 ```
 
-### ❌ NEVER
+### ❌ CRITICAL FAILURES TO AVOID
 - `workflow.execute(runtime)` → Use `runtime.execute(workflow)`
-- `workflow.addNode()` → Use `workflow.add_node()`
-- `inputs={}` → Use `parameters={}`
-- String code in PythonCodeNode → Use `.from_function()` (step 4)
-- `use_real_mcp=False` → Use `use_real_mcp=True` (default) for real tool execution
+- `use_real_mcp=False` → Use `use_real_mcp=True` (default)
+- String code in PythonCodeNode → Use `.from_function()` (step 8)
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
-1. **First implementation** → Copy basic pattern above
-2. **Architecture decisions** → [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md)
-3. **Node selection** → [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md)
-4. **AI Agents with MCP** → Use `use_real_mcp=True` (default) for real tool execution
-5. **Multi-channel apps** → [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) (API, CLI, MCP unified)
-6. **Security & access control** → [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) (User management, RBAC, auth)
-7. **Enterprise integration** → [sdk-users/enterprise/gateway-patterns.md](sdk-users/enterprise/gateway-patterns.md) (API gateways, external systems)
-8. **Custom logic** → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
-9. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
-10. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
-11. **Enterprise resilience** → [sdk-users/enterprise/resilience-patterns.md](sdk-users/enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
-12. **Distributed transactions** → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
-13. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
-14. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+1. **First implementation** (5 min) → Copy basic pattern above
+2. **Architecture decisions** (10 min) → [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md)
+3. **Node selection** (5 min) → [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md)
+4. **AI Agents with MCP** (15 min) → Use `use_real_mcp=True` (default) for real tool execution
+5. **Multi-channel apps** (30 min) → [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) (API, CLI, MCP unified)
+6. **Security & access control** (20 min) → [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) (User management, RBAC, auth)
+7. **Enterprise integration** (45 min) → [sdk-users/enterprise/gateway-patterns.md](sdk-users/enterprise/gateway-patterns.md) (API gateways, external systems)
+8. **Custom logic** (15 min) → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
+9. **Custom nodes** (1 hour) → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
+10. **Production deployment** (2 hours) → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
+11. **Enterprise resilience** (1 hour) → [sdk-users/enterprise/resilience-patterns.md](sdk-users/enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
+12. **Distributed transactions** (45 min) → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
+13. **Governance & compliance** (30 min) → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
+14. **Common errors** (15 min) → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
 
 ---
 

@@ -209,7 +209,7 @@ class TestTransactionMonitoringIntegration:
 
                 # Report concurrent READ operation
                 race_node.execute(
-                    operation="report_operation",
+                    operation="register_operation",
                     operation_id=operation_id,
                     resource_id="shared_counter",
                     operation_type="READ",
@@ -222,7 +222,7 @@ class TestTransactionMonitoringIntegration:
 
                 # Report WRITE operation
                 race_node.execute(
-                    operation="complete_operation",
+                    operation="end_operation",
                     operation_id=operation_id,
                     success=True,
                 )
@@ -244,7 +244,7 @@ class TestTransactionMonitoringIntegration:
         time.sleep(2.0)
 
         # Analyze for race conditions
-        result = race_node.execute(operation="analyze_races", time_window=30.0)
+        result = race_node.execute(operation="detect_races", time_window=30.0)
         assert result["status"] == "success"
 
         # Verify race detection analysis ran

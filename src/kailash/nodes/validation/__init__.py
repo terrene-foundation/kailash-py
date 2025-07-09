@@ -4,18 +4,18 @@ This module provides comprehensive validation capabilities for test-driven
 development, including code validation, test execution, and schema validation.
 """
 
-from .test_executor import TestExecutor, ValidationLevel, ValidationResult
+from .test_executor import ValidationLevel, ValidationResult, ValidationTestExecutor
 from .validation_nodes import (
     CodeValidationNode,
-    TestSuiteExecutorNode,
+    ValidationTestSuiteExecutorNode,
     WorkflowValidationNode,
 )
 
 __all__ = [
-    "TestExecutor",
+    "ValidationTestExecutor",
     "ValidationLevel",
     "ValidationResult",
     "CodeValidationNode",
     "WorkflowValidationNode",
-    "TestSuiteExecutorNode",
+    "ValidationTestSuiteExecutorNode",
 ]

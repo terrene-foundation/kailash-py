@@ -967,7 +967,7 @@ class ServiceRegistry:
     async def stop_health_monitoring(self):
         """Stop health monitoring (async version)."""
         if self.health_checker:
-            self.health_checker.stop()
+            await self.health_checker.stop()
 
     async def get_best_server_for_capability(
         self, capability: str

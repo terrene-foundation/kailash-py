@@ -794,7 +794,9 @@ class TestServiceRegistry:
     async def test_start_stop_health_monitoring(self):
         """Test starting and stopping health monitoring."""
         with patch.object(self.registry.health_checker, "start") as mock_start:
-            with patch.object(self.registry.health_checker, "stop") as mock_stop:
+            with patch.object(
+                self.registry.health_checker, "stop", new_callable=AsyncMock
+            ) as mock_stop:
                 await self.registry.start_health_monitoring()
                 mock_start.assert_called_once()
 

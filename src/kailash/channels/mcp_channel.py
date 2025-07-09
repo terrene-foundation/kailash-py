@@ -92,14 +92,38 @@ class MCPChannel(Channel):
         if not _MCP_AVAILABLE:
             raise ImportError("MCP server components not available")
 
-        # Extract MCP config from channel config
+        # Extract MCP config from channel config with platform adapter support
+        from kailash.adapters import MCPPlatformAdapter
+
         mcp_config = MCPServerConfig()
-        mcp_config.name = self.config.extra_config.get(
-            "server_name", f"{self.name}-mcp-server"
-        )
-        mcp_config.description = self.config.extra_config.get(
-            "description", f"MCP server for {self.name} channel"
-        )
+
+        # Check if we have platform-format configuration
+        platform_config = self.config.extra_config.get("platform_config")
+        if platform_config and isinstance(platform_config, dict):
+            # Translate platform configuration to SDK format
+            try:
+                translated_config = MCPPlatformAdapter.translate_server_config(
+                    platform_config
+                )
+                mcp_config.name = translated_config.get(
+                    "name", f"{self.name}-mcp-server"
+                )
+                mcp_config.description = translated_config.get(
+                    "description", f"MCP server for {self.name} channel"
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to translate platform config: {e}")
+                # Fall back to default configuration
+                mcp_config.name = f"{self.name}-mcp-server"
+                mcp_config.description = f"MCP server for {self.name} channel"
+        else:
+            # Use direct configuration
+            mcp_config.name = self.config.extra_config.get(
+                "server_name", f"{self.name}-mcp-server"
+            )
+            mcp_config.description = self.config.extra_config.get(
+                "description", f"MCP server for {self.name} channel"
+            )
 
         # MiddlewareMCPServer only accepts config, event_stream, and agent_ui
         # Host and port are handled by the channel itself, not the MCP server

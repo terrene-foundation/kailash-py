@@ -15,6 +15,67 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.7.0] - 2025-07-09
+
+**Major Framework Release: Complete Application Ecosystem**
+
+**🚀 New Framework Applications:**
+- **DataFlow Framework**: Complete standalone ETL/database framework with 100% documentation validation
+  - 4 production-ready example applications (simple CRUD, enterprise, data migration, API backend)
+  - MongoDB-style query builder with Redis caching
+  - Comprehensive testing infrastructure with Docker/Kubernetes deployment
+- **Nexus Multi-Channel Platform**: Enterprise orchestration supporting API, CLI, and MCP interfaces
+  - Complete application structure with enterprise features (multi-tenant, RBAC, marketplace)
+  - 105 tests with 100% pass rate and production deployment ready
+  - Unified session management across all channels
+
+**🔧 Enterprise Resilience & Monitoring:**
+- **Distributed Transaction Management**: Automatic pattern selection (Saga/2PC) with compensation logic
+  - 122 unit tests + 23 integration tests (100% pass rate)
+  - State persistence with Memory, Redis, and PostgreSQL backends
+  - Enterprise-grade recovery and monitoring capabilities
+- **Transaction Monitoring System**: 5 specialized monitoring nodes for production environments
+  - TransactionMetricsNode, TransactionMonitorNode, DeadlockDetectorNode, RaceConditionDetectorNode, PerformanceAnomalyNode
+  - 219 unit tests + 8 integration tests (100% pass rate)
+  - Complete documentation with enterprise patterns
+
+**🗄️ Data Management Enhancements:**
+- **MongoDB-Style Query Builder**: Production-ready query builder with cross-database support
+  - Supports PostgreSQL, MySQL, SQLite with MongoDB-style operators ($eq, $ne, $lt, $gt, $in, $regex)
+  - 33 unit tests + 8 integration tests with automatic tenant isolation
+- **Redis Query Cache**: Enterprise-grade caching with pattern-based invalidation
+  - 40 unit tests with TTL management and tenant isolation
+  - Multiple invalidation strategies and performance optimization
+
+**🤖 AI & MCP Enhancements:**
+- **Real MCP Execution**: Default behavior for all AI agents (breaking change from mock execution)
+  - IterativeLLMAgent and LLMAgentNode now use real MCP tools by default
+  - Enhanced error handling and protocol compliance
+  - Backward compatibility with `use_real_mcp=False` option
+
+**📚 Documentation & Standards:**
+- **Complete Documentation Validation**: 100% test pass rate across all examples
+  - Updated all frameworks with standardized documentation structure
+  - Created comprehensive validation framework for all code examples
+  - Application documentation standards across DataFlow and Nexus
+
+**🔧 Technical Improvements:**
+- **Gateway Architecture Cleanup**: Renamed server classes for clarity
+  - WorkflowAPIGateway → WorkflowServer
+  - DurableAPIGateway → DurableWorkflowServer
+  - EnhancedDurableAPIGateway → EnterpriseWorkflowServer
+- **Version Consistency**: Fixed version synchronization across all package files
+- **Test Suite Excellence**: 3,000+ tests passing with comprehensive coverage
+
+**Breaking Changes:**
+- Real MCP execution is now default for AI agents (can be disabled with `use_real_mcp=False`)
+- Gateway class names updated (backward compatibility maintained with deprecation warnings)
+
+**Migration Guide:**
+- DataFlow and Nexus are new frameworks - no migration needed
+- MCP execution change requires explicit `use_real_mcp=False` if mock execution is needed
+- Gateway class renames are backward compatible
+
 ### [0.6.6] - 2025-07-08
 
 **AgentUIMiddleware Shared Workflow Fix & API Standardization**

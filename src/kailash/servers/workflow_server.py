@@ -63,6 +63,7 @@ class WorkflowServer:
         version: str = "1.0.0",
         max_workers: int = 10,
         cors_origins: list[str] = None,
+        **kwargs,
     ):
         """Initialize the workflow server.
 

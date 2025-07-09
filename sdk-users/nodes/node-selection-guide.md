@@ -15,6 +15,8 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 | REST API calls | `requests` library | `RESTClientNode` |
 | GraphQL queries | GraphQL libraries | `GraphQLClientNode` |
 | SQL queries | `cursor.execute()` | `SQLDatabaseNode` |
+| **MongoDB-style queries** | **Raw SQL strings** | **`QueryBuilder` ⭐⭐⭐ NEW** |
+| **Query result caching** | **Manual Redis operations** | **`QueryCache` ⭐⭐⭐ NEW** |
 | **Enterprise async SQL** | **Manual pooling/transactions** | **`AsyncSQLDatabaseNode` ⭐⭐⭐** |
 | **Concurrency control** | **Custom version checking** | **`OptimisticLockingNode` ⭐⭐ NEW** |
 | **High-perf SQL** | **Manual pooling** | **`QueryRouterNode` + Pool` ⭐NEW** |
@@ -55,6 +57,8 @@ This guide helps you choose the right node for your task and avoid overusing Pyt
 │  ├─ Plain text → TextReaderNode
 │  └─ Multiple files in directory → DirectoryReaderNode
 ├─ 🗄️ Database data?
+│  ├─ **MongoDB-style queries** → **QueryBuilder ⭐⭐⭐ NEW**
+│  ├─ **Query result caching** → **QueryCache ⭐⭐⭐ NEW**
 │  ├─ Production with pooling → WorkflowConnectionPool ⭐
 │  ├─ **Enterprise async SQL** → **AsyncSQLDatabaseNode ⭐⭐⭐ ENHANCED**
 │  ├─ **Concurrency control** → **OptimisticLockingNode ⭐⭐ NEW**
@@ -307,6 +311,65 @@ EmailSenderNode, TeamsAlertNode
 PagerDutyAlertNode, WebhookAlertNode
 ```
 
+### 🗄️ Query Builder & Cache Decision Tree (NEW v0.6.6+)
+
+```
+🔍 Need to build database queries?
+├─ 🐍 MongoDB-style syntax preferred?
+│  ├─ Multi-tenant app → QueryBuilder with tenant()
+│  ├─ Cross-database support → QueryBuilder with dialect
+│  ├─ Complex WHERE conditions → QueryBuilder with $operators
+│  └─ Simple queries → SQLDatabaseNode
+├─ ⚡ High-performance queries?
+│  ├─ Frequent repeated queries → QueryCache + QueryBuilder
+│  ├─ Need cache invalidation → QueryCache with PATTERN_BASED
+│  ├─ Multi-tenant caching → QueryCache with tenant isolation
+│  └─ Simple caching → QueryCache with TTL strategy
+└─ 🔄 Query optimization needed?
+   ├─ Prevent SQL injection → QueryBuilder (automatic parameter binding)
+   ├─ Database-specific optimizations → QueryBuilder with dialect
+   └─ Redis caching layer → QueryCache with health monitoring
+```
+
+### 🔧 Query Builder Usage Patterns
+
+```python
+# Basic query building
+from kailash.nodes.data.query_builder import create_query_builder
+
+# Multi-tenant complex queries
+builder = create_query_builder("postgresql")
+builder.table("users").tenant("tenant_123")
+builder.where("age", "$gt", 18).where("status", "$in", ["active", "premium"])
+sql, params = builder.build_select(["name", "email"])
+
+# Cross-database compatibility
+mysql_builder = create_query_builder("mysql")
+postgres_builder = create_query_builder("postgresql")
+sqlite_builder = create_query_builder("sqlite")
+```
+
+### ⚡ Query Cache Usage Patterns
+
+```python
+# High-performance caching
+from kailash.nodes.data.query_cache import QueryCache, CacheInvalidationStrategy
+
+# Pattern-based invalidation for complex apps
+cache = QueryCache(
+    redis_host="localhost",
+    redis_port=6379,
+    invalidation_strategy=CacheInvalidationStrategy.PATTERN_BASED
+)
+
+# Cache with tenant isolation
+cache.set(query, params, result, tenant_id="tenant_123")
+cached = cache.get(query, params, tenant_id="tenant_123")
+
+# Table-based cache invalidation
+cache.invalidate_table("users", tenant_id="tenant_123")
+```
+
 ## When to Use PythonCodeNode
 
 **✅ Appropriate uses:**
@@ -335,7 +398,7 @@ PagerDutyAlertNode, WebhookAlertNode
 ## Quick Tips
 
 - **File operations**: Always use dedicated reader/writer nodes
-- **Database work**: Use AsyncSQLDatabaseNode for enterprise/production, QueryRouterNode for high-performance routing, OptimisticLockingNode for concurrent updates, SQLDatabaseNode for simple cases
+- **Database work**: Use QueryBuilder for MongoDB-style queries, QueryCache for high-performance caching, AsyncSQLDatabaseNode for enterprise/production, QueryRouterNode for high-performance routing, OptimisticLockingNode for concurrent updates, SQLDatabaseNode for simple cases
 - **Distributed transactions**: Use DistributedTransactionManagerNode for automatic pattern selection, SagaCoordinatorNode for high availability, TwoPhaseCommitCoordinatorNode for strong consistency
 - **API calls**: Use RESTClientNode for REST, HTTPRequestNode for simple HTTP
 - **AI tasks**: Use LLMAgentNode family, **IterativeLLMAgentNode** for real MCP execution (use_real_mcp=True), avoid direct SDK calls

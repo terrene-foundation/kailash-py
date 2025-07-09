@@ -58,6 +58,7 @@ class DurableWorkflowServer(WorkflowServer):
         deduplicator: Optional[RequestDeduplicator] = None,
         event_store: Optional[EventStore] = None,
         durability_opt_in: bool = True,  # If True, durability is opt-in per endpoint
+        **kwargs,
     ):
         """Initialize durable workflow server."""
         super().__init__(
@@ -66,6 +67,7 @@ class DurableWorkflowServer(WorkflowServer):
             version=version,
             max_workers=max_workers,
             cors_origins=cors_origins,
+            **kwargs,
         )
 
         # Durability components
@@ -133,52 +135,77 @@ class DurableWorkflowServer(WorkflowServer):
                 request.headers.get("X-Request-ID")
                 or f"req_{datetime.now(UTC).timestamp()}"
             )
+            current_time = datetime.now(UTC)
             metadata = RequestMetadata(
                 request_id=request_id,
-                path=str(request.url.path),
                 method=request.method,
-                timestamp=datetime.now(UTC),
-                client_ip=request.client.host if request.client else None,
-                user_agent=request.headers.get("User-Agent"),
+                path=str(request.url.path),
+                headers=dict(request.headers),
+                query_params=dict(request.query_params),
+                body=None,  # Will be set later if needed
+                client_ip=request.client.host if request.client else "unknown",
+                user_id=None,  # Will be set from auth if available
+                tenant_id=None,  # Will be set from auth if available
+                idempotency_key=request.headers.get("Idempotency-Key"),
+                created_at=current_time,
+                updated_at=current_time,
             )
 
             try:
                 # Check for duplicate request
-                if await self.deduplicator.is_duplicate(request_id):
+                cached_response = await self.deduplicator.check_duplicate(
+                    method=request.method,
+                    path=str(request.url.path),
+                    query_params=dict(request.query_params),
+                    body=metadata.body,
+                    headers=dict(request.headers),
+                    idempotency_key=metadata.idempotency_key,
+                )
+                if cached_response:
                     logger.info(f"Duplicate request detected: {request_id}")
-                    cached_response = await self.deduplicator.get_cached_response(
-                        request_id
-                    )
-                    if cached_response:
-                        return JSONResponse(content=cached_response)
+                    return JSONResponse(content=cached_response)
 
                 # Create durable request
                 durable_request = DurableRequest(
                     metadata=metadata,
-                    state=RequestState.STARTED,
                 )
                 self.active_requests[request_id] = durable_request
 
                 # Emit start event
-                await self.event_store.emit_event(
+                await self.event_store.append(
                     EventType.REQUEST_STARTED,
+                    request_id,
                     {
-                        "request_id": request_id,
                         "path": metadata.path,
                         "method": metadata.method,
-                        "timestamp": metadata.timestamp.isoformat(),
+                        "timestamp": metadata.created_at.isoformat(),
                     },
                 )
 
                 # Create checkpoint before processing
-                await self.checkpoint_manager.create_checkpoint(
-                    request_id,
-                    {
-                        "metadata": metadata.model_dump(),
-                        "state": RequestState.STARTED.value,
+                from ..middleware.gateway.durable_request import Checkpoint
+
+                checkpoint = Checkpoint(
+                    checkpoint_id=f"ckpt_{request_id}_init",
+                    request_id=request_id,
+                    sequence=0,
+                    name="request_initialized",
+                    state=RequestState.INITIALIZED,
+                    data={
+                        "metadata": {
+                            "request_id": metadata.request_id,
+                            "method": metadata.method,
+                            "path": metadata.path,
+                            "client_ip": metadata.client_ip,
+                            "created_at": metadata.created_at.isoformat(),
+                        },
                         "created_at": datetime.now(UTC).isoformat(),
                     },
+                    workflow_state=None,
+                    created_at=datetime.now(UTC),
+                    size_bytes=0,
                 )
+                await self.checkpoint_manager.save_checkpoint(checkpoint)
 
                 # Process request
                 response = await call_next(request)
@@ -192,8 +219,21 @@ class DurableWorkflowServer(WorkflowServer):
                     response_body = b"".join(
                         [chunk async for chunk in response.body_iterator]
                     )
+                    try:
+                        response_data = {"content": response_body.decode()}
+                    except UnicodeDecodeError:
+                        response_data = {"content": response_body.hex()}
+
                     await self.deduplicator.cache_response(
-                        request_id, response_body.decode()
+                        method=metadata.method,
+                        path=metadata.path,
+                        query_params=metadata.query_params,
+                        body=metadata.body,
+                        headers=metadata.headers,
+                        idempotency_key=metadata.idempotency_key,
+                        response_data=response_data,
+                        status_code=response.status_code,
+                        response_headers=dict(response.headers),
                     )
 
                     # Recreate response with new body
@@ -205,10 +245,10 @@ class DurableWorkflowServer(WorkflowServer):
                     )
 
                 # Emit completion event
-                await self.event_store.emit_event(
+                await self.event_store.append(
                     EventType.REQUEST_COMPLETED,
+                    request_id,
                     {
-                        "request_id": request_id,
                         "status_code": response.status_code,
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
@@ -222,10 +262,10 @@ class DurableWorkflowServer(WorkflowServer):
                     self.active_requests[request_id].state = RequestState.FAILED
 
                 # Emit failure event
-                await self.event_store.emit_event(
+                await self.event_store.append(
                     EventType.REQUEST_FAILED,
+                    request_id,
                     {
-                        "request_id": request_id,
                         "error": str(e),
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
@@ -261,8 +301,10 @@ class DurableWorkflowServer(WorkflowServer):
                 "enabled": self.enable_durability,
                 "opt_in": self.durability_opt_in,
                 "active_requests": len(self.active_requests),
-                "checkpoint_count": await self.checkpoint_manager.get_checkpoint_count(),
-                "event_count": await self.event_store.get_event_count(),
+                "checkpoint_count": len(
+                    getattr(self.checkpoint_manager, "_memory_checkpoints", [])
+                ),
+                "event_count": self.event_store.event_count,
             }
 
         @self.app.get("/durability/requests")
@@ -271,8 +313,14 @@ class DurableWorkflowServer(WorkflowServer):
             return {
                 request_id: {
                     "state": req.state.value,
-                    "metadata": req.metadata.model_dump(),
-                    "created_at": req.metadata.timestamp.isoformat(),
+                    "metadata": {
+                        "request_id": req.metadata.request_id,
+                        "method": req.metadata.method,
+                        "path": req.metadata.path,
+                        "client_ip": req.metadata.client_ip,
+                        "created_at": req.metadata.created_at.isoformat(),
+                    },
+                    "created_at": req.metadata.created_at.isoformat(),
                 }
                 for request_id, req in self.active_requests.items()
             }
@@ -290,12 +338,14 @@ class DurableWorkflowServer(WorkflowServer):
                 }
 
             # Check checkpoint storage
-            checkpoint = await self.checkpoint_manager.get_checkpoint(request_id)
+            checkpoint = await self.checkpoint_manager.load_latest_checkpoint(
+                request_id
+            )
             if checkpoint:
                 return {
                     "request_id": request_id,
-                    "state": checkpoint.get("state", "unknown"),
-                    "metadata": checkpoint.get("metadata", {}),
+                    "state": checkpoint.state.value,
+                    "metadata": checkpoint.data.get("metadata", {}),
                     "active": False,
                 }
 
@@ -304,7 +354,9 @@ class DurableWorkflowServer(WorkflowServer):
         @self.app.post("/durability/requests/{request_id}/recover")
         async def recover_request(request_id: str):
             """Attempt to recover a failed request."""
-            checkpoint = await self.checkpoint_manager.get_checkpoint(request_id)
+            checkpoint = await self.checkpoint_manager.load_latest_checkpoint(
+                request_id
+            )
             if not checkpoint:
                 raise HTTPException(
                     status_code=404, detail="Request checkpoint not found"
@@ -313,7 +365,7 @@ class DurableWorkflowServer(WorkflowServer):
             # TODO: Implement request recovery logic
             return {
                 "message": f"Recovery initiated for request {request_id}",
-                "checkpoint": checkpoint,
+                "checkpoint": checkpoint.to_dict(),
             }
 
         @self.app.get("/durability/events")
@@ -339,11 +391,11 @@ class DurableWorkflowServer(WorkflowServer):
         """Clean up old completed request data."""
         cutoff_time = datetime.now(UTC).timestamp() - (max_age_hours * 3600)
 
-        # Clean up checkpoints
-        await self.checkpoint_manager.cleanup_old_checkpoints(cutoff_time)
+        # Clean up checkpoints - using garbage collection method
+        await self.checkpoint_manager._garbage_collection()
 
-        # Clean up cached responses
-        await self.deduplicator.cleanup_old_responses(cutoff_time)
+        # Clean up cached responses - using internal cleanup
+        await self.deduplicator._cleanup_expired()
 
         logger.info(f"Cleaned up durability data older than {max_age_hours} hours")
 

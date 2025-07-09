@@ -485,8 +485,11 @@ class InteractiveShellNode(Node):
             if "last_command_time" not in session_state:
                 session_state["last_command_time"] = None
 
-            # Add command to history
-            if command_input.strip():
+            # Process special shell commands BEFORE adding to history
+            shell_result = self._process_shell_commands(command_input, session_state)
+
+            # Add command to history (but not if it's a history command to avoid including itself)
+            if command_input.strip() and command_input.strip() != "history":
                 import time
 
                 current_time = time.time()
@@ -502,9 +505,6 @@ class InteractiveShellNode(Node):
 
             # Generate prompt
             prompt = self._generate_prompt(prompt_template, session_state)
-
-            # Process special shell commands
-            shell_result = self._process_shell_commands(command_input, session_state)
 
             return {
                 "session_id": session_id,
