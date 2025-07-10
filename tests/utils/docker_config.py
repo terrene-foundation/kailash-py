@@ -170,3 +170,18 @@ async def ensure_docker_services():
     except Exception as e:
         print(f"Docker services check failed: {e}")
         return False
+
+
+# Pytest decorators for E2E tests
+def requires_docker(func):
+    """Decorator to mark tests that require Docker services."""
+    import pytest
+
+    return pytest.mark.requires_docker(func)
+
+
+def requires_ollama(func):
+    """Decorator to mark tests that require Ollama service."""
+    import pytest
+
+    return pytest.mark.requires_ollama(func)

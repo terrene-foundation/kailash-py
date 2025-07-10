@@ -24,10 +24,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # MCP Platform imports
-from apps.mcp.core.gateway import MCPGateway
-from apps.mcp.core.models import MCPServer, MCPTool, ServerStatus
-from apps.mcp.core.registry import MCPRegistry
-from apps.mcp.core.security import MCPSecurityManager
+from apps.mcp_platform.core.core.gateway import MCPGateway
+from apps.mcp_platform.core.core.models import MCPServer, MCPTool, ServerStatus
+from apps.mcp_platform.core.core.registry import MCPRegistry
+from apps.mcp_platform.core.core.security import MCPSecurityManager
 from kailash.core.resilience.circuit_breaker import ConnectionCircuitBreaker
 
 # Service discovery and resilience imports
