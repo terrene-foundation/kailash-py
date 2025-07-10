@@ -77,7 +77,7 @@ class DataTypeValidator:
             if len(value) > 0:
                 first_type = type(value[0])
                 inconsistent_types = [
-                    i for i, item in enumerate(value) if type(item) != first_type
+                    i for i, item in enumerate(value) if type(item) is not first_type
                 ]
                 if inconsistent_types:
                     logger.warning(

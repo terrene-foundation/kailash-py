@@ -70,7 +70,7 @@ class MCPPlatformAdapter:
 
     @staticmethod
     def translate_mcp_servers_list(
-        platform_servers: List[Dict[str, Any]]
+        platform_servers: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Translate list of mcp_platform server configs to SDK format.
 

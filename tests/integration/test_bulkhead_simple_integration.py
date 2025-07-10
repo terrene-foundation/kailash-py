@@ -1,17 +1,18 @@
 """Simple integration tests for bulkhead pattern."""
 
 import asyncio
-import pytest
-import tempfile
 import os
 import sqlite3
+import tempfile
+
+import pytest
 
 from src.kailash.core.resilience.bulkhead import (
     BulkheadManager,
+    BulkheadRejectionError,
     PartitionConfig,
     PartitionType,
     get_bulkhead_manager,
-    BulkheadRejectionError,
 )
 from src.kailash.nodes.data.sql import SQLDatabaseNode
 from src.kailash.sdk_exceptions import NodeExecutionError
@@ -89,7 +90,7 @@ class TestBulkheadBasicIntegration:
 
         # SQL node returns a dict with success, data, etc.
         assert "success" in result
-        assert result["success"] == True
+        assert result["success"]
         assert "data" in result
         assert len(result["data"]) == 1
         assert result["data"][0]["count"] == 1
