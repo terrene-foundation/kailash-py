@@ -130,6 +130,38 @@ workflow.connect("reader", "processor", mapping={"data": "input"})
 
 ```
 
+### **Mistake #6: WorkflowBuilder API Confusion (v0.6.6+)**
+
+```python
+# ❌ WRONG - Inconsistent API usage
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node(node_type="PythonCodeNode", node_id="processor", config={"code": "..."})
+auto_id = workflow.add_node("JSONWriterNode")
+workflow.add_node(SomeNode, "instance_node")  # Mixed patterns confuse readers
+
+# ✅ CORRECT - Consistent style throughout workflow
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "..."})
+workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
+```
+
+```python
+# ❌ WRONG - Ignoring auto-generated IDs
+workflow.add_node("CSVReaderNode")  # ID not captured
+workflow.add_node("PythonCodeNode")  # Can't connect nodes!
+
+# ✅ CORRECT - Capture auto-generated IDs for connections
+reader_id = workflow.add_node("CSVReaderNode", {"file_path": "data.csv"})
+processor_id = workflow.add_node("PythonCodeNode", {"code": "..."})
+workflow.connect(reader_id, "result", mapping={processor_id: "input_data"})
+```
+
+**See:** [WorkflowBuilder API Patterns Guide](../developer/55-workflow-builder-api-patterns.md) for comprehensive API usage
+
 ## 🔧 **Real Error Examples & Fixes**
 
 ### **Example 1: CSV Reading Gone Wrong**

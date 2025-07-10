@@ -1,5 +1,38 @@
 # Quick Workflow Creation - Direct Pattern
 
+## 🆕 Enhanced API Patterns (v0.6.6+)
+
+### Auto ID Generation (New!)
+```python
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+
+# Auto-generate node IDs for rapid prototyping
+reader_id = workflow.add_node("CSVReaderNode", {"file_path": "data.csv"})
+processor_id = workflow.add_node("PythonCodeNode", {"code": "result = len(input_data)"})
+
+# Use returned IDs for connections
+workflow.connect(reader_id, "result", mapping={processor_id: "input_data"})
+```
+
+### Flexible API Patterns
+```python
+# All these patterns work and are equivalent:
+
+# 1. Current/Preferred Pattern
+workflow.add_node("PythonCodeNode", "processor", {"code": "..."})
+
+# 2. Keyword-Only Pattern
+workflow.add_node(node_type="PythonCodeNode", node_id="processor", config={"code": "..."})
+
+# 3. Mixed Pattern (common in existing code)
+workflow.add_node("PythonCodeNode", node_id="processor", config={"code": "..."})
+
+# 4. Auto ID (returns generated ID)
+processor_id = workflow.add_node("PythonCodeNode", {"code": "..."})
+```
+
 ## Basic Workflow Pattern
 ```python
 from kailash.workflow.builder import WorkflowBuilder

@@ -42,11 +42,36 @@ from kailash.nodes.logic import SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
+
 # Import the basic test infrastructure
-try:
-    from .test_basic_patterns import MockMCPClient, MockMCPServer
-except ImportError:
-    from test_basic_patterns import MockMCPClient, MockMCPServer
+# Define mock classes locally since test_basic_patterns was moved to integration
+class MockMCPServer:
+    """Mock MCP server for testing."""
+
+    def __init__(self):
+        self.tools = {}
+        self.resources = {}
+
+    def register_tool(self, name, func):
+        self.tools[name] = func
+
+    def register_resource(self, name, resource):
+        self.resources[name] = resource
+
+
+class MockMCPClient:
+    """Mock MCP client for testing."""
+
+    def __init__(self, server):
+        self.server = server
+        self.call_count = 0
+
+    async def call_tool(self, name, **kwargs):
+        self.call_count += 1
+        if name in self.server.tools:
+            return await self.server.tools[name](**kwargs)
+        raise ValueError(f"Tool {name} not found")
+
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
 

@@ -9,6 +9,7 @@ from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})  # All classes end with "Node"
+# Auto ID generation: agent_id = workflow.add_node("LLMAgentNode", {"model": "gpt-4"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 ```

@@ -22,66 +22,28 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python and uv for local runner
-        run: |
-          # Check if Python is available
-          python3 --version || { echo "Python 3 not found"; exit 1; }
-
-          # Install uv if not available, using workspace directory to avoid permission issues
-          if ! command -v uv &> /dev/null; then
-            export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
-            export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
-            curl -LsSf https://astral.sh/uv/install.sh | sh
-            echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
-            export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
-          fi
-
-          # Verify uv is working
-          uv --version
-
-      - name: Install GNU tar for local runner
-        run: |
-          # Install GNU tar via Homebrew and create reliable symlink
-          if command -v brew &> /dev/null; then
-            echo "Installing GNU tar via Homebrew..."
-            brew install gnu-tar || echo "GNU tar might already be installed"
-
-            # Create reliable symlink in standard location
-            if [ -f "/opt/homebrew/bin/gtar" ]; then
-              sudo ln -sf /opt/homebrew/bin/gtar /usr/local/bin/gtar
-            elif [ -f "/usr/local/bin/gtar" ]; then
-              echo "GNU tar already available at /usr/local/bin/gtar"
-            else
-              echo "Warning: Could not find gtar after Homebrew installation"
-            fi
-          else
-            echo "Homebrew not available, creating fallback gtar symlink..."
-            sudo ln -sf /usr/bin/tar /usr/local/bin/gtar
-          fi
-
-          # Verify gtar is accessible
-          /usr/local/bin/gtar --version || echo "Warning: gtar symlink verification failed"
-          which gtar || echo "gtar not in PATH, but symlink should work"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          # Create virtual environment in workspace
-          uv venv .venv --python python3
-          uv sync
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install -r docs/requirements.txt
 
       - name: Build documentation
         run: |
-          # Ensure uv is in PATH and activate environment
-          export PATH="${GITHUB_WORKSPACE}/.cargo/bin:$PATH"
           cd docs
-          uv run python build_docs.py
+          python build_docs.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
