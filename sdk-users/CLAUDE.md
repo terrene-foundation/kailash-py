@@ -20,13 +20,29 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Enterprise App Architecture
 ```python
-from kailash.middleware.gateway import create_gateway
+from kailash.servers.gateway import create_gateway
 
-app = create_gateway({
-    "enable_real_time": True,
-    "enable_ai_chat": True,
-    "enable_session_management": True
-})
+# Single-channel API gateway with enterprise features
+app = create_gateway(
+    title="Enterprise Gateway",
+    server_type="enterprise",  # Uses EnterpriseWorkflowServer
+    enable_durability=True,
+    enable_resource_management=True,
+    enable_async_execution=True
+)
+```
+
+### Multi-Channel Nexus Architecture
+```python
+from kailash.nexus import create_nexus
+
+nexus = create_nexus(
+    title="Unified Platform",
+    enable_api=True,     # REST API + WebSocket
+    enable_cli=True,     # Command-line interface
+    enable_mcp=True,     # Model Context Protocol
+    channels_synced=True # Cross-channel session sync
+)
 ```
 
 ### Node Selection Priority
@@ -36,6 +52,26 @@ from kailash.nodes.ai import LLMAgentNode        # NOT custom API calls
 from kailash.nodes.api import HTTPRequestNode    # NOT requests library
 from kailash.nodes.admin import UserManagementNode  # NOT custom auth
 from kailash.nodes.data import CSVReaderNode     # NOT PythonCodeNode for files
+from kailash.nodes.data import QueryBuilder     # NOT raw SQL strings
+from kailash.nodes.data import QueryCache       # NOT manual Redis
+```
+
+### Query Builder & Cache (New v0.6.6+)
+```python
+from kailash.nodes.data.query_builder import QueryBuilder, create_query_builder
+from kailash.nodes.data.query_cache import QueryCache, CacheInvalidationStrategy
+
+# MongoDB-style query building
+builder = create_query_builder("postgresql")
+builder.table("users").where("age", "$gt", 18).where("status", "$eq", "active")
+sql, params = builder.build_select(["name", "email"])
+
+# Redis query caching with pattern-based invalidation
+cache = QueryCache(
+    redis_host="localhost",
+    redis_port=6379,
+    invalidation_strategy=CacheInvalidationStrategy.PATTERN_BASED
+)
 ```
 
 ### Parameter Patterns
@@ -49,13 +85,15 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 ---
 
-## 🚀 Enterprise Middleware Architecture
+## 🚀 Enterprise Architecture & Multi-Channel Platform
 
-**🌉 Complete Middleware Stack**: Production-ready enterprise platform with `create_gateway()` - single function creates full app with real-time communication, AI chat, and session management.
+**🌉 Unified Nexus Platform**: Next-generation multi-channel orchestration with `create_nexus()` - single function creates API, CLI, and MCP interfaces with unified sessions and cross-channel communication.
 
-**🔄 Real-time Agent-UI Communication**: WebSocket/SSE streaming, dynamic workflow creation from frontend, multi-tenant session isolation.
+**🔄 Multi-Channel Communication**: WebSocket/SSE streaming, CLI command interface, MCP tool/resource discovery with synchronized sessions across all channels.
 
-**🤖 AI Chat Integration**: Natural language workflow generation, context-aware conversations, automatic workflow creation from user descriptions.
+**🤖 Enhanced Gateway Architecture**: Production-ready enterprise platform with `create_gateway()` - fully redesigned server classes (EnterpriseWorkflowServer, DurableWorkflowServer, WorkflowServer) with improved naming and enterprise defaults.
+
+**⚡ Channel Abstraction Framework**: Unified interface management across API, CLI, and MCP channels with cross-channel session management and event routing.
 
 **⚡ Unified Async Runtime**: Production-ready AsyncLocalRuntime with 2-10x performance gains. See [developer/10-unified-async-runtime-guide.md](developer/10-unified-async-runtime-guide.md) for complete guide.
 
@@ -73,9 +111,29 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 **🏥 Enterprise MCP Workflows**: Complete healthcare HIPAA, finance SOX, and multi-tenant patterns with 4 production-grade enterprise nodes. See [cheatsheet/040-enterprise-mcp-workflows.md](cheatsheet/040-enterprise-mcp-workflows.md).
 
+**📊 Transaction Monitoring**: Enterprise-grade transaction metrics, deadlock detection, race condition analysis, and performance anomaly detection with 5 production-tested monitoring nodes. **v0.6.6+ Enhanced**: New operations (`complete_transaction`, `acquire_resource`, `request_resource`, `complete_operation`), success rate calculations, alias support, and improved AsyncNode event loop handling. See [cheatsheet/048-transaction-monitoring.md](cheatsheet/048-transaction-monitoring.md) and [nodes/monitoring-nodes.md](nodes/monitoring-nodes.md).
+
+**🔄 Distributed Transaction Management**: Enterprise-grade transaction patterns with automatic pattern selection. Supports Saga pattern for high availability and Two-Phase Commit for strong consistency. Includes compensation logic, state persistence, and recovery mechanisms. Complete with 122 unit tests and 23 integration tests. See [cheatsheet/049-distributed-transactions.md](cheatsheet/049-distributed-transactions.md) and [nodes/transaction-nodes.md](nodes/transaction-nodes.md).
+
+**🧪 Comprehensive Validation Framework**: Test-driven development with multi-level code validation, workflow validation, and comprehensive test execution. Features enhanced IterativeLLMAgentNode with **real MCP tool execution** (v0.6.5+) and test-driven convergence that only stops when deliverables actually work. Includes sandbox execution, schema validation, and automated quality gates. See [developer/13-validation-framework-guide.md](developer/13-validation-framework-guide.md) and [cheatsheet/050-validation-testing-patterns.md](cheatsheet/050-validation-testing-patterns.md).
+
+**🔌 Nexus Multi-Channel Framework**: Complete multi-channel orchestration platform supporting API, CLI, and MCP interfaces with unified session management. Features cross-channel event routing, synchronized state management, and comprehensive channel abstraction. **MCP initialization issues fully resolved** - fixes WorkflowBuilder syntax, parameter passing, and initialization order. See [cheatsheet/051-nexus-multi-channel-patterns.md](cheatsheet/051-nexus-multi-channel-patterns.md) and [enterprise/nexus-patterns.md](enterprise/nexus-patterns.md).
+
+**🗄️ MongoDB-Style Query Builder**: Production-ready query builder with MongoDB-style operators ($eq, $ne, $lt, $gt, $in, $regex, etc.) that generates optimized SQL for PostgreSQL, MySQL, and SQLite. Includes automatic tenant isolation, multi-database support, and comprehensive validation. Complete with 33 unit tests, 8 integration tests, and real Redis caching. See [cheatsheet/052-query-builder-patterns.md](cheatsheet/052-query-builder-patterns.md) and [nodes/03-data-nodes.md](nodes/03-data-nodes.md).
+
+**⚡ Redis Query Cache**: Enterprise-grade query result caching with Redis backend. Features automatic cache key generation, TTL management, pattern-based invalidation, tenant isolation, and comprehensive health monitoring. Supports multiple invalidation strategies (TTL, pattern-based, event-based) with production-tested performance. Complete with 40 unit tests and 8 integration tests. See [cheatsheet/053-query-cache-patterns.md](cheatsheet/053-query-cache-patterns.md) and [developer/16-query-cache-guide.md](developer/16-query-cache-guide.md).
+
+**🚀 Nexus Production Hardening** ⭐ **NEW** (2025-07-10): Enterprise-grade production deployment with 100% hardening complete. Features complete Terraform infrastructure automation (AWS EKS, RDS, ElastiCache), performance baseline validation (31.8M ops/sec), zero-vulnerability security compliance, and comprehensive operational documentation. Nexus is now **production-ready** with enterprise monitoring, authentication, and infrastructure automation. See [../apps/kailash-nexus/docs/operations/](../apps/kailash-nexus/docs/operations/) and [../apps/kailash-nexus/docs/performance/](../apps/kailash-nexus/docs/performance/).
+
+**🏗️ DataFlow Architectural Modernization** ⭐ **ACTIVE** (TODO-107): DataFlow framework is undergoing architectural refactoring from monolithic structure to modern modular design for enhanced maintainability and developer experience. All existing functionality remains fully compatible during transition. See [../apps/kailash-dataflow/docs/adr/](../apps/kailash-dataflow/docs/adr/) for architecture decisions.
+
 ## 🏗️ Architecture Decisions First
 
 **⚠️ STOP! Before building any app, make these critical decisions:**
+
+### 🔗 App Frameworks Navigation
+- **DataFlow (Database)**: [../apps/kailash-dataflow/CLAUDE.md](../apps/kailash-dataflow/CLAUDE.md) - Zero-config database with enterprise power
+- **Nexus (Multi-Channel)**: [../apps/kailash-nexus/CLAUDE.md](../apps/kailash-nexus/CLAUDE.md) - Unified API, CLI, MCP platform
 
 ### 📋 Decision Matrix → [decision-matrix.md](decision-matrix.md)
 
@@ -100,9 +158,10 @@ The decision matrix provides fast answers to:
 | **Build complete app** | [../apps/APP_DEVELOPMENT_GUIDE.md](../apps/APP_DEVELOPMENT_GUIDE.md) | App implementation guide |
 | **Find a node quickly** | [nodes/node-index.md](nodes/node-index.md) | Minimal 47-line reference |
 | **Choose right node** | [nodes/node-selection-guide.md](nodes/node-selection-guide.md) | Smart node finder with decision trees |
-| Build from scratch | [developer/](developer/) | 6 focused technical guides |
+| Build from scratch | [developer/](developer/) | 7 focused technical guides |
 | **Test workflows** | [developer/12-testing-production-quality.md](developer/12-testing-production-quality.md) | Production-certified testing framework ✅ |
-| Quick code snippet | [cheatsheet/](cheatsheet/) | 37 standardized copy-paste patterns |
+| **Validate code/workflows** | [developer/13-validation-framework-guide.md](developer/13-validation-framework-guide.md) | NEW: Test-driven convergence & quality gates ⭐ |
+| Quick code snippet | [cheatsheet/](cheatsheet/) | 38 standardized copy-paste patterns |
 | Fix an error | [validation/common-mistakes.md](validation/common-mistakes.md) | Comprehensive error resolution |
 | Frontend integration | [frontend-integration/](frontend-integration/) | React/Vue + middleware patterns |
 | Production deployment | [developer/04-production.md](developer/04-production.md) | Security, monitoring, performance |

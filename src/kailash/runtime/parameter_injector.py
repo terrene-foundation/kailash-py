@@ -5,7 +5,7 @@ for enterprise nodes that require connection configuration.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node
 
@@ -67,22 +67,82 @@ class DeferredConfigNode(Node):
 
     def _has_required_config(self):
         """Check if we have enough configuration to initialize the node."""
-        # This is a simple heuristic - could be made more sophisticated
         effective_config = self.get_effective_config()
+        node_name = self._node_class.__name__
 
-        # For OAuth2 nodes, we need at least token_url and client_id
-        if "OAuth2" in self._node_class.__name__:
-            return "token_url" in effective_config and "client_id" in effective_config
+        # Get required parameters from the node class if available
+        try:
+            if hasattr(self._node_class, "get_parameter_definitions"):
+                required_params = []
+                param_defs = self._node_class.get_parameter_definitions()
+                for param_name, param_def in param_defs.items():
+                    if hasattr(param_def, "required") and param_def.required:
+                        required_params.append(param_name)
+                    elif hasattr(param_def, "default") and param_def.default is None:
+                        required_params.append(param_name)
 
-        # For SQL nodes, we need at least database info and a query
-        if "SQL" in self._node_class.__name__:
-            has_db_config = any(
-                key in effective_config for key in ["connection_string", "database"]
+                # Check if all required parameters are present
+                missing_params = [
+                    p for p in required_params if p not in effective_config
+                ]
+                if missing_params:
+                    logger.warning(
+                        f"Missing required parameters for {node_name}: {missing_params}"
+                    )
+                    return False
+
+        except Exception as e:
+            logger.debug(f"Could not get parameter definitions for {node_name}: {e}")
+
+        # Node-specific validation rules
+        if "OAuth2" in node_name:
+            required_oauth = ["token_url", "client_id"]
+            missing_oauth = [p for p in required_oauth if p not in effective_config]
+            if missing_oauth:
+                logger.warning(
+                    f"Missing OAuth2 parameters for {node_name}: {missing_oauth}"
+                )
+                return False
+
+        elif "SQL" in node_name:
+            # Need either connection_string or individual db parameters or minimal database config
+            has_connection_string = "connection_string" in effective_config
+            has_individual_params = all(
+                key in effective_config for key in ["host", "database", "user"]
             )
+            has_minimal_config = "database" in effective_config  # For testing scenarios
             has_query = "query" in effective_config
-            return has_db_config and has_query
 
-        # Default: assume we have enough config
+            if not (
+                has_connection_string or has_individual_params or has_minimal_config
+            ):
+                logger.warning(
+                    f"Missing database connection parameters for {node_name}"
+                )
+                return False
+            if not has_query:
+                logger.warning(f"Missing query parameter for {node_name}")
+                return False
+
+        elif "HTTP" in node_name or "Request" in node_name:
+            if "url" not in effective_config:
+                logger.warning(f"Missing url parameter for {node_name}")
+                return False
+
+        elif "LLM" in node_name or "Agent" in node_name:
+            if "model" not in effective_config and "provider" not in effective_config:
+                logger.warning(f"Missing model/provider parameters for {node_name}")
+                return False
+
+        elif "Cache" in node_name or "Redis" in node_name:
+            redis_params = ["redis_host", "redis_port", "host", "port"]
+            has_redis_config = any(param in effective_config for param in redis_params)
+            if not has_redis_config:
+                logger.warning(f"Missing Redis connection parameters for {node_name}")
+                return False
+
+        # Validation passed
+        logger.debug(f"Configuration validation passed for {node_name}")
         return True
 
     def get_parameters(self):
@@ -547,45 +607,141 @@ class WorkflowParameterInjector:
             param_name: Name of the workflow parameter
             param_value: Value of the parameter
             node_param_defs: Node parameter definitions
+            node_instance: The node instance for advanced mapping
 
         Returns:
             The node parameter name to inject to, or the original param_name
             if the node accepts **kwargs parameters
         """
-        # Direct parameter name match
+        # Validate inputs
+        if not isinstance(param_name, str):
+            logger.warning(f"Parameter name must be string, got {type(param_name)}")
+            return None
+
+        if not isinstance(node_param_defs, dict):
+            logger.warning(
+                f"Node parameter definitions must be dict, got {type(node_param_defs)}"
+            )
+            return None
+
+        # Direct parameter name match (highest priority)
         if param_name in node_param_defs:
             return param_name
 
         # Check for workflow alias matches
         for node_param_name, param_def in node_param_defs.items():
-            if (
-                hasattr(param_def, "workflow_alias")
-                and param_def.workflow_alias == param_name
-            ):
-                return node_param_name
-
-            # Check for auto_map_from matches
-            if hasattr(param_def, "auto_map_from") and param_def.auto_map_from:
-                if param_name in param_def.auto_map_from:
+            try:
+                if (
+                    hasattr(param_def, "workflow_alias")
+                    and param_def.workflow_alias == param_name
+                ):
                     return node_param_name
 
-            # Check for auto_map_primary matches
-            if hasattr(param_def, "auto_map_primary") and param_def.auto_map_primary:
-                # Primary parameters get first available workflow parameter
-                # This is a simplified implementation - could be more sophisticated
-                return node_param_name
+                # Check for auto_map_from matches
+                if hasattr(param_def, "auto_map_from") and param_def.auto_map_from:
+                    if isinstance(param_def.auto_map_from, list):
+                        if param_name in param_def.auto_map_from:
+                            return node_param_name
+                    elif isinstance(param_def.auto_map_from, str):
+                        if param_name == param_def.auto_map_from:
+                            return node_param_name
+
+                # Check for auto_map_primary matches
+                if (
+                    hasattr(param_def, "auto_map_primary")
+                    and param_def.auto_map_primary
+                ):
+                    # Enhanced primary parameter matching with type checking
+                    if self._is_compatible_type(param_value, param_def):
+                        return node_param_name
+
+            except Exception as e:
+                logger.warning(
+                    f"Error processing parameter definition for {node_param_name}: {e}"
+                )
+                continue
+
+        # Enhanced fuzzy matching for common parameter patterns
+        fuzzy_matches = self._get_fuzzy_parameter_matches(param_name, node_param_defs)
+        if fuzzy_matches:
+            # Return the best match (first in list)
+            return fuzzy_matches[0]
 
         # ENTERPRISE FEATURE: Check if this specific node accepts **kwargs
         # This enables enterprise parameter injection into arbitrary functions
         if node_instance and self._node_accepts_kwargs(node_instance):
             # PythonCodeNode with **kwargs can accept any workflow parameter
-            if self.debug:
-                self.logger.debug(
-                    f"Injecting workflow parameter '{param_name}' into **kwargs function"
-                )
+            logger.debug(
+                f"Injecting workflow parameter '{param_name}' into **kwargs function"
+            )
             return param_name
 
         return None
+
+    def _is_compatible_type(self, param_value: Any, param_def: Any) -> bool:
+        """Check if parameter value is compatible with parameter definition type."""
+        try:
+            if not hasattr(param_def, "type"):
+                return True  # No type constraint
+
+            expected_type = param_def.type
+            if expected_type is None:
+                return True
+
+            # Handle union types and generics
+            if hasattr(expected_type, "__origin__"):
+                # Handle Union, Optional, etc.
+                if expected_type.__origin__ is Union:
+                    return any(
+                        isinstance(param_value, t) for t in expected_type.__args__
+                    )
+
+            # Direct type check
+            return isinstance(param_value, expected_type)
+        except Exception:
+            return True  # If type checking fails, assume compatible
+
+    def _get_fuzzy_parameter_matches(
+        self, param_name: str, node_param_defs: Dict[str, Any]
+    ) -> List[str]:
+        """Get fuzzy matches for parameter names."""
+        matches = []
+
+        # Common parameter aliases
+        aliases = {
+            "input": ["data", "content", "text", "input_data"],
+            "data": ["input", "content", "text", "input_data"],
+            "content": ["data", "input", "text", "body"],
+            "text": ["data", "input", "content", "body"],
+            "url": ["endpoint", "address", "link", "uri"],
+            "endpoint": ["url", "address", "link", "uri"],
+            "config": ["configuration", "settings", "options"],
+            "params": ["parameters", "args", "arguments"],
+            "result": ["output", "response", "return"],
+            "output": ["result", "response", "return"],
+        }
+
+        # Check if param_name has known aliases
+        if param_name in aliases:
+            for alias in aliases[param_name]:
+                if alias in node_param_defs:
+                    matches.append(alias)
+
+        # Check reverse mapping
+        for node_param_name in node_param_defs:
+            if node_param_name in aliases and param_name in aliases[node_param_name]:
+                matches.append(node_param_name)
+
+        # Substring matching for partial matches
+        for node_param_name in node_param_defs:
+            if (
+                param_name.lower() in node_param_name.lower()
+                or node_param_name.lower() in param_name.lower()
+            ):
+                if node_param_name not in matches:
+                    matches.append(node_param_name)
+
+        return matches
 
     def _node_accepts_kwargs(self, node_instance) -> bool:
         """Check if a node can accept arbitrary keyword arguments.

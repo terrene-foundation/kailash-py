@@ -393,7 +393,7 @@ try:
                 VALUES ($1, $2, $3)
                 RETURNING *
             ''',
-            "params": [customer_id, inputs.get("customer_name", "Guest"), customer_email],
+            "params": [customer_id, customer_name if 'customer_name' in locals() else "Guest", customer_email],
             "fetch_mode": "one"
         })
         customer = {"customer_id": customer_id, "tier": "standard", "new_customer": True}
@@ -652,8 +652,15 @@ import asyncio
 pool = inputs["pool"]
 order_id = inputs["order_id"]
 amount = inputs["amount"]
-payment_method = inputs.get("payment_method", "credit_card")
-attempt = inputs.get("attempt", 1)
+try:
+    payment_method = payment_method if 'payment_method' in locals() else "credit_card"
+except NameError:
+    payment_method = "credit_card"
+
+try:
+    attempt = attempt if 'attempt' in locals() else 1
+except NameError:
+    attempt = 1
 
 # Simulate payment processing
 await asyncio.sleep(0.5)
@@ -892,8 +899,15 @@ finally:
             {
                 "code": """
 pool = inputs["pool"]
-time_range = inputs.get("time_range", "7 days")
-segment = inputs.get("segment", "all")
+try:
+    time_range = time_range if 'time_range' in locals() else "7 days"
+except NameError:
+    time_range = "7 days"
+
+try:
+    segment = segment if 'segment' in locals() else "all"
+except NameError:
+    segment = "all"
 
 conn = await pool.process({"operation": "acquire"})
 conn_id = conn["connection_id"]
@@ -1137,9 +1151,20 @@ result = report
 import uuid
 from datetime import datetime
 
-job_type = inputs.get("job_type", "data_migration")
-items = inputs.get("items", [])
-batch_size = inputs.get("batch_size", 10)
+try:
+    job_type = job_type if 'job_type' in locals() else "data_migration"
+except NameError:
+    job_type = "data_migration"
+
+try:
+    items = items if 'items' in locals() else []
+except NameError:
+    items = []
+
+try:
+    batch_size = batch_size if 'batch_size' in locals() else 10
+except NameError:
+    batch_size = 10
 
 job_id = f"BATCH-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}"
 
@@ -1561,7 +1586,10 @@ import json
 
 ticket_id = f"TKT-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}"
 
-categorization = json.loads(inputs.get("categorization", {}).get("response", "{}"))
+try:
+    categorization = json.loads(categorization.get("response", "{}")) if isinstance(categorization, dict) else json.loads(categorization) if isinstance(categorization, str) else {}
+except (NameError, json.JSONDecodeError, AttributeError):
+    categorization = {}
 customer_data = inputs["customer_data"]
 ai_response = inputs["ai_response"]
 

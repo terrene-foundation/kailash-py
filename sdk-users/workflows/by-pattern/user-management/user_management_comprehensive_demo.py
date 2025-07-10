@@ -271,8 +271,8 @@ class UserManagementSystem:
                     FROM users
                     WHERE tenant_id = '{params["tenant_id"]}'
                     {' AND is_active = true' if params.get("filters", {}).get("active_only") else ''}
-                    {f' AND department = \'{params["filters"]["department"]}\'' if params.get("filters", {}).get("department") else ''}
-                    {f' AND (email ILIKE \'%{params["filters"]["search"]}%\' OR username ILIKE \'%{params["filters"]["search"]}%\' OR first_name ILIKE \'%{params["filters"]["search"]}%\' OR last_name ILIKE \'%{params["filters"]["search"]}%\')' if params.get("filters", {}).get("search") else ''}
+                    {' AND department = ' + repr(params["filters"]["department"]) if params.get("filters", {}).get("department") else ''}
+                    {' AND (email ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR username ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR first_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR last_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ')' if params.get("filters", {}).get("search") else ''}
                     ORDER BY {params["order_by"]}
                     LIMIT {params["per_page"]} OFFSET {(params["page"] - 1) * params["per_page"]}
                     """,
@@ -281,8 +281,8 @@ class UserManagementSystem:
                     FROM users
                     WHERE tenant_id = '{params["tenant_id"]}'
                     {' AND is_active = true' if params.get("filters", {}).get("active_only") else ''}
-                    {f' AND department = \'{params["filters"]["department"]}\'' if params.get("filters", {}).get("department") else ''}
-                    {f' AND (email ILIKE \'%{params["filters"]["search"]}%\' OR username ILIKE \'%{params["filters"]["search"]}%\' OR first_name ILIKE \'%{params["filters"]["search"]}%\' OR last_name ILIKE \'%{params["filters"]["search"]}%\')' if params.get("filters", {}).get("search") else ''}
+                    {' AND department = ' + repr(params["filters"]["department"]) if params.get("filters", {}).get("department") else ''}
+                    {' AND (email ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR username ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR first_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR last_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ')' if params.get("filters", {}).get("search") else ''}
                     """,
                 }
             },
@@ -778,7 +778,7 @@ class UserManagementSystem:
             FROM users
             WHERE tenant_id = '{self.tenant_id}'
             {' AND is_active = true' if filters and filters.get("active_only") else ''}
-            {f' AND department = \'{filters["department"]}\'' if filters and filters.get("department") else ''}
+            {' AND department = ' + repr(filters["department"]) if filters and filters.get("department") else ''}
             ORDER BY date_joined DESC
             """,
             operation_type="query",

@@ -1,4 +1,4 @@
-"""Integration tests for test fixtures that require external dependencies."""
+"""Unit tests for test fixtures."""
 
 import asyncio
 import json
@@ -18,9 +18,9 @@ from kailash.testing.fixtures import (
 )
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 class TestAsyncWorkflowFixtures:
-    """Integration tests for AsyncWorkflowFixtures functionality."""
+    """Test AsyncWorkflowFixtures functionality."""
 
     @pytest.mark.asyncio
     async def test_temp_directory(self):
@@ -101,37 +101,13 @@ class TestAsyncWorkflowFixtures:
             # Should be ~1 second in mock time (0.1 * 10)
             assert 0.5 < elapsed < 1.5
 
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    @pytest.mark.requires_docker
-    async def test_create_test_database(self):
-        """Integration test for creating test database with Docker."""
-        # This test requires Docker to be running
-        if not HAS_DOCKER:
-            pytest.skip("Docker not available")
-
-        db = await AsyncWorkflowFixtures.create_test_database(
-            engine="postgresql",
-            database="test_db",
-            user="test_user",
-            password="test_pass",
-        )
-
-        try:
-            assert isinstance(db, DatabaseFixture)
-            assert db.host == "localhost"
-            assert db.database == "test_db"
-            assert db.user == "test_user"
-            assert db.password == "test_pass"
-            assert db.port > 0
-            assert "postgresql://" in db.connection_string
-        finally:
-            await db.cleanup()
+    # NOTE: test_create_test_database has been moved to
+    # tests/integration/testing/test_fixtures.py as it requires Docker
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 class TestMockHttpClient:
-    """Integration tests for MockHttpClient functionality."""
+    """Test MockHttpClient functionality."""
 
     @pytest.mark.asyncio
     async def test_basic_requests(self):
@@ -267,9 +243,9 @@ class TestMockHttpClient:
         assert len(client._calls) == 0
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 class TestMockCache:
-    """Integration tests for MockCache functionality."""
+    """Test MockCache functionality."""
 
     @pytest.mark.asyncio
     async def test_basic_operations(self):
@@ -379,6 +355,7 @@ class TestMockCache:
             cache.assert_called("delete")
 
 
+@pytest.mark.unit
 class TestHttpCall:
     """Test HttpCall dataclass."""
 

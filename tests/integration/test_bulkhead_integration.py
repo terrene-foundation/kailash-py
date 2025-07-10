@@ -102,7 +102,7 @@ class TestBulkheadSQLIntegration:
             execute_sql_async, "SELECT * FROM test_users"
         )
 
-        assert result["success"] == True
+        assert result["success"]
         assert len(result["data"]) == 2
         assert result["data"][0]["name"] in ["John Doe", "Jane Smith"]
 
@@ -178,8 +178,8 @@ class TestBulkheadSQLIntegration:
         )
 
         # Both should succeed
-        assert critical_result["success"] == True
-        assert background_result["success"] == True
+        assert critical_result["success"]
+        assert background_result["success"]
 
         # Check metrics for both partitions
         critical_status = critical_partition.get_status()
@@ -244,7 +244,7 @@ class TestBulkheadSQLIntegration:
 
         # Small partition should be busy, but normal partition should work
         normal_result = await normal_partition.execute(fast_query)
-        assert normal_result["success"] == True
+        assert normal_result["success"]
 
         # Small partition should reject additional operations
         with pytest.raises(BulkheadRejectionError):
@@ -252,7 +252,7 @@ class TestBulkheadSQLIntegration:
 
         # Wait for slow task to complete
         slow_result = await slow_task
-        assert slow_result["success"] == True
+        assert slow_result["success"]
 
     @pytest.mark.asyncio
     async def test_sql_transaction_isolation(self, temp_database, bulkhead_manager):
@@ -408,7 +408,7 @@ class TestBulkheadGlobalIntegration:
         # Use global convenience function
         result = await execute_with_bulkhead("database", sql_operation)
 
-        assert result["success"] == True
+        assert result["success"]
         assert result["data"][0]["test"] == 1
 
         # Check that global manager tracked the operation

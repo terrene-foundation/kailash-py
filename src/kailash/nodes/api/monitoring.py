@@ -13,7 +13,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 
 @register_node()
-class HealthCheckNode(Node):
+class APIHealthCheckNode(Node):
     """
     Performs health checks on various system components and services.
 

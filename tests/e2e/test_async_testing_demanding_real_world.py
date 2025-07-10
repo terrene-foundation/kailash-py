@@ -847,7 +847,11 @@ result = quality_report
 cache = await get_resource("cache")
 user_service = await get_resource("user_service")
 
-user_id = str(inputs["user_id"])
+# Access user_id parameter directly
+try:
+    user_id = str(user_id) if 'user_id' in locals() else "default_user"
+except NameError:
+    user_id = "default_user"
 cache_key = f"user_profile:{user_id}"
 
 # Check cache first
@@ -877,7 +881,11 @@ result = {
 product_service = await get_resource("product_service")
 cache = await get_resource("cache")
 
-search_query = inputs.get("search_query", "electronics")
+# Access search_query parameter directly
+try:
+    search_query = search_query if 'search_query' in locals() else "electronics"
+except NameError:
+    search_query = "electronics"
 cache_key = f"product_search:{search_query}"
 
 # Check cache
@@ -1303,9 +1311,21 @@ import json
 import random
 
 # Simulate processing a batch of data
-batch_id = inputs["batch_id"]
-batch_size = inputs.get("batch_size", 100)
-processing_delay = inputs.get("delay", 0.01)
+# Access batch_id parameter directly
+try:
+    batch_id = batch_id if 'batch_id' in locals() else 0
+except NameError:
+    batch_id = 0
+# Access batch_size and delay parameters directly
+try:
+    batch_size = batch_size if 'batch_size' in locals() else 100
+except NameError:
+    batch_size = 100
+
+try:
+    processing_delay = delay if 'delay' in locals() else 0.01
+except NameError:
+    processing_delay = 0.01
 
 start_time = time.time()
 processed_items = []

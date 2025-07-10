@@ -424,39 +424,13 @@ jobs:
               fi
           }
 
-          # ALWAYS run Tier 1 tests only for push/PR events
-          # Exclude tests with sleep/timeout calls to keep CI fast
-          IGNORE_SLOW="--ignore=tests/unit/core/test_adaptive_pool_controller.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/core/test_circuit_breaker.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/core/test_connection_metrics.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/gateway/test_enhanced_gateway.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/middleware/test_checkpoint_manager.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/code/test_async_python.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_a2a.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_async_operations.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_query_pipeline.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_sync_async_separation.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_workflow_connection_pool.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/runtime/test_async_local.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/runtime/test_local.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/scenarios/test_cycle_scenarios.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/test_architecture_refactoring.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/testing/test_async_test_case.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/testing/test_async_utils.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/testing/test_fixtures.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/tracking/test_metrics_collector.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/utils/test_resource_manager_simple.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/workflow/test_async_workflow_builder.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/workflows/test_convergence_safety.py"
-          # Also exclude other known slow tests
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_async_sql.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_llm_agent.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/nodes/test_sql_database.py"
-          IGNORE_SLOW="$IGNORE_SLOW --ignore=tests/unit/apps/user_management/test_password_security.py"
+          # Run Tier 1 tests only for push/PR events
+          # Tests are now properly organized - unit tests have no sleep calls
+          # Use marker-based exclusion as per test organization policy
 
           # Use pytest-xdist for parallel execution (-n auto uses all CPU cores)
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker)' $IGNORE_SLOW --maxfail=5 -v -n auto"
-          echo "Running Tier 1 unit tests only (fast mode) - excluding 22 slow tests with parallel execution"
+          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v -n auto"
+          echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
 
           # Run all checks in parallel with proper failure detection
           pids=()

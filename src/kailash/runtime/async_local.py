@@ -579,13 +579,65 @@ class AsyncLocalRuntime(LocalRuntime):
         context_inputs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Prepare inputs for sync node execution."""
-        # Simplified input preparation
         inputs = context_inputs.copy()
 
-        # Add outputs from predecessor nodes
+        # Add outputs from predecessor nodes using proper connection mapping
         for predecessor in workflow.graph.predecessors(node_id):
             if predecessor in node_outputs:
-                inputs[f"{predecessor}_output"] = node_outputs[predecessor]
+                # Use the actual connection mapping if available
+                edge_data = workflow.graph.get_edge_data(predecessor, node_id)
+                if edge_data and "mapping" in edge_data:
+                    # Handle new graph format with mapping
+                    mapping = edge_data["mapping"]
+                    source_data = node_outputs[predecessor]
+
+                    for source_path, target_param in mapping.items():
+                        if source_path == "result":
+                            # Source path is 'result' - use the entire source data
+                            inputs[target_param] = source_data
+                        elif "." in source_path and isinstance(source_data, dict):
+                            # Navigate dotted path (e.g., "result.data" or "nested.field")
+                            path_parts = source_path.split(".")
+
+                            # Special case: if path starts with "result." and source_data doesn't have "result" key,
+                            # try stripping "result." since AsyncPythonCodeNode returns direct dict
+                            if (
+                                path_parts[0] == "result"
+                                and "result" not in source_data
+                                and len(path_parts) > 1
+                            ):
+                                # Try the remaining path without "result"
+                                remaining_path = ".".join(path_parts[1:])
+                                if remaining_path in source_data:
+                                    inputs[target_param] = source_data[remaining_path]
+                                    continue
+                                else:
+                                    # Try navigating remaining path parts
+                                    path_parts = path_parts[1:]
+
+                            current_data = source_data
+                            # Navigate through each part of the path
+                            for part in path_parts:
+                                if (
+                                    isinstance(current_data, dict)
+                                    and part in current_data
+                                ):
+                                    current_data = current_data[part]
+                                else:
+                                    current_data = None
+                                    break
+                            inputs[target_param] = current_data
+                        elif (
+                            isinstance(source_data, dict) and source_path in source_data
+                        ):
+                            # Direct key access
+                            inputs[target_param] = source_data[source_path]
+                        else:
+                            # Fallback - use source data directly
+                            inputs[target_param] = source_data
+                else:
+                    # Fallback to legacy behavior if no mapping
+                    inputs[f"{predecessor}_output"] = node_outputs[predecessor]
 
         return inputs
 
@@ -713,17 +765,31 @@ class AsyncLocalRuntime(LocalRuntime):
                     source_data = tracker.node_outputs[predecessor]
 
                     for source_path, target_param in mapping.items():
-                        if source_path != "result" and isinstance(source_data, dict):
-                            # Navigate the path (e.g., "result.data")
+                        if source_path == "result":
+                            # Source path is 'result' - use the entire source data
+                            inputs[target_param] = source_data
+                        elif "." in source_path and isinstance(source_data, dict):
+                            # Navigate dotted path (e.g., "result.data" or "nested.field")
                             path_parts = source_path.split(".")
+
+                            # Special case: if path starts with "result." and source_data doesn't have "result" key,
+                            # try stripping "result." since AsyncPythonCodeNode returns direct dict
+                            if (
+                                path_parts[0] == "result"
+                                and "result" not in source_data
+                                and len(path_parts) > 1
+                            ):
+                                # Try the remaining path without "result"
+                                remaining_path = ".".join(path_parts[1:])
+                                if remaining_path in source_data:
+                                    inputs[target_param] = source_data[remaining_path]
+                                    continue
+                                else:
+                                    # Try navigating remaining path parts
+                                    path_parts = path_parts[1:]
+
                             current_data = source_data
-
-                            # CRITICAL FIX: Handle paths starting with "result"
-                            # When source_path is "result.field", the node output IS the result
-                            if path_parts[0] == "result" and len(path_parts) > 1:
-                                # Skip the "result" prefix and navigate from the actual data
-                                path_parts = path_parts[1:]
-
+                            # Navigate through each part of the path
                             for part in path_parts:
                                 if (
                                     isinstance(current_data, dict)
@@ -734,17 +800,14 @@ class AsyncLocalRuntime(LocalRuntime):
                                     current_data = None
                                     break
                             inputs[target_param] = current_data
+                        elif (
+                            isinstance(source_data, dict) and source_path in source_data
+                        ):
+                            # Direct key access
+                            inputs[target_param] = source_data[source_path]
                         else:
-                            # Source path is 'result' or source_data is not a dict
-                            if source_path == "result":
-                                inputs[target_param] = source_data
-                            elif (
-                                isinstance(source_data, dict)
-                                and source_path in source_data
-                            ):
-                                inputs[target_param] = source_data[source_path]
-                            else:
-                                inputs[target_param] = source_data
+                            # Fallback - use source data directly
+                            inputs[target_param] = source_data
                 elif edge_data and "connections" in edge_data:
                     # Handle legacy connection format
                     connections = edge_data["connections"]

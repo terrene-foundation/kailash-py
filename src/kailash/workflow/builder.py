@@ -2,10 +2,13 @@
 
 import logging
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.graph import Workflow
+
+if TYPE_CHECKING:
+    from kailash.nodes.base import Node
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +22,238 @@ class WorkflowBuilder:
         self.connections: list[dict[str, str]] = []
         self._metadata: dict[str, Any] = {}
 
-    def add_node(
+    def add_node(self, *args, **kwargs) -> str:
+        """
+        Unified add_node method supporting multiple API patterns.
+
+        Supported patterns:
+        1. add_node("NodeType", "node_id", {"param": value})     # Current/Preferred
+        2. add_node("node_id", NodeClass, param=value)           # Legacy fluent
+        3. add_node(NodeClass, "node_id", param=value)           # Alternative
+
+        Args:
+            *args: Positional arguments (pattern-dependent)
+            **kwargs: Keyword arguments for configuration
+
+        Returns:
+            Node ID (useful for method chaining)
+
+        Raises:
+            WorkflowValidationError: If node_id is already used or invalid pattern
+        """
+        # Pattern detection and routing
+        if len(args) == 0 and kwargs:
+            # Keyword-only pattern: add_node(node_type="NodeType", node_id="id", config={})
+            node_type = kwargs.pop("node_type", None)
+            node_id = kwargs.pop("node_id", None)
+            config = kwargs.pop("config", {})
+            # Any remaining kwargs are treated as config
+            config.update(kwargs)
+
+            if node_type is None:
+                raise WorkflowValidationError(
+                    "node_type is required when using keyword arguments"
+                )
+
+            return self._add_node_current(node_type, node_id, config)
+
+        elif len(args) == 1:
+            # Single argument with possible keywords
+            if isinstance(args[0], str) and kwargs:
+                # Pattern: add_node("NodeType", node_id="id", config={})
+                node_type = args[0]
+                node_id = kwargs.pop("node_id", None)
+                config = kwargs.pop("config", {})
+                # Any remaining kwargs are treated as config
+                config.update(kwargs)
+                return self._add_node_current(node_type, node_id, config)
+            elif isinstance(args[0], str):
+                # Pattern: add_node("NodeType")
+                return self._add_node_current(args[0], None, {})
+            elif hasattr(args[0], "__name__"):
+                # Pattern: add_node(NodeClass)
+                return self._add_node_alternative(args[0], None, **kwargs)
+            else:
+                from kailash.nodes.base import Node
+
+                if isinstance(args[0], Node):
+                    # Pattern: add_node(node_instance)
+                    return self._add_node_instance(args[0], None)
+
+        elif len(args) == 3 and isinstance(args[0], str) and isinstance(args[2], dict):
+            # Pattern 1: Current API - add_node("NodeType", "node_id", {"param": value})
+            return self._add_node_current(args[0], args[1], args[2])
+
+        elif len(args) >= 2 and isinstance(args[0], str):
+            # Pattern 2: Legacy fluent API - add_node("node_id", NodeClass, param=value)
+            if hasattr(args[1], "__name__") or isinstance(args[1], type):
+                return self._add_node_legacy_fluent(args[0], args[1], **kwargs)
+            elif isinstance(args[1], str):
+                # Two strings - assume current API: add_node("NodeType", "node_id")
+                config = kwargs if kwargs else (args[2] if len(args) > 2 else {})
+                return self._add_node_current(args[0], args[1], config)
+            else:
+                # Invalid second argument
+                raise WorkflowValidationError(
+                    f"Invalid node type: {type(args[1]).__name__}. "
+                    "Expected: str (node type name), Node class, or Node instance"
+                )
+
+        elif len(args) >= 2 and hasattr(args[0], "__name__"):
+            # Pattern 3: Alternative - add_node(NodeClass, "node_id", param=value)
+            # Handle both dict config and keyword args
+            if len(args) == 3 and isinstance(args[2], dict):
+                # Config provided as dict
+                return self._add_node_alternative(args[0], args[1], **args[2])
+            else:
+                # Config provided as kwargs
+                return self._add_node_alternative(args[0], args[1], **kwargs)
+
+        elif len(args) >= 2:
+            # Check if first arg is a Node instance
+            from kailash.nodes.base import Node
+
+            if isinstance(args[0], Node):
+                # Pattern 4: Instance - add_node(node_instance, "node_id") or add_node(node_instance, "node_id", config)
+                # Config is ignored for instances
+                return self._add_node_instance(args[0], args[1])
+            elif len(args) == 2:
+                # Invalid arguments for 2-arg call
+                raise WorkflowValidationError(
+                    f"Invalid node type: {type(args[0]).__name__}. "
+                    "Expected: str (node type name), Node class, or Node instance"
+                )
+
+            # For 3 or more args that don't match other patterns
+            # Error with helpful message
+            raise WorkflowValidationError(
+                f"Invalid add_node signature. Received {len(args)} args: {[type(arg).__name__ for arg in args]}\n"
+                f"Supported patterns:\n"
+                f"  add_node('NodeType', 'node_id', {{'param': value}})  # Preferred\n"
+                f"  add_node('node_id', NodeClass, param=value)          # Legacy\n"
+                f"  add_node(NodeClass, 'node_id', param=value)          # Alternative\n"
+                f"Examples:\n"
+                f"  add_node('HTTPRequestNode', 'api_call', {{'url': 'https://api.com'}})\n"
+                f"  add_node('csv_reader', CSVReaderNode, file_path='data.csv')"
+            )
+
+    def _add_node_current(
+        self, node_type: str, node_id: str | None, config: dict[str, Any]
+    ) -> str:
+        """Handle current API pattern: add_node('NodeType', 'node_id', {'param': value})"""
+        return self._add_node_unified(node_type, node_id, config)
+
+    def _add_node_legacy_fluent(
+        self, node_id: str, node_class_or_type: Any, **config
+    ) -> "WorkflowBuilder":
+        """Handle legacy fluent API pattern: add_node('node_id', NodeClass, param=value)"""
+        import warnings
+
+        from kailash.nodes.base import Node
+
+        # If it's a class, validate it's a Node subclass
+        if isinstance(node_class_or_type, type) and not issubclass(
+            node_class_or_type, Node
+        ):
+            raise WorkflowValidationError(
+                f"Invalid node type: {node_class_or_type}. Expected a Node subclass or string."
+            )
+
+        warnings.warn(
+            f"Legacy fluent API usage detected. "
+            f"Migration guide:\n"
+            f"  OLD: add_node('{node_id}', {getattr(node_class_or_type, '__name__', str(node_class_or_type))}, {list(config.keys())})\n"
+            f"  NEW: add_node('{getattr(node_class_or_type, '__name__', str(node_class_or_type))}', '{node_id}', {config})\n"
+            f"Legacy support will be removed in v0.8.0",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+        if hasattr(node_class_or_type, "__name__"):
+            node_type = node_class_or_type.__name__
+        else:
+            node_type = str(node_class_or_type)
+
+        self._add_node_unified(node_type, node_id, config)
+        return self  # Return self for fluent chaining
+
+    def _add_node_alternative(
+        self, node_class: type, node_id: str | None, **config
+    ) -> str:
+        """Handle alternative pattern: add_node(NodeClass, 'node_id', param=value)"""
+        import warnings
+
+        from kailash.nodes.base import Node
+
+        # Validate that node_class is actually a Node subclass
+        if not isinstance(node_class, type) or not issubclass(node_class, Node):
+            raise WorkflowValidationError(
+                f"Invalid node type: {node_class}. Expected a Node subclass."
+            )
+
+        # Generate ID if not provided
+        if node_id is None:
+            node_id = f"node_{uuid.uuid4().hex[:8]}"
+
+        warnings.warn(
+            f"Alternative API usage detected. Consider using preferred pattern:\n"
+            f"  CURRENT: add_node({node_class.__name__}, '{node_id}', {list(config.keys())})\n"
+            f"  PREFERRED: add_node('{node_class.__name__}', '{node_id}', {config})",
+            UserWarning,
+            stacklevel=3,
+        )
+
+        # Store the class reference along with the type name
+        self.nodes[node_id] = {
+            "type": node_class.__name__,
+            "config": config,
+            "class": node_class,
+        }
+        logger.info(f"Added node '{node_id}' of type '{node_class.__name__}'")
+        return node_id
+
+    def _add_node_instance(self, node_instance: "Node", node_id: str | None) -> str:
+        """Handle instance pattern: add_node(node_instance, 'node_id')"""
+        import warnings
+
+        # Generate ID if not provided
+        if node_id is None:
+            node_id = f"node_{uuid.uuid4().hex[:8]}"
+
+        warnings.warn(
+            f"Instance-based API usage detected. Consider using preferred pattern:\n"
+            f"  CURRENT: add_node(<instance>, '{node_id}')\n"
+            f"  PREFERRED: add_node('{node_instance.__class__.__name__}', '{node_id}', {{'param': value}})",
+            UserWarning,
+            stacklevel=3,
+        )
+
+        # Store the instance
+        self.nodes[node_id] = {
+            "instance": node_instance,
+            "type": node_instance.__class__.__name__,
+        }
+        logger.info(
+            f"Added node '{node_id}' with instance of type '{node_instance.__class__.__name__}'"
+        )
+        return node_id
+
+    def _add_node_unified(
         self,
-        node_type: str | type | Any,
+        node_type: str,
         node_id: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> str:
         """
-        Add a node to the workflow.
+        Unified implementation for all add_node patterns.
 
         Args:
-            node_type: Node type name (string), Node class, or Node instance
+            node_type: Node type name (string)
             node_id: Unique identifier for this node (auto-generated if not provided)
-            config: Configuration for the node (ignored if node_type is an instance)
+            config: Configuration for the node
 
         Returns:
-            Node ID (useful for method chaining)
+            Node ID
 
         Raises:
             WorkflowValidationError: If node_id is already used
@@ -80,6 +299,39 @@ class WorkflowBuilder:
         logger.info(f"Added node '{node_id}' of type '{type_name}'")
         return node_id
 
+    # Fluent API methods for backward compatibility
+    def add_node_fluent(
+        self, node_id: str, node_class_or_type: Any, **config
+    ) -> "WorkflowBuilder":
+        """
+        DEPRECATED: Fluent API for backward compatibility.
+        Use add_node(node_type, node_id, config) instead.
+
+        Args:
+            node_id: Node identifier
+            node_class_or_type: Node class or type
+            **config: Node configuration as keyword arguments
+
+        Returns:
+            Self for method chaining
+        """
+        import warnings
+
+        warnings.warn(
+            "Fluent API is deprecated. Use add_node(node_type, node_id, config) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        if hasattr(node_class_or_type, "__name__"):
+            # Node class
+            self.add_node(node_class_or_type.__name__, node_id, config)
+        else:
+            # Assume string type
+            self.add_node(str(node_class_or_type), node_id, config)
+
+        return self
+
     def add_node_instance(self, node_instance: Any, node_id: str | None = None) -> str:
         """
         Add a node instance to the workflow.
@@ -124,7 +376,7 @@ class WorkflowBuilder:
 
     def add_connection(
         self, from_node: str, from_output: str, to_node: str, to_input: str
-    ) -> None:
+    ) -> "WorkflowBuilder":
         """
         Connect two nodes in the workflow.
 
@@ -161,6 +413,7 @@ class WorkflowBuilder:
         self.connections.append(connection)
 
         logger.info(f"Connected '{from_node}.{from_output}' to '{to_node}.{to_input}'")
+        return self
 
     def connect(
         self,
@@ -399,9 +652,21 @@ class WorkflowBuilder:
             # Dict format: {node_id: {type: "...", parameters: {...}}}
             for node_id, node_config in nodes_config.items():
                 node_type = node_config.get("type")
-                node_params = node_config.get(
-                    "parameters", node_config.get("config", {})
-                )
+
+                # Handle parameter naming inconsistencies - prefer 'parameters' over 'config'
+                if "parameters" in node_config:
+                    node_params = node_config["parameters"]
+                elif "config" in node_config:
+                    node_params = node_config["config"]
+                else:
+                    node_params = {}
+
+                # Ensure node_params is a dictionary
+                if not isinstance(node_params, dict):
+                    logger.warning(
+                        f"Node '{node_id}' parameters must be a dict, got {type(node_params)}. Using empty dict."
+                    )
+                    node_params = {}
 
                 if not node_type:
                     raise WorkflowValidationError(
@@ -414,7 +679,21 @@ class WorkflowBuilder:
             for node_config in nodes_config:
                 node_id = node_config.get("id")
                 node_type = node_config.get("type")
-                node_params = node_config.get("config", {})
+
+                # Handle parameter naming inconsistencies - prefer 'parameters' over 'config'
+                if "parameters" in node_config:
+                    node_params = node_config["parameters"]
+                elif "config" in node_config:
+                    node_params = node_config["config"]
+                else:
+                    node_params = {}
+
+                # Ensure node_params is a dictionary
+                if not isinstance(node_params, dict):
+                    logger.warning(
+                        f"Node '{node_id}' parameters must be a dict, got {type(node_params)}. Using empty dict."
+                    )
+                    node_params = {}
 
                 if not node_id:
                     raise WorkflowValidationError("Node ID is required")

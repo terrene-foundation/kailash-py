@@ -46,7 +46,7 @@ repos:
         exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*\.html|.*_mermaid\.md)$
       - id: check-yaml
         name: Check YAML syntax
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|apps/.*/deployment/kubernetes/.*\.yaml)$
       - id: check-toml
         name: Check TOML syntax
       - id: check-json

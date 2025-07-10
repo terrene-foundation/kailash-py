@@ -1,24 +1,32 @@
 # Enterprise Gateway Patterns
 
-*API gateways, external systems integration, and enterprise communication patterns*
+*Single-channel API gateway patterns for REST services and external systems integration*
 
 ## 🌐 Overview
 
-This guide covers enterprise gateway implementation using Kailash SDK's `create_gateway()` function, including API gateway setup, external system integration, real-time communication, multi-tenant support, and service discovery patterns.
+This guide covers enterprise gateway implementation using Kailash SDK's `create_gateway()` function for single-channel API gateway deployment. For multi-channel orchestration (API + CLI + MCP), see [Nexus Patterns](nexus-patterns.md).
+
+**Choose Your Architecture:**
+- **Single-Channel API Gateway**: Use `create_gateway()` for REST-only services
+- **Multi-Channel Platform**: Use `create_nexus()` for unified API, CLI, and MCP orchestration
+
+This guide focuses on single-channel API gateway patterns with the redesigned server architecture.
 
 ## 🚀 Core Gateway Creation
 
 ### Basic Enterprise Gateway
 
 ```python
-from kailash.middleware import create_gateway
-from kailash.middleware.auth import JWTAuthManager
+from kailash.servers.gateway import create_gateway
 
-# Enterprise API gateway with full features
+# Enterprise API gateway with redesigned architecture
 gateway = create_gateway(
     title="Enterprise API Gateway",
-    description="Production-ready gateway with all enterprise features",
+    description="Production-ready single-channel API gateway",
     version="1.0.0",
+
+    # Server type (enterprise is default)
+    server_type="enterprise",  # "enterprise", "durable", "basic"
 
     # CORS configuration
     cors_origins=[
@@ -27,17 +35,17 @@ gateway = create_gateway(
         "https://admin.company.com"
     ],
 
-    # Feature flags
-    enable_docs=True,
-    enable_auth=True,
+    # Enterprise features (enabled by default)
+    enable_durability=True,
+    enable_resource_management=True,
+    enable_async_execution=True,
+    enable_health_checks=True,
 
     # Performance settings
-    max_sessions=1000,
-
-    # Database persistence
-    database_url="postgresql://user:pass@localhost/kailash"
+    max_workers=20
 )
 
+# Returns EnterpriseWorkflowServer instance
 # Run the enterprise gateway
 gateway.run(host="0.0.0.0", port=8000)
 ```
@@ -45,34 +53,44 @@ gateway.run(host="0.0.0.0", port=8000)
 ### Advanced Gateway Configuration
 
 ```python
-from kailash.middleware.auth import MiddlewareAuthManager
+from kailash.servers.gateway import create_gateway
+from kailash.resources.registry import ResourceRegistry
+from kailash.gateway.security import SecretManager
 
-# Custom authentication manager
-auth_manager = MiddlewareAuthManager(
-    secret_key="enterprise-secret-key",
-    token_expiry_hours=24,
-    enable_api_keys=True,
-    enable_audit=True,
-    database_url="postgresql://..."
+# Custom resource management
+resource_registry = ResourceRegistry()
+resource_registry.register_database_pool("main_db",
+    "postgresql://enterprise-db:5432/kailash")
+
+# Enterprise security management
+secret_manager = SecretManager(
+    encryption_key="enterprise-secret-key",
+    key_rotation_days=90,
+    audit_access=True
 )
 
-# Enterprise gateway with custom auth
+# Advanced enterprise gateway
 gateway = create_gateway(
     title="Secure Enterprise Platform",
-    description="Multi-tenant platform with advanced security",
+    description="Advanced single-channel API gateway",
     version="2.0.0",
+
+    # Server configuration
+    server_type="enterprise",
+    max_workers=50,
 
     # Security configuration
     cors_origins=["https://secure.company.com"],
-    enable_docs=True,
-    auth_manager=auth_manager,
 
-    # Enterprise features
-    max_sessions=5000,
-    database_url="postgresql://enterprise-db:5432/kailash",
+    # Enterprise components
+    resource_registry=resource_registry,
+    secret_manager=secret_manager,
 
-    # SSL/TLS (configured at deployment level)
-    # ssl_context=ssl_context
+    # Feature toggles
+    enable_durability=True,
+    enable_resource_management=True,
+    enable_async_execution=True,
+    enable_health_checks=True
 )
 ```
 
@@ -772,7 +790,26 @@ CMD ["python", "gateway_app.py"]
 - **`GET /api/stats`** - Performance statistics
 - **`GET /api/schemas/nodes`** - Node schema discovery
 
+### Server Architecture Options
+
+**Single-Channel API Gateway (This Guide):**
+```python
+from kailash.servers.gateway import create_gateway
+
+# Enterprise API-only gateway
+gateway = create_gateway(server_type="enterprise")  # EnterpriseWorkflowServer
+```
+
+**Multi-Channel Platform (Recommended for New Projects):**
+```python
+from kailash.nexus import create_nexus
+
+# Unified API + CLI + MCP platform
+nexus = create_nexus()  # API, CLI, and MCP channels with session sync
+```
+
 ### Related Enterprise Guides
+- **[Nexus Patterns](nexus-patterns.md)** - Multi-channel orchestration (API + CLI + MCP)
 - **[Security Patterns](security-patterns.md)** - Authentication and authorization
 - **[Middleware Patterns](middleware-patterns.md)** - Advanced middleware setup
 - **[Production Patterns](production-patterns.md)** - Deployment and scaling
@@ -780,4 +817,6 @@ CMD ["python", "gateway_app.py"]
 
 ---
 
-**Ready to build enterprise gateways?** Start with `create_gateway()` and progressively add authentication, real-time communication, and external integrations.
+**Ready to build enterprise gateways?**
+- **Single-channel API**: Start with `create_gateway()` for REST-only services
+- **Multi-channel platform**: Start with `create_nexus()` for unified API, CLI, and MCP orchestration

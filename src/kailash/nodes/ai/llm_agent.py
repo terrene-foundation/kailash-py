@@ -363,6 +363,13 @@ class LLMAgentNode(Node):
                 default={},
                 description="Configuration for tool execution behavior",
             ),
+            "use_real_mcp": NodeParameter(
+                name="use_real_mcp",
+                type=bool,
+                required=False,
+                default=True,
+                description="Use real MCP tool execution instead of mock execution",
+            ),
         }
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -629,12 +636,14 @@ class LLMAgentNode(Node):
             )
 
             # Retrieve MCP context if configured
-            mcp_context_data = self._retrieve_mcp_context(mcp_servers, mcp_context)
+            mcp_context_data = self._retrieve_mcp_context(
+                mcp_servers, mcp_context, kwargs
+            )
 
             # Discover MCP tools if enabled
             discovered_mcp_tools = []
             if auto_discover_tools and mcp_servers:
-                discovered_mcp_tools = self._discover_mcp_tools(mcp_servers)
+                discovered_mcp_tools = self._discover_mcp_tools(mcp_servers, kwargs)
                 # Merge MCP tools with existing tools
                 tools = self._merge_tools(tools, discovered_mcp_tools)
 
@@ -976,7 +985,7 @@ class LLMAgentNode(Node):
             return asyncio.run(coro)
 
     def _retrieve_mcp_context(
-        self, mcp_servers: list[dict], mcp_context: list[str]
+        self, mcp_servers: list[dict], mcp_context: list[str], kwargs: dict = None
     ) -> list[dict[str, Any]]:
         """
         Retrieve context from Model Context Protocol (MCP) servers.
@@ -1043,7 +1052,7 @@ class LLMAgentNode(Node):
         context_data = []
 
         # Check if we should use real MCP implementation
-        use_real_mcp = hasattr(self, "_mcp_client") or self._should_use_real_mcp()
+        use_real_mcp = hasattr(self, "_mcp_client") or self._should_use_real_mcp(kwargs)
 
         if use_real_mcp:
             # Use internal MCP client for real implementation
@@ -1224,14 +1233,25 @@ class LLMAgentNode(Node):
 
         return context_data
 
-    def _should_use_real_mcp(self) -> bool:
+    def _should_use_real_mcp(self, kwargs: dict = None) -> bool:
         """Check if real MCP implementation should be used."""
-        # Check environment variable or configuration
         import os
 
-        return os.environ.get("KAILASH_USE_REAL_MCP", "false").lower() == "true"
+        # 1. Check explicit parameter first (highest priority)
+        if kwargs and "use_real_mcp" in kwargs:
+            return kwargs["use_real_mcp"]
 
-    def _discover_mcp_tools(self, mcp_servers: list[dict]) -> list[dict[str, Any]]:
+        # 2. Check environment variable (fallback)
+        env_value = os.environ.get("KAILASH_USE_REAL_MCP", "").lower()
+        if env_value in ("true", "false"):
+            return env_value == "true"
+
+        # 3. Default to True (real MCP execution)
+        return True
+
+    def _discover_mcp_tools(
+        self, mcp_servers: list[dict], kwargs: dict = None
+    ) -> list[dict[str, Any]]:
         """
         Discover available tools from MCP servers.
 
@@ -1244,7 +1264,7 @@ class LLMAgentNode(Node):
         discovered_tools = []
 
         # Check if we should use real MCP implementation
-        use_real_mcp = hasattr(self, "_mcp_client") or self._should_use_real_mcp()
+        use_real_mcp = hasattr(self, "_mcp_client") or self._should_use_real_mcp(kwargs)
 
         if use_real_mcp:
             try:

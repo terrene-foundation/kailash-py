@@ -1,12 +1,12 @@
 # Comprehensive Node Catalog - Kailash SDK
 
-> **⚠️ Note**: This is the exhaustive 2194-line reference. For most use cases, start with:
+> **⚠️ Note**: This is the exhaustive 2455-line reference. For most use cases, start with:
 > - **[node-index.md](node-index.md)** - 47-line quick reference
 > - **[node-selection-guide.md](node-selection-guide.md)** - 436-line smart selection guide
 
 This reference guide lists all available nodes in the Kailash SDK and their primary use cases. **Always prefer using these specialized nodes over PythonCodeNode when possible.**
 
-*Total: 110+ specialized nodes across 12 categories*
+*Total: 118+ specialized nodes across 13 categories*
 
 ## 🔗 **See Also**
 - **[Fundamentals](../developer/01-fundamentals.md)** - Core concepts and node usage patterns
@@ -24,6 +24,7 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 | Process text with AI | `LLMAgentNode`, `TextSummarizerNode` | AI/ML |
 | Filter/search data | `FilterNode`, `SearchNode` | Transform |
 | Send notifications | `DiscordAlertNode`, `EmailSenderNode` | Alert |
+| Validate code/workflows | `CodeValidationNode`, `WorkflowValidationNode` ⭐ NEW | Transform |
 | Validate data | `DataValidatorNode`, `SchemaValidatorNode` | Transform |
 | Handle authentication | `OAuth2Node`, `JWTValidatorNode` | Authentication |
 | Route based on conditions | `SwitchNode`, `ConditionalRouterNode` | Logic & Control |
@@ -72,7 +73,7 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 │  ├─ General LLM tasks → LLMAgentNode
 │  ├─ Conversational agents → ChatAgent
 │  ├─ Cost-controlled LLM → MonitoredLLMAgentNode
-│  ├─ Iterative refinement → IterativeLLMAgentNode
+│  ├─ Iterative refinement with test-driven convergence → IterativeLLMAgentNode ⭐ ENHANCED
 │  └─ Function calling → FunctionCallingAgent
 ├─ 📖 Text understanding?
 │  ├─ Document Q&A → RetrievalAgent
@@ -142,6 +143,9 @@ This reference guide lists all available nodes in the Kailash SDK and their prim
 │  ├─ Aggregations → AggregatorNode
 │  └─ Complex formulas → Use PythonCodeNode
 ├─ ✅ Validation?
+│  ├─ Code validation → CodeValidationNode ⭐ NEW
+│  ├─ Workflow validation → WorkflowValidationNode ⭐ NEW
+│  ├─ Test execution → TestSuiteExecutorNode ⭐ NEW
 │  ├─ Data validation → DataValidatorNode
 │  ├─ Schema validation → SchemaValidatorNode
 │  ├─ Business rules → BusinessRuleValidatorNode
@@ -482,7 +486,63 @@ workflow.runtime = LocalRuntime()
   node = MonitoredLLMAgentNode(model="gpt-4", budget_limit=10.0, alert_threshold=0.8)
 
   ```
-- **IterativeLLMAgentNode**: LLM agent with iterative refinement capabilities
+- **IterativeLLMAgentNode**: Advanced LLM agent with iterative refinement, test-driven convergence, and real MCP tool execution
+  ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.ai import IterativeLLMAgentNode
+from kailash.nodes.ai.iterative_llm_agent import ConvergenceMode
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+  # Real MCP tool execution (default behavior)
+  node = IterativeLLMAgentNode(
+      model="gpt-4",
+      max_iterations=10,
+      use_real_mcp=True,  # Default: True - executes real MCP tools
+      mcp_servers=[{
+          "name": "data-server",
+          "transport": "stdio",
+          "command": "python",
+          "args": ["-m", "data_mcp_server"]
+      }],
+      discovery_mode="progressive"
+  )
+
+  # Test-driven convergence - agent only stops when deliverables actually work
+  test_driven_node = IterativeLLMAgentNode(
+      model="gpt-4",
+      convergence_mode=ConvergenceMode.TEST_DRIVEN,
+      validation_levels=["syntax", "imports", "semantic"],
+      max_iterations=10,
+      use_real_mcp=True
+  )
+
+  # Hybrid mode - combines satisfaction and validation
+  hybrid_node = IterativeLLMAgentNode(
+      model="gpt-4",
+      convergence_mode=ConvergenceMode.HYBRID,
+      satisfaction_threshold=0.8,
+      validation_required=True,
+      use_real_mcp=True
+  )
+
+  ```
+
+  **Key Features:**
+  - **Real MCP Tool Execution**: Now executes actual MCP tools instead of mock responses (v0.6.5+)
+  - **Test-Driven Convergence**: Validates code actually executes correctly, not just confidence scores
+  - **Three Convergence Modes**: `SATISFACTION` (original), `TEST_DRIVEN` (new), `HYBRID` (combination)
+  - **Progressive MCP Discovery**: Discovers and integrates MCP tools dynamically across iterations
+  - **6-Phase Process**: Discovery → Planning → Execution → Reflection → Convergence → Synthesis
+  - **Validation Integration**: Built-in code validation with sandbox execution
+  - **Iteration Tracking**: Comprehensive state tracking and progress visualization
+  - **Backward Compatibility**: Set `use_real_mcp=False` to use legacy mock execution
+
+  **When to use:** For complex tasks requiring iterative refinement where deliverable quality is critical - code generation, workflow creation, complex analysis. The agent now executes real MCP tools and can iteratively discover and use new tools as needed.
 - **ChatAgent**: Conversational agent with context management
 - **RetrievalAgent**: RAG-enabled agent for document retrieval
 - **FunctionCallingAgent**: Agent with function calling capabilities
@@ -1394,6 +1454,125 @@ workflow.runtime = LocalRuntime()
 - **QueryTextWrapperNode**: Wrap queries with additional context
 - **ContextFormatterNode**: Format context for LLM consumption
 
+### Validation & Testing
+- **CodeValidationNode**: ⭐ **NEW** Comprehensive code validation with multiple validation levels
+  ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.validation import CodeValidationNode
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+  # Multi-level code validation with sandbox execution
+  node = CodeValidationNode(
+      code="def process(data): return {'result': len(data)}",
+      validation_levels=["syntax", "imports", "semantic", "functional"],
+      test_inputs={"data": [1, 2, 3, 4, 5]},
+      expected_schema={"result": int},
+      timeout=30,
+      sandbox=True
+  )
+
+  ```
+
+  **Key Features:**
+  - **5 Validation Levels**: syntax, imports, semantic, functional, integration
+  - **Sandbox Execution**: Safe code execution with timeout and resource limits
+  - **Schema Validation**: Verify output structure matches expectations
+  - **Test-Driven Validation**: Execute code with real inputs to verify correctness
+  - **Comprehensive Reporting**: Detailed validation results with suggestions
+
+  **When to use:** For validating generated code, testing code snippets, ensuring code quality in automated workflows, validating LLM-generated code before execution.
+
+- **WorkflowValidationNode**: ⭐ **NEW** Validate complete workflow definitions
+  ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.validation import WorkflowValidationNode
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+  # Validate workflow structure and execution
+  node = WorkflowValidationNode(
+      workflow_code='''
+from kailash.workflow.builder import WorkflowBuilder
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = data"})
+workflow.connect("reader", "processor", {"data": "data"})
+      ''',
+      validate_execution=True,
+      expected_nodes=["reader", "processor"],
+      required_connections=[{"from": "reader", "to": "processor"}]
+  )
+
+  ```
+
+  **Key Features:**
+  - **Syntax Validation**: Verify workflow code syntax
+  - **Structure Validation**: Check node configurations and connections
+  - **Execution Testing**: Optionally test workflow execution with sample data
+  - **Node Verification**: Ensure required nodes are present
+  - **Connection Validation**: Verify required connections exist
+
+  **When to use:** For validating dynamically generated workflows, testing workflow definitions before deployment, ensuring workflow structural integrity.
+
+- **TestSuiteExecutorNode**: ⭐ **NEW** Execute comprehensive test suites against code
+  ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.validation import TestSuiteExecutorNode
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+  # Execute comprehensive test suite
+  node = TestSuiteExecutorNode(
+      code="def fibonacci(n): return n if n <= 1 else fibonacci(n-1) + fibonacci(n-2)",
+      test_suite=[
+          {
+              "name": "test_base_case_0",
+              "inputs": {"n": 0},
+              "expected_output": {"result": 0}
+          },
+          {
+              "name": "test_base_case_1",
+              "inputs": {"n": 1},
+              "expected_output": {"result": 1}
+          },
+          {
+              "name": "test_fibonacci_5",
+              "inputs": {"n": 5},
+              "expected_output": {"result": 5}
+          }
+      ],
+      stop_on_failure=False
+  )
+
+  ```
+
+  **Key Features:**
+  - **Multiple Test Cases**: Run comprehensive test suites with multiple scenarios
+  - **Input/Output Validation**: Verify expected outputs match actual results
+  - **Detailed Reporting**: Test-by-test results with pass/fail status
+  - **Failure Modes**: Option to stop on first failure or run all tests
+  - **Performance Tracking**: Execution time and performance metrics
+
+  **When to use:** For thorough testing of generated code, regression testing, ensuring code meets specifications across multiple scenarios.
+
+- **DataValidatorNode**: Validate data against schemas and business rules
+- **SchemaValidatorNode**: JSON schema validation for structured data
+- **BusinessRuleValidatorNode**: Custom business rule validation
+- **DataQualityNode**: Data quality assessment and scoring
+
 ## Authentication Nodes
 
 ### Enterprise Authentication & Authorization
@@ -2091,6 +2270,266 @@ workflow.runtime = LocalRuntime()
   node = AuditLogNode(compliance_tags=["SOC2", "HIPAA"])
 
   ```
+
+## Monitoring & Observability Nodes
+
+### TransactionMetricsNode
+
+**Purpose**: Collect and aggregate transaction performance metrics with enterprise export formats.
+
+**Use cases**:
+- Transaction timing and latency tracking
+- Success rate monitoring
+- Throughput measurement
+- Custom metric collection
+- Export to Prometheus, CloudWatch, DataDog, OpenTelemetry
+
+**Example**:
+```python
+from kailash.nodes.monitoring import TransactionMetricsNode
+
+# Initialize metrics collector
+metrics = TransactionMetricsNode({
+    "aggregation_window": 60,    # 1-minute windows
+    "retention_period": 3600,    # Keep 1 hour of data
+    "export_format": "prometheus",
+    "custom_percentiles": [50, 75, 90, 95, 99]
+})
+
+# Track transaction
+result = metrics.execute(
+    operation="start_transaction",
+    transaction_id="order_123",
+    operation_type="order_processing"
+)
+
+# Complete with metrics
+result = metrics.execute(
+    operation="end_transaction",
+    transaction_id="order_123",
+    status="success",
+    custom_metrics={"items": 5, "total": 150.00}
+)
+
+# Get aggregated metrics
+result = metrics.execute(
+    operation="get_metrics",
+    metric_types=["latency", "throughput", "success_rate"],
+    export_format="prometheus"
+)
+```
+
+### TransactionMonitorNode
+
+**Purpose**: Real-time transaction monitoring with distributed tracing and alerting.
+
+**Use cases**:
+- Live transaction tracing
+- Distributed tracing (OpenTelemetry compatible)
+- Real-time alerting on thresholds
+- Transaction correlation
+- Performance bottleneck identification
+
+**Example**:
+```python
+from kailash.nodes.monitoring import TransactionMonitorNode
+
+# Initialize monitor with alerts
+monitor = TransactionMonitorNode()
+
+result = monitor.execute(
+    operation="start_monitoring",
+    monitoring_interval=1.0,
+    alert_thresholds={
+        "latency_ms": 1000,
+        "error_rate": 0.05,
+        "concurrent_transactions": 100
+    }
+)
+
+# Create trace
+result = monitor.execute(
+    operation="create_trace",
+    trace_id="trace_001",
+    operation_name="api_request",
+    metadata={"endpoint": "/api/orders", "method": "POST"}
+)
+
+# Add spans
+result = monitor.execute(
+    operation="add_span",
+    trace_id="trace_001",
+    span_id="db_query",
+    operation_name="database_query",
+    start_time=time.time()
+)
+
+# Get alerts
+result = monitor.execute(operation="get_alerts")
+```
+
+### DeadlockDetectorNode
+
+**Purpose**: Detect and resolve database deadlocks using wait-for graph analysis.
+
+**Use cases**:
+- Database deadlock detection
+- Lock dependency graph visualization
+- Automatic victim selection
+- Deadlock prevention strategies
+- Lock timeout management
+
+**Example**:
+```python
+from kailash.nodes.monitoring import DeadlockDetectorNode
+
+# Initialize detector
+detector = DeadlockDetectorNode({
+    "detection_interval": 5.0,
+    "timeout_threshold": 30.0,
+    "victim_selection": "youngest"  # or "oldest", "lowest_cost"
+})
+
+# Start monitoring
+result = detector.execute(operation="start_monitoring")
+
+# Register lock acquisition
+result = detector.execute(
+    operation="register_lock",
+    transaction_id="txn_001",
+    resource_id="table_orders",
+    lock_type="EXCLUSIVE"
+)
+
+# Register wait condition
+result = detector.execute(
+    operation="register_wait",
+    transaction_id="txn_001",
+    waiting_for_transaction_id="txn_002",
+    resource_id="table_users"
+)
+
+# Detect deadlocks
+result = detector.execute(operation="detect_deadlocks")
+
+if result["deadlocks_detected"] > 0:
+    # Automatic resolution
+    detector.execute(
+        operation="resolve_deadlock",
+        deadlock_id=result["deadlocks"][0]["deadlock_id"],
+        resolution_strategy="abort_victim"
+    )
+```
+
+### RaceConditionDetectorNode
+
+**Purpose**: Detect race conditions in concurrent resource access patterns.
+
+**Use cases**:
+- Concurrent access analysis
+- Race condition identification
+- Thread safety validation
+- Resource contention detection
+- Access pattern visualization
+
+**Example**:
+```python
+from kailash.nodes.monitoring import RaceConditionDetectorNode
+
+# Initialize detector
+detector = RaceConditionDetectorNode({
+    "detection_window": 10.0,
+    "confidence_threshold": 0.8
+})
+
+# Start monitoring
+result = detector.execute(operation="start_monitoring")
+
+# Register resource access
+result = detector.execute(
+    operation="register_access",
+    access_id="access_001",
+    resource_id="shared_counter",
+    access_type="read_write",  # or "read", "write"
+    thread_id="thread_1"
+)
+
+# End access
+result = detector.execute(
+    operation="end_access",
+    access_id="access_001"
+)
+
+# Detect race conditions
+result = detector.execute(operation="detect_races")
+
+for race in result.get("races_detected", []):
+    print(f"Race condition: {race['race_type']}")
+    print(f"Confidence: {race['confidence']}")
+    print(f"Resources: {race['resources']}")
+```
+
+### PerformanceAnomalyNode
+
+**Purpose**: Detect performance anomalies using statistical baselines and ML techniques.
+
+**Use cases**:
+- Performance baseline learning
+- Anomaly detection (statistical & ML)
+- Trend analysis
+- Seasonal pattern recognition
+- Automatic alerting
+
+**Example**:
+```python
+from kailash.nodes.monitoring import PerformanceAnomalyNode
+
+# Initialize detector
+detector = PerformanceAnomalyNode()
+
+# Initialize baseline
+result = detector.execute(
+    operation="initialize_baseline",
+    metric_name="api_response_time",
+    sensitivity=0.8,
+    min_samples=30,
+    detection_window=300  # 5 minutes
+)
+
+# Feed metric data
+for value in response_times:
+    result = detector.execute(
+        operation="add_metric",
+        metric_name="api_response_time",
+        value=value,
+        tags={"endpoint": "/api/users", "method": "GET"}
+    )
+
+# Detect anomalies
+result = detector.execute(
+    operation="detect_anomalies",
+    metric_names=["api_response_time"],
+    detection_methods=["statistical", "threshold_based", "iqr"]
+)
+
+# Handle anomalies
+for anomaly in result.get("anomalies_detected", []):
+    if anomaly["severity"] == "critical":
+        # Trigger emergency response
+        send_alert(anomaly)
+```
+
+**Best Practices**:
+- Layer multiple monitoring nodes for comprehensive coverage
+- Set thresholds based on baseline performance
+- Monitor the monitors (keep overhead < 5%)
+- Use appropriate sampling rates for high-volume systems
+- Regularly update performance baselines
+
+**See Also**:
+- [Transaction Monitoring Cheatsheet](../cheatsheet/048-transaction-monitoring.md)
+- [Monitoring Guide](monitoring-nodes.md)
+- [Enterprise Production Patterns](../enterprise/production-patterns.md)
 
 ## Middleware Nodes
 
