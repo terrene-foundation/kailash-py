@@ -1200,7 +1200,7 @@ Analyze content for:
 Provide detailed moderation decisions with reasoning.""",
                 "prompt": """Moderate these content items:
 
-{content_items}
+{content_data.content_items}
 
 For each item, provide moderation analysis in JSON format:
 {{

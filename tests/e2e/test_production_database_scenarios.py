@@ -31,6 +31,70 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 class TestProductionDatabaseScenarios:
     """Real-world database pattern tests."""
 
+    @pytest.fixture(autouse=True)
+    async def setup_database(self):
+        """Set up test database with required tables."""
+        from kailash.nodes.data import SQLDatabaseNode
+
+        connection_string = f"postgresql://{DATABASE_CONFIG['user']}:{DATABASE_CONFIG['password']}@{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{DATABASE_CONFIG['database']}"
+
+        # Create tables
+        setup_node = SQLDatabaseNode(
+            connection_string=connection_string, database_type="postgresql"
+        )
+
+        # Create users table
+        setup_node.execute(
+            operation="execute",
+            query="""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100),
+                email VARCHAR(200),
+                status VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+        )
+
+        # Create transactions table
+        setup_node.execute(
+            operation="execute",
+            query="""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                amount DECIMAL(10, 2),
+                status VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+        )
+
+        # Insert test data
+        setup_node.execute(
+            operation="execute",
+            query="""
+            INSERT INTO users (username, email, status) VALUES
+            ('user1', 'user1@example.com', 'active'),
+            ('user2', 'user2@example.com', 'active'),
+            ('user3', 'user3@example.com', 'inactive')
+            ON CONFLICT DO NOTHING
+            """,
+        )
+
+        setup_node.execute(
+            operation="execute",
+            query="""
+            INSERT INTO transactions (user_id, amount, status) VALUES
+            (1, 100.00, 'completed'),
+            (1, 50.00, 'completed'),
+            (2, 200.00, 'completed'),
+            (2, 75.00, 'pending')
+            ON CONFLICT DO NOTHING
+            """,
+        )
+
     async def test_cross_database_analytics(self):
         """Test analytics across multiple databases.
 
