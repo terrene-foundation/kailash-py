@@ -534,6 +534,8 @@ class TestTransactionMetricsNode:
             mock_async_run.return_value = {
                 "metrics": {},
                 "transaction_count": 0,
+                "total_transactions": 0,  # Added new required field
+                "success_rate": 1.0,  # Added new required field
                 "aggregations": {},
                 "export_format": "json",
                 "timestamp": datetime.now(UTC).isoformat(),

@@ -23,15 +23,12 @@ import pytest_asyncio
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# MCP Platform imports
-from apps.mcp_platform.core.core.gateway import MCPGateway
-from apps.mcp_platform.core.core.models import MCPServer, MCPTool, ServerStatus
-from apps.mcp_platform.core.core.registry import MCPRegistry
-from apps.mcp_platform.core.core.security import MCPSecurityManager
-from kailash.core.resilience.circuit_breaker import ConnectionCircuitBreaker
-
 # Service discovery and resilience imports
 from kailash.edge.discovery import EdgeDiscovery
+from kailash.mcp_server.server import MCPServer as MCPServerBase
+
+# MCP Platform imports
+from kailash.middleware.communication.api_gateway import create_gateway
 from kailash.nodes.admin.tenant_isolation import TenantIsolationManager
 from kailash.nodes.ai import LLMAgentNode
 

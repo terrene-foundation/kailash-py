@@ -111,7 +111,7 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 **🏥 Enterprise MCP Workflows**: Complete healthcare HIPAA, finance SOX, and multi-tenant patterns with 4 production-grade enterprise nodes. See [cheatsheet/040-enterprise-mcp-workflows.md](cheatsheet/040-enterprise-mcp-workflows.md).
 
-**📊 Transaction Monitoring**: Enterprise-grade transaction metrics, deadlock detection, race condition analysis, and performance anomaly detection with 5 production-tested monitoring nodes. See [cheatsheet/048-transaction-monitoring.md](cheatsheet/048-transaction-monitoring.md) and [nodes/monitoring-nodes.md](nodes/monitoring-nodes.md).
+**📊 Transaction Monitoring**: Enterprise-grade transaction metrics, deadlock detection, race condition analysis, and performance anomaly detection with 5 production-tested monitoring nodes. **v0.6.6+ Enhanced**: New operations (`complete_transaction`, `acquire_resource`, `request_resource`, `complete_operation`), success rate calculations, alias support, and improved AsyncNode event loop handling. See [cheatsheet/048-transaction-monitoring.md](cheatsheet/048-transaction-monitoring.md) and [nodes/monitoring-nodes.md](nodes/monitoring-nodes.md).
 
 **🔄 Distributed Transaction Management**: Enterprise-grade transaction patterns with automatic pattern selection. Supports Saga pattern for high availability and Two-Phase Commit for strong consistency. Includes compensation logic, state persistence, and recovery mechanisms. Complete with 122 unit tests and 23 integration tests. See [cheatsheet/049-distributed-transactions.md](cheatsheet/049-distributed-transactions.md) and [nodes/transaction-nodes.md](nodes/transaction-nodes.md).
 
@@ -123,9 +123,17 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 **⚡ Redis Query Cache**: Enterprise-grade query result caching with Redis backend. Features automatic cache key generation, TTL management, pattern-based invalidation, tenant isolation, and comprehensive health monitoring. Supports multiple invalidation strategies (TTL, pattern-based, event-based) with production-tested performance. Complete with 40 unit tests and 8 integration tests. See [cheatsheet/053-query-cache-patterns.md](cheatsheet/053-query-cache-patterns.md) and [developer/16-query-cache-guide.md](developer/16-query-cache-guide.md).
 
+**🚀 Nexus Production Hardening** ⭐ **NEW** (2025-07-10): Enterprise-grade production deployment with 100% hardening complete. Features complete Terraform infrastructure automation (AWS EKS, RDS, ElastiCache), performance baseline validation (31.8M ops/sec), zero-vulnerability security compliance, and comprehensive operational documentation. Nexus is now **production-ready** with enterprise monitoring, authentication, and infrastructure automation. See [../apps/kailash-nexus/docs/operations/](../apps/kailash-nexus/docs/operations/) and [../apps/kailash-nexus/docs/performance/](../apps/kailash-nexus/docs/performance/).
+
+**🏗️ DataFlow Architectural Modernization** ⭐ **ACTIVE** (TODO-107): DataFlow framework is undergoing architectural refactoring from monolithic structure to modern modular design for enhanced maintainability and developer experience. All existing functionality remains fully compatible during transition. See [../apps/kailash-dataflow/docs/adr/](../apps/kailash-dataflow/docs/adr/) for architecture decisions.
+
 ## 🏗️ Architecture Decisions First
 
 **⚠️ STOP! Before building any app, make these critical decisions:**
+
+### 🔗 App Frameworks Navigation
+- **DataFlow (Database)**: [../apps/kailash-dataflow/CLAUDE.md](../apps/kailash-dataflow/CLAUDE.md) - Zero-config database with enterprise power
+- **Nexus (Multi-Channel)**: [../apps/kailash-nexus/CLAUDE.md](../apps/kailash-nexus/CLAUDE.md) - Unified API, CLI, MCP platform
 
 ### 📋 Decision Matrix → [decision-matrix.md](decision-matrix.md)
 

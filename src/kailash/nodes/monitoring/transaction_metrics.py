@@ -230,6 +230,16 @@ class TransactionMetricsNode(AsyncNode):
                 type=int,
                 description="Number of transactions processed",
             ),
+            "total_transactions": NodeParameter(
+                name="total_transactions",
+                type=int,
+                description="Total number of transactions (alias for transaction_count)",
+            ),
+            "success_rate": NodeParameter(
+                name="success_rate",
+                type=float,
+                description="Success rate of transactions (0.0 to 1.0)",
+            ),
             "aggregations": NodeParameter(
                 name="aggregations", type=dict, description="Aggregated metric data"
             ),
@@ -253,6 +263,8 @@ class TransactionMetricsNode(AsyncNode):
                 return await self._start_transaction(**kwargs)
             elif operation == "end_transaction":
                 return await self._end_transaction(**kwargs)
+            elif operation == "complete_transaction":
+                return await self._end_transaction(**kwargs)  # Same as end_transaction
             elif operation == "get_metrics":
                 return await self._get_metrics(**kwargs)
             elif operation == "get_aggregated":
@@ -289,6 +301,8 @@ class TransactionMetricsNode(AsyncNode):
         return {
             "metrics": {"transaction_id": transaction_id, "status": "started"},
             "transaction_count": 1,
+            "total_transactions": 1,  # Alias for backward compatibility
+            "success_rate": 1.0,  # Starting transaction is optimistically successful
             "aggregations": {},
             "export_format": "json",
             "timestamp": datetime.now(UTC).isoformat(),
@@ -335,6 +349,10 @@ class TransactionMetricsNode(AsyncNode):
                 "status": metric.status,
             },
             "transaction_count": 1,
+            "total_transactions": 1,  # Alias for backward compatibility
+            "success_rate": (
+                1.0 if metric.status == "success" else 0.0
+            ),  # Based on this transaction
             "aggregations": {},
             "export_format": "json",
             "timestamp": datetime.now(UTC).isoformat(),
@@ -355,6 +373,11 @@ class TransactionMetricsNode(AsyncNode):
         else:
             filtered_metrics = self._completed_transactions
 
+        # Calculate success rate
+        total_metrics = len(filtered_metrics)
+        successful_metrics = len([m for m in filtered_metrics if m.status == "success"])
+        success_rate = successful_metrics / total_metrics if total_metrics > 0 else 1.0
+
         # Format output
         if export_format == MetricExportFormat.JSON:
             if include_raw:
@@ -363,6 +386,7 @@ class TransactionMetricsNode(AsyncNode):
                 metrics_data = {
                     "transaction_count": len(filtered_metrics),
                     "metric_names": list(set(m.name for m in filtered_metrics)),
+                    "success_rate": success_rate,
                 }
         else:
             metrics_data = self._format_metrics(filtered_metrics, export_format)
@@ -370,6 +394,10 @@ class TransactionMetricsNode(AsyncNode):
         return {
             "metrics": metrics_data,
             "transaction_count": len(filtered_metrics),
+            "total_transactions": len(
+                filtered_metrics
+            ),  # Alias for backward compatibility
+            "success_rate": success_rate,  # Add success rate to top level
             "aggregations": {},
             "export_format": export_format.value,
             "timestamp": datetime.now(UTC).isoformat(),
@@ -436,11 +464,25 @@ class TransactionMetricsNode(AsyncNode):
                 aggregations, export_format
             )
 
+        transaction_count = (
+            sum(agg.count for agg in aggregations.values()) if aggregations else 0
+        )
+
+        # Calculate overall success rate from aggregations
+        total_success = (
+            sum(agg.success_count for agg in aggregations.values())
+            if aggregations
+            else 0
+        )
+        success_rate = (
+            total_success / transaction_count if transaction_count > 0 else 1.0
+        )
+
         return {
             "metrics": formatted_metrics,
-            "transaction_count": (
-                sum(agg.count for agg in aggregations.values()) if aggregations else 0
-            ),
+            "transaction_count": transaction_count,
+            "total_transactions": transaction_count,  # Alias for backward compatibility
+            "success_rate": success_rate,  # Calculated from aggregations
             "aggregations": serialized_aggregations,
             "export_format": export_format.value,
             "timestamp": datetime.now(UTC).isoformat(),

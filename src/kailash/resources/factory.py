@@ -390,7 +390,7 @@ class CacheFactory(ResourceFactory):
             async def get(self, key: str) -> Any:
                 return self._cache.get(key)
 
-            async def set(self, key: str, value: Any, expire: int = None) -> None:
+            async def set(self, key: str, value: Any, ttl: int = None) -> None:
                 self._cache[key] = value
                 # TODO: Implement expiration
 

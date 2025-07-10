@@ -46,10 +46,13 @@ class AsyncNode(Node):
     """
 
     def execute(self, **runtime_inputs) -> dict[str, Any]:
-        """Execute the node synchronously by running async code in a new event loop.
+        """Execute the node synchronously by running async code with proper event loop handling.
 
-        This override allows AsyncNode to work with synchronous runtimes like LocalRuntime
-        by wrapping the async execution in a synchronous interface.
+        This enhanced implementation handles all event loop scenarios:
+        1. No event loop: Create new one with asyncio.run()
+        2. Event loop running: Use ThreadPoolExecutor with isolated loop
+        3. Threaded contexts: Proper thread-safe execution
+        4. Windows compatibility: ProactorEventLoopPolicy support
 
         Args:
             **runtime_inputs: Runtime inputs for node execution
@@ -62,7 +65,9 @@ class AsyncNode(Node):
             NodeExecutionError: If execution fails
         """
         import asyncio
+        import concurrent.futures
         import sys
+        import threading
 
         # For sync execution, we always create a new event loop
         # This avoids complexity with nested loops and ensures clean execution
@@ -70,22 +75,57 @@ class AsyncNode(Node):
             # Windows requires special handling
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+        # Check if we're in a thread without an event loop
+        current_thread = threading.current_thread()
+        is_main_thread = isinstance(current_thread, threading._MainThread)
+
         # Run the async method - handle existing event loop
         try:
             # Try to get current event loop
             loop = asyncio.get_running_loop()
+            # Event loop is running - need to run in separate thread
+            return self._execute_in_thread(**runtime_inputs)
         except RuntimeError:
-            # No event loop running, safe to use asyncio.run()
-            return asyncio.run(self.execute_async(**runtime_inputs))
-        else:
-            # Event loop is running, create a task
-            import concurrent.futures
+            # No event loop running
+            if is_main_thread:
+                # Main thread without loop - safe to use asyncio.run()
+                return asyncio.run(self.execute_async(**runtime_inputs))
+            else:
+                # Non-main thread without loop - create new loop
+                return self._execute_in_new_loop(**runtime_inputs)
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(
-                    asyncio.run, self.execute_async(**runtime_inputs)
-                )
-                return future.result()
+    def _execute_in_thread(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute async code in a separate thread with its own event loop."""
+        import asyncio
+        import concurrent.futures
+
+        def run_in_new_loop():
+            """Run async code in a completely new event loop."""
+            # Create fresh event loop for this thread
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(self.execute_async(**runtime_inputs))
+            finally:
+                new_loop.close()
+                asyncio.set_event_loop(None)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_new_loop)
+            return future.result()
+
+    def _execute_in_new_loop(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute async code by creating a new event loop in current thread."""
+        import asyncio
+
+        # Create and set new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(self.execute_async(**runtime_inputs))
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
 
     def run(self, **kwargs) -> dict[str, Any]:
         """Synchronous run is not supported for AsyncNode.

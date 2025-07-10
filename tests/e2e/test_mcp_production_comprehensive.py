@@ -41,13 +41,20 @@ from kailash.nodes.data import JSONReaderNode
 # SDK imports for real functionality
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
+from tests.utils.docker_config import (
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+    skip_if_no_docker,
+    skip_if_no_postgres,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.e2e
 @pytest.mark.requires_docker
+@skip_if_no_docker()
+@skip_if_no_postgres()
 class TestMCPProductionE2E:
     """
     Production-quality E2E tests for MCP functionality.
@@ -611,6 +618,8 @@ result = {{
 @pytest.mark.requires_docker
 @pytest.mark.slow
 @pytest.mark.asyncio
+@skip_if_no_docker()
+@skip_if_no_postgres()
 async def test_mcp_production_comprehensive():
     """
     Comprehensive production test combining all MCP functionality.

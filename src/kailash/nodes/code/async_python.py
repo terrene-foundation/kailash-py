@@ -783,7 +783,7 @@ class AsyncPythonCodeNode(AsyncNode):
                 "max_concurrent_tasks",
                 "max_memory_mb",
                 "imports",
-                "config",
+                # Note: "config" removed - it's a valid runtime parameter name
             }
             runtime_inputs = {k: v for k, v in kwargs.items() if k not in config_params}
 

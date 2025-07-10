@@ -160,6 +160,18 @@ class TransactionMonitorNode(AsyncNode):
                 required=True,
                 description="Operation (start_monitoring, stop_monitoring, create_trace, add_span, finish_span, get_trace, get_alerts)",
             ),
+            "transaction_id": NodeParameter(
+                name="transaction_id",
+                type=str,
+                required=False,
+                description="Transaction identifier for monitoring operations",
+            ),
+            "success": NodeParameter(
+                name="success",
+                type=bool,
+                required=False,
+                description="Whether the transaction completed successfully",
+            ),
             "trace_id": NodeParameter(
                 name="trace_id",
                 type=str,
@@ -292,6 +304,12 @@ class TransactionMonitorNode(AsyncNode):
                 return await self._start_monitoring(**kwargs)
             elif operation == "stop_monitoring":
                 return await self._stop_monitoring(**kwargs)
+            elif operation == "start_transaction":
+                return await self._start_transaction(**kwargs)
+            elif operation == "complete_transaction":
+                return await self._complete_transaction(**kwargs)
+            elif operation == "get_monitoring_status":
+                return await self._get_monitoring_status(**kwargs)
             elif operation == "create_trace":
                 return await self._create_trace(**kwargs)
             elif operation == "add_span":
@@ -793,6 +811,119 @@ class TransactionMonitorNode(AsyncNode):
         import asyncio
 
         return asyncio.run(self.async_run(**kwargs))
+
+    async def _start_transaction(self, **kwargs) -> Dict[str, Any]:
+        """Start monitoring a specific transaction."""
+        transaction_id = kwargs.get("transaction_id", str(uuid.uuid4()))
+        transaction_type = kwargs.get("transaction_type", "default")
+        metadata = kwargs.get("metadata", {})
+
+        # Create trace for transaction
+        trace_id = str(uuid.uuid4())
+        span_id = str(uuid.uuid4())
+
+        # Store transaction info
+        self._active_traces[trace_id] = {
+            "transaction_id": transaction_id,
+            "transaction_type": transaction_type,
+            "start_time": time.time(),
+            "metadata": metadata,
+            "spans": [span_id],
+            "status": "active",
+        }
+
+        self.logger.info(f"Started transaction monitoring for {transaction_id}")
+
+        return {
+            "monitoring_status": "transaction_started",
+            "trace_data": {"trace_id": trace_id, "transaction_id": transaction_id},
+            "span_data": {"span_id": span_id, "operation": "transaction_start"},
+            "alerts": [],
+            "metrics": {"active_transactions": len(self._active_traces)},
+            "correlation_id": transaction_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": "success",
+        }
+
+    async def _complete_transaction(self, **kwargs) -> Dict[str, Any]:
+        """Complete a transaction and update monitoring status."""
+        self.logger.debug(f"Complete transaction called with kwargs: {kwargs}")
+        transaction_id = kwargs.get("transaction_id")
+        status = kwargs.get("status", "completed")
+
+        if not transaction_id:
+            raise ValueError(
+                f"transaction_id is required for complete_transaction. Received kwargs: {kwargs}"
+            )
+
+        # Mark the transaction as completed in active traces
+        if transaction_id in self._active_traces:
+            trace_data = self._active_traces[transaction_id]
+            trace_data["end_time"] = time.time()
+            trace_data["status"] = status
+            trace_data["duration"] = trace_data["end_time"] - trace_data.get(
+                "start_time", 0
+            )
+
+            # Move to completed traces if we track them
+            # For now, just mark as completed in place
+
+        return {
+            "monitoring_active": self._monitoring_active,
+            "transaction_id": transaction_id,
+            "transaction_status": status,
+            "monitoring_status": "transaction_completed",
+            "trace_data": {
+                "trace_id": f"trace_{transaction_id}",
+                "transaction_id": transaction_id,
+            },
+            "span_data": {
+                "span_id": f"span_{transaction_id}",
+                "operation": "transaction_complete",
+            },
+            "alerts": [],
+            "metrics": {"active_transactions": len(self._active_traces)},
+            "correlation_id": transaction_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": "success",
+        }
+
+    async def _get_monitoring_status(self, **kwargs) -> Dict[str, Any]:
+        """Get current monitoring status and metrics."""
+        active_traces_count = len(self._active_traces)
+        active_spans_count = sum(
+            len(trace_data.get("spans", []))
+            for trace_data in self._active_traces.values()
+        )
+
+        # Calculate performance metrics
+        current_time = time.time()
+        recent_traces = [
+            trace
+            for trace in self._active_traces.values()
+            if current_time - trace.get("start_time", 0) < 300  # Last 5 minutes
+        ]
+
+        status_info = {
+            "monitoring_active": self._monitoring_active,
+            "total_active_traces": active_traces_count,
+            "total_active_spans": active_spans_count,
+            "recent_traces_5min": len(recent_traces),
+            "sampling_rate": self._trace_sampling_rate,
+            "alert_thresholds": self._alert_thresholds,
+            "background_tasks": len(self._background_tasks),
+        }
+
+        return {
+            "monitoring_status": "active" if self._monitoring_active else "inactive",
+            "trace_data": {"active_traces": active_traces_count},
+            "span_data": {"active_spans": active_spans_count},
+            "alerts": [],
+            "metrics": status_info,
+            "correlation_id": str(uuid.uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": "success",
+        }
 
     async def cleanup(self):
         """Cleanup resources when node is destroyed."""

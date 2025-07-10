@@ -16,9 +16,9 @@ result = metrics.execute(
     metadata={"user_id": "user123", "endpoint": "/api/orders"}
 )
 
-# Complete transaction
+# Complete transaction (can also use complete_transaction)
 result = metrics.execute(
-    operation="end_transaction",
+    operation="end_transaction",  # or "complete_transaction"
     transaction_id="txn_001",
     status="success"
 )
@@ -26,10 +26,11 @@ result = metrics.execute(
 # Get aggregated metrics
 result = metrics.execute(
     operation="get_metrics",
-    metric_types=["latency", "throughput", "success_rate"],
-    time_range=300  # Last 5 minutes
+    include_raw=True,
+    export_format="json"
 )
-print(f"P95 latency: {result['latency']['p95']}ms")
+print(f"Success rate: {result['success_rate']}")
+print(f"Total transactions: {result['total_transactions']}")
 ```
 
 ## Real-time Transaction Monitor - Quick Start
@@ -71,16 +72,26 @@ print(f"Trace status: {result.get('monitoring_status', 'unknown')}")
 ```python
 from kailash.nodes.monitoring import DeadlockDetectorNode
 
-# Start deadlock monitoring
+# Initialize and start deadlock monitoring
 detector = DeadlockDetectorNode()
+result = detector.execute(operation="initialize")
 result = detector.execute(operation="start_monitoring")
 
-# Register lock acquisition
+# Register lock acquisition (can also use acquire_resource)
 result = detector.execute(
-    operation="register_lock",
+    operation="register_lock",  # or "acquire_resource"
     transaction_id="txn_003",
     resource_id="table_users",
     lock_type="EXCLUSIVE"
+)
+
+# Request a resource (simplified E2E testing operation)
+result = detector.execute(
+    operation="request_resource",
+    transaction_id="txn_004",
+    resource_id="table_orders",
+    resource_type="database_table",
+    lock_type="SHARED"
 )
 
 # Check for deadlocks
@@ -100,13 +111,21 @@ from kailash.nodes.monitoring import RaceConditionDetectorNode
 detector = RaceConditionDetectorNode()
 result = detector.execute(operation="start_monitoring")
 
-# Register resource access
+# Register resource access or operation
 result = detector.execute(
-    operation="register_access",
-    access_id="access_001",
+    operation="register_access",  # or "register_operation"
+    access_id="access_001",       # or "operation_id" for register_operation
     resource_id="shared_counter",
     access_type="read_write",
     thread_id="thread_1"
+)
+
+# Complete an operation (finalize race detection analysis)
+result = detector.execute(
+    operation="complete_operation",
+    operation_id="access_001",
+    resource_id="shared_counter",
+    success=True
 )
 
 # Detect race conditions
@@ -363,6 +382,98 @@ workflow.connect("processor", "result", mapping={"complete_metrics": "final_resu
 # Execute with monitoring
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
+```
+
+## New Operations & Enhancements (v0.6.6+)
+
+### Enhanced Operation Support
+
+```python
+# TransactionMetricsNode - New complete_transaction operation
+metrics = TransactionMetricsNode()
+result = metrics.execute(
+    operation="complete_transaction",  # Alias for end_transaction
+    transaction_id="txn_123",
+    success=True  # Boolean success parameter
+)
+print(f"Success rate: {result['success_rate']}")  # New field
+print(f"Total transactions: {result['total_transactions']}")  # New alias field
+```
+
+### DeadlockDetectorNode - Enhanced Operations
+
+```python
+# New initialize operation
+detector = DeadlockDetectorNode()
+result = detector.execute(
+    operation="initialize",
+    deadlock_timeout=30.0,
+    cycle_detection_enabled=True
+)
+
+# Acquire/release resource aliases
+detector.execute(
+    operation="acquire_resource",  # Alias for register_lock
+    transaction_id="txn_123",
+    resource_id="table_users",
+    lock_type="exclusive"
+)
+
+detector.execute(
+    operation="release_resource",  # Alias for release_lock
+    transaction_id="txn_123",
+    resource_id="table_users"
+)
+
+# Request resource for E2E scenarios
+detector.execute(
+    operation="request_resource",
+    transaction_id="txn_456",
+    resource_id="table_orders",
+    resource_type="database_table",
+    lock_type="SHARED"
+)
+```
+
+### RaceConditionDetectorNode - Complete Operation Cycle
+
+```python
+detector = RaceConditionDetectorNode()
+
+# Register operation
+detector.execute(
+    operation="register_operation",
+    operation_id="op_123",
+    resource_id="shared_resource",
+    thread_id="thread_1"
+)
+
+# Complete operation with final analysis
+result = detector.execute(
+    operation="complete_operation",  # New operation
+    operation_id="op_123",
+    resource_id="shared_resource",
+    success=True
+)
+print(f"Race conditions detected: {result['race_count']}")
+print(f"Operation status: {result['monitoring_status']}")
+```
+
+### TransactionMonitorNode - Enhanced Tracing
+
+```python
+monitor = TransactionMonitorNode()
+
+# Complete transaction with enhanced schema
+result = monitor.execute(
+    operation="complete_transaction",  # New operation
+    transaction_id="monitor_test_123",
+    success=True  # Boolean success parameter
+)
+# New fields in output
+assert "trace_data" in result
+assert "span_data" in result
+assert "correlation_id" in result
 ```
 
 ## Configuration Reference
