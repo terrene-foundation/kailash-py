@@ -32,8 +32,8 @@ import pytest
 import pytest_asyncio
 
 # MCP Platform imports
-from apps.mcp.core.gateway import MCPGateway
-from apps.mcp.core.models import MCPServer, ServerStatus
+from apps.mcp_platform.core.core.gateway import MCPGateway
+from apps.mcp_platform.core.core.models import MCPServer, ServerStatus
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONReaderNode

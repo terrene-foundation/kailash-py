@@ -123,8 +123,14 @@ class TestAsyncPythonCodeNodeE2E:
         workflow = await self._create_async_workflow(test_database)
         gateway.register_workflow("async_processor", workflow)
 
-        # Start gateway in background thread
-        port = 18082
+        # Start gateway in background thread with dynamic port
+        import socket
+
+        # Get a free port dynamically
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("", 0))
+            port = s.getsockname()[1]
+
         server_thread = threading.Thread(
             target=lambda: gateway.run(host="localhost", port=port), daemon=True
         )

@@ -196,37 +196,41 @@ class TestProductionWorkflowsE2E:
     @pytest.mark.asyncio
     async def test_customer_analytics_pipeline(self):
         """Test complete customer analytics pipeline with LLM analysis."""
+        # Set up test environment
+        await self.setup_method_async()
+
         # Create workflow for customer event processing
-        workflow = (
-            AsyncWorkflowBuilder(
-                "customer_analytics_pipeline",
-                description="Process customer events and generate insights",
-            )
-            # 1. Extract recent events from database
-            .add_node(
-                AsyncSQLDatabaseNode,
-                "extract_events",
-                {
-                    "query": """
-                        SELECT
-                            customer_id,
-                            event_type,
-                            event_data,
-                            created_at
-                        FROM customer_events
-                        WHERE tenant_id = :tenant_id
-                            AND created_at >= NOW() - INTERVAL '1 hour'
-                            AND NOT processed
-                        ORDER BY created_at DESC
-                        LIMIT 100
-                    """,
-                    "database_config": self.db_config,
-                },
-            )
-            # 2. Transform and enrich data
-            .add_async_code(
-                "enrich_events",
-                """
+        builder = AsyncWorkflowBuilder(
+            "customer_analytics_pipeline",
+            description="Process customer events and generate insights",
+        )
+
+        # 1. Extract recent events from database
+        builder.add_node(
+            AsyncSQLDatabaseNode,
+            "extract_events",
+            {
+                "query": """
+                    SELECT
+                        customer_id,
+                        event_type,
+                        event_data,
+                        created_at
+                    FROM customer_events
+                    WHERE tenant_id = :tenant_id
+                        AND created_at >= NOW() - INTERVAL '1 hour'
+                        AND NOT processed
+                    ORDER BY created_at DESC
+                    LIMIT 100
+                """,
+                **self.db_config,
+            },
+        )
+
+        # 2. Transform and enrich data
+        builder.add_async_code(
+            "enrich_events",
+            """
 import json
 from collections import defaultdict
 
@@ -264,25 +268,27 @@ result = {
     'timestamp': datetime.now(UTC).isoformat()
 }
 """,
-            )
-            # 3. Generate embeddings for customer behavior
-            .add_node(
-                EmbeddingGeneratorNode,
-                "generate_embeddings",
-                {
-                    "model": "nomic-embed-text",
-                    "input_path": "enriched_events.customers",
-                    "batch_size": 10,
-                    "text_field": "events",  # Will convert to string
-                },
-            )
-            # 4. Analyze customer segments with LLM
-            .add_node(
-                LLMAgentNode,
-                "analyze_segments",
-                {
-                    "model": "llama2",
-                    "prompt": """Analyze these customer behavior patterns and provide insights:
+        )
+
+        # 3. Generate embeddings for customer behavior
+        builder.add_node(
+            EmbeddingGeneratorNode,
+            "generate_embeddings",
+            {
+                "model": "nomic-embed-text",
+                "input_path": "enriched_events.customers",
+                "batch_size": 10,
+                "text_field": "events",  # Will convert to string
+            },
+        )
+
+        # 4. Analyze customer segments with LLM
+        builder.add_node(
+            LLMAgentNode,
+            "analyze_segments",
+            {
+                "model": "llama2",
+                "prompt": """Analyze these customer behavior patterns and provide insights:
 
 Customer Data: {enriched_events.customers}
 
@@ -299,14 +305,15 @@ Format your response as JSON with the following structure:
     "recommendations": [{"segment": "...", "actions": [...]}],
     "key_insights": [...]
 }""",
-                    "temperature": 0.3,
-                    "max_tokens": 1000,
-                },
-            )
-            # 5. Cache results for fast retrieval
-            .add_async_code(
-                "cache_results",
-                """
+                "temperature": 0.3,
+                "max_tokens": 1000,
+            },
+        )
+
+        # 5. Cache results for fast retrieval
+        builder.add_async_code(
+            "cache_results",
+            """
 # Simulate caching results
 # In real scenario, you'd use Redis or another cache
 result = {
@@ -315,11 +322,12 @@ result = {
     "analysis": analyze_segments
 }
 """,
-            )
-            # 6. Store analysis results in database
-            .add_async_code(
-                "store_results",
-                """
+        )
+
+        # 6. Store analysis results in database
+        builder.add_async_code(
+            "store_results",
+            """
 import json
 
 # Parse LLM response
@@ -396,33 +404,28 @@ result = {
     'cache_key': f"analytics:tenant_{tenant_id}:latest"
 }
 """,
-            )
-            # Connect the workflow
-            .add_connections(
-                [
-                    ("extract_events", "data", "enrich_events", "extract_events"),
-                    ("enrich_events", "result", "generate_embeddings", "input_data"),
-                    ("enrich_events", "result", "analyze_segments", "enriched_events"),
-                    ("analyze_segments", "result", "cache_results", "data"),
-                    ("analyze_segments", "result", "store_results", "analyze_segments"),
-                    ("enrich_events", "result", "store_results", "enriched_events"),
-                ]
-            )
-            # Add resilience patterns
-            .add_pattern(
-                AsyncPatterns.retry(
-                    max_attempts=3,
-                    backoff_factor=2.0,
-                    exceptions=[httpx.TimeoutException],
-                )
-            )
-            .add_pattern(
-                AsyncPatterns.timeout(
-                    timeout_seconds=120,  # 2 minutes for complete pipeline
-                )
-            )
-            .build()
         )
+
+        # Connect the workflow
+        builder.add_connection(
+            "extract_events", "data", "enrich_events", "extract_events"
+        )
+        builder.add_connection(
+            "enrich_events", "result", "generate_embeddings", "input_data"
+        )
+        builder.add_connection(
+            "enrich_events", "result", "analyze_segments", "enriched_events"
+        )
+        builder.add_connection("analyze_segments", "result", "cache_results", "data")
+        builder.add_connection(
+            "analyze_segments", "result", "store_results", "analyze_segments"
+        )
+        builder.add_connection(
+            "enrich_events", "result", "store_results", "enriched_events"
+        )
+
+        # Build workflow
+        workflow = builder.build()
 
         # Generate test data
         await self._generate_test_events(tenant_id=1, num_customers=20, num_events=200)
@@ -452,35 +455,39 @@ result = {
             )
             assert count > 0
 
+        # Clean up
+        await self.teardown_method_async()
+
     @pytest.mark.asyncio
     async def test_resilient_api_orchestration(self):
         """Test API orchestration with circuit breakers and fallbacks."""
         # Create a workflow that handles API failures gracefully
-        workflow = (
-            AsyncWorkflowBuilder(
-                "resilient_api_workflow",
-                description="Orchestrate multiple APIs with resilience",
-            )
-            # Primary API call
-            .add_node(
-                HTTPRequestNode,
-                "call_primary_api",
-                {
-                    "method": "POST",
-                    "url": f"{self.ollama_config['base_url']}/api/generate",
-                    "headers": {"Content-Type": "application/json"},
-                    "body": {
-                        "model": "llama2",
-                        "prompt": "Generate a customer satisfaction score based on: positive feedback",
-                        "stream": False,
-                    },
-                    "timeout": 10.0,
+        builder = AsyncWorkflowBuilder(
+            "resilient_api_workflow",
+            description="Orchestrate multiple APIs with resilience",
+        )
+
+        # Primary API call
+        builder.add_node(
+            HTTPRequestNode,
+            "call_primary_api",
+            {
+                "method": "POST",
+                "url": f"{self.ollama_config['base_url']}/api/generate",
+                "headers": {"Content-Type": "application/json"},
+                "body": {
+                    "model": "llama2",
+                    "prompt": "Generate a customer satisfaction score based on: positive feedback",
+                    "stream": False,
                 },
-            )
-            # Parse primary response
-            .add_async_code(
-                "parse_primary",
-                """
+                "timeout": 10.0,
+            },
+        )
+
+        # Parse primary response
+        builder.add_async_code(
+            "parse_primary",
+            """
 try:
     response = call_primary_api.get('response', {})
     score_text = response.get('response', '')
@@ -500,11 +507,12 @@ except Exception as e:
     # If parsing fails, trigger fallback
     raise ValueError(f"Failed to parse primary response: {e}")
 """,
-            )
-            # Fallback to simpler analysis
-            .add_async_code(
-                "fallback_analysis",
-                """
+        )
+
+        # Fallback to simpler analysis
+        builder.add_async_code(
+            "fallback_analysis",
+            """
 # Simple rule-based fallback
 text = "positive feedback"
 keywords = {
@@ -524,37 +532,44 @@ result = {
     'method': 'keyword_analysis'
 }
 """,
-                error_handler=ErrorHandler.skip(),
-            )
-            # Merge results
-            .add_node(
-                MergeNode,
-                "merge_results",
-                merge_strategy="first_non_null",
-                paths=["parse_primary.result", "fallback_analysis.result"],
-            )
-            # Add circuit breaker pattern
-            .add_pattern(
-                AsyncPatterns.circuit_breaker(
-                    failure_threshold=3,
-                    recovery_timeout=30,
-                    half_open_requests=1,
-                )
-            )
-            # Connect with error handling
-            .add_connection(
-                "call_primary_api", "result", "parse_primary", "call_primary_api"
-            )
-            .add_connection("parse_primary", "result", "merge_results", "primary_input")
-            .add_connection(
-                "fallback_analysis", "result", "merge_results", "fallback_input"
-            )
-            # Set error handler for primary path
-            .set_error_handler(
-                "parse_primary", ErrorHandler.fallback("fallback_analysis")
-            )
-            .build()
+            error_handler=ErrorHandler.skip(),
         )
+
+        # Merge results
+        builder.add_node(
+            MergeNode,
+            "merge_results",
+            merge_strategy="first_non_null",
+            paths=["parse_primary.result", "fallback_analysis.result"],
+        )
+
+        # Add circuit breaker pattern
+        builder.add_pattern(
+            AsyncPatterns.circuit_breaker(
+                failure_threshold=3,
+                recovery_timeout=30,
+                half_open_requests=1,
+            )
+        )
+
+        # Connect with error handling
+        builder.add_connection(
+            "call_primary_api", "result", "parse_primary", "call_primary_api"
+        )
+        builder.add_connection(
+            "parse_primary", "result", "merge_results", "primary_input"
+        )
+        builder.add_connection(
+            "fallback_analysis", "result", "merge_results", "fallback_input"
+        )
+
+        # Set error handler for primary path
+        builder.set_error_handler(
+            "parse_primary", ErrorHandler.fallback("fallback_analysis")
+        )
+
+        # Build workflow
+        workflow = builder.build()
 
         # Execute workflow multiple times to test resilience
         results = []
@@ -576,15 +591,15 @@ result = {
     async def test_real_time_monitoring_pipeline(self):
         """Test real-time monitoring with performance tracking."""
         # Create monitoring workflow
-        workflow = (
-            AsyncWorkflowBuilder(
-                "monitoring_pipeline",
-                description="Real-time system monitoring and alerting",
-            )
-            # Monitor system metrics
-            .add_async_code(
-                "collect_metrics",
-                """
+        builder = AsyncWorkflowBuilder(
+            "monitoring_pipeline",
+            description="Real-time system monitoring and alerting",
+        )
+
+        # Monitor system metrics
+        builder.add_async_code(
+            "collect_metrics",
+            """
 import psutil
 import asyncio
 
@@ -638,11 +653,12 @@ result = {
     }
 }
 """,
-            )
-            # Analyze metrics and detect anomalies
-            .add_async_code(
-                "detect_anomalies",
-                """
+        )
+
+        # Analyze metrics and detect anomalies
+        builder.add_async_code(
+            "detect_anomalies",
+            """
 metrics = collect_metrics
 anomalies = []
 
@@ -688,11 +704,12 @@ result = {
     'metrics': metrics
 }
 """,
-            )
-            # Store metrics for trending
-            .add_async_code(
-                "store_metrics",
-                """
+        )
+
+        # Store metrics for trending
+        builder.add_async_code(
+            "store_metrics",
+            """
 # Store in Redis with TTL for time-series data
 redis = await get_resource("redis_main")
 timestamp = int(datetime.now(UTC).timestamp())
@@ -723,20 +740,23 @@ result = {
     'health': detect_anomalies
 }
 """,
-            )
-            # Connect workflow
-            .add_connections(
-                [
-                    (
-                        "collect_metrics",
-                        "result",
-                        "detect_anomalies",
-                        "collect_metrics",
-                    ),
-                    ("detect_anomalies", "result", "store_metrics", "detect_anomalies"),
-                ]
-            ).build()
         )
+
+        # Connect workflow
+        builder.add_connections(
+            [
+                (
+                    "collect_metrics",
+                    "result",
+                    "detect_anomalies",
+                    "collect_metrics",
+                ),
+                ("detect_anomalies", "result", "store_metrics", "detect_anomalies"),
+            ]
+        )
+
+        # Build workflow
+        workflow = builder.build()
 
         # Run monitoring multiple times
         health_scores = []
