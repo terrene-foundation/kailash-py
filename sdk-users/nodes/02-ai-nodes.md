@@ -87,6 +87,82 @@ workflow.runtime = LocalRuntime()
 
   ```
 
+### IterativeLLMAgentNode
+- **Module**: `kailash.nodes.ai.iterative_llm_agent`
+- **Purpose**: Advanced LLM agent with iterative refinement and real MCP tool execution
+- **Key Features**:
+  - **Real MCP Tool Execution**: Execute actual MCP tools instead of mock responses (v0.6.5+)
+  - **6-Phase Process**: Discovery → Planning → Execution → Reflection → Convergence → Synthesis
+  - **Test-Driven Convergence**: Only stops when deliverables actually work
+  - **Adaptive Discovery**: Progressive tool discovery based on task complexity
+  - **Intelligent Execution**: Context-aware tool selection and execution
+- **Parameters**:
+  - `provider`: LLM provider (openai, anthropic, ollama, mock)
+  - `model`: LLM model to use
+  - `messages`: Input conversation messages
+  - `max_iterations`: Maximum number of refinement iterations
+  - `mcp_servers`: List of MCP server configurations
+  - `use_real_mcp`: Enable real MCP tool execution (default: True)
+  - `discovery_mode`: Discovery strategy (progressive, exhaustive, focused)
+  - `convergence_criteria`: Criteria for determining completion
+  - `auto_discover_tools`: Enable automatic tool discovery
+  - `auto_execute_tools`: Enable automatic tool execution
+- **Example**:
+  ```python
+# SDK Setup for example
+from kailash import Workflow
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.ai import LLMAgentNode
+from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.base import Node, NodeParameter
+
+# Example setup
+workflow = Workflow("example", name="Example")
+workflow.runtime = LocalRuntime()
+
+  # Basic iterative refinement
+  node = IterativeLLMAgentNode()
+  result = node.execute(
+      provider="openai",
+      model="gpt-4",
+      messages=[{"role": "user", "content": "Analyze the sales data and create a comprehensive report"}],
+      max_iterations=5,
+      discovery_mode="progressive",
+      convergence_criteria={
+          "goal_satisfaction": {"threshold": 0.9},
+          "quality_threshold": 0.8
+      }
+  )
+
+  # With real MCP tool execution
+  result = node.execute(
+      provider="openai",
+      model="gpt-4",
+      messages=[{"role": "user", "content": "Get weather data and analyze trends"}],
+      mcp_servers=[{
+          "name": "weather-server",
+          "transport": "stdio",
+          "command": "python",
+          "args": ["-m", "weather_mcp_server"]
+      }],
+      use_real_mcp=True,  # Enable real tool execution
+      auto_discover_tools=True,
+      auto_execute_tools=True,
+      max_iterations=3
+  )
+
+  # Output includes detailed iteration history
+  print(f"Completed in {len(result['iterations'])} iterations")
+  print(f"Tools used: {result['context']['tools_executed']}")
+  print(f"Convergence reason: {result['convergence_summary']['reason']}")
+
+  ```
+
+**Backward Compatibility**: The `use_real_mcp` parameter defaults to `True` for real execution. Set to `False` for legacy mock behavior.
+
 ## Ollama Integration Patterns
 
 ### Working with Local LLMs

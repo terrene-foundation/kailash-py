@@ -3,9 +3,10 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.6.6: AgentUIMiddleware shared workflow fix, execute() method standardization.
-Previous v0.6.5: Enterprise AsyncSQL enhancements with optimistic locking, comprehensive
-testing improvements, and production-grade documentation.
+New in v0.7.0: Complete DataFlow and Nexus application frameworks, infrastructure hardening
+with 100% E2E test pass rate, enhanced AsyncNode event loop handling, 8 new monitoring operations,
+distributed transactions, QueryBuilder/QueryCache with Redis, and real MCP execution by default.
+Previous v0.6.6: AgentUIMiddleware shared workflow fix, execute() method standardization.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
@@ -23,6 +24,23 @@ try:
         AIChatMiddleware,
         APIGateway,
         RealtimeMiddleware,
+    )
+
+    # Import Nexus multi-channel framework (v0.6.7+)
+    from kailash.nexus import NexusGateway, create_nexus
+
+    # Import new server classes (v0.6.7+)
+    from kailash.servers import (
+        DurableWorkflowServer,
+        EnterpriseWorkflowServer,
+        WorkflowServer,
+    )
+
+    # Import updated create_gateway function with enterprise defaults
+    from kailash.servers.gateway import (
+        create_basic_gateway,
+        create_durable_gateway,
+        create_enterprise_gateway,
         create_gateway,
     )
 
@@ -34,7 +52,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.6.6"
+__version__ = "0.7.0"
 
 __all__ = [
     # Core workflow components
@@ -50,14 +68,26 @@ __all__ = [
     "LocalRuntime",
 ]
 
-# Add middleware to exports if available
+# Add middleware and servers to exports if available
 if _MIDDLEWARE_AVAILABLE:
     __all__.extend(
         [
+            # Legacy middleware
             "AgentUIMiddleware",
             "RealtimeMiddleware",
             "APIGateway",
             "AIChatMiddleware",
+            # New server classes
+            "WorkflowServer",
+            "DurableWorkflowServer",
+            "EnterpriseWorkflowServer",
+            # Gateway creation functions
             "create_gateway",
+            "create_enterprise_gateway",
+            "create_durable_gateway",
+            "create_basic_gateway",
+            # Nexus multi-channel framework
+            "NexusGateway",
+            "create_nexus",
         ]
     )

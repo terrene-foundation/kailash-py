@@ -27,6 +27,8 @@ def main():
                 # LLM configuration
                 "provider": "ollama",  # or "openai", "anthropic"
                 "model": "llama3.2",  # or "gpt-4", "claude-3"
+                # Use real MCP execution for this example (default)
+                "use_real_mcp": True,
                 # Complex request requiring multiple tools
                 "messages": [
                     {

@@ -790,9 +790,165 @@ workflow.runtime = LocalRuntime()
   - Conflict monitoring helps identify hotspot records
   - Batch operations reduce network round-trips
 
-### SQLQueryBuilderNode
+### QueryBuilder ⭐ **NEW** - MongoDB-Style Query Building
+- **Module**: `kailash.nodes.data.query_builder`
+- **Purpose**: Production-ready query builder with MongoDB-style operators that generates optimized SQL
+- **Key Features**:
+  - **MongoDB-Style Operators**: $eq, $ne, $lt, $lte, $gt, $gte, $in, $nin, $like, $ilike, $regex, $and, $or, $has_key
+  - **Multi-Database Support**: PostgreSQL, MySQL, SQLite with dialect-specific optimizations
+  - **Automatic Tenant Isolation**: Built-in tenant_id injection for multi-tenant applications
+  - **Parameter Binding**: Automatic parameter binding with SQL injection prevention
+  - **Comprehensive Validation**: Type checking and operator validation
+  - **Fluent API**: Method chaining for readable query construction
+  - **JSON Support**: PostgreSQL JSON operators (?, ?|, ?&, @>) and MySQL JSON functions
+- **Supported Operations**:
+  - **SELECT**: Build select queries with fields, conditions, and tenant isolation
+  - **UPDATE**: Build update queries with WHERE conditions
+  - **DELETE**: Build delete queries with WHERE conditions
+  - **INSERT**: Build insert queries (planned for v0.6.7)
+- **Parameters**:
+  - `dialect`: Database dialect ("postgresql", "mysql", "sqlite")
+  - `table_name`: Target table name
+  - `tenant_id`: Optional tenant ID for multi-tenant isolation
+- **Factory Function**: `create_query_builder(dialect="postgresql")`
+- **Best For**:
+  - Multi-tenant applications requiring query isolation
+  - Applications with complex query logic
+  - Teams familiar with MongoDB query syntax
+  - Cross-database applications
+  - Applications requiring SQL injection prevention
+- **Example**:
+  ```python
+  from kailash.nodes.data.query_builder import create_query_builder
+
+  # Create PostgreSQL query builder
+  builder = create_query_builder("postgresql")
+
+  # Build complex query with MongoDB-style operators
+  builder.table("users").tenant("tenant_123")
+  builder.where("age", "$gt", 18)
+  builder.where("status", "$in", ["active", "premium"])
+  builder.where("metadata", "$has_key", "preferences")
+
+  # Generate SQL and parameters
+  sql, params = builder.build_select(["name", "email", "created_at"])
+  # Result: SELECT name, email, created_at FROM users WHERE tenant_id = $1 AND age > $2 AND status = ANY($3) AND metadata ? $4
+  # Params: ["tenant_123", 18, ["active", "premium"], "preferences"]
+
+  # Build update query
+  builder.reset().table("users").where("id", "$eq", 123)
+  sql, params = builder.build_update({"last_login": "2024-01-01"})
+
+  # Build delete query
+  builder.reset().table("users").where("status", "$eq", "inactive")
+  sql, params = builder.build_delete()
+  ```
+- **MongoDB Operators**:
+  - **$eq**: Equal to
+  - **$ne**: Not equal to
+  - **$lt**: Less than
+  - **$lte**: Less than or equal to
+  - **$gt**: Greater than
+  - **$gte**: Greater than or equal to
+  - **$in**: In array
+  - **$nin**: Not in array
+  - **$like**: SQL LIKE pattern
+  - **$ilike**: Case-insensitive LIKE (PostgreSQL only)
+  - **$regex**: Regular expression match
+  - **$and**: Logical AND (implicit)
+  - **$or**: Logical OR (planned for v0.6.7)
+  - **$has_key**: JSON key exists (PostgreSQL/MySQL)
+- **Testing**: 33 unit tests, 8 integration tests with real databases
+
+### QueryCache ⭐ **NEW** - Redis Query Result Caching
+- **Module**: `kailash.nodes.data.query_cache`
+- **Purpose**: Enterprise-grade query result caching with Redis backend
+- **Key Features**:
+  - **Multiple Cache Patterns**: Cache-aside, write-through, write-behind, refresh-ahead
+  - **Intelligent Invalidation**: TTL-based, manual, pattern-based, event-based strategies
+  - **Tenant Isolation**: Automatic tenant-based cache key separation
+  - **Automatic Key Generation**: SHA-256 based cache keys with query normalization
+  - **Pattern-Based Invalidation**: Table-based cache invalidation using Redis SETs
+  - **Health Monitoring**: Redis connection health checks and statistics
+  - **Configurable TTL**: Per-query and global TTL settings
+  - **Error Resilience**: Graceful degradation when Redis is unavailable
+  - **Comprehensive Metrics**: Cache hit rates, key counts, Redis statistics
+- **Cache Patterns**:
+  - **CACHE_ASIDE**: Manual cache management (default)
+  - **WRITE_THROUGH**: Synchronous cache updates
+  - **WRITE_BEHIND**: Asynchronous cache updates
+  - **REFRESH_AHEAD**: Proactive cache refresh
+- **Invalidation Strategies**:
+  - **TTL**: Time-based expiration (default)
+  - **MANUAL**: Manual cache invalidation
+  - **PATTERN_BASED**: Table-based pattern invalidation
+  - **EVENT_BASED**: Event-driven invalidation
+- **Parameters**:
+  - `redis_host`: Redis server host (default: "localhost")
+  - `redis_port`: Redis server port (default: 6379)
+  - `redis_db`: Redis database number (default: 0)
+  - `redis_password`: Redis password (optional)
+  - `default_ttl`: Default TTL in seconds (default: 3600)
+  - `cache_pattern`: Cache pattern (default: CACHE_ASIDE)
+  - `invalidation_strategy`: Invalidation strategy (default: TTL)
+  - `key_prefix`: Cache key prefix (default: "kailash:query")
+- **Operations**:
+  - `get(query, parameters, tenant_id)`: Get cached result
+  - `set(query, parameters, result, tenant_id, ttl)`: Cache result
+  - `invalidate(query, parameters, tenant_id)`: Invalidate specific cache entry
+  - `invalidate_table(table_name, tenant_id)`: Invalidate all cache entries for table
+  - `clear_all(tenant_id)`: Clear all cache entries (globally or per tenant)
+  - `get_stats()`: Get cache statistics
+  - `health_check()`: Check cache and Redis health
+- **Best For**:
+  - High-traffic applications with repeated queries
+  - Applications with expensive query operations
+  - Multi-tenant applications requiring cache isolation
+  - Applications requiring fine-grained cache control
+  - Systems with complex cache invalidation requirements
+- **Example**:
+  ```python
+  from kailash.nodes.data.query_cache import QueryCache, CacheInvalidationStrategy
+
+  # Create cache with pattern-based invalidation
+  cache = QueryCache(
+      redis_host="localhost",
+      redis_port=6379,
+      invalidation_strategy=CacheInvalidationStrategy.PATTERN_BASED,
+      default_ttl=3600
+  )
+
+  # Cache query result
+  query = "SELECT * FROM users WHERE age > $1"
+  parameters = [18]
+  result = {"users": [{"id": 1, "name": "John", "age": 25}]}
+
+  success = cache.set(query, parameters, result, tenant_id="tenant_123")
+
+  # Retrieve cached result
+  cached_result = cache.get(query, parameters, tenant_id="tenant_123")
+  if cached_result:
+      print(f"Cache hit: {cached_result['result']}")
+
+  # Invalidate all cache entries for users table
+  deleted_count = cache.invalidate_table("users", tenant_id="tenant_123")
+
+  # Get cache statistics
+  stats = cache.get_stats()
+  print(f"Hit rate: {stats['hit_rate']:.2%}")
+  print(f"Total keys: {stats['total_keys']}")
+
+  # Health check
+  health = cache.health_check()
+  print(f"Cache status: {health['status']}")
+  ```
+- **Factory Function**: `create_query_cache(config)` for configuration-based creation
+- **Testing**: 40 unit tests, 8 integration tests with real Redis
+
+### SQLQueryBuilderNode (Deprecated)
 - **Module**: `kailash.nodes.data.sql`
 - **Purpose**: Build SQL queries programmatically
+- **Status**: ⚠️ **DEPRECATED** - Use QueryBuilder instead
 - **Parameters**:
   - `table`: Table name
   - `operation`: SELECT, INSERT, UPDATE, DELETE

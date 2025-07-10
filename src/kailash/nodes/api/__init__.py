@@ -23,7 +23,7 @@ import warnings
 from .auth import APIKeyNode, BasicAuthNode, OAuth2Node
 from .graphql import AsyncGraphQLClientNode, GraphQLClientNode
 from .http import AsyncHTTPRequestNode, HTTPRequestNode
-from .monitoring import HealthCheckNode
+from .monitoring import APIHealthCheckNode
 from .rate_limiting import (
     AsyncRateLimitedAPINode,
     RateLimitConfig,
@@ -71,7 +71,7 @@ __all__ = [
     "AsyncRateLimitedAPINode",
     "create_rate_limiter",
     # Monitoring and Security
-    "HealthCheckNode",
+    "APIHealthCheckNode",
     "SecurityScannerNode",
     # Backwards compatibility
     "HTTPClientNode",  # Deprecated alias

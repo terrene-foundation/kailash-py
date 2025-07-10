@@ -7,7 +7,31 @@
 - **E2E Tests**: 2 complete workflow scenarios
 - **Test Coverage**: Client, server, tool execution, async handling, error recovery
 
-## Quick Setup - LLMAgentNode with MCP
+## 🚨 BREAKING CHANGE v0.6.6: Real MCP by Default
+**All LLMAgentNode instances now default to real MCP execution.**
+- **Migration Required**: Set `use_real_mcp=False` for mock execution
+- **Environment Override**: `KAILASH_USE_REAL_MCP=false` for global mock
+- **See**: [MCP_MIGRATION_NOTES.md](../../MCP_MIGRATION_NOTES.md) for full details
+
+## 🔌 Multi-Channel MCP Integration
+**NEW: Nexus Framework Integration** - MCP now available as unified channel
+```python
+from kailash.nexus import create_nexus
+
+# MCP as part of multi-channel platform
+nexus = create_nexus(
+    enable_api=True,    # REST API
+    enable_cli=True,    # Command line
+    enable_mcp=True     # MCP server - FULLY TESTED ✅
+)
+
+# Workflows automatically available across all channels:
+# - API: POST /api/executions
+# - CLI: nexus run workflow_name
+# - MCP: Call "workflow_<name>" tool
+```
+
+## Quick Setup - LLMAgentNode with MCP (v0.6.6+)
 ```python
 from kailash import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
@@ -36,7 +60,8 @@ results, run_id = runtime.execute(workflow, parameters={
             }
         ],
         "auto_discover_tools": True,
-        "auto_execute_tools": True  # NEW: Execute tools automatically
+        "auto_execute_tools": True,  # Execute tools automatically
+        "use_real_mcp": True  # Default - real MCP execution
     }
 })
 
@@ -368,7 +393,7 @@ mcp_servers = [
 
 ```
 
-### Iterative MCP Usage
+### Iterative MCP Usage with Real Tool Execution
 ```python
 from kailash import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -383,19 +408,38 @@ mcp_servers = [
     {"name": "data", "transport": "stdio", "command": "mcp-server"}
 ]
 
+# NEW: Real MCP tool execution with iterative refinement
 results, run_id = runtime.execute(workflow, parameters={
     "iterative": {
+        "provider": "openai",
+        "model": "gpt-4",
         "mcp_servers": mcp_servers,
+        "use_real_mcp": True,  # Enable real tool execution (default: True)
         "auto_discover_tools": True,
-        "iterative_config": {
-            "max_iterations": 5,
-            "tool_discovery_per_iteration": True
+        "auto_execute_tools": True,
+        "max_iterations": 5,
+        "discovery_mode": "progressive",
+        "convergence_criteria": {
+            "goal_satisfaction": {"threshold": 0.9},
+            "quality_threshold": 0.8
         },
-        "messages": [{"role": "user", "content": "Analyze all data sources"}]
+        "messages": [{"role": "user", "content": "Analyze all data sources and create comprehensive report"}]
     }
 })
 
+# Check execution results
+if results["iterative"]["success"]:
+    print(f"Completed in {len(results['iterative']['iterations'])} iterations")
+    print(f"Tools executed: {results['iterative']['context']['tools_executed']}")
+    print(f"Convergence reason: {results['iterative']['convergence_summary']['reason']}")
+
 ```
+
+**Key Features (v0.6.5+)**:
+- **Real MCP Tool Execution**: Actually calls MCP tools instead of mock responses
+- **6-Phase Process**: Discovery → Planning → Execution → Reflection → Convergence → Synthesis
+- **Test-Driven Convergence**: Only stops when deliverables actually work
+- **Backward Compatibility**: Set `use_real_mcp=False` for legacy mock behavior
 
 ## Testing MCP Integration
 

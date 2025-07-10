@@ -26,6 +26,8 @@ Follow these guides in order for complete mastery:
 - **[Unified Async Runtime](10-unified-async-runtime-guide.md)** - Async execution
 - **[Parameter Passing](11-parameter-passing-guide.md)** - Complete parameter reference
 - **[Testing Guide](12-testing-production-quality.md)** - Production testing
+- **[Validation Framework](13-validation-framework-guide.md)** ⭐ **NEW** - Comprehensive validation & test-driven development
+- **[WorkflowBuilder API Patterns](55-workflow-builder-api-patterns.md)** ⭐ **NEW** - Enhanced API flexibility & auto ID generation
 
 ### Troubleshooting
 - **[Common Mistakes](../validation/common-mistakes.md)** ⭐ - Debug common issues quickly

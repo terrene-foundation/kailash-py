@@ -10,11 +10,12 @@ All examples in this guide assume these imports:
 from kailash import Workflow
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode
-from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
+from kailash.nodes.ai import LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 from kailash.nodes.logic import SwitchNode, MergeNode, WorkflowNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.transform import DataTransformerNode
+from kailash.nodes.transaction import DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode
 from kailash.nodes.base import Node, NodeParameter
 ```
 
@@ -128,6 +129,38 @@ workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
 workflow.connect("reader", "processor", mapping={"data": "input"})
 
 ```
+
+### **Mistake #6: WorkflowBuilder API Confusion (v0.6.6+)**
+
+```python
+# ❌ WRONG - Inconsistent API usage
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node(node_type="PythonCodeNode", node_id="processor", config={"code": "..."})
+auto_id = workflow.add_node("JSONWriterNode")
+workflow.add_node(SomeNode, "instance_node")  # Mixed patterns confuse readers
+
+# ✅ CORRECT - Consistent style throughout workflow
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "..."})
+workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
+```
+
+```python
+# ❌ WRONG - Ignoring auto-generated IDs
+workflow.add_node("CSVReaderNode")  # ID not captured
+workflow.add_node("PythonCodeNode")  # Can't connect nodes!
+
+# ✅ CORRECT - Capture auto-generated IDs for connections
+reader_id = workflow.add_node("CSVReaderNode", {"file_path": "data.csv"})
+processor_id = workflow.add_node("PythonCodeNode", {"code": "..."})
+workflow.connect(reader_id, "result", mapping={processor_id: "input_data"})
+```
+
+**See:** [WorkflowBuilder API Patterns Guide](../developer/55-workflow-builder-api-patterns.md) for comprehensive API usage
 
 ## 🔧 **Real Error Examples & Fixes**
 
@@ -425,6 +458,132 @@ workflow.connect("api", "llm", mapping={"response": "prompt"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow)
 
+```
+
+### **Mistake #15: Distributed Transaction Pattern Selection**
+
+```python
+# ❌ WRONG - Hard-coding pattern choice when capabilities are mixed
+coordinator = TwoPhaseCommitCoordinatorNode(...)  # Will fail if participants don't support 2PC
+# or
+coordinator = SagaCoordinatorNode(...)  # Sub-optimal for services that support 2PC
+
+# ✅ CORRECT - Use DTM for automatic pattern selection
+manager = DistributedTransactionManagerNode(
+    transaction_name="mixed_services",
+    state_storage="redis",
+    storage_config={"redis_client": redis_client}
+)
+
+# DTM will automatically select the best pattern
+await manager.async_run(
+    operation="create_transaction",
+    requirements={"consistency": "strong", "availability": "high"}
+)
+```
+
+### **Mistake #16: Saga Compensation Logic**
+
+```python
+# ❌ WRONG - Not providing compensation for saga steps
+coordinator = SagaCoordinatorNode(saga_name="order_processing")
+coordinator.execute(
+    operation="add_step",
+    name="payment",
+    node_id="PaymentNode"
+    # Missing compensation_node_id!
+)
+
+# ✅ CORRECT - Always provide compensation for saga steps
+coordinator.execute(
+    operation="add_step",
+    name="payment",
+    node_id="PaymentNode",
+    compensation_node_id="RefundNode",
+    compensation_parameters={"action": "refund_payment"}
+)
+```
+
+### **Mistake #17: Async/Sync Method Confusion**
+
+```python
+# ❌ WRONG - Using sync execute on async transaction nodes
+coordinator = TwoPhaseCommitCoordinatorNode(...)
+result = coordinator.execute(operation="execute_transaction")  # Will fail
+
+# ✅ CORRECT - Use async_run for transaction nodes
+result = await coordinator.async_run(operation="execute_transaction")
+```
+
+### **Mistake #18: Missing Transaction Recovery**
+
+```python
+# ❌ WRONG - Not implementing recovery for failed transactions
+coordinator = SagaCoordinatorNode(...)
+try:
+    await coordinator.async_run(operation="execute_saga")
+except Exception:
+    pass  # Transaction state is lost!
+
+# ✅ CORRECT - Always implement recovery patterns
+try:
+    result = await coordinator.async_run(operation="execute_saga")
+except Exception as e:
+    # Attempt to recover the transaction
+    recovery_result = await coordinator.async_run(
+        operation="load_saga",
+        saga_id=coordinator.saga_id
+    )
+    if recovery_result["status"] == "success":
+        await coordinator.async_run(operation="resume")
+```
+
+### **Mistake #19: IterativeLLMAgent Mock Execution**
+
+```python
+# ❌ WRONG - Disabling real MCP execution (reverts to mock)
+agent = IterativeLLMAgentNode()
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}],
+    mcp_servers=[{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
+    use_real_mcp=False  # This causes mock execution!
+)
+
+# ✅ CORRECT - Use real MCP execution (default behavior)
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}],
+    mcp_servers=[{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
+    use_real_mcp=True  # Default: True (real tool execution)
+)
+```
+
+```python
+# ❌ WRONG - No MCP servers but expecting tool execution
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}]
+    # Missing mcp_servers!
+)
+
+# ✅ CORRECT - Always provide MCP servers for tool execution
+result = agent.execute(
+    provider="openai",
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Search for data"}],
+    mcp_servers=[{
+        "name": "data-server",
+        "transport": "stdio",
+        "command": "python",
+        "args": ["-m", "data_mcp_server"]
+    }],
+    auto_discover_tools=True,
+    auto_execute_tools=True
+)
 ```
 
 ## 🔗 **Next Steps**

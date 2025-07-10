@@ -483,7 +483,23 @@ class DataTransformer(Node):
                     f"Error executing transformation '{transform_str}': {str(e)}\n{tb}"
                 )
 
-        return {"result": result}
+        # Validate result before returning to prevent data type issues
+        from kailash.utils.data_validation import DataTypeValidator
+
+        # Log result type and structure for debugging
+        self.logger.debug(f"DataTransformer result type: {type(result)}")
+        if isinstance(result, dict):
+            self.logger.debug(f"DataTransformer result keys: {list(result.keys())}")
+        elif isinstance(result, list) and len(result) > 0:
+            self.logger.debug(
+                f"DataTransformer result list length: {len(result)}, first item type: {type(result[0])}"
+            )
+
+        output = {"result": result}
+        node_id = getattr(self, "node_id", getattr(self, "id", "DataTransformer"))
+        validated_output = DataTypeValidator.validate_node_output(node_id, output)
+
+        return validated_output
 
 
 @register_node()

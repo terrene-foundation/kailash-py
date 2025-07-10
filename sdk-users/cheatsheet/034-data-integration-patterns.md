@@ -408,85 +408,242 @@ validator = PythonCodeNode.from_function(
 
 ```
 
+## 🗄️ Modern Query Builder & Cache Integration
+
+### QueryBuilder for Complex Data Queries
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.nodes.data.query_builder import QueryBuilder, create_query_builder
+from kailash.nodes.data.query_cache import QueryCache
+
+# Create workflow with query builder
+workflow = WorkflowBuilder()
+
+# Add query builder node for complex customer queries
+workflow.add_node("QueryBuilder", "customer_query", {
+    "database_type": "postgresql",
+    "table": "customers",
+    "query_config": {
+        "where": [
+            {"field": "age", "operator": "$gte", "value": 18},
+            {"field": "status", "operator": "$in", "value": ["active", "premium"]},
+            {"field": "region", "operator": "$eq", "value": "US"}
+        ],
+        "select": ["id", "name", "email", "tier", "last_login"],
+        "order_by": [{"field": "last_login", "direction": "desc"}],
+        "limit": 100
+    }
+})
+
+# Add query cache for performance
+workflow.add_node("QueryCache", "cache_results", {
+    "redis_host": "localhost",
+    "redis_port": 6379,
+    "cache_ttl": 300,  # 5 minutes
+    "cache_key_prefix": "customer_query",
+    "invalidation_strategy": "pattern_based"
+})
+
+# Connect for cached query execution
+workflow.add_connection("customer_query", "cache_results")
+```
+
+### Multi-Database Query Integration
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.nodes.data.query_builder import create_query_builder
+
+workflow = WorkflowBuilder()
+
+# PostgreSQL customer data
+workflow.add_node("QueryBuilder", "pg_customers", {
+    "database_type": "postgresql",
+    "connection_string": "postgresql://user:pass@localhost:5432/customers",
+    "table": "customers",
+    "query_config": {
+        "where": [{"field": "status", "operator": "$eq", "value": "active"}],
+        "select": ["customer_id", "name", "tier"]
+    }
+})
+
+# MySQL transaction data
+workflow.add_node("QueryBuilder", "mysql_transactions", {
+    "database_type": "mysql",
+    "connection_string": "mysql://user:pass@localhost:3306/transactions",
+    "table": "transactions",
+    "query_config": {
+        "where": [
+            {"field": "date", "operator": "$gte", "value": "2024-01-01"},
+            {"field": "amount", "operator": "$gt", "value": 100}
+        ],
+        "select": ["customer_id", "amount", "date"],
+        "order_by": [{"field": "date", "direction": "desc"}]
+    }
+})
+
+# Join results with PythonCodeNode
+workflow.add_node("PythonCodeNode", "join_data", {
+    "code": """
+import pandas as pd
+
+# Convert to DataFrames
+customers_df = pd.DataFrame(pg_customers)
+transactions_df = pd.DataFrame(mysql_transactions)
+
+# Join on customer_id
+joined_df = pd.merge(
+    customers_df,
+    transactions_df,
+    on='customer_id',
+    how='inner'
+)
+
+# Aggregate by customer
+result_df = joined_df.groupby(['customer_id', 'name', 'tier']).agg({
+    'amount': ['sum', 'count', 'mean']
+}).reset_index()
+
+# Flatten columns
+result_df.columns = ['customer_id', 'name', 'tier', 'total_amount', 'transaction_count', 'avg_amount']
+
+result = result_df.to_dict('records')
+"""
+})
+
+# Connect the pipeline
+workflow.add_connection("pg_customers", "join_data")
+workflow.add_connection("mysql_transactions", "join_data")
+```
+
+### Cached Data Pipeline with Invalidation
+```python
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+
+# Query with caching
+workflow.add_node("QueryBuilder", "data_query", {
+    "database_type": "postgresql",
+    "table": "analytics_data",
+    "query_config": {
+        "where": [
+            {"field": "date", "operator": "$gte", "value": "2024-01-01"},
+            {"field": "region", "operator": "$eq", "value": "US"}
+        ],
+        "select": ["date", "region", "revenue", "users"],
+        "order_by": [{"field": "date", "direction": "asc"}]
+    }
+})
+
+# Add intelligent caching
+workflow.add_node("QueryCache", "smart_cache", {
+    "redis_host": "localhost",
+    "redis_port": 6379,
+    "cache_ttl": 3600,  # 1 hour
+    "invalidation_strategy": "pattern_based",
+    "invalidation_patterns": [
+        "analytics_data:*",
+        "user_activity:*",
+        "revenue:*"
+    ],
+    "cache_key_template": "analytics:{region}:{date_range}",
+    "compression_enabled": True
+})
+
+# Pattern-based cache invalidation trigger
+workflow.add_node("PythonCodeNode", "cache_invalidation", {
+    "code": """
+from kailash.nodes.data.query_cache import QueryCache
+
+# If data is updated, invalidate related caches
+if data_updated:
+    cache = QueryCache(redis_host="localhost", redis_port=6379)
+    cache.invalidate_by_pattern("analytics:*")
+    cache.invalidate_by_pattern("user_activity:*")
+
+result = {"cache_invalidated": True}
+"""
+})
+
+workflow.add_connection("data_query", "smart_cache")
+```
+
 ## 📋 Best Practices
 
-1. **Normalize IDs Early**
+1. **Use QueryBuilder for Complex Queries**
    ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.nodes.data.query_builder import QueryBuilder
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+   workflow = WorkflowBuilder()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("reader", "id_normalizer")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("id_normalizer", "merger")
-
+   # Instead of raw SQL, use QueryBuilder
+   workflow.add_node("QueryBuilder", "customer_query", {
+       "database_type": "postgresql",
+       "table": "customers",
+       "query_config": {
+           "where": [
+               {"field": "age", "operator": "$gte", "value": 18},
+               {"field": "status", "operator": "$eq", "value": "active"}
+           ],
+           "select": ["id", "name", "email"]
+       }
+   })
    ```
 
-2. **Use MergeNode for Simple Joins**
+2. **Add Caching for Performance**
    ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
-   merger = MergeNode(name="data_merger")
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-
+   # Add QueryCache after expensive queries
+   workflow.add_node("QueryCache", "cache_results", {
+       "redis_host": "localhost",
+       "redis_port": 6379,
+       "cache_ttl": 300,
+       "invalidation_strategy": "pattern_based"
+   })
+   workflow.add_connection("customer_query", "cache_results")
    ```
 
-3. **Validate Early and Often**
+3. **Use MergeNode for Simple Joins**
    ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.nodes.logic import MergeNode
 
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("reader", "validator1")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("normalizer", "validator2")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("merger", "validator3")
-
+   workflow = WorkflowBuilder()
+   workflow.add_node("MergeNode", "data_merger", {
+       "merge_strategy": "inner_join",
+       "join_key": "customer_id"
+   })
    ```
 
-4. **Handle Edge Cases**
+4. **Validate Early and Often**
+   ```python
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.nodes.validation import ValidationNode
+
+   workflow = WorkflowBuilder()
+
+   # Add validation after each major step
+   workflow.add_node("ValidationNode", "validate_input", {
+       "schema": {
+           "type": "object",
+           "properties": {
+               "customer_id": {"type": "string"},
+               "amount": {"type": "number", "minimum": 0}
+           },
+           "required": ["customer_id", "amount"]
+       }
+   })
+
+   workflow.add_connection("reader", "validate_input")
+   workflow.add_connection("validate_input", "normalizer")
+   ```
+
+5. **Handle Edge Cases**
    - Empty datasets
    - Missing join keys
    - Duplicate records
    - Format inconsistencies
+   - Cache misses and invalidation
 
 ## ⚠️ Common Pitfalls
 

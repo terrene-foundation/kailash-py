@@ -567,12 +567,19 @@ class LocalRuntime:
                 collector = MetricsCollector()
                 with collector.collect(node_id=node_id) as metrics_context:
                     # Unified async/sync execution
+                    # Validate inputs before execution
+                    from kailash.utils.data_validation import DataTypeValidator
+
+                    validated_inputs = DataTypeValidator.validate_node_input(
+                        node_id, inputs
+                    )
+
                     if self.enable_async and hasattr(node_instance, "execute_async"):
                         # Use async execution method that includes validation
-                        outputs = await node_instance.execute_async(**inputs)
+                        outputs = await node_instance.execute_async(**validated_inputs)
                     else:
                         # Standard synchronous execution
-                        outputs = node_instance.execute(**inputs)
+                        outputs = node_instance.execute(**validated_inputs)
 
                 # Get performance metrics
                 performance_metrics = metrics_context.result()
@@ -696,6 +703,18 @@ class LocalRuntime:
                 if isinstance(source_outputs, dict) and source_outputs.get("failed"):
                     raise WorkflowExecutionError(
                         f"Cannot use outputs from failed node '{source_node_id}'"
+                    )
+
+                # Validate source outputs before mapping
+                from kailash.utils.data_validation import DataTypeValidator
+
+                try:
+                    source_outputs = DataTypeValidator.validate_node_output(
+                        source_node_id, source_outputs
+                    )
+                except Exception as e:
+                    self.logger.warning(
+                        f"Data validation failed for node '{source_node_id}': {e}"
                     )
 
                 for source_key, target_key in mapping.items():

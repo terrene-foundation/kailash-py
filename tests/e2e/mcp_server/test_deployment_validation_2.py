@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class TestStatus(Enum):
+class DeploymentTestStatus(Enum):
     """Test execution status"""
 
     PENDING = "pending"
@@ -63,7 +63,7 @@ class DeploymentTest:
     compose_path: Optional[str] = None
     required_files: List[str] = None
     environment_vars: List[str] = None
-    status: TestStatus = TestStatus.PENDING
+    status: DeploymentTestStatus = DeploymentTestStatus.PENDING
     error_message: Optional[str] = None
 
     def __post_init__(self):
@@ -283,7 +283,7 @@ class MCPDeploymentValidator:
     def test_docker_build(self, test: DeploymentTest) -> bool:
         """Test Docker build process"""
         try:
-            test.status = TestStatus.RUNNING
+            test.status = DeploymentTestStatus.RUNNING
 
             # Create build context
             build_context = self.project_root / test.app_path
@@ -414,45 +414,45 @@ class MCPDeploymentValidator:
         logger.info(f"Running deployment test: {test.name}")
 
         try:
-            test.status = TestStatus.RUNNING
+            test.status = DeploymentTestStatus.RUNNING
 
             # Step 1: Validate required files
             if not self.validate_required_files(test):
-                test.status = TestStatus.FAILED
+                test.status = DeploymentTestStatus.FAILED
                 return False
 
             # Step 2: Validate Dockerfile
             if not self.validate_dockerfile(test):
-                test.status = TestStatus.FAILED
+                test.status = DeploymentTestStatus.FAILED
                 return False
 
             # Step 3: Validate Docker Compose
             if not self.validate_docker_compose(test):
-                test.status = TestStatus.FAILED
+                test.status = DeploymentTestStatus.FAILED
                 return False
 
             # Step 4: Test Docker Compose syntax
             if not self.test_docker_compose_syntax(test):
-                test.status = TestStatus.FAILED
+                test.status = DeploymentTestStatus.FAILED
                 return False
 
             # Step 5: Test environment variables
             if not self.test_environment_variables(test):
-                test.status = TestStatus.FAILED
+                test.status = DeploymentTestStatus.FAILED
                 return False
 
             # Step 6: Test Docker build (most resource intensive)
             if not self.test_docker_build(test):
-                test.status = TestStatus.FAILED
+                test.status = DeploymentTestStatus.FAILED
                 return False
 
-            test.status = TestStatus.PASSED
+            test.status = DeploymentTestStatus.PASSED
             logger.info(f"✅ {test.name} passed all tests")
             return True
 
         except Exception as e:
             test.error_message = f"Test execution error: {str(e)}"
-            test.status = TestStatus.FAILED
+            test.status = DeploymentTestStatus.FAILED
             logger.error(f"❌ {test.name} failed: {str(e)}")
             return False
 

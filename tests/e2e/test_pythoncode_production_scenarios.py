@@ -181,7 +181,7 @@ class TestTPCMigrationScenarios:
         This simulates the TPC team's production workflow that processes
         customer transactions with dynamic risk scoring and discounts.
         """
-        builder = WorkflowBuilder(name="TPC Production Pipeline")
+        builder = WorkflowBuilder()
 
         # Step 1: Fetch high-value transactions
         builder.add_node(
@@ -407,7 +407,7 @@ class TestTPCMigrationScenarios:
         where credentials are injected at runtime.
         """
         # Create workflow with deferred nodes
-        builder = WorkflowBuilder(name="Enterprise Deferred Config Workflow")
+        builder = WorkflowBuilder()
 
         # Add deferred SQL node (credentials injected later)
         sql_node = create_deferred_sql(
@@ -493,7 +493,7 @@ class TestTPCMigrationScenarios:
         This tests the complete parameter handling in a complex pipeline
         that includes error scenarios and recovery logic.
         """
-        builder = WorkflowBuilder(name="Resilient Processing Pipeline")
+        builder = WorkflowBuilder()
 
         # Stage 1: Parallel data fetching
         builder.add_node(
@@ -703,7 +703,7 @@ class TestPythonCodeSecurityE2E:
         """Test security measures in a production-like workflow."""
         await ensure_docker_services(["postgres"])
 
-        builder = WorkflowBuilder(name="Secure Processing Workflow")
+        builder = WorkflowBuilder()
 
         # Add data source
         builder.add_node(

@@ -473,6 +473,224 @@ scrape_configs:
       - targets: ['redis-exporter:9121']
 ```
 
+### Transaction Monitoring
+
+```python
+from kailash.nodes.monitoring import (
+    TransactionMetricsNode,
+    TransactionMonitorNode,
+    DeadlockDetectorNode,
+    RaceConditionDetectorNode,
+    PerformanceAnomalyNode
+)
+
+# Enterprise transaction monitoring workflow
+transaction_monitoring = WorkflowBuilder()
+
+# Transaction metrics collection
+transaction_monitoring.add_node("TransactionMetricsNode", "transaction_metrics", {
+    "aggregation_window": 60,       # 1-minute aggregation
+    "retention_period": 86400,      # 24-hour retention
+    "export_interval": 30,          # Export every 30 seconds
+    "export_format": "prometheus",
+    "custom_percentiles": [50, 75, 90, 95, 99, 99.9]
+})
+
+# Real-time transaction monitoring
+transaction_monitoring.add_node("TransactionMonitorNode", "transaction_monitor", {
+    "monitoring_interval": 1.0,     # Check every second
+    "alert_thresholds": {
+        "latency_ms": 1000,         # Alert on >1s latency
+        "error_rate": 0.05,         # Alert on >5% error rate
+        "concurrent_transactions": 100,  # Alert on >100 concurrent
+        "queue_depth": 50,          # Alert on >50 queued
+        "memory_usage_mb": 1024,    # Alert on >1GB memory
+        "cpu_usage_percent": 80     # Alert on >80% CPU
+    },
+    "enable_distributed_tracing": True,
+    "tracing_sample_rate": 0.1,     # Sample 10% for performance
+    "enable_streaming": True
+})
+
+# Deadlock detection for database operations
+transaction_monitoring.add_node("DeadlockDetectorNode", "deadlock_detector", {
+    "detection_interval": 5.0,      # Check every 5 seconds
+    "timeout_threshold": 30.0,      # Consider deadlock after 30s
+    "max_wait_graph_size": 1000,    # Limit graph size for performance
+    "victim_selection": "youngest", # Abort youngest transaction
+    "enable_prevention": True,      # Enable deadlock prevention
+    "prevention_strategy": "wound_wait"
+})
+
+# Race condition detection
+transaction_monitoring.add_node("RaceConditionDetectorNode", "race_detector", {
+    "detection_window": 10.0,       # 10-second analysis window
+    "confidence_threshold": 0.8,    # 80% confidence for alerts
+    "max_concurrent_operations": 1000,
+    "analysis_interval": 5.0,       # Analyze every 5 seconds
+    "enable_prevention_suggestions": True
+})
+
+# Performance anomaly detection
+transaction_monitoring.add_node("PerformanceAnomalyNode", "anomaly_detector", {
+    "sensitivity": 0.8,              # High sensitivity for production
+    "min_samples": 100,              # Need 100 samples for baseline
+    "detection_window": 300,         # 5-minute detection window
+    "zscore_threshold": 2.5,         # Statistical anomaly threshold
+    "learning_rate": 0.1,            # Baseline learning rate
+    "decay_factor": 0.95,            # Historical data decay
+    "enable_ml_detection": True,     # Enable ML-based detection
+    "detection_methods": ["statistical", "threshold_based", "iqr", "rolling_average"]
+})
+
+# Alert integration
+transaction_monitoring.add_node("DiscordAlertNode", "transaction_alerts", {
+    "webhook_url": "https://discord.com/api/webhooks/...",
+    "alert_levels": ["high", "critical"],
+    "rate_limit": {
+        "max_alerts_per_minute": 5,
+        "cooldown_seconds": 300
+    },
+    "alert_templates": {
+        "deadlock": "🔒 **Deadlock Detected**: {deadlock_id} - Victim: {victim_transaction}",
+        "anomaly": "📊 **Performance Anomaly**: {metric_name} - {severity} severity ({confidence}% confidence)",
+        "transaction_failure": "❌ **Transaction Failure**: {transaction_id} - Error: {error_type}"
+    }
+})
+
+# Connect monitoring nodes
+transaction_monitoring.add_connection(
+    "transaction_metrics", "metrics",
+    "transaction_alerts", "metrics_data"
+)
+
+transaction_monitoring.add_connection(
+    "deadlock_detector", "deadlocks",
+    "transaction_alerts", "deadlock_data"
+)
+
+transaction_monitoring.add_connection(
+    "anomaly_detector", "anomalies",
+    "transaction_alerts", "anomaly_data"
+)
+```
+
+### Production Transaction Monitoring Integration
+
+```python
+# Integrate transaction monitoring with existing production workflow
+def create_monitored_enterprise_workflow():
+    workflow = WorkflowBuilder()
+
+    # Business logic nodes
+    workflow.add_node("CSVReaderNode", "data_reader", {
+        "file_path": "/data/transactions.csv"
+    })
+
+    workflow.add_node("AsyncSQLDatabaseNode", "database", {
+        "connection_string": "postgresql://user:pass@db:5432/enterprise",
+        "pool_size": 20,
+        "max_overflow": 50
+    })
+
+    workflow.add_node("LLMAgentNode", "processor", {
+        "model": "gpt-4",
+        "provider": "openai"
+    })
+
+    # Transaction monitoring overlay
+    workflow.add_node("TransactionMetricsNode", "metrics", {
+        "operation": "start_transaction",
+        "transaction_id": "enterprise_workflow",
+        "operation_type": "data_processing"
+    })
+
+    workflow.add_node("DeadlockDetectorNode", "deadlock_monitor", {
+        "operation": "start_monitoring"
+    })
+
+    workflow.add_node("PerformanceAnomalyNode", "anomaly_monitor", {
+        "operation": "add_metric",
+        "metric_name": "workflow_execution_time"
+    })
+
+    # Connect with monitoring
+    workflow.connect("metrics", "status",
+                    mapping={"data_reader": "start_signal"})
+    workflow.connect("data_reader", "data",
+                    mapping={"database": "input_data"})
+    workflow.connect("database", "result",
+                    mapping={"processor": "data_input"})
+    workflow.connect("processor", "result",
+                    mapping={"anomaly_monitor": "execution_metrics"})
+
+    return workflow
+```
+
+### Transaction Monitoring Dashboard
+
+```python
+# Real-time transaction monitoring dashboard
+dashboard_workflow = WorkflowBuilder()
+
+# Dashboard data aggregation
+dashboard_workflow.add_node("PythonCodeNode", "dashboard_aggregator", {
+    "code": """
+def aggregate_transaction_metrics(metrics_data, monitoring_data, anomaly_data):
+    import json
+    from datetime import datetime, timedelta
+
+    current_time = datetime.now()
+
+    # Calculate key metrics
+    dashboard = {
+        "timestamp": current_time.isoformat(),
+        "summary": {
+            "total_transactions": metrics_data.get("total_transactions", 0),
+            "active_transactions": monitoring_data.get("active_count", 0),
+            "error_rate": metrics_data.get("error_rate", 0.0),
+            "avg_latency_ms": metrics_data.get("latency", {}).get("mean", 0),
+            "p95_latency_ms": metrics_data.get("latency", {}).get("p95", 0),
+            "p99_latency_ms": metrics_data.get("latency", {}).get("p99", 0)
+        },
+        "alerts": {
+            "critical_anomalies": len([a for a in anomaly_data.get("anomalies", [])
+                                     if a.get("severity") == "critical"]),
+            "deadlocks_detected": monitoring_data.get("deadlocks_count", 0),
+            "race_conditions": monitoring_data.get("race_conditions_count", 0)
+        },
+        "performance": {
+            "throughput_tps": metrics_data.get("throughput", {}).get("transactions_per_second", 0),
+            "success_rate": metrics_data.get("success_rate", 1.0),
+            "queue_depth": monitoring_data.get("queue_depth", 0),
+            "resource_utilization": {
+                "cpu_percent": monitoring_data.get("cpu_usage", 0),
+                "memory_mb": monitoring_data.get("memory_usage", 0),
+                "disk_io_mb": monitoring_data.get("disk_io", 0)
+            }
+        },
+        "trends": {
+            "latency_trend": metrics_data.get("latency_trend", "stable"),
+            "error_trend": metrics_data.get("error_trend", "stable"),
+            "throughput_trend": metrics_data.get("throughput_trend", "stable")
+        }
+    }
+
+    return dashboard
+"""
+})
+
+# Real-time dashboard server
+dashboard_workflow.add_node("HTTPRequestNode", "dashboard_server", {
+    "url": "http://dashboard:3000/api/metrics",
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer ${DASHBOARD_API_KEY}"
+    }
+})
+```
+
 ## 🔄 Auto-Scaling Patterns
 
 ### Kubernetes Deployment

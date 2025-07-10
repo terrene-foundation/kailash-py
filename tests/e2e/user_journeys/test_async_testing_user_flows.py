@@ -36,7 +36,10 @@ class TestAsyncTestingUserFlows:
                     .add_async_code(
                         "greet",
                         """
-name = inputs.get("name", "World")
+try:
+    name = name if 'name' in locals() else "World"
+except NameError:
+    name = "World"
 result = {"greeting": f"Hello, {name}!"}
 """,
                     )
@@ -141,7 +144,10 @@ result = {"greeting": f"Hello, {name}!"}
                         """
 # Extract sales data for a specific date
 source_db = await get_resource("source_db")
-target_date = inputs["date"]
+try:
+    target_date = date if 'date' in locals() else None
+except NameError:
+    target_date = None
 
 sales = await source_db.fetch('''
     SELECT * FROM sales
@@ -185,7 +191,7 @@ for sale in raw_sales:
 
 # Create daily summary
 daily_summary = {
-    "date": inputs["date"],
+    "date": date if 'date' in locals() else None,
     "total_sales": sum(s["amount"] for s in transformed_sales),
     "total_transactions": len(transformed_sales),
     "unique_customers": len(customer_totals),
@@ -381,7 +387,10 @@ result = {
                         """
 # Validate user exists and get current plan
 user_db = await get_resource("user_db")
-user_id = inputs["user_id"]
+try:
+    user_id = user_id if 'user_id' in locals() else None
+except NameError:
+    user_id = None
 
 user = await user_db.fetchone("SELECT * FROM users WHERE id = %s", user_id)
 if not user:
@@ -402,7 +411,10 @@ if not can_upgrade:
     raise ValueError("User already on highest plan")
 
 payments = await get_resource("payments")
-new_plan = inputs["new_plan"]
+try:
+    new_plan = new_plan if 'new_plan' in locals() else None
+except NameError:
+    new_plan = None
 
 # Calculate price difference
 plan_prices = {"basic": 10, "premium": 25, "enterprise": 50}
@@ -570,7 +582,7 @@ result = {
                             "validate_user",
                             """
 user_db = await get_resource("user_db")
-user = await user_db.fetchone("SELECT * FROM users WHERE id = %s", inputs["user_id"])
+user = await user_db.fetchone("SELECT * FROM users WHERE id = %s", user_id if 'user_id' in locals() else None)
 if not user:
     raise ValueError("User not found")
 result = {"user": dict(user)}

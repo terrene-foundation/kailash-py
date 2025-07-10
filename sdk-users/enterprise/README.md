@@ -28,6 +28,7 @@ This directory contains enterprise-specific patterns, architectures, and best pr
 | **High-throughput API** | API Gateway + Connection pooling | Rate limiting, caching, monitoring |
 | **Agent Coordination** | A2A + Self-organizing nodes | Dynamic agent pools, intelligent routing |
 | **Secure Enterprise** | JWT + ABAC + ThreatDetection | Multi-factor auth, threat monitoring |
+| **Distributed Transactions** | DTM + Saga/2PC patterns | Automatic pattern selection, compensation logic |
 
 ## 🚀 Quick Start Patterns
 
@@ -121,6 +122,60 @@ workflow.add_node("coordinator", A2ACoordinatorNode(
     performance_monitoring=True
 ))
 
+```
+
+### Enterprise Transaction Management
+```python
+from kailash.nodes.transaction import DistributedTransactionManagerNode
+
+# Automatic pattern selection for enterprise transactions
+dtm = DistributedTransactionManagerNode(
+    transaction_name="enterprise_order_processing",
+    state_storage="database",
+    storage_config={
+        "db_pool": enterprise_db_pool,
+        "table_name": "enterprise_transaction_states"
+    }
+)
+
+# Create transaction with enterprise requirements
+await dtm.async_run(
+    operation="create_transaction",
+    requirements={
+        "consistency": "strong",        # Enterprise data consistency
+        "availability": "high",         # 99.9% uptime requirement
+        "timeout": 300,                # 5-minute timeout
+        "isolation_level": "serializable"
+    },
+    context={
+        "enterprise_id": "ENT001",
+        "compliance_required": True,
+        "audit_trail": True
+    }
+)
+
+# Add enterprise service participants
+enterprise_services = [
+    {"id": "crm_service", "2pc": True, "saga": True},
+    {"id": "erp_service", "2pc": True, "saga": True},
+    {"id": "billing_service", "2pc": False, "saga": True},  # Legacy
+    {"id": "audit_service", "2pc": True, "saga": True}
+]
+
+for service in enterprise_services:
+    await dtm.async_run(
+        operation="add_participant",
+        participant_id=service["id"],
+        endpoint=f"https://internal.{service['id']}.company.com/api/v1/transactions",
+        supports_2pc=service["2pc"],
+        supports_saga=service["saga"],
+        timeout=60,
+        retry_count=3
+    )
+
+# Execute with automatic pattern selection
+result = await dtm.async_run(operation="execute_transaction")
+print(f"Selected pattern: {result['selected_pattern']}")
 ```
 
 ## 🛡️ Security Patterns

@@ -9,8 +9,50 @@ from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})  # All classes end with "Node"
+# Auto ID generation: agent_id = workflow.add_node("LLMAgentNode", {"model": "gpt-4"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
+```
+
+### LLMAgentNode with Real MCP (v0.6.6+)
+```python
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "use_real_mcp": True,  # Default - executes real MCP tools
+    "mcp_servers": [{"name": "tools", "transport": "stdio", "command": "mcp-server"}],
+    "auto_discover_tools": True
+})
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### IterativeLLMAgent with Real MCP (v0.6.5+)
+```python
+workflow = WorkflowBuilder()
+workflow.add_node("IterativeLLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "use_real_mcp": True,  # Default - executes real MCP tools
+    "mcp_servers": [{"name": "tools", "transport": "stdio", "command": "mcp-server"}]
+})
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Multi-Channel Nexus Platform (v0.6.6+)
+```python
+from kailash.nexus import create_nexus
+
+nexus = create_nexus(
+    title="Unified Platform",
+    enable_api=True,     # REST API + WebSocket
+    enable_cli=True,     # Command-line interface
+    enable_mcp=True,     # Model Context Protocol
+    channels_synced=True # Cross-channel session sync
+)
+# Access same workflows via API, CLI, or MCP with unified sessions
 ```
 
 ### ❌ NEVER
@@ -18,18 +60,23 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 - `workflow.addNode()` → Use `workflow.add_node()`
 - `inputs={}` → Use `parameters={}`
 - String code in PythonCodeNode → Use `.from_function()` (step 4)
+- `use_real_mcp=False` → Use `use_real_mcp=True` (default) for real tool execution
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
 2. **Architecture decisions** → [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md)
 3. **Node selection** → [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md)
-4. **Security & access control** → [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) (User management, RBAC, auth)
-5. **Enterprise integration** → [sdk-users/enterprise/gateway-patterns.md](sdk-users/enterprise/gateway-patterns.md) (API gateways, external systems)
-6. **Custom logic** → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
-7. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
-8. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
-9. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
-10. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+4. **AI Agents with MCP** → Use `use_real_mcp=True` (default) for real tool execution
+5. **Multi-channel apps** → [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) (API, CLI, MCP unified)
+6. **Security & access control** → [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) (User management, RBAC, auth)
+7. **Enterprise integration** → [sdk-users/enterprise/gateway-patterns.md](sdk-users/enterprise/gateway-patterns.md) (API gateways, external systems)
+8. **Custom logic** → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
+9. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
+10. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
+11. **Enterprise resilience** → [sdk-users/enterprise/resilience-patterns.md](sdk-users/enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
+12. **Distributed transactions** → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
+13. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
+14. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
 
 ---
 
@@ -64,18 +111,23 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 5. **Cyclic Workflows**: Preserve state with `set_cycle_state()`, explicit parameter mapping
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
 7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/cheatsheet/025-mcp-integration.md)
-8. **Documentation**: Comprehensive validation across 9 critical phases, 100% pass rates achieved - see [SDK Users](sdk-users/) navigation hub
-9. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/enterprise/resilience-patterns.md)
+8. **MCP Real Execution**: All AI agents use `use_real_mcp=True` by default (v0.6.6+) - BREAKING CHANGE from mock execution
+9. **Documentation**: Comprehensive validation across 9 critical phases, 100% pass rates achieved - see [SDK Users](sdk-users/) navigation hub
+10. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/enterprise/resilience-patterns.md)
+11. **Transaction Monitoring**: 5 production-tested nodes for metrics, deadlock detection, race conditions - see [Transaction Monitoring](sdk-users/cheatsheet/048-transaction-monitoring.md)
+12. **Distributed Transactions**: Automatic pattern selection (Saga/2PC), compensation logic, recovery - see [Distributed Transactions](sdk-users/cheatsheet/049-distributed-transactions.md)
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
 **Choose Smart**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - Decision trees + quick finder
-**AI**: LLMAgentNode, MonitoredLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, SelfOrganizingAgentNode
+**AI**: **LLMAgentNode**, **IterativeLLMAgentNode** (real MCP execution by default), MonitoredLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, SelfOrganizingAgentNode
 **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, DirectoryReaderNode
 **RAG**: 47+ specialized nodes - see [RAG Guide](sdk-users/developer/06-comprehensive-rag-guide.md)
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Enterprise**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
+**Monitoring**: TransactionMetricsNode, TransactionMonitorNode, DeadlockDetectorNode, RaceConditionDetectorNode, PerformanceAnomalyNode - see [Monitoring Guide](sdk-users/nodes/monitoring-nodes.md)
+**Transactions**: DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode - see [Transaction Guide](sdk-users/nodes/transaction-nodes.md)
 **Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md) (2194 lines - use sparingly)
 
 ## 📂 Directory Navigation Convention
@@ -98,11 +150,13 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 | **I need to...** | **SDK User** | **SDK Contributor** |
 |-----------------|--------------|---------------------|
 | **Build a workflow** | [sdk-users/workflows/](sdk-users/workflows/) | - |
-| **Build an app** | [apps/APP_DEVELOPMENT_GUIDE.md](apps/APP_DEVELOPMENT_GUIDE.md) | - |
+| **Build an app** | [apps/DOCUMENTATION_STANDARDS.md](apps/DOCUMENTATION_STANDARDS.md) | - |
+| **Multi-channel platform** | [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) - API, CLI, MCP unified | - |
 | **Make arch decisions** | [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md) | [Architecture ADRs](# contrib (removed)/architecture/adr/) |
 | **Fix an error** | [sdk-users/developer/05-troubleshooting.md](sdk-users/developer/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) |
 | **Find patterns** | [sdk-users/patterns/](sdk-users/patterns/) | - |
 | **Learn from workflows** | [sdk-users/workflows/](sdk-users/workflows/) - Production workflows | - |
+| **Distributed transactions** | [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) - Saga/2PC patterns | - |
 | **Run tests**   | [tests/README.md](tests/README.md) - Test guide | [tests/](tests/) - Full test suite |
 | **SDK development** | [examples/](examples/) - Feature validation | - |
 | **Train LLMs**  | - | [# contrib (removed)/training/](# contrib (removed)/training/) |
@@ -130,8 +184,11 @@ results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
 - **Examples**: [examples/](examples/) - Feature validation
 
 **Testing:**
-- **Test Suite**: 1,950+ tests (Unit: 1,265, Integration: 194, E2E: 16 core)
+- **Test Suite**: 2,400+ tests (Unit: 1,617, Integration: 233, E2E: 21 core)
+- **Infrastructure**: 100% E2E pass rate with v0.6.6+ enhancements
 - **MCP Testing**: 407 comprehensive tests across 8 components (100% pass rate)
+- **Transaction Monitoring**: 230 unit tests, 8 integration tests, comprehensive E2E (100% pass rate)
+- **Distributed Transactions**: 122 unit tests, 23 integration tests, comprehensive E2E (100% pass rate)
 - **Test Guide**: [tests/README.md](tests/README.md) - 3-tier testing strategy
 - **CI/CD**: Sub-10 minute test execution with Docker infrastructure
 

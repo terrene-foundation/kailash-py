@@ -3,10 +3,19 @@
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import NodeParameter, register_node
+
+
+class ConvergenceMode(Enum):
+    """Convergence modes for iterative agent."""
+
+    SATISFACTION = "satisfaction"  # Original confidence-based
+    TEST_DRIVEN = "test_driven"  # New validation-based
+    HYBRID = "hybrid"  # Combination of both
 
 
 @dataclass
@@ -85,29 +94,41 @@ class IterativeLLMAgentNode(LLMAgentNode):
     Key Features:
     - Progressive MCP discovery without pre-configuration
     - 6-phase iterative process (Discovery → Planning → Execution → Reflection → Convergence → Synthesis)
+    - **Real MCP tool execution** - Calls actual MCP tools instead of mock execution
     - Semantic tool understanding and capability mapping
     - Adaptive strategy based on iteration results
     - Smart convergence criteria and resource management
+    - Configurable execution modes (real MCP vs mock for testing)
 
     Examples:
-        >>> # Basic iterative agent
+        >>> # Basic iterative agent with real MCP execution
         >>> agent = IterativeLLMAgentNode()
         >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Find and analyze healthcare AI trends"}],
         ...     mcp_servers=["http://localhost:8080"],
-        ...     max_iterations=3
+        ...     max_iterations=3,
+        ...     use_real_mcp=True  # Enables real MCP tool execution
         ... )
 
-        >>> # Advanced iterative agent with custom convergence
+        >>> # Advanced iterative agent with custom convergence and real MCP
         >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Research and recommend AI implementation strategy"}],
         ...     mcp_servers=["http://ai-registry:8080", "http://knowledge-base:8081"],
         ...     max_iterations=5,
         ...     discovery_mode="semantic",
+        ...     use_real_mcp=True,  # Use real MCP tools
         ...     convergence_criteria={
         ...         "goal_satisfaction": {"threshold": 0.9},
         ...         "diminishing_returns": {"min_improvement": 0.1}
         ...     }
+        ... )
+
+        >>> # Test mode with mock execution for development
+        >>> result = agent.execute(
+        ...     messages=[{"role": "user", "content": "Test query"}],
+        ...     mcp_servers=["http://localhost:8080"],
+        ...     max_iterations=2,
+        ...     use_real_mcp=False  # Uses mock execution for testing
         ... )
     """
 
@@ -136,7 +157,16 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 - quality_gates: {"min_confidence": 0.7, "custom_validator": callable} - Quality checks with optional custom validator
                 - resource_limits: {"max_cost": 1.0, "max_time": 300} - Hard resource limits
                 - custom_criteria: [{"name": "my_check", "function": callable, "weight": 0.5}] - User-defined criteria
+                - test_requirements: {"syntax_valid": True, "executes_without_error": True} - Test-driven requirements
                 """,
+            ),
+            # Convergence Mode
+            "convergence_mode": NodeParameter(
+                name="convergence_mode",
+                type=str,
+                required=False,
+                default="satisfaction",
+                description="Convergence mode: satisfaction (default), test_driven, or hybrid",
             ),
             # Discovery Configuration
             "discovery_mode": NodeParameter(
@@ -168,6 +198,25 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 default="dynamic",
                 description="How to adapt strategy: static, dynamic, ml_guided",
             ),
+            # Test-driven specific parameters
+            "enable_auto_validation": NodeParameter(
+                name="enable_auto_validation",
+                type=bool,
+                required=False,
+                default=True,
+                description="Automatically add validation tools to MCP servers",
+            ),
+            "validation_strategy": NodeParameter(
+                name="validation_strategy",
+                type=dict,
+                required=False,
+                default={
+                    "progressive": True,  # Start with syntax, move to semantic
+                    "fail_fast": True,  # Stop on first validation failure
+                    "auto_fix": True,  # Attempt to fix validation errors
+                },
+                description="Strategy for validation execution",
+            ),
             # Performance and Monitoring
             "enable_detailed_logging": NodeParameter(
                 name="enable_detailed_logging",
@@ -182,6 +231,14 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 required=False,
                 default=300,
                 description="Timeout for each iteration in seconds",
+            ),
+            # MCP Execution Control
+            "use_real_mcp": NodeParameter(
+                name="use_real_mcp",
+                type=bool,
+                required=False,
+                default=True,
+                description="Use real MCP tool execution instead of mock execution",
             ),
         }
 
@@ -209,6 +266,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
         # Extract iterative-specific parameters
         max_iterations = kwargs.get("max_iterations", 5)
         convergence_criteria = kwargs.get("convergence_criteria", {})
+        convergence_mode = ConvergenceMode(
+            kwargs.get("convergence_mode", "satisfaction")
+        )
         discovery_mode = kwargs.get("discovery_mode", "progressive")
         discovery_budget = kwargs.get(
             "discovery_budget", {"max_servers": 5, "max_tools": 20, "max_resources": 50}
@@ -216,7 +276,26 @@ class IterativeLLMAgentNode(LLMAgentNode):
         reflection_enabled = kwargs.get("reflection_enabled", True)
         adaptation_strategy = kwargs.get("adaptation_strategy", "dynamic")
         enable_detailed_logging = kwargs.get("enable_detailed_logging", True)
+        enable_auto_validation = kwargs.get("enable_auto_validation", True)
         kwargs.get("iteration_timeout", 300)
+
+        # Auto-inject validation tools if in test-driven mode
+        if convergence_mode in [ConvergenceMode.TEST_DRIVEN, ConvergenceMode.HYBRID]:
+            if enable_auto_validation:
+                mcp_servers = kwargs.get("mcp_servers", [])
+                # Add internal validation server if not present
+                if not any(
+                    s == "builtin_validation"
+                    or (isinstance(s, dict) and s.get("type") == "internal")
+                    for s in mcp_servers
+                ):
+                    mcp_servers.append(
+                        {"type": "internal", "name": "builtin_validation"}
+                    )
+                kwargs["mcp_servers"] = mcp_servers
+
+        # Store mode in kwargs for convergence phase
+        kwargs["_convergence_mode"] = convergence_mode
 
         # Initialize iterative execution state
         start_time = time.time()
@@ -270,16 +349,18 @@ class IterativeLLMAgentNode(LLMAgentNode):
                             kwargs, iteration_state.execution_results, iterations
                         )
 
-                    # Phase 5: Convergence
-                    iteration_state.phase = "convergence"
-                    convergence_result = self._phase_convergence(
+                    # Phase 5: Convergence - mode-aware
+                    convergence_result = self._phase_convergence_with_mode(
                         kwargs,
                         iteration_state,
                         iterations,
                         convergence_criteria,
                         global_discoveries,
+                        kwargs.get("_convergence_mode", ConvergenceMode.SATISFACTION),
                     )
                     iteration_state.convergence_decision = convergence_result
+                    # Set phase after convergence check is complete
+                    iteration_state.phase = "convergence"
 
                     if convergence_result["should_stop"]:
                         converged = True
@@ -670,6 +751,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
             "errors": [],
         }
 
+        # Check if we should use real MCP tool execution
+        use_real_mcp = kwargs.get("use_real_mcp", True)
+
         # Execute each step in the plan
         for step in plan.get("execution_steps", []):
             step_num = step.get("step", 0)
@@ -677,22 +761,35 @@ class IterativeLLMAgentNode(LLMAgentNode):
             tools = step.get("tools", [])
 
             try:
-                # Mock tool execution (in real implementation, call actual tools)
-                step_result = {
-                    "step": step_num,
-                    "action": action,
-                    "tools_used": tools,
-                    "output": f"Mock execution result for {action} using tools: {', '.join(tools)}",
-                    "success": True,
-                    "duration": 1.5,
-                }
+                if use_real_mcp:
+                    # Real MCP tool execution
+                    step_result = self._execute_tools_with_mcp(
+                        step_num, action, tools, discoveries, kwargs
+                    )
+                else:
+                    # Mock tool execution for backward compatibility
+                    step_result = {
+                        "step": step_num,
+                        "action": action,
+                        "tools_used": tools,
+                        "output": f"Mock execution result for {action} using tools: {', '.join(tools)}",
+                        "success": True,
+                        "duration": 1.5,
+                    }
 
                 execution_results["steps_completed"].append(step_result)
                 execution_results["intermediate_results"].append(step_result["output"])
 
                 # Store tool outputs
                 for tool in tools:
-                    execution_results["tool_outputs"][tool] = f"Output from {tool}"
+                    if step_result["success"]:
+                        execution_results["tool_outputs"][tool] = step_result.get(
+                            "tool_outputs", {}
+                        ).get(tool, step_result["output"])
+                    else:
+                        execution_results["tool_outputs"][
+                            tool
+                        ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
 
             except Exception as e:
                 error_result = {
@@ -707,6 +804,262 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 execution_results["success"] = False
 
         return execution_results
+
+    def _execute_tools_with_mcp(
+        self,
+        step_num: int,
+        action: str,
+        tools: list[str],
+        discoveries: dict[str, Any],
+        kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute tools using real MCP client."""
+        import time
+
+        start_time = time.time()
+        step_result = {
+            "step": step_num,
+            "action": action,
+            "tools_used": tools,
+            "output": "",
+            "success": True,
+            "duration": 0.0,
+            "tool_outputs": {},
+        }
+
+        # Initialize MCP client if not already done
+        if not hasattr(self, "_mcp_client"):
+            from kailash.mcp_server import MCPClient
+
+            self._mcp_client = MCPClient()
+
+        # Build tool-to-server mapping from discoveries
+        tool_server_map = self._build_tool_server_mapping(discoveries, kwargs)
+
+        # Execute each tool
+        tool_results = []
+        for tool_name in tools:
+            try:
+                # Find server configuration for this tool
+                server_config = tool_server_map.get(tool_name)
+                if not server_config:
+                    self.logger.warning(
+                        f"No server configuration found for tool: {tool_name}"
+                    )
+                    continue
+
+                # Get tool arguments from planning context
+                tool_args = self._extract_tool_arguments(tool_name, action, kwargs)
+
+                # Execute the tool
+                tool_result = self._run_async_in_sync_context(
+                    self._mcp_client.call_tool(server_config, tool_name, tool_args)
+                )
+
+                if tool_result.get("success", False):
+                    content = tool_result.get("content", "")
+                    step_result["tool_outputs"][tool_name] = content
+                    tool_results.append(f"Tool {tool_name}: {content}")
+                else:
+                    error_msg = tool_result.get("error", "Unknown error")
+                    step_result["tool_outputs"][tool_name] = f"Error: {error_msg}"
+                    tool_results.append(f"Tool {tool_name} failed: {error_msg}")
+
+            except Exception as e:
+                error_msg = str(e)
+                step_result["tool_outputs"][tool_name] = f"Error: {error_msg}"
+                tool_results.append(f"Tool {tool_name} failed: {error_msg}")
+                self.logger.error(f"Tool execution failed for {tool_name}: {e}")
+
+        # Combine all tool outputs
+        step_result["output"] = (
+            "\n".join(tool_results)
+            if tool_results
+            else f"No tools executed for action: {action}"
+        )
+        step_result["duration"] = time.time() - start_time
+
+        # Mark as failed if no tools executed successfully
+        if tool_results:
+            step_result["success"] = any(
+                "failed" not in result for result in tool_results
+            )
+        else:
+            step_result["success"] = False
+
+        return step_result
+
+    def _build_tool_server_mapping(
+        self, discoveries: dict[str, Any], kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Build mapping from tool names to server configurations."""
+        tool_server_map = {}
+
+        # Get MCP servers from kwargs with platform adapter support
+        mcp_servers = kwargs.get("mcp_servers", [])
+
+        # Check if we have platform-format server configurations
+        if "server_config" in kwargs or "server_configs" in kwargs:
+            from kailash.adapters import MCPPlatformAdapter
+
+            try:
+                platform_config = {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k in ["server_config", "server_configs"]
+                }
+                translated_config = MCPPlatformAdapter.translate_llm_agent_config(
+                    platform_config
+                )
+                if "mcp_servers" in translated_config:
+                    mcp_servers = translated_config["mcp_servers"]
+                    self.logger.debug(
+                        f"Translated platform MCP servers: {len(mcp_servers)} servers"
+                    )
+            except Exception as e:
+                self.logger.warning(f"Failed to translate platform MCP config: {e}")
+                # Continue with original mcp_servers
+
+        # Create fallback server config if we have mcp_servers
+        fallback_server = mcp_servers[0] if mcp_servers else None
+
+        # Process discovered tools to map them to servers
+        for tool in discoveries.get("new_tools", []):
+            if isinstance(tool, dict):
+                # Extract tool name and server info
+                if "function" in tool:
+                    tool_name = tool["function"].get("name", "unknown")
+                    server_config = tool["function"].get("mcp_server_config")
+                else:
+                    tool_name = tool.get("name", "unknown")
+                    server_config = tool.get("mcp_server_config")
+
+                # Skip tools with unknown names
+                if tool_name == "unknown":
+                    self.logger.warning(f"Skipping tool with unknown name: {tool}")
+                    continue
+
+                # Find matching server configuration
+                if server_config:
+                    tool_server_map[tool_name] = server_config
+                elif fallback_server:
+                    # Use fallback server and log the mapping
+                    tool_server_map[tool_name] = fallback_server
+                    self.logger.debug(
+                        f"Mapped tool '{tool_name}' to fallback server: {fallback_server.get('name', 'unnamed')}"
+                    )
+                else:
+                    # No server available for this tool
+                    self.logger.warning(
+                        f"No MCP server configuration available for tool: {tool_name}"
+                    )
+
+        # Also map any tools that might be explicitly listed in mcp_servers
+        for server in mcp_servers:
+            server_tools = server.get("tools", [])
+            for tool_name in server_tools:
+                if tool_name not in tool_server_map:
+                    tool_server_map[tool_name] = server
+                    self.logger.debug(
+                        f"Pre-mapped tool '{tool_name}' from server configuration"
+                    )
+
+        return tool_server_map
+
+    def _extract_tool_arguments(
+        self, tool_name: str, action: str, kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Extract arguments for tool execution based on action context."""
+        # Get user query for context
+        messages = kwargs.get("messages", [])
+        user_query = ""
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                user_query = msg.get("content", "")
+                break
+
+        # Check if explicit tool arguments are provided in kwargs
+        tool_args_key = f"{tool_name}_args"
+        if tool_args_key in kwargs:
+            explicit_args = kwargs[tool_args_key]
+            if isinstance(explicit_args, dict):
+                return explicit_args
+
+        # Check if there are general tool parameters provided
+        if "tool_parameters" in kwargs and isinstance(kwargs["tool_parameters"], dict):
+            tool_params = kwargs["tool_parameters"]
+            if tool_name in tool_params and isinstance(tool_params[tool_name], dict):
+                return tool_params[tool_name]
+
+        # Try to extract structured parameters from the action string
+        import re
+
+        # Look for JSON-like structures in action
+        json_match = re.search(r"\{[^}]+\}", action)
+        if json_match:
+            try:
+                import json
+
+                parsed_params = json.loads(json_match.group())
+                if isinstance(parsed_params, dict):
+                    return parsed_params
+            except (json.JSONDecodeError, ValueError):
+                # Fall through to default behavior
+                pass
+
+        # Look for key=value pairs in action
+        param_matches = re.findall(r'(\w+)=(["\']?)([^,\s]+)\2', action)
+        if param_matches:
+            extracted_params = {}
+            for key, _, value in param_matches:
+                # Try to convert to appropriate type
+                if value.lower() in ("true", "false"):
+                    extracted_params[key] = value.lower() == "true"
+                elif value.isdigit():
+                    extracted_params[key] = int(value)
+                else:
+                    extracted_params[key] = value
+
+            # Add default parameters
+            extracted_params.update({"query": user_query, "action": action})
+            return extracted_params
+
+        # Generate basic arguments based on action and user query (fallback)
+        if action == "gather_data":
+            return {"query": user_query, "action": "search", "source": "default"}
+        elif action == "perform_analysis":
+            return {"data": user_query, "action": "analyze", "format": "structured"}
+        elif action == "generate_insights":
+            return {"input": user_query, "action": "generate", "type": "insights"}
+        elif "search" in action.lower():
+            return {"query": user_query, "search_type": "general"}
+        elif "file" in action.lower() or "read" in action.lower():
+            return {"path": user_query, "operation": "read"}
+        elif "write" in action.lower() or "create" in action.lower():
+            return {"content": user_query, "operation": "write"}
+        else:
+            return {"query": user_query, "action": action, "context": "default"}
+
+    def _run_async_in_sync_context(self, coro):
+        """Run async coroutine in sync context using existing pattern from parent class."""
+        try:
+            import asyncio
+
+            # Try to get existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If loop is running, we need to use a new thread
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, coro)
+                    return future.result()
+            else:
+                # Loop exists but not running, use run_until_complete
+                return loop.run_until_complete(coro)
+        except RuntimeError:
+            # No event loop exists, create one
+            return asyncio.run(coro)
 
     def _phase_reflection(
         self,
@@ -1278,3 +1631,621 @@ class IterativeLLMAgentNode(LLMAgentNode):
             "average_iteration_time": total_duration / max(len(iterations), 1),
             "estimated_cost_usd": total_api_calls * 0.01,  # Mock cost calculation
         }
+
+    def _phase_convergence_with_mode(
+        self,
+        kwargs: dict[str, Any],
+        iteration_state: IterationState,
+        previous_iterations: list[IterationState],
+        convergence_criteria: dict[str, Any],
+        global_discoveries: dict[str, Any],
+        mode: ConvergenceMode,
+    ) -> dict[str, Any]:
+        """Execute convergence check based on selected mode."""
+
+        if mode == ConvergenceMode.SATISFACTION:
+            # Use existing convergence logic
+            return self._phase_convergence(
+                kwargs,
+                iteration_state,
+                previous_iterations,
+                convergence_criteria,
+                global_discoveries,
+            )
+
+        elif mode == ConvergenceMode.TEST_DRIVEN:
+            # Use new test-driven convergence
+            return self._phase_convergence_test_driven(
+                kwargs,
+                iteration_state,
+                previous_iterations,
+                convergence_criteria,
+                global_discoveries,
+            )
+
+        elif mode == ConvergenceMode.HYBRID:
+            # Combine both approaches
+            return self._phase_convergence_hybrid(
+                kwargs,
+                iteration_state,
+                previous_iterations,
+                convergence_criteria,
+                global_discoveries,
+            )
+
+    def _phase_convergence_test_driven(
+        self,
+        kwargs: dict[str, Any],
+        iteration_state: IterationState,
+        previous_iterations: list[IterationState],
+        convergence_criteria: dict[str, Any],
+        global_discoveries: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Test-driven convergence - only stop when deliverables pass validation."""
+
+        convergence_result = {
+            "should_stop": False,
+            "reason": "",
+            "confidence": 0.0,
+            "validation_results": {},
+            "tests_summary": {"total": 0, "passed": 0, "failed": 0, "skipped": 0},
+            "recommendations": [],
+        }
+
+        # Get test requirements from convergence criteria
+        test_requirements = convergence_criteria.get(
+            "test_requirements",
+            {
+                "syntax_valid": True,
+                "imports_resolve": True,
+                "executes_without_error": True,
+                "unit_tests_pass": False,
+                "integration_tests_pass": False,
+                "output_schema_valid": False,
+            },
+        )
+
+        # Get validation strategy
+        validation_strategy = kwargs.get(
+            "validation_strategy",
+            {"progressive": True, "fail_fast": True, "auto_fix": True},
+        )
+
+        # Extract all validation results from execution
+        validation_results = self._extract_validation_results(iteration_state)
+
+        # If no validation results found, look for code/workflow outputs to validate
+        if not validation_results:
+            validation_results = self._perform_implicit_validation(
+                iteration_state, test_requirements, validation_strategy
+            )
+
+        # Analyze validation results against requirements
+        test_status = self._analyze_test_results(validation_results, test_requirements)
+
+        # Update summary
+        convergence_result["tests_summary"]["total"] = len(test_status)
+        convergence_result["tests_summary"]["passed"] = sum(
+            1 for r in test_status.values() if r["passed"]
+        )
+        convergence_result["tests_summary"]["failed"] = sum(
+            1 for r in test_status.values() if not r["passed"] and not r.get("skipped")
+        )
+        convergence_result["tests_summary"]["skipped"] = sum(
+            1 for r in test_status.values() if r.get("skipped")
+        )
+        convergence_result["validation_results"] = test_status
+
+        # Determine convergence
+        required_tests = [name for name, req in test_requirements.items() if req]
+        required_passed = all(
+            test_status.get(name, {}).get("passed", False) for name in required_tests
+        )
+
+        if required_passed and convergence_result["tests_summary"]["total"] > 0:
+            convergence_result["should_stop"] = True
+            convergence_result["reason"] = (
+                f"test_driven_success: All {len(required_tests)} required tests passed"
+            )
+            convergence_result["confidence"] = 0.95
+        else:
+            # Provide detailed failure analysis
+            failed_required = [
+                name
+                for name in required_tests
+                if not test_status.get(name, {}).get("passed", False)
+            ]
+
+            convergence_result["reason"] = (
+                f"test_driven_continue: {len(failed_required)} required tests failed: {failed_required}"
+            )
+            convergence_result["confidence"] = convergence_result["tests_summary"][
+                "passed"
+            ] / max(len(required_tests), 1)
+
+            # Generate recommendations for next iteration
+            convergence_result["recommendations"] = self._generate_fix_recommendations(
+                test_status, failed_required, iteration_state
+            )
+
+        # Check resource limits even in test-driven mode
+        if not convergence_result["should_stop"]:
+            resource_check = self._check_resource_limits(
+                kwargs, iteration_state, previous_iterations, convergence_criteria
+            )
+            if resource_check["exceeded"]:
+                convergence_result["should_stop"] = True
+                convergence_result["reason"] = (
+                    f"resource_limit: {resource_check['reason']}"
+                )
+
+        return convergence_result
+
+    def _phase_convergence_hybrid(
+        self,
+        kwargs: dict[str, Any],
+        iteration_state: IterationState,
+        previous_iterations: list[IterationState],
+        convergence_criteria: dict[str, Any],
+        global_discoveries: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Hybrid convergence combining test-driven and satisfaction-based approaches."""
+
+        # Get both convergence results
+        test_result = self._phase_convergence_test_driven(
+            kwargs,
+            iteration_state,
+            previous_iterations,
+            convergence_criteria,
+            global_discoveries,
+        )
+
+        satisfaction_result = self._phase_convergence(
+            kwargs,
+            iteration_state,
+            previous_iterations,
+            convergence_criteria,
+            global_discoveries,
+        )
+
+        # Combine results with configurable weights
+        hybrid_config = convergence_criteria.get(
+            "hybrid_config",
+            {
+                "test_weight": 0.7,
+                "satisfaction_weight": 0.3,
+                "require_both": False,  # If True, both must pass
+            },
+        )
+
+        test_weight = hybrid_config.get("test_weight", 0.7)
+        satisfaction_weight = hybrid_config.get("satisfaction_weight", 0.3)
+        require_both = hybrid_config.get("require_both", False)
+
+        # Calculate combined confidence
+        combined_confidence = (
+            test_result["confidence"] * test_weight
+            + satisfaction_result["confidence"] * satisfaction_weight
+        )
+
+        # Determine convergence
+        if require_both:
+            should_stop = (
+                test_result["should_stop"] and satisfaction_result["should_stop"]
+            )
+            reason = f"hybrid_both: tests={'passed' if test_result['should_stop'] else 'failed'}, satisfaction={'met' if satisfaction_result['should_stop'] else 'unmet'}"
+        else:
+            # Stop if weighted score is high enough
+            threshold = convergence_criteria.get("hybrid_threshold", 0.85)
+            should_stop = combined_confidence >= threshold
+
+            if should_stop:
+                reason = f"hybrid_threshold: combined confidence {combined_confidence:.2f} >= {threshold}"
+            else:
+                reason = f"hybrid_continue: combined confidence {combined_confidence:.2f} < {threshold}"
+
+        return {
+            "should_stop": should_stop,
+            "reason": reason,
+            "confidence": combined_confidence,
+            "test_results": test_result.get("validation_results", {}),
+            "satisfaction_metrics": satisfaction_result.get("criteria_met", {}),
+            "recommendations": test_result.get("recommendations", [])
+            + satisfaction_result.get("recommendations", []),
+        }
+
+    def _extract_validation_results(
+        self, iteration_state: IterationState
+    ) -> list[dict]:
+        """Extract validation results from execution outputs."""
+        validation_results = []
+        execution_results = iteration_state.execution_results or {}
+        tool_outputs = execution_results.get("tool_outputs", {})
+
+        # Look for validation tool outputs with expanded keyword matching
+        validation_keywords = [
+            "validate",
+            "test",
+            "check",
+            "verify",
+            "assert",
+            "confirm",
+            "audit",
+            "review",
+            "inspect",
+            "examine",
+            "eval",
+            "run",
+        ]
+
+        for tool_name, output in tool_outputs.items():
+            is_validation_tool = any(
+                keyword in tool_name.lower() for keyword in validation_keywords
+            )
+
+            if isinstance(output, dict):
+                # Check for validation-related content in the output structure
+                has_validation_content = any(
+                    key in output
+                    for key in [
+                        "validation_results",
+                        "test_results",
+                        "validated",
+                        "passed",
+                        "failed",
+                        "success",
+                        "errors",
+                        "warnings",
+                        "status",
+                        "result",
+                    ]
+                )
+
+                if is_validation_tool or has_validation_content:
+                    if "validation_results" in output:
+                        # Standard validation node output
+                        results = output["validation_results"]
+                        if isinstance(results, list):
+                            validation_results.extend(results)
+                        elif isinstance(results, dict):
+                            validation_results.append(results)
+                    elif "test_results" in output:
+                        # Test suite output
+                        results = output["test_results"]
+                        if isinstance(results, list):
+                            validation_results.extend(results)
+                        elif isinstance(results, dict):
+                            validation_results.append(results)
+                    elif "validated" in output or "passed" in output:
+                        # Simple validation result
+                        passed = output.get("validated", output.get("passed", False))
+                        validation_results.append(
+                            {
+                                "test_name": tool_name,
+                                "passed": passed,
+                                "details": output,
+                            }
+                        )
+                    elif "success" in output or "status" in output:
+                        # Status-based validation
+                        success = output.get(
+                            "success", output.get("status") == "success"
+                        )
+                        validation_results.append(
+                            {
+                                "test_name": tool_name,
+                                "passed": success,
+                                "details": output,
+                            }
+                        )
+                    elif "result" in output:
+                        # Generic result output - try to extract validation info
+                        result = output["result"]
+                        if isinstance(result, dict):
+                            # Check if result contains validation data
+                            if any(
+                                key in result
+                                for key in ["passed", "failed", "success", "errors"]
+                            ):
+                                validation_results.append(
+                                    {
+                                        "test_name": tool_name,
+                                        "passed": result.get(
+                                            "passed", result.get("success", False)
+                                        ),
+                                        "details": result,
+                                    }
+                                )
+                            else:
+                                # Treat non-empty result as successful validation
+                                validation_results.append(
+                                    {
+                                        "test_name": tool_name,
+                                        "passed": bool(result),
+                                        "details": output,
+                                    }
+                                )
+                        elif isinstance(result, (str, bool, int)):
+                            # Simple result types
+                            validation_results.append(
+                                {
+                                    "test_name": tool_name,
+                                    "passed": bool(result)
+                                    and result != "false"
+                                    and result != 0,
+                                    "details": output,
+                                }
+                            )
+            elif isinstance(output, str):
+                # String output - look for validation patterns
+                if is_validation_tool:
+                    # Simple heuristic: look for success/fail indicators in string
+                    success_indicators = ["pass", "success", "ok", "valid", "true"]
+                    failure_indicators = ["fail", "error", "invalid", "false"]
+
+                    output_lower = output.lower()
+                    has_success = any(
+                        indicator in output_lower for indicator in success_indicators
+                    )
+                    has_failure = any(
+                        indicator in output_lower for indicator in failure_indicators
+                    )
+
+                    if has_success or has_failure:
+                        validation_results.append(
+                            {
+                                "test_name": tool_name,
+                                "passed": has_success and not has_failure,
+                                "details": {"output": output},
+                            }
+                        )
+
+        return validation_results
+
+    def _perform_implicit_validation(
+        self,
+        iteration_state: IterationState,
+        test_requirements: dict,
+        validation_strategy: dict,
+    ) -> list[dict]:
+        """Perform validation on discovered code/workflow outputs."""
+        from kailash.nodes.validation import CodeValidationNode, WorkflowValidationNode
+
+        validation_results = []
+        execution_results = iteration_state.execution_results or {}
+        tool_outputs = execution_results.get("tool_outputs", {})
+
+        # Look for code generation outputs
+        for tool_name, output in tool_outputs.items():
+            if not isinstance(output, (dict, str)):
+                continue
+
+            # Detect code outputs
+            code_content = None
+            if isinstance(output, str) and any(
+                keyword in output for keyword in ["def ", "class ", "import "]
+            ):
+                code_content = output
+            elif isinstance(output, dict):
+                # Check various possible keys
+                for key in ["code", "generated_code", "result", "output"]:
+                    if key in output and isinstance(output[key], str):
+                        potential_code = output[key]
+                        if any(
+                            keyword in potential_code
+                            for keyword in ["def ", "class ", "import "]
+                        ):
+                            code_content = potential_code
+                            break
+
+            # Validate discovered code
+            if code_content:
+                validator = CodeValidationNode()
+
+                # Determine validation levels based on requirements
+                levels = []
+                if test_requirements.get("syntax_valid", True):
+                    levels.append("syntax")
+                if test_requirements.get("imports_resolve", True):
+                    levels.append("imports")
+                if test_requirements.get("executes_without_error", True):
+                    levels.append("semantic")
+
+                if levels:
+                    try:
+                        result = validator.execute(
+                            code=code_content,
+                            validation_levels=levels,
+                            test_inputs={},  # Could extract from context
+                        )
+
+                        if "validation_results" in result:
+                            validation_results.extend(result["validation_results"])
+                    except Exception as e:
+                        self.logger.warning(f"Implicit validation failed: {e}")
+
+            # Detect workflow outputs
+            if isinstance(output, (dict, str)) and "WorkflowBuilder" in str(output):
+                workflow_content = (
+                    str(output)
+                    if isinstance(output, str)
+                    else output.get("workflow", "")
+                )
+
+                if workflow_content:
+                    validator = WorkflowValidationNode()
+                    try:
+                        result = validator.execute(
+                            workflow_code=workflow_content,
+                            validate_execution=test_requirements.get(
+                                "executes_without_error", False
+                            ),
+                        )
+
+                        if result.get("validated"):
+                            validation_results.append(
+                                {
+                                    "test_name": "workflow_structure",
+                                    "level": "semantic",
+                                    "passed": True,
+                                    "details": result.get("validation_details", {}),
+                                }
+                            )
+                        else:
+                            validation_results.append(
+                                {
+                                    "test_name": "workflow_structure",
+                                    "level": "semantic",
+                                    "passed": False,
+                                    "error": "; ".join(
+                                        result.get("validation_details", {}).get(
+                                            "errors", []
+                                        )
+                                    ),
+                                }
+                            )
+                    except Exception as e:
+                        self.logger.warning(f"Workflow validation failed: {e}")
+
+        return validation_results
+
+    def _analyze_test_results(
+        self, validation_results: list[dict], test_requirements: dict
+    ) -> dict[str, dict]:
+        """Analyze validation results against requirements."""
+        test_status = {}
+
+        # Map validation results to requirements
+        requirement_mapping = {
+            "syntax_valid": ["syntax", "python_syntax"],
+            "imports_resolve": ["imports", "import_validation"],
+            "executes_without_error": ["semantic", "code_execution", "execution"],
+            "unit_tests_pass": ["unit_tests", "test_suite"],
+            "integration_tests_pass": ["integration", "integration_tests"],
+            "output_schema_valid": ["schema", "output_schema"],
+        }
+
+        for req_name, req_enabled in test_requirements.items():
+            if not req_enabled:
+                test_status[req_name] = {"passed": True, "skipped": True}
+                continue
+
+            # Find matching validation results
+            matching_results = []
+            for result in validation_results:
+                test_name = result.get("test_name", "").lower()
+                level = result.get("level", "").lower()
+
+                for keyword in requirement_mapping.get(req_name, []):
+                    if keyword in test_name or keyword in level:
+                        matching_results.append(result)
+                        break
+
+            if matching_results:
+                # Requirement passes if ALL matching tests pass
+                all_passed = all(r.get("passed", False) for r in matching_results)
+                first_error = next(
+                    (r.get("error") for r in matching_results if not r.get("passed")),
+                    None,
+                )
+
+                test_status[req_name] = {
+                    "passed": all_passed,
+                    "test_count": len(matching_results),
+                    "error": first_error,
+                    "details": matching_results,
+                }
+            else:
+                # No matching tests found
+                test_status[req_name] = {
+                    "passed": False,
+                    "error": "No validation tests found for this requirement",
+                    "missing": True,
+                }
+
+        return test_status
+
+    def _generate_fix_recommendations(
+        self,
+        test_status: dict,
+        failed_tests: list[str],
+        iteration_state: IterationState,
+    ) -> list[str]:
+        """Generate recommendations for fixing failed tests."""
+        recommendations = []
+
+        for test_name in failed_tests:
+            test_result = test_status.get(test_name, {})
+            error = test_result.get("error", "")
+
+            if test_name == "syntax_valid":
+                recommendations.append(
+                    "Fix syntax errors in generated code - check for missing colons, incorrect indentation"
+                )
+                if "SyntaxError" in error:
+                    recommendations.append(f"Syntax error details: {error}")
+
+            elif test_name == "imports_resolve":
+                recommendations.append(
+                    "Ensure all imports are valid - use only standard library or explicitly available packages"
+                )
+                if test_result.get("details"):
+                    unresolved = [
+                        d.get("unresolved_list", []) for d in test_result["details"]
+                    ]
+                    if unresolved:
+                        recommendations.append(f"Unresolved imports: {unresolved}")
+
+            elif test_name == "executes_without_error":
+                recommendations.append(
+                    "Fix runtime errors - check variable names, function calls, and logic"
+                )
+                if error:
+                    recommendations.append(f"Execution error: {error}")
+
+            elif test_name == "unit_tests_pass":
+                recommendations.append("Ensure code logic matches test expectations")
+
+            elif test_name == "output_schema_valid":
+                recommendations.append("Ensure output format matches expected schema")
+
+        # Add general recommendations based on iteration count
+        if len(iteration_state.discoveries.get("new_tools", [])) == 0:
+            recommendations.append(
+                "Consider discovering more tools to help with the task"
+            )
+
+        return recommendations
+
+    def _check_resource_limits(
+        self,
+        kwargs: dict[str, Any],
+        iteration_state: IterationState,
+        previous_iterations: list[IterationState],
+        convergence_criteria: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Check if resource limits have been exceeded."""
+        resource_limits = convergence_criteria.get(
+            "resource_limits", {"max_time": 300, "max_iterations": 10}
+        )
+
+        # Calculate total time
+        total_time = sum(
+            (state.end_time - state.start_time)
+            for state in previous_iterations + [iteration_state]
+            if state.end_time
+        )
+
+        # Check limits
+        exceeded = False
+        reason = ""
+
+        if total_time > resource_limits.get("max_time", 300):
+            exceeded = True
+            reason = f"Time limit exceeded: {total_time:.1f}s > {resource_limits['max_time']}s"
+
+        elif len(previous_iterations) + 1 >= resource_limits.get("max_iterations", 10):
+            exceeded = True
+            reason = f"Iteration limit reached: {len(previous_iterations) + 1}"
+
+        return {"exceeded": exceeded, "reason": reason}

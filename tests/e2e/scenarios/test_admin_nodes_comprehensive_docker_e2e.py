@@ -1450,9 +1450,16 @@ Respond with a JSON object:
                             "code": """
 import json
 
-# Combine AI assessments
-risk_assessment = json.loads(inputs.get("risk_assessment", "{}"))
-behavior_analysis = json.loads(inputs.get("behavior_analysis", "{}"))
+# Combine AI assessments - access parameters directly
+try:
+    risk_assessment = json.loads(risk_assessment) if isinstance(risk_assessment, str) else risk_assessment
+except (NameError, json.JSONDecodeError):
+    risk_assessment = {}
+
+try:
+    behavior_analysis = json.loads(behavior_analysis) if isinstance(behavior_analysis, str) else behavior_analysis
+except (NameError, json.JSONDecodeError):
+    behavior_analysis = {}
 
 # Make final decision based on both AI outputs
 decision = "deny"  # Default to deny
@@ -1903,8 +1910,11 @@ Is this normal behavior for this user?""",
 import json
 from datetime import UTC, datetime
 
-# Track operation for compliance
-operation = inputs.get("operation", {})
+# Track operation for compliance - access operation parameter directly
+try:
+    operation = operation if isinstance(operation, dict) else {}
+except NameError:
+    operation = {}
 timestamp = datetime.now(UTC).isoformat()
 
 compliance_record = {

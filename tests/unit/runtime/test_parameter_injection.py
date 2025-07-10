@@ -153,8 +153,20 @@ class TestWorkflowParameterInjection:
     def test_workflow_builder_input_mappings(self):
         """Test WorkflowBuilder's add_workflow_inputs method."""
         builder = WorkflowBuilder()
-        # Correct order: node_type (instance), node_id
-        builder.add_node(MockParameterNode(), "processor")
+        # Use PythonCodeNode with proper function code
+        builder.add_node(
+            "PythonCodeNode",
+            "processor",
+            {
+                "code": """
+# Parameters are injected into namespace
+result = {
+    'required': required_param,
+    'optional': optional_param
+}
+"""
+            },
+        )
         builder.add_workflow_inputs(
             "processor",
             {"user_input": "required_param", "config_data": "optional_param"},
@@ -171,8 +183,8 @@ class TestWorkflowParameterInjection:
             },
         )
 
-        assert results["processor"]["required"] == "mapped_required"
-        assert results["processor"]["optional"] == "mapped_optional"
+        assert results["processor"]["result"]["required"] == "mapped_required"
+        assert results["processor"]["result"]["optional"] == "mapped_optional"
 
     def test_multiple_entry_nodes(self):
         """Test parameter injection with multiple entry nodes."""
