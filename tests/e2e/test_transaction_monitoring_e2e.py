@@ -154,7 +154,7 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
 
                 # Track transaction
                 transaction_monitor.execute(
-                    operation="track_transaction",
+                    operation="start_transaction",
                     transaction_id=txn_id,
                     operation_type="concurrent_processing",
                     start_time=start_time,
@@ -221,7 +221,7 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
             )
 
         # Analyze results
-        race_result = race_detector.execute(operation="analyze_races", time_window=60.0)
+        race_result = race_detector.execute(operation="detect_races", time_window=60.0)
 
         monitor_status = transaction_monitor.execute(operation="get_monitoring_status")
 
@@ -406,7 +406,7 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
 
             # Track request
             transaction_monitor.execute(
-                operation="track_transaction",
+                operation="start_transaction",
                 transaction_id=request_id,
                 operation_type="api_request",
                 start_time=start_time,
@@ -572,7 +572,7 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
                     )
 
                     real_time_monitor.execute(
-                        operation="track_transaction",
+                        operation="start_transaction",
                         transaction_id=txn_id,
                         operation_type="enterprise_operation",
                         start_time=time.time(),
@@ -675,7 +675,7 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
         )
 
         dashboard_data["race_analysis"] = race_detector.execute(
-            operation="analyze_races", time_window=120.0
+            operation="detect_races", time_window=120.0
         )
 
         dashboard_data["anomaly_analysis"] = anomaly_detector.execute(

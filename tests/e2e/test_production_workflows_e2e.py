@@ -27,7 +27,7 @@ from kailash.nodes.data import CSVWriterNode, SQLDatabaseNode
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.nodes.transform import DataTransformer
-from kailash.resources import ResourceFactory, ResourceRegistry
+from kailash.resources import ResourceRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.metrics_collector import MetricsCollector as PerformanceMonitor
 from kailash.workflow.async_builder import AsyncWorkflowBuilder, ErrorHandler
@@ -91,29 +91,36 @@ class TestProductionWorkflowsE2E:
 
         # Set up resource registry
         self.registry = ResourceRegistry()
-        self.factory = ResourceFactory(self.registry)
 
-        # Register database factory
-        await self.factory.register_database_factory(
-            "postgres_main",
-            self.db_config["connection_string"],
+        # Register database pool
+        from kailash.resources import DatabasePoolFactory
+
+        db_factory = DatabasePoolFactory(
+            connection_string=self.db_config["connection_string"],
             database_type="postgresql",
             pool_size=self.db_config["pool_size"],
+            max_overflow=self.db_config["max_overflow"],
         )
+        self.registry.register_factory("postgres_main", db_factory)
 
-        # Register Redis factory
-        await self.factory.register_cache_factory(
-            "redis_main",
-            self.redis_config["redis_url"],
+        # Register Redis cache
+        from kailash.resources import CacheFactory
+
+        cache_factory = CacheFactory(
+            cache_url=self.redis_config["redis_url"],
             cache_type="redis",
+            max_connections=self.redis_config["max_connections"],
         )
+        self.registry.register_factory("redis_main", cache_factory)
 
-        # Register HTTP client factory
-        await self.factory.register_http_factory(
-            "http_main",
+        # Register HTTP client
+        from kailash.resources import HttpClientFactory
+
+        http_factory = HttpClientFactory(
             base_url=self.ollama_config["base_url"],
             timeout=self.ollama_config["timeout"],
         )
+        self.registry.register_factory("http_main", http_factory)
 
         # Initialize runtime
         self.runtime = LocalRuntime(
