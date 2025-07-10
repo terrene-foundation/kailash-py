@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath("../../src"))
 project = "Kailash Python SDK"
 copyright = f"{datetime.now().year}, Terrene Foundation"
 author = "Terrene Foundation"
-release = "0.6.3"
+release = "0.6.6"
 version = "0.6"
 
 # General configuration
@@ -42,7 +42,17 @@ templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "README.md",
+    "SPHINX_UPDATE_PLAN.md",
+    "SPHINX_UPDATE_SUMMARY.md",
+    "import_cheatsheets.py",
+    ".archive/*",
+    "mcp/README.md",
+]
 
 # The suffix(es) of source filenames
 source_suffix = {

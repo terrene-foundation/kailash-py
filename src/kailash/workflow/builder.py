@@ -2,10 +2,13 @@
 
 import logging
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.graph import Workflow
+
+if TYPE_CHECKING:
+    from kailash.nodes.base import Node
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +42,45 @@ class WorkflowBuilder:
             WorkflowValidationError: If node_id is already used or invalid pattern
         """
         # Pattern detection and routing
-        if len(args) == 3 and isinstance(args[0], str) and isinstance(args[2], dict):
+        if len(args) == 0 and kwargs:
+            # Keyword-only pattern: add_node(node_type="NodeType", node_id="id", config={})
+            node_type = kwargs.pop("node_type", None)
+            node_id = kwargs.pop("node_id", None)
+            config = kwargs.pop("config", {})
+            # Any remaining kwargs are treated as config
+            config.update(kwargs)
+
+            if node_type is None:
+                raise WorkflowValidationError(
+                    "node_type is required when using keyword arguments"
+                )
+
+            return self._add_node_current(node_type, node_id, config)
+
+        elif len(args) == 1:
+            # Single argument with possible keywords
+            if isinstance(args[0], str) and kwargs:
+                # Pattern: add_node("NodeType", node_id="id", config={})
+                node_type = args[0]
+                node_id = kwargs.pop("node_id", None)
+                config = kwargs.pop("config", {})
+                # Any remaining kwargs are treated as config
+                config.update(kwargs)
+                return self._add_node_current(node_type, node_id, config)
+            elif isinstance(args[0], str):
+                # Pattern: add_node("NodeType")
+                return self._add_node_current(args[0], None, {})
+            elif hasattr(args[0], "__name__"):
+                # Pattern: add_node(NodeClass)
+                return self._add_node_alternative(args[0], None, **kwargs)
+            else:
+                from kailash.nodes.base import Node
+
+                if isinstance(args[0], Node):
+                    # Pattern: add_node(node_instance)
+                    return self._add_node_instance(args[0], None)
+
+        elif len(args) == 3 and isinstance(args[0], str) and isinstance(args[2], dict):
             # Pattern 1: Current API - add_node("NodeType", "node_id", {"param": value})
             return self._add_node_current(args[0], args[1], args[2])
 
@@ -47,16 +88,43 @@ class WorkflowBuilder:
             # Pattern 2: Legacy fluent API - add_node("node_id", NodeClass, param=value)
             if hasattr(args[1], "__name__") or isinstance(args[1], type):
                 return self._add_node_legacy_fluent(args[0], args[1], **kwargs)
-            else:
-                # Might be current API with positional args
+            elif isinstance(args[1], str):
+                # Two strings - assume current API: add_node("NodeType", "node_id")
                 config = kwargs if kwargs else (args[2] if len(args) > 2 else {})
-                return self._add_node_current(args[1], args[0], config)
+                return self._add_node_current(args[0], args[1], config)
+            else:
+                # Invalid second argument
+                raise WorkflowValidationError(
+                    f"Invalid node type: {type(args[1]).__name__}. "
+                    "Expected: str (node type name), Node class, or Node instance"
+                )
 
         elif len(args) >= 2 and hasattr(args[0], "__name__"):
             # Pattern 3: Alternative - add_node(NodeClass, "node_id", param=value)
-            return self._add_node_alternative(args[0], args[1], **kwargs)
+            # Handle both dict config and keyword args
+            if len(args) == 3 and isinstance(args[2], dict):
+                # Config provided as dict
+                return self._add_node_alternative(args[0], args[1], **args[2])
+            else:
+                # Config provided as kwargs
+                return self._add_node_alternative(args[0], args[1], **kwargs)
 
-        else:
+        elif len(args) >= 2:
+            # Check if first arg is a Node instance
+            from kailash.nodes.base import Node
+
+            if isinstance(args[0], Node):
+                # Pattern 4: Instance - add_node(node_instance, "node_id") or add_node(node_instance, "node_id", config)
+                # Config is ignored for instances
+                return self._add_node_instance(args[0], args[1])
+            elif len(args) == 2:
+                # Invalid arguments for 2-arg call
+                raise WorkflowValidationError(
+                    f"Invalid node type: {type(args[0]).__name__}. "
+                    "Expected: str (node type name), Node class, or Node instance"
+                )
+
+            # For 3 or more args that don't match other patterns
             # Error with helpful message
             raise WorkflowValidationError(
                 f"Invalid add_node signature. Received {len(args)} args: {[type(arg).__name__ for arg in args]}\n"
@@ -70,7 +138,7 @@ class WorkflowBuilder:
             )
 
     def _add_node_current(
-        self, node_type: str, node_id: str, config: dict[str, Any]
+        self, node_type: str, node_id: str | None, config: dict[str, Any]
     ) -> str:
         """Handle current API pattern: add_node('NodeType', 'node_id', {'param': value})"""
         return self._add_node_unified(node_type, node_id, config)
@@ -80,6 +148,16 @@ class WorkflowBuilder:
     ) -> "WorkflowBuilder":
         """Handle legacy fluent API pattern: add_node('node_id', NodeClass, param=value)"""
         import warnings
+
+        from kailash.nodes.base import Node
+
+        # If it's a class, validate it's a Node subclass
+        if isinstance(node_class_or_type, type) and not issubclass(
+            node_class_or_type, Node
+        ):
+            raise WorkflowValidationError(
+                f"Invalid node type: {node_class_or_type}. Expected a Node subclass or string."
+            )
 
         warnings.warn(
             f"Legacy fluent API usage detected. "
@@ -99,9 +177,23 @@ class WorkflowBuilder:
         self._add_node_unified(node_type, node_id, config)
         return self  # Return self for fluent chaining
 
-    def _add_node_alternative(self, node_class: type, node_id: str, **config) -> str:
+    def _add_node_alternative(
+        self, node_class: type, node_id: str | None, **config
+    ) -> str:
         """Handle alternative pattern: add_node(NodeClass, 'node_id', param=value)"""
         import warnings
+
+        from kailash.nodes.base import Node
+
+        # Validate that node_class is actually a Node subclass
+        if not isinstance(node_class, type) or not issubclass(node_class, Node):
+            raise WorkflowValidationError(
+                f"Invalid node type: {node_class}. Expected a Node subclass."
+            )
+
+        # Generate ID if not provided
+        if node_id is None:
+            node_id = f"node_{uuid.uuid4().hex[:8]}"
 
         warnings.warn(
             f"Alternative API usage detected. Consider using preferred pattern:\n"
@@ -111,8 +203,40 @@ class WorkflowBuilder:
             stacklevel=3,
         )
 
-        node_type = node_class.__name__
-        return self._add_node_unified(node_type, node_id, config)
+        # Store the class reference along with the type name
+        self.nodes[node_id] = {
+            "type": node_class.__name__,
+            "config": config,
+            "class": node_class,
+        }
+        logger.info(f"Added node '{node_id}' of type '{node_class.__name__}'")
+        return node_id
+
+    def _add_node_instance(self, node_instance: "Node", node_id: str | None) -> str:
+        """Handle instance pattern: add_node(node_instance, 'node_id')"""
+        import warnings
+
+        # Generate ID if not provided
+        if node_id is None:
+            node_id = f"node_{uuid.uuid4().hex[:8]}"
+
+        warnings.warn(
+            f"Instance-based API usage detected. Consider using preferred pattern:\n"
+            f"  CURRENT: add_node(<instance>, '{node_id}')\n"
+            f"  PREFERRED: add_node('{node_instance.__class__.__name__}', '{node_id}', {{'param': value}})",
+            UserWarning,
+            stacklevel=3,
+        )
+
+        # Store the instance
+        self.nodes[node_id] = {
+            "instance": node_instance,
+            "type": node_instance.__class__.__name__,
+        }
+        logger.info(
+            f"Added node '{node_id}' with instance of type '{node_instance.__class__.__name__}'"
+        )
+        return node_id
 
     def _add_node_unified(
         self,

@@ -33,12 +33,21 @@ class TestConnectionMetricsCollector:
 
     def test_track_acquisition(self, collector):
         """Test connection acquisition tracking."""
-        # Track multiple acquisitions
-        with collector.track_acquisition() as timer:
-            time.sleep(0.01)  # Simulate acquisition time
+        # Track multiple acquisitions with mocked time
+        with patch("time.time") as mock_time:
+            # First acquisition - simulate 10ms
+            mock_time.return_value = 1000.0
+            timer1 = collector.track_acquisition()
+            timer1.__enter__()
+            mock_time.return_value = 1000.01  # 10ms later
+            timer1.__exit__(None, None, None)
 
-        with collector.track_acquisition() as timer:
-            time.sleep(0.02)
+            # Second acquisition - simulate 20ms
+            mock_time.return_value = 1001.0
+            timer2 = collector.track_acquisition()
+            timer2.__enter__()
+            mock_time.return_value = 1001.02  # 20ms later
+            timer2.__exit__(None, None, None)
 
         # Check counters
         assert collector._counters["connections_acquired"] == 2
@@ -47,7 +56,7 @@ class TestConnectionMetricsCollector:
         hist = collector.get_histogram("connection_acquisition_ms")
         assert hist is not None
         assert hist.count == 2
-        assert hist.min > 10  # At least 10ms
+        assert hist.min >= 9.99  # At least ~10ms (allowing for float precision)
         assert hist.max > hist.min
 
     def test_track_release(self, collector):
@@ -62,15 +71,28 @@ class TestConnectionMetricsCollector:
 
     def test_track_query(self, collector):
         """Test query execution tracking."""
-        # Track different query types
-        with collector.track_query("SELECT", "users"):
-            time.sleep(0.01)
+        # Track different query types with mocked time
+        with patch("time.time") as mock_time:
+            # SELECT query - simulate 10ms
+            mock_time.return_value = 1000.0
+            timer1 = collector.track_query("SELECT", "users")
+            timer1.__enter__()
+            mock_time.return_value = 1000.01  # 10ms later
+            timer1.__exit__(None, None, None)
 
-        with collector.track_query("INSERT", "orders"):
-            time.sleep(0.02)
+            # INSERT query - simulate 20ms
+            mock_time.return_value = 1001.0
+            timer2 = collector.track_query("INSERT", "orders")
+            timer2.__enter__()
+            mock_time.return_value = 1001.02  # 20ms later
+            timer2.__exit__(None, None, None)
 
-        with collector.track_query("UPDATE", "products"):
-            time.sleep(0.015)
+            # UPDATE query - simulate 15ms
+            mock_time.return_value = 1002.0
+            timer3 = collector.track_query("UPDATE", "products")
+            timer3.__enter__()
+            mock_time.return_value = 1002.015  # 15ms later
+            timer3.__exit__(None, None, None)
 
         # Check counters
         assert collector._counters["queries_total"] == 3
@@ -82,7 +104,7 @@ class TestConnectionMetricsCollector:
         summary = collector.get_query_summary()
         assert "SELECT:users" in summary
         assert summary["SELECT:users"]["count"] == 1
-        assert summary["SELECT:users"]["avg_time_ms"] > 10
+        assert summary["SELECT:users"]["avg_time_ms"] >= 9.99  # ~10ms (float precision)
 
     def test_track_query_error(self, collector):
         """Test query error tracking."""
@@ -153,13 +175,19 @@ class TestConnectionMetricsCollector:
 
     def test_time_series_data(self, collector):
         """Test time series data collection."""
-        # Add some data points
-        for i in range(5):
-            collector._record_time_series("test_metric", float(i))
-            time.sleep(0.1)
+        # Add some data points with mocked time
+        with patch("time.time") as mock_time:
+            base_time = 1000.0
+            for i in range(5):
+                mock_time.return_value = base_time + (i * 0.1)
+                collector._record_time_series("test_metric", float(i))
 
-        # Get recent data
-        points = collector.get_time_series("test_metric", minutes=1)
+            # Mock current time for retrieval (within the minute window)
+            mock_time.return_value = base_time + 1.0  # 1 second later
+
+            # Get recent data
+            points = collector.get_time_series("test_metric", minutes=1)
+
         assert len(points) == 5
         assert all(isinstance(p, MetricPoint) for p in points)
         assert [p.value for p in points] == [0.0, 1.0, 2.0, 3.0, 4.0]
