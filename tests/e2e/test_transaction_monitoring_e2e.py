@@ -323,9 +323,9 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
         assert detection_result["status"] == "success"
 
         # Handle any detected deadlocks
-        deadlocks_found = detection_result.get("deadlocks_detected", 0)
-        if deadlocks_found > 0:
-            deadlocks = detection_result["deadlocks"]
+        deadlocks_found = detection_result.get("deadlocks_detected", [])
+        if len(deadlocks_found) > 0:
+            deadlocks = deadlocks_found
 
             # Resolve deadlocks
             for deadlock in deadlocks:
@@ -721,8 +721,8 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
             "services_monitored": services,
             "success_rate": success_rate,
             "anomalies_detected": len(anomalies),
-            "deadlocks_detected": dashboard_data["deadlock_analysis"].get(
-                "deadlocks_detected", 0
+            "deadlocks_detected": len(
+                dashboard_data["deadlock_analysis"].get("deadlocks_detected", [])
             ),
             "race_conditions_analyzed": dashboard_data["race_analysis"].get(
                 "operations_analyzed", 0

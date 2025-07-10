@@ -2,6 +2,14 @@
 
 Enterprise-grade transaction monitoring, deadlock detection, race condition analysis, and performance anomaly detection.
 
+## 🚀 What's New in v0.6.6+
+
+- **Enhanced Operations**: New `complete_transaction`, `acquire_resource`, `release_resource`, `request_resource`, `complete_operation`, and `initialize` operations
+- **Success Rate Calculations**: Automatic success rate calculation in TransactionMetricsNode output
+- **Alias Support**: Multiple operation names for better API compatibility
+- **Schema Compliance**: Enhanced output schemas with new fields like `total_transactions`, `trace_data`, `span_data`
+- **Async Performance**: Improved AsyncNode base class with proper event loop handling
+
 ## 🎯 Quick Node Selection
 
 | Need | Use This Node | Key Features |
@@ -31,20 +39,29 @@ result = metrics.execute(
     tags={"service": "orders", "region": "us-west"}
 )
 
-# End transaction with metrics
+# End transaction with metrics (can also use complete_transaction)
 result = metrics.execute(
-    operation="end_transaction",
+    operation="end_transaction",  # or "complete_transaction"
     transaction_id="txn_001",
     status="success",  # or "failed"
     custom_metrics={"items_processed": 5, "db_queries": 3}
 )
 
+# Alternative: Complete transaction with boolean success
+result = metrics.execute(
+    operation="complete_transaction",  # New v0.6.6+
+    transaction_id="txn_001",
+    success=True  # Boolean parameter
+)
+
 # Get aggregated metrics
 result = metrics.execute(
     operation="get_metrics",
-    metric_types=["latency", "throughput", "success_rate"],
-    time_range=300  # Last 5 minutes
+    include_raw=True,
+    export_format="json"
 )
+print(f"Success rate: {result['success_rate']}")  # New field
+print(f"Total transactions: {result['total_transactions']}")  # New alias
 
 # Get aggregated data with percentiles
 result = metrics.execute(
@@ -139,6 +156,17 @@ result = monitor.execute(
 # Get alerts
 result = monitor.execute(operation="get_alerts")
 
+# Complete transaction monitoring (new v0.6.6+)
+result = monitor.execute(
+    operation="complete_transaction",
+    transaction_id="txn_001",
+    success=True
+)
+# New enhanced output fields
+print(f"Correlation ID: {result['correlation_id']}")
+print(f"Trace data: {result['trace_data']}")
+print(f"Span data: {result['span_data']}")
+
 # Correlate transactions
 result = monitor.execute(
     operation="correlate_transactions",
@@ -160,15 +188,31 @@ from kailash.nodes.monitoring import DeadlockDetectorNode
 
 detector = DeadlockDetectorNode()
 
+# Initialize detector (new v0.6.6+)
+result = detector.execute(
+    operation="initialize",
+    deadlock_timeout=30.0,
+    cycle_detection_enabled=True
+)
+
 # Start monitoring
 result = detector.execute(operation="start_monitoring")
 
-# Register lock acquisition
+# Register lock acquisition (multiple operation names available)
 result = detector.execute(
-    operation="register_lock",
+    operation="register_lock",  # or "acquire_resource"
     transaction_id="txn_001",
     resource_id="table_users",
     lock_type="EXCLUSIVE"  # or "SHARED", "UPDATE"
+)
+
+# Request resource (simplified for E2E testing)
+result = detector.execute(
+    operation="request_resource",  # New v0.6.6+
+    transaction_id="txn_002",
+    resource_id="table_orders",
+    resource_type="database_table",
+    lock_type="SHARED"
 )
 
 # Register wait condition (creates deadlock potential)
@@ -179,9 +223,9 @@ result = detector.execute(
     resource_id="table_orders"
 )
 
-# Release lock
+# Release lock (multiple operation names available)
 result = detector.execute(
-    operation="release_lock",
+    operation="release_lock",  # or "release_resource"
     transaction_id="txn_001",
     resource_id="table_users"
 )
@@ -251,6 +295,16 @@ result = detector.execute(
     operation="end_operation",
     operation_id="op_001"
 )
+
+# Complete operation with final analysis (new v0.6.6+)
+result = detector.execute(
+    operation="complete_operation",
+    operation_id="op_001",
+    resource_id="shared_data",
+    success=True
+)
+print(f"Race conditions detected: {result['race_count']}")
+print(f"Operation status: {result['monitoring_status']}")
 
 # Detect race conditions
 result = detector.execute(operation="detect_races")

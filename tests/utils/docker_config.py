@@ -117,58 +117,132 @@ TEST_DATABASES = {
 }
 
 
+def is_docker_available():
+    """Check if Docker daemon is available."""
+    try:
+        import subprocess
+
+        result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+
+def is_postgres_available():
+    """Check if PostgreSQL service is available."""
+    try:
+        import psycopg2
+
+        conn = psycopg2.connect(
+            host=DATABASE_CONFIG["host"],
+            port=DATABASE_CONFIG["port"],
+            database=DATABASE_CONFIG["database"],
+            user=DATABASE_CONFIG["user"],
+            password=DATABASE_CONFIG["password"],
+            connect_timeout=3,
+        )
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+def is_redis_available():
+    """Check if Redis service is available."""
+    try:
+        import redis
+
+        r = redis.Redis(**REDIS_CONFIG, socket_connect_timeout=3)
+        r.ping()
+        return True
+    except Exception:
+        return False
+
+
+def is_ollama_available():
+    """Check if Ollama service is available."""
+    try:
+        import requests
+
+        response = requests.get(
+            f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}/api/tags",
+            timeout=3,
+        )
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
 async def ensure_docker_services():
-    """Ensure Docker services are available."""
+    """Ensure essential Docker services are available."""
     import asyncio
 
     import httpx
 
     try:
-        # Check PostgreSQL
+        # Check PostgreSQL (REQUIRED)
         import asyncpg
 
         conn = await asyncpg.connect(get_postgres_connection_string())
         await conn.close()
 
-        # Check Redis
+        # Check Redis (REQUIRED)
         import redis
 
         r = redis.Redis(**REDIS_CONFIG)
         r.ping()
 
-        # Check MySQL
-        import pymysql
+        # Optional services - log warnings but don't fail
+        warnings = []
 
-        conn = pymysql.connect(
-            host=MYSQL_CONFIG["host"],
-            port=MYSQL_CONFIG["port"],
-            user=MYSQL_CONFIG["user"],
-            password=MYSQL_CONFIG["password"],
-            database=MYSQL_CONFIG["database"],
-        )
-        conn.close()
+        # Check MySQL (OPTIONAL)
+        try:
+            import pymysql
 
-        # Check Ollama
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}/api/tags",
-                timeout=5.0,
+            conn = pymysql.connect(
+                host=MYSQL_CONFIG["host"],
+                port=MYSQL_CONFIG["port"],
+                user=MYSQL_CONFIG["user"],
+                password=MYSQL_CONFIG["password"],
+                database=MYSQL_CONFIG["database"],
             )
-            if response.status_code != 200:
-                return False
+            conn.close()
+        except Exception:
+            warnings.append("MySQL not available (some tests may skip)")
 
-        # Check Mock API
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{MOCK_API_CONFIG['base_url']}/health",
-                timeout=5.0,
-            )
-            if response.status_code != 200:
-                return False
+        # Check Ollama (OPTIONAL)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}/api/tags",
+                    timeout=5.0,
+                )
+                if response.status_code != 200:
+                    warnings.append("Ollama not responding (AI tests may skip)")
+        except Exception:
+            warnings.append("Ollama not available (AI tests may skip)")
+
+        # Check Mock API (OPTIONAL)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{MOCK_API_CONFIG['base_url']}/health",
+                    timeout=5.0,
+                )
+                if response.status_code != 200:
+                    warnings.append("Mock API not responding (some tests may skip)")
+        except Exception:
+            warnings.append("Mock API not available (some tests may skip)")
+
+        # Print warnings but don't fail
+        if warnings:
+            print("Service warnings:")
+            for warning in warnings:
+                print(f"  - {warning}")
 
         return True
     except Exception as e:
-        print(f"Docker services check failed: {e}")
+        print(f"Essential Docker services check failed: {e}")
         return False
 
 
@@ -177,11 +251,63 @@ def requires_docker(func):
     """Decorator to mark tests that require Docker services."""
     import pytest
 
-    return pytest.mark.requires_docker(func)
+    return pytest.mark.requires_docker(
+        pytest.mark.skipif(not is_docker_available(), reason="Docker not available")(
+            func
+        )
+    )
+
+
+def requires_postgres(func):
+    """Decorator to mark tests that require PostgreSQL service."""
+    import pytest
+
+    return pytest.mark.requires_postgres(
+        pytest.mark.skipif(
+            not is_postgres_available(), reason="PostgreSQL not available"
+        )(func)
+    )
+
+
+def requires_redis(func):
+    """Decorator to mark tests that require Redis service."""
+    import pytest
+
+    return pytest.mark.requires_redis(
+        pytest.mark.skipif(not is_redis_available(), reason="Redis not available")(func)
+    )
 
 
 def requires_ollama(func):
     """Decorator to mark tests that require Ollama service."""
     import pytest
 
-    return pytest.mark.requires_ollama(func)
+    return pytest.mark.requires_ollama(
+        pytest.mark.skipif(not is_ollama_available(), reason="Ollama not available")(
+            func
+        )
+    )
+
+
+# Combined skip conditions for common scenarios
+def skip_if_no_postgres():
+    """Skip test if PostgreSQL is not available."""
+    import pytest
+
+    return pytest.mark.skipif(
+        not is_postgres_available(), reason="PostgreSQL not available"
+    )
+
+
+def skip_if_no_docker():
+    """Skip test if Docker is not available."""
+    import pytest
+
+    return pytest.mark.skipif(not is_docker_available(), reason="Docker not available")
+
+
+def skip_if_no_ollama():
+    """Skip test if Ollama is not available."""
+    import pytest
+
+    return pytest.mark.skipif(not is_ollama_available(), reason="Ollama not available")

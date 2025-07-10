@@ -626,6 +626,100 @@ logging.getLogger("kailash").setLevel(logging.DEBUG)
 result = await runtime.execute_workflow_async(workflow, inputs)
 ```
 
+## Enhanced AsyncNode Support (v0.6.6+)
+
+The AsyncNode base class has been significantly enhanced to handle complex event loop scenarios without "RuntimeError: no running event loop" issues:
+
+### Thread-Safe Async Execution
+
+```python
+from kailash.nodes.monitoring import TransactionMetricsNode
+from kailash.nodes.base_async import AsyncNode
+
+# AsyncNode now handles all event loop scenarios automatically
+class MyAsyncNode(AsyncNode):
+    async def async_run(self, **kwargs):
+        # Your async logic here
+        return {"result": "async processing complete"}
+
+# Works in any context - main thread, worker threads, existing event loops
+node = MyAsyncNode()
+result = node.execute(operation="my_operation")  # Thread-safe
+```
+
+### Event Loop Detection & Handling
+
+The enhanced AsyncNode automatically:
+
+1. **No Event Loop**: Creates new loop with `asyncio.run()`
+2. **Event Loop Running**: Uses ThreadPoolExecutor with isolated loop
+3. **Threaded Contexts**: Proper thread-safe execution
+4. **Windows Compatibility**: ProactorEventLoopPolicy support
+
+### Performance Benefits
+
+```python
+# Before v0.6.6: Event loop errors in threaded contexts
+# RuntimeError: no running event loop
+
+# After v0.6.6: Seamless execution everywhere
+from kailash.nodes.monitoring import TransactionMetricsNode
+import concurrent.futures
+
+# Works perfectly in thread pools
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = []
+    for i in range(10):
+        metrics = TransactionMetricsNode()
+        future = executor.submit(
+            metrics.execute,
+            operation="start_transaction",
+            transaction_id=f"txn_{i}"
+        )
+        futures.append(future)
+
+    # All executions succeed without event loop errors
+    results = [f.result() for f in futures]
+```
+
+### Monitoring Node Integration
+
+All monitoring nodes benefit from these improvements:
+
+```python
+from kailash.nodes.monitoring import (
+    TransactionMetricsNode,
+    DeadlockDetectorNode,
+    RaceConditionDetectorNode,
+    TransactionMonitorNode,
+    PerformanceAnomalyNode
+)
+
+# All work seamlessly in any execution context
+nodes = [
+    TransactionMetricsNode(),
+    DeadlockDetectorNode(),
+    RaceConditionDetectorNode(),
+    TransactionMonitorNode(),
+    PerformanceAnomalyNode()
+]
+
+# Execute appropriate operations without event loop conflicts
+operations = {
+    "TransactionMetricsNode": "get_metrics",
+    "DeadlockDetectorNode": "start_monitoring",
+    "RaceConditionDetectorNode": "start_monitoring",
+    "TransactionMonitorNode": "start_monitoring",
+    "PerformanceAnomalyNode": "start_monitoring"
+}
+
+for node in nodes:
+    node_type = type(node).__name__
+    operation = operations[node_type]
+    result = node.execute(operation=operation)
+    assert result["status"] == "success"
+```
+
 ## Related Documentation
 
 - [AsyncWorkflowBuilder Guide](08-async-workflow-builder.md) - Building async-first workflows

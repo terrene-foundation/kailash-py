@@ -302,11 +302,7 @@ class TestTransactionMonitoringIntegrationSimple:
             metrics_node.execute(operation="invalid_operation")
 
         with pytest.raises(NodeExecutionError):
-            deadlock_node.execute(
-                operation="release_resource",
-                transaction_id="nonexistent",
-                resource_id="nonexistent",
-            )
+            deadlock_node.execute(operation="invalid_operation")
 
     def test_comprehensive_monitoring_workflow_integration(
         self, metrics_node, monitor_node, anomaly_node

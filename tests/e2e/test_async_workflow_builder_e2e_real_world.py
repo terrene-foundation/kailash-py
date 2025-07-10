@@ -666,81 +666,81 @@ class TestAsyncWorkflowBuilderE2ERealWorld:
         builder.add_parallel_map(
             "generate_event_stream",
             """
-            async def process_item(batch_id):
-                import random
-                import json
-                import uuid
-                from datetime import datetime
+async def process_item(batch_id):
+    import random
+    import json
+    import uuid
+    from datetime import datetime
 
-                cache = await get_resource("production_cache")
+    cache = await get_resource("production_cache")
 
-                # Event types with different frequencies
-                event_types = [
-                    ("page_view", 0.4),
-                    ("click", 0.25),
-                    ("purchase", 0.1),
-                    ("login", 0.15),
-                    ("logout", 0.1)
-                ]
+    # Event types with different frequencies
+    event_types = [
+        ("page_view", 0.4),
+        ("click", 0.25),
+        ("purchase", 0.1),
+        ("login", 0.15),
+        ("logout", 0.1)
+    ]
 
-                events_generated = []
+    events_generated = []
 
-                # Generate 50 events per batch
-                for i in range(50):
-                    # Select event type based on probability
-                    rand = random.random()
-                    cumulative = 0
-                    selected_event = "page_view"
+    # Generate 50 events per batch
+    for i in range(50):
+        # Select event type based on probability
+        rand = random.random()
+        cumulative = 0
+        selected_event = "page_view"
 
-                    for event_type, prob in event_types:
-                        cumulative += prob
-                        if rand <= cumulative:
-                            selected_event = event_type
-                            break
+        for event_type, prob in event_types:
+            cumulative += prob
+            if rand <= cumulative:
+                selected_event = event_type
+                break
 
-                    # Generate realistic event data
-                    user_id = f"user_{random.randint(1, 1000)}"
-                    session_id = str(uuid.uuid4())[:8]
+    # Generate realistic event data
+    user_id = f"user_{random.randint(1, 1000)}"
+    session_id = str(uuid.uuid4())[:8]
 
-                    event_data = {
-                        "timestamp": datetime.now().isoformat(),
-                        "user_agent": random.choice(["Chrome", "Firefox", "Safari", "Edge"]),
-                        "platform": random.choice(["web", "mobile", "tablet"]),
-                        "location": random.choice(["US", "UK", "CA", "AU", "DE"])
-                    }
+    event_data = {
+        "timestamp": datetime.now().isoformat(),
+        "user_agent": random.choice(["Chrome", "Firefox", "Safari", "Edge"]),
+        "platform": random.choice(["web", "mobile", "tablet"]),
+        "location": random.choice(["US", "UK", "CA", "AU", "DE"])
+    }
 
-                    # Add event-specific data
-                    if selected_event == "page_view":
-                        event_data["page"] = random.choice(["/home", "/products", "/about", "/contact"])
-                        event_data["duration"] = random.randint(10, 300)  # seconds
-                    elif selected_event == "click":
-                        event_data["element"] = random.choice(["button", "link", "image", "menu"])
-                        event_data["coordinates"] = {"x": random.randint(0, 1920), "y": random.randint(0, 1080)}
-                    elif selected_event == "purchase":
-                        event_data["product_id"] = f"prod_{random.randint(1, 100)}"
-                        event_data["amount"] = round(random.uniform(10, 500), 2)
-                        event_data["currency"] = "USD"
+    # Add event-specific data
+    if selected_event == "page_view":
+        event_data["page"] = random.choice(["/home", "/products", "/about", "/contact"])
+        event_data["duration"] = random.randint(10, 300)  # seconds
+    elif selected_event == "click":
+        event_data["element"] = random.choice(["button", "link", "image", "menu"])
+        event_data["coordinates"] = {"x": random.randint(0, 1920), "y": random.randint(0, 1080)}
+    elif selected_event == "purchase":
+        event_data["product_id"] = f"prod_{random.randint(1, 100)}"
+        event_data["amount"] = round(random.uniform(10, 500), 2)
+        event_data["currency"] = "USD"
 
-                    event = {
-                        "event_type": selected_event,
-                        "user_id": user_id,
-                        "session_id": session_id,
-                        "event_data": event_data
-                    }
+    event = {
+        "event_type": selected_event,
+        "user_id": user_id,
+        "session_id": session_id,
+        "event_data": event_data
+    }
 
-                    # Add to Redis stream
-                    await cache.xadd("events_stream", event)
-                    events_generated.append(event)
+    # Add to Redis stream
+    await cache.xadd("events_stream", event)
+    events_generated.append(event)
 
-                    # Small delay to simulate real-time streaming
-                    await asyncio.sleep(0.01)
+    # Small delay to simulate real-time streaming
+    await asyncio.sleep(0.01)
 
-                return {
-                    "batch_id": batch_id,
-                    "events_count": len(events_generated),
-                    "event_types": list(set(e["event_type"] for e in events_generated)),
-                    "generation_complete": True
-                }
+    return {
+    "batch_id": batch_id,
+    "events_count": len(events_generated),
+    "event_types": list(set(e["event_type"] for e in events_generated)),
+    "generation_complete": True
+    }
             """,
             max_workers=5,
             timeout_per_item=30,
@@ -1011,10 +1011,10 @@ class TestAsyncWorkflowBuilderE2ERealWorld:
             "pre_deployment_checks",
             {
                 "database_health": """
-                db = await get_resource("production_db")
+db = await get_resource("production_db")
 
-                try:
-                    async with db.acquire() as conn:
+try:
+    async with db.acquire() as conn:
                         # Check database connectivity
                         db_version = await conn.fetchval('SELECT version()')
 
@@ -1045,7 +1045,7 @@ class TestAsyncWorkflowBuilderE2ERealWorld:
                     }
                 """,
                 "cache_health": """
-                cache = await get_resource("production_cache")
+cache = await get_resource("production_cache")
 
                 try:
                     # Test cache operations

@@ -19,22 +19,117 @@ class WorkflowBuilder:
         self.connections: list[dict[str, str]] = []
         self._metadata: dict[str, Any] = {}
 
-    def add_node(
+    def add_node(self, *args, **kwargs) -> str:
+        """
+        Unified add_node method supporting multiple API patterns.
+
+        Supported patterns:
+        1. add_node("NodeType", "node_id", {"param": value})     # Current/Preferred
+        2. add_node("node_id", NodeClass, param=value)           # Legacy fluent
+        3. add_node(NodeClass, "node_id", param=value)           # Alternative
+
+        Args:
+            *args: Positional arguments (pattern-dependent)
+            **kwargs: Keyword arguments for configuration
+
+        Returns:
+            Node ID (useful for method chaining)
+
+        Raises:
+            WorkflowValidationError: If node_id is already used or invalid pattern
+        """
+        # Pattern detection and routing
+        if len(args) == 3 and isinstance(args[0], str) and isinstance(args[2], dict):
+            # Pattern 1: Current API - add_node("NodeType", "node_id", {"param": value})
+            return self._add_node_current(args[0], args[1], args[2])
+
+        elif len(args) >= 2 and isinstance(args[0], str):
+            # Pattern 2: Legacy fluent API - add_node("node_id", NodeClass, param=value)
+            if hasattr(args[1], "__name__") or isinstance(args[1], type):
+                return self._add_node_legacy_fluent(args[0], args[1], **kwargs)
+            else:
+                # Might be current API with positional args
+                config = kwargs if kwargs else (args[2] if len(args) > 2 else {})
+                return self._add_node_current(args[1], args[0], config)
+
+        elif len(args) >= 2 and hasattr(args[0], "__name__"):
+            # Pattern 3: Alternative - add_node(NodeClass, "node_id", param=value)
+            return self._add_node_alternative(args[0], args[1], **kwargs)
+
+        else:
+            # Error with helpful message
+            raise WorkflowValidationError(
+                f"Invalid add_node signature. Received {len(args)} args: {[type(arg).__name__ for arg in args]}\n"
+                f"Supported patterns:\n"
+                f"  add_node('NodeType', 'node_id', {{'param': value}})  # Preferred\n"
+                f"  add_node('node_id', NodeClass, param=value)          # Legacy\n"
+                f"  add_node(NodeClass, 'node_id', param=value)          # Alternative\n"
+                f"Examples:\n"
+                f"  add_node('HTTPRequestNode', 'api_call', {{'url': 'https://api.com'}})\n"
+                f"  add_node('csv_reader', CSVReaderNode, file_path='data.csv')"
+            )
+
+    def _add_node_current(
+        self, node_type: str, node_id: str, config: dict[str, Any]
+    ) -> str:
+        """Handle current API pattern: add_node('NodeType', 'node_id', {'param': value})"""
+        return self._add_node_unified(node_type, node_id, config)
+
+    def _add_node_legacy_fluent(
+        self, node_id: str, node_class_or_type: Any, **config
+    ) -> "WorkflowBuilder":
+        """Handle legacy fluent API pattern: add_node('node_id', NodeClass, param=value)"""
+        import warnings
+
+        warnings.warn(
+            f"Legacy fluent API usage detected. "
+            f"Migration guide:\n"
+            f"  OLD: add_node('{node_id}', {getattr(node_class_or_type, '__name__', str(node_class_or_type))}, {list(config.keys())})\n"
+            f"  NEW: add_node('{getattr(node_class_or_type, '__name__', str(node_class_or_type))}', '{node_id}', {config})\n"
+            f"Legacy support will be removed in v0.8.0",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+        if hasattr(node_class_or_type, "__name__"):
+            node_type = node_class_or_type.__name__
+        else:
+            node_type = str(node_class_or_type)
+
+        self._add_node_unified(node_type, node_id, config)
+        return self  # Return self for fluent chaining
+
+    def _add_node_alternative(self, node_class: type, node_id: str, **config) -> str:
+        """Handle alternative pattern: add_node(NodeClass, 'node_id', param=value)"""
+        import warnings
+
+        warnings.warn(
+            f"Alternative API usage detected. Consider using preferred pattern:\n"
+            f"  CURRENT: add_node({node_class.__name__}, '{node_id}', {list(config.keys())})\n"
+            f"  PREFERRED: add_node('{node_class.__name__}', '{node_id}', {config})",
+            UserWarning,
+            stacklevel=3,
+        )
+
+        node_type = node_class.__name__
+        return self._add_node_unified(node_type, node_id, config)
+
+    def _add_node_unified(
         self,
-        node_type: str | type | Any,
+        node_type: str,
         node_id: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> str:
         """
-        Add a node to the workflow.
+        Unified implementation for all add_node patterns.
 
         Args:
-            node_type: Node type name (string), Node class, or Node instance
+            node_type: Node type name (string)
             node_id: Unique identifier for this node (auto-generated if not provided)
-            config: Configuration for the node (ignored if node_type is an instance)
+            config: Configuration for the node
 
         Returns:
-            Node ID (useful for method chaining)
+            Node ID
 
         Raises:
             WorkflowValidationError: If node_id is already used
@@ -80,6 +175,39 @@ class WorkflowBuilder:
         logger.info(f"Added node '{node_id}' of type '{type_name}'")
         return node_id
 
+    # Fluent API methods for backward compatibility
+    def add_node_fluent(
+        self, node_id: str, node_class_or_type: Any, **config
+    ) -> "WorkflowBuilder":
+        """
+        DEPRECATED: Fluent API for backward compatibility.
+        Use add_node(node_type, node_id, config) instead.
+
+        Args:
+            node_id: Node identifier
+            node_class_or_type: Node class or type
+            **config: Node configuration as keyword arguments
+
+        Returns:
+            Self for method chaining
+        """
+        import warnings
+
+        warnings.warn(
+            "Fluent API is deprecated. Use add_node(node_type, node_id, config) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        if hasattr(node_class_or_type, "__name__"):
+            # Node class
+            self.add_node(node_class_or_type.__name__, node_id, config)
+        else:
+            # Assume string type
+            self.add_node(str(node_class_or_type), node_id, config)
+
+        return self
+
     def add_node_instance(self, node_instance: Any, node_id: str | None = None) -> str:
         """
         Add a node instance to the workflow.
@@ -124,7 +252,7 @@ class WorkflowBuilder:
 
     def add_connection(
         self, from_node: str, from_output: str, to_node: str, to_input: str
-    ) -> None:
+    ) -> "WorkflowBuilder":
         """
         Connect two nodes in the workflow.
 
@@ -161,6 +289,7 @@ class WorkflowBuilder:
         self.connections.append(connection)
 
         logger.info(f"Connected '{from_node}.{from_output}' to '{to_node}.{to_input}'")
+        return self
 
     def connect(
         self,

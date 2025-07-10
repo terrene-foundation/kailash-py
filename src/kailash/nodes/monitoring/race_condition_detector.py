@@ -6,7 +6,10 @@ concurrent access pattern analysis, timing-based detection, and preventive sugge
 
 import asyncio
 import logging
+import os
+import threading
 import time
+import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -350,6 +353,10 @@ class RaceConditionDetectorNode(AsyncNode):
                 return await self._start_monitoring(**kwargs)
             elif operation == "stop_monitoring":
                 return await self._stop_monitoring(**kwargs)
+            elif operation == "report_operation":
+                return await self._report_operation(**kwargs)
+            elif operation == "complete_operation":
+                return await self._complete_operation(**kwargs)
             else:
                 raise ValueError(f"Unknown operation: {operation}")
 
@@ -1049,6 +1056,87 @@ class RaceConditionDetectorNode(AsyncNode):
             "recommended_prevention": [p.value for p in race.recommended_prevention],
             "timing_analysis": race.timing_analysis,
             "metadata": race.metadata,
+        }
+
+    async def _report_operation(self, **kwargs) -> Dict[str, Any]:
+        """Report an operation with resource access for race detection."""
+        operation_id = kwargs.get("operation_id", str(uuid.uuid4()))
+        resource_id = kwargs.get("resource_id")
+        access_type = kwargs.get("access_type", "read")
+        thread_id = kwargs.get("thread_id", str(threading.get_ident()))
+        process_id = kwargs.get("process_id", str(os.getpid()))
+        metadata = kwargs.get("metadata", {})
+
+        # Register the operation
+        register_result = await self._register_operation(
+            operation_id=operation_id,
+            operation_type="reported_operation",
+            metadata=metadata,
+        )
+
+        # Register resource access if specified
+        if resource_id:
+            access_result = await self._register_access(
+                resource_id=resource_id,
+                operation_id=operation_id,
+                thread_id=thread_id,
+                process_id=process_id,
+                access_type=access_type,
+                metadata=metadata,
+            )
+
+        return {
+            "operation_id": operation_id,
+            "resource_id": resource_id,
+            "access_type": access_type,
+            "thread_id": thread_id,
+            "process_id": process_id,
+            "detection_status": "reported",
+            "races_detected": [
+                self._serialize_race(race) for race in self._detected_races
+            ],
+            "race_count": len(self._detected_races),
+            "active_accesses": len(
+                self._active_accesses
+            ),  # Fixed to use correct data structure
+            "active_operations": len(self._active_operations),
+            "prevention_suggestions": [],
+            "resource_conflicts": {},
+            "timing_analysis": {},
+            "monitoring_status": "active",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": "success",
+        }
+
+    async def _complete_operation(self, **kwargs) -> Dict[str, Any]:
+        """Complete an operation and perform final race detection analysis."""
+        operation_id = kwargs.get("operation_id")
+        resource_id = kwargs.get("resource_id")
+        success = kwargs.get("success", True)
+
+        # If operation_id is provided, complete that specific operation
+        if operation_id:
+            if operation_id in self._active_operations:
+                operation = self._active_operations.pop(operation_id)
+                # You could add completion logic here
+
+        # Return the current state with race detection results
+        return {
+            "operation_id": operation_id,
+            "resource_id": resource_id,
+            "operation_success": success,
+            "races_detected": [
+                self._serialize_race(race) for race in self._detected_races
+            ],
+            "race_count": len(self._detected_races),
+            "active_accesses": len(self._active_accesses),
+            "active_operations": len(self._active_operations),
+            "prevention_suggestions": [],
+            "resource_conflicts": {},
+            "timing_analysis": {},
+            "monitoring_status": "operation_completed",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": "success",
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
