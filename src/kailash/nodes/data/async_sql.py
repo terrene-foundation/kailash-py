@@ -431,6 +431,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         fetch_mode: FetchMode = FetchMode.ALL,
         fetch_size: Optional[int] = None,
         transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query and return results."""
         # Convert dict params to positional for asyncpg
@@ -440,14 +441,34 @@ class PostgreSQLAdapter(DatabaseAdapter):
             import json
 
             query_params = []
+            param_names = []  # Track parameter names for type mapping
             for i, (key, value) in enumerate(params.items(), 1):
                 query = query.replace(f":{key}", f"${i}")
+                param_names.append(key)
                 # For PostgreSQL, lists should remain as lists for array operations
                 # Only convert dicts to JSON strings
                 if isinstance(value, dict):
                     value = json.dumps(value)
                 query_params.append(value)
             params = query_params
+
+            # Apply parameter type casts if provided
+            if parameter_types:
+                # Build a query with explicit type casts
+                for i, param_name in enumerate(param_names, 1):
+                    if param_name in parameter_types:
+                        pg_type = parameter_types[param_name]
+                        # Replace $N with $N::type in the query
+                        query = query.replace(f"${i}", f"${i}::{pg_type}")
+
+        else:
+            # For positional params, apply type casts if provided
+            if parameter_types and isinstance(params, (list, tuple)):
+                # Build query with type casts for positional parameters
+                for i, param_type in parameter_types.items():
+                    if isinstance(i, int) and 0 <= i < len(params):
+                        # Replace $N with $N::type
+                        query = query.replace(f"${i+1}", f"${i+1}::{param_type}")
 
         # Ensure params is a list/tuple for asyncpg
         if params is None:
@@ -1271,6 +1292,13 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 description="Whether to allow administrative SQL commands (CREATE, DROP, etc.)",
             ),
             NodeParameter(
+                name="parameter_types",
+                type=dict,
+                required=False,
+                default=None,
+                description="Optional PostgreSQL type hints for parameters (e.g., {'role_id': 'text', 'metadata': 'jsonb'})",
+            ),
+            NodeParameter(
                 name="retry_config",
                 type=Any,
                 required=False,
@@ -1532,6 +1560,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 "result_format", self.config.get("result_format", "dict")
             )
             user_context = inputs.get("user_context")
+            parameter_types = inputs.get(
+                "parameter_types", self.config.get("parameter_types")
+            )
 
             if not query:
                 raise NodeExecutionError("No query provided")
@@ -1576,6 +1607,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 fetch_mode=fetch_mode,
                 fetch_size=fetch_size,
                 user_context=user_context,
+                parameter_types=parameter_types,
             )
 
             # Format results based on requested format
@@ -1795,6 +1827,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         fetch_mode: FetchMode,
         fetch_size: Optional[int],
         user_context: Any = None,
+        parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query with retry logic for transient failures.
 
@@ -1823,6 +1856,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     params=params,
                     fetch_mode=fetch_mode,
                     fetch_size=fetch_size,
+                    parameter_types=parameter_types,
                 )
 
                 # Apply data masking if access control is enabled
@@ -2010,6 +2044,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         params: Any,
         fetch_mode: FetchMode,
         fetch_size: Optional[int],
+        parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query with automatic transaction management.
 
@@ -2034,6 +2069,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 fetch_mode=fetch_mode,
                 fetch_size=fetch_size,
                 transaction=self._active_transaction,
+                parameter_types=parameter_types,
             )
         elif self._transaction_mode == "auto":
             # Auto-transaction mode
@@ -2045,6 +2081,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     fetch_mode=fetch_mode,
                     fetch_size=fetch_size,
                     transaction=transaction,
+                    parameter_types=parameter_types,
                 )
                 await adapter.commit_transaction(transaction)
                 return result
@@ -2058,6 +2095,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 params=params,
                 fetch_mode=fetch_mode,
                 fetch_size=fetch_size,
+                parameter_types=parameter_types,
             )
 
     @classmethod
