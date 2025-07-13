@@ -1045,7 +1045,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "0.6.3"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1151,7 +1151,7 @@ requires-dist = [
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.10" },
     { name = "limits", specifier = ">=5.4.0" },
     { name = "matplotlib", specifier = ">=3.5" },
-    { name = "mcp", extras = ["cli", "server"], specifier = ">=1.9.2" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.9.2" },
     { name = "msal", specifier = ">=1.32.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=0.9" },
     { name = "myst-parser", specifier = ">=4.0.1" },
