@@ -322,7 +322,7 @@ Verify test coverage:
 - Add additional tests for any uncovered critical code
 - Follow the same 3-tier testing strategy for new tests
 - **NO MOCKING** in integration/E2E tiers
-- If tests contain capabilities are missing
+- If tests contain capabilities and components are missing
   - Do not simply skip or remove them because we follow TDD and will write tests first before implementation.
   - The tests covers capabilities that we must have, thus if tests are missing capabilities or functionality:
     - Identify the missing capabilities
@@ -390,7 +390,7 @@ If you find any existing tests with policy violations, please fix them immediate
 **Show me the COMPLETE output from each tier. Do not summarize. If any tests fail, STOP and fix before continuing.**
 
 ### Component Completion Verification
-For the features you have implementing, confirm you have created ALL required components:
+For the features you have implemented, confirm you have created ALL required components:
 
 - [ ] Core implementation in `src/kailash/`
 - [ ] Unit tests in `tests/unit/`
@@ -522,5 +522,5 @@ Then, review this project without any prejudice:
 
 ## 11. GIT Procedures
 1. Never use git reset --hard or git reset --soft.
-2. Always check all local changes (not just the current session) and add/stage all modified and untracked files.
+2. Always check all local changes (from all sessions) and add/stage all modified and untracked files.
 3. Before any potentially destructive git operations, check if there are any uncommitted changes. If there are, stash or commit them first.

@@ -1610,6 +1610,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 parameter_types=parameter_types,
             )
 
+            # Ensure all data is JSON-serializable (safety net for adapter inconsistencies)
+            result = self._ensure_serializable(result)
+
             # Format results based on requested format
             formatted_data = self._format_results(result, result_format)
 
@@ -2497,6 +2500,55 @@ class AsyncSQLDatabaseNode(AsyncNode):
         modified_query = re.sub(r"%s", replace_mysql_placeholder, modified_query)
 
         return modified_query, param_dict
+
+    def _ensure_serializable(self, data: Any) -> Any:
+        """Ensure all data types are JSON-serializable.
+
+        This is a safety net for cases where adapter _convert_row might not be called
+        or might miss certain data types. It recursively processes the data structure
+        to ensure datetime objects and other non-JSON-serializable types are converted.
+
+        Args:
+            data: Raw data from database adapter
+
+        Returns:
+            JSON-serializable data structure
+        """
+        if data is None:
+            return None
+        elif isinstance(data, bool):
+            return data
+        elif isinstance(data, (int, float, str)):
+            return data
+        elif isinstance(data, datetime):
+            return data.isoformat()
+        elif isinstance(data, date):
+            return data.isoformat()
+        elif hasattr(data, "total_seconds"):  # timedelta
+            return data.total_seconds()
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, bytes):
+            import base64
+
+            return base64.b64encode(data).decode("utf-8")
+        elif hasattr(data, "__str__") and hasattr(data, "hex"):  # UUID-like objects
+            return str(data)
+        elif isinstance(data, dict):
+            return {
+                key: self._ensure_serializable(value) for key, value in data.items()
+            }
+        elif isinstance(data, (list, tuple)):
+            return [self._ensure_serializable(item) for item in data]
+        else:
+            # For any other type, try to convert to string as fallback
+            try:
+                # Test if it's already JSON serializable
+                json.dumps(data)
+                return data
+            except (TypeError, ValueError):
+                # Not serializable, convert to string
+                return str(data)
 
     def _format_results(self, data: list[dict], result_format: str) -> Any:
         """Format query results according to specified format.
