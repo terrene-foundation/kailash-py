@@ -158,6 +158,9 @@ class WorkflowServer:
 
             return health_status
 
+        # Note: Metrics and authentication endpoints are provided by EnterpriseWorkflowServer
+        # Basic WorkflowServer focuses on core workflow functionality
+
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             """WebSocket for real-time updates."""

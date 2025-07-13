@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -31,11 +31,25 @@ class ExecutionMode(str, Enum):
 class WorkflowRequest(BaseModel):
     """Base request model for workflow execution."""
 
-    inputs: dict[str, Any] = Field(..., description="Input data for workflow nodes")
+    inputs: dict[str, Any] | None = Field(
+        None, description="Input data for workflow nodes"
+    )
+    parameters: dict[str, Any] | None = Field(
+        None, description="Legacy: parameters for workflow execution"
+    )
     config: dict[str, Any] | None = Field(
         None, description="Node configuration overrides"
     )
     mode: ExecutionMode = Field(ExecutionMode.SYNC, description="Execution mode")
+
+    def get_inputs(self) -> dict[str, Any]:
+        """Get inputs, supporting both 'inputs' and 'parameters' format."""
+        if self.inputs is not None:
+            return self.inputs
+        elif self.parameters is not None:
+            return self.parameters
+        else:
+            return {}
 
 
 class WorkflowResponse(BaseModel):
@@ -114,6 +128,21 @@ class WorkflowAPI:
 
     def _setup_routes(self):
         """Setup API routes dynamically based on workflow."""
+
+        # Root execution endpoint (convenience for direct workflow execution)
+        @self.app.post("/")
+        async def execute_workflow_root(
+            request: Request, background_tasks: BackgroundTasks
+        ):
+            """Execute the workflow with provided inputs (root endpoint)."""
+            try:
+                # Try to parse JSON body
+                json_data = await request.json()
+                workflow_request = WorkflowRequest(**json_data)
+            except:
+                # If no JSON or invalid JSON, create empty request
+                workflow_request = WorkflowRequest()
+            return await execute_workflow(workflow_request, background_tasks)
 
         # Main execution endpoint
         @self.app.post("/execute")
@@ -195,7 +224,9 @@ class WorkflowAPI:
 
             # Execute workflow with inputs
             results = await asyncio.to_thread(
-                self.runtime.execute, self.workflow_graph, parameters=request.inputs
+                self.runtime.execute,
+                self.workflow_graph,
+                parameters=request.get_inputs(),
             )
 
             # Handle tuple return from runtime
