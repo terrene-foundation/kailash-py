@@ -11,7 +11,7 @@ You are implementing a feature. Follow these steps exactly and show me complete 
 ### Essential Context Loading
 Load these files before starting (DO NOT proceed until loaded):
 - Root `CLAUDE.md` - Core validation rules and critical patterns
-- `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance  
+- `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance
 - `# contrib (removed)/project/todos/000-master.md` - Current project state and priorities
 
 **For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
@@ -34,7 +34,7 @@ After loading the essential files, you MUST confirm you understand:
   - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
   - Real Docker infrastructure requirement - never skip this for integration/E2E tests
 - **Todo management system** structure in `# contrib (removed)/project/todos/`
-- **Available frameworks** in `apps/` that can provide ready-made solutions
+- **Available solutions** in `apps/` that can provide ready-made solutions
 - **How to use MCP tools** to search relevant documentation when needed
 
 **Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
@@ -42,7 +42,7 @@ After loading the essential files, you MUST confirm you understand:
 ### ULTRATHINK CAP ACTIVATION
 Put on your ultrathink cap. Before we begin any implementation, you MUST analyze deeply and provide specific answers to these questions:
 
-1. **What are the 3 most likely failure points for this specific task?**
+1. **What are the most likely failure points for this specific task?**
    - Consider past patterns from `sdk-users/validation/common-mistakes.md`
    - Think about integration points that commonly break
    - Identify areas where tests typically fail
@@ -63,7 +63,7 @@ Put on your ultrathink cap. Before we begin any implementation, you MUST analyze
    - What examples need to be tested
    - How will you verify every code example works
 
-**Think deeply and be specific. Show me your detailed analysis before proceeding. Do not give generic answers.**
+**Think deeply and be specific. Document your detailed analysis before proceeding. Do not give generic answers.**
 
 ## 2. REQUIREMENTS ANALYSIS AND PLANNING
 
@@ -100,7 +100,7 @@ This prevents incomplete implementations by ensuring we understand exactly what 
 - What could go wrong (failure scenarios)
 - How it maps to existing SDK components
 
-**Do not proceed until you have provided complete analysis for all requirements.**
+**Do not proceed until you have provided and documented complete analysis for all requirements.**
 
 ### Framework Solutions Check (CRITICAL)
 **MANDATORY**: Search for existing solutions before writing any new code:
@@ -109,7 +109,7 @@ This prevents incomplete implementations by ensuring we understand exactly what 
 - Use MCP tools to search `apps/kailash-nexus/` for platform-related solutions
 - Use MCP tools to search `src/kailash/` for similar implementations
 
-**Show me what existing solutions you found and what you can reuse.**
+**Document and show me what existing solutions you found and what you can reuse.**
 
 ### Architectural Decision Documentation
 Before writing any code, you MUST create an ADR (Architecture Decision Record) in `# contrib (removed)/architecture/adr/`. This prevents wrong implementations by documenting the approach and reasoning.
@@ -117,25 +117,25 @@ Before writing any code, you MUST create an ADR (Architecture Decision Record) i
 You MUST create an ADR with the following structure:
 
 1. **Title**: ADR-XXX-feature-name.md (replace XXX with next number)
-2. **Context**: 
+2. **Context**:
    - Why is this change needed?
    - What problem does it solve?
    - What are the current limitations?
    - What are the business requirements?
 
-3. **Decision**: 
+3. **Decision**:
    - What specific approach will be taken?
    - What technologies/patterns will be used?
    - How does it integrate with existing SDK?
    - What are the implementation details?
 
-4. **Consequences**: 
+4. **Consequences**:
    - What are the positive impacts?
    - What are the negative impacts?
    - What are the risks?
    - How will this affect other components?
 
-5. **Alternatives**: 
+5. **Alternatives**:
    - What other approaches were considered?
    - Why were they rejected?
    - What are the trade-offs?
@@ -182,19 +182,21 @@ The local todo management system is in `# contrib (removed)/project/todos/`. You
 
 Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
 
+**Always ensure that your TDD covers all the detailed todo entries**
+
 Do not write new tests without checking that existing ones can be modified to include them. You MUST have all 3 kinds of tests:
 
 **Tier 1 (Unit tests):**
 - For each component, we should have unit tests that cover the functionality
 - Can use mocks, must be fast (<1s per test), no external dependencies, no sleep
-- Location: `tests/unit/test_component.py`
+- Location: `tests/unit/`
 - Must cover all public methods, edge cases, and error conditions
 - Must follow the existing test patterns in the codebase
 
 **Tier 2 (Integration tests):**
 - For each component, we should have integration tests to ensure that it works together with the system
 - **NO MOCKING** - must use real Docker services
-- Location: `tests/integration/test_component.py`
+- Location: `tests/integration/`
 - Must test actual component interactions with real services
 - Must use the docker implementation in `tests/utils`
 - Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before these tests
@@ -202,13 +204,15 @@ Do not write new tests without checking that existing ones can be modified to in
 **Tier 3 (E2E tests):**
 - For each user flow, we should have user flow tests that ensure that we meet developer expectations
 - **NO MOCKING** - complete scenarios with real infrastructure
-- Location: `tests/e2e/test_feature.py`
+- Location: `tests/e2e/`
 - Must test complete user workflows from start to finish
 - Must use real data, processes, and responses
 
 **Show me the complete test plan and initial test files. Do not proceed with implementation until all test files are created and reviewed.**
 
 ## 5. IMPLEMENTATION WITH CONTINUOUS VALIDATION
+
+**Always read the detailed todo entries before starting implementation**
 
 Implement in small, verifiable chunks. After each component, please test your implementation thoroughly. **Do not proceed to the next component until the current one is completely working.**
 
@@ -221,7 +225,7 @@ For each component, you MUST:
 - [ ] Integration tests pass (show full output)
 - [ ] Documentation updated if needed
 - [ ] No policy violations found
-    
+
 **Component 2**: [name]
 - [ ] Implementation complete in which directory
 - [ ] Unit tests pass (show full output)
@@ -235,7 +239,10 @@ For each component, you MUST:
 1. **Start Docker infrastructure:**
    - Always use the docker implementation in `tests/utils`, and real data, processes, responses
    - **DO NOT create new docker containers** or images before checking that the docker for this repository exists
-   - If there isn't any and you need to create one, please inspect the current docker containers in this system to understand what ports and services are currently in use by other containers/images. Deconflict by locking in a set of docker services and ports for this project. Do not create docker containers or images manually, please use the docker-compose approach outlined in `tests/utils/CLAUDE.md`.
+   - If there isn't any and you need to create one:
+     - Inspect the current docker containers in this system to understand what ports and services are currently in use by other containers/images.
+     - Deconflict by locking in a set of docker services and ports for this project.
+     - Do not create docker containers or images manually, please use the docker-compose approach outlined in `tests/utils/CLAUDE.md`.
 
    `./tests/utils/test-env up && ./tests/utils/test-env status`
 
@@ -245,7 +252,14 @@ For each component, you MUST:
 3. **Run integration tests:**
    `pytest tests/integration/test_component.py -v`
 
-4. **Verify component follows SDK patterns:**
+4. **Ensure missing components in tests are implemented:**
+   - Do not simply skip or remove them.
+   - Identify what capabilities do these components support
+   - Write new tests to cover those capabilities
+   - Ensure they follow the existing patterns and policies
+   - Do not remove tests that are not implemented yet
+
+5. **Verify component follows SDK patterns:**
    - Ensure 100% kailash SDK compliance
    - Do not create new code without checking it against existing SDK components
    - Do not assume any new functionality without verifying it against specifications
@@ -254,7 +268,7 @@ For each component, you MUST:
 **Show me the COMPLETE output after each component. Do not summarize. Do not proceed to the next component if any tests fail.**
 
 ### Continuous Validation Requirements
-After each component, you MUST validate the following:
+After each component, you MUST validate the following against the detailed todo entries:
 
 1. **Does it follow existing SDK patterns?**
    - Check `src/kailash/` for similar implementations
@@ -280,54 +294,55 @@ After each component, you MUST validate the following:
    - Handle edge cases and error conditions
    - Include proper documentation strings
 
+5. **Did you verify that our tests are not trivial?**
+   - Ensure tests actually verify intended functionality
+   - Cover edge cases and error conditions
+   - Avoid redundant or trivial tests that do not add value
+   - Ensure tests are meaningful and cover actual behavior
+   - Avoid tests that only check for syntax or trivial conditions
+   - Ensure tests are not just placeholders or empty stubs
+   - Ensure tests are not just checking for presence of code or artifact without verifying actual functionality
+   - Ensure that performance tests are meaningful and cover actual performance characteristics
+
 **STOP if any answer is no. Fix before continuing to the next component.**
 
 ## 6. TEST COVERAGE VERIFICATION
 
-After implementation is complete, verify test coverage:
+Verify test coverage:
 - Run test coverage analysis: `pytest --cov=src/kailash --cov-report=html --cov-report=term`
-- Aim for >80% test coverage
-- Review coverage report to identify untested code paths
+- Aim for >80% test coverage at the solution's level
+- Ensure tests are importing the actual modules
+- Ensure that tests are not over-mocked that they don't reflect reality
+- Ensure that implementation and infrastructure dependencies are real and available
+- Skips do not count towards coverage and ensure no tests are skipped
+- Use real Docker services for integration/E2E tests
+  - Must use the docker implementation in `tests/utils`
+  - Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before tests
+- Review coverage report carefully to identify untested code paths
 - Add additional tests for any uncovered critical code
 - Follow the same 3-tier testing strategy for new tests
-- Use real Docker services for integration/E2E tests
 - **NO MOCKING** in integration/E2E tiers
+- If tests contain capabilities are missing
+  - Do not simply skip or remove them because we follow TDD and will write tests first before implementation.
+  - The tests covers capabilities that we must have, thus if tests are missing capabilities or functionality:
+    - Identify the missing capabilities
+    - Write new tests to cover those capabilities
+    - Ensure they follow the existing patterns and policies
+    - Do not remove tests that are not implemented yet
+
+Ensure that no tests are trivial:
+- Ensure tests actually verify intended functionality
+- Cover edge cases and error conditions
+- Avoid redundant or trivial tests that do not add value
+- Ensure tests are meaningful and cover actual behavior
+- Avoid tests that only check for syntax or trivial conditions
+- Ensure tests are not just placeholders or empty stubs
+- Ensure tests are not just checking for presence of code or artifact without verifying actual functionality
+- Ensure that performance tests are meaningful and cover actual performance characteristics
 
 **Show me the coverage report and address any gaps before proceeding.**
 
-## 7. ULTRATHINK CAP CRITIQUE
-
-Put on your ultrathink cap again. Starting fresh, critique this implementation as if you're a different AI seeing this code for the first time.
-
-Imagine you're reviewing this code without any prior knowledge:
-
-1. **What looks wrong or incomplete?**
-   - Are there missing error handlers?
-   - Are there untested code paths?
-   - Are there performance bottlenecks?
-   - Are there security vulnerabilities?
-
-2. **What tests are missing or inadequate?**
-   - Are all edge cases covered?
-   - Are error conditions properly tested?
-   - Are integration points thoroughly tested?
-   - Are performance characteristics verified?
-
-3. **What documentation is unclear or missing?**
-   - Are usage examples clear and complete?
-   - Are parameters and return values documented?
-   - Are error conditions explained?
-   - Are integration requirements clear?
-
-4. **What would frustrate a user trying to use this?**
-   - Are error messages helpful?
-   - Are setup requirements clear?
-   - Are examples runnable?
-   - Are common mistakes addressed?
-
-**Be harsh. Find real problems. Show me specific issues with code examples.**
-
-## 8. DOCUMENTATION VALIDATION
+## 7. DOCUMENTATION VALIDATION
 
 Validate ALL documentation updates. For each doc file you've changed, you MUST create temporary tests to verify every code example actually works.
 
@@ -353,18 +368,18 @@ Cross-reference the actual SDK implementation and the corresponding tests in `te
 - Temp test: [path to temp test file]
 - Output: [full output proving it works]
 
-## 9. FINAL COMPREHENSIVE VALIDATION
+## 8. FINAL COMPREHENSIVE VALIDATION
 
 ### Full Test Suite Execution
 Run complete test suite in the correct order. You MUST show me the COMPLETE output - do not summarize anything.
 
 1. **Tier 1 (all unit tests):**
    `pytest tests/unit/ -v`
-   
+
 2. **Tier 2 (all integration tests):**
    `./tests/utils/test-env up && ./tests/utils/test-env status`
    `pytest tests/integration/ -v`
-   
+
 3. **Tier 3 (relevant E2E tests):**
    `pytest tests/e2e/test_specific_feature.py -v`
 
@@ -375,7 +390,7 @@ If you find any existing tests with policy violations, please fix them immediate
 **Show me the COMPLETE output from each tier. Do not summarize. If any tests fail, STOP and fix before continuing.**
 
 ### Component Completion Verification
-For the feature you're implementing, confirm you have created ALL required components:
+For the features you have implementing, confirm you have created ALL required components:
 
 - [ ] Core implementation in `src/kailash/`
 - [ ] Unit tests in `tests/unit/`
@@ -395,34 +410,27 @@ Before declaring this implementation complete, you MUST verify every item on thi
 - [ ] Documentation validated (show temp test results for each file)
 - [ ] Todo items updated to completed (show the updated todo files)
 - [ ] No policy violations found (confirmed by reviewing policy documents)
-- [ ] Ultrathink critique addressed (show specific fixes made)
+- [ ] Critique (`docs/critiques`) addressed (show specific fixes made)
 - [ ] Component completion verified (show file locations for each component)
 - [ ] Ready for PR (show git status and final test results)
 
 **If any item is unchecked, STOP and fix it before declaring complete. Do not proceed until EVERY item is verified.**
 
-## 10. POST-IMPLEMENTATION TASKS
+### Final Validation
+Before considering this implementation complete, put on your ultrathink cap and run through this final validation:
 
-### Documentation System Update
-Please update all documentation and references in detail:
+1. Can another developer understand and maintain this code?
+2. Are all edge cases and error conditions handled?
+3. Do all tests actually verify the intended functionality?
+4. Is the documentation accurate and complete?
+5. Does this follow all established SDK patterns?
 
-1. Look through the docs in `sdk-users/`, using the `CLAUDE.md` as the entrypoint:
-   - Important directories are `developer/`, `nodes/`, and `cheatsheet/`
-   - Check existing docs (file by file) for patterns, and ensure that they are up-to-date
-   - Cross-reference the actual SDK implementation and the corresponding tests in `tests/` to understand the expected behavior, and the correct usage patterns
-   - Tests in `tests/` are written in accordance with the policies in `sdk-users/testing/regression-testing-strategy.md`, and `sdk-users/testing/test-organization-policy.md`
-   - Your focus is to ensure that the code and guide in the documentation are correct and up-to-date
-   - Please write temporary tests to validate the codebases, before and after your changes
-   - Do this for every file without fail
-   - Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before integration/E2E tests - **NEVER use pytest directly!**
-   - Check through the other directories to ensure that we don't have any underused or redundant information
-   - Keep `sdk-users/` lean, concise, and focused for developers and users
+**If you cannot answer "yes" to all questions, continue working until you can.**
 
-2. Look through the migration docs in `sdk-users/migration-guides/`:
-   - Ensure that the docs are up-to-date and reflect the latest changes in the SDK
-   - Update any outdated information, and ensure that the guides are clear and concise
-   - Remove any redundant or underused migration guides
-   
+**Do not declare the feature complete until all validation steps pass and you've shown me the complete outputs for every step.**
+
+## 9. POST-IMPLEMENTATION TASKS
+
 ### Todo System Completion Update
 After completing the implementation, update the todo management system:
 
@@ -432,7 +440,6 @@ After completing the implementation, update the todo management system:
    - Update the status of completed todos
    - Remove old completed entries that don't add context to outstanding todos
    - Keep this file concise, lean, and easy to navigate
-
 3. Ensure that each todo's details are captured in:
    - `todos/active` for outstanding todos
    - `todos/completed` for completed todos
@@ -451,7 +458,7 @@ Check the `CLAUDE.md` in root and other directories:
      - You can trace a complete path from basic patterns to advanced custom development
      - Please maintain the concise, authoritative tone that respects context limits!
 
-2. For the modules in `apps/`:
+2. For this module in `apps/`:
    - Please trace through the `CLAUDE.md` guidance system
    - Temp test all the instructions to ensure that they are correct
    - For each user persona and their workflows, please run through the e2e using temp tests
@@ -469,3 +476,51 @@ Before considering this implementation complete, put on your ultrathink cap and 
 **If you cannot answer "yes" to all questions, continue working until you can.**
 
 **Do not declare the feature complete until all validation steps pass and you've shown me the complete outputs for every step.**
+
+## 10. ULTRATHINK CAP CRITIQUE
+
+Put on your ultrathink cap again. Starting fresh, critique this implementation.
+- Read adr, guidance, and documentations thoroughly.
+- Check the detailed todo entries in `todos/`.
+- Make sure you understand the intent and purpose of this project.
+- Read your past critiques in the core or apps `docs/critiques` accordingly.
+
+Then, review this project without any prejudice:
+
+1. **Is the codebase delivering the solution's intents, purposes and user objectives**
+   - Does it meet the functional requirements?
+   - Does it meet user expectations?
+   - Does it follow the architectural decisions made in the ADR?
+   - Does it integrate well with existing components?
+
+2. **What looks wrong or incomplete?**
+   - Are there missing error handlers?
+   - Are there untested code paths?
+   - Are there performance bottlenecks?
+   - Are there security vulnerabilities?
+
+3. **What tests are missing or inadequate?**
+   - Are all edge cases covered?
+   - Are error conditions properly tested?
+   - Are integration points thoroughly tested?
+   - Are performance characteristics verified?
+
+4. **What documentation is unclear or missing?**
+   - Are usage examples clear and complete?
+   - Are parameters and return values documented?
+   - Are error conditions explained?
+   - Are integration requirements clear?
+
+5. **What would frustrate a user trying to use this?**
+   - Are error messages helpful?
+   - Are setup requirements clear?
+   - Are examples runnable?
+   - Are common mistakes addressed?
+
+**Be honest, fair, and transparent. Find real problems. Show me specific issues with code examples.**
+**Record your critique in the core or apps `docs/critiques` accordingly`**
+
+## 11. GIT Procedures
+1. Never use git reset --hard or git reset --soft.
+2. Always check all local changes (not just the current session) and add/stage all modified and untracked files.
+3. Before any potentially destructive git operations, check if there are any uncommitted changes. If there are, stash or commit them first.
