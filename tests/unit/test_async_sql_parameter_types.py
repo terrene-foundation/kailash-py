@@ -30,16 +30,7 @@ class TestAsyncSQLParameterTypes:
     @pytest.fixture
     def node(self):
         """Create AsyncSQLDatabaseNode instance."""
-        return AsyncSQLDatabaseNode(
-            name="test_node",
-            database_type="postgresql",
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
-            transaction_mode="none",  # No transaction wrapping for simpler tests
-            validate_queries=False,  # Disable validation for testing
-        )
+        return AsyncSQLDatabaseNode()
 
     @pytest.mark.asyncio
     async def test_parameter_types_passed_through_chain(self, node, mock_adapter):
@@ -111,16 +102,7 @@ class TestAsyncSQLParameterTypes:
         """Test that PostgreSQLAdapter correctly applies type casts when parameter_types are provided."""
         # Instead of testing the adapter directly, test through the node
         # which is the intended usage pattern
-        node = AsyncSQLDatabaseNode(
-            name="test_node",
-            database_type="postgresql",
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
-            transaction_mode="none",
-            validate_queries=False,
-        )
+        node = AsyncSQLDatabaseNode()
 
         # Create a mock adapter that captures the execute call
         mock_adapter = Mock(spec=DatabaseAdapter)
@@ -152,16 +134,7 @@ class TestAsyncSQLParameterTypes:
     @pytest.mark.asyncio
     async def test_no_parameter_types_no_modification(self):
         """Test that queries are not modified when parameter_types is None."""
-        node = AsyncSQLDatabaseNode(
-            name="test_node",
-            database_type="postgresql",
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
-            transaction_mode="none",
-            validate_queries=False,
-        )
+        node = AsyncSQLDatabaseNode()
 
         # Create a mock adapter
         mock_adapter = Mock(spec=DatabaseAdapter)
