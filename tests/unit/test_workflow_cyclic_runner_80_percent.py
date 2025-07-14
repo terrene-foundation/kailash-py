@@ -233,7 +233,7 @@ class TestCyclicWorkflowExecutor:
             executor.dag_runner.run = Mock(return_value={"result": "dag_success"})
 
             results, run_id = executor.execute(workflow, {"param1": "value1"})
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert isinstance(run_id, str)
             executor.dag_runner.run.assert_called_once_with(
                 workflow, {"param1": "value1"}
@@ -289,7 +289,7 @@ class TestCyclicWorkflowExecutor:
             )
 
             results, run_id = executor.execute(workflow, {"param1": "value1"})
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert isinstance(run_id, str)
             executor._execute_with_cycles.assert_called_once()
 
@@ -329,7 +329,7 @@ class TestCyclicWorkflowExecutor:
 
             results, run_id = executor.execute(workflow, task_manager=task_manager)
         # assert result... - variable may not be defined
-            # Task manager should be passed to the execution
+        # Task manager should be passed to the execution
 
         except ImportError:
             pytest.skip("CyclicWorkflowExecutor not available")

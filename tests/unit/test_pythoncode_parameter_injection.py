@@ -42,12 +42,12 @@ result = {
 
     # Test with node parameters
     result = node.execute(message="hello", value=5)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Test with workflow parameters (should also be accessible)
     result = node.execute(message="hello", value=5, workflow_data="extra")
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 def test_function_parameter_injection():
@@ -61,15 +61,15 @@ def test_function_parameter_injection():
 
     # Test with all parameters
     result = node.execute(message="test", value=20)
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Test with only required parameter
     result = node.execute(message="test")
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Test with extra workflow parameters (should be filtered out)
     result = node.execute(message="test", value=15, extra_param="ignored")
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 def test_workflow_parameter_flow():
@@ -133,9 +133,9 @@ result = {
     print("Results:", results)
 
     # Verify all parameters were accessible in code node
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Verify function node received the data
     assert "node_param" in results["processor"]["result"]["processed"]
@@ -189,12 +189,12 @@ result = {
 
     # Should work with missing parameters
     result = flexible_node.execute(x=5)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Should work with extra parameters
     result = flexible_node.execute(x=5, y=10, z="extra")
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 def test_parameter_injection_security():
@@ -237,13 +237,13 @@ def test_class_based_parameter_injection():
 
     # Test with default parameter
     result = node.execute(value=5)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Test with optional parameter
     result = node.execute(value=3, increment=2)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 if __name__ == "__main__":

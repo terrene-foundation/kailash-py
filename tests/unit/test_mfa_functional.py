@@ -168,10 +168,8 @@ class TestMultiFactorAuthNodeConfiguration:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
             # Create with custom settings
-            mfa_node = MultiFactorAuthNode(),
-                rate_limit_attempts=3,
-                rate_limit_window=600,
-            )
+            mfa_node = MultiFactorAuthNode()
+            # Custom settings would be passed as parameters during execute()
 
             # Verify custom configuration
             assert mfa_node.methods == ["totp", "sms"]

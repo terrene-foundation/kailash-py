@@ -455,7 +455,7 @@ class TestNetworkDiscovery:
 
     @pytest.mark.asyncio
     @patch("socket.socket", new_callable=AsyncMock)
-async def test_network_discovery_port_scanning(self, mock_socket_class):
+    async def test_network_discovery_port_scanning(self, mock_socket_class):
         """Test NetworkDiscovery port scanning functionality."""
         try:
             from kailash.mcp_server.discovery import NetworkDiscovery
@@ -1139,7 +1139,7 @@ class TestHealthChecker:
 
     @pytest.mark.asyncio
     @patch("aiohttp.ClientSession", new_callable=AsyncMock)
-async def test_health_checker_http_check(self, mock_session_class):
+    async def test_health_checker_http_check(self, mock_session_class):
         """Test HealthChecker HTTP health check."""
         try:
             from kailash.mcp_server.discovery import (

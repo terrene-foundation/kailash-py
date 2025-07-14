@@ -306,7 +306,7 @@ class TestMCPServerToolManagement:
 
             # Test successful execution
             result = server._execute_tool("divide_numbers", {"a": 10.0, "b": 2.0})
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Test error handling
             with pytest.raises(ValueError) as exc_info:
@@ -339,13 +339,13 @@ class TestMCPServerToolManagement:
             result1 = server._execute_tool(
                 "expensive_operation", {"input_value": "test"}
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Second call with same input should use cache
             result2 = server._execute_tool(
                 "expensive_operation", {"input_value": "test"}
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Call with different input should execute function again
             result3 = server._execute_tool(
@@ -512,8 +512,8 @@ class TestMCPServerPromptManagement:
                     "focus_areas": ["performance", "security"],
                 },
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "performance, security" in result["prompt"]
             assert "def hello(): pass" in result["prompt"]
 

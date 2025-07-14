@@ -54,7 +54,7 @@ class TestWorkflowBuilderInitialization:
 
             # Clear and verify empty state
             result = builder.clear()
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert len(builder.nodes) == 0
             assert len(builder.connections) == 0
             assert len(builder._metadata) == 0
@@ -176,7 +176,7 @@ class TestWorkflowBuilderNodeAddition:
                 )
 
                 # Should return self for chaining
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 # Should have generated deprecation warning
                 assert len(w) == 1
@@ -237,7 +237,7 @@ class TestWorkflowBuilderConnections:
 
             # Add connection
             result = builder.add_connection("source", "output", "target", "input")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert len(builder.connections) == 1
 
             connection = builder.connections[0]
@@ -336,7 +336,7 @@ class TestWorkflowBuilderMetadata:
                 author="Test Author",
                 tags=["test", "validation"],
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert builder._metadata["name"] == "Test Workflow"
             assert builder._metadata["description"] == "A test workflow for validation"
             assert builder._metadata["version"] == "1.0.0"
@@ -370,7 +370,7 @@ class TestWorkflowBuilderMetadata:
             result = builder.update_node(
                 "db_node", {"timeout": 60, "pool_size": 10, "retry_count": 3}
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify updates
             config = builder.nodes["db_node"]["config"]
@@ -416,7 +416,7 @@ class TestWorkflowBuilderParameters:
                 batch_size=100,
                 environment="production",
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert builder.workflow_parameters["api_key"] == "secret_key_123"
             assert builder.workflow_parameters["debug_mode"] is True
             assert builder.workflow_parameters["batch_size"] == 100
@@ -448,7 +448,7 @@ class TestWorkflowBuilderParameters:
             result = builder.add_parameter_mapping(
                 "api_client", {"global_api_key": "api_key", "global_timeout": "timeout"}
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "api_client" in builder.parameter_mappings
             mappings = builder.parameter_mappings["api_client"]
             assert mappings["global_api_key"] == "api_key"
@@ -484,7 +484,7 @@ class TestWorkflowBuilderParameters:
                 to_input="config_data",
                 from_workflow_param="global_config",
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert len(builder.connections) == 1
 
             connection = builder.connections[0]
@@ -836,7 +836,7 @@ class TestWorkflowBuilderAdvancedFeatures:
                 "processor",
                 {"global_input_data": "input_data", "global_config": "config"},
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify inputs were stored in metadata
             assert "_workflow_inputs" in builder._metadata
@@ -886,7 +886,7 @@ class TestWorkflowBuilderAdvancedFeatures:
                 assert "Fluent API is deprecated" in str(w[0].message)
 
                 # Should return self for chaining
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 # Node should be added
                 assert "fluent_node" in builder.nodes

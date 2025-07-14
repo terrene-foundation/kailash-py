@@ -69,12 +69,12 @@ result = {
     )
 
     # Code node sees all parameters
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Function node only sees declared parameters
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
     # These workflow parameters are lost!
 
 

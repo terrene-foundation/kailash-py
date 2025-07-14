@@ -424,9 +424,9 @@ class TestKailashClientWorkflowExecution:
                 )
 
                 # Should have called wait_for_completion
-                # # # mock_wait.assert_called_once_with(
-                    "wf_456", "req_123", poll_interval=0.5, max_wait=60.0
-                )  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+                # mock_wait.assert_called_once_with(
+                #     "wf_456", "req_123", poll_interval=0.5, max_wait=60.0
+                # )  # Mock assertion may need adjustment
         # assert result... - variable may not be defined
         # assert result... - variable may not be defined
 

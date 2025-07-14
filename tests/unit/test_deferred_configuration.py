@@ -202,7 +202,7 @@ def test_run_method_with_config_extraction():
     # Should have initialized and delegated
     assert deferred._is_initialized
     assert deferred._actual_node == mock_instance
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Should have passed all parameters to actual node (including defaults)
     mock_instance.execute.assert_called_once_with(
@@ -236,7 +236,7 @@ def test_async_run_method():
         return result
 
     result = asyncio.run(test_async())
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
     mock_instance.async_run.assert_called_once_with(param="value")
 
 
@@ -350,7 +350,7 @@ def test_validate_inputs_integration():
     # Should have initialized and delegated
     assert deferred._is_initialized
     mock_instance.validate_inputs.assert_called_once_with(**inputs)
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 def test_default_parameter_definitions():

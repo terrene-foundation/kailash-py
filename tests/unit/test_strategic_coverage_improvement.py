@@ -188,7 +188,7 @@ class TestStrategicLowCoverageBoost:
                         return_value={"status": "success", "result": "data"}
                     )
                     result = runner.execute_workflow()
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 if hasattr(runner, "validate_workflow"):
                     runner.validate_workflow = Mock(return_value=True)
@@ -339,7 +339,7 @@ class TestStrategicLowCoverageBoost:
                         return_value={"valid": True, "warnings": []}
                     )
                     result = safety.validate_workflow()
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 if hasattr(safety, "check_resource_limits"):
                     safety.check_resource_limits = Mock(return_value=True)
@@ -472,7 +472,7 @@ class TestHighImpactModuleCoverage:
                         return_value={"processed": True, "data": "test"}
                     )
                     result = handler.process_input()
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 if hasattr(handler, "validate_input"):
                     handler.validate_input = Mock(return_value=True)
@@ -503,7 +503,7 @@ class TestHighImpactModuleCoverage:
                         return_value={"migrated": True, "version": "2.0"}
                     )
                     result = migrator.migrate_workflow()
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 if hasattr(migrator, "check_compatibility"):
                     migrator.check_compatibility = Mock(return_value=True)

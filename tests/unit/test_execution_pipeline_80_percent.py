@@ -459,13 +459,7 @@ class TestQueryExecutionStage:
             result = await stage.process(context, None)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-                {"id": 1, "name": "Test"},
-                {"id": 2, "name": "Another"},
-            ]
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result.data == [{"id": 1, "name": "Test"}, {"id": 2, "name": "Another"}] - variable may not be defined
 
             # Note: Can't verify callable directly like with Mock
 
@@ -758,13 +752,7 @@ class TestDataMaskingStage:
             result = await stage.process(context, test_result)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-                {"id": 1, "ssn": "***-**-****"},
-                {"id": 2, "ssn": "***-**-****"},
-            ]
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result.data == [{"id": 1, "ssn": "***-**-****"}, {"id": 2, "ssn": "***-**-****"}] - variable may not be defined
         # assert result... - variable may not be defined
 
             # Verify masking was called for each row

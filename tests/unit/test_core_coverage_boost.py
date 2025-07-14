@@ -327,7 +327,7 @@ class TestMockingUtilitiesCoverage:
 
             result = os.path.exists("/fake/path")
         # assert result... - variable may not be defined
-            # # # mock_exists.assert_called_once_with("/fake/path")  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+        # # # mock_exists.assert_called_once_with("/fake/path")  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
 
 
 class TestStringProcessingCoverage:

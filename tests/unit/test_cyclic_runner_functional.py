@@ -214,9 +214,9 @@ class TestCyclicWorkflowExecutorBehavior:
             # Load and verify states
             loaded_state_1 = executor.cycle_state_manager.load_state("iteration_1")
             loaded_state_2 = executor.cycle_state_manager.load_state("iteration_2")
-        # assert loaded... - variable may not be defined
-        # assert loaded... - variable may not be defined
-        # assert loaded... - variable may not be defined
+            # assert loaded... - variable may not be defined
+            # assert loaded... - variable may not be defined
+            # assert loaded... - variable may not be defined
 
             # Test loading non-existent state
             empty_state = executor.cycle_state_manager.load_state("nonexistent")
@@ -255,7 +255,7 @@ class TestCyclicWorkflowExecutorBehavior:
                 result, run_id = executor.dag_runner.execute()
 
                 # Verify results match expected DAG execution
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert run_id == expected_result[1]
 
                 # Verify result structure
@@ -274,7 +274,7 @@ class TestCyclicWorkflowExecutorBehavior:
             )
 
             result, run_id = executor.dag_runner.execute()
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert run_id == "run_456"
 
         except ImportError:

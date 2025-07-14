@@ -752,7 +752,7 @@ def test_comprehensive_tpc_issue_verification():
     result2 = node2.execute_code(
         {"data": [1, 2, 3], "workflow_param": "injected_value"}
     )
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
     issues_verified.append("✅ Issue #2: Parameter injection - RESOLVED")
 
     # Issue #3: Security model consistency
