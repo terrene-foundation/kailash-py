@@ -283,7 +283,7 @@ class TestDatabaseConfig:
 
             config = DatabaseConfig(
                 connection_string="postgresql://user:pass@host:5432/mydb",
-                database_type="postgresql",
+                type=DatabaseType.POSTGRESQL,
                 host="host",
                 port=5432,
                 database="mydb",
@@ -1027,7 +1027,7 @@ class TestAsyncDatabaseConfigBuilder:
 
             base_config = AsyncDatabaseConfig(
                 connection_string="postgresql://user:pass@host/vector_db",
-                database_type="postgresql",
+                type=DatabaseType.POSTGRESQL,
                 host="host",
                 port=5432,
                 database="vector_db",

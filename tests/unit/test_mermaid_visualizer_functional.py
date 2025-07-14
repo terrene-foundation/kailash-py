@@ -12,7 +12,7 @@ class TestMermaidVisualizerDiagramGeneration:
     def test_generate_basic_linear_workflow_diagram(self):
         """Test generation of a basic linear workflow with correct Mermaid syntax."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             # Create a mock workflow with a linear flow
@@ -90,7 +90,7 @@ class TestMermaidVisualizerDiagramGeneration:
     def test_generate_complex_workflow_with_branching(self):
         """Test generation of complex workflow with branching and merging."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             # Create mock workflow with branching: Input -> Switch -> [Path A, Path B] -> Merge -> Output
@@ -169,7 +169,7 @@ class TestMermaidVisualizerDiagramGeneration:
     def test_node_style_classification_functionality(self):
         """Test that node style classification works correctly for different node types."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             # Test different node type classifications
@@ -221,7 +221,7 @@ class TestMermaidVisualizerDiagramGeneration:
     def test_node_id_sanitization_functionality(self):
         """Test that node ID sanitization handles problematic characters correctly."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             # Create minimal workflow for testing
@@ -272,7 +272,7 @@ class TestMermaidVisualizerDiagramGeneration:
     def test_node_shape_assignment_by_type(self):
         """Test that different node types get appropriate shapes in Mermaid diagram."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             mock_workflow = Mock(spec=Workflow)
@@ -318,7 +318,7 @@ class TestMermaidVisualizerMarkdownGeneration:
     def test_generate_markdown_with_title_and_code_blocks(self):
         """Test generation of complete Markdown with proper code block formatting."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             # Create simple workflow for markdown testing
@@ -382,7 +382,7 @@ class TestMermaidVisualizerEdgeCases:
     def test_empty_workflow_handling(self):
         """Test handling of workflows with no nodes or edges."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             # Create empty workflow
@@ -424,7 +424,7 @@ class TestMermaidVisualizerEdgeCases:
     def test_single_node_workflow(self):
         """Test workflow with only one node."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             mock_workflow = Mock(spec=Workflow)
@@ -457,7 +457,7 @@ class TestMermaidVisualizerEdgeCases:
     def test_workflow_with_cycles(self):
         """Test handling of workflows with circular dependencies."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             mock_workflow = Mock(spec=Workflow)
@@ -505,7 +505,7 @@ class TestMermaidVisualizerEdgeCases:
     def test_custom_node_styles_override(self):
         """Test that custom node styles properly override defaults."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             mock_workflow = Mock(spec=Workflow)
@@ -542,7 +542,7 @@ class TestMermaidVisualizerEdgeCases:
     def test_direction_parameter_functionality(self):
         """Test that direction parameter affects diagram generation."""
         try:
-            from kailash.workflow.graph import Workflow
+            from kailash.workflow.builder import WorkflowBuilder
             from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
             mock_workflow = Mock(spec=Workflow)
