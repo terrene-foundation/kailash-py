@@ -212,9 +212,10 @@ Do not write new tests without checking that existing ones can be modified to in
 
 ## 5. IMPLEMENTATION WITH CONTINUOUS VALIDATION
 
-**Always read the detailed todo entries before starting implementation**
+**Always read the detailed todo entries before starting implementation. Extend from core SDK, don't create.**
 
-Implement in small, verifiable chunks. After each component, please test your implementation thoroughly. **Do not proceed to the next component until the current one is completely working.**
+Implement in small, verifiable chunks. After each component, please test your implementation thoroughly. 
+**Do not proceed to the next component until the current one is completely working.**
 
 ### Implementation Checkpoints
 For each component, you MUST:
