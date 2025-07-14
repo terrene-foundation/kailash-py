@@ -61,8 +61,8 @@ class TestAsyncSQLDatetimeSerialization:
                 )
 
                 # Verify the result structure
-                # # assert result... - variable may not be defined - result variable may not be defined
-                # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Verify datetime was serialized to ISO format string
                 updated_at = result["result"]["data"][0]["updated_at"]

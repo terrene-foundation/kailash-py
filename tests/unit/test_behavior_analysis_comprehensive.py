@@ -32,9 +32,9 @@ class TestBehaviorAnalysisNodeInitialization:
             # assert hasattr(node, "user_profiles") - Attributes may not exist
             # assert hasattr(node, "alert_handlers") - Attributes may not exist
 
-            # assert node.analysis_window... - Node attributes not accessible directly
-            # # # # assert node.anomaly_threshold... - Node attributes not accessible directly
-            # assert node.learning_rate... - Node attributes not accessible directly
+            # # assert node.analysis_window... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert node.anomaly_threshold... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert node.learning_rate... - Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("BehaviorAnalysisNode not available")
@@ -46,13 +46,13 @@ class TestBehaviorAnalysisNodeInitialization:
 
             node = BehaviorAnalysisNode()
 
-            # assert node.analysis_window... - Node attributes not accessible directly
-            # # # # assert node.anomaly_threshold... - Node attributes not accessible directly
-            # assert node.learning_rate... - Node attributes not accessible directly
-            # assert node.enable_ml_models... - Node attributes not accessible directly
+            # # assert node.analysis_window... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert node.anomaly_threshold... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert node.learning_rate... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert node.enable_ml_models... - Node attributes not accessible directly  # Node attributes not accessible directly
             assert "isolation_forest" in node.model_types
             assert "email" in node.alert_channels
-            # assert node.profile_retention_days... - Node attributes not accessible directly
+            # # assert node.profile_retention_days... - Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("BehaviorAnalysisNode not available")
@@ -80,10 +80,10 @@ class TestUserBehaviorTracking:
                     "timestamp": datetime.now().isoformat(),
                 },
             )
-            # # assert result... - variable may not be defined - result variable may not be defined
-            # # assert result... - variable may not be defined - result variable may not be defined
-            # # assert result... - variable may not be defined - result variable may not be defined
-            # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify event was stored
             profile = node.execute(operation="get_profile", user_id="user_123")
@@ -117,7 +117,7 @@ class TestUserBehaviorTracking:
                     event_type=event["type"],
                     event_data=event,
                 )
-            # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Analyze behavior pattern
             analysis = node.execute(operation="analyze_pattern", user_id="user_456")
@@ -254,8 +254,8 @@ class TestMachineLearningModels:
                 user_id="ml_user",
                 model_type="isolation_forest",
             )
-            # # assert result... - variable may not be defined - result variable may not be defined
-            # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify model was trained
             mock_model.fit.assert_called_once()
@@ -309,7 +309,7 @@ class TestMachineLearningModels:
                     model_type="lstm",
                     sequence_length=10,
                 )
-                # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Test anomalous sequence
                 anomaly_sequence = ["rm -rf /", "sudo su", "wget malware.exe"]
@@ -349,9 +349,9 @@ class TestBehaviorProfiles:
                     "risk_level": "low",
                 },
             )
-            # # assert result... - variable may not be defined - result variable may not be defined
-            # # assert result... - variable may not be defined - result variable may not be defined
-            # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Update profile
             update_result = node.execute(
@@ -892,8 +892,8 @@ class TestSecurityUseCases:
                     event_type="login",
                     event_data=event,
                 )
-                # # assert result... - variable may not be defined - result variable may not be defined
-                # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert "location_anomaly" in result["indicators"]
                 assert "device_anomaly" in result["indicators"]
 
@@ -923,7 +923,7 @@ class TestDataPrivacy:
                 },
                 anonymize=True,
             )
-            # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify anonymization
             stored_data = node.execute(
