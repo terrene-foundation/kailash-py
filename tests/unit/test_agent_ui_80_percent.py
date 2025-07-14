@@ -195,15 +195,19 @@ class TestAgentUIMiddlewareInit:
                     with patch(
                         "kailash.middleware.core.agent_ui.MiddlewareWorkflowRepository"
                     ) as mock_repo:
-                        middleware = AgentUIMiddleware(
-                            enable_persistence=True,
-                            database_url="postgresql://localhost/test",
-                        )
+                        with patch(
+                            "kailash.middleware.core.agent_ui.MiddlewareExecutionRepository"
+                        ) as mock_exec_repo:
+                            middleware = AgentUIMiddleware(
+                                enable_persistence=True,
+                                database_url="postgresql://localhost/test",
+                            )
 
-                        # Verify SDK nodes were initialized
-                        mock_cred.assert_called_once()
-                        mock_trans.assert_called_once()
-                        mock_repo.assert_called_once()
+                            # Verify SDK nodes were initialized
+                            mock_cred.assert_called_once()
+                            mock_trans.assert_called_once()
+                            mock_repo.assert_called_once()
+                            mock_exec_repo.assert_called_once()
 
         except ImportError:
             pytest.skip("AgentUIMiddleware not available")
