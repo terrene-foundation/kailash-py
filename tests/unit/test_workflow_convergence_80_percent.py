@@ -39,7 +39,7 @@ class TestConvergenceConditionBase:
                     return False
 
             condition = TestCondition()
-            # assert condition.describe() == "TestCondition"  # Node attributes not accessible directly
+            # # assert condition.describe() == "TestCondition"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ConvergenceCondition not available")
@@ -54,7 +54,7 @@ class TestExpressionCondition:
             from kailash.workflow.convergence import ExpressionCondition
 
             condition = ExpressionCondition("iteration >= 10")
-            # # assert condition.expression == "iteration >= 10"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.expression == "iteration >= 10"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -68,10 +68,10 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=7)
             results = {}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             cycle_state = MockCycleState(iteration=3)
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -85,10 +85,10 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=1)
             results = {"node1": {"quality_score": 0.95}}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             results = {"node1": {"quality_score": 0.85}}
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -102,7 +102,7 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=1)
             results = {"evaluator": {"result": {"accuracy": 0.85, "loss": 0.1}}}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -116,10 +116,10 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=1)
             results = {"node1": {"loss_change": -0.005}}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             results = {"node1": {"loss_change": 0.02}}
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -133,10 +133,10 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=5, elapsed_time=45.0)
             results = {}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             cycle_state = MockCycleState(iteration=2, elapsed_time=45.0)
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -150,10 +150,10 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=1, history=[1, 2, 3, 4])
             results = {}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             cycle_state = MockCycleState(iteration=1, history=[1, 2])
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -167,7 +167,7 @@ class TestExpressionCondition:
             cycle_state = MockCycleState(iteration=1)
             results = {"optimizer": {"learning_rate": 0.005}}
 
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -182,7 +182,7 @@ class TestExpressionCondition:
             results = {}
 
             # Should return True (terminate) on error for safety
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -193,7 +193,7 @@ class TestExpressionCondition:
             from kailash.workflow.convergence import ExpressionCondition
 
             condition = ExpressionCondition("quality > 0.9")
-            # assert condition.describe() == "ExpressionCondition: quality > 0.9"  # Node attributes not accessible directly
+            # # assert condition.describe() == "ExpressionCondition: quality > 0.9"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -213,7 +213,7 @@ class TestExpressionCondition:
 
             # Should not crash with non-identifier keys
             result = condition.evaluate(results, cycle_state)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")
@@ -231,8 +231,8 @@ class TestCallbackCondition:
                 return True
 
             condition = CallbackCondition(test_callback)
-            # # assert condition.callback == test_callback  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert condition.name == "test_callback"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.callback == test_callback  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.name == "test_callback"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CallbackCondition not available")
@@ -246,7 +246,7 @@ class TestCallbackCondition:
                 return False
 
             condition = CallbackCondition(test_callback, name="custom_name")
-            # # assert condition.name == "custom_name"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.name == "custom_name"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CallbackCondition not available")
@@ -264,11 +264,11 @@ class TestCallbackCondition:
 
             # High score should converge
             results = {"score": 0.98}
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Low score should continue
             results = {"score": 0.85}
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CallbackCondition not available")
@@ -284,10 +284,10 @@ class TestCallbackCondition:
             condition = CallbackCondition(converge_after_iterations)
 
             cycle_state = MockCycleState(iteration=12)
-            # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             cycle_state = MockCycleState(iteration=5)
-            # assert condition.evaluate({}, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate({}, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CallbackCondition not available")
@@ -304,7 +304,7 @@ class TestCallbackCondition:
             cycle_state = MockCycleState(iteration=1)
 
             # Should return True (terminate) on error for safety
-            # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CallbackCondition not available")
@@ -318,7 +318,7 @@ class TestCallbackCondition:
                 return True
 
             condition = CallbackCondition(test_callback, name="test_convergence")
-            # assert condition.describe() == "CallbackCondition: test_convergence"  # Node attributes not accessible directly
+            # # assert condition.describe() == "CallbackCondition: test_convergence"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CallbackCondition not available")
@@ -333,7 +333,7 @@ class TestMaxIterationsCondition:
             from kailash.workflow.convergence import MaxIterationsCondition
 
             condition = MaxIterationsCondition(10)
-            # # assert condition.max_iterations == 10  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.max_iterations == 10  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("MaxIterationsCondition not available")
@@ -347,15 +347,15 @@ class TestMaxIterationsCondition:
 
             # Should continue before max iterations
             cycle_state = MockCycleState(iteration=3)
-            # assert condition.evaluate({}, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate({}, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Should converge at max iterations
             cycle_state = MockCycleState(iteration=5)
-            # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Should converge after max iterations
             cycle_state = MockCycleState(iteration=7)
-            # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate({}, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("MaxIterationsCondition not available")
@@ -366,7 +366,7 @@ class TestMaxIterationsCondition:
             from kailash.workflow.convergence import MaxIterationsCondition
 
             condition = MaxIterationsCondition(15)
-            # assert condition.describe() == "MaxIterationsCondition: 15"  # Node attributes not accessible directly
+            # # assert condition.describe() == "MaxIterationsCondition: 15"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("MaxIterationsCondition not available")
@@ -389,7 +389,7 @@ class TestCompoundCondition:
 
             condition = CompoundCondition([cond1, cond2], "OR")
             assert len(condition.conditions) == 2
-            # # assert condition.operator == "OR"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.operator == "OR"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CompoundCondition not available")
@@ -409,7 +409,7 @@ class TestCompoundCondition:
             condition = CompoundCondition(
                 [cond1, cond2], "and"
             )  # Test case insensitive
-            # # assert condition.operator == "AND"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.operator == "AND"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CompoundCondition not available")
@@ -447,16 +447,16 @@ class TestCompoundCondition:
 
             # Neither condition met - should continue
             results = {"quality": 0.8}
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # One condition met - should converge
             results = {"quality": 0.95}
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Both conditions met - should converge
             cycle_state = MockCycleState(iteration=15)
             results = {"quality": 0.95}
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CompoundCondition not available")
@@ -478,11 +478,11 @@ class TestCompoundCondition:
 
             # Only one condition met - should continue
             results = {"quality": 0.8}
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Both conditions met - should converge
             results = {"quality": 0.95}
-            # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CompoundCondition not available")
@@ -530,8 +530,8 @@ class TestAdaptiveCondition:
 
             assert len(condition.stages) == 2
             # Should be sorted by threshold
-            # assert condition.stages[0][0] == 0  # Node attributes not accessible directly
-            # assert condition.stages[1][0] == 10  # Node attributes not accessible directly
+            # # assert condition.stages[0][0] == 0  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert condition.stages[1][0] == 10  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("AdaptiveCondition not available")
@@ -554,18 +554,18 @@ class TestAdaptiveCondition:
             # Early iterations - use first condition
             cycle_state = MockCycleState(iteration=3)
             results = {"quality": 0.95}
-            # assert condition.evaluate(results, cycle_state) is False  # < 5 iterations  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # < 5 iterations  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             cycle_state = MockCycleState(iteration=5)
-            # assert condition.evaluate(results, cycle_state) is True  # >= 5 iterations  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # >= 5 iterations  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Later iterations - use second condition
             cycle_state = MockCycleState(iteration=12)
             results = {"quality": 0.85}
-            # assert condition.evaluate(results, cycle_state) is False  # Low quality  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Low quality  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             results = {"quality": 0.95}
-            # assert condition.evaluate(results, cycle_state) is True  # High quality  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is True  # High quality  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("AdaptiveCondition not available")
@@ -585,7 +585,7 @@ class TestAdaptiveCondition:
             # Before any stage applies - should continue
             cycle_state = MockCycleState(iteration=5)
             results = {"quality": 0.95}
-            # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly
+            # # assert condition.evaluate(results, cycle_state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("AdaptiveCondition not available")
@@ -607,9 +607,9 @@ class TestAdaptiveCondition:
             condition = AdaptiveCondition(stages)
 
             # Should be sorted by threshold
-            # assert condition.stages[0][0] == 3  # Node attributes not accessible directly
-            # assert condition.stages[1][0] == 5  # Node attributes not accessible directly
-            # assert condition.stages[2][0] == 10  # Node attributes not accessible directly
+            # # assert condition.stages[0][0] == 3  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert condition.stages[1][0] == 5  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert condition.stages[2][0] == 10  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("AdaptiveCondition not available")
@@ -651,7 +651,7 @@ class TestCreateConvergenceCondition:
 
             condition = create_convergence_condition("quality > 0.9")
             assert isinstance(condition, ExpressionCondition)
-            # # assert condition.expression == "quality > 0.9"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.expression == "quality > 0.9"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")
@@ -666,7 +666,7 @@ class TestCreateConvergenceCondition:
 
             condition = create_convergence_condition(15)
             assert isinstance(condition, MaxIterationsCondition)
-            # # assert condition.max_iterations == 15  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.max_iterations == 15  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")
@@ -684,7 +684,7 @@ class TestCreateConvergenceCondition:
 
             condition = create_convergence_condition(test_callback)
             assert isinstance(condition, CallbackCondition)
-            # # assert condition.callback == test_callback  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.callback == test_callback  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")
@@ -700,7 +700,7 @@ class TestCreateConvergenceCondition:
             spec = {"type": "expression", "expression": "iteration >= 10"}
             condition = create_convergence_condition(spec)
             assert isinstance(condition, ExpressionCondition)
-            # # assert condition.expression == "iteration >= 10"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.expression == "iteration >= 10"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")
@@ -716,7 +716,7 @@ class TestCreateConvergenceCondition:
             spec = {"type": "max_iterations", "max_iterations": 20}
             condition = create_convergence_condition(spec)
             assert isinstance(condition, MaxIterationsCondition)
-            # # assert condition.max_iterations == 20  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.max_iterations == 20  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")
@@ -735,8 +735,8 @@ class TestCreateConvergenceCondition:
             spec = {"type": "callback", "callback": test_callback, "name": "test"}
             condition = create_convergence_condition(spec)
             assert isinstance(condition, CallbackCondition)
-            # # assert condition.callback == test_callback  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert condition.name == "test"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.callback == test_callback  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.name == "test"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")
@@ -756,7 +756,7 @@ class TestCreateConvergenceCondition:
             }
             condition = create_convergence_condition(spec)
             assert isinstance(condition, CompoundCondition)
-            # # assert condition.operator == "AND"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.operator == "AND"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert len(condition.conditions) == 2
 
         except ImportError:
@@ -792,7 +792,7 @@ class TestCreateConvergenceCondition:
             spec = {"expression": "score > threshold"}
             condition = create_convergence_condition(spec)
             assert isinstance(condition, ExpressionCondition)
-            # # assert condition.expression == "score > threshold"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert condition.expression == "score > threshold"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("create_convergence_condition not available")

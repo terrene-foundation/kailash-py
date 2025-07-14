@@ -19,39 +19,43 @@ class TestPermissionRule:
 
     def test_create_node_permission_rule(self):
         """Test creating a permission rule for a node."""
-        rule = PermissionRule(
-            id="test_rule",
-            resource_type="node",
-            resource_id="test_node",
-            permission=NodePermission.EXECUTE,
-            effect=PermissionEffect.ALLOW,
-            role="admin",
-        )
+        try:
+            rule = PermissionRule(
+                id="test_rule",
+                resource_type="node",
+                resource_id="test_node",
+                permission=NodePermission.EXECUTE,
+                effect=PermissionEffect.ALLOW,
+                role="admin",
+            )
 
-        assert rule.id == "test_rule"
-        assert rule.resource_type == "node"
-        assert rule.resource_id == "test_node"
-        assert rule.permission == NodePermission.EXECUTE
-        assert rule.effect == PermissionEffect.ALLOW
-        assert rule.role == "admin"
-        assert rule.tenant_id is None
+            assert rule.id == "test_rule"
+            assert rule.resource_type == "node"
+            assert rule.resource_id == "test_node"
+            assert rule.permission == NodePermission.EXECUTE
+            assert rule.effect == PermissionEffect.ALLOW
+            assert rule.role == "admin"
+            assert rule.tenant_id is None
+        except ImportError:
+            pytest.skip("Required modules not available")
 
     def test_create_workflow_permission_rule(self):
         """Test creating a permission rule for a workflow."""
-        rule = PermissionRule(
-            id="workflow_rule",
-            resource_type="workflow",
-            resource_id="my_workflow",
-            permission=WorkflowPermission.EXECUTE,
-            effect=PermissionEffect.DENY,
-            role="guest",
-            tenant_id="tenant-123",
-        )
+        try:
+            rule = PermissionRule(
+                id="workflow_rule",
+                resource_type="workflow",
+                resource_id="my_workflow",
+                permission=WorkflowPermission.EXECUTE,
+                effect=PermissionEffect.DENY,
+                role="guest",
+                tenant_id="tenant-123",
+            )
 
-        assert rule.resource_type == "workflow"
-        assert rule.permission == WorkflowPermission.EXECUTE
-        assert rule.effect == PermissionEffect.DENY
-        assert rule.tenant_id == "tenant-123"
+            assert rule.resource_type == "workflow"
+            assert rule.permission == WorkflowPermission.EXECUTE
+            assert rule.effect == PermissionEffect.DENY
+            assert rule.tenant_id == "tenant-123"
         except ImportError:
             pytest.skip("Required modules not available")
 

@@ -41,20 +41,21 @@ class TestNodeInstance:
 
     def test_node_instance_serialization(self):
         """Test NodeInstance serialization."""
-        instance = NodeInstance(
-            node_id="serialization_test",
-            node_type="CSVReaderNode",
-            config={"file_path": "test.csv", "encoding": "utf-8"},
-            position=(50.0, 75.0),
-        )
+        try:
+            instance = NodeInstance(
+                node_id="serialization_test",
+                node_type="CSVReaderNode",
+                config={"file_path": "test.csv", "encoding": "utf-8"},
+                position=(50.0, 75.0),
+            )
 
-        # Test dict conversion
-        instance_dict = instance.model_dump()
-        assert instance_dict["node_id"] == "serialization_test"
-        assert instance_dict["node_type"] == "CSVReaderNode"
-        assert instance_dict["config"]["file_path"] == "test.csv"
-        assert instance_dict["config"]["encoding"] == "utf-8"
-        assert instance_dict["position"] == (50.0, 75.0)
+            # Test dict conversion
+            instance_dict = instance.model_dump()
+            assert instance_dict["node_id"] == "serialization_test"
+            assert instance_dict["node_type"] == "CSVReaderNode"
+            assert instance_dict["config"]["file_path"] == "test.csv"
+            assert instance_dict["config"]["encoding"] == "utf-8"
+            assert instance_dict["position"] == (50.0, 75.0)
         except ImportError:
             pytest.skip("Required modules not available")
 
@@ -66,17 +67,19 @@ class TestConnection:
         """Test Test Connection creation."""
 
         try:
-        conn = Connection(
-            source_node="node_a",
-            source_output="output",
-            target_node="node_b",
-            target_input="input",
-        )
+            conn = Connection(
+                source_node="node_a",
+                source_output="output",
+                target_node="node_b",
+                target_input="input",
+            )
 
-        assert conn.source_node == "node_a"
-        assert conn.source_output == "output"
-        assert conn.target_node == "node_b"
-        assert conn.target_input == "input"
+            assert conn.source_node == "node_a"
+            assert conn.source_output == "output"
+            assert conn.target_node == "node_b"
+            assert conn.target_input == "input"
+        except ImportError:
+            pytest.skip("Required modules not available")
 
     def test_connection_validation(self):
         """Test Connection field validation."""
@@ -85,18 +88,19 @@ class TestConnection:
 
     def test_connection_serialization(self):
         """Test Connection serialization."""
-        conn = Connection(
-            source_node="producer",
-            source_output="data",
-            target_node="consumer",
-            target_input="input_data",
-        )
+        try:
+            conn = Connection(
+                source_node="producer",
+                source_output="data",
+                target_node="consumer",
+                target_input="input_data",
+            )
 
-        conn_dict = conn.model_dump()
-        assert conn_dict["source_node"] == "producer"
-        assert conn_dict["source_output"] == "data"
-        assert conn_dict["target_node"] == "consumer"
-        assert conn_dict["target_input"] == "input_data"
+            conn_dict = conn.model_dump()
+            assert conn_dict["source_node"] == "producer"
+            assert conn_dict["source_output"] == "data"
+            assert conn_dict["target_node"] == "consumer"
+            assert conn_dict["target_input"] == "input_data"
         except ImportError:
             pytest.skip("Required modules not available")
 

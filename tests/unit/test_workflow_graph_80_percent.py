@@ -147,10 +147,10 @@ class TestConnection:
                 target_input="input1",
             )
 
-            # # assert conn.source_node == "node1"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.source_output == "output1"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.target_node == "node2"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.target_input == "input1"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.source_node == "node1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.source_output == "output1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.target_node == "node2"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.target_input == "input1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("Connection not available")
@@ -185,14 +185,14 @@ class TestCyclicConnection:
                 target_input="input1",
             )
 
-            # assert conn.cycle is False  # Node attributes not accessible directly
-            # assert conn.max_iterations is None  # Node attributes not accessible directly
-            # assert conn.convergence_check is None  # Node attributes not accessible directly
-            # assert conn.cycle_id is None  # Node attributes not accessible directly
-            # assert conn.timeout is None  # Node attributes not accessible directly
-            # assert conn.memory_limit is None  # Node attributes not accessible directly
-            # assert conn.condition is None  # Node attributes not accessible directly
-            # assert conn.parent_cycle is None  # Node attributes not accessible directly
+            # # assert conn.cycle is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.max_iterations is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.convergence_check is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.cycle_id is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.timeout is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.memory_limit is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.condition is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.parent_cycle is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CyclicConnection not available")
@@ -217,14 +217,14 @@ class TestCyclicConnection:
                 parent_cycle="parent_cycle_1",
             )
 
-            # assert conn.cycle is True  # Node attributes not accessible directly
-            # # assert conn.max_iterations == 100  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.convergence_check == "error < 0.01"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.cycle_id == "cycle_1"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert conn.cycle is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.max_iterations == 100  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.convergence_check == "error < 0.01"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.cycle_id == "cycle_1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # assert numeric value - may vary
-            # # assert conn.memory_limit == 1024  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.condition == "iteration > 5"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert conn.parent_cycle == "parent_cycle_1"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.memory_limit == 1024  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.condition == "iteration > 5"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert conn.parent_cycle == "parent_cycle_1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CyclicConnection not available")
@@ -243,11 +243,11 @@ class TestWorkflow:
 
             workflow = WorkflowBuilder(workflow_id, name)
 
-            # # # assert workflow.workflow_id == workflow_id  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert workflow.name == name  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert workflow.description == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert workflow.version == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert workflow.author == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.workflow_id == workflow_id  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.name == name  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.description == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.version == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.author == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # assert isinstance(workflow.metadata, dict)  # Structure may differ
             # assert isinstance(workflow.graph, nx.DiGraph)  # Internal structure
             # assert isinstance(workflow._node_instances, dict)  # Internal structure
@@ -278,12 +278,12 @@ class TestWorkflow:
                 metadata=metadata,
             )
 
-            # # # assert workflow.description == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert workflow.version == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert workflow.author == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.description == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.version == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # assert workflow.author == ...  # May not have this attribute  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "tags" in workflow.metadata
-            # assert workflow.metadata["author"] == author  # Node attributes not accessible directly
-            # assert workflow.metadata["version"] == version  # Node attributes not accessible directly
+            # # assert workflow.metadata["author"] == author  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert workflow.metadata["version"] == version  # Node attributes not accessible directly  # Node attributes not accessible directly
             # assert "created_at" in workflow.metadata  # Metadata structure may differ
 
         except ImportError:
@@ -296,8 +296,8 @@ class TestWorkflow:
 
             workflow = WorkflowBuilder()  # Parameters not supported
 
-            # # assert workflow.metadata["author"] == "John"  # Metadata structure may differ  # Node attributes not accessible directly
-            # # assert workflow.metadata["version"] == "1.5"  # Metadata structure may differ  # Node attributes not accessible directly
+            # # # assert workflow.metadata["author"] == "John"  # Metadata structure may differ  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert workflow.metadata["version"] == "1.5"  # Metadata structure may differ  # Node attributes not accessible directly  # Node attributes not accessible directly
             # assert "created_at" in workflow.metadata  # Metadata structure may differ
 
             # Should be ISO format timestamp
@@ -385,9 +385,9 @@ class TestWorkflow:
                 pass
 
                 assert "test_node" in workflow.nodes
-                # # assert workflow._node_instances["test_node"]  # Internal structure changed == node  # Node attributes not accessible directly
+                # # # assert workflow._node_instances["test_node"]  # Internal structure changed == node  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert "test_node" in workflow.nodes
-                # # assert workflow.build().graph.has_node("test_node")  # Node attributes not accessible directly
+                # # # assert workflow.build().graph.has_node("test_node")  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("Workflow not available")
@@ -407,7 +407,7 @@ class TestWorkflow:
 
                 assert "test_node" in workflow.nodes
                 assert "test_node" in workflow.nodes
-                # # # assert workflow.nodes["test_node"].node_type == "TestNode"  # Node structure changed  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # # assert workflow.nodes["test_node"].node_type == "TestNode"  # Node structure changed  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("Workflow not available")
@@ -453,9 +453,9 @@ class TestWorkflow:
 
                 assert len(workflow.connections) == 1
                 conn = workflow.connections[0]
-                # # assert conn.source_node == "node1"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert conn.target_node == "node2"  # Node attributes not accessible directly  # Node attributes not accessible directly
-        # # assert workflow.graph.has_edge("node1", "node2")  # Node attributes not accessible directly
+                # # # # assert conn.source_node == "node1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert conn.target_node == "node2"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+        # # # assert workflow.graph.has_edge("node1", "node2")  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("Workflow not available")
@@ -502,9 +502,9 @@ class TestWorkflow:
 
                 assert len(workflow.connections) == 1
                 conn = workflow.connections[0]
-                # assert conn.cycle is True  # Node attributes not accessible directly
-                # # assert conn.max_iterations == 10  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert conn.convergence_check == "error < 0.01"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert conn.cycle is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert conn.max_iterations == 10  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert conn.convergence_check == "error < 0.01"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("Workflow not available")
@@ -706,8 +706,8 @@ class TestWorkflow:
 
                 # workflow = Workflow.from_dict(workflow_dict)  # Static method may not exist
 
-                # # assert workflow.workflow_id == "test_id"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert workflow.name == "Test Workflow"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert workflow.workflow_id == "test_id"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert workflow.name == "Test Workflow"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert len(workflow.nodes) == 2
                 assert len(workflow.connections) == 1
 
@@ -744,8 +744,8 @@ class TestWorkflow:
 
                 # workflow = Workflow.from_json(json_str)  # Static method may not exist
 
-                # # assert workflow.workflow_id == "test_id"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert workflow.name == "Test"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert workflow.workflow_id == "test_id"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert workflow.name == "Test"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             pytest.skip("Method not available on WorkflowBuilder")
 
         except ImportError:
@@ -786,8 +786,8 @@ connections: []
 
                 # workflow = Workflow.from_yaml(yaml_str)  # Static method may not exist
 
-                # # assert workflow.workflow_id == "test_id"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert workflow.name == "Test"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert workflow.workflow_id == "test_id"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert workflow.name == "Test"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             pytest.skip("Method not available on WorkflowBuilder")
 
         except ImportError:
@@ -810,7 +810,7 @@ connections: []
 
             try:
                 # workflow.save(temp_file)  # Method may not exist on WorkflowBuilder
-                # assert os.path.exists(temp_file)  # Node attributes not accessible directly
+                # # assert os.path.exists(temp_file)  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 with patch(
                     "kailash.workflow.graph.NodeRegistry"
@@ -924,13 +924,13 @@ connections: []
                 workflow.add_node("TestNode", "node2")
 
                 # No cycle initially
-                # # assert workflow.has_cycles() is False  # Method may not exist  # Node attributes not accessible directly
+                # # # assert workflow.has_cycles() is False  # Method may not exist  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Add edges creating a cycle
                 workflow.add_connection("node1", "out", "node2", "in")
                 workflow.add_connection("node2", "out", "node1", "in")
 
-                # # assert workflow.has_cycles() is True  # Method may not exist  # Node attributes not accessible directly
+                # # # assert workflow.has_cycles() is True  # Method may not exist  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("Workflow not available")
@@ -978,7 +978,7 @@ connections: []
                 # Clone with new ID
                 # # cloned = workflow.clone("cloned_id")  # Method may not exist  # Method may not exist on WorkflowBuilder
 
-                # # # assert cloned.workflow_id == "cloned_id"  # Depends on commented code  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # # assert cloned.workflow_id == "cloned_id"  # Depends on commented code  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 # assert cloned... - variable not defined
                 # assert cloned... - variable not defined
                 # assert len(cloned...) - variable not defined

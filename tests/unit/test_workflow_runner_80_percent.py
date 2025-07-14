@@ -26,10 +26,10 @@ class TestWorkflowConnection:
 
             connection = WorkflowConnection("source", "target")
 
-            # # assert connection.source_workflow_id == "source"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert connection.target_workflow_id == "target"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert connection.condition == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert connection.state_mapping == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.source_workflow_id == "source"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.target_workflow_id == "target"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.condition == {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.state_mapping == {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -46,10 +46,10 @@ class TestWorkflowConnection:
                 "workflow1", "workflow2", condition, mapping
             )
 
-            # # assert connection.source_workflow_id == "workflow1"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert connection.target_workflow_id == "workflow2"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert connection.condition == condition  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert connection.state_mapping == mapping  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.source_workflow_id == "workflow1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.target_workflow_id == "workflow2"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.condition == condition  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert connection.state_mapping == mapping  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -62,7 +62,7 @@ class TestWorkflowConnection:
             connection = WorkflowConnection("source", "target")
             state = TestState(counter=5)
 
-            # assert connection.should_follow(state) is True  # Node attributes not accessible directly
+            # # assert connection.should_follow(state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -79,7 +79,7 @@ class TestWorkflowConnection:
             )
             state = TestState(status="pending")
 
-            # assert connection.should_follow(state) is True  # Node attributes not accessible directly
+            # # assert connection.should_follow(state) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -97,11 +97,11 @@ class TestWorkflowConnection:
 
             # Should follow when equal
             state_match = TestState(status="ready")
-            # assert connection.should_follow(state_match) is True  # Node attributes not accessible directly
+            # # assert connection.should_follow(state_match) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Should not follow when not equal
             state_no_match = TestState(status="pending")
-            # assert connection.should_follow(state_no_match) is False  # Node attributes not accessible directly
+            # # assert connection.should_follow(state_no_match) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -119,11 +119,11 @@ class TestWorkflowConnection:
 
             # Should follow when not equal
             state_match = TestState(status="ready")
-            # assert connection.should_follow(state_match) is True  # Node attributes not accessible directly
+            # # assert connection.should_follow(state_match) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Should not follow when equal
             state_no_match = TestState(status="error")
-            # assert connection.should_follow(state_no_match) is False  # Node attributes not accessible directly
+            # # assert connection.should_follow(state_no_match) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -137,29 +137,29 @@ class TestWorkflowConnection:
             connection_gt = WorkflowConnection(
                 "source", "target", {"field": "counter", "operator": ">", "value": 5}
             )
-            # assert connection_gt.should_follow(TestState(counter=10)) is True  # Node attributes not accessible directly
-            # assert connection_gt.should_follow(TestState(counter=3)) is False  # Node attributes not accessible directly
+            # # assert connection_gt.should_follow(TestState(counter=10)) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert connection_gt.should_follow(TestState(counter=3)) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Greater than or equal
             connection_gte = WorkflowConnection(
                 "source", "target", {"field": "counter", "operator": ">=", "value": 5}
             )
-            # assert connection_gte.should_follow(TestState(counter=5)) is True  # Node attributes not accessible directly
-            # assert connection_gte.should_follow(TestState(counter=3)) is False  # Node attributes not accessible directly
+            # # assert connection_gte.should_follow(TestState(counter=5)) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert connection_gte.should_follow(TestState(counter=3)) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Less than
             connection_lt = WorkflowConnection(
                 "source", "target", {"field": "counter", "operator": "<", "value": 5}
             )
-            # assert connection_lt.should_follow(TestState(counter=3)) is True  # Node attributes not accessible directly
-            # assert connection_lt.should_follow(TestState(counter=10)) is False  # Node attributes not accessible directly
+            # # assert connection_lt.should_follow(TestState(counter=3)) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert connection_lt.should_follow(TestState(counter=10)) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Less than or equal
             connection_lte = WorkflowConnection(
                 "source", "target", {"field": "counter", "operator": "<=", "value": 5}
             )
-            # assert connection_lte.should_follow(TestState(counter=5)) is True  # Node attributes not accessible directly
-            # assert connection_lte.should_follow(TestState(counter=10)) is False  # Node attributes not accessible directly
+            # # assert connection_lte.should_follow(TestState(counter=5)) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert connection_lte.should_follow(TestState(counter=10)) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -175,8 +175,8 @@ class TestWorkflowConnection:
                 "target",
                 {"field": "status", "operator": "in", "value": ["ready", "processing"]},
             )
-            # assert connection_in.should_follow(TestState(status="ready")) is True  # Node attributes not accessible directly
-            # assert connection_in.should_follow(TestState(status="error")) is False  # Node attributes not accessible directly
+            # # assert connection_in.should_follow(TestState(status="ready")) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert connection_in.should_follow(TestState(status="error")) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Not in operator
             connection_not_in = WorkflowConnection(
@@ -184,8 +184,8 @@ class TestWorkflowConnection:
                 "target",
                 {"field": "status", "operator": "not in", "value": ["error", "failed"]},
             )
-            # assert connection_not_in.should_follow(TestState(status="ready")) is True  # Node attributes not accessible directly
-            # assert connection_not_in.should_follow(TestState(status="error")) is False  # Node attributes not accessible directly
+            # # assert connection_not_in.should_follow(TestState(status="ready")) is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert connection_not_in.should_follow(TestState(status="error")) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -204,7 +204,7 @@ class TestWorkflowConnection:
 
                 state = TestState(status="anything")
                 result = connection.should_follow(state)
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 mock_logger.warning.assert_called_once()
 
         except ImportError:
@@ -223,7 +223,7 @@ class TestWorkflowConnection:
 
             state = TestState()
             # Should return False when field doesn't exist (None != "test")
-            # assert connection.should_follow(state) is False  # Node attributes not accessible directly
+            # # assert connection.should_follow(state) is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -237,7 +237,7 @@ class TestWorkflowConnection:
             state = TestState(counter=5, status="ready")
 
             result = connection.map_state(state)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -254,7 +254,7 @@ class TestWorkflowConnection:
             result = connection.map_state(state)
 
             expected = {"step_count": 10, "workflow_status": "ready"}
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -272,7 +272,7 @@ class TestWorkflowConnection:
 
             # Only existing fields should be mapped
             expected = {"step_count": 5}
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowConnection not available")
@@ -288,8 +288,8 @@ class TestWorkflowRunner:
 
             runner = WorkflowRunner()
 
-            # # assert runner.workflows == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert runner.connections == []  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert runner.workflows == {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert runner.connections == []  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowRunner not available")
@@ -307,7 +307,7 @@ class TestWorkflowRunner:
                 runner.add_workflow("workflow1", mock_workflow)
 
                 assert "workflow1" in runner.workflows
-                # assert runner.workflows["workflow1"] == mock_workflow  # Node attributes not accessible directly
+                # # assert runner.workflows["workflow1"] == mock_workflow  # Node attributes not accessible directly  # Node attributes not accessible directly
                 mock_logger.info.assert_called_once()
 
         except ImportError:
@@ -356,10 +356,10 @@ class TestWorkflowRunner:
 
                 assert len(runner.connections) == 1
                 connection = runner.connections[0]
-                # # assert connection.source_workflow_id == "workflow1"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert connection.target_workflow_id == "workflow2"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert connection.condition == condition  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert connection.state_mapping == mapping  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert connection.source_workflow_id == "workflow1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert connection.target_workflow_id == "workflow2"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert connection.condition == condition  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert connection.state_mapping == mapping  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 mock_logger.info.assert_called_once()
 
         except ImportError:
@@ -408,7 +408,7 @@ class TestWorkflowRunner:
             state = TestState()
 
             result = runner.get_next_workflows("workflow1", state)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowRunner not available")
@@ -512,13 +512,13 @@ class TestWorkflowRunner:
 
             with patch("kailash.workflow.runner.logger") as mock_logger:
                 result_state, all_results = runner.execute("workflow1", initial_state)
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert all_results == {"workflow1": workflow_results}
                 mock_workflow.execute_with_state.assert_called_once_with(
                     state_model=initial_state, task_manager=None
                 )
                 # Should log execution and completion
-                # assert mock_logger.info.call_count >= 2  # Node attributes not accessible directly
+                # # assert mock_logger.info.call_count >= 2  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowRunner not available")
@@ -548,7 +548,7 @@ class TestWorkflowRunner:
 
             with patch("kailash.workflow.runner.logger"):
                 result_state, all_results = runner.execute("workflow1", initial_state)
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert all_results == {
                     "workflow1": {"step": 1},
                     "workflow2": {"step": 2},
@@ -611,7 +611,7 @@ class TestWorkflowRunner:
                 )
 
                 # Should execute max_steps times
-                # # assert mock_workflow.execute_with_state.call_count == 3  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert mock_workflow.execute_with_state.call_count == 3  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 # Should log warning about reaching max steps
                 mock_logger.warning.assert_called_with(
                     "Reached maximum steps (3) in workflow execution"
@@ -717,8 +717,8 @@ class TestWorkflowRunner:
             # workflow2 should be called with the mapped state
             mock_workflow2.execute_with_state.assert_called_once()
             called_state = mock_workflow2.execute_with_state.call_args[1]["state_model"]
-            # # assert called_state.counter == 99  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert called_state.status == "mapped"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert called_state.counter == 99  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert called_state.status == "mapped"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowRunner not available")

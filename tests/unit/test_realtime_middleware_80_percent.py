@@ -90,7 +90,7 @@ class TestConnectionManager:
                     user_id="user_1",
                 )
 
-                # assert websocket.accepted is True  # Node attributes not accessible directly
+                # # assert websocket.accepted is True  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert connection_id in manager.connections
                 connection = manager.connections[connection_id]
                 assert connection["websocket"] == websocket
@@ -116,7 +116,7 @@ class TestConnectionManager:
             async def test_async():
                 await manager.connect(websocket=websocket, connection_id=connection_id)
 
-                # assert websocket.accepted is True  # Node attributes not accessible directly
+                # # assert websocket.accepted is True  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert connection_id in manager.connections
                 connection = manager.connections[connection_id]
                 assert connection["session_id"] is None
@@ -148,7 +148,7 @@ class TestConnectionManager:
                 # Then disconnect
                 await manager.disconnect(connection_id)
 
-                # assert websocket.closed is True  # Node attributes not accessible directly
+                # # assert websocket.closed is True  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert connection_id not in manager.connections
                 assert "session_1" not in manager.session_connections
                 assert "user_1" not in manager.user_connections
@@ -188,7 +188,7 @@ class TestConnectionManager:
 
                 message = {"type": "test", "data": "hello"}
                 result = await manager.send_to_connection(connection_id, message)
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert len(websocket.messages) == 1
                 sent_message = json.loads(websocket.messages[0])
                 assert sent_message == message
@@ -209,7 +209,7 @@ class TestConnectionManager:
                 message = {"type": "test", "data": "hello"}
                 result = await manager.send_to_connection("nonexistent", message)
 
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             asyncio.run(test_async())
 
@@ -401,7 +401,7 @@ class TestSSEManager:
                 message = {"type": "update", "data": "test"}
                 result = await manager.send_to_stream("stream_123", message)
 
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             asyncio.run(test_async())
 
@@ -464,8 +464,8 @@ class TestWebhookManager:
             from kailash.middleware.communication.realtime import WebhookManager
 
             manager = WebhookManager(max_retries=5, timeout_seconds=30)
-            # # assert manager.max_retries == 5  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert manager.timeout_seconds == 30  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert manager.max_retries == 5  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert manager.timeout_seconds == 30  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert isinstance(manager.webhooks, dict)
 
         except ImportError:
@@ -590,10 +590,10 @@ class TestRealtimeMiddleware:
                 enable_webhooks=True,
             )
 
-            # # assert middleware.agent_ui == mock_agent_ui  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert middleware.enable_websocket is True  # Node attributes not accessible directly
-            # assert middleware.enable_sse is True  # Node attributes not accessible directly
-            # assert middleware.enable_webhooks is True  # Node attributes not accessible directly
+            # # # # assert middleware.agent_ui == mock_agent_ui  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert middleware.enable_websocket is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert middleware.enable_sse is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert middleware.enable_webhooks is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("RealtimeMiddleware not available")
@@ -609,9 +609,9 @@ class TestRealtimeMiddleware:
             middleware = RealtimeMiddleware(mock_agent_ui)
 
             # Should have default values
-            # assert middleware.enable_websocket is True  # Node attributes not accessible directly
-            # assert middleware.enable_sse is True  # Node attributes not accessible directly
-            # assert middleware.enable_webhooks is True  # Node attributes not accessible directly
+            # # assert middleware.enable_websocket is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert middleware.enable_sse is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert middleware.enable_webhooks is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("RealtimeMiddleware not available")
@@ -644,7 +644,7 @@ class TestRealtimeMiddleware:
                         websocket=websocket, session_id="session_1", user_id="user_1"
                     )
 
-                    # assert websocket.accepted is True  # Node attributes not accessible directly
+                    # # assert websocket.accepted is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             asyncio.run(test_async())
 

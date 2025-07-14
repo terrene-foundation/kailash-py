@@ -25,15 +25,15 @@ class TestServerInfoFunctionality:
             )
 
             # Verify auto-generated values
-            # assert server.id is not None  # Node attributes not accessible directly
-            # assert server.id.startswith("test-server_")  # Node attributes not accessible directly
-            # assert server.last_seen > 0  # Node attributes not accessible directly
-            # # assert server.metadata == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert server.capabilities == []  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert server.health_status == "unknown"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert server.id is not None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert server.id.startswith("test-server_")  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert server.last_seen > 0  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server.metadata == {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server.capabilities == []  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server.health_status == "unknown"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Verify endpoint extraction
-            # # assert server.endpoint == "http://localhost:8080"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server.endpoint == "http://localhost:8080"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ServerInfo not available")
@@ -59,9 +59,9 @@ class TestServerInfoFunctionality:
             )
 
             # Verify health integration
-            # # assert server.health_status == "healthy"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server.health_status == "healthy"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # assert numeric value - may vary
-            # # assert server.health == health_data  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server.health == health_data  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test health status override
             server_with_status = ServerInfo(
@@ -72,7 +72,7 @@ class TestServerInfoFunctionality:
             )
 
             # Explicit status should take precedence
-            # # assert server_with_status.health_status == "unhealthy"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server_with_status.health_status == "unhealthy"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ServerInfo not available")
@@ -92,7 +92,7 @@ class TestServerInfoFunctionality:
                 last_seen=current_time - 100,  # 100 seconds ago
             )
 
-            # assert healthy_server.is_healthy(max_age=300)  # 5 minutes max age  # Node attributes not accessible directly
+            # # assert healthy_server.is_healthy(max_age=300)  # 5 minutes max age  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert not healthy_server.is_healthy(
                 max_age=50
             )  # Too old for 50 second limit
@@ -154,14 +154,14 @@ class TestServerInfoFunctionality:
             restored_server = ServerInfo.from_dict(server_dict)
 
             # Verify roundtrip integrity
-            # # assert restored_server.name == original_server.name  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.transport == original_server.transport  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.command == original_server.command  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.args == original_server.args  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.capabilities == original_server.capabilities  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.metadata == original_server.metadata  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.health_status == original_server.health_status  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert restored_server.auth_required == original_server.auth_required  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.name == original_server.name  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.transport == original_server.transport  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.command == original_server.command  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.args == original_server.args  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.capabilities == original_server.capabilities  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.metadata == original_server.metadata  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.health_status == original_server.health_status  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert restored_server.auth_required == original_server.auth_required  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ServerInfo not available")
@@ -175,13 +175,13 @@ class TestServerInfoFunctionality:
             stdio_server = ServerInfo(
                 name="stdio-server", transport="stdio", command="python mcp_server.py"
             )
-            # # assert stdio_server.endpoint == "python mcp_server.py"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert stdio_server.endpoint == "python mcp_server.py"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test HTTP transport endpoint
             http_server = ServerInfo(
                 name="http-server", transport="http", url="https://api.example.com/mcp"
             )
-            # # assert http_server.endpoint == "https://api.example.com/mcp"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert http_server.endpoint == "https://api.example.com/mcp"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test SSE transport endpoint
             sse_server = ServerInfo(
@@ -189,11 +189,11 @@ class TestServerInfoFunctionality:
                 transport="sse",
                 url="https://events.example.com/stream",
             )
-            # # assert sse_server.endpoint == "https://events.example.com/stream"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert sse_server.endpoint == "https://events.example.com/stream"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test unknown transport
             unknown_server = ServerInfo(name="unknown-server", transport="unknown")
-            # # assert unknown_server.endpoint == "unknown"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert unknown_server.endpoint == "unknown"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test explicit endpoint override
             override_server = ServerInfo(
@@ -202,7 +202,7 @@ class TestServerInfoFunctionality:
                 url="http://default.com",
                 endpoint="http://override.com",
             )
-            # # assert override_server.endpoint == "http://override.com"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert override_server.endpoint == "http://override.com"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ServerInfo not available")
@@ -235,7 +235,7 @@ class TestFileBasedDiscoveryFunctionality:
                 assert success is True
 
                 # Verify file was created and contains data
-                # assert registry_file.exists()  # Node attributes not accessible directly
+                # # assert registry_file.exists()  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 with open(registry_file, "r") as f:
                     data = json.load(f)
@@ -300,22 +300,22 @@ class TestFileBasedDiscoveryFunctionality:
                     (s for s in servers if s.name == "weather-server"), None
                 )
                 assert weather_server is not None
-                # # assert weather_server.transport == "http"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert weather_server.transport == "http"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert "weather.current" in weather_server.capabilities
 
                 auth_server = next(
                     (s for s in servers if s.name == "auth-server"), None
                 )
                 assert auth_server is not None
-                # # assert auth_server.transport == "stdio"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert auth_server.command == "auth-service"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert auth_server.transport == "stdio"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert auth_server.command == "auth-service"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Test capability-based filtering
                 weather_servers = await discovery.discover_servers(
                     capability="weather.current"
                 )
                 assert len(weather_servers) == 1
-                # assert weather_servers[0].name == "weather-server"  # Node attributes not accessible directly
+                # # assert weather_servers[0].name == "weather-server"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Test non-existent capability
                 none_servers = await discovery.discover_servers(
@@ -407,8 +407,8 @@ class TestServiceRegistryIntegration:
             success = await registry.register_server(server)
 
             assert success is True
-            # assert backend1.register_server.called  # Node attributes not accessible directly
-            # assert backend2.register_server.called  # Node attributes not accessible directly
+            # # assert backend1.register_server.called  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert backend2.register_server.called  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Verify both backends received the same server
             backend1.register_server.assert_called_with(server)
@@ -477,7 +477,7 @@ class TestServiceRegistryIntegration:
             # Test capability-based filtering across backends
             web_servers = await registry.discover_servers(capability="web.api")
             assert len(web_servers) == 1
-            # assert web_servers[0].name == "web-server"  # Node attributes not accessible directly
+            # # assert web_servers[0].name == "web-server"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test transport-based filtering
             http_servers = await registry.discover_servers(transport="http")
@@ -514,17 +514,17 @@ class TestServiceRegistryIntegration:
             assert success is True
 
             # Verify backend received ServerInfo object
-            # assert backend.register_server.called  # Node attributes not accessible directly
+            # # assert backend.register_server.called  # Node attributes not accessible directly  # Node attributes not accessible directly
             call_args = backend.register_server.call_args[0]
             server_info = call_args[0]
 
             assert isinstance(server_info, ServerInfo)
-            # # assert server_info.name == "config-server"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert server_info.transport == "http"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert server_info.url == "http://config:8080"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server_info.name == "config-server"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server_info.transport == "http"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert server_info.url == "http://config:8080"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "config.get" in server_info.capabilities
-            # assert server_info.metadata["version"] == "2.0.0"  # Node attributes not accessible directly
-            # assert server_info.auth_required is True  # Node attributes not accessible directly
+            # # assert server_info.metadata["version"] == "2.0.0"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert server_info.auth_required is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ServiceRegistry not available")
@@ -556,14 +556,14 @@ class TestServiceRegistryIntegration:
                 assert success is True
 
                 # Should log error for failing backend
-                # assert mock_logger.error.called  # Node attributes not accessible directly
+                # # assert mock_logger.error.called  # Node attributes not accessible directly  # Node attributes not accessible directly
                 error_message = mock_logger.error.call_args[0][0]
                 assert "Backend" in error_message
                 assert "registration failed" in error_message
 
             # Verify working backend was still called
-            # assert working_backend.register_server.called  # Node attributes not accessible directly
-            # assert failing_backend.register_server.called  # Node attributes not accessible directly
+            # # assert working_backend.register_server.called  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert failing_backend.register_server.called  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ServiceRegistry not available")
@@ -779,7 +779,7 @@ class TestServiceMeshAndLoadBalancing:
                 # Verify the correct server was selected
                 call_args = mock_create_client.call_args[0]
                 selected_server = call_args[0]
-                # # assert selected_server.name == "auth-service"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert selected_server.name == "auth-service"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert "auth.login" in selected_server.capabilities
 
                 # Test non-existent capability
@@ -873,11 +873,11 @@ class TestDiscoveryErrorHandling:
 
             # Test with minimal data
             minimal_server = ServerInfo(name="", transport="")
-            # # assert minimal_server.name == ""  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert minimal_server.transport == ""  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert minimal_server.id is not None  # Should still generate ID  # Node attributes not accessible directly
-            # # assert minimal_server.capabilities == []  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert minimal_server.metadata == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert minimal_server.name == ""  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert minimal_server.transport == ""  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert minimal_server.id is not None  # Should still generate ID  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert minimal_server.capabilities == []  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert minimal_server.metadata == {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test with None values
             none_server = ServerInfo(
@@ -887,9 +887,9 @@ class TestDiscoveryErrorHandling:
                 metadata=None,
                 health=None,
             )
-            # # assert none_server.capabilities == []  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert none_server.metadata == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert none_server.health is None  # Node attributes not accessible directly
+            # # # # assert none_server.capabilities == []  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert none_server.metadata == {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert none_server.health is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test health status validation
             current_time = time.time()

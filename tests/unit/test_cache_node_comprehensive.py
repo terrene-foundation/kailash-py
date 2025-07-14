@@ -32,12 +32,12 @@ class TestCacheNodeInitialization:
             assert hasattr(node, "_cache_stats")
 
             # Verify initial state
-            # # # assert node._memory_cache ==  # Parameters passed during execute(), not stored as attributes {}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert node._access_times ==  # Parameters passed during execute(), not stored as attributes {}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # assert node._access_counts ==  # Parameters passed during execute(), not stored as attributes {}  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # assert node._memory_cache ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # assert node._access_times ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # assert node._access_counts ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes {}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # Redis client is created on first use
-            # # assert node._memory_cache_stats... - Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert node._memory_cache_stats... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert node._memory_cache_stats... - Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert node._memory_cache_stats... - Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -58,13 +58,13 @@ class TestCacheNodeInitialization:
             assert "backend" in params
 
             # Verify default values
-            # assert params["ttl"].default == 3600  # Node attributes not accessible directly
-            # assert params["backend"].default == "memory"  # Node attributes not accessible directly
+            # # assert params["ttl"].default == 3600  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert params["backend"].default == "memory"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test that node can be created with any ID/name
             named_node = CacheNode()
-            # # assert named_node.id == "test_cache"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert named_node.metadata.name == "Test Cache"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert named_node.id == "test_cache"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert named_node.metadata.name == "Test Cache"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -82,7 +82,7 @@ class TestCacheNodeInitialization:
 
             # Redis is initialized when first used with backend="redis"
 
-            # # # assert node._redis_client... - Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert node._redis_client... - Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -105,21 +105,21 @@ class TestCacheNodeOperations:
                 key="test_key",
                 value={"data": "test_value", "number": 42},
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Test get
             result = node.execute(operation="get", backend="memory", key="test_key")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Test get non-existent key
             result = node.execute(operation="get", backend="memory", key="non_existent")
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -138,16 +138,16 @@ class TestCacheNodeOperations:
 
             # Get immediately - should exist
             result = node.execute(operation="get", backend="redis", key="expire_test")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Wait for expiration
             time.sleep(1.1)
 
             # Get after expiration - should not exist
             result = node.execute(operation="get", backend="redis", key="expire_test")
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -166,25 +166,25 @@ class TestCacheNodeOperations:
 
             # Verify it exists
             result = node.execute(operation="get", backend="redis", key="delete_test")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Delete
             result = node.execute(
                 operation="delete", backend="redis", key="delete_test"
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify it's gone
             result = node.execute(operation="get", backend="redis", key="delete_test")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Delete non-existent key
             result = node.execute(
                 operation="delete", backend="redis", key="never_existed"
             )
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -207,17 +207,17 @@ class TestCacheNodeOperations:
 
             # Verify they exist
             result = node.execute(operation="get", backend="memory", key="key_0")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Clear cache
             result = node.execute(operation="clear", backend="memory")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify all are gone
             for i in range(5):
                 result = node.execute(operation="get", backend="redis", key=f"key_{i}")
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -249,7 +249,7 @@ class TestCacheEvictionPolicies:
 
             # Verify key3 was evicted
             result = node.execute(operation="get", backend="memory", key="key3")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify others still exist
             assert (
@@ -294,7 +294,7 @@ class TestCacheEvictionPolicies:
 
             # Verify key3 was evicted
             result = node.execute(operation="get", backend="memory", key="key3")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify frequently used keys remain
             assert (
@@ -331,7 +331,7 @@ class TestCacheEvictionPolicies:
 
             # Verify first was evicted
             result = node.execute(operation="get", backend="memory", key="first")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify others remain
             assert (
@@ -368,13 +368,13 @@ class TestCacheCompression:
             result = node.execute(
                 operation="set", backend="redis", key="large_key", value=large_value
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Get compressed value
             result = node.execute(operation="get", backend="redis", key="large_key")
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -393,8 +393,8 @@ class TestCacheCompression:
             result = node.execute(
                 operation="set", backend="redis", key="small_key", value=small_value
             )
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -426,7 +426,7 @@ class TestRedisCache:
                 key="redis_key",
                 value={"data": "redis_value"},
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify Redis setex was called
             mock_redis.setex.assert_called_once()
@@ -437,9 +437,9 @@ class TestRedisCache:
 
             # Test get
             result = node.execute(operation="get", backend="redis", key="redis_key")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             mock_redis.get.assert_called_once_with("redis_key")
 
@@ -462,14 +462,14 @@ class TestRedisCache:
 
             # Test delete
             result = node.execute(operation="delete", backend="redis", key="redis_key")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             mock_redis.delete.assert_called_once_with("redis_key")
 
             # Test clear
             result = node.execute(operation="clear", backend="redis")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             mock_redis.flushdb.assert_called_once()
 
@@ -492,7 +492,7 @@ class TestRedisCache:
 
             # Should handle error gracefully
             result = node.execute(operation="get", backend="redis", key="error_key")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert "error" in result
             assert "Connection failed" in result["error"]
 
@@ -525,7 +525,7 @@ class TestCacheStatistics:
 
             # Get statistics
             result = node.execute(operation="stats", backend="memory")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             stats = result["statistics"]
 
             assert stats["hits"] == 3
@@ -555,10 +555,10 @@ class TestCacheStatistics:
 
             # Check size
             result = node.execute(operation="size", backend="memory")
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -634,11 +634,11 @@ class TestCachePatternOperations:
 
             # Get multiple
             result = node.execute(operation="mget", backend="redis", keys=keys)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             # assert len(result["values"]) == 3 - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -658,8 +658,8 @@ class TestCachePatternOperations:
             }
 
             result = node.execute(operation="mset", backend="redis", items=items)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify all were set
             for key, expected_value in items.items():
@@ -695,7 +695,7 @@ class TestCachePatternOperations:
 
             # Find user keys
             result = node.execute(operation="keys", backend="redis", pattern="user:*")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             # assert len(result["keys"]) == 3 - result variable may not be defined
             assert "user:1:name" in result["keys"]
             assert "user:1:email" in result["keys"]
@@ -724,13 +724,13 @@ class TestCacheTagging:
                 value={"data": "tagged_value"},
                 tags=["user_data", "premium", "v2"],
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Get by tag
             result = node.execute(
                 operation="get_by_tag", backend="redis", tag="user_data"
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             # assert len(result["keys"]) == 1 - result variable may not be defined
             assert "tagged_item" in result["keys"]
 
@@ -771,8 +771,8 @@ class TestCacheTagging:
             result = node.execute(
                 operation="invalidate_tag", backend="memory", tag="group1"
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify invalidation
             assert (
@@ -810,8 +810,8 @@ class TestCacheWarmup:
             }
 
             result = node.execute(operation="warmup", backend="redis", data=warmup_data)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify all data was loaded
             for key in warmup_data:
@@ -839,10 +839,10 @@ class TestCacheWarmup:
             result = node.execute(
                 operation="warmup", url="https://api.example.com/cache-warmup"
             )
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
-        # # # # # mock_get.assert_called_once_with("https://api.example.com/cache-warmup") - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+        # # # # # # mock_get.assert_called_once_with("https://api.example.com/cache-warmup") - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -874,7 +874,7 @@ class TestCacheSerialization:
                 operation="set", backend="redis", key="json_test", value=complex_value
             )
             result = node.execute(operation="get", backend="redis", key="json_test")
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -903,7 +903,7 @@ class TestCacheSerialization:
             result = node.execute(operation="get", backend="redis", key="pickle_test")
 
             assert isinstance(result["value"], CustomObject)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -1017,7 +1017,7 @@ class TestCachePerformance:
 
             # Get benchmark results
             result = node.execute(operation="benchmark", backend="memory")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             bench = result["benchmark"]
 
             assert "avg_set_time_ms" in bench
@@ -1047,7 +1047,7 @@ class TestCacheErrorHandling:
             result = node.execute(
                 operation="invalid_action", backend="memory", key="test"
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert "error" in result
             assert "Invalid operation" in result["error"]
 
@@ -1063,13 +1063,13 @@ class TestCacheErrorHandling:
 
             # Set without key
             result = node.execute(operation="set", backend="redis", value="test")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert "error" in result
             assert "key" in result["error"].lower()
 
             # Get without key
             result = node.execute(operation="get", backend="redis")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert "error" in result
 
         except ImportError:

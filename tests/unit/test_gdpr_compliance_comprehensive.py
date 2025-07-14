@@ -30,9 +30,9 @@ class TestGDPRComplianceNodeInitialization:
             # assert hasattr(node, "audit_log")  # Attributes may not exist
             # # # # assert hasattr(node, "encryption_enabled")  # Attributes may not exist  # Attributes may not exist  # Attributes may not exist  # Attributes may not exist
 
-            # # # # # # # assert node.data_retention_days ==  # Parameters passed during execute(), not stored as attributes 2555  # ~7 years default  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert node.consent_tracking is True  # Node attributes not accessible  # Node attributes not accessible directly
-            # # assert node.encryption_enabled is True  # Node attributes not accessible  # Node attributes not accessible directly
+            # # # # # # # # # # assert node.data_retention_days ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes 2555  # ~7 years default  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert node.consent_tracking is True  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert node.encryption_enabled is True  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
             # # # # assert isinstance(node.data_processors, dict)  # Internal structure may differ  # Internal structure may differ  # Internal structure may differ  # Node attributes not accessible
             # # # # assert isinstance(node.audit_log, list)  # Internal structure may differ  # Internal structure may differ  # Internal structure may differ  # Node attributes not accessible
 
@@ -46,13 +46,13 @@ class TestGDPRComplianceNodeInitialization:
 
             node = GDPRComplianceNode()
 
-            # # # # # # # assert node.data_retention_days ==  # Parameters passed during execute(), not stored as attributes 1095  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert node.anonymization_enabled is True  # Node attributes not accessible  # Node attributes not accessible directly
-            # # # # assert node.encryption_algorithm ==  # Parameters passed during execute(), not stored as attributes "AES-256"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # # assert node.audit_storage_path ==  # Parameters passed during execute(), not stored as attributes "/var/log/gdpr/"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # # assert node.data_controller ==  # Parameters passed during execute(), not stored as attributes "ACME Corp"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # # # assert node.dpo_contact ==  # Parameters passed during execute(), not stored as attributes "dpo@acme.com"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert node.enable_breach_notifications is True  # Node attributes not accessible  # Node attributes not accessible directly
+            # # # # # # # # # # assert node.data_retention_days ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes 1095  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert node.anonymization_enabled is True  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # # assert node.encryption_algorithm ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes "AES-256"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # # assert node.audit_storage_path ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes "/var/log/gdpr/"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # # assert node.data_controller ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes "ACME Corp"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # # # # assert node.dpo_contact ==  # Parameters passed during execute(), not stored as attributes  # Parameters passed during execute(), not stored as attributes "dpo@acme.com"  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # assert node.enable_breach_notifications is True  # Node attributes not accessible  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("GDPRComplianceNode not available")
@@ -78,9 +78,9 @@ class TestConsentManagement:
                 consent_method="checkbox",
                 timestamp=datetime.now().isoformat(),
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify consent was stored
             consent_check = node.execute(
@@ -871,7 +871,7 @@ class TestAuditingAndCompliance:
 
             for op in operations:
                 result = node.execute(**op)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Generate audit report
             audit_result = node.execute(

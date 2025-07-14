@@ -54,7 +54,7 @@ class TestWorkflowBuilderInitialization:
 
             # Clear and verify empty state
             result = builder.clear()
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert len(builder.nodes) == 0
             assert len(builder.connections) == 0
             assert len(builder._metadata) == 0
@@ -84,11 +84,11 @@ class TestWorkflowBuilderNodeAddition:
 
             assert node_id == "api_call"
             assert "api_call" in builder.nodes
-            # assert builder.nodes["api_call"]["type"] == "HTTPRequestNode"  # Node attributes not accessible directly
+            # # assert builder.nodes["api_call"]["type"] == "HTTPRequestNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert (
                 builder.nodes["api_call"]["config"]["url"] == "https://api.example.com"
             )
-            # assert builder.nodes["api_call"]["config"]["method"] == "GET"  # Node attributes not accessible directly
+            # # assert builder.nodes["api_call"]["config"]["method"] == "GET"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -106,8 +106,8 @@ class TestWorkflowBuilderNodeAddition:
             assert node_id is not None
             assert len(node_id) > 0
             assert node_id in builder.nodes
-            # assert builder.nodes[node_id]["type"] == "CSVReaderNode"  # Node attributes not accessible directly
-            # assert builder.nodes[node_id]["config"]["file_path"] == "data.csv"  # Node attributes not accessible directly
+            # # assert builder.nodes[node_id]["type"] == "CSVReaderNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes[node_id]["config"]["file_path"] == "data.csv"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test multiple auto-generated IDs are unique
             node_id2 = builder.add_node(
@@ -133,8 +133,8 @@ class TestWorkflowBuilderNodeAddition:
             )
 
             assert node_id == "db_query"
-            # assert builder.nodes["db_query"]["type"] == "DatabaseNode"  # Node attributes not accessible directly
-            # assert builder.nodes["db_query"]["config"]["query"] == "SELECT * FROM users"  # Node attributes not accessible directly
+            # # assert builder.nodes["db_query"]["type"] == "DatabaseNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["db_query"]["config"]["query"] == "SELECT * FROM users"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test with additional kwargs merged into config
             node_id2 = builder.add_node(
@@ -145,9 +145,9 @@ class TestWorkflowBuilderNodeAddition:
                 body="Hello World",
             )
 
-            # assert builder.nodes["email_sender"]["config"]["subject"] == "Test"  # Node attributes not accessible directly
-            # assert builder.nodes["email_sender"]["config"]["to"] == "test@example.com"  # Node attributes not accessible directly
-            # assert builder.nodes["email_sender"]["config"]["body"] == "Hello World"  # Node attributes not accessible directly
+            # # assert builder.nodes["email_sender"]["config"]["subject"] == "Test"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["email_sender"]["config"]["to"] == "test@example.com"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["email_sender"]["config"]["body"] == "Hello World"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -176,7 +176,7 @@ class TestWorkflowBuilderNodeAddition:
                 )
 
                 # Should return self for chaining
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Should have generated deprecation warning
                 assert len(w) == 1
@@ -185,9 +185,9 @@ class TestWorkflowBuilderNodeAddition:
 
                 # Node should be added correctly
                 assert "legacy_node" in builder.nodes
-                # assert builder.nodes["legacy_node"]["type"] == "MockNode"  # Node attributes not accessible directly
-                # assert builder.nodes["legacy_node"]["config"]["param1"] == "value1"  # Node attributes not accessible directly
-                # assert builder.nodes["legacy_node"]["config"]["param2"] == "value2"  # Node attributes not accessible directly
+                # # assert builder.nodes["legacy_node"]["type"] == "MockNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert builder.nodes["legacy_node"]["config"]["param1"] == "value1"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert builder.nodes["legacy_node"]["config"]["param2"] == "value2"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -237,7 +237,7 @@ class TestWorkflowBuilderConnections:
 
             # Add connection
             result = builder.add_connection("source", "output", "target", "input")
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert len(builder.connections) == 1
 
             connection = builder.connections[0]
@@ -336,18 +336,18 @@ class TestWorkflowBuilderMetadata:
                 author="Test Author",
                 tags=["test", "validation"],
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # assert builder._metadata["name"] == "Test Workflow"  # Node attributes not accessible directly
-            # assert builder._metadata["description"] == "A test workflow for validation"  # Node attributes not accessible directly
-            # assert builder._metadata["version"] == "1.0.0"  # Node attributes not accessible directly
-            # assert builder._metadata["author"] == "Test Author"  # Node attributes not accessible directly
-            # assert builder._metadata["tags"] == ["test", "validation"]  # Node attributes not accessible directly
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert builder._metadata["name"] == "Test Workflow"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["description"] == "A test workflow for validation"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["version"] == "1.0.0"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["author"] == "Test Author"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["tags"] == ["test", "validation"]  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test updating metadata
             builder.set_metadata(version="1.1.0", priority="high")
-            # assert builder._metadata["version"] == "1.1.0"  # Node attributes not accessible directly
-            # assert builder._metadata["priority"] == "high"  # Node attributes not accessible directly
-            # assert builder._metadata["name"] == "Test Workflow"  # Should remain  # Node attributes not accessible directly
+            # # assert builder._metadata["version"] == "1.1.0"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["priority"] == "high"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["name"] == "Test Workflow"  # Should remain  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -370,7 +370,7 @@ class TestWorkflowBuilderMetadata:
             result = builder.update_node(
                 "db_node", {"timeout": 60, "pool_size": 10, "retry_count": 3}
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify updates
             config = builder.nodes["db_node"]["config"]
@@ -415,16 +415,16 @@ class TestWorkflowBuilderParameters:
                 batch_size=100,
                 environment="production",
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # assert builder.workflow_parameters["api_key"] == "secret_key_123"  # Node attributes not accessible directly
-            # assert builder.workflow_parameters["debug_mode"] is True  # Node attributes not accessible directly
-            # assert builder.workflow_parameters["batch_size"] == 100  # Node attributes not accessible directly
-            # assert builder.workflow_parameters["environment"] == "production"  # Node attributes not accessible directly
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert builder.workflow_parameters["api_key"] == "secret_key_123"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.workflow_parameters["debug_mode"] is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.workflow_parameters["batch_size"] == 100  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.workflow_parameters["environment"] == "production"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test updating parameters
             builder.set_workflow_parameters(debug_mode=False, max_retries=5)
-            # assert builder.workflow_parameters["debug_mode"] is False  # Node attributes not accessible directly
-            # assert builder.workflow_parameters["max_retries"] == 5  # Node attributes not accessible directly
+            # # assert builder.workflow_parameters["debug_mode"] is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.workflow_parameters["max_retries"] == 5  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert (
                 builder.workflow_parameters["api_key"] == "secret_key_123"
             )  # Should remain
@@ -447,7 +447,7 @@ class TestWorkflowBuilderParameters:
             result = builder.add_parameter_mapping(
                 "api_client", {"global_api_key": "api_key", "global_timeout": "timeout"}
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert "api_client" in builder.parameter_mappings
             mappings = builder.parameter_mappings["api_client"]
             assert mappings["global_api_key"] == "api_key"
@@ -483,7 +483,7 @@ class TestWorkflowBuilderParameters:
                 to_input="config_data",
                 from_workflow_param="global_config",
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert len(builder.connections) == 1
 
             connection = builder.connections[0]
@@ -537,7 +537,7 @@ class TestWorkflowBuilderBuild:
                 assert call_kwargs["version"] == "1.0.0"  # Default
 
                 # Verify add_node was called for each node
-                # # assert mock_workflow.add_node.call_count == 2  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert mock_workflow.add_node.call_count == 2  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Verify _add_edge_internal was called for connection
                 mock_workflow._add_edge_internal.assert_called_once_with(
@@ -614,7 +614,7 @@ class TestWorkflowBuilderBuild:
                     mock_workflow.metadata["workflow_parameters"]["api_key"]
                     == "test_key"
                 )
-                # assert mock_workflow.metadata["workflow_parameters"]["timeout"] == 30  # Node attributes not accessible directly
+                # # assert mock_workflow.metadata["workflow_parameters"]["timeout"] == 30  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert (
                     mock_workflow.metadata["parameter_mappings"]["api"]["api_key"]
                     == "key"
@@ -685,9 +685,9 @@ class TestWorkflowBuilderFromDict:
             builder = WorkflowBuilder.from_dict(config)
 
             # Verify metadata
-            # assert builder._metadata["name"] == "Test Workflow"  # Node attributes not accessible directly
-            # assert builder._metadata["description"] == "A workflow from dict"  # Node attributes not accessible directly
-            # assert builder._metadata["version"] == "2.0.0"  # Node attributes not accessible directly
+            # # assert builder._metadata["name"] == "Test Workflow"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["description"] == "A workflow from dict"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder._metadata["version"] == "2.0.0"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Verify nodes
             assert len(builder.nodes) == 2
@@ -835,7 +835,7 @@ class TestWorkflowBuilderAdvancedFeatures:
                 "processor",
                 {"global_input_data": "input_data", "global_config": "config"},
             )
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify inputs were stored in metadata
             assert "_workflow_inputs" in builder._metadata
@@ -885,12 +885,12 @@ class TestWorkflowBuilderAdvancedFeatures:
                 assert "Fluent API is deprecated" in str(w[0].message)
 
                 # Should return self for chaining
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Node should be added
                 assert "fluent_node" in builder.nodes
-                # assert builder.nodes["fluent_node"]["type"] == "TestNode"  # Node attributes not accessible directly
-                # assert builder.nodes["fluent_node"]["config"]["param"] == "value"  # Node attributes not accessible directly
+                # # assert builder.nodes["fluent_node"]["type"] == "TestNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert builder.nodes["fluent_node"]["config"]["param"] == "value"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -909,8 +909,8 @@ class TestWorkflowBuilderAdvancedFeatures:
             )
 
             assert node_id == "typed_node"
-            # assert builder.nodes["typed_node"]["type"] == "CSVReaderNode"  # Node attributes not accessible directly
-            # assert builder.nodes["typed_node"]["config"]["file_path"] == "test.csv"  # Node attributes not accessible directly
+            # # assert builder.nodes["typed_node"]["type"] == "CSVReaderNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["typed_node"]["config"]["file_path"] == "test.csv"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test add_node_instance method with proper Node instance
             class MockInstanceNode(Node):
@@ -927,7 +927,7 @@ class TestWorkflowBuilderAdvancedFeatures:
                 instance_id = builder.add_node_instance(mock_instance, "instance_node")
 
             assert instance_id == "instance_node"
-            # assert builder.nodes["instance_node"]["type"] == "MockInstanceNode"  # Node attributes not accessible directly
+            # # assert builder.nodes["instance_node"]["type"] == "MockInstanceNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "instance" in builder.nodes["instance_node"]
 
         except ImportError:
