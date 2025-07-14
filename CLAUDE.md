@@ -43,17 +43,38 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Multi-Channel Nexus Platform (v0.6.6+)
 ```python
-from nexus import Nexus
+from kailash.nexus import create_nexus
 
-app = Nexus(
-    api_port=8000,      # REST API + WebSocket
-    mcp_port=3001,      # Model Context Protocol
-    enable_auth=True,    # Enterprise auth
-    enable_monitoring=True  # Production monitoring
+nexus = create_nexus(
+    title="Unified Platform",
+    enable_api=True,     # REST API + WebSocket
+    enable_cli=True,     # Command-line interface
+    enable_mcp=True,     # Model Context Protocol
+    channels_synced=True # Cross-channel session sync
 )
-# Register workflows once, access via API, CLI, or MCP
-app.register("my-workflow", workflow)
-app.start()
+# Access same workflows via API, CLI, or MCP with unified sessions
+```
+
+### DataFlow Enterprise Framework (v0.6.6+) - SDK-Compliant
+```python
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Zero-config database framework with enterprise power
+db = DataFlow()  # Creates SQLite automatically
+
+@db.model
+class User:
+    name: str
+    email: str
+    active: bool = True
+
+# Generates 9 SDK-compliant nodes: UserCreateNode, UserBulkCreateNode, etc.
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"name": "Alice", "email": "alice@example.com"})
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())  # Real database operations
 ```
 
 ### ❌ NEVER

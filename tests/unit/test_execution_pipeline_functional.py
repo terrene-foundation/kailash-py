@@ -24,12 +24,12 @@ class TestExecutionContext:
                 node_name="test_node",
             )
 
-            # # assert context.query == "SELECT * FROM users"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.parameters == {"user_id": 123}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.node_name == "test_node"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.result_format == "dict"  # Default value  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert context.user_context is None  # Default value  # Node attributes not accessible directly
-            # assert context.runtime_context is None  # Default value  # Node attributes not accessible directly
+            # # # # assert context.query == "SELECT * FROM users"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.parameters == {"user_id": 123}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.node_name == "test_node"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.result_format == "dict"  # Default value  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert context.user_context is None  # Default value  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert context.runtime_context is None  # Default value  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExecutionContext not available")
@@ -53,12 +53,12 @@ class TestExecutionContext:
                 runtime_context={"session_id": "sess_789"},
             )
 
-            # assert context.query.startswith("SELECT name FROM")  # Node attributes not accessible directly
-            # # assert context.parameters == [456]  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.user_context == user_context  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.node_name == "profile_node"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.result_format == "list"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert context.runtime_context["session_id"] == "sess_789"  # Node attributes not accessible directly
+            # # assert context.query.startswith("SELECT name FROM")  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.parameters == [456]  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.user_context == user_context  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.node_name == "profile_node"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.result_format == "list"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert context.runtime_context["session_id"] == "sess_789"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExecutionContext or UserContext not available")
@@ -71,12 +71,12 @@ class TestExecutionContext:
             # Minimal context with just required query
             context = ExecutionContext(query="SELECT 1")
 
-            # # assert context.query == "SELECT 1"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert context.parameters is None  # Node attributes not accessible directly
-            # assert context.user_context is None  # Node attributes not accessible directly
-            # # assert context.node_name == "unknown_node"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert context.result_format == "dict"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert context.runtime_context is None  # Node attributes not accessible directly
+            # # # # assert context.query == "SELECT 1"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert context.parameters is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert context.user_context is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.node_name == "unknown_node"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert context.result_format == "dict"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert context.runtime_context is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("ExecutionContext not available")
@@ -98,11 +98,11 @@ class TestExecutionResult:
             )
 
             # assert len(result.data) == 2 - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExecutionResult not available")
@@ -125,12 +125,12 @@ class TestExecutionResult:
                 execution_time=0.001,
                 metadata=metadata,
             )
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExecutionResult not available")
@@ -143,10 +143,10 @@ class TestExecutionResult:
             result = ExecutionResult(
                 data=[], row_count=0, columns=[], execution_time=0.005
             )
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExecutionResult not available")
@@ -193,7 +193,7 @@ class TestPipelineStageAbstract:
 
             # Should be able to instantiate concrete class
             stage = TestStage("test_stage")
-            # assert stage.get_stage_name() == "test_stage"  # Node attributes not accessible directly
+            # # assert stage.get_stage_name() == "test_stage"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("PipelineStage not available")
@@ -209,13 +209,13 @@ class TestPermissionCheckStage:
 
             # Without access control manager
             stage1 = PermissionCheckStage()
-            # assert stage1.access_control_manager is None  # Node attributes not accessible directly
-            # assert stage1.get_stage_name() == "permission_check"  # Node attributes not accessible directly
+            # # assert stage1.access_control_manager is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert stage1.get_stage_name() == "permission_check"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # With access control manager
             mock_acm = Mock()
             stage2 = PermissionCheckStage(access_control_manager=mock_acm)
-            # # assert stage2.access_control_manager == mock_acm  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert stage2.access_control_manager == mock_acm  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("PermissionCheckStage not available")
@@ -236,7 +236,7 @@ class TestPermissionCheckStage:
 
             # Should pass through when no access control
             result = await stage.process(context)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("PermissionCheckStage not available")
@@ -261,7 +261,7 @@ class TestPermissionCheckStage:
 
             # Should pass through when no user context
             result = await stage.process(context)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Access control should not be called
             mock_acm.check_node_access.assert_not_called()
@@ -299,7 +299,7 @@ class TestPermissionCheckStage:
 
             # Should pass through when access is allowed
             result = await stage.process(context)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify access control was called correctly
             mock_acm.check_node_access.assert_called_once_with(
@@ -396,8 +396,8 @@ class TestPermissionCheckStage:
 
             # Should pass through previous result when access is allowed
             result = await stage.process(context, previous_result)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("PermissionCheckStage or dependencies not available")
@@ -414,8 +414,8 @@ class TestQueryExecutionStage:
             mock_query_executor = AsyncMock()
             stage = QueryExecutionStage(query_executor=mock_query_executor)
 
-            # # assert stage.query_executor == mock_query_executor  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert stage.get_stage_name() == "query_execution"  # Node attributes not accessible directly
+            # # # # assert stage.query_executor == mock_query_executor  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert stage.get_stage_name() == "query_execution"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("QueryExecutionStage not available")
@@ -460,11 +460,11 @@ class TestQueryExecutionStage:
                 )
 
                 # Verify result
-                # # # # # # # assert result.data == [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}] - variable may not be defined - result variable may not be defined  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # # # # # # # # # assert result.data == [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}] - variable may not be defined - result variable may not be defined  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert (
                     abs(result.execution_time - 0.025) < 0.001
                 )  # Allow for small floating point differences
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("QueryExecutionStage not available")
@@ -501,8 +501,8 @@ class TestQueryExecutionStage:
                     [123],
                     "dict",
                 )
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert (
                     abs(result.execution_time - 0.010) < 0.001
                 )  # Allow for small floating point differences
@@ -553,8 +553,8 @@ class TestDataMaskingStage:
             mock_acm = Mock()
             stage = DataMaskingStage(access_control_manager=mock_acm)
 
-            # # assert stage.access_control_manager == mock_acm  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert stage.get_stage_name() == "data_masking"  # Node attributes not accessible directly
+            # # # # assert stage.access_control_manager == mock_acm  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert stage.get_stage_name() == "data_masking"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -605,13 +605,13 @@ class TestDataMaskingStage:
             result = await stage.process(context, previous_result)
 
             # Verify masking was applied
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify access control manager was called
-            # # assert mock_acm.apply_data_masking.call_count == 2  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert mock_acm.apply_data_masking.call_count == 2  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -644,8 +644,8 @@ class TestDataMaskingStage:
             result = await stage.process(context, original_result)
 
             # Should pass through unchanged when no access control
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -680,9 +680,9 @@ class TestDataMaskingStage:
             result = await stage.process(context, previous_result)
 
             # Should pass through unchanged when no user context
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -703,8 +703,8 @@ class TestExecutionPipeline:
                 access_control_manager=mock_acm, query_executor=mock_query_executor
             )
 
-            # # assert pipeline.access_control_manager == mock_acm  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert pipeline.query_executor == mock_query_executor  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert pipeline.access_control_manager == mock_acm  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert pipeline.query_executor == mock_query_executor  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert (
                 len(pipeline.stages) >= 4
             )  # Permission, validation, execution, masking
@@ -764,8 +764,8 @@ class TestExecutionPipeline:
             # The pipeline stops at validation stage when result is None
             # This creates an empty ExecutionResult at the end
             assert isinstance(result, ExecutionResult)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify access control was called for permission check
             mock_acm.check_node_access.assert_called_once()
@@ -844,8 +844,8 @@ class TestExecutionPipeline:
 
             # Pipeline stopped at validation, so we get empty result
             assert isinstance(result, ExecutionResult)
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
             # Query executor should not be called because validation stopped pipeline
             mock_query_executor.execute_query.assert_not_called()
@@ -914,8 +914,8 @@ class TestDatabaseExecutionPipelineIntegration:
 
             # Verify result is empty (validation stopped pipeline)
             assert isinstance(result, ExecutionResult)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("Pipeline integration dependencies not available")
@@ -946,7 +946,7 @@ class TestDatabaseExecutionPipelineIntegration:
             pipeline.add_stage(test_stage)
 
             assert len(pipeline.stages) == initial_stage_count + 1
-            # assert pipeline.stages[-1] == test_stage  # Node attributes not accessible directly
+            # # assert pipeline.stages[-1] == test_stage  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Remove the stage
             removed = pipeline.remove_stage("test_stage")

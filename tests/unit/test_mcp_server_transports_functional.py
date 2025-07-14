@@ -33,7 +33,7 @@ class TestTransportSecurityFunctionality:
             ]
 
             for url in valid_urls:
-                # assert TransportSecurity.validate_url(  # Node attributes not accessible directly
+                # # assert TransportSecurity.validate_url(  # Node attributes not accessible directly  # Node attributes not accessible directly
                     url, allow_localhost=True
                 ), f"Should allow {url}"
 
@@ -70,7 +70,7 @@ class TestTransportSecurityFunctionality:
 
             # Test explicit allow behavior
             for url in localhost_urls:
-                # assert TransportSecurity.validate_url(  # Node attributes not accessible directly
+                # # assert TransportSecurity.validate_url(  # Node attributes not accessible directly  # Node attributes not accessible directly
                     url, allow_localhost=True
                 ), f"Should allow {url} when explicitly allowed"
 
@@ -101,7 +101,7 @@ class TestTransportSecurityFunctionality:
             ]
 
             # Test exact matches
-            # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly
+            # # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly  # Node attributes not accessible directly
                 "https://app.example.com", allowed_origins
             )
             assert not TransportSecurity.validate_origin(
@@ -109,10 +109,10 @@ class TestTransportSecurityFunctionality:
             )
 
             # Test wildcard subdomain matches
-            # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly
+            # # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly  # Node attributes not accessible directly
                 "https://api.staging.example.com", allowed_origins
             )
-            # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly
+            # # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly  # Node attributes not accessible directly
                 "https://frontend.staging.example.com", allowed_origins
             )
             assert not TransportSecurity.validate_origin(
@@ -120,10 +120,10 @@ class TestTransportSecurityFunctionality:
             )
 
             # Test port wildcards
-            # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly
+            # # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly  # Node attributes not accessible directly
                 "http://localhost:3000", allowed_origins
             )
-            # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly
+            # # assert TransportSecurity.validate_origin(  # Node attributes not accessible directly  # Node attributes not accessible directly
                 "http://localhost:8080", allowed_origins
             )
             assert not TransportSecurity.validate_origin(
@@ -162,7 +162,7 @@ class TestTransportSecurityFunctionality:
             ]
 
             for url in safe_ips:
-                # assert TransportSecurity.validate_url(  # Node attributes not accessible directly
+                # # assert TransportSecurity.validate_url(  # Node attributes not accessible directly  # Node attributes not accessible directly
                     url
                 ), f"Should allow safe IP {url}"
 
@@ -219,7 +219,7 @@ class TestBaseTransportFunctionality:
 
             # Test metrics disabled
             no_metrics_transport = TestTransport("test", enable_metrics=False)
-            # assert no_metrics_transport.get_metrics() == {}  # Node attributes not accessible directly
+            # # assert no_metrics_transport.get_metrics() == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("BaseTransport not available")
@@ -255,7 +255,7 @@ class TestBaseTransportFunctionality:
             # Test normal context manager flow
             async with transport as t:
                 assert connect_called
-                # assert t.is_connected()  # Node attributes not accessible directly
+                # # assert t.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert t is transport
 
             assert disconnect_called
@@ -313,8 +313,8 @@ class TestEnhancedStdioTransportFunctionality:
 
                 # Test connection
                 await transport.connect()
-                # assert transport.is_connected()  # Node attributes not accessible directly
-                # assert transport.process is mock_process  # Node attributes not accessible directly
+                # # assert transport.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert transport.process is mock_process  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Verify subprocess was created with correct parameters
                 mock_create_process.assert_called_once()
@@ -440,7 +440,7 @@ class TestEnhancedStdioTransportFunctionality:
                 mock_process.stdin.write.assert_called_once()
                 written_data = mock_process.stdin.write.call_args[0][0]
                 assert b'"method": "tool/call"' in written_data
-                # assert written_data.endswith(b"\n")  # Node attributes not accessible directly
+                # # assert written_data.endswith(b"\n")  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Test message receiving
                 received_message = await transport.receive_message()
@@ -533,7 +533,7 @@ class TestSSETransportFunctionality:
                 )
 
                 await transport.connect()
-                # assert transport.is_connected()  # Node attributes not accessible directly
+                # # assert transport.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Verify session was created with proper headers
                 mock_session_class.assert_called_once()
@@ -575,7 +575,7 @@ class TestSSETransportFunctionality:
 
                 # Should connect successfully despite localhost URL
                 await transport.connect()
-                # assert transport.is_connected()  # Node attributes not accessible directly
+                # # assert transport.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 await transport.disconnect()
 
@@ -705,8 +705,8 @@ class TestStreamableHTTPTransportFunctionality:
                 )
 
                 await transport.connect()
-                # assert transport.is_connected()  # Node attributes not accessible directly
-                # # assert transport.session_id == "sess_12345"  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert transport.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert transport.session_id == "sess_12345"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Verify session creation was called
                 session_calls = [
@@ -879,8 +879,8 @@ class TestWebSocketTransportFunctionality:
                 )
 
                 await transport.connect()
-                # assert transport.is_connected()  # Node attributes not accessible directly
-                # assert transport.websocket is mock_websocket  # Node attributes not accessible directly
+                # # assert transport.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # assert transport.websocket is mock_websocket  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Verify connection was called with correct parameters
                 mock_ws_connect.assert_called_once()
@@ -1099,9 +1099,9 @@ class TestTransportManagerFunctionality:
             manager.register_transport("conn2", transport2)
 
             # Test retrieval
-            # assert manager.get_transport("conn1") is transport1  # Node attributes not accessible directly
-            # assert manager.get_transport("conn2") is transport2  # Node attributes not accessible directly
-            # assert manager.get_transport("nonexistent") is None  # Node attributes not accessible directly
+            # # assert manager.get_transport("conn1") is transport1  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert manager.get_transport("conn2") is transport2  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert manager.get_transport("nonexistent") is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test listing
             transport_names = manager.list_transports()
@@ -1148,15 +1148,15 @@ class TestTransportManagerFunctionality:
             manager.register_transport("conn1", transport1)
             manager.register_transport("conn2", transport2)
 
-            # assert transport1.is_connected()  # Node attributes not accessible directly
-            # assert transport2.is_connected()  # Node attributes not accessible directly
+            # # assert transport1.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert transport2.is_connected()  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test disconnect all
             await manager.disconnect_all()
 
             # Verify all transports were disconnected
-            # assert transport1.disconnected  # Node attributes not accessible directly
-            # assert transport2.disconnected  # Node attributes not accessible directly
+            # # assert transport1.disconnected  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert transport2.disconnected  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert not transport1.is_connected()
             assert not transport2.is_connected()
 
@@ -1265,7 +1265,7 @@ class TestTransportErrorHandlingEdgeCases:
                     result = TransportSecurity.validate_url(
                         str(url) if url is not None else ""
                     )
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 except Exception:
                     # Exception during validation is also acceptable for malformed URLs
                     pass
@@ -1277,7 +1277,7 @@ class TestTransportErrorHandlingEdgeCases:
 
             # Test wildcard edge cases
             allowed_origins = ["*.example.com", "https://*.test.com"]
-            # assert TransportSecurity.validate_origin("sub.example.com", allowed_origins)  # Node attributes not accessible directly
+            # # assert TransportSecurity.validate_origin("sub.example.com", allowed_origins)  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert not TransportSecurity.validate_origin(
                 "example.com", allowed_origins
             )  # Wildcard requires subdomain

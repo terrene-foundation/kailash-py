@@ -34,13 +34,13 @@ class TestWorkflowResult:
             )
 
             # Test properties
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowResult not available")
@@ -59,10 +59,10 @@ class TestWorkflowResult:
             )
 
             # Test properties
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowResult not available")
@@ -77,18 +77,18 @@ class TestWorkflowResult:
                 request_id="req_pending", workflow_id="wf_pending", status="pending"
             )
 
-            # assert pending_result.is_success is False  # Node attributes not accessible directly
-            # assert pending_result.is_failed is False  # Node attributes not accessible directly
-            # assert pending_result.is_running is True  # Node attributes not accessible directly
+            # # assert pending_result.is_success is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert pending_result.is_failed is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert pending_result.is_running is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test running status
             running_result = WorkflowResult(
                 request_id="req_running", workflow_id="wf_running", status="running"
             )
 
-            # assert running_result.is_success is False  # Node attributes not accessible directly
-            # assert running_result.is_failed is False  # Node attributes not accessible directly
-            # assert running_result.is_running is True  # Node attributes not accessible directly
+            # # assert running_result.is_success is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert running_result.is_failed is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert running_result.is_running is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowResult not available")
@@ -104,10 +104,10 @@ class TestKailashClientInitialization:
 
             client = KailashClient("https://api.example.com")
 
-            # # assert client.base_url == "https://api.example.com"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert client.api_key is None  # Node attributes not accessible directly
-            # # assert client.timeout == 30  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert client._session is None  # Node attributes not accessible directly
+            # # # # assert client.base_url == "https://api.example.com"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert client.api_key is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert client.timeout == 30  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert client._session is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -126,8 +126,8 @@ class TestKailashClientInitialization:
             assert (
                 client.base_url == "https://api.example.com"
             )  # Trailing slash removed
-            # # assert client.api_key == "test_key_123"  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert client.timeout == 60  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert client.api_key == "test_key_123"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert client.timeout == 60  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -147,7 +147,7 @@ class TestKailashClientInitialization:
 
             for input_url, expected_url in test_cases:
                 client = KailashClient(input_url)
-                # # assert client.base_url == expected_url  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert client.base_url == expected_url  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -185,7 +185,7 @@ class TestKailashClientSessionManagement:
                 timeout = call_args.kwargs["timeout"]
                 assert hasattr(timeout, "total")
 
-                # # assert client._session == mock_session  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert client._session == mock_session  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -206,7 +206,7 @@ class TestKailashClientSessionManagement:
 
             # Verify session was closed
             mock_session.close.assert_called_once()
-            # assert client._session is None  # Node attributes not accessible directly
+            # # assert client._session is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -227,7 +227,7 @@ class TestKailashClientContextManager:
 
                 async with KailashClient("https://api.example.com") as client:
                     # Session should be created
-                    # # assert client._session == mock_session  # Node attributes not accessible directly  # Node attributes not accessible directly
+                    # # # # assert client._session == mock_session  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                     mock_session_class.assert_called_once()
 
                 # Session should be closed after context
@@ -281,10 +281,10 @@ class TestKailashClientWorkflowExecution:
 
                 # Verify result
                 assert isinstance(result, WorkflowResult)
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -327,7 +327,7 @@ class TestKailashClientWorkflowExecution:
                 request_data = call_args[1]["json"]
                 assert request_data["resources"] == {}
                 assert request_data["context"] == {}
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -502,9 +502,9 @@ class TestKailashClientIntegrationScenarios:
                     await client.execute_workflow("wf2", {"test": 2})
 
                     # Session should be created only once
-                    # # assert mock_session_class.call_count == 1  # Node attributes not accessible directly  # Node attributes not accessible directly
+                    # # # # assert mock_session_class.call_count == 1  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
                     # All requests should use the same session
-                    # # assert mock_session.post.call_count == 2  # Node attributes not accessible directly  # Node attributes not accessible directly
+                    # # # # assert mock_session.post.call_count == 2  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Session should be closed after context exit
                 mock_session.close.assert_called_once()
@@ -555,8 +555,8 @@ class TestKailashClientIntegrationScenarios:
                 request_data = call_args[1]["json"]
                 assert len(request_data["inputs"]["data"]) == 100
                 assert len(request_data["inputs"]["matrix"]) == 10
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -575,7 +575,7 @@ class TestKailashClientConfiguration:
 
             for timeout in test_timeouts:
                 client = KailashClient("https://api.example.com", timeout=timeout)
-                # # assert client.timeout == timeout  # Node attributes not accessible directly  # Node attributes not accessible directly
+                # # # # assert client.timeout == timeout  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -589,11 +589,11 @@ class TestKailashClientConfiguration:
             client_with_key = KailashClient(
                 "https://api.example.com", api_key="secret_key"
             )
-            # # assert client_with_key.api_key == "secret_key"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert client_with_key.api_key == "secret_key"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test without API key
             client_without_key = KailashClient("https://api.example.com")
-            # assert client_without_key.api_key is None  # Node attributes not accessible directly
+            # # assert client_without_key.api_key is None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -626,9 +626,9 @@ class TestWorkflowResultUtilities:
                 result = WorkflowResult(
                     request_id="test", workflow_id="test", status=status
                 )
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("WorkflowResult not available")
@@ -643,10 +643,10 @@ class TestWorkflowResultUtilities:
                 request_id="min_req", workflow_id="min_wf", status="completed"
             )
 
-            # assert minimal_result.result is None  # Node attributes not accessible directly
-            # assert minimal_result.error is None  # Node attributes not accessible directly
-            # assert minimal_result.execution_time is None  # Node attributes not accessible directly
-            # assert minimal_result.is_success is True  # Node attributes not accessible directly
+            # # assert minimal_result.result is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert minimal_result.error is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert minimal_result.execution_time is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert minimal_result.is_success is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test with all fields populated
             complete_result = WorkflowResult(
@@ -658,10 +658,10 @@ class TestWorkflowResultUtilities:
                 execution_time=45.7,
             )
 
-            # # assert complete_result.result == {"partial": "data"}  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert complete_result.error == "Something went wrong"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert complete_result.result == {"partial": "data"}  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert complete_result.error == "Something went wrong"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # assert numeric value - may vary
-            # assert complete_result.is_failed is True  # Node attributes not accessible directly
+            # # assert complete_result.is_failed is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowResult not available")

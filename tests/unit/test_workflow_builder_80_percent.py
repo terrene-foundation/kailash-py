@@ -24,8 +24,8 @@ class TestWorkflowBuilderMissingCoverage:
             assert node_id is not None
             assert len(node_id) > 0
             assert node_id in builder.nodes
-            # assert builder.nodes[node_id]["type"] == "HTTPRequestNode"  # Node attributes not accessible directly
-            # assert builder.nodes[node_id]["config"] == {}  # Node attributes not accessible directly
+            # # assert builder.nodes[node_id]["type"] == "HTTPRequestNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes[node_id]["config"] == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -55,7 +55,7 @@ class TestWorkflowBuilderMissingCoverage:
 
             assert node_id is not None
             assert node_id in builder.nodes
-            # assert builder.nodes[node_id]["type"] == "MockNode"  # Node attributes not accessible directly
+            # # assert builder.nodes[node_id]["type"] == "MockNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -107,10 +107,10 @@ class TestWorkflowBuilderMissingCoverage:
             )
 
             assert node_id == "db_node"
-            # assert builder.nodes["db_node"]["type"] == "DatabaseNode"  # Node attributes not accessible directly
-            # assert builder.nodes["db_node"]["config"]["query"] == "SELECT *"  # Node attributes not accessible directly
-            # assert builder.nodes["db_node"]["config"]["timeout"] == 30  # Node attributes not accessible directly
-            # assert builder.nodes["db_node"]["config"]["retries"] == 3  # Node attributes not accessible directly
+            # # assert builder.nodes["db_node"]["type"] == "DatabaseNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["db_node"]["config"]["query"] == "SELECT *"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["db_node"]["config"]["timeout"] == 30  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["db_node"]["config"]["retries"] == 3  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -126,8 +126,8 @@ class TestWorkflowBuilderMissingCoverage:
             node_id = builder.add_node("CSVReaderNode", "csv_reader")
 
             assert node_id == "csv_reader"
-            # assert builder.nodes["csv_reader"]["type"] == "CSVReaderNode"  # Node attributes not accessible directly
-            # assert builder.nodes["csv_reader"]["config"] == {}  # Node attributes not accessible directly
+            # # assert builder.nodes["csv_reader"]["type"] == "CSVReaderNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["csv_reader"]["config"] == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -154,7 +154,7 @@ class TestWorkflowBuilderMissingCoverage:
                 node_id = builder.add_node(MockNode, "alt_node", {"param": "value"})
 
             assert node_id == "alt_node"
-            # assert builder.nodes["alt_node"]["type"] == "MockNode"  # Node attributes not accessible directly
+            # # assert builder.nodes["alt_node"]["type"] == "MockNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "class" in builder.nodes["alt_node"]
 
         except ImportError:
@@ -184,7 +184,7 @@ class TestWorkflowBuilderMissingCoverage:
                 node_id = builder.add_node(mock_instance, "instance_id")
 
             assert node_id == "instance_id"
-            # assert builder.nodes["instance_id"]["type"] == "MockNode"  # Node attributes not accessible directly
+            # # assert builder.nodes["instance_id"]["type"] == "MockNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "instance" in builder.nodes["instance_id"]
 
         except ImportError:
@@ -212,9 +212,9 @@ class TestWorkflowBuilderMissingCoverage:
             )
 
             assert node_id == "unified_node"
-            # assert builder.nodes["unified_node"]["type"] == "MockNode"  # Node attributes not accessible directly
+            # # assert builder.nodes["unified_node"]["type"] == "MockNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "class" in builder.nodes["unified_node"]
-            # assert builder.nodes["unified_node"]["config"]["param"] == "value"  # Node attributes not accessible directly
+            # # assert builder.nodes["unified_node"]["config"]["param"] == "value"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -241,7 +241,7 @@ class TestWorkflowBuilderMissingCoverage:
             node_id = builder._add_node_unified(mock_instance, "instance_unified")
 
             assert node_id == "instance_unified"
-            # assert builder.nodes["instance_unified"]["type"] == "MockNode"  # Node attributes not accessible directly
+            # # assert builder.nodes["instance_unified"]["type"] == "MockNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert "instance" in builder.nodes["instance_unified"]
 
         except ImportError:
@@ -441,7 +441,7 @@ class TestWorkflowBuilderMissingCoverage:
                 assert (
                     mock_workflow.metadata["workflow_parameters"]["api_key"] == "secret"
                 )
-                # assert mock_workflow.metadata["workflow_parameters"]["timeout"] == 30  # Node attributes not accessible directly
+                # # assert mock_workflow.metadata["workflow_parameters"]["timeout"] == 30  # Node attributes not accessible directly  # Node attributes not accessible directly
                 assert (
                     mock_workflow.metadata["parameter_mappings"]["processor"]["api_key"]
                     == "key"
@@ -470,7 +470,7 @@ class TestWorkflowBuilderMissingCoverage:
 
             # Node should still be added with empty dict
             assert "bad_params_node" in builder.nodes
-            # assert builder.nodes["bad_params_node"]["config"] == {}  # Node attributes not accessible directly
+            # # assert builder.nodes["bad_params_node"]["config"] == {}  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -509,8 +509,8 @@ class TestWorkflowBuilderMissingCoverage:
             )
 
             assert node_id == "csv_node"
-            # assert builder.nodes["csv_node"]["type"] == "CSVReaderNode"  # Node attributes not accessible directly
-            # assert builder.nodes["csv_node"]["config"]["file_path"] == "data.csv"  # Node attributes not accessible directly
+            # # assert builder.nodes["csv_node"]["type"] == "CSVReaderNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert builder.nodes["csv_node"]["config"]["file_path"] == "data.csv"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test with auto-generated ID and empty config
             node_id2 = builder.add_node_type("JSONReaderNode", None, {})
@@ -534,7 +534,7 @@ class TestWorkflowBuilderMissingCoverage:
             builder.update_node("manual_node", {"new_param": "value"})
 
             assert "config" in builder.nodes["manual_node"]
-            # assert builder.nodes["manual_node"]["config"]["new_param"] == "value"  # Node attributes not accessible directly
+            # # assert builder.nodes["manual_node"]["config"]["new_param"] == "value"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -595,11 +595,11 @@ class TestWorkflowBuilderEdgeCasesAndMissing:
                 assert issubclass(w[0].category, DeprecationWarning)
 
                 # Should return self for fluent chaining
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Node should be added
                 assert "string_node" in builder.nodes
-                # assert builder.nodes["string_node"]["type"] == "StringNodeType"  # Node attributes not accessible directly
+                # # assert builder.nodes["string_node"]["type"] == "StringNodeType"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
@@ -744,9 +744,9 @@ class TestWorkflowBuilderEdgeCasesAndMissing:
                 )
 
                 # Should return self and add node
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert "fluent_class" in builder.nodes
-                # assert builder.nodes["fluent_class"]["type"] == "ClassType"  # Node attributes not accessible directly
+                # # assert builder.nodes["fluent_class"]["type"] == "ClassType"  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")

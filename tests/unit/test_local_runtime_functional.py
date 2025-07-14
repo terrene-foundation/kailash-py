@@ -21,14 +21,14 @@ class TestLocalRuntimeInitialization:
             runtime = LocalRuntime()
 
             # Verify default settings
-            # assert runtime.debug is False  # Node attributes not accessible directly
-            # assert runtime.enable_cycles is True  # Node attributes not accessible directly
-            # assert runtime.enable_async is True  # Node attributes not accessible directly
-            # # assert runtime.max_concurrency == 10  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert runtime.user_context is None  # Node attributes not accessible directly
-            # assert runtime.enable_monitoring is True  # Node attributes not accessible directly
-            # assert runtime.enable_security is False  # Node attributes not accessible directly
-            # assert runtime.enable_audit is False  # Node attributes not accessible directly
+            # # assert runtime.debug is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_cycles is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_async is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert runtime.max_concurrency == 10  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.user_context is None  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_monitoring is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_security is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_audit is False  # Node attributes not accessible directly  # Node attributes not accessible directly
             assert isinstance(runtime.resource_limits, dict)
             assert len(runtime.resource_limits) == 0
 
@@ -65,16 +65,16 @@ class TestLocalRuntimeInitialization:
             )
 
             # Verify enterprise settings
-            # assert runtime.debug is True  # Node attributes not accessible directly
-            # assert runtime.enable_cycles is False  # Node attributes not accessible directly
-            # assert runtime.enable_async is True  # Node attributes not accessible directly
-            # # assert runtime.max_concurrency == 20  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # # assert runtime.user_context == mock_user_context  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert runtime.enable_monitoring is True  # Node attributes not accessible directly
-            # assert runtime.enable_security is True  # Node attributes not accessible directly
-            # assert runtime.enable_audit is True  # Node attributes not accessible directly
-            # assert runtime.resource_limits["memory_mb"] == 1024  # Node attributes not accessible directly
-            # assert runtime.resource_limits["cpu_cores"] == 4  # Node attributes not accessible directly
+            # # assert runtime.debug is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_cycles is False  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_async is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert runtime.max_concurrency == 20  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # # # assert runtime.user_context == mock_user_context  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_monitoring is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_security is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.enable_audit is True  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.resource_limits["memory_mb"] == 1024  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime.resource_limits["cpu_cores"] == 4  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Verify execution context
             context = runtime._execution_context
@@ -96,7 +96,7 @@ class TestLocalRuntimeInitialization:
             # Test with cycles enabled
             runtime_with_cycles = LocalRuntime(enable_cycles=True)
             assert hasattr(runtime_with_cycles, "cyclic_executor")
-            # assert runtime_with_cycles.cyclic_executor is not None  # Node attributes not accessible directly
+            # # assert runtime_with_cycles.cyclic_executor is not None  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test with cycles disabled
             runtime_without_cycles = LocalRuntime(enable_cycles=False)
@@ -155,7 +155,7 @@ class TestLocalRuntimeWorkflowExecution:
                 )
 
                 # Verify results
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert run_id == "run_123"
 
                 # Verify workflow validation was called
@@ -207,7 +207,7 @@ class TestLocalRuntimeWorkflowExecution:
             )
 
             # Verify results
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             assert run_id == "cyclic_run_789"
 
             # Verify cyclic executor was called
@@ -306,7 +306,7 @@ class TestLocalRuntimeAsyncExecution:
                 )
 
                 # Verify results
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert run_id is not None
 
                 # Verify workflow validation was called
@@ -351,7 +351,7 @@ class TestLocalRuntimeAsyncExecution:
 
                     # Verify sync execution was used
                     mock_sync_execute.assert_called_once()
-                    # # # # # assert result... - variable may not be defined - result variable may not be defined
+                    # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                     assert run_id == "sync_run_123"
 
             # Run the test in an event loop
@@ -394,7 +394,7 @@ class TestLocalRuntimeAsyncExecution:
 
                 # Verify async method was called
                 mock_async_execute.assert_called_once()
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 assert run_id == "thread_run_456"
 
         except ImportError:
@@ -444,8 +444,8 @@ class TestLocalRuntimeEnterpriseFeatures:
                 )
 
                 # Verify security check was called
-                # # # # # mock_security_check.assert_called_once_with(mock_workflow) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # mock_security_check.assert_called_once_with(mock_workflow) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("LocalRuntime not available")
@@ -486,7 +486,7 @@ class TestLocalRuntimeEnterpriseFeatures:
                 )
 
                 # Verify audit events were logged
-                # assert mock_audit_log.call_count >= 2  # Start and completion events  # Node attributes not accessible directly
+                # # assert mock_audit_log.call_count >= 2  # Start and completion events  # Node attributes not accessible directly  # Node attributes not accessible directly
 
                 # Check start event
                 start_call = mock_audit_log.call_args_list[0]
@@ -605,7 +605,7 @@ class TestLocalRuntimeParameterProcessing:
                 result = injector.inject_parameters(mock_workflow, params)
 
                 # Verify injector was created and used
-                # # # # # mock_injector_class.assert_called_once_with(mock_workflow) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+                # # # # # # mock_injector_class.assert_called_once_with(mock_workflow) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
 
         except ImportError:
             pytest.skip("LocalRuntime or dependencies not available")
@@ -748,10 +748,10 @@ class TestLocalRuntimeErrorHandling:
                 results, run_id = runtime.execute(workflow=mock_workflow)
 
                 # Verify execution completed successfully
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
         # run_id may be auto-generated even if task manager create_run fails
         # The test should focus on successful execution despite failure
-        # # # # # assert result... - variable may not be defined - result variable may not be defined
+        # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("LocalRuntime not available")
@@ -798,7 +798,7 @@ class TestLocalRuntimeCyclicWorkflowHandling:
             results, run_id = runtime.execute(workflow=mock_workflow)
 
             # Verify cyclic executor was used
-            # # # # # assert result... - variable may not be defined - result variable may not be defined
+            # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             # run_id will be auto-generated by TaskManager, not from cyclic executor
             assert run_id is not None
             mock_cyclic_executor.execute.assert_called_once()
@@ -838,7 +838,7 @@ class TestLocalRuntimeCyclicWorkflowHandling:
                 results, run_id = runtime.execute(workflow=mock_workflow)
 
                 # Verify standard execution was used
-                # # # # # assert result... - variable may not be defined - result variable may not be defined
+                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
                 mock_execute.assert_called_once()
 
         except ImportError:
@@ -903,8 +903,8 @@ class TestLocalRuntimeResourceManagement:
             runtime = LocalRuntime(resource_limits=resource_limits)
 
             # Verify resource limits are stored
-            # # assert runtime.resource_limits == resource_limits  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert runtime._execution_context["resource_limits"] == resource_limits  # Node attributes not accessible directly
+            # # # # assert runtime.resource_limits == resource_limits  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime._execution_context["resource_limits"] == resource_limits  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("LocalRuntime not available")
@@ -916,8 +916,8 @@ class TestLocalRuntimeResourceManagement:
 
             runtime = LocalRuntime(max_concurrency=15)
 
-            # # assert runtime.max_concurrency == 15  # Node attributes not accessible directly  # Node attributes not accessible directly
-            # assert runtime._execution_context["async_enabled"] is True  # Node attributes not accessible directly
+            # # # # assert runtime.max_concurrency == 15  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+            # # assert runtime._execution_context["async_enabled"] is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("LocalRuntime not available")
@@ -937,11 +937,11 @@ class TestLocalRuntimeLogging:
             runtime_debug = LocalRuntime(debug=True)
             # Logger level should be set to DEBUG
             # Note: In actual implementation, this would affect the logger level
-            # assert runtime_debug.debug is True  # Node attributes not accessible directly
+            # # assert runtime_debug.debug is True  # Node attributes not accessible directly  # Node attributes not accessible directly
 
             # Test debug disabled
             runtime_no_debug = LocalRuntime(debug=False)
-            # assert runtime_no_debug.debug is False  # Node attributes not accessible directly
+            # # assert runtime_no_debug.debug is False  # Node attributes not accessible directly  # Node attributes not accessible directly
 
         except ImportError:
             pytest.skip("LocalRuntime not available")
