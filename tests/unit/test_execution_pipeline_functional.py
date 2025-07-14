@@ -261,7 +261,7 @@ class TestPermissionCheckStage:
 
             # Should pass through when no user context
             result = await stage.process(context)
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Access control should not be called
             mock_acm.check_node_access.assert_not_called()
@@ -299,7 +299,7 @@ class TestPermissionCheckStage:
 
             # Should pass through when access is allowed
             result = await stage.process(context)
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify access control was called correctly
             mock_acm.check_node_access.assert_called_once_with(
@@ -501,8 +501,8 @@ class TestQueryExecutionStage:
                     [123],
                     "dict",
                 )
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
                 assert (
                     abs(result.execution_time - 0.010) < 0.001
                 )  # Allow for small floating point differences
@@ -605,10 +605,10 @@ class TestDataMaskingStage:
             result = await stage.process(context, previous_result)
 
             # Verify masking was applied
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify access control manager was called
             assert mock_acm.apply_data_masking.call_count == 2
@@ -764,8 +764,8 @@ class TestExecutionPipeline:
             # The pipeline stops at validation stage when result is None
             # This creates an empty ExecutionResult at the end
             assert isinstance(result, ExecutionResult)
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify access control was called for permission check
             mock_acm.check_node_access.assert_called_once()
@@ -844,8 +844,8 @@ class TestExecutionPipeline:
 
             # Pipeline stopped at validation, so we get empty result
             assert isinstance(result, ExecutionResult)
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Query executor should not be called because validation stopped pipeline
             mock_query_executor.execute_query.assert_not_called()

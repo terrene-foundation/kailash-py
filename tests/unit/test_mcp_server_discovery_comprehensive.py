@@ -255,16 +255,16 @@ class TestStaticDiscovery:
             )
 
             result = await discovery.register_server(new_server)
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert len(discovery.servers) == 2
 
             # Test register duplicate
             result = await discovery.register_server(new_server)
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Test deregister
             result = await discovery.deregister_server("static_001")
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert len(discovery.servers) == 1
 
             # Test deregister non-existent
@@ -357,7 +357,7 @@ class TestFileBasedDiscovery:
             )
 
             result = await discovery.register_server(server)
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify save was called
             write_handle = mock_file.return_value.__enter__.return_value

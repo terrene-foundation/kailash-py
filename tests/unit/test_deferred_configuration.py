@@ -13,8 +13,9 @@ from kailash.runtime.parameter_injector import (
 
 
 def test_deferred_config_node_creation():
+        """Test Test creating a deferred configuration node."""
+
         try:
-    """Test creating a deferred configuration node."""
     # Mock node class
     mock_node_class = Mock()
     mock_node_class.__name__ = "TestNode"
@@ -32,8 +33,9 @@ def test_deferred_config_node_creation():
 
 
 def test_runtime_configuration():
+        """Test Test setting runtime configuration."""
+
         try:
-    """Test setting runtime configuration."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "TestNode"
 
@@ -52,8 +54,9 @@ def test_runtime_configuration():
 
 
 def test_parameter_precedence():
+        """Test Test that runtime parameters override initial parameters."""
+
         try:
-    """Test that runtime parameters override initial parameters."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "TestNode"
 
@@ -71,8 +74,9 @@ def test_parameter_precedence():
 
 
 def test_oauth2_required_config_detection():
+        """Test Test detection of required OAuth2 configuration."""
+
         try:
-    """Test detection of required OAuth2 configuration."""
     mock_oauth_class = Mock()
     mock_oauth_class.__name__ = "OAuth2Node"
 
@@ -93,8 +97,9 @@ def test_oauth2_required_config_detection():
 
 
 def test_sql_required_config_detection():
+        """Test Test detection of required SQL configuration."""
+
         try:
-    """Test detection of required SQL configuration."""
     mock_sql_class = Mock()
     mock_sql_class.__name__ = "AsyncSQLDatabaseNode"
 
@@ -115,8 +120,9 @@ def test_sql_required_config_detection():
 
 
 def test_parameter_extraction():
+        """Test Test extraction of configuration parameters from inputs."""
+
         try:
-    """Test extraction of configuration parameters from inputs."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
 
@@ -142,8 +148,9 @@ def test_parameter_extraction():
 
 
 def test_deferred_initialization():
+        """Test Test that nodes are initialized when configuration is complete."""
+
         try:
-    """Test that nodes are initialized when configuration is complete."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
     mock_instance = Mock()
@@ -172,14 +179,15 @@ def test_deferred_initialization():
         "token_url": "https://auth.example.com/token",
         "client_id": "test_client",
     }
-    # # # # mock_node_class.assert_called_once_with(**expected_config) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+    # # # # mock_node_class.assert_called_once_with(**expected_config  # ) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
         except ImportError:
             pytest.skip("Required modules not available")
 
 
 def test_parameter_delegation():
+        """Test Test that get_parameters delegates to actual node when available."""
+
         try:
-    """Test that get_parameters delegates to actual node when available."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
     mock_instance = Mock()
@@ -205,8 +213,9 @@ def test_parameter_delegation():
 
 
 def test_run_method_with_config_extraction():
+        """Test Test that run method extracts configuration and initializes."""
+
         try:
-    """Test that run method extracts configuration and initializes."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
     mock_instance = Mock()
@@ -241,8 +250,9 @@ def test_run_method_with_config_extraction():
 
 
 def test_async_run_method():
+        """Test Test async run method with delegation."""
+
         try:
-    """Test async run method with delegation."""
     import asyncio
     from unittest.mock import AsyncMock
 
@@ -271,8 +281,9 @@ def test_async_run_method():
 
 
 def test_run_without_required_config():
+        """Test Test that run fails when required configuration is missing."""
+
         try:
-    """Test that run fails when required configuration is missing."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
 
@@ -291,8 +302,9 @@ def test_run_without_required_config():
 
 
 def test_create_deferred_oauth2():
+        """Test Test the convenience function for creating deferred OAuth2 nodes."""
+
         try:
-    """Test the convenience function for creating deferred OAuth2 nodes."""
     node = create_deferred_oauth2(name="test_oauth")
 
     assert isinstance(node, DeferredConfigNode)
@@ -303,8 +315,9 @@ def test_create_deferred_oauth2():
 
 
 def test_create_deferred_sql():
+        """Test Test the convenience function for creating deferred SQL nodes."""
+
         try:
-    """Test the convenience function for creating deferred SQL nodes."""
     node = create_deferred_sql(name="test_sql")
 
     assert isinstance(node, DeferredConfigNode)
@@ -315,8 +328,9 @@ def test_create_deferred_sql():
 
 
 def test_create_deferred_node():
+        """Test Test the generic deferred node creation function."""
+
         try:
-    """Test the generic deferred node creation function."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "CustomNode"
 
@@ -330,8 +344,9 @@ def test_create_deferred_node():
 
 
 def test_multiple_config_updates():
+        """Test Test that configuration can be updated multiple times."""
+
         try:
-    """Test that configuration can be updated multiple times."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "TestNode"
 
@@ -355,8 +370,9 @@ def test_multiple_config_updates():
 
 
 def test_initialization_error_handling():
+        """Test Test that initialization errors are handled gracefully."""
+
         try:
-    """Test that initialization errors are handled gracefully."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
     mock_node_class.side_effect = Exception("Initialization failed")
@@ -377,8 +393,9 @@ def test_initialization_error_handling():
 
 
 def test_validate_inputs_integration():
+        """Test Test that validate_inputs properly extracts and sets configuration."""
+
         try:
-    """Test that validate_inputs properly extracts and sets configuration."""
     mock_node_class = Mock()
     mock_node_class.__name__ = "OAuth2Node"
     mock_instance = Mock()
@@ -405,8 +422,9 @@ def test_validate_inputs_integration():
 
 
 def test_default_parameter_definitions():
+        """Test Test that default parameter definitions are reasonable."""
+
         try:
-    """Test that default parameter definitions are reasonable."""
     # Test OAuth2 defaults
     mock_oauth_class = Mock()
     mock_oauth_class.__name__ = "OAuth2Node"

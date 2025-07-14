@@ -19,8 +19,9 @@ class TestDefaultParameterHandlingFix:
     """Test the fix for default parameter detection in get_parameter_info()."""
 
     def test_function_wrapper_default_detection(self):
+        """Test Test that FunctionWrapper correctly detects default parameters."""
+
         try:
-        """Test that FunctionWrapper correctly detects default parameters."""
 
         def test_func(
             required1: str,
@@ -72,8 +73,9 @@ class TestKwargsParameterInjection:
     """Test the fix for **kwargs parameter injection."""
 
     def test_function_accepts_var_keyword(self):
+        """Test Test detection of functions that accept **kwargs."""
+
         try:
-        """Test detection of functions that accept **kwargs."""
 
         def no_kwargs(a: int, b: str):
             return {}
@@ -157,8 +159,9 @@ class TestSecurityValidationFix:
     """Test the security validation improvements."""
 
     def test_code_executor_safety_check(self):
+        """Test Test that CodeExecutor properly validates unsafe code."""
+
         try:
-        """Test that CodeExecutor properly validates unsafe code."""
 
         executor = CodeExecutor()
 
@@ -234,8 +237,9 @@ class TestParameterFlowIntegration:
     """Test the complete parameter flow through PythonCodeNode."""
 
     def test_complete_parameter_handling(self):
+        """Test Test complete flow: detection, validation, execution."""
+
         try:
-        """Test complete flow: detection, validation, execution."""
 
         def flexible_processor(
             required_input: str, threshold: float = 0.5, max_items: int = 100, **kwargs

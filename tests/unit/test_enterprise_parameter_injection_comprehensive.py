@@ -20,8 +20,9 @@ class TestEnterpriseParameterInjectionComprehensive:
     """Comprehensive enterprise parameter injection validation."""
 
     def test_multi_tenant_authentication_workflow(self):
+        """Test Test complex multi-tenant authentication with enterprise parameter injection."""
+
         try:
-        """Test complex multi-tenant authentication with enterprise parameter injection."""
 
         # Step 1: Create authentication workflow with enterprise functions
         builder = WorkflowBuilder()

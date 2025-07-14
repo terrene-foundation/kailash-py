@@ -146,14 +146,14 @@ class TestMultiFactorAuthNodeConfiguration:
             mfa_node = MultiFactorAuthNode()
 
             # Verify default configuration
-            assert mfa_# node.methods == - Node attribute not accessible ["totp", "sms", "email", "push", "backup_codes"]
-            assert mfa_# node.default_method == - Node attribute not accessible "totp"
-            assert mfa_# node.issuer == - Node attribute not accessible "KailashSDK"
+            assert mfa_  # node.methods == - Node attribute not accessible ["totp", "sms", "email", "push", "backup_codes"]
+            assert mfa_  # node.default_method == - Node attribute not accessible "totp"
+            assert mfa_  # node.issuer == - Node attribute not accessible "KailashSDK"
             assert mfa_node.backup_codes is True
             assert mfa_node.backup_codes_count == 10
             assert mfa_node.totp_period == 30
-            assert mfa_# node.rate_limit_attempts == - Node attribute not accessible 5
-            assert mfa_# node.rate_limit_window == - Node attribute not accessible 300
+            assert mfa_  # node.rate_limit_attempts == - Node attribute not accessible 5
+            assert mfa_  # node.rate_limit_window == - Node attribute not accessible 300
 
             # Verify session timeout
             assert isinstance(mfa_node.session_timeout, timedelta)
@@ -172,14 +172,16 @@ class TestMultiFactorAuthNodeConfiguration:
             # Custom settings would be passed as parameters during execute()
 
             # Verify custom configuration
-            assert mfa_# node.methods == - Node attribute not accessible ["totp", "sms"]
-            assert mfa_# node.default_method == - Node attribute not accessible "sms"
-            assert mfa_# node.issuer == - Node attribute not accessible "MyApp"
+            assert (
+                mfa_  # node.methods == - Node attribute not accessible ["totp", "sms"]
+            )
+            assert mfa_  # node.default_method == - Node attribute not accessible "sms"
+            assert mfa_  # node.issuer == - Node attribute not accessible "MyApp"
             assert mfa_node.backup_codes is False
             assert mfa_node.backup_codes_count == 5
             assert mfa_node.totp_period == 60
-            assert mfa_# node.rate_limit_attempts == - Node attribute not accessible 3
-            assert mfa_# node.rate_limit_window == - Node attribute not accessible 600
+            assert mfa_  # node.rate_limit_attempts == - Node attribute not accessible 3
+            assert mfa_  # node.rate_limit_window == - Node attribute not accessible 600
             assert mfa_node.session_timeout.total_seconds() == 30 * 60
 
         except ImportError:
@@ -250,8 +252,8 @@ class TestMFASetupFunctionality:
 
             # Verify setup result structure
             assert "success" in result
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify secret is present and properly formatted
             assert "secret" in result
@@ -305,12 +307,12 @@ class TestMFASetupFunctionality:
                 )
 
                 # Verify setup result
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
                 assert "verification_sent" in result
-        # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Verify SMS was sent
                 mock_sms.assert_called_once()
@@ -341,10 +343,10 @@ class TestMFASetupFunctionality:
                 )
 
                 # Verify setup result
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
 
                 # Verify email sending was attempted
                 if hasattr(mfa_node, "_send_email"):
@@ -880,7 +882,7 @@ class TestMFAIntegrationAndEdgeCases:
             result = mfa_node.execute(operation="invalid_action", user_id="user123")
 
             # Should handle gracefully
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert "error" in result or "invalid" in str(result).lower()
 
         except ImportError:
@@ -895,11 +897,14 @@ class TestMFAIntegrationAndEdgeCases:
 
             # Try with empty user ID
             result = mfa_node.execute(
-                operation="setup", user_id="", method="totp", user_email="user@example.com"
+                operation="setup",
+                user_id="",
+                method="totp",
+                user_email="user@example.com",
             )
 
             # Should handle gracefully
-        # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert "error" in result or "user_id" in str(result).lower()
 
         except ImportError:

@@ -468,8 +468,8 @@ class TestKailashClientWorkflowExecution:
                     poll_interval=0.01,  # Very short for testing
                     max_wait=5.0,
                 )
-        # # assert result... - variable may not be defined - result variable may not be defined
-        # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
                 assert call_count == 2  # Should have polled twice
 
         except ImportError:
@@ -599,7 +599,7 @@ class TestKailashClientWorkflowManagement:
 
             # Verify result
         # # assert result... - variable may not be defined - result variable may not be defined
-            # assert len(result["workflows"]) == 2 - result variable may not be defined
+        # assert len(result["workflows"]) == 2 - result variable may not be defined
 
         except ImportError:
             pytest.skip("KailashClient not available")
@@ -646,7 +646,7 @@ class TestKailashClientWorkflowManagement:
             # Verify result
         # # assert result... - variable may not be defined - result variable may not be defined
         # # assert result... - variable may not be defined - result variable may not be defined
-            # assert len(result["nodes"]) == 2 - result variable may not be defined
+        # assert len(result["nodes"]) == 2 - result variable may not be defined
 
         except ImportError:
             pytest.skip("KailashClient not available")
