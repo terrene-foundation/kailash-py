@@ -520,7 +520,18 @@ Then, review this project without any prejudice:
 **Be honest, fair, and transparent. Find real problems. Show me specific issues with code examples.**
 **Record your critique in the core or apps `docs/critiques` accordingly`**
 
-## 11. GIT Procedures
+## 11. GIT and RELEASE PROCEDURES
+**Important**
 1. Never use git reset --hard or git reset --soft.
 2. Always check all local changes (from all sessions) and add/stage all modified and untracked files.
 3. Before any potentially destructive git operations, check if there are any uncommitted changes. If there are, stash or commit them first.
+
+**Commit to github**
+1. Run locally to ensure that the github actions will pass.
+2. Commit and push to github.
+3. Issue PR, wait for the CI to pass. Correct errors if any, else merge the PR.
+
+**Release versions**
+1. Please follow `# contrib (removed)/development/workflows/release-checklist.md`
+2. Continue with release process.
+3. Release to github and pypi.
