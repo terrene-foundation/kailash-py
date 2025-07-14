@@ -78,9 +78,9 @@ class TestConsentManagement:
                 consent_method="checkbox",
                 timestamp=datetime.now().isoformat(),
             )
-            # assert result... - variable may not be defined
-            # assert result... - variable may not be defined
-            # assert result... - variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify consent was stored
             consent_check = node.execute(
@@ -871,7 +871,7 @@ class TestAuditingAndCompliance:
 
             for op in operations:
                 result = node.execute(**op)
-            # assert result... - variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
 
             # Generate audit report
             audit_result = node.execute(

@@ -213,7 +213,7 @@ class TestExpressionCondition:
 
             # Should not crash with non-identifier keys
             result = condition.evaluate(results, cycle_state)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExpressionCondition not available")

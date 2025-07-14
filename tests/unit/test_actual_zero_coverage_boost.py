@@ -291,8 +291,8 @@ class TestMockedZeroCoverageModules:
             pipeline = mock_pipeline()
             assert pipeline.add_step() is True
             result = pipeline.execute()
-            # assert result... - variable may not be defined
-            # assert result... - variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert pipeline.get_status() == "running"
 
 
