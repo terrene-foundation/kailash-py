@@ -742,7 +742,7 @@ class TestTPCIssue5RealWorldProductionScenarios:
 
 
 def test_comprehensive_tpc_issue_verification():
-        """Test 
+        """Test
     Master test that verifies all TPC migration issues are resolved.
 
     This test provides a comprehensive verification that maps to each
