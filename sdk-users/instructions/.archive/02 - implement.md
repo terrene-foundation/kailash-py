@@ -95,13 +95,13 @@ Begin with step 1 and work systematically through each phase.
      - Deconflict by locking in a set of docker services and ports for this project.
      - Do not create docker containers or images manually, please use the docker-compose approach outlined in `tests/utils/CLAUDE.md`.
      - Update this setup and the CLAUDE.md in `tests/utils`. Update other references if required.
-5. Apply test coverage improvement process. 
+5. Apply test coverage improvement process.
     - Follow the same 3-tier testing strategy.
     - Aim for >80% test coverage.
     - Create comprehensive unit, integration, and E2E tests.
     - Use real Docker services for integration/E2E tests.
-    - NO MOCKING in integration/E2E tiers. 
-   
+    - NO MOCKING in integration/E2E tiers.
+
 # Updating the documentation
 1. Please update all documentations and references in details.
 2. Look through the docs in `sdk-users/`, using the `CLAUDE.md` as the entrypoint.
@@ -176,12 +176,12 @@ Begin with step 1 and work systematically through each phase.
    - Every time a feature is done and fully tested.
    - Ensure that wrong usages are corrected.
    - Ensure that guides are clear and concise.
-10. Apply test coverage improvement process. 
+10. Apply test coverage improvement process.
     - Follow the same 3-tier testing strategy.
     - Aim for >80% test coverage.
     - Create comprehensive unit, integration, and E2E tests.
     - Use real Docker services for integration/E2E tests.
-    - NO MOCKING in integration/E2E tiers. 
+    - NO MOCKING in integration/E2E tiers.
 11. Commit after each tier of tests is cleared.
 
 # Commit to github
