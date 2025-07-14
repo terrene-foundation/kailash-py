@@ -521,7 +521,7 @@ class TestKailashClientIntegrationScenarios:
             client = KailashClient("https://api.example.com")
 
             # Create large test payload
-            large_parameters={
+            large_parameters = {
                 "data": ["item_" + str(i) for i in range(100)],  # Smaller for testing
                 "matrix": [[j for j in range(10)] for i in range(10)],
             }

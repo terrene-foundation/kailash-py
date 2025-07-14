@@ -517,8 +517,8 @@ class TestAsyncDatabaseConfig:
             # assert connection string format - implementation specificpostgresql"
 
             # Async-specific defaults
-            assert config.pool_size== 1
-            assert config.max_pool_size== 10
+            assert config.pool_size == 1
+            assert config.max_pool_size == 10
             assert config.command_timeout == 60
             assert config.server_settings == {}
 
@@ -540,8 +540,8 @@ class TestAsyncDatabaseConfig:
                 server_settings=server_settings,
             )
 
-            assert config.pool_size== 2
-            assert config.max_pool_size== 20
+            assert config.pool_size == 2
+            assert config.max_pool_size == 20
             assert config.command_timeout == 120
             assert config.server_settings == server_settings
 
@@ -931,8 +931,8 @@ class TestAsyncDatabaseConfigBuilder:
             assert config.password == ""
 
             # Async-specific defaults
-            assert config.pool_size== 1
-            assert config.max_pool_size== 10
+            assert config.pool_size == 1
+            assert config.max_pool_size == 10
             assert config.command_timeout == 60
 
         except ImportError:
@@ -964,8 +964,8 @@ class TestAsyncDatabaseConfigBuilder:
             assert config.database == "async_app"
             assert config.username == "async_user"
             assert config.password == "async_pass"
-            assert config.pool_size== 2
-            assert config.max_pool_size== 20
+            assert config.pool_size == 2
+            assert config.max_pool_size == 20
             assert config.command_timeout == 120
 
         except ImportError:
@@ -1052,8 +1052,8 @@ class TestAsyncDatabaseConfigBuilder:
             assert vector_config.echo is True
             assert vector_config.connect_args == {"sslmode": "require"}
             assert vector_config.isolation_level == "SERIALIZABLE"
-            assert vector_config.pool_size== 3
-            assert vector_config.max_pool_size== 15
+            assert vector_config.pool_size == 3
+            assert vector_config.max_pool_size == 15
             assert vector_config.command_timeout == 90
             assert vector_config.server_settings == {"application_name": "vector_app"}
 

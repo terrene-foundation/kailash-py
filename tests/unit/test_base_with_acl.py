@@ -25,8 +25,6 @@ class TestNodeAccessControlWrapper:
         return node
 
     def test_wraps_node_with_access_control_attributes(self, mock_node):
-        try:
-        """Test that add_access_control adds required attributes to the node."""
         wrapped_node = add_access_control(
             mock_node,
             enable_access_control=True,

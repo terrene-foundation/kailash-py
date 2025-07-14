@@ -67,7 +67,7 @@ class TestActorConnectionLifecycle:
                 assert actor.state == ConnectionState.RECYCLING
 
                 # Stop actor
-                await actor.stop()
+                    await actor.stop()
                 assert actor.state == ConnectionState.TERMINATED
                 assert actor._actor_task.done()
 
@@ -136,8 +136,7 @@ class TestActorConnectionLifecycle:
                 except asyncio.TimeoutError:
                     pass
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -190,8 +189,7 @@ class TestActorConnectionLifecycle:
                     connection_count > initial_conn_count
                 ), "Should create new connection after max lifetime"
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -260,8 +258,7 @@ class TestActorConnectionLifecycle:
                     except asyncio.TimeoutError:
                         pytest.fail(f"Timeout waiting for {msg_type} response")
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -338,8 +335,7 @@ class TestConnectionStatistics:
                 assert stats["total_execution_time"] > 0
                 assert stats["avg_execution_time"] > 0
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -390,8 +386,7 @@ class TestConnectionStatistics:
                 assert final_health < initial_health
                 assert final_health > 0  # Not completely dead
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -460,8 +455,7 @@ class TestActorMessageHandling:
                     assert exec_query == query
                     assert list(exec_params) == params
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -529,8 +523,7 @@ class TestActorMessageHandling:
                     # # assert result is not None and result.status == "success" - variable may not be defined - result variable may not be defined
                     # assert result is not None - result variable may not be defined
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -622,8 +615,7 @@ class TestConnectionPoolIntegration:
 
             # Stop all actors
             for actor in actors:
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -738,8 +730,7 @@ class TestConnectionActorEdgeCases:
 
                 assert sent_count <= 5, "Should not exceed mailbox size"
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -805,8 +796,7 @@ class TestConnectionActorEdgeCases:
                 # Should have attempted reconnections
                 assert failure_count >= 3
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")
 
@@ -868,7 +858,6 @@ class TestConnectionActorEdgeCases:
                 stats = await stats_msg.reply_to.get()
                 assert isinstance(stats, dict)
 
-                await actor.stop()
-
+                    await actor.stop()
         except ImportError:
             pytest.skip("ActorConnection not available")

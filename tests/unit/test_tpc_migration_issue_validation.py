@@ -44,7 +44,6 @@ class TestTPCIssue1DefaultParameterDetection:
     """
 
     def test_function_with_defaults_parameter_detection(self):
-        try:
         """Test that functions with default parameters are correctly detected."""
 
         def test_function(
@@ -138,8 +137,9 @@ class TestTPCIssue2ParameterInjection:
     """
 
     def test_function_with_kwargs_receives_parameters(self):
+        """Test Test that functions with **kwargs receive workflow parameters."""
+
         try:
-        """Test that functions with **kwargs receive workflow parameters."""
 
         def process_with_kwargs(
             data: List[int], threshold: float = 0.5, **kwargs
@@ -282,8 +282,9 @@ class TestTPCIssue3SecurityModelValidation:
     """
 
     def test_security_validation_with_helpful_messages(self):
+        """Test Test that security violations provide helpful error messages."""
+
         try:
-        """Test that security violations provide helpful error messages."""
 
         # Test dangerous code detection
         dangerous_code = "import subprocess; subprocess.run(['rm', '-rf', '/'])"
@@ -330,8 +331,9 @@ result = eval(malicious_input)
         print("✅ Parameter injection attacks properly blocked")
 
     def test_safe_code_patterns_allowed(self):
+        """Test Test that safe code patterns are allowed to execute."""
+
         try:
-        """Test that safe code patterns are allowed to execute."""
 
         safe_code = """
         except ImportError:
@@ -370,8 +372,9 @@ class TestTPCIssue4EnterpriseNodeIntegration:
     """
 
     def test_deferred_sql_node_configuration(self):
+        """Test Test deferred SQL configuration pattern for enterprise nodes."""
+
         try:
-        """Test deferred SQL configuration pattern for enterprise nodes."""
 
         # Create deferred SQL node (connection configured at runtime)
         deferred_sql = create_deferred_sql(
@@ -458,8 +461,9 @@ class TestTPCIssue5RealWorldProductionScenarios:
     """
 
     def test_tpc_authentication_workflow_scenario(self):
+        """Test Test the complete TPC authentication workflow with all reported fixes."""
+
         try:
-        """Test the complete TPC authentication workflow with all reported fixes."""
 
         # Step 1: Create the exact authentication function TPC uses
         def authenticate_tpc_user(
@@ -738,13 +742,14 @@ class TestTPCIssue5RealWorldProductionScenarios:
 
 
 def test_comprehensive_tpc_issue_verification():
-        try:
-    """
+        """Test 
     Master test that verifies all TPC migration issues are resolved.
 
     This test provides a comprehensive verification that maps to each
     specific issue in the TPC migration documentation.
     """
+
+        try:
 
     print("\n" + "=" * 80)
     print("COMPREHENSIVE TPC MIGRATION ISSUE VERIFICATION")

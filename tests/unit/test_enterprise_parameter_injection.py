@@ -15,8 +15,9 @@ from kailash.workflow import WorkflowBuilder
 
 
 def test_deferred_oauth2_node_creation():
+        """Test Test creating a deferred OAuth2 node."""
+
         try:
-    """Test creating a deferred OAuth2 node."""
     # Create node without connection parameters
     node = create_deferred_oauth2(name="test_oauth")
 
@@ -33,8 +34,9 @@ def test_deferred_oauth2_node_creation():
 
 
 def test_deferred_sql_node_creation():
+        """Test Test creating a deferred SQL node."""
+
         try:
-    """Test creating a deferred SQL node."""
     # Create node without connection parameters
     node = create_deferred_sql(name="test_sql")
 
@@ -51,8 +53,9 @@ def test_deferred_sql_node_creation():
 
 
 def test_parameter_injection_workflow():
+        """Test Test parameter injection in a workflow context."""
+
         try:
-    """Test parameter injection in a workflow context."""
     workflow = WorkflowBuilder()
 
     # Add a deferred SQL node that will receive connection params at runtime
@@ -88,8 +91,9 @@ result = {
 
 
 def test_runtime_parameter_injection():
+        """Test Test that runtime parameters are properly injected."""
+
         try:
-    """Test that runtime parameters are properly injected."""
     node = create_deferred_sql(name="test_injection")
 
     # Initially not initialized
@@ -115,8 +119,9 @@ def test_runtime_parameter_injection():
 
 
 def test_connection_parameter_extraction():
+        """Test Test extraction of connection parameters from runtime inputs."""
+
         try:
-    """Test extraction of connection parameters from runtime inputs."""
     node = create_deferred_oauth2(name="test_extraction")
 
     # Mix of connection and non-connection parameters
@@ -145,8 +150,9 @@ def test_connection_parameter_extraction():
 
 
 def test_deferred_initialization():
+        """Test Test that nodes can be created without full configuration and initialized later."""
+
         try:
-    """Test that nodes can be created without full configuration and initialized later."""
     # Create node with minimal config
     node = create_deferred_oauth2(name="deferred_oauth")
 
@@ -172,8 +178,9 @@ def test_deferred_initialization():
 
 
 def test_parameter_precedence():
+        """Test Test that runtime parameters take precedence over init-time parameters."""
+
         try:
-    """Test that runtime parameters take precedence over init-time parameters."""
     # Create node with initial config
     initial_config = {
         "name": "precedence_test",
@@ -199,8 +206,9 @@ def test_parameter_precedence():
 
 
 def test_missing_connection_parameters():
+        """Test Test behavior when required connection parameters are missing."""
+
         try:
-    """Test behavior when required connection parameters are missing."""
     node = create_deferred_oauth2(name="missing_params")
 
     # Try to run without setting connection parameters
@@ -216,8 +224,9 @@ def test_missing_connection_parameters():
 
 
 def test_multiple_parameter_updates():
+        """Test Test that parameters can be updated multiple times."""
+
         try:
-    """Test that parameters can be updated multiple times."""
     node = create_deferred_sql(name="multi_update")
 
     # First update
@@ -237,8 +246,9 @@ def test_multiple_parameter_updates():
 
 
 def test_workflow_integration_pattern():
+        """Test Test the complete pattern for workflow integration."""
+
         try:
-    """Test the complete pattern for workflow integration."""
     # This test demonstrates how users should use deferred enterprise nodes
     workflow = WorkflowBuilder()
 
@@ -283,8 +293,9 @@ result = {
 
 
 def test_create_deferred_node_generic():
+        """Test Test the generic deferred node creation function."""
+
         try:
-    """Test the generic deferred node creation function."""
 
     # Mock node class
     class MockNode:
@@ -307,8 +318,9 @@ def test_create_deferred_node_generic():
 
 
 def test_required_config_detection():
+        """Test Test that different node types have appropriate config detection."""
+
         try:
-    """Test that different node types have appropriate config detection."""
     # OAuth2 node
     oauth_node = create_deferred_oauth2()
 

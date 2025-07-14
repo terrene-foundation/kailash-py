@@ -603,8 +603,8 @@ class TestAdaptivePoolControllerFunctionality:
             ), "Should have resource monitor"
 
             # Test that min/max constraints are respected
-            assert controller.pool_size== 10
-            assert controller.max_pool_size== 100
+            assert controller.pool_size == 10
+            assert controller.max_pool_size == 100
             # assert numeric value - may vary
 
             # Test scaling decision engine exists and can make decisions
@@ -789,8 +789,8 @@ class TestPoolControllerEdgeCases:
             )
 
             # Test that the controller has components configured for load handling
-            assert controller.pool_size== 5
-            assert controller.max_pool_size== 100
+            assert controller.pool_size == 5
+            assert controller.max_pool_size == 100
             # assert numeric value - may vary
             assert controller.adjustment_interval_seconds == 10
 

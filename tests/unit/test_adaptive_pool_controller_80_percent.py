@@ -1103,8 +1103,8 @@ class TestAdaptivePoolController:
 
             # Default initialization
             controller = AdaptivePoolController()
-            assert controller.pool_size== 2
-            assert controller.max_pool_size== 50
+            assert controller.pool_size == 2
+            assert controller.max_pool_size == 50
             # assert numeric value - may vary
             assert controller.adjustment_interval_seconds == 30
             assert controller.running is False
@@ -1118,8 +1118,8 @@ class TestAdaptivePoolController:
                 target_utilization=0.8,
                 adjustment_interval_seconds=60,
             )
-            assert controller.pool_size== 5
-            assert controller.max_pool_size== 100
+            assert controller.pool_size == 5
+            assert controller.max_pool_size == 100
             # assert numeric value - may vary
             assert controller.adjustment_interval_seconds == 60
 

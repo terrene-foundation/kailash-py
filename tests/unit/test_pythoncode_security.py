@@ -9,8 +9,9 @@ from kailash.sdk_exceptions import NodeExecutionError, SafetyViolationError
 
 
 def test_function_security_sanitization():
+        """Test Test that function-based nodes properly sanitize inputs."""
+
         try:
-    """Test that function-based nodes properly sanitize inputs."""
 
     def process_data(data: str, **kwargs) -> Dict[str, Any]:
         """Process data with kwargs."""
@@ -40,8 +41,9 @@ def test_function_security_sanitization():
 
 
 def test_code_vs_function_security_consistency():
+        """Test Test that code and function nodes have consistent security models."""
+
         try:
-    """Test that code and function nodes have consistent security models."""
     # Code node with dangerous operations
     with pytest.raises(NodeExecutionError):
         dangerous_code_node = PythonCodeNode()",
@@ -64,8 +66,9 @@ def test_code_vs_function_security_consistency():
 
 
 def test_parameter_injection_security():
+        """Test Test that parameter injection doesn't create security vulnerabilities."""
+
         try:
-    """Test that parameter injection doesn't create security vulnerabilities."""
 
     def flexible_func(data: str, **kwargs) -> Dict[str, Any]:
         """Function that accepts arbitrary kwargs."""
@@ -106,8 +109,9 @@ def test_parameter_injection_security():
 
 
 def test_security_config_consistency():
+        """Test Test that security configuration is applied consistently."""
+
         try:
-    """Test that security configuration is applied consistently."""
     from kailash.security import SecurityConfig
 
     # Create nodes with custom security config
@@ -141,8 +145,9 @@ def test_security_config_consistency():
 
 
 def test_kwargs_security_boundaries():
+        """Test Test security boundaries when using **kwargs."""
+
         try:
-    """Test security boundaries when using **kwargs."""
 
     def boundary_test(**kwargs) -> Dict[str, Any]:
         """Test function that processes all kwargs."""

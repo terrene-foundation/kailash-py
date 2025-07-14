@@ -14,7 +14,6 @@ class TestNodeInstance:
     """Test NodeInstance model functionality."""
 
     def test_node_instance_creation(self):
-        try:
         """Test NodeInstance creation with all fields."""
         instance = NodeInstance(
             node_id="test_node_1",
@@ -64,8 +63,9 @@ class TestConnection:
     """Test Connection model functionality."""
 
     def test_connection_creation(self):
+        """Test Test Connection creation."""
+
         try:
-        """Test Connection creation."""
         conn = Connection(
             source_node="node_a",
             source_output="output",
@@ -105,8 +105,9 @@ class TestCyclicConnection:
     """Test CyclicConnection functionality."""
 
     def test_cyclic_connection_creation(self):
+        """Test Test CyclicConnection with cycle metadata."""
+
         try:
-        """Test CyclicConnection with cycle metadata."""
         conn = CyclicConnection(
             source_node="node_a",
             source_output="output",
@@ -165,8 +166,9 @@ class TestWorkflow:
     """Test Workflow class comprehensive functionality."""
 
     def test_workflow_creation(self):
+        """Test Test Workflow creation with all parameters."""
+
         try:
-        """Test Workflow creation with all parameters."""
         workflow = WorkflowBuilder()
 
         assert workflow.workflow_id == "test_workflow_123"

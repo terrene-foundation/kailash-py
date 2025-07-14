@@ -10,8 +10,9 @@ from kailash.workflow import WorkflowBuilder
 
 
 def test_injection_consistency_workflow_params():
+        """Test Test that both code and function nodes handle workflow parameters consistently."""
+
         try:
-    """Test that both code and function nodes handle workflow parameters consistently."""
     workflow = WorkflowBuilder()
 
     # Code node - accepts any parameters
@@ -82,8 +83,9 @@ result = {
 
 
 def test_parameter_injection_with_kwargs():
+        """Test Test if we can make function nodes accept workflow parameters via **kwargs."""
+
         try:
-    """Test if we can make function nodes accept workflow parameters via **kwargs."""
 
     # This is the ideal pattern - function accepts **kwargs for workflow params
     def flexible_func(required_param: str, **kwargs) -> Dict[str, Any]:
@@ -109,8 +111,9 @@ def test_parameter_injection_with_kwargs():
 
 
 def test_parameter_injection_patterns():
+        """Test Document different parameter injection patterns and their behavior."""
+
         try:
-    """Document different parameter injection patterns and their behavior."""
     # Pattern 1: Code node with loose validation
     code_node = PythonCodeNode()
 
@@ -146,8 +149,9 @@ def test_parameter_injection_patterns():
 
 
 def test_validation_inconsistency():
+        """Test Demonstrate the validation inconsistency between code and function nodes."""
+
         try:
-    """Demonstrate the validation inconsistency between code and function nodes."""
     # Both nodes do the same thing conceptually
     code_node = PythonCodeNode()
 

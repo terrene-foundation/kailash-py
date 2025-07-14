@@ -34,8 +34,6 @@ class TestAsyncSQLParameterTypes:
 
     @pytest.mark.asyncio
     async def test_parameter_types_passed_through_chain(self, node, mock_adapter):
-        try:
-        """Test that parameter_types are passed through the entire execution chain."""
         # Patch the adapter creation
         with patch.object(node, "_get_adapter", return_value=mock_adapter):
             # Mock execute to return a result
