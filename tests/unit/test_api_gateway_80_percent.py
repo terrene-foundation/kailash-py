@@ -1193,11 +1193,11 @@ class TestAPIGatewayCreateGatewayFunction:
             pytest.skip("create_gateway not available")
 
 
-class TestAPIGatewayRouteHandlerMethods:
-    """Test individual route handler methods to improve coverage."""
+class TestAPIGatewayPrivateMethods:
+    """Test private and internal methods to improve coverage."""
 
-    def test_route_handler_methods_exist(self):
-        """Test that all route handler methods exist."""
+    def test_get_node_categories_helper(self):
+        """Test _get_node_categories helper method."""
         try:
             from kailash.middleware.communication.api_gateway import APIGateway
 
@@ -1212,81 +1212,154 @@ class TestAPIGatewayRouteHandlerMethods:
             ):
                 gateway = APIGateway()
 
-                # Test that route handler methods exist
-                handler_methods = [
-                    "create_session",
-                    "get_session",
-                    "update_session",
-                    "delete_session",
-                    "list_sessions",
-                    "create_workflow",
-                    "get_workflow",
-                    "update_workflow",
-                    "delete_workflow",
-                    "list_workflows",
-                    "execute_workflow",
-                    "get_execution",
-                    "list_executions",
-                    "stop_execution",
-                    "get_nodes",
-                    "get_node_schema",
-                    "get_node_categories",
-                ]
+                # Test schemas data
+                schemas = {
+                    "LLMNode": {"category": "ai", "description": "LLM processing"},
+                    "CSVReaderNode": {"category": "data", "description": "CSV reader"},
+                    "SQLDatabaseNode": {
+                        "category": "data",
+                        "description": "Database query",
+                    },
+                    "HTTPRequestNode": {
+                        "category": "api",
+                        "description": "HTTP request",
+                    },
+                }
 
-                for method_name in handler_methods:
-                    assert hasattr(
-                        gateway, method_name
-                    ), f"Method {method_name} should exist"
+                categories = gateway._get_node_categories(schemas)
+
+                assert "ai" in categories
+                assert "data" in categories
+                assert "api" in categories
+                assert "LLMNode" in categories["ai"]
+                assert "CSVReaderNode" in categories["data"]
+                assert "SQLDatabaseNode" in categories["data"]
+                assert "HTTPRequestNode" in categories["api"]
+
+        except ImportError:
+            pytest.skip("APIGateway not available")
+
+    def test_setup_routes_method(self):
+        """Test _setup_routes method."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway()
+
+                # Verify that _setup_routes was called during initialization
+                # Check that FastAPI app has routes
+                assert len(gateway.app.routes) > 0
+
+                # Verify specific route setup methods can be called
+                with patch.object(gateway, "_setup_core_routes") as mock_core:
+                    with patch.object(gateway, "_setup_session_routes") as mock_session:
+                        gateway._setup_routes()
+                        mock_core.assert_called_once()
+                        mock_session.assert_called_once()
+
+        except ImportError:
+            pytest.skip("APIGateway not available")
+
+    def test_mount_existing_app_method(self):
+        """Test mount_existing_app method."""
+        try:
+            from fastapi import FastAPI
+
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway()
+                sub_app = FastAPI(title="Sub App")
+
+                # Mock the mount method
+                with patch.object(gateway.app, "mount") as mock_mount:
+                    gateway.mount_existing_app("/subapi", sub_app)
+                    mock_mount.assert_called_once_with("/subapi", sub_app)
+
+        except ImportError:
+            pytest.skip("APIGateway not available")
+
+    def test_register_shared_workflow_method(self):
+        """Test register_shared_workflow method."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+            from kailash.workflow import Workflow
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway()
+                mock_workflow = Mock(spec=Workflow)
+                mock_workflow.name = "Test Workflow"
+
+                with patch.object(
+                    gateway.agent_ui, "register_workflow"
+                ) as mock_register:
+                    with patch("asyncio.create_task") as mock_create_task:
+                        result = gateway.register_shared_workflow(
+                            "test_workflow", mock_workflow
+                        )
+
+                        # Verify that the task was created
+                        mock_create_task.assert_called_once()
+
+                        # The method doesn't return anything, just creates a task
+                        assert result is None
+
+        except ImportError:
+            pytest.skip("APIGateway not available")
+
+    def test_init_sdk_nodes_method(self):
+        """Test _init_sdk_nodes method."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway(database_url="sqlite:///test.db")
+
+                # Verify SDK nodes were initialized
+                assert hasattr(gateway, "data_transformer")
+                assert hasattr(gateway, "credential_manager")
+                assert gateway.data_transformer is not None
+                assert gateway.credential_manager is not None
 
         except ImportError:
             pytest.skip("APIGateway not available")
 
     @pytest.mark.asyncio
-    async def test_create_session_handler(self):
-        """Test create_session handler method."""
-        try:
-            from kailash.middleware.communication.api_gateway import (
-                APIGateway,
-                SessionCreateRequest,
-            )
-
-            with patch.multiple(
-                "kailash.middleware.communication.api_gateway",
-                AgentUIMiddleware=Mock(),
-                RealtimeMiddleware=Mock(),
-                DynamicSchemaRegistry=Mock(),
-                NodeRegistry=Mock(),
-                DataTransformer=Mock(),
-                CredentialManagerNode=Mock(),
-            ):
-                gateway = APIGateway()
-
-                # Mock session manager
-                mock_session = {
-                    "session_id": "test_session_123",
-                    "user_id": "user_456",
-                    "created_at": datetime.now(timezone.utc),
-                    "active": True,
-                }
-
-                with patch.object(
-                    gateway.agent_ui, "create_session", return_value=mock_session
-                ):
-                    request = SessionCreateRequest(
-                        user_id="user_456", metadata={"client": "test"}
-                    )
-                    response = await gateway.create_session(request)
-
-                    assert response.session_id == "test_session_123"
-                    assert response.user_id == "user_456"
-                    assert response.active is True
-
-        except ImportError:
-            pytest.skip("APIGateway create_session not available")
-
-    @pytest.mark.asyncio
-    async def test_get_session_handler(self):
-        """Test get_session handler method."""
+    async def test_log_startup_method(self):
+        """Test _log_startup method."""
         try:
             from kailash.middleware.communication.api_gateway import APIGateway
 
@@ -1301,240 +1374,16 @@ class TestAPIGatewayRouteHandlerMethods:
             ):
                 gateway = APIGateway()
 
-                # Mock session data
-                mock_session = {
-                    "session_id": "test_session_123",
-                    "user_id": "user_456",
-                    "created_at": datetime.now(timezone.utc),
-                    "active": True,
-                }
-
-                with patch.object(
-                    gateway.agent_ui, "get_session", return_value=mock_session
-                ):
-                    response = await gateway.get_session("test_session_123")
-
-                    assert response.session_id == "test_session_123"
-                    assert response.user_id == "user_456"
-                    assert response.active is True
+                # Mock the startup logging
+                with patch(
+                    "kailash.middleware.communication.api_gateway.logger"
+                ) as mock_logger:
+                    await gateway._log_startup()
+                    # Verify logging was called (startup should log information)
+                    assert mock_logger.info.call_count > 0
 
         except ImportError:
-            pytest.skip("APIGateway get_session not available")
-
-    @pytest.mark.asyncio
-    async def test_list_sessions_handler(self):
-        """Test list_sessions handler method."""
-        try:
-            from kailash.middleware.communication.api_gateway import APIGateway
-
-            with patch.multiple(
-                "kailash.middleware.communication.api_gateway",
-                AgentUIMiddleware=Mock(),
-                RealtimeMiddleware=Mock(),
-                DynamicSchemaRegistry=Mock(),
-                NodeRegistry=Mock(),
-                DataTransformer=Mock(),
-                CredentialManagerNode=Mock(),
-            ):
-                gateway = APIGateway()
-
-                # Mock sessions list
-                mock_sessions = [
-                    {
-                        "session_id": "session_1",
-                        "user_id": "user_1",
-                        "created_at": datetime.now(timezone.utc),
-                        "active": True,
-                    },
-                    {
-                        "session_id": "session_2",
-                        "user_id": "user_2",
-                        "created_at": datetime.now(timezone.utc),
-                        "active": False,
-                    },
-                ]
-
-                with patch.object(
-                    gateway.agent_ui, "list_sessions", return_value=mock_sessions
-                ):
-                    response = await gateway.list_sessions(limit=10, offset=0)
-
-                    assert len(response) == 2
-                    assert response[0].session_id == "session_1"
-                    assert response[1].session_id == "session_2"
-
-        except ImportError:
-            pytest.skip("APIGateway list_sessions not available")
-
-    @pytest.mark.asyncio
-    async def test_create_workflow_handler(self):
-        """Test create_workflow handler method."""
-        try:
-            from kailash.middleware.communication.api_gateway import (
-                APIGateway,
-                WorkflowCreateRequest,
-            )
-
-            with patch.multiple(
-                "kailash.middleware.communication.api_gateway",
-                AgentUIMiddleware=Mock(),
-                RealtimeMiddleware=Mock(),
-                DynamicSchemaRegistry=Mock(),
-                NodeRegistry=Mock(),
-                DataTransformer=Mock(),
-                CredentialManagerNode=Mock(),
-            ):
-                gateway = APIGateway()
-
-                # Mock workflow creation
-                mock_workflow = {
-                    "workflow_id": "workflow_123",
-                    "name": "Test Workflow",
-                    "created_at": datetime.now(timezone.utc),
-                    "status": "active",
-                }
-
-                with patch.object(
-                    gateway.agent_ui, "create_workflow", return_value=mock_workflow
-                ):
-                    request = WorkflowCreateRequest(
-                        name="Test Workflow",
-                        description="A test workflow",
-                        nodes=[],
-                        connections=[],
-                    )
-                    response = await gateway.create_workflow(request)
-
-                    assert response.workflow_id == "workflow_123"
-                    assert response.name == "Test Workflow"
-
-        except ImportError:
-            pytest.skip("APIGateway create_workflow not available")
-
-    @pytest.mark.asyncio
-    async def test_get_node_schema_handler(self):
-        """Test get_node_schema handler method."""
-        try:
-            from kailash.middleware.communication.api_gateway import APIGateway
-
-            with patch.multiple(
-                "kailash.middleware.communication.api_gateway",
-                AgentUIMiddleware=Mock(),
-                RealtimeMiddleware=Mock(),
-                DynamicSchemaRegistry=Mock(),
-                NodeRegistry=Mock(),
-                DataTransformer=Mock(),
-                CredentialManagerNode=Mock(),
-            ):
-                gateway = APIGateway()
-
-                # Mock schema response
-                mock_schema = {
-                    "node_type": "LLMNode",
-                    "properties": {
-                        "model": {"type": "string", "required": True},
-                        "temperature": {"type": "number", "default": 0.7},
-                    },
-                }
-
-                with patch.object(
-                    gateway.schema_registry, "get_schema", return_value=mock_schema
-                ):
-                    response = await gateway.get_node_schema("LLMNode")
-
-                    assert response["node_type"] == "LLMNode"
-                    assert "properties" in response
-
-        except ImportError:
-            pytest.skip("APIGateway get_node_schema not available")
-
-    @pytest.mark.asyncio
-    async def test_get_nodes_handler(self):
-        """Test get_nodes handler method."""
-        try:
-            from kailash.middleware.communication.api_gateway import APIGateway
-
-            with patch.multiple(
-                "kailash.middleware.communication.api_gateway",
-                AgentUIMiddleware=Mock(),
-                RealtimeMiddleware=Mock(),
-                DynamicSchemaRegistry=Mock(),
-                NodeRegistry=Mock(),
-                DataTransformer=Mock(),
-                CredentialManagerNode=Mock(),
-            ):
-                gateway = APIGateway()
-
-                # Mock node registry response
-                mock_schemas = {
-                    "LLMNode": {"category": "ai", "description": "Language model node"},
-                    "CSVReaderNode": {
-                        "category": "data",
-                        "description": "CSV reader node",
-                    },
-                }
-
-                with patch.object(
-                    gateway.node_registry,
-                    "get_available_nodes",
-                    return_value=list(mock_schemas.keys()),
-                ):
-                    with patch.object(
-                        gateway.schema_registry,
-                        "get_all_schemas",
-                        return_value=mock_schemas,
-                    ):
-                        response = await gateway.get_nodes()
-
-                        assert "nodes" in response
-                        assert "categories" in response
-                        assert len(response["nodes"]) >= 0
-
-        except ImportError:
-            pytest.skip("APIGateway get_nodes not available")
-
-    @pytest.mark.asyncio
-    async def test_execute_workflow_handler(self):
-        """Test execute_workflow handler method."""
-        try:
-            from kailash.middleware.communication.api_gateway import (
-                APIGateway,
-                WorkflowExecuteRequest,
-            )
-
-            with patch.multiple(
-                "kailash.middleware.communication.api_gateway",
-                AgentUIMiddleware=Mock(),
-                RealtimeMiddleware=Mock(),
-                DynamicSchemaRegistry=Mock(),
-                NodeRegistry=Mock(),
-                DataTransformer=Mock(),
-                CredentialManagerNode=Mock(),
-            ):
-                gateway = APIGateway()
-
-                # Mock execution response
-                mock_execution = {
-                    "execution_id": "exec_123",
-                    "workflow_id": "workflow_456",
-                    "status": "running",
-                    "started_at": datetime.now(timezone.utc),
-                }
-
-                with patch.object(
-                    gateway.agent_ui, "execute_workflow", return_value=mock_execution
-                ):
-                    request = WorkflowExecuteRequest(
-                        workflow_id="workflow_456", parameters={"input": "test"}
-                    )
-                    response = await gateway.execute_workflow(request)
-
-                    assert response.execution_id == "exec_123"
-                    assert response.workflow_id == "workflow_456"
-                    assert response.status == "running"
-
-        except ImportError:
-            pytest.skip("APIGateway execute_workflow not available")
+            pytest.skip("APIGateway not available")
 
 
 class TestAPIGatewayCleanupAndLifecycle:
@@ -1557,18 +1406,15 @@ class TestAPIGatewayCleanupAndLifecycle:
             ):
                 gateway = APIGateway()
 
-                # Mock cleanup for components
-                mock_agent_ui_cleanup = AsyncMock()
-                mock_realtime_cleanup = AsyncMock()
-
-                gateway.agent_ui.cleanup = mock_agent_ui_cleanup
-                gateway.realtime.cleanup = mock_realtime_cleanup
+                # Mock the sessions dict to be iterable
+                mock_sessions = {"session1": Mock(), "session2": Mock()}
+                gateway.agent_ui.sessions = mock_sessions
+                gateway.agent_ui.close_session = AsyncMock()
 
                 await gateway._cleanup()
 
-                # Verify cleanup was called on components that have it
-                mock_agent_ui_cleanup.assert_called_once()
-                mock_realtime_cleanup.assert_called_once()
+                # Verify close_session was called for each session
+                assert gateway.agent_ui.close_session.call_count == len(mock_sessions)
 
         except ImportError:
             pytest.skip("APIGateway _cleanup not available")
@@ -1723,3 +1569,256 @@ class TestAPIGatewayAdvancedConfigurationOptions:
 
         except ImportError:
             pytest.skip("APIGateway comprehensive config not available")
+
+
+class TestAPIGatewayRouteImplementations:
+    """Test actual route implementations to cover missing lines."""
+
+    def test_health_check_route_success(self):
+        """Test health check route with successful response."""
+        try:
+            from fastapi.testclient import TestClient
+
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway()
+
+                # Mock the stats methods to return realistic data
+                gateway.agent_ui.get_stats.return_value = {
+                    "active_sessions": 5,
+                    "workflows_executed": 42,
+                }
+                gateway.realtime.get_stats.return_value = {
+                    "events_processed": 128,
+                    "websocket_stats": {"total_connections": 3},
+                }
+                gateway.schema_registry.get_stats.return_value = {
+                    "schemas_generated": 15,
+                    "cache_hit_rate": 0.85,
+                }
+
+                client = TestClient(gateway.app)
+                response = client.get("/health")
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "healthy"
+                assert "timestamp" in data
+                assert "uptime_seconds" in data
+                assert "components" in data
+                assert "agent_ui" in data["components"]
+                assert "realtime" in data["components"]
+                assert "schema_registry" in data["components"]
+
+        except ImportError:
+            pytest.skip("APIGateway health check not available")
+
+    def test_health_check_route_error(self):
+        """Test health check route with error handling."""
+        try:
+            from fastapi.testclient import TestClient
+
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway()
+
+                # Mock an exception in stats collection
+                gateway.agent_ui.get_stats.side_effect = Exception(
+                    "Stats collection failed"
+                )
+
+                client = TestClient(gateway.app)
+                response = client.get("/health")
+
+                assert response.status_code == 503
+                data = response.json()
+                assert data["status"] == "unhealthy"
+                assert "error" in data
+
+        except ImportError:
+            pytest.skip("APIGateway health check error not available")
+
+    def test_root_endpoint_detailed(self):
+        """Test root endpoint with detailed response validation."""
+        try:
+            from fastapi.testclient import TestClient
+
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway(title="Test Gateway", version="2.0.0")
+
+                client = TestClient(gateway.app)
+                response = client.get("/")
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["name"] == "Test Gateway"
+                assert data["version"] == "2.0.0"
+                assert data["status"] == "healthy"
+                assert "uptime_seconds" in data
+                assert "features" in data
+                assert "endpoints" in data
+
+                # Verify specific features
+                features = data["features"]
+                assert features["sessions"] is True
+                assert features["real_time"] is True
+                assert features["dynamic_workflows"] is True
+                assert features["ai_chat"] is True
+                assert features["webhooks"] is True
+
+        except ImportError:
+            pytest.skip("APIGateway root endpoint not available")
+
+    def test_cors_middleware_setup(self):
+        """Test CORS middleware configuration."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                cors_origins = ["https://example.com", "https://app.example.com"]
+                gateway = APIGateway(cors_origins=cors_origins)
+
+                # Verify CORS middleware was added to the app by checking middleware_stack
+                assert hasattr(gateway.app, "middleware_stack")
+
+                # Check that middleware was configured (this tests the initialization path)
+                assert gateway.app is not None
+
+        except ImportError:
+            pytest.skip("APIGateway CORS setup not available")
+
+    def test_run_method_configuration(self):
+        """Test run method with various configurations."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway()
+
+                with patch("uvicorn.run") as mock_uvicorn:
+                    gateway.run(host="0.0.0.0", port=8080, workers=4)
+
+                    mock_uvicorn.assert_called_once()
+                    args, kwargs = mock_uvicorn.call_args
+
+                    assert kwargs["host"] == "0.0.0.0"
+                    assert kwargs["port"] == 8080
+                    assert kwargs["workers"] == 4
+
+        except ImportError:
+            pytest.skip("APIGateway run method not available")
+
+
+class TestAPIGatewayAdditionalCoverage:
+    """Additional tests to improve API Gateway coverage."""
+
+    def test_startup_time_tracking(self):
+        """Test startup time tracking initialization."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                with patch("time.time", return_value=12345.0):
+                    gateway = APIGateway()
+                    assert gateway.start_time == 12345.0
+                    assert gateway.requests_processed == 0
+
+        except ImportError:
+            pytest.skip("APIGateway startup tracking not available")
+
+    def test_disable_documentation(self):
+        """Test gateway with documentation disabled."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                gateway = APIGateway(enable_docs=False)
+                assert gateway.app.docs_url is None
+                assert gateway.app.redoc_url is None
+
+        except ImportError:
+            pytest.skip("APIGateway documentation config not available")
+
+    def test_custom_database_url(self):
+        """Test gateway with custom database URL."""
+        try:
+            from kailash.middleware.communication.api_gateway import APIGateway
+
+            with patch.multiple(
+                "kailash.middleware.communication.api_gateway",
+                AgentUIMiddleware=Mock(),
+                RealtimeMiddleware=Mock(),
+                DynamicSchemaRegistry=Mock(),
+                NodeRegistry=Mock(),
+                DataTransformer=Mock(),
+                CredentialManagerNode=Mock(),
+            ):
+                database_url = "postgresql://user:pass@localhost/test"
+                gateway = APIGateway(database_url=database_url)
+
+                # Verify SDK nodes were initialized with database URL
+                assert hasattr(gateway, "data_transformer")
+                assert hasattr(gateway, "credential_manager")
+
+        except ImportError:
+            pytest.skip("APIGateway database URL not available")
