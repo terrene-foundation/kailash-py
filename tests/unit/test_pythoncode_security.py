@@ -19,8 +19,8 @@ def test_function_security_sanitization():
 
     # Test with safe inputs
     result = node.execute(data="hello", extra="world")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Test with potentially dangerous inputs
     # These should be sanitized, not executed
@@ -31,7 +31,7 @@ def test_function_security_sanitization():
     )
 
     # Data should be treated as strings, not executable code
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
     assert "dangerous_code" in result["result"]["extras"]
     assert "eval_attempt" in result["result"]["extras"]
 
@@ -55,8 +55,8 @@ def test_code_vs_function_security_consistency():
 
     # Even dangerous inputs should be sanitized
     result = func_node.execute(command="rm -rf /")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 def test_parameter_injection_security():
@@ -87,11 +87,11 @@ def test_parameter_injection_security():
     )
 
     # All parameters should be treated as data, not code
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
     assert (
         len(result["result"]["dangerous_keys"]) == 2
     )  # eval_injection, exec_injection
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
     # Values should be strings, not executed code
     for value in result["result"]["sample_values"].values():
@@ -172,8 +172,8 @@ def test_kwargs_security_boundaries():
 
     # Should detect dangerous patterns in the strings
     assert len(result["result"]["dangerous_patterns"]) >= 3
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
+    # assert result... - variable may not be defined
 
 
 if __name__ == "__main__":

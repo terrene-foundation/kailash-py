@@ -204,7 +204,7 @@ class TestWorkflowConnection:
 
                 state = TestState(status="anything")
                 result = connection.should_follow(state)
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 mock_logger.warning.assert_called_once()
 
         except ImportError:
@@ -512,7 +512,7 @@ class TestWorkflowRunner:
 
             with patch("kailash.workflow.runner.logger") as mock_logger:
                 result_state, all_results = runner.execute("workflow1", initial_state)
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert all_results == {"workflow1": workflow_results}
                 mock_workflow.execute_with_state.assert_called_once_with(
                     state_model=initial_state, task_manager=None
@@ -548,7 +548,7 @@ class TestWorkflowRunner:
 
             with patch("kailash.workflow.runner.logger"):
                 result_state, all_results = runner.execute("workflow1", initial_state)
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert all_results == {
                     "workflow1": {"step": 1},
                     "workflow2": {"step": 2},

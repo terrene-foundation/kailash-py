@@ -43,12 +43,12 @@ class TestPerformanceBenchmarkingFunctionality:
                 operation_name="fast_operation",
                 operation_func=fast_operation,
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert 15 < result["execution_time_ms"] < 40  # Allow some variance
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify benchmark was recorded
             assert len(node.benchmark_results) == 1
@@ -61,8 +61,8 @@ class TestPerformanceBenchmarkingFunctionality:
                 operation_name="slow_operation",
                 operation_func=slow_operation,
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert (
                 result2["memory_used_mb"] > result["memory_used_mb"]
             )  # Used more memory
@@ -101,7 +101,7 @@ class TestPerformanceBenchmarkingFunctionality:
                 operations=operations,
                 operation_funcs=operation_funcs,
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert len(result["results"]) == 3
 
             # Verify each operation was benchmarked
@@ -144,9 +144,9 @@ class TestPerformanceBenchmarkingFunctionality:
                 operation_name="failing_operation",
                 operation_func=failing_operation,
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "error_message" in result
             assert "Simulated operation failure" in result["error_message"]
 
@@ -172,7 +172,7 @@ class TestPerformanceMonitoring:
 
             # Monitor current resource metrics
             result = node.execute(operation="monitor", metric_type="resources")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "cpu_percent" in result
             assert "memory_percent" in result
             assert "memory_mb" in result
@@ -220,7 +220,7 @@ class TestPerformanceMonitoring:
                     operations=["test_operation"],
                     duration_seconds=1,  # Short duration for test
                 )
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert "measurements" in result
                 assert len(result["measurements"]) > 0
 
@@ -251,7 +251,8 @@ class TestPerformanceMonitoring:
 
             # Start monitoring
             start_result = node.execute(
-                operation="start_monitoring", operations=["api_endpoint", "database_query"]
+                operation="start_monitoring",
+                operations=["api_endpoint", "database_query"],
             )
 
             assert start_result["success"] is True
@@ -789,7 +790,7 @@ class TestAdvancedPerformanceFeatures:
                 operation="load_test_results",
                 options={"test_id": load_test_result["test_id"]},
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "statistics" in results
 
             stats = results["statistics"]

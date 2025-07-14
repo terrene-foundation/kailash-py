@@ -595,7 +595,7 @@ class TestWorkflowBuilderEdgeCasesAndMissing:
                 assert issubclass(w[0].category, DeprecationWarning)
 
                 # Should return self for fluent chaining
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
 
                 # Node should be added
                 assert "string_node" in builder.nodes
@@ -744,7 +744,7 @@ class TestWorkflowBuilderEdgeCasesAndMissing:
                 )
 
                 # Should return self and add node
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert "fluent_class" in builder.nodes
                 assert builder.nodes["fluent_class"]["type"] == "ClassType"
 

@@ -396,7 +396,7 @@ class TestPostgreSQLAdapterFunctionality:
                     params=(1,),
                     fetch_mode=FetchMode.ONE,
                 )
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 mock_conn.fetchrow.assert_called_once()
 
                 # Test FetchMode.ALL
@@ -404,7 +404,7 @@ class TestPostgreSQLAdapterFunctionality:
                     "SELECT * FROM users", fetch_mode=FetchMode.ALL
                 )
                 assert len(result) == 2
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 mock_conn.fetch.assert_called_once()
 
                 # Test execute without fetch (INSERT/UPDATE)
@@ -568,7 +568,7 @@ class TestMySQLAdapterFunctionality:
                     params=(1,),
                     fetch_mode=FetchMode.ONE,
                 )
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 mock_cursor.execute.assert_called_with(
                     "SELECT * FROM users WHERE id = %s", (1,)
                 )
@@ -705,7 +705,7 @@ class TestSQLiteAdapterFunctionality:
                     params=(1,),
                     fetch_mode=FetchMode.ONE,
                 )
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 mock_connect.assert_called_with("/path/to/test.db")
 
                 # Test that connection is created per operation
@@ -914,7 +914,7 @@ class TestAsyncSQLDatabaseNodeFunctionality:
 
                     result = await node.execute(params_tuple)
                     assert len(result["results"]) == 2
-        # assert result... - variable may not be defined
+                    # assert result... - variable may not be defined
 
                     mock_adapter.execute.assert_called_with(
                         "SELECT * FROM users WHERE age > $1 AND active = $2",
@@ -1014,7 +1014,7 @@ class TestAsyncSQLDatabaseNodeFunctionality:
                         }
 
                     result = await node.execute(params)
-        # assert result... - variable may not be defined
+                    # assert result... - variable may not be defined
                     assert connect_attempts == 3
 
                     # Verify exponential backoff was used

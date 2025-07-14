@@ -30,7 +30,7 @@ class TestCacheNodeInitialization:
             assert hasattr(node, "_access_counts")
             assert hasattr(node, "_redis_client")
             assert hasattr(node, "_cache_stats")
-            
+
             # Verify initial state
             assert node._memory_cache == {}
             assert node._access_times == {}
@@ -48,21 +48,21 @@ class TestCacheNodeInitialization:
             from kailash.nodes.cache.cache import CacheNode
 
             node = CacheNode()
-            
+
             # Get parameters to verify configuration options
             params = node.get_parameters()
-            
+
             # Verify parameter definitions exist
             assert "operation" in params
             assert "key" in params
             assert "value" in params
             assert "ttl" in params
             assert "backend" in params
-            
+
             # Verify default values
             assert params["ttl"].default == 3600
             assert params["backend"].default == "memory"
-            
+
             # Test that node can be created with any ID/name
             named_node = CacheNode()
             assert named_node.id == "test_cache"
@@ -101,17 +101,21 @@ class TestCacheNodeOperations:
             node = CacheNode()
 
             # Test set
-            result = node.execute(operation="set", backend="memory", key="test_key", value={"data": "test_value", "number": 42}
+            result = node.execute(
+                operation="set",
+                backend="memory",
+                key="test_key",
+                value={"data": "test_value", "number": 42},
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Test get
             result = node.execute(operation="get", backend="memory", key="test_key")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Test get non-existent key
             result = node.execute(operation="get", backend="memory", key="non_existent")
@@ -130,12 +134,14 @@ class TestCacheNodeOperations:
             node = CacheNode()  # 1 second TTL
 
             # Set value
-            node.execute(operation="set", backend="redis", key="expire_test", value="will_expire")
+            node.execute(
+                operation="set", backend="redis", key="expire_test", value="will_expire"
+            )
 
             # Get immediately - should exist
             result = node.execute(operation="get", backend="redis", key="expire_test")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Wait for expiration
             time.sleep(1.1)
@@ -156,23 +162,29 @@ class TestCacheNodeOperations:
             node = CacheNode()
 
             # Set value
-            node.execute(operation="set", backend="redis", key="delete_test", value="to_delete")
+            node.execute(
+                operation="set", backend="redis", key="delete_test", value="to_delete"
+            )
 
             # Verify it exists
             result = node.execute(operation="get", backend="redis", key="delete_test")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Delete
-            result = node.execute(operation="delete", backend="redis", key="delete_test")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            result = node.execute(
+                operation="delete", backend="redis", key="delete_test"
+            )
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify it's gone
             result = node.execute(operation="get", backend="redis", key="delete_test")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Delete non-existent key
-            result = node.execute(operation="delete", backend="redis", key="never_existed")
+            result = node.execute(
+                operation="delete", backend="redis", key="never_existed"
+            )
         # assert result... - variable may not be defined
         # assert result... - variable may not be defined
 
@@ -188,16 +200,21 @@ class TestCacheNodeOperations:
 
             # Set multiple values
             for i in range(5):
-                node.execute(operation="set", backend="memory", key=f"key_{i}", value=f"value_{i}")
+                node.execute(
+                    operation="set",
+                    backend="memory",
+                    key=f"key_{i}",
+                    value=f"value_{i}",
+                )
 
             # Verify they exist
             result = node.execute(operation="get", backend="memory", key="key_0")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Clear cache
             result = node.execute(operation="clear", backend="memory")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify all are gone
             for i in range(5):
@@ -234,12 +251,21 @@ class TestCacheEvictionPolicies:
 
             # Verify key3 was evicted
             result = node.execute(operation="get", backend="memory", key="key3")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify others still exist
-            assert node.execute(operation="get", backend="memory", key="key1")["hit"] is True
-            assert node.execute(operation="get", backend="memory", key="key2")["hit"] is True
-            assert node.execute(operation="get", backend="memory", key="key4")["hit"] is True
+            assert (
+                node.execute(operation="get", backend="memory", key="key1")["hit"]
+                is True
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="key2")["hit"]
+                is True
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="key4")["hit"]
+                is True
+            )
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -270,11 +296,17 @@ class TestCacheEvictionPolicies:
 
             # Verify key3 was evicted
             result = node.execute(operation="get", backend="memory", key="key3")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify frequently used keys remain
-            assert node.execute(operation="get", backend="memory", key="key1")["hit"] is True
-            assert node.execute(operation="get", backend="memory", key="key2")["hit"] is True
+            assert (
+                node.execute(operation="get", backend="memory", key="key1")["hit"]
+                is True
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="key2")["hit"]
+                is True
+            )
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -289,20 +321,33 @@ class TestCacheEvictionPolicies:
 
             # Fill cache in order
             node.execute(operation="set", backend="memory", key="first", value="value1")
-            node.execute(operation="set", backend="memory", key="second", value="value2")
+            node.execute(
+                operation="set", backend="memory", key="second", value="value2"
+            )
             node.execute(operation="set", backend="memory", key="third", value="value3")
 
             # Add new key - should evict "first" (oldest)
-            node.execute(operation="set", backend="memory", key="fourth", value="value4")
+            node.execute(
+                operation="set", backend="memory", key="fourth", value="value4"
+            )
 
             # Verify first was evicted
             result = node.execute(operation="get", backend="memory", key="first")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify others remain
-            assert node.execute(operation="get", backend="memory", key="second")["hit"] is True
-            assert node.execute(operation="get", backend="memory", key="third")["hit"] is True
-            assert node.execute(operation="get", backend="memory", key="fourth")["hit"] is True
+            assert (
+                node.execute(operation="get", backend="memory", key="second")["hit"]
+                is True
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="third")["hit"]
+                is True
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="fourth")["hit"]
+                is True
+            )
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -322,9 +367,11 @@ class TestCacheCompression:
             large_value = {"data": "x" * 1000, "array": list(range(100))}
 
             # Set large value
-            result = node.execute(operation="set", backend="redis", key="large_key", value=large_value)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            result = node.execute(
+                operation="set", backend="redis", key="large_key", value=large_value
+            )
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Get compressed value
             result = node.execute(operation="get", backend="redis", key="large_key")
@@ -345,7 +392,9 @@ class TestCacheCompression:
             small_value = {"data": "small"}
 
             # Set small value
-            result = node.execute(operation="set", backend="redis", key="small_key", value=small_value)
+            result = node.execute(
+                operation="set", backend="redis", key="small_key", value=small_value
+            )
         # assert result... - variable may not be defined
         # assert result... - variable may not be defined
 
@@ -373,9 +422,13 @@ class TestRedisCache:
             node = CacheNode()
 
             # Test set
-            result = node.execute(operation="set", backend="redis", key="redis_key", value={"data": "redis_value"}
+            result = node.execute(
+                operation="set",
+                backend="redis",
+                key="redis_key",
+                value={"data": "redis_value"},
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify Redis setex was called
             mock_redis.setex.assert_called_once()
@@ -386,9 +439,9 @@ class TestRedisCache:
 
             # Test get
             result = node.execute(operation="get", backend="redis", key="redis_key")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             mock_redis.get.assert_called_once_with("redis_key")
 
@@ -411,14 +464,14 @@ class TestRedisCache:
 
             # Test delete
             result = node.execute(operation="delete", backend="redis", key="redis_key")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             mock_redis.delete.assert_called_once_with("redis_key")
 
             # Test clear
             result = node.execute(operation="clear", backend="redis")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             mock_redis.flushdb.assert_called_once()
 
@@ -441,7 +494,7 @@ class TestRedisCache:
 
             # Should handle error gracefully
             result = node.execute(operation="get", backend="redis", key="error_key")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "error" in result
             assert "Connection failed" in result["error"]
 
@@ -460,7 +513,9 @@ class TestCacheStatistics:
             node = CacheNode()
 
             # Generate some hits and misses
-            node.execute(operation="set", backend="redis", key="stat_key", value="stat_value")
+            node.execute(
+                operation="set", backend="redis", key="stat_key", value="stat_value"
+            )
 
             # Hits
             for _ in range(3):
@@ -472,7 +527,7 @@ class TestCacheStatistics:
 
             # Get statistics
             result = node.execute(operation="stats", backend="memory")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             stats = result["statistics"]
 
             assert stats["hits"] == 3
@@ -493,7 +548,12 @@ class TestCacheStatistics:
 
             # Add items
             for i in range(5):
-                node.execute(operation="set", backend="memory", key=f"size_key_{i}", value=f"value_{i}")
+                node.execute(
+                    operation="set",
+                    backend="memory",
+                    key=f"size_key_{i}",
+                    value=f"value_{i}",
+                )
 
             # Check size
             result = node.execute(operation="size", backend="memory")
@@ -522,13 +582,18 @@ class TestCacheConcurrency:
             def cache_operation(thread_id):
                 for i in range(10):
                     # Set
-                    node.execute(operation="set", backend="memory",
+                    node.execute(
+                        operation="set",
+                        backend="memory",
                         key=f"thread_{thread_id}_key_{i}",
                         value=f"thread_{thread_id}_value_{i}",
                     )
 
                     # Get
-                    result = node.execute(operation="get", backend="memory", key=f"thread_{thread_id}_key_{i}"
+                    result = node.execute(
+                        operation="get",
+                        backend="memory",
+                        key=f"thread_{thread_id}_key_{i}",
                     )
 
                     results.append(result["hit"])
@@ -565,11 +630,13 @@ class TestCachePatternOperations:
             # Set multiple keys
             keys = ["multi_1", "multi_2", "multi_3"]
             for i, key in enumerate(keys):
-                node.execute(operation="set", backend="redis", key=key, value=f"value_{i}")
+                node.execute(
+                    operation="set", backend="redis", key=key, value=f"value_{i}"
+                )
 
             # Get multiple
             result = node.execute(operation="mget", backend="redis", keys=keys)
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert len(result["values"]) == 3
         # assert result... - variable may not be defined
         # assert result... - variable may not be defined
@@ -593,8 +660,8 @@ class TestCachePatternOperations:
             }
 
             result = node.execute(operation="mset", backend="redis", items=items)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify all were set
             for key, expected_value in items.items():
@@ -612,14 +679,25 @@ class TestCachePatternOperations:
             node = CacheNode()
 
             # Set keys with patterns
-            node.execute(operation="set", backend="redis", key="user:1:name", value="Alice")
-            node.execute(operation="set", backend="redis", key="user:1:email", value="alice@example.com")
-            node.execute(operation="set", backend="redis", key="user:2:name", value="Bob")
-            node.execute(operation="set", backend="redis", key="product:1:name", value="Widget")
+            node.execute(
+                operation="set", backend="redis", key="user:1:name", value="Alice"
+            )
+            node.execute(
+                operation="set",
+                backend="redis",
+                key="user:1:email",
+                value="alice@example.com",
+            )
+            node.execute(
+                operation="set", backend="redis", key="user:2:name", value="Bob"
+            )
+            node.execute(
+                operation="set", backend="redis", key="product:1:name", value="Widget"
+            )
 
             # Find user keys
             result = node.execute(operation="keys", backend="redis", pattern="user:*")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert len(result["keys"]) == 3
             assert "user:1:name" in result["keys"]
             assert "user:1:email" in result["keys"]
@@ -641,16 +719,20 @@ class TestCacheTagging:
             node = CacheNode()
 
             # Set with tags
-            result = node.execute(operation="set", backend="memory",
+            result = node.execute(
+                operation="set",
+                backend="memory",
                 key="tagged_item",
                 value={"data": "tagged_value"},
                 tags=["user_data", "premium", "v2"],
             )
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Get by tag
-            result = node.execute(operation="get_by_tag", backend="redis", tag="user_data")
-        # assert result... - variable may not be defined
+            result = node.execute(
+                operation="get_by_tag", backend="redis", tag="user_data"
+            )
+            # assert result... - variable may not be defined
             assert len(result["keys"]) == 1
             assert "tagged_item" in result["keys"]
 
@@ -665,21 +747,47 @@ class TestCacheTagging:
             node = CacheNode()
 
             # Set multiple items with tags
-            node.execute(operation="set", backend="memory", key="tag_1", value="value1", tags=["group1"])
-            node.execute(operation="set", backend="memory", key="tag_2", value="value2", tags=["group1", "group2"]
+            node.execute(
+                operation="set",
+                backend="memory",
+                key="tag_1",
+                value="value1",
+                tags=["group1"],
             )
-            node.execute(operation="set", backend="memory", key="tag_3", value="value3", tags=["group2"])
+            node.execute(
+                operation="set",
+                backend="memory",
+                key="tag_2",
+                value="value2",
+                tags=["group1", "group2"],
+            )
+            node.execute(
+                operation="set",
+                backend="memory",
+                key="tag_3",
+                value="value3",
+                tags=["group2"],
+            )
 
             # Invalidate by tag
-            result = node.execute(operation="invalidate_tag", backend="memory", tag="group1")
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            result = node.execute(
+                operation="invalidate_tag", backend="memory", tag="group1"
+            )
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify invalidation
-            assert node.execute(operation="get", backend="memory", key="tag_1")["hit"] is False
-            assert node.execute(operation="get", backend="memory", key="tag_2")["hit"] is False
             assert (
-                node.execute(operation="get", backend="memory", key="tag_3")["hit"] is True
+                node.execute(operation="get", backend="memory", key="tag_1")["hit"]
+                is False
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="tag_2")["hit"]
+                is False
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="tag_3")["hit"]
+                is True
             )  # Not tagged with group1
 
         except ImportError:
@@ -704,8 +812,8 @@ class TestCacheWarmup:
             }
 
             result = node.execute(operation="warmup", backend="redis", data=warmup_data)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
 
             # Verify all data was loaded
             for key in warmup_data:
@@ -736,7 +844,7 @@ class TestCacheWarmup:
         # assert result... - variable may not be defined
         # assert result... - variable may not be defined
 
-            # # # mock_get.assert_called_once_with("https://api.example.com/cache-warmup")  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+        # # # mock_get.assert_called_once_with("https://api.example.com/cache-warmup")  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -764,7 +872,9 @@ class TestCacheSerialization:
             }
 
             # Set and get
-            node.execute(operation="set", backend="redis", key="json_test", value=complex_value)
+            node.execute(
+                operation="set", backend="redis", key="json_test", value=complex_value
+            )
             result = node.execute(operation="get", backend="redis", key="json_test")
         # assert result... - variable may not be defined
 
@@ -789,7 +899,9 @@ class TestCacheSerialization:
             custom_obj = CustomObject("test")
 
             # Set and get
-            node.execute(operation="set", backend="redis", key="pickle_test", value=custom_obj)
+            node.execute(
+                operation="set", backend="redis", key="pickle_test", value=custom_obj
+            )
             result = node.execute(operation="get", backend="redis", key="pickle_test")
 
             assert isinstance(result["value"], CustomObject)
@@ -810,16 +922,28 @@ class TestCacheInvalidation:
             node = CacheNode()
 
             # Set with specific TTL
-            node.execute(operation="set", backend="memory", key="timed_key", value="timed_value", ttl=2)
+            node.execute(
+                operation="set",
+                backend="memory",
+                key="timed_key",
+                value="timed_value",
+                ttl=2,
+            )
 
             # Should exist immediately
-            assert node.execute(operation="get", backend="memory", key="timed_key")["hit"] is True
+            assert (
+                node.execute(operation="get", backend="memory", key="timed_key")["hit"]
+                is True
+            )
 
             # Wait for expiration
             time.sleep(2.1)
 
             # Should be expired
-            assert node.execute(operation="get", backend="memory", key="timed_key")["hit"] is False
+            assert (
+                node.execute(operation="get", backend="memory", key="timed_key")["hit"]
+                is False
+            )
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -832,23 +956,42 @@ class TestCacheInvalidation:
             node = CacheNode()
 
             # Set parent and dependent entries
-            node.execute(operation="set", backend="memory", key="parent_key", value="parent_value")
-            node.execute(operation="set", backend="memory",
+            node.execute(
+                operation="set",
+                backend="memory",
+                key="parent_key",
+                value="parent_value",
+            )
+            node.execute(
+                operation="set",
+                backend="memory",
                 key="child_key",
                 value="child_value",
                 dependencies=["parent_key"],
             )
 
             # Both should exist
-            assert node.execute(operation="get", backend="memory", key="parent_key")["hit"] is True
-            assert node.execute(operation="get", backend="memory", key="child_key")["hit"] is True
+            assert (
+                node.execute(operation="get", backend="memory", key="parent_key")["hit"]
+                is True
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="child_key")["hit"]
+                is True
+            )
 
             # Invalidate parent
             node.execute(operation="delete", backend="memory", key="parent_key")
 
             # Child should also be invalidated
-            assert node.execute(operation="get", backend="memory", key="parent_key")["hit"] is False
-            assert node.execute(operation="get", backend="memory", key="child_key")["hit"] is False
+            assert (
+                node.execute(operation="get", backend="memory", key="parent_key")["hit"]
+                is False
+            )
+            assert (
+                node.execute(operation="get", backend="memory", key="child_key")["hit"]
+                is False
+            )
 
         except ImportError:
             pytest.skip("CacheNode not available")
@@ -866,12 +1009,17 @@ class TestCachePerformance:
 
             # Perform operations
             for i in range(100):
-                node.execute(operation="set", backend="memory", key=f"bench_{i}", value=f"value_{i}")
+                node.execute(
+                    operation="set",
+                    backend="memory",
+                    key=f"bench_{i}",
+                    value=f"value_{i}",
+                )
                 node.execute(operation="get", backend="memory", key=f"bench_{i}")
 
             # Get benchmark results
             result = node.execute(operation="benchmark", backend="memory")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             bench = result["benchmark"]
 
             assert "avg_set_time_ms" in bench
@@ -898,8 +1046,10 @@ class TestCacheErrorHandling:
             node = CacheNode()
 
             # Invalid action
-            result = node.execute(operation="invalid_action", backend="memory", key="test")
-        # assert result... - variable may not be defined
+            result = node.execute(
+                operation="invalid_action", backend="memory", key="test"
+            )
+            # assert result... - variable may not be defined
             assert "error" in result
             assert "Invalid operation" in result["error"]
 
@@ -915,13 +1065,13 @@ class TestCacheErrorHandling:
 
             # Set without key
             result = node.execute(operation="set", backend="redis", value="test")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "error" in result
             assert "key" in result["error"].lower()
 
             # Get without key
             result = node.execute(operation="get", backend="redis")
-        # assert result... - variable may not be defined
+            # assert result... - variable may not be defined
             assert "error" in result
 
         except ImportError:

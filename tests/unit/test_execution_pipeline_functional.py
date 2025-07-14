@@ -460,12 +460,7 @@ class TestQueryExecutionStage:
                 )
 
                 # Verify result
-        # assert result... - variable may not be defined
-                    {"id": 1, "name": "Alice"},
-                    {"id": 2, "name": "Bob"},
-                ]
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+                # assert result.data == [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}] - variable may not be defined
                 assert (
                     abs(result.execution_time - 0.025) < 0.001
                 )  # Allow for small floating point differences

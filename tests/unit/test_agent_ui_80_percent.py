@@ -535,7 +535,7 @@ class TestWorkflowManagement:
 
                 async def test_async():
                     result = await middleware._build_workflow_from_config(config)
-        # assert result... - variable may not be defined
+                    # assert result... - variable may not be defined
                     mock_builder.from_dict.assert_called_once_with(config)
 
                 asyncio.run(test_async())
@@ -837,9 +837,10 @@ class TestStatisticsAndEvents:
                     callback=mock_callback,
                     event_types=["workflow.started", "workflow.completed"],
                 )
-        # assert result... - variable may not be defined
-                # Verify subscription was registered with event stream
-                # This would need to be mocked based on actual EventStream implementation
+
+            # assert result... - variable may not be defined
+            # Verify subscription was registered with event stream
+            # This would need to be mocked based on actual EventStream implementation
 
             asyncio.run(test_async())
 

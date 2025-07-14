@@ -1152,10 +1152,10 @@ class TestIterativeFullWorkflow:
                 )
 
                 # Verify workflow completion
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert len(result["iterations"]) == 3  # Should stop after 3 iterations
-        # assert result... - variable may not be defined
+                # assert result... - variable may not be defined
                 assert "total_duration" in result
                 assert "resource_usage" in result
 

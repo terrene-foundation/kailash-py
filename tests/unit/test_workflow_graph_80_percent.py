@@ -85,14 +85,15 @@ class TestNodeInstance:
             from kailash.workflow.graph import NodeInstance
 
             node = NodeInstance(node_id="test_node", node_type="TestNode")
-        # assert node... - variable not defined
-        # assert node... - variable not defined
+            # assert node... - variable not defined
+            # assert node... - variable not defined
             assert isinstance(node.config, dict)
         # assert len(node...) - variable not defined
         # assert node... - variable not defined
 
         except ImportError:
             pytest.skip("NodeInstance not available")
+
     def test_node_instance_init_full(self):
         """Test NodeInstance initialization with all parameters."""
         try:
@@ -112,6 +113,7 @@ class TestNodeInstance:
 
         except ImportError:
             pytest.skip("NodeInstance not available")
+
     def test_node_instance_validation(self):
         """Test NodeInstance validation."""
         try:
@@ -128,6 +130,7 @@ class TestNodeInstance:
 
         except ImportError:
             pytest.skip("NodeInstance not available")
+
 
 class TestConnection:
     """Test Connection model."""
@@ -151,6 +154,7 @@ class TestConnection:
 
         except ImportError:
             pytest.skip("Connection not available")
+
     def test_connection_validation(self):
         """Test Connection validation."""
         try:
@@ -164,6 +168,7 @@ class TestConnection:
 
         except ImportError:
             pytest.skip("Connection not available")
+
 
 class TestCyclicConnection:
     """Test CyclicConnection model."""
@@ -191,6 +196,7 @@ class TestCyclicConnection:
 
         except ImportError:
             pytest.skip("CyclicConnection not available")
+
     def test_cyclic_connection_init_full(self):
         """Test CyclicConnection initialization with all parameters."""
         try:
@@ -223,6 +229,7 @@ class TestCyclicConnection:
         except ImportError:
             pytest.skip("CyclicConnection not available")
 
+
 class TestWorkflow:
     """Test Workflow functionality."""
 
@@ -249,6 +256,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_workflow_init_full(self):
         """Test Workflow initialization with all parameters."""
         try:
@@ -280,6 +288,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_workflow_metadata_defaults(self):
         """Test Workflow metadata default values."""
         try:
@@ -297,6 +306,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_create_node_instance_with_name(self):
         """Test creating node instance that expects name parameter."""
         try:
@@ -317,6 +327,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_create_node_instance_with_id(self):
         """Test creating node instance that expects id parameter."""
         try:
@@ -337,6 +348,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_create_node_instance_error_handling(self):
         """Test error handling in node instance creation."""
         try:
@@ -357,6 +369,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_add_node_with_instance(self):
         """Test adding a node instance to workflow."""
         try:
@@ -378,6 +391,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_add_node_with_type_string(self):
         """Test adding a node by type string."""
         try:
@@ -397,6 +411,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_add_node_duplicate_id(self):
         """Test adding node with duplicate ID."""
         try:
@@ -417,6 +432,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_add_connection_basic(self):
         """Test adding basic connection between nodes."""
         try:
@@ -443,6 +459,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_add_connection_missing_nodes(self):
         """Test adding connection with missing nodes."""
         try:
@@ -457,6 +474,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_add_cyclic_connection(self):
         """Test adding cyclic connection."""
         try:
@@ -490,6 +508,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_get_node_existing(self):
         """Test getting existing node."""
         try:
@@ -509,6 +528,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_get_node_nonexistent(self):
         """Test getting non-existent node."""
         try:
@@ -521,6 +541,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_remove_node(self):
         """Test removing node from workflow."""
         try:
@@ -542,6 +563,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_remove_node_with_connections(self):
         """Test removing node that has connections."""
         try:
@@ -569,6 +591,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_validate_no_cycles(self):
         """Test validation of DAG workflow (no cycles)."""
         try:
@@ -589,6 +612,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_validate_with_cycles_error(self):
         """Test validation error with unintentional cycles."""
         try:
@@ -612,6 +636,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_validate_empty_workflow(self):
         """Test validation of empty workflow."""
         try:
@@ -624,6 +649,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_to_dict(self):
         """Test workflow serialization to dictionary."""
         try:
@@ -650,6 +676,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_from_dict(self):
         """Test workflow deserialization from dictionary."""
         try:
@@ -686,6 +713,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_to_json(self):
         """Test workflow serialization to JSON."""
         try:
@@ -702,6 +730,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_from_json(self):
         """Test workflow deserialization from JSON."""
         try:
@@ -721,6 +750,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_to_yaml(self):
         """Test workflow serialization to YAML."""
         try:
@@ -737,6 +767,7 @@ class TestWorkflow:
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_from_yaml(self):
         """Test workflow deserialization from YAML."""
         try:
@@ -761,6 +792,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_save_and_load(self):
         """Test saving and loading workflow to/from file."""
         try:
@@ -787,7 +819,7 @@ connections: []
                     # NodeRegistry is now a singleton, mocking needs different approach
 
                     # loaded = Workflow.load(temp_file)  # Static method may not exist
-        # assert loaded... - variable not defined
+            # assert loaded... - variable not defined
 
             finally:
                 if os.path.exists(temp_file):
@@ -795,6 +827,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_get_execution_order(self):
         """Test getting topological execution order."""
         try:
@@ -821,6 +854,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_get_node_dependencies(self):
         """Test getting node dependencies."""
         try:
@@ -842,11 +876,12 @@ connections: []
 
                 # assert isinstance(deps, list)  # Depends on commented code
         # assert len(deps...) - variable not defined
-                # assert "node1" in deps  # Depends on undefined variable
-                # assert "node3" in deps  # Depends on undefined variable
+        # assert "node1" in deps  # Depends on undefined variable
+        # assert "node3" in deps  # Depends on undefined variable
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_get_node_dependents(self):
         """Test getting node dependents."""
         try:
@@ -868,11 +903,12 @@ connections: []
 
                 # assert isinstance(deps, list)  # Depends on commented code
         # assert len(deps...) - variable not defined
-                # assert "node2" in deps  # Depends on undefined variable
-                # assert "node3" in deps  # Depends on undefined variable
+        # assert "node2" in deps  # Depends on undefined variable
+        # assert "node3" in deps  # Depends on undefined variable
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_has_cycles(self):
         """Test cycle detection."""
         try:
@@ -898,6 +934,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_get_cycles(self):
         """Test getting cycle information."""
         try:
@@ -923,6 +960,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_clone(self):
         """Test workflow cloning."""
         try:
@@ -941,18 +979,19 @@ connections: []
                 # # cloned = workflow.clone("cloned_id")  # Method may not exist  # Method may not exist on WorkflowBuilder
 
                 # assert cloned.workflow_id == "cloned_id"  # Depends on commented code
-        # assert cloned... - variable not defined
-        # assert cloned... - variable not defined
-        # assert len(cloned...) - variable not defined
-        # assert len(cloned...) - variable not defined
+                # assert cloned... - variable not defined
+                # assert cloned... - variable not defined
+                # assert len(cloned...) - variable not defined
+                # assert len(cloned...) - variable not defined
 
                 # Modifying clone shouldn't affect original
                 # cloned.add_node(  # Depends on undefined variable"TestNode", "node2")
-        # assert len(cloned...) - variable not defined
+                # assert len(cloned...) - variable not defined
                 assert len(workflow.nodes) == 1
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_export_import_error_handling(self):
         """Test error handling in export/import operations."""
         try:
@@ -975,6 +1014,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_runtime_parameter_validation(self):
         """Test runtime parameter validation."""
         try:
@@ -994,6 +1034,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_node_position_tracking(self):
         """Test node position tracking for visualization."""
         try:
@@ -1013,6 +1054,7 @@ connections: []
 
         except ImportError:
             pytest.skip("Workflow not available")
+
     def test_workflow_state_wrapper_integration(self):
         """Test integration with WorkflowStateWrapper."""
         try:
