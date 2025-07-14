@@ -4,10 +4,10 @@
 
 ## 🎯 Quick Selection Guide
 
-| Your Task | Characteristics | Copy-Paste File |
-|-----------|----------------|----------------|
-| **Bug Fix** | < 4 hours, < 20 lines changed, existing functionality | [snippets/bug-fix.md](snippets/bug-fix.md) |
-| **Feature Addition** | Any new functionality, from simple to complex | [snippets/feature-implementation.md](snippets/feature-implementation.md) |
+| Your Task | Characteristics | Copy-Paste File                                                                  |
+|-----------|----------------|----------------------------------------------------------------------------------|
+| **Bug Fix** | < 4 hours, < 20 lines changed, existing functionality | [snippets/bug-fix.md](snippets/bug-fix.md)                                       |
+| **Feature Addition** | Any new functionality, from simple to complex | [snippets/.../feature-implementation.md](snippets/.../feature-implementation.md) |
 
 ## 📋 How to Use
 
