@@ -34,15 +34,18 @@ app = create_gateway(
 
 ### Multi-Channel Nexus Architecture
 ```python
-from kailash.nexus import create_nexus
+from nexus import Nexus
 
-nexus = create_nexus(
-    title="Unified Platform",
-    enable_api=True,     # REST API + WebSocket
-    enable_cli=True,     # Command-line interface
-    enable_mcp=True,     # Model Context Protocol
-    channels_synced=True # Cross-channel session sync
+app = Nexus(
+    api_port=8000,         # REST API + WebSocket
+    mcp_port=3001,         # Model Context Protocol
+    enable_auth=True,      # Enterprise authentication
+    enable_monitoring=True # Production monitoring
 )
+
+# Register workflows once, available everywhere
+app.register("data-processor", workflow)
+app.start()
 ```
 
 ### Node Selection Priority

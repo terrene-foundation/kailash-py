@@ -43,16 +43,17 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Multi-Channel Nexus Platform (v0.6.6+)
 ```python
-from kailash.nexus import create_nexus
+from nexus import Nexus
 
-nexus = create_nexus(
-    title="Unified Platform",
-    enable_api=True,     # REST API + WebSocket
-    enable_cli=True,     # Command-line interface
-    enable_mcp=True,     # Model Context Protocol
-    channels_synced=True # Cross-channel session sync
+app = Nexus(
+    api_port=8000,      # REST API + WebSocket
+    mcp_port=3001,      # Model Context Protocol
+    enable_auth=True,    # Enterprise auth
+    enable_monitoring=True  # Production monitoring
 )
-# Access same workflows via API, CLI, or MCP with unified sessions
+# Register workflows once, access via API, CLI, or MCP
+app.register("my-workflow", workflow)
+app.start()
 ```
 
 ### ❌ NEVER

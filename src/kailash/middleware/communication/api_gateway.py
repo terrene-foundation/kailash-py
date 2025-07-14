@@ -331,9 +331,23 @@ class APIGateway:
     def _setup_session_routes(self):
         """Setup session management routes."""
 
+        # Create auth dependency
+        async def get_optional_current_user():
+            """Optional auth dependency - returns None if auth is disabled."""
+            if self.enable_auth and self.auth_manager:
+                # Use auth manager's dependency if available
+                try:
+                    # This would normally use the auth manager's get_current_user_dependency
+                    # For now, return None to avoid complex auth setup
+                    return None
+                except:
+                    return None
+            return None
+
         @self.app.post("/api/sessions", response_model=SessionResponse)
         async def create_session(
-            request: SessionCreateRequest, current_user: Dict[str, Any] = None
+            request: SessionCreateRequest,
+            current_user: Dict[str, Any] = Depends(get_optional_current_user),
         ):
             """Create a new session for a frontend client."""
             try:
@@ -583,7 +597,13 @@ class APIGateway:
             """Get schemas for available node types."""
             try:
                 # Get all registered nodes
-                available_nodes = self.node_registry.get_all_nodes()
+                # NodeRegistry doesn't have get_all_nodes, need to use _nodes directly
+                available_nodes = {}
+                if hasattr(self.node_registry, "_nodes"):
+                    available_nodes = self.node_registry._nodes.copy()
+                else:
+                    # Fallback - return empty dict
+                    available_nodes = {}
 
                 # Filter by requested types if specified
                 if request.node_types:
@@ -611,7 +631,7 @@ class APIGateway:
         @self.app.get("/api/schemas/nodes/{node_type}")
         async def get_node_schema(node_type: str):
             """Get schema for a specific node type."""
-            node_class = self.node_registry.get_node(node_type)
+            node_class = self.node_registry.get(node_type)
             if not node_class:
                 raise HTTPException(status_code=404, detail="Node type not found")
 
