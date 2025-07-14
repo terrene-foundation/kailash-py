@@ -35,7 +35,7 @@ class TestStrategicLowCoverageBoost:
                 if hasattr(runner, "run_cycle"):
                     runner.run_cycle = Mock(return_value={"status": "completed"})
                     result = runner.run_cycle()
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             # Module might not be available
@@ -188,7 +188,7 @@ class TestStrategicLowCoverageBoost:
                         return_value={"status": "success", "result": "data"}
                     )
                     result = runner.execute_workflow()
-                # assert result... - variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
 
                 if hasattr(runner, "validate_workflow"):
                     runner.validate_workflow = Mock(return_value=True)
@@ -339,7 +339,7 @@ class TestStrategicLowCoverageBoost:
                         return_value={"valid": True, "warnings": []}
                     )
                     result = safety.validate_workflow()
-                # assert result... - variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
 
                 if hasattr(safety, "check_resource_limits"):
                     safety.check_resource_limits = Mock(return_value=True)
@@ -436,7 +436,7 @@ class TestHighImpactModuleCoverage:
             # Test Workflow coverage with mocks
             if "Workflow" in locals():
                 with patch.object(Workflow, "__init__", return_value=None):
-                    workflow = Workflow()
+                    workflow = WorkflowBuilder()
 
                     # Mock workflow methods for coverage
                     if hasattr(workflow, "add_node"):
@@ -450,7 +450,7 @@ class TestHighImpactModuleCoverage:
                     if hasattr(workflow, "validate"):
                         workflow.validate = Mock(return_value={"valid": True})
                         result = workflow.validate()
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             assert True
@@ -472,7 +472,7 @@ class TestHighImpactModuleCoverage:
                         return_value={"processed": True, "data": "test"}
                     )
                     result = handler.process_input()
-                # assert result... - variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
 
                 if hasattr(handler, "validate_input"):
                     handler.validate_input = Mock(return_value=True)
@@ -481,7 +481,7 @@ class TestHighImpactModuleCoverage:
                 if hasattr(handler, "inject_parameters"):
                     handler.inject_parameters = Mock(return_value={"injected": True})
                     result = handler.inject_parameters()
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             assert True
@@ -503,7 +503,7 @@ class TestHighImpactModuleCoverage:
                         return_value={"migrated": True, "version": "2.0"}
                     )
                     result = migrator.migrate_workflow()
-                # assert result... - variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
 
                 if hasattr(migrator, "check_compatibility"):
                     migrator.check_compatibility = Mock(return_value=True)

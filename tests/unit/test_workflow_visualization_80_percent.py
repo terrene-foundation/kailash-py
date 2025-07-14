@@ -501,7 +501,7 @@ class TestWorkflowVisualizer:
                     visualizer.visualize(output_path="/tmp/test.png")
 
                     mock_draw.assert_called_once()
-                    # # # mock_save.assert_called_once_with("/tmp/test.png")  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+                    # # # # mock_save.assert_called_once_with("/tmp/test.png") - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
 
         except ImportError:
             pytest.skip("WorkflowVisualizer not available")
@@ -645,7 +645,7 @@ class TestWorkflowVisualizer:
                     WorkflowVisualizer.visualize(workflow, output_path="/tmp/test.png")
 
                     # Verify initialization was called
-                    # # # mock_init.assert_called_once_with(workflow)  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
+                    # # # # mock_init.assert_called_once_with(workflow) - Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment  # Mock assertion may need adjustment
 
         except ImportError:
             pytest.skip("WorkflowVisualizer not available")

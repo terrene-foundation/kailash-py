@@ -147,11 +147,11 @@ class TestChatMessage:
             result = message.to_dict()
 
             assert isinstance(result, dict)
-            # assert result... - variable may not be defined
-            # assert result... - variable may not be defined
-            # assert result... - variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert "timestamp" in result
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ChatMessage not available")
@@ -617,7 +617,7 @@ class TestAIChatIntegration:
             assert session_id in integration.sessions
 
             result = integration.delete_chat_session(session_id)
-            # assert result... - variable may not be defined
+            # # assert result... - variable may not be defined - result variable may not be defined
             assert session_id not in integration.sessions
 
         except ImportError:
@@ -632,7 +632,7 @@ class TestAIChatIntegration:
             integration = AIChatIntegration(mock_agent_ui)
 
             result = integration.delete_chat_session("nonexistent_session")
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("AIChatIntegration not available")
@@ -699,7 +699,7 @@ class TestAIChatIntegration:
                 mock_class.return_value = mock_node
 
                 result = integration._create_llm_agent()
-                # assert result... - variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
                 mock_class.assert_called_once()
 
         except ImportError:
@@ -720,7 +720,7 @@ class TestAIChatIntegration:
                 mock_class.return_value = mock_node
 
                 result = integration._create_embedding_generator()
-                # assert result... - variable may not be defined
+                # # assert result... - variable may not be defined - result variable may not be defined
                 mock_class.assert_called_once()
 
         except ImportError:

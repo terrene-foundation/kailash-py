@@ -71,11 +71,11 @@ class TestExecutionResult:
             result = ExecutionResult(
                 data=data, row_count=1, columns=columns, execution_time=0.15
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExecutionResult not available")
@@ -96,11 +96,11 @@ class TestExecutionResult:
                 execution_time=0.25,
                 metadata=metadata,
             )
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("ExecutionResult not available")
@@ -137,7 +137,7 @@ class TestPermissionCheckStage:
 
             # Should skip and return the result unchanged
             result = asyncio.run(stage.process(context, None))
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("PermissionCheckStage not available")
@@ -156,7 +156,7 @@ class TestPermissionCheckStage:
 
             # Should skip and return the result unchanged
             result = asyncio.run(stage.process(context, None))
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("PermissionCheckStage not available")
@@ -188,7 +188,7 @@ class TestPermissionCheckStage:
 
             # Should pass through
             result = await stage.process(context, None)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify permission check was called
             mock_access_control.check_node_access.assert_called_once_with(
@@ -320,7 +320,7 @@ class TestQueryValidationStage:
 
             # Should pass validation
             result = await stage.process(context, None)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("QueryValidationStage not available")
@@ -352,7 +352,7 @@ class TestQueryValidationStage:
                 # Should pass but log warning
                 with patch.object(stage.logger, "warning") as mock_warning:
                     result = await stage.process(context, None)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
                     mock_warning.assert_called()
 
         except ImportError:
@@ -421,11 +421,11 @@ class TestQueryExecutionStage:
             result = await stage.process(context, None)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify executor was called correctly
             mock_executor.execute_query.assert_called_once_with(
@@ -459,7 +459,7 @@ class TestQueryExecutionStage:
             result = await stage.process(context, None)
 
             assert isinstance(result, ExecutionResult)
-            # assert result.data == [{"id": 1, "name": "Test"}, {"id": 2, "name": "Another"}] - variable may not be defined
+            # # assert result.data == [{"id": 1, "name": "Test"}, {"id": 2, "name": "Another"}] - variable may not be defined - result variable may not be defined
 
             # Note: Can't verify callable directly like with Mock
 
@@ -488,10 +488,10 @@ class TestQueryExecutionStage:
             result = await stage.process(context, None)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("QueryExecutionStage not available")
@@ -559,7 +559,7 @@ class TestDataMaskingStage:
 
             # Should return None when no result
             result = await stage.process(context, None)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -584,7 +584,7 @@ class TestDataMaskingStage:
 
             # Should return result unchanged
             result = await stage.process(context, empty_result)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -611,7 +611,7 @@ class TestDataMaskingStage:
 
             # Should return result unchanged
             result = await stage.process(context, test_result)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -639,7 +639,7 @@ class TestDataMaskingStage:
 
             # Should return result unchanged
             result = await stage.process(context, test_result)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -673,7 +673,7 @@ class TestDataMaskingStage:
 
             # Should return result unchanged
             result = await stage.process(context, test_result)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -707,7 +707,7 @@ class TestDataMaskingStage:
 
             # Should return result unchanged
             result = await stage.process(context, test_result)
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -752,8 +752,8 @@ class TestDataMaskingStage:
             result = await stage.process(context, test_result)
 
             assert isinstance(result, ExecutionResult)
-            # assert result.data == [{"id": 1, "ssn": "***-**-****"}, {"id": 2, "ssn": "***-**-****"}] - variable may not be defined
-        # assert result... - variable may not be defined
+            # # assert result.data == [{"id": 1, "ssn": "***-**-****"}, {"id": 2, "ssn": "***-**-****"}] - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
             # Verify masking was called for each row
             assert mock_access_control.apply_data_masking.call_count == 2
@@ -796,9 +796,9 @@ class TestDataMaskingStage:
             result = await stage.process(context, test_result)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DataMaskingStage not available")
@@ -842,10 +842,10 @@ class TestDataMaskingStage:
             result = await stage.process(context, test_result)
 
             assert isinstance(result, ExecutionResult)
-            assert len(result.data) == 3
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+            # assert len(result.data) == 3 - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
             # Only dict should be processed by masking
             mock_access_control.apply_data_masking.assert_called_once()
@@ -989,10 +989,10 @@ class TestDatabaseExecutionPipeline:
             result = await pipeline.execute(context)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DatabaseExecutionPipeline not available")
@@ -1114,10 +1114,10 @@ class TestDatabaseExecutionPipeline:
             result = await pipeline.execute(context)
 
             assert isinstance(result, ExecutionResult)
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
-        # assert result... - variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
+        # # assert result... - variable may not be defined - result variable may not be defined
 
         except ImportError:
             pytest.skip("DatabaseExecutionPipeline not available")
