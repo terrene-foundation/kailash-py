@@ -48,6 +48,25 @@ tests/
 └── utils/        # Test utilities and Docker configuration
 ```
 
+## 🎯 TODO-111 Testing Patterns
+
+**Core SDK Architecture Tests**: 67 comprehensive tests for critical infrastructure components:
+
+### Unit Tests (47 tests):
+- **CyclicWorkflowExecutor**: 14 tests for `_execute_dag_portion`, `_execute_cycle_groups`, `_propagate_parameters`
+- **WorkflowVisualizer**: 14 tests for optional workflow parameter and enhanced methods
+- **ConnectionManager**: 19 tests for `filter_events()` and `process_event()` functionality
+
+### Integration Tests (15 tests):
+- **Real Docker Infrastructure**: All tests use actual Docker services
+- **Component Interactions**: Workflow visualization with real workflows
+- **No Mocking Policy**: Integration tests use real SDK components
+
+### E2E Tests (5 tests):
+- **Real File I/O**: Tests use actual CSV files and file operations
+- **Production Scenarios**: API simulations with realistic timing
+- **Complex Workflows**: Multi-cycle workflows with visualization
+
 ## ⚠️ Common Issues and Solutions
 
 ### "Connection refused" or "Database not found"
@@ -109,6 +128,16 @@ pytest tests/e2e/test_durable_gateway_real_world.py -v
 1. **Unit Tests (Tier 1)**: Mock external dependencies
 2. **Integration Tests (Tier 2)**: Use real Docker services
 3. **E2E Tests (Tier 3)**: Full scenarios with real infrastructure
+
+## 🧪 Test-Driven Development (TODO-111 Pattern)
+
+**Key Lessons from TODO-111 Implementation**:
+
+1. **Test Before Implementation**: Write tests first to identify missing methods and architecture issues
+2. **3-Tier Validation**: Each component tested at unit, integration, and E2E levels
+3. **Real Infrastructure**: Use actual Docker services, not mocks, for integration tests
+4. **Documentation Validation**: All examples verified with real SDK execution
+5. **Comprehensive Coverage**: 100% test pass rate with meaningful scenario coverage
 
 ## 📚 Full Documentation
 

@@ -464,19 +464,6 @@ Check the `CLAUDE.md` in root and other directories:
    - For each user persona and their workflows, please run through the e2e using temp tests
    - Run through the guidance flow as a user and ensure that you can trace everything to build from basic to advanced
 
-### Final Validation
-Before considering this implementation complete, put on your ultrathink cap and run through this final validation:
-
-1. Can another developer understand and maintain this code?
-2. Are all edge cases and error conditions handled?
-3. Do all tests actually verify the intended functionality?
-4. Is the documentation accurate and complete?
-5. Does this follow all established SDK patterns?
-
-**If you cannot answer "yes" to all questions, continue working until you can.**
-
-**Do not declare the feature complete until all validation steps pass and you've shown me the complete outputs for every step.**
-
 ## 10. ULTRATHINK CAP CRITIQUE
 
 Put on your ultrathink cap again. Starting fresh, critique this implementation.

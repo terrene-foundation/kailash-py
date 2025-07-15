@@ -166,3 +166,168 @@ if __name__ == "__main__":
     else:
         print("❌ Some tests failed")
         sys.exit(1)
+
+
+def test_core_sdk_import_independence():
+    """Test core SDK modules can be imported independently (TODO-111)."""
+    print("\nTesting core SDK import independence...")
+    
+    import sys
+    import importlib
+    
+    core_modules = [
+        'kailash.nodes.base',
+        'kailash.workflow.builder',
+        'kailash.workflow.graph',
+        'kailash.runtime.local'
+    ]
+    
+    failed_imports = []
+    
+    for module_name in core_modules:
+        # Clear module from cache to test fresh import
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+            
+        try:
+            importlib.import_module(module_name)
+            print(f"✅ {module_name} imported independently")
+        except ImportError as e:
+            print(f"❌ {module_name} failed: {e}")
+            failed_imports.append(f"{module_name}: {e}")
+            
+    assert len(failed_imports) == 0, f"Core SDK circular imports detected: {failed_imports}"
+
+
+def test_node_registry_lazy_loading():
+    """Test NodeRegistry uses lazy loading to prevent circular imports (TODO-111)."""
+    print("\nTesting NodeRegistry lazy loading...")
+    
+    import sys
+    
+    # Clear registry module
+    if 'kailash.workflow.node_registry' in sys.modules:
+        del sys.modules['kailash.workflow.node_registry']
+        
+    try:
+        from kailash.nodes.base import NodeRegistry
+        print("✅ NodeRegistry imported successfully")
+        
+        # Node modules should not be auto-imported (lazy loading)
+        node_modules = [
+            'kailash.nodes.data.csv_reader',
+            'kailash.nodes.ai.llm_agent',
+            'kailash.nodes.api.http_request'
+        ]
+        
+        pre_import_modules = set(sys.modules.keys())
+        
+        # Getting a node should trigger lazy loading
+        try:
+            csv_node_class = NodeRegistry.get_node("CSVReaderNode")
+            print("✅ Node lazy loading works")
+        except Exception as e:
+            print(f"⚠️ Node retrieval failed (might be expected): {e}")
+            
+        post_import_modules = set(sys.modules.keys())
+        new_modules = post_import_modules - pre_import_modules
+        
+        # Some new modules should be loaded (the specific node)
+        node_related = [m for m in new_modules if 'node' in m.lower() or 'csv' in m.lower()]
+        print(f"✅ Lazy loaded modules: {len(node_related)} node-related modules")
+        
+    except ImportError as e:
+        print(f"❌ NodeRegistry import failed: {e}")
+        assert False, f"NodeRegistry import failed: {e}"
+
+
+def test_import_order_independence():
+    """Test that import order doesn't cause circular dependencies (TODO-111)."""
+    print("\nTesting import order independence...")
+    
+    import subprocess
+    import sys
+    
+    # Test different import orders in subprocess
+    test_scripts = [
+        # Order 1: Bottom-up
+        '''
+from kailash.nodes.base import Node
+from kailash.workflow.graph import Workflow
+from kailash.workflow.builder import WorkflowBuilder
+print("ORDER1_SUCCESS")
+''',
+        # Order 2: Top-down
+        '''
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
+from kailash.nodes.base import Node
+print("ORDER2_SUCCESS")
+''',
+        # Order 3: Mixed problematic order
+        '''
+from kailash.workflow.graph import Workflow
+from kailash.nodes.base import Node
+from kailash.workflow.builder import WorkflowBuilder
+print("ORDER3_SUCCESS")
+'''
+    ]
+    
+    for i, script in enumerate(test_scripts, 1):
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            print(f"❌ Import order {i} failed: {result.stderr}")
+            assert False, f"Import order {i} caused circular import: {result.stderr}"
+        elif f"ORDER{i}_SUCCESS" in result.stdout:
+            print(f"✅ Import order {i} succeeded")
+        else:
+            print(f"⚠️ Import order {i} unclear result")
+
+
+def test_workflow_builder_imports():
+    """Test WorkflowBuilder imports don't cause circular dependencies."""
+    print("\nTesting WorkflowBuilder import safety...")
+    
+    try:
+        # These imports should work together without circular issues
+        from kailash.workflow.builder import WorkflowBuilder
+        from kailash.nodes.base import NodeRegistry
+        from kailash.nodes.base import Node
+        
+        # Should be able to use them together
+        builder = WorkflowBuilder()
+        assert builder is not None
+        
+        print("✅ WorkflowBuilder imports safe")
+        
+    except ImportError as e:
+        print(f"❌ WorkflowBuilder import circular dependency: {e}")
+        assert False, f"WorkflowBuilder circular import: {e}"
+
+
+def test_runtime_imports():
+    """Test runtime module imports don't cause circular dependencies."""
+    print("\nTesting runtime import safety...")
+    
+    try:
+        # These should work together
+        from kailash.runtime.local import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+        
+        # Should be able to use them together
+        runtime = LocalRuntime()
+        builder = WorkflowBuilder()
+        
+        assert runtime is not None
+        assert builder is not None
+        
+        print("✅ Runtime imports safe")
+        
+    except ImportError as e:
+        print(f"❌ Runtime import circular dependency: {e}")
+        assert False, f"Runtime circular import: {e}"

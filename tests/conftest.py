@@ -25,7 +25,7 @@ from kailash.access_control import (
     WorkflowPermission,
 )
 from kailash.manifest import KailashManifest
-from kailash.nodes.base import Node, NodeMetadata, NodeParameter
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter, NodeRegistry
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage
@@ -199,6 +199,10 @@ def check_ollama_connection():
 # ===========================
 
 
+# Register MockNode globally for all tests that need it
+from kailash.nodes.base import register_node
+
+@register_node()
 class MockNode(Node):
     """Mock node for testing."""
 
@@ -241,6 +245,49 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+def pytest_configure(config):
+    """Add custom markers."""
+    config.addinivalue_line(
+        "markers", "registry_isolation: mark test as needing node registry isolation"
+    )
+
+
+@pytest.fixture
+def _ensure_test_nodes_registered():
+    """Ensure test-specific nodes are registered when needed."""
+    # This fixture can be used by tests that need specific node registrations
+    pass
+
+
+@pytest.fixture(autouse=True, scope="function")
+def manage_node_registry():
+    """Smart node registry management to handle test interdependencies."""
+    # Capture initial state - save the actual registry state
+    initial_registry = NodeRegistry.list_nodes().copy()
+    initial_nodes = set(initial_registry.keys())
+    
+    yield
+    
+    # After test, restore to exact initial state
+    current_nodes = set(NodeRegistry.list_nodes().keys())
+    
+    # If registry has changed at all, restore it completely
+    if current_nodes != initial_nodes:
+        # Clear the registry
+        NodeRegistry.clear()
+        
+        # Restore exact initial state
+        for name, node_class in initial_registry.items():
+            try:
+                NodeRegistry.register(node_class, name)
+            except Exception:
+                # If we can't register, try direct assignment
+                try:
+                    NodeRegistry._node_registry[name] = node_class
+                except:
+                    pass
 
 
 @pytest.fixture(scope="session")

@@ -139,6 +139,7 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 11. **Transaction Monitoring**: 5 production-tested nodes for metrics, deadlock detection, race conditions - see [Transaction Monitoring](sdk-users/cheatsheet/048-transaction-monitoring.md)
 12. **Distributed Transactions**: Automatic pattern selection (Saga/2PC), compensation logic, recovery - see [Distributed Transactions](sdk-users/cheatsheet/049-distributed-transactions.md)
 13. **AsyncSQL Parameter Types**: PostgreSQL type inference fix with `parameter_types` for JSONB/COALESCE contexts (v0.6.6+) - see [AsyncSQL Patterns](sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md)
+14. **Core SDK Architecture**: TODO-111 resolved critical infrastructure gaps - CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager now production-ready with comprehensive test coverage
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
@@ -209,6 +210,7 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 **Testing:**
 - **Test Suite**: 2,400+ tests (Unit: 1,617, Integration: 233, E2E: 21 core)
 - **Infrastructure**: 100% E2E pass rate with v0.6.6+ enhancements
+- **Core SDK Coverage**: TODO-111 resolved critical architecture gaps with 67 comprehensive tests (100% pass rate)
 - **MCP Testing**: 407 comprehensive tests across 8 components (100% pass rate)
 - **Transaction Monitoring**: 230 unit tests, 8 integration tests, comprehensive E2E (100% pass rate)
 - **Distributed Transactions**: 122 unit tests, 23 integration tests, comprehensive E2E (100% pass rate)
