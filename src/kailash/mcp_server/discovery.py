@@ -590,6 +590,27 @@ class NetworkDiscovery:
         except (json.JSONDecodeError, KeyError) as e:
             logger.debug(f"Invalid announcement from {addr[0]}: {e}")
 
+    async def _is_port_open(self, host: str, port: int, timeout: float = 1.0) -> bool:
+        """Check if a port is open on a host.
+        
+        Args:
+            host: Host to check
+            port: Port to check
+            timeout: Connection timeout
+            
+        Returns:
+            True if port is open, False otherwise
+        """
+        try:
+            # Create socket connection with timeout
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            return result == 0
+        except (OSError, socket.error, socket.timeout):
+            return False
+
     async def scan_network(
         self, network: str = "192.168.1.0/24", timeout: float = 5.0
     ) -> List[ServerInfo]:

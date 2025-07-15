@@ -321,7 +321,8 @@ class TestModuleDiscovery:
 
                 # Check if module has common attributes
                 if hasattr(module, "__file__"):
-                    # # assert module.__file__ is not None  # Node attributes not accessible directly  # Node attributes not accessible directly
+                    # assert module.__file__ is not None  # Node attributes not accessible directly
+                    pass
 
                 if hasattr(module, "__package__"):
                     assert isinstance(module.__package__, (str, type(None)))
@@ -360,7 +361,8 @@ class TestModuleDiscovery:
 
                 # Check basic module properties
                 if hasattr(module, "__name__"):
-                    # # # # assert module.__name__ == module_name  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
+                    # assert module.__name__ == module_name  # Node attributes not accessible directly
+                    pass
 
             except (KeyError, AttributeError):
                 # Module might have been unloaded or have issues

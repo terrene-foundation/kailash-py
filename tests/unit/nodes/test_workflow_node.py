@@ -6,14 +6,29 @@ from typing import Any
 import pytest
 import yaml
 
-from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.sdk_exceptions import NodeConfigurationError
 from kailash.utils.export import WorkflowExporter
 from kailash.workflow.graph import Workflow
 
 
-@register_node()
+@pytest.fixture(autouse=True)
+def register_test_nodes():
+    """Register test nodes for this module only."""
+    # Register the test nodes
+    NodeRegistry.register(InputTestNode, "InputTestNode")
+    NodeRegistry.register(ProcessorTestNode, "ProcessorTestNode")
+    yield
+    # Clean up after tests
+    for node_name in ["InputTestNode", "ProcessorTestNode"]:
+        try:
+            NodeRegistry._node_registry.pop(node_name, None)
+        except:
+            pass
+
+
+# Removed @register_node() to prevent test pollution
 class InputTestNode(Node):
     """Test node that provides input data."""
 
@@ -32,7 +47,7 @@ class InputTestNode(Node):
         return {"output": value * 2}
 
 
-@register_node()
+# Removed @register_node() to prevent test pollution
 class ProcessorTestNode(Node):
     """Test node that processes data."""
 
