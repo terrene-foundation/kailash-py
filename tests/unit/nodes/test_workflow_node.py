@@ -23,7 +23,7 @@ def register_test_nodes():
     # Clean up after tests
     for node_name in ["InputTestNode", "ProcessorTestNode"]:
         try:
-            NodeRegistry._node_registry.pop(node_name, None)
+            NodeRegistry._nodes.pop(node_name, None)
         except:
             pass
 

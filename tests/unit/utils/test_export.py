@@ -22,6 +22,15 @@ class MockNode(Node):
 class TestWorkflowExporter:
     """Test WorkflowExporter functionality."""
 
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Ensure nodes are registered
+        from kailash.nodes.base import NodeRegistry
+        from kailash.nodes.data import CSVReaderNode
+
+        if "CSVReaderNode" not in NodeRegistry._nodes:
+            NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
+
     def test_exporter_initialization(self):
         """Test WorkflowExporter can be initialized."""
         exporter = WorkflowExporter()

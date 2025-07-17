@@ -323,9 +323,6 @@ class TestBearerTokenAuth:
             auth.authenticate(123)
 
 
-@pytest.mark.skipif(
-    not hasattr(JWTAuth, "__init__"), reason="JWT dependencies not available"
-)
 class TestJWTAuth:
     """Test JWT authentication provider."""
 

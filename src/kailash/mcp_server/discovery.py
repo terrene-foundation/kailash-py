@@ -486,7 +486,7 @@ class FileBasedDiscovery(DiscoveryBackend):
             raise
 
 
-class NetworkDiscovery:
+class NetworkDiscovery(asyncio.DatagramProtocol):
     """Network-based discovery using UDP broadcast/multicast."""
 
     DISCOVERY_PORT = 8765
@@ -534,6 +534,40 @@ class NetworkDiscovery:
             self._transport.close()
             self._transport = None
             self._protocol = None
+
+    # AsyncIO DatagramProtocol methods
+    def connection_made(self, transport):
+        """Called when a connection is made."""
+        self._transport = transport
+        logger.info(f"Network discovery protocol connected on port {self.port}")
+
+    def datagram_received(self, data, addr):
+        """Called when a datagram is received."""
+        try:
+            message = json.loads(data.decode())
+            # Try to get current event loop
+            try:
+                asyncio.get_running_loop()
+                asyncio.create_task(self._handle_discovery_message(message, addr))
+            except RuntimeError:
+                # No event loop, run synchronously
+                asyncio.run(self._handle_discovery_message(message, addr))
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON received from {addr}")
+        except Exception as e:
+            logger.error(f"Error handling datagram from {addr}: {e}")
+
+    def error_received(self, exc):
+        """Called when an error is received."""
+        logger.error(f"Network discovery protocol error: {exc}")
+
+    def connection_lost(self, exc):
+        """Called when the connection is lost."""
+        if exc:
+            logger.error(f"Network discovery connection lost: {exc}")
+        else:
+            logger.info("Network discovery connection closed")
+        self.running = False
 
     async def start_discovery_listener(self):
         """Start listening for server announcements."""
@@ -592,12 +626,12 @@ class NetworkDiscovery:
 
     async def _is_port_open(self, host: str, port: int, timeout: float = 1.0) -> bool:
         """Check if a port is open on a host.
-        
+
         Args:
             host: Host to check
             port: Port to check
             timeout: Connection timeout
-            
+
         Returns:
             True if port is open, False otherwise
         """
@@ -776,22 +810,6 @@ class NetworkDiscovery:
 
         else:
             logger.debug(f"Unknown message type: {msg_type}")
-
-    def datagram_received(self, data: bytes, addr: tuple):
-        """Handle received datagram (part of asyncio protocol)."""
-        try:
-            message = json.loads(data.decode())
-            # Try to get current event loop
-            try:
-                loop = asyncio.get_running_loop()
-                asyncio.create_task(self._handle_discovery_message(message, addr))
-            except RuntimeError:
-                # No event loop, run synchronously
-                asyncio.run(self._handle_discovery_message(message, addr))
-        except json.JSONDecodeError:
-            logger.warning(f"Invalid JSON received from {addr}")
-        except Exception as e:
-            logger.error(f"Error handling datagram from {addr}: {e}")
 
 
 class ServiceRegistry:

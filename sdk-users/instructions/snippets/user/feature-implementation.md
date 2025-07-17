@@ -214,7 +214,7 @@ Do not write new tests without checking that existing ones can be modified to in
 
 **Always read the detailed todo entries before starting implementation. Extend from core SDK, don't create.**
 
-Implement in small, verifiable chunks. After each component, please test your implementation thoroughly. 
+Implement in small, verifiable chunks. After each component, please test your implementation thoroughly.
 **Do not proceed to the next component until the current one is completely working.**
 
 ### Implementation Checkpoints
@@ -331,7 +331,6 @@ Verify test coverage:
     - Ensure they follow the existing patterns and policies
     - Do not remove tests that are not implemented yet
 
-
 Ensure that no tests are trivial:
 - Ensure tests actually verify intended functionality
 - Cover edge cases and error conditions
@@ -346,9 +345,15 @@ Ensure that no tests are trivial:
 
 ## 7. DOCUMENTATION VALIDATION
 
-Validate ALL documentation updates. For each doc file you've changed, you MUST create temporary tests to verify every code example actually works.
+Validate ALL documentation updates.
 
-For each doc file changed:
+**Important implementation guidance docs**:
+- `sdk-users/developer/` - Core implementation guides and patterns
+- `sdk-users/nodes/` - Node selection and usage patterns
+- `sdk-users/cheatsheet/` - Copy-paste implementation patterns
+- `sdk-users/migration-guides/` - Migration guides for breaking changes
+
+For each doc file you've changed, you MUST create temporary tests to verify every code example actually works.
 1. Create a temp test file (e.g., `/tmp/test_docs_feature.py`)
 2. Copy-paste every code example from the documentation
 3. Add necessary imports and setup code
@@ -526,3 +531,8 @@ Then, review this project without any prejudice:
 1. Never use git reset --hard or git reset --soft.
 2. Always check all local changes (from all sessions) and add/stage all modified and untracked files.
 3. Always stash any uncommitted changes before any potentially destructive git operations.
+
+# 12. Release versions
+1. Please follow `# contrib (removed)/development/workflows/release-checklist.md`
+2. Continue with release process.
+3. Release to github and pypi.

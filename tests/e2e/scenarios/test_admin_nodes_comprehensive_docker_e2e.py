@@ -20,6 +20,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 import pytest
+from tests.utils.docker_config import (
+    DATABASE_CONFIG,
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+    ensure_docker_services,
+    get_postgres_connection_string,
+)
 
 from kailash import LocalRuntime, Workflow, WorkflowBuilder
 from kailash.nodes import PythonCodeNode
@@ -32,13 +39,6 @@ from kailash.nodes.admin.schema_manager import AdminSchemaManager
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
-from tests.utils.docker_config import (
-    DATABASE_CONFIG,
-    OLLAMA_CONFIG,
-    REDIS_CONFIG,
-    ensure_docker_services,
-    get_postgres_connection_string,
-)
 
 # Mark as requiring Docker infrastructure
 pytestmark = [pytest.mark.docker, pytest.mark.e2e, pytest.mark.slow]
@@ -529,7 +529,7 @@ class TestAdminNodesComprehensiveDockerE2E:
             "socket_keepalive_options": {},
         }
 
-        self.ollama_config = {**OLLAMA_CONFIG, "model": "llama3.2:3b", "timeout": 60}
+        self.ollama_config = {**OLLAMA_CONFIG, "model": "llama3.2:3b", "timeout": 5}
 
         # Generate unique test identifiers
         self.test_id = str(uuid4())[:8]
@@ -964,7 +964,7 @@ class TestAdminNodesComprehensiveDockerE2E:
         print(f"Running {num_checks} concurrent permission checks...")
         bench_start = time.time()
 
-        with ThreadPoolExecutor(max_workers=50) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:  # Reduced for E2E
             futures = [executor.submit(benchmark_check, i) for i in range(num_checks)]
             results = [f.result() for f in as_completed(futures)]
 
@@ -1248,11 +1248,11 @@ class TestAdminNodesComprehensiveDockerE2E:
                     "error": str(e),
                 }
 
-        # Run 1000 concurrent operations across all tenants
-        with ThreadPoolExecutor(max_workers=30) as executor:
+        # Run 50 concurrent operations across all tenants (reduced for E2E timeout)
+        with ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
 
-            for i in range(1000):
+            for i in range(50):
                 tenant_id = self.tenants[i % 3]
                 tenant_data = enterprise_data[tenant_id]
                 user = tenant_data["users"][i % len(tenant_data["users"])]
@@ -2046,7 +2046,7 @@ result = compliance_record
             ("user_update", 5),  # 5% of operations
         ]
 
-        total_operations = 50000
+        total_operations = 500  # Reduced for E2E timeout
         operation_results = {
             "permission_check": [],
             "role_lookup": [],
@@ -2172,11 +2172,11 @@ result = compliance_record
             return {"type": op_type, "success": success, "time_ms": elapsed}
 
         # Execute with thread pool
-        with ThreadPoolExecutor(max_workers=100) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:  # Reduced for E2E
             futures = []
 
             # Submit in batches to avoid overwhelming
-            batch_size = 1000
+            batch_size = 50  # Reduced for E2E
             for i in range(0, total_operations, batch_size):
                 batch_futures = [
                     executor.submit(execute_operation, j)

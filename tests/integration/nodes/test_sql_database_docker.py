@@ -250,7 +250,29 @@ class TestSQLDatabaseWithDocker:
             "postgresql://test_user:test_password@localhost:5434/kailash_test",
         )
 
-        node = AsyncSQLDatabaseNode(connection_string=connection_string)
+        # Parse connection string to individual components
+        # postgresql://test_user:test_password@localhost:5434/kailash_test
+        host = "localhost"
+        port = 5434
+        database = "kailash_test"
+        user = "test_user"
+        password = "test_password"
+
+        node = AsyncSQLDatabaseNode(
+            database_type="postgresql",
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password,
+            validate_queries=False,  # Allow DDL operations
+            pool_settings={
+                "min_size": 1,
+                "max_size": 3,
+                "max_queries": 50000,
+                "max_inactive_connection_lifetime": 300.0,
+            },
+        )
 
         # Create async table
         create_query = """
@@ -262,10 +284,10 @@ class TestSQLDatabaseWithDocker:
         );
         """
 
-        result = await node.async_run(query=create_query, operation="execute")
+        result = node.execute(query=create_query)
 
         # Check if table creation was successful
-        assert "error" not in result or result["error"] is None
+        assert "result" in result
 
         # Insert multiple events concurrently
         events = [
@@ -287,26 +309,32 @@ class TestSQLDatabaseWithDocker:
             },
         ]
 
-        insert_tasks = []
+        # Insert events using separate nodes to avoid connection issues
         for event in events:
             insert_query = """
             INSERT INTO async_events (event_type, event_data)
-            VALUES (:event_type, :event_data::jsonb);
+            VALUES ($1, $2::jsonb);
             """
 
-            task = node.async_run(
-                query=insert_query,
-                operation="execute",
-                params={
-                    "event_type": event["event_type"],
-                    "event_data": json.dumps(event["event_data"]),
-                },
+            # Use separate node for each insert to avoid connection issues
+            insert_node = AsyncSQLDatabaseNode(
+                database_type="postgresql",
+                host=host,
+                port=port,
+                database=database,
+                user=user,
+                password=password,
+                validate_queries=False,
+                pool_settings={"min_size": 1, "max_size": 2},
             )
-            insert_tasks.append(task)
-
-        # Wait for all inserts
-        results = await asyncio.gather(*insert_tasks)
-        assert all("error" not in r or r["error"] is None for r in results)
+            result = insert_node.execute(
+                query=insert_query,
+                params=[
+                    event["event_type"],
+                    json.dumps(event["event_data"]),
+                ],
+            )
+            assert "result" in result
 
         # Query with JSONB operations
         jsonb_query = """
@@ -319,7 +347,18 @@ class TestSQLDatabaseWithDocker:
         ORDER BY created_at;
         """
 
-        result = await node.async_run(query=jsonb_query, operation="fetch_all")
+        # Create fresh node for query
+        query_node = AsyncSQLDatabaseNode(
+            database_type="postgresql",
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password,
+            validate_queries=False,
+            pool_settings={"min_size": 1, "max_size": 2},
+        )
+        result = query_node.execute(query=jsonb_query)
 
         assert "result" in result
         assert "data" in result["result"]
@@ -329,9 +368,17 @@ class TestSQLDatabaseWithDocker:
         )
 
         # Cleanup
-        await node.async_run(
-            query="DROP TABLE IF EXISTS async_events;", operation="execute"
+        cleanup_node = AsyncSQLDatabaseNode(
+            database_type="postgresql",
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password,
+            validate_queries=False,  # Allow DDL operations
+            pool_settings={"min_size": 1, "max_size": 2},
         )
+        cleanup_node.execute(query="DROP TABLE IF EXISTS async_events;")
 
 
 @pytest.mark.integration

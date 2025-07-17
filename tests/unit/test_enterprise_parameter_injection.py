@@ -4,6 +4,9 @@ from typing import Any, Dict
 
 import pytest
 
+# Ensure nodes are registered for tests
+from kailash.nodes.base import NodeRegistry
+from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.parameter_injector import (
     DeferredConfigNode,
@@ -13,10 +16,13 @@ from kailash.runtime.parameter_injector import (
 )
 from kailash.workflow import WorkflowBuilder
 
+if "PythonCodeNode" not in NodeRegistry._nodes:
+    NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+
 
 def test_deferred_oauth2_node_creation():
     """Test creating a deferred OAuth2 node."""
-    
+
     try:
         # Create node without connection parameters
         node = create_deferred_oauth2(name="test_oauth")
@@ -52,16 +58,24 @@ def test_deferred_sql_node_creation():
         pass  # ImportError will cause test failure as intended
 
 
-@pytest.mark.skip(reason="Test interdependency issue - passes individually but fails in full suite")
 def test_parameter_injection_workflow():
     """Test parameter injection in a workflow context."""
+
+    # Ensure PythonCodeNode is registered within test
+    from kailash.nodes.base import NodeRegistry
+    from kailash.nodes.code import PythonCodeNode
+
+    if "PythonCodeNode" not in NodeRegistry._nodes:
+        NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
 
     try:
         workflow = WorkflowBuilder()
 
         # Add a deferred SQL node that will receive connection params at runtime
         sql_node = create_deferred_sql(name="dynamic_sql")
-        workflow.add_node(sql_node, "database_query")  # Use node instance pattern with explicit ID
+        workflow.add_node(
+            sql_node, "database_query"
+        )  # Use node instance pattern with explicit ID
 
         # Add a simple code node to verify the flow
         workflow.add_node(
@@ -130,7 +144,7 @@ def test_connection_parameter_extraction():
             "token_url": "https://auth.example.com/token",
             "client_id": "test_client_id",
             "scope": "read write",
-            "additional_data": "non_connection_param"
+            "additional_data": "non_connection_param",
         }
 
         node.set_runtime_config(**parameters)
@@ -149,16 +163,13 @@ def test_deferred_config_node_base():
 
     try:
         from kailash.nodes.api.http import HTTPRequestNode
-        
-        # Create a basic deferred node
-        node = create_deferred_node(
-            node_class=HTTPRequestNode, 
-            name="test_deferred"
-        )
 
-        assert hasattr(node, '_is_initialized')
+        # Create a basic deferred node
+        node = create_deferred_node(node_class=HTTPRequestNode, name="test_deferred")
+
+        assert hasattr(node, "_is_initialized")
         assert not node._is_initialized
-        assert hasattr(node, 'set_runtime_config')
-        assert hasattr(node, 'get_effective_config')
+        assert hasattr(node, "set_runtime_config")
+        assert hasattr(node, "get_effective_config")
     except ImportError:
         pass  # ImportError will cause test failure as intended
