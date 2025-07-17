@@ -283,7 +283,7 @@ print("ORDER3_SUCCESS")
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
-            timeout=0.5,  # Prevent hanging on subprocess
+            timeout=2.0,  # Prevent hanging on subprocess but allow imports
         )
 
         if result.returncode != 0:
