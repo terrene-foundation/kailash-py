@@ -50,6 +50,7 @@ import ast
 import importlib.util
 import inspect
 import logging
+import os
 import resource
 import traceback
 from collections.abc import Callable
@@ -467,7 +468,7 @@ class CodeExecutor:
                 try:
                     # Skip scipy in CI due to version conflicts
                     if module_name == "scipy" and os.environ.get("CI"):
-                        logger.warning(f"Skipping scipy import in CI environment")
+                        logger.warning("Skipping scipy import in CI environment")
                         continue
                     module = importlib.import_module(module_name)
                     namespace[module_name] = module

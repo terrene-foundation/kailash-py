@@ -37,20 +37,23 @@ class TestAccessControlledRuntime:
 
     def setup_method(self):
         """Set up test fixtures."""
-        # Ensure PythonCodeNode is registered
-        from tests.node_registry_utils import ensure_nodes_registered
-
-        # First ensure nodes are registered
-        ensure_nodes_registered()
-
-        # Double-check that PythonCodeNode is available
+        # Clear and restore registry to ensure clean state
         from kailash.nodes.base import NodeRegistry
 
-        if "PythonCodeNode" not in NodeRegistry._nodes:
-            # Force import if still not registered
-            from kailash.nodes.code.python import PythonCodeNode
+        NodeRegistry._nodes.clear()
 
-            NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+        # Import all nodes to trigger registration
+        # Force reimport to ensure decorators fire
+        import importlib
+
+        import kailash.nodes
+
+        importlib.reload(kailash.nodes)
+
+        # Ensure nodes are actually registered
+        from tests.node_registry_utils import ensure_nodes_registered
+
+        ensure_nodes_registered()
 
     def test_init_with_user_context(self):
         """Test initialization with user context."""
@@ -85,8 +88,9 @@ class TestAccessControlledRuntime:
 
     def test_execute_with_disabled_access_control(self):
         """Test execute method when access control is disabled (default)."""
-        # Import PythonCodeNode which auto-registers itself
-        import kailash.nodes  # This imports all nodes and registers them
+        # Use MockNode which is always available in tests
+        # Import to ensure MockNode is registered via @register_node decorator
+        import tests.conftest  # noqa: F401
 
         user = UserContext(
             user_id="test_user",
@@ -97,11 +101,9 @@ class TestAccessControlledRuntime:
 
         runtime = AccessControlledRuntime(user_context=user)
 
-        # Create a simple workflow
+        # Create a simple workflow using MockNode
         builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode", "test_node", {"code": "result = {'result': 'success'}"}
-        )
+        builder.add_node("MockNode", "test_node", {"value": 2.5})
         workflow = builder.build()
 
         # Should execute without access control checks (default behavior)
@@ -110,7 +112,7 @@ class TestAccessControlledRuntime:
         assert result is not None
         assert run_id is not None
         assert "test_node" in result
-        assert result["test_node"]["result"]["result"] == "success"
+        assert result["test_node"]["result"] == 5.0  # MockNode doubles the value
 
     def test_execute_with_enabled_access_control_allowed(self):
         """Test execute method with access control enabled and permission granted."""
@@ -214,11 +216,12 @@ class TestAccessControlledRuntime:
 
         runtime = AccessControlledRuntime(user_context=user)
 
+        # Import to ensure MockNode is registered via @register_node decorator
+        import tests.conftest  # noqa: F401
+
         # Create original workflow
         builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode", "test_node", {"code": "result = {'result': 'original'}"}
-        )
+        builder.add_node("MockNode", "test_node", {"value": 4.0})
         original_workflow = builder.build()
 
         # Create controlled workflow
