@@ -12,10 +12,8 @@ from kailash.workflow.builder import WorkflowBuilder
 
 def _ensure_mock_node_registered():
     """Ensure MockNode is registered for string-based references."""
-    from kailash.nodes.base import NodeRegistry
-
-    if "MockNode" not in NodeRegistry._nodes:
-        NodeRegistry.register(MockNode, "MockNode")
+    # Import to trigger @register_node decorator
+    import tests.conftest  # noqa: F401
 
 
 class TestWorkflowBuilderUnification:
