@@ -16,6 +16,12 @@ import pytest
 import requests
 import yaml
 
+# Import isolation configuration
+from tests.conftest_isolation import pytest_addoption as add_isolation_options
+from tests.conftest_isolation import pytest_collection_modifyitems as apply_isolation
+from tests.conftest_isolation import pytest_configure as configure_isolation
+from tests.conftest_isolation import pytest_runtest_setup as setup_isolation
+
 # Import timeout configuration
 from tests.conftest_timeouts import pytest_collection_modifyitems as apply_timeouts
 from tests.node_registry_utils import ensure_nodes_registered
@@ -60,7 +66,7 @@ asyncio.set_event_loop_policy(
 )
 
 # Configure pytest-asyncio to use strict mode
-pytest_plugins = ("pytest_asyncio",)
+pytest_plugins = ("pytest_asyncio", "pytest_forked")
 
 # ===========================
 # SDK Infrastructure Support
@@ -121,6 +127,12 @@ def start_sdk_dev_infrastructure():
 # ===========================
 
 
+def pytest_addoption(parser):
+    """Add command-line options."""
+    # Add isolation options
+    add_isolation_options(parser)
+
+
 def pytest_configure(config):
     """Configure pytest with custom settings and markers."""
     # Start SDK infrastructure if needed
@@ -144,11 +156,17 @@ def pytest_configure(config):
     for marker in markers:
         config.addinivalue_line("markers", marker)
 
+    # Also configure isolation markers
+    configure_isolation(config)
+
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle infrastructure requirements and timeouts."""
     # Apply timeout configuration first
     apply_timeouts(config, items)
+
+    # Apply isolation handling
+    apply_isolation(config, items)
 
     # Check service availability for conditional skipping
     import asyncio
@@ -260,13 +278,6 @@ def event_loop():
     loop.close()
 
 
-def pytest_configure(config):
-    """Add custom markers."""
-    config.addinivalue_line(
-        "markers", "registry_isolation: mark test as needing node registry isolation"
-    )
-
-
 @pytest.fixture
 def _ensure_test_nodes_registered():
     """Ensure test-specific nodes are registered when needed."""
@@ -277,22 +288,9 @@ def _ensure_test_nodes_registered():
 @pytest.fixture(autouse=True, scope="function")
 def manage_node_registry():
     """Smart node registry management to handle test interdependencies."""
-    from tests.node_registry_utils import (
-        ensure_nodes_registered,
-        restore_registry,
-        save_and_clear_registry,
-    )
-
-    # Capture initial state and optionally clear
-    initial_nodes = save_and_clear_registry()
-
-    # Ensure SDK nodes are available
-    ensure_nodes_registered()
-
+    # This fixture is now handled by isolate_global_state
+    # We keep it for backward compatibility but it does nothing
     yield
-
-    # Restore to exact initial state
-    restore_registry(initial_nodes, ensure_sdk_nodes=True)
 
 
 @pytest.fixture(scope="session")
@@ -901,8 +899,14 @@ def isolate_global_state():
     from kailash.nodes.base import NodeRegistry
     from kailash.nodes.data.async_connection import AsyncConnectionManager
 
-    # Save original NodeRegistry state
-    original_nodes = NodeRegistry._nodes.copy()
+    # In forked processes, we need to ensure nodes are registered first
+    if len(NodeRegistry._nodes) == 0:
+        from tests.node_registry_utils import ensure_nodes_registered
+
+        ensure_nodes_registered()
+
+    # Don't save/restore node classes - just track what was added
+    original_node_names = set(NodeRegistry._nodes.keys())
     original_node_instance = NodeRegistry._instance
 
     # Save original AsyncConnectionManager state
@@ -913,9 +917,15 @@ def isolate_global_state():
 
     yield
 
-    # Restore NodeRegistry state
-    NodeRegistry._nodes.clear()
-    NodeRegistry._nodes.update(original_nodes)
+    # Clean up only test-added nodes, keep SDK nodes
+    current_node_names = set(NodeRegistry._nodes.keys())
+    test_added_nodes = current_node_names - original_node_names
+
+    # Remove only the nodes added during the test
+    for node_name in test_added_nodes:
+        NodeRegistry._nodes.pop(node_name, None)
+
+    # Restore instance
     NodeRegistry._instance = original_node_instance
 
     # Restore AsyncConnectionManager state
@@ -1132,12 +1142,3 @@ def isolated_workflow_builder():
 
     # Cleanup
     builder.clear()
-
-
-def pytest_configure(config):
-    """Add custom markers for test organization."""
-    config.addinivalue_line(
-        "markers", "needs_isolation: Test requires complete isolation"
-    )
-    config.addinivalue_line("markers", "modifies_registry: Test modifies NodeRegistry")
-    config.addinivalue_line("markers", "uses_singletons: Test uses singleton patterns")

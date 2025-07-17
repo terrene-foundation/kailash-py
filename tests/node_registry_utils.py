@@ -1,5 +1,7 @@
 """Centralized utilities for managing NodeRegistry in tests."""
 
+import os
+
 from kailash.nodes.base import NodeRegistry
 
 
@@ -9,25 +11,74 @@ def ensure_nodes_registered():
     This function should be called after any operation that clears the registry
     to ensure all standard SDK nodes are available for tests.
     """
+    import importlib
+    import logging
+    import sys
+
+    # Debug: log the current state
+    logging.debug(
+        f"ensure_nodes_registered called. Current registry size: {len(NodeRegistry._nodes)}"
+    )
+
+    # First, check if nodes are already registered
+    if NodeRegistry._nodes:
+        # If we already have nodes, just ensure we have the common ones
+        required_nodes = [
+            "PythonCodeNode",
+            "CSVReaderNode",
+            "HTTPRequestNode",
+            "SQLDatabaseNode",
+        ]
+        missing = [node for node in required_nodes if node not in NodeRegistry._nodes]
+        if not missing:
+            logging.debug("All required nodes already present")
+            return  # All required nodes present
+
+    # Don't clear module cache in non-forked mode to preserve class identities
+    # Only clear in forked processes where we have no choice
+    if os.environ.get("_PYTEST_FORKED"):
+        modules_to_reload = []
+        for module_name in list(sys.modules.keys()):
+            if module_name.startswith("kailash.nodes."):
+                modules_to_reload.append(module_name)
+
+        # Remove modules from sys.modules to force fresh import
+        for module_name in modules_to_reload:
+            sys.modules.pop(module_name, None)
+
     try:
-        # Import the main nodes module which triggers all @register_node decorators
-        # The __init__.py imports all submodules, triggering registration
-        # Force reimport to ensure decorators fire even if already imported
-        import importlib
+        # Import specific node modules directly to trigger decorators
+        # These imports MUST happen after clearing sys.modules
+        from kailash.nodes.api.http import HTTPRequestNode
+        from kailash.nodes.code.python import PythonCodeNode
+        from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
+        from kailash.nodes.data.sql import SQLDatabaseNode
+        from kailash.nodes.transform.data_transform import DataTransformer
 
-        import kailash.nodes
+        # Force registration if not already registered
+        if "PythonCodeNode" not in NodeRegistry._nodes:
+            NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+        if "CSVReaderNode" not in NodeRegistry._nodes:
+            NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
+        if "JSONReaderNode" not in NodeRegistry._nodes:
+            NodeRegistry.register(JSONReaderNode, "JSONReaderNode")
+        if "HTTPRequestNode" not in NodeRegistry._nodes:
+            NodeRegistry.register(HTTPRequestNode, "HTTPRequestNode")
+        if "SQLDatabaseNode" not in NodeRegistry._nodes:
+            NodeRegistry.register(SQLDatabaseNode, "SQLDatabaseNode")
+        if "DataTransformer" not in NodeRegistry._nodes:
+            NodeRegistry.register(DataTransformer, "DataTransformer")
 
-        importlib.reload(kailash.nodes)
-    except ImportError:
-        # If main import fails, try individual imports
+    except ImportError as e:
+        # If imports fail, try to at least import the main module
         try:
-            from kailash.nodes.ai import embeddings, llm
-            from kailash.nodes.api import graphql, http
-            from kailash.nodes.code import python
-            from kailash.nodes.data import cache, readers, sql, writers
-            from kailash.nodes.logic import conditions, operations
-            from kailash.nodes.security import auth, behavior_analysis
-            from kailash.nodes.transform import data_transform
+            import kailash.nodes
+
+            # Force reload all submodules
+            for attr_name in dir(kailash.nodes):
+                attr = getattr(kailash.nodes, attr_name)
+                if hasattr(attr, "__file__"):
+                    importlib.reload(attr)
         except ImportError:
             pass  # Some modules may not be available in all environments
 

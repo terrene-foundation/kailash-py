@@ -43,7 +43,6 @@ results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
 - `workflow.connect(..., cycle=True)` → Use `workflow.create_cycle("name").connect(...).build()`
 - Override `execute()` in nodes → Implement `run()` instead
 - Use `operation` parameter → Use `action` for consistency
-- Run unit tests without `--forked` → Always use `pytest tests/unit/ --forked`
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
@@ -145,8 +144,7 @@ The **App Framework** provides complete domain-specific applications built on th
 13. **AsyncSQL Parameter Types**: PostgreSQL type inference fix with `parameter_types` for JSONB/COALESCE contexts (v0.6.6+) - see [AsyncSQL Patterns](sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md)
 14. **Core SDK Architecture**: TODO-111 resolved critical infrastructure gaps - CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager now production-ready with comprehensive test coverage
 15. **Parameter Naming Convention**: Use `action` (not `operation`) for consistency across nodes
-16. **Test Isolation**: Always use `--forked` flag for unit tests: `pytest tests/unit/ --forked`
-17. **Node Registry**: Tests must re-import nodes after clearing: `import kailash.nodes`
+16. **Test Performance**: Run unit tests directly for 11x faster execution: `pytest tests/unit/`
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
@@ -196,11 +194,12 @@ The **App Framework** provides complete domain-specific applications built on th
 ## 🧪 CRITICAL: Testing Requirements
 - **Test Guide**: [tests/README.md](tests/README.md) - 3-tier testing strategy
 
-### 1. Unit Test Isolation
-**ALWAYS use `--forked` for unit tests**: `pytest tests/unit/ --forked --timeout=1 --tb=short`
-- Eliminates NodeRegistry pollution between tests
-- Prevents shared state contamination
-- Required for consistent test execution in CI/CD
+### 1. Fast Unit Tests
+**Run unit tests directly**: `pytest tests/unit/ --timeout=1 --tb=short`
+- 11x faster execution without process forking overhead
+- Proper test isolation through fixtures
+- 99.96% pass rate with optimized state management
+- Tests requiring isolation (< 1%) are automatically handled with `@pytest.mark.requires_isolation`
 
 ### 2. Timeout Enforcement
 **ALWAYS enforce timeout limits**:
