@@ -70,7 +70,7 @@ class TestMCPServerBase:
 
         # Test that the tool maintains its original functionality
         # When FastMCP is not available, the function is returned as-is
-        if hasattr(test_function, 'fn'):
+        if hasattr(test_function, "fn"):
             assert test_function.fn() == "test"
         else:
             assert test_function() == "test"
@@ -93,7 +93,7 @@ class TestMCPServerBase:
 
         # Test that the function maintains its original functionality
         # When FastMCP is not available, the function is returned as-is
-        if hasattr(test_function, 'fn'):
+        if hasattr(test_function, "fn"):
             assert test_function.fn() == "test"
         else:
             assert test_function() == "test"
@@ -116,7 +116,7 @@ class TestMCPServerBase:
 
         # Test that the function maintains its original functionality
         # When FastMCP is not available, the function is returned as-is
-        if hasattr(test_function, 'fn'):
+        if hasattr(test_function, "fn"):
             assert test_function.fn() == "test"
         else:
             assert test_function() == "test"
@@ -186,7 +186,11 @@ class TestMCPServer:
         assert tool_info["error_count"] == 0
 
         # Verify function still works
-        assert test_function.fn() == "test"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_function, "fn"):
+            assert test_function.fn() == "test"
+        else:
+            assert test_function() == "test"
 
     def test_tool_decorator_with_cache(self):
         """Test tool decorator with caching enabled."""
@@ -203,7 +207,11 @@ class TestMCPServer:
         assert tool_info["cache_ttl"] == 600
 
         # Verify function still works
-        assert test_function.fn() == "test"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_function, "fn"):
+            assert test_function.fn() == "test"
+        else:
+            assert test_function() == "test"
 
     def test_tool_decorator_with_permission(self):
         """Test tool decorator with permission requirements."""
@@ -229,7 +237,11 @@ class TestMCPServer:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_resource.fn() == "resource data"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_resource, "fn"):
+            assert test_resource.fn() == "resource data"
+        else:
+            assert test_resource() == "resource data"
 
     def test_prompt_decorator_basic(self):
         """Test basic prompt decorator functionality."""
@@ -243,7 +255,11 @@ class TestMCPServer:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_prompt.fn() == "prompt text"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_prompt, "fn"):
+            assert test_prompt.fn() == "prompt text"
+        else:
+            assert test_prompt() == "prompt text"
 
     def test_get_tool_stats(self):
         """Test get_tool_stats functionality."""
