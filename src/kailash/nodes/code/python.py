@@ -465,6 +465,10 @@ class CodeExecutor:
             # Normal operation - eagerly load all modules
             for module_name in self.allowed_modules:
                 try:
+                    # Skip scipy in CI due to version conflicts
+                    if module_name == "scipy" and os.environ.get("CI"):
+                        logger.warning(f"Skipping scipy import in CI environment")
+                        continue
                     module = importlib.import_module(module_name)
                     namespace[module_name] = module
                 except ImportError:
