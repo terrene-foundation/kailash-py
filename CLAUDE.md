@@ -1,88 +1,49 @@
-# Kailash SDK - Development Guide
+# Kailash SDK
 
-## 🚀 ESSENTIAL PATTERNS - COPY THESE FIRST
+## ⚡ Quick Start
 
-### Basic Workflow (Required Foundation)
+### Basic Workflow
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
-workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})  # All classes end with "Node"
-# Auto ID generation: agent_id = workflow.add_node("LLMAgentNode", {"model": "gpt-4"})
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())  # runtime executes workflow
-```
-
-### LLMAgentNode with Real MCP (v0.6.6+)
-```python
-workflow = WorkflowBuilder()
-workflow.add_node("LLMAgentNode", "agent", {
-    "provider": "openai",
-    "model": "gpt-4",
-    "use_real_mcp": True,  # Default - executes real MCP tools
-    "mcp_servers": [{"name": "tools", "transport": "stdio", "command": "mcp-server"}],
-    "auto_discover_tools": True
-})
+workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
-### IterativeLLMAgent with Real MCP (v0.6.5+)
+### Cyclic Workflows (v0.6.6+) - CycleBuilder API
 ```python
-workflow = WorkflowBuilder()
-workflow.add_node("IterativeLLMAgentNode", "agent", {
-    "provider": "openai",
-    "model": "gpt-4",
-    "use_real_mcp": True,  # Default - executes real MCP tools
-    "mcp_servers": [{"name": "tools", "transport": "stdio", "command": "mcp-server"}]
-})
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
-```
-
-### Multi-Channel Nexus Platform (v0.6.6+)
-```python
-from kailash.nexus import create_nexus
-
-nexus = create_nexus(
-    title="Unified Platform",
-    enable_api=True,     # REST API + WebSocket
-    enable_cli=True,     # Command-line interface
-    enable_mcp=True,     # Model Context Protocol
-    channels_synced=True # Cross-channel session sync
-)
-# Access same workflows via API, CLI, or MCP with unified sessions
-```
-
-### DataFlow Enterprise Framework (v0.6.6+) - SDK-Compliant
-```python
-from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-# Zero-config database framework with enterprise power
-db = DataFlow()  # Creates SQLite automatically
-
-@db.model
-class User:
-    name: str
-    email: str
-    active: bool = True
-
-# Generates 9 SDK-compliant nodes: UserCreateNode, UserBulkCreateNode, etc.
 workflow = WorkflowBuilder()
-workflow.add_node("UserCreateNode", "create", {"name": "Alice", "email": "alice@example.com"})
+workflow.add_node("DataProcessorNode", "processor", {"threshold": 0.9})
+workflow.add_node("QualityEvaluatorNode", "evaluator", {"target_quality": 0.95})
+
+# Create cycle using CycleBuilder API (NOT deprecated cycle=True)
+cycle_builder = workflow.create_cycle("quality_improvement")
+cycle_builder.connect("processor", "evaluator", mapping={"result": "input_data"}) \
+             .connect("evaluator", "processor", mapping={"feedback": "adjustment"}) \
+             .max_iterations(50) \
+             .converge_when("quality > 0.95") \
+             .timeout(300) \
+             .build()
+
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())  # Real database operations
+results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
 ```
 
 ### ❌ NEVER
 - `workflow.execute(runtime)` → Use `runtime.execute(workflow)`
 - `workflow.addNode()` → Use `workflow.add_node()`
 - `inputs={}` → Use `parameters={}`
-- String code in PythonCodeNode → Use `.from_function()` (step 4)
-- `use_real_mcp=False` → Use `use_real_mcp=True` (default) for real tool execution
+- String code in PythonCodeNode → Use `.from_function()`
+- `workflow.connect(..., cycle=True)` → Use `workflow.create_cycle("name").connect(...).build()`
+- Override `execute()` in nodes → Implement `run()` instead
+- Use `operation` parameter → Use `action` for consistency
+- Run unit tests without `--forked` → Always use `pytest tests/unit/ --forked`
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
@@ -102,13 +63,55 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 
 ---
 
+## 🏗️ Core SDK vs App Framework Architecture
+
+### Core SDK Components (src/kailash/)
+The **Core SDK** provides the foundational building blocks for workflow automation:
+
+- **Runtime System**: `LocalRuntime`, `ParallelRuntime`, `DockerRuntime` - Execute workflows
+- **Workflow Builder**: `WorkflowBuilder` - Create and configure workflows programmatically
+- **Node Library**: 110+ production-ready nodes (AI, Data, Security, etc.)
+- **MCP Integration**: Complete Model Context Protocol support for AI agents
+- **Middleware**: API Gateway, Event Store, Checkpoint Manager for enterprise features
+
+### App Framework (apps/)
+The **App Framework** provides complete domain-specific applications built on the Core SDK:
+
+- **kailash-dataflow**: Zero-config database framework with enterprise power
+- **kailash-mcp**: Enterprise MCP platform with authentication, multi-tenancy, compliance
+- **kailash-nexus**: Multi-channel platform (API, CLI, MCP) with unified sessions
+- **ai_registry**: AI-powered document registry with advanced RAG capabilities
+- **user_management**: Enterprise user management with RBAC and security patterns
+
+### When to Use Each Approach
+
+**Use Core SDK when:**
+- Building custom workflows and automation
+- Integrating with existing systems
+- Need fine-grained control over execution
+- Creating domain-specific solutions
+
+**Use App Framework when:**
+- Need complete, production-ready applications
+- Want zero-configuration setup
+- Require enterprise features (auth, compliance, multi-tenancy)
+- Building on proven architectural patterns
+
+### Development Paths
+
+1. **Start with Core SDK**: Build workflows using `WorkflowBuilder` and `LocalRuntime`
+2. **Add App Framework**: Integrate domain-specific apps for advanced features
+3. **Enterprise Scale**: Use Nexus for multi-channel deployment with unified sessions
+
+---
+
 ## 📁 Quick Access
-| **SDK Users** | **SDK Contributors** | **Shared** |
+| **Core SDK** | **App Framework** | **Contributors** |
 |---------------|---------------------|-----------|
-| [sdk-users/](sdk-users/) | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) | [shared/mistakes/](shared/mistakes/) |
-| [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) | [# contrib (removed)/training/](# contrib (removed)/training/) | [tests/](tests/) |
-| [sdk-users/cheatsheet/](sdk-users/cheatsheet/) | [# contrib (removed)/research/](# contrib (removed)/research/) | [examples/](examples/) |
-| [sdk-users/migration-guides/](sdk-users/migration-guides/) | [# contrib (removed)/architecture/migration-guides/](# contrib (removed)/architecture/migration-guides/) | |
+| [sdk-users/](sdk-users/) - Complete workflow guides | [apps/](apps/) - Production-ready applications | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
+| [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) - 110+ nodes | [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config database | [# contrib (removed)/training/](# contrib (removed)/training/) |
+| [sdk-users/cheatsheet/](sdk-users/cheatsheet/) - Copy-paste patterns | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP platform | [tests/](tests/) - 2,400+ tests |
+| [sdk-users/enterprise/](sdk-users/enterprise/) - Advanced features | [apps/kailash-nexus/](apps/kailash-nexus/) - Multi-channel platform | [examples/](examples/) - Feature validation |
 
 ## ⚠️ MUST FOLLOW
 1. **🚨 Node Execution**: ALWAYS use `.execute()` - NEVER `.run()`, `.process()`, or `.call()`
@@ -118,8 +121,6 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 5. **PythonCodeNode Patterns**: Use `.from_function()` for multi-line code
 6. **Middleware**: Use `create_gateway()` for production apps
 7. **Git Safety**: NEVER destroy uncommitted work
-
-6. **Git Safety**: NEVER destroy uncommitted work
     - ❌ **FORBIDDEN**: `git reset --hard`, `git clean -fd`, `rm -rf` on code
     - ✅ **REQUIRED**: `git add . && git commit -m "WIP"` before risky operations
     - ✅ Use `git stash` instead of destructive resets
@@ -128,9 +129,12 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 ## ⚡ Critical Patterns
 1. **Data Paths**: `get_input_data_path()`, `get_output_data_path()`
 2. **Access Control**: `AccessControlManager(strategy="rbac"|"abac"|"hybrid")`
-3. **Execution**: Use `.execute()` not `.run()` or `.process()` or `.call()`
+3. **Execution Pattern - CRITICAL**:
+   - **Users call**: `node.execute(**params)` - Public API with validation
+   - **Nodes implement**: `def run(self, **kwargs)` - Protected method with actual logic
+   - **Never override**: `execute()` in custom nodes - breaks validation chain
 4. **Ollama Embeddings**: Extract with `[emb["embedding"] for emb in result["embeddings"]]`
-5. **Cyclic Workflows**: Preserve state with `set_cycle_state()`, explicit parameter mapping
+5. **Cyclic Workflows**: Use CycleBuilder API `workflow.create_cycle("name").connect(...).max_iterations(N).build()`
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
 7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/cheatsheet/025-mcp-integration.md)
 8. **MCP Real Execution**: All AI agents use `use_real_mcp=True` by default (v0.6.6+) - BREAKING CHANGE from mock execution
@@ -140,6 +144,9 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 12. **Distributed Transactions**: Automatic pattern selection (Saga/2PC), compensation logic, recovery - see [Distributed Transactions](sdk-users/cheatsheet/049-distributed-transactions.md)
 13. **AsyncSQL Parameter Types**: PostgreSQL type inference fix with `parameter_types` for JSONB/COALESCE contexts (v0.6.6+) - see [AsyncSQL Patterns](sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md)
 14. **Core SDK Architecture**: TODO-111 resolved critical infrastructure gaps - CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager now production-ready with comprehensive test coverage
+15. **Parameter Naming Convention**: Use `action` (not `operation`) for consistency across nodes
+16. **Test Isolation**: Always use `--forked` flag for unit tests: `pytest tests/unit/ --forked`
+17. **Node Registry**: Tests must re-import nodes after clearing: `import kailash.nodes`
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
@@ -171,51 +178,74 @@ results, run_id = runtime.execute(workflow.build())  # Real database operations
 
 ## 🔗 Quick Links by Need
 
-| **I need to...** | **SDK User** | **SDK Contributor** |
-|-----------------|--------------|---------------------|
-| **Build a workflow** | [sdk-users/workflows/](sdk-users/workflows/) | - |
-| **Build an app** | [apps/DOCUMENTATION_STANDARDS.md](apps/DOCUMENTATION_STANDARDS.md) | - |
-| **Multi-channel platform** | [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) - API, CLI, MCP unified | - |
-| **Make arch decisions** | [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md) | [Architecture ADRs](# contrib (removed)/architecture/adr/) |
-| **Fix an error** | [sdk-users/developer/05-troubleshooting.md](sdk-users/developer/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) |
-| **Find patterns** | [sdk-users/patterns/](sdk-users/patterns/) | - |
-| **Learn from workflows** | [sdk-users/workflows/](sdk-users/workflows/) - Production workflows | - |
-| **Distributed transactions** | [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) - Saga/2PC patterns | - |
-| **Run tests**   | [tests/README.md](tests/README.md) - Test guide | [tests/](tests/) - Full test suite |
-| **SDK development** | [examples/](examples/) - Feature validation | - |
-| **Train LLMs**  | - | [# contrib (removed)/training/](# contrib (removed)/training/) |
-| **Design architecture** | - | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
-| **Version operations** | - | [# contrib (removed)/operations/](# contrib (removed)/operations/) |
-| **Track todos** | - | [# contrib (removed)/project/todos/](# contrib (removed)/project/todos/) |
+| **I need to...** | **Core SDK** | **App Framework** | **Contributors** |
+|-----------------|--------------|---------------------|-----------|
+| **Build a workflow** | [sdk-users/workflows/](sdk-users/workflows/) | - | - |
+| **Build an app** | [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md) | [apps/DOCUMENTATION_STANDARDS.md](apps/DOCUMENTATION_STANDARDS.md) | - |
+| **Database operations** | [sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md](sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md) | [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config | - |
+| **Multi-channel platform** | [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) | [apps/kailash-nexus/](apps/kailash-nexus/) - Production-ready | - |
+| **MCP integration** | [sdk-users/cheatsheet/025-mcp-integration.md](sdk-users/cheatsheet/025-mcp-integration.md) | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise platform | - |
+| **AI & RAG** | [sdk-users/developer/06-comprehensive-rag-guide.md](sdk-users/developer/06-comprehensive-rag-guide.md) | [apps/ai_registry/](apps/ai_registry/) - Advanced RAG | - |
+| **User management** | [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) | [apps/user_management/](apps/user_management/) - RBAC system | - |
+| **Fix an error** | [sdk-users/developer/05-troubleshooting.md](sdk-users/developer/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) | [shared/mistakes/](shared/mistakes/) |
+| **Distributed transactions** | [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) | - | - |
+| **Run tests**   | [tests/README.md](tests/README.md) - Test guide | [tests/](tests/) - Full test suite | [tests/](tests/) - Full test suite |
+| **Train LLMs**  | - | - | [# contrib (removed)/training/](# contrib (removed)/training/) |
+| **Design architecture** | - | - | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
+
+## 🧪 CRITICAL: Testing Requirements
+- **Test Guide**: [tests/README.md](tests/README.md) - 3-tier testing strategy
+
+### 1. Unit Test Isolation
+**ALWAYS use `--forked` for unit tests**: `pytest tests/unit/ --forked --timeout=1 --tb=short`
+- Eliminates NodeRegistry pollution between tests
+- Prevents shared state contamination
+- Required for consistent test execution in CI/CD
+
+### 2. Timeout Enforcement
+**ALWAYS enforce timeout limits**:
+- **Unit tests**: 1 second max (`--timeout=1`)
+- **Integration tests**: 5 seconds max (`--timeout=5`)
+- **E2E tests**: 10 seconds max (`--timeout=10`)
+
+### 3. Fix Timeout Violations
+When tests exceed timeout:
+1. Check for `asyncio.sleep(10)` → change to `asyncio.sleep(0.1)`
+2. Check actor/pool cleanup → add proper task cancellation
+3. Check database configs → use `health_check_interval=0.1`
+4. Mock slow services instead of real calls
+5. Use smaller test datasets
+6. Add proper cleanup in finally blocks
+
+Use centralized `tests/node_registry_utils.py` for consistent node management
 
 ## 📁 Organization Principles
+- **Core SDK** → `src/kailash/` (foundational components) + `sdk-users/` (usage guides)
+- **App Framework** → `apps/` (complete applications) + domain-specific docs
 - **Production workflows** → `sdk-users/workflows/` (business value)
 - **SDK development** → `examples/` (feature validation)
-- **Quality validation** → `tests/` (unit/integration/e2e)
+- **SDK core tests** → `tests/` (unit/integration/e2e for SDK only)
+- **App-specific tests** → `apps/*/tests/` (DataFlow, Nexus, etc. have their own test folders)
 - **Training data** → `# contrib (removed)/training/` (LLM patterns)
 
 ## 🎯 Quick Start Guide
 
-**Building Apps/Workflows:**
-- **Start**: [sdk-users/](sdk-users/) - Complete solution guide with decision matrix
-- **Node Selection**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - Smart finder
+**Core SDK Development:**
+- **Start**: [sdk-users/](sdk-users/) - Complete workflow guides with decision matrix
+- **Node Selection**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - 110+ nodes
 - **Quick Patterns**: [Cheatsheet](sdk-users/cheatsheet/) - 37 copy-paste patterns
 - **Enterprise**: [Enterprise Patterns](sdk-users/enterprise/) - Advanced features
+
+**App Framework Deployment:**
+- **DataFlow**: [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config database operations
+- **MCP Platform**: [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP with auth & compliance
+- **Nexus Platform**: [apps/kailash-nexus/](apps/kailash-nexus/) - Multi-channel (API, CLI, MCP)
+- **AI Registry**: [apps/ai_registry/](apps/ai_registry/) - Advanced RAG with document analysis
 
 **SDK Development:**
 - **Contributing**: [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md)
 - **Architecture**: [# contrib (removed)/architecture/](# contrib (removed)/architecture/)
 - **Examples**: [examples/](examples/) - Feature validation
-
-**Testing:**
-- **Test Suite**: 2,400+ tests (Unit: 1,617, Integration: 233, E2E: 21 core)
-- **Infrastructure**: 100% E2E pass rate with v0.6.6+ enhancements
-- **Core SDK Coverage**: TODO-111 resolved critical architecture gaps with 67 comprehensive tests (100% pass rate)
-- **MCP Testing**: 407 comprehensive tests across 8 components (100% pass rate)
-- **Transaction Monitoring**: 230 unit tests, 8 integration tests, comprehensive E2E (100% pass rate)
-- **Distributed Transactions**: 122 unit tests, 23 integration tests, comprehensive E2E (100% pass rate)
-- **Test Guide**: [tests/README.md](tests/README.md) - 3-tier testing strategy
-- **CI/CD**: Sub-10 minute test execution with Docker infrastructure
 
 **Need Help:**
 - **Errors**: [Troubleshooting](sdk-users/developer/05-troubleshooting.md)

@@ -184,7 +184,7 @@ class CyclicWorkflowExecutor:
         if not workflow.has_cycles():
             # No cycles, use standard DAG execution
             logger.info("No cycles detected, using standard DAG execution")
-            return self.dag_runner.run(workflow, parameters), run_id
+            return self.dag_runner.execute(workflow, parameters), run_id
 
         # Execute with cycle support
         try:
@@ -386,18 +386,18 @@ class CyclicWorkflowExecutor:
         task_manager: TaskManager | None = None,
     ) -> dict[str, Any]:
         """Execute DAG (non-cyclic) portion of the workflow.
-        
+
         Args:
             workflow: Workflow instance
             dag_nodes: List of DAG node IDs to execute
             state: Workflow state
             task_manager: Optional task manager for tracking
-            
+
         Returns:
             Dictionary with node IDs as keys and their results as values
         """
         results = {}
-        
+
         for node_id in dag_nodes:
             if node_id not in state.node_outputs:
                 logger.info(f"Executing DAG node: {node_id}")
@@ -406,9 +406,9 @@ class CyclicWorkflowExecutor:
                 )
                 results[node_id] = node_result
                 state.node_outputs[node_id] = node_result
-        
+
         return results
-    
+
     def _execute_cycle_groups(
         self,
         workflow: Workflow,
@@ -417,27 +417,27 @@ class CyclicWorkflowExecutor:
         task_manager: TaskManager | None = None,
     ) -> dict[str, Any]:
         """Execute cycle groups portion of the workflow.
-        
+
         Args:
             workflow: Workflow instance
             cycle_groups: List of cycle groups to execute
             state: Workflow state
             task_manager: Optional task manager for tracking
-            
+
         Returns:
             Dictionary with node IDs as keys and their results as values
         """
         results = {}
-        
+
         for cycle_group in cycle_groups:
             logger.info(f"Executing cycle group: {cycle_group.cycle_id}")
             cycle_results = self._execute_cycle_group(
                 workflow, cycle_group, state, task_manager
             )
             results.update(cycle_results)
-        
+
         return results
-    
+
     def _propagate_parameters(
         self,
         current_params: dict[str, Any],
@@ -445,33 +445,33 @@ class CyclicWorkflowExecutor:
         cycle_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Handle parameter propagation between cycle iterations.
-        
+
         Args:
             current_params: Current iteration parameters
             current_results: Results from current iteration
             cycle_config: Cycle configuration (optional)
-            
+
         Returns:
             Updated parameters for the next iteration
         """
         # Base propagation: copy current results for next iteration
         next_params = current_results.copy() if current_results else {}
-        
+
         # Apply any cycle-specific parameter mappings if provided
         if cycle_config and "parameter_mappings" in cycle_config:
             mappings = cycle_config["parameter_mappings"]
             for src_key, dst_key in mappings.items():
                 if src_key in current_results:
                     next_params[dst_key] = current_results[src_key]
-        
+
         # Preserve any initial parameters that aren't overridden
         for key, value in current_params.items():
             if key not in next_params:
                 next_params[key] = value
-        
+
         # Filter out None values to avoid validation errors
         next_params = self._filter_none_values(next_params)
-        
+
         return next_params
 
     def _execute_cycle_group(

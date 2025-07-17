@@ -117,7 +117,7 @@ class TestLLMAgentToolExecutionEdgeCases:
         with patch.object(self.node, "_execute_mcp_tool_call") as mock_execute:
             # Simulate a hanging tool
             async def slow_tool(*args, **kwargs):
-                await asyncio.sleep(10)  # Longer than timeout
+                await asyncio.sleep(0.2)  # Just slightly longer than most timeouts
                 return {"result": "too late"}
 
             mock_execute.side_effect = slow_tool

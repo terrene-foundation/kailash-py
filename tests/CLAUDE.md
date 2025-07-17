@@ -8,15 +8,38 @@
 - Redis is running
 - All test data is properly seeded
 
+## 🔧 CRITICAL: Always Use --forked for Test Isolation
+
+**ALWAYS use `--forked` when running unit tests!** This prevents test isolation issues:
+- Eliminates NodeRegistry pollution between tests
+- Prevents shared state contamination
+- Ensures tests pass consistently in CI/CD
+- **Required for all unit test runs**: `pytest tests/unit/ --forked`
+
+### Why --forked is Required
+
+The Kailash SDK uses a singleton NodeRegistry pattern. Without `--forked`:
+1. Tests can pollute the registry with test nodes
+2. Registry clearing in one test affects others
+3. Import state becomes inconsistent
+4. Tests fail randomly based on execution order
+
+With `--forked`, each test runs in a fresh process with clean state.
+
 ## 🚀 Test Environment Setup (REQUIRED)
 
 ```bash
 # From project root:
 ./test-env setup   # One-time setup (downloads models, initializes databases)
 ./test-env up      # Start all test services (PostgreSQL, Redis, Ollama)
-./test-env test tier1  # Run unit tests
+./test-env test tier1  # Run unit tests (automatically uses --forked)
 ./test-env test tier2  # Run integration tests
 ./test-env test tier3  # Run E2E tests
+
+# Manual test execution:
+pytest tests/unit/ --forked --tb=short  # REQUIRED: --forked for unit tests
+pytest tests/integration/ --tb=short     # Integration tests handle node imports
+pytest tests/e2e/ --tb=short            # E2E tests use real environment
 
 # Check if services are running:
 ./test-env status
@@ -109,12 +132,14 @@ result = node.call(params)
 ./test-env up
 
 # Run specific test tiers
-./test-env test tier1    # Unit tests only
+./test-env test tier1    # Unit tests only (uses --forked automatically)
 ./test-env test tier2    # Integration tests
 ./test-env test tier3    # E2E tests
 
-# Run specific test file
-pytest tests/e2e/test_durable_gateway_real_world.py -v
+# Run specific test file (ALWAYS use --forked for unit tests)
+pytest tests/unit/test_specific.py --forked -v
+pytest tests/integration/test_specific.py -v
+pytest tests/e2e/test_specific.py -v
 
 # Run with coverage
 ./test-env test tier2 --cov
@@ -125,9 +150,55 @@ pytest tests/e2e/test_durable_gateway_real_world.py -v
 
 ## 🎯 Test Guidelines
 
-1. **Unit Tests (Tier 1)**: Mock external dependencies
-2. **Integration Tests (Tier 2)**: Use real Docker services
-3. **E2E Tests (Tier 3)**: Full scenarios with real infrastructure
+1. **Unit Tests (Tier 1)**: Mock external dependencies, 1 second timeout max
+2. **Integration Tests (Tier 2)**: Use real Docker services, 5 second timeout max
+3. **E2E Tests (Tier 3)**: Full scenarios with real infrastructure, 10 second timeout max
+
+## ⏱️ CRITICAL: Test Timeout Directives
+
+**When running tests, ALWAYS enforce these timeouts:**
+
+```bash
+# Unit tests - 1 second maximum
+pytest tests/unit/ --forked --timeout=1 --timeout-method=thread
+
+# Integration tests - 5 seconds maximum
+pytest tests/integration/ --timeout=5 --timeout-method=thread
+
+# E2E tests - 10 seconds maximum
+pytest tests/e2e/ --timeout=10 --timeout-method=thread
+```
+
+### Systematic Approach to Fix Timeout Violations
+
+1. **Identify violating tests**:
+   ```bash
+   # Find all tests that exceed timeout
+   pytest tests/integration/ --timeout=5 -v | grep -B5 "Timeout"
+   ```
+
+2. **Common fixes for timeout violations**:
+   - **Long sleeps**: Change `await asyncio.sleep(10)` → `await asyncio.sleep(0.1)`
+   - **Actor cleanup**: Add proper task cancellation:
+     ```python
+     finally:
+         if hasattr(pool, '_supervisor'):
+             await pool._supervisor.stop_all_actors()
+         pool._closing = True
+     ```
+   - **Database config**: Use fast timeouts:
+     ```python
+     config["health_check_interval"] = 0.1  # Not 30s!
+     config["max_idle_time"] = 10.0        # Not 600s!
+     ```
+   - **Mock slow services**: Replace real HTTP calls with mocks
+   - **Reduce iterations**: Use 2-3 iterations instead of 10+ for tests
+
+3. **Verify fixes**:
+   ```bash
+   # Re-run with strict timeout to ensure fix worked
+   pytest path/to/fixed_test.py --timeout=5 -v
+   ```
 
 ## 🧪 Test-Driven Development (TODO-111 Pattern)
 
@@ -149,3 +220,14 @@ See **[# contrib (removed)/testing/](../# contrib (removed)/testing/)** for comp
 - Run tier 2/3 tests before committing
 - Use `-x` flag to stop on first failure: `pytest -x`
 - Use `-k` to run specific tests: `pytest -k "test_order_processing"`
+- Always include timeout flags to catch slow tests early
+- Run with `--tb=short` for concise error output
+
+## 📑 Test Execution Checklist for Claude Code
+
+1. ☑️ Start test environment: `./test-env up`
+2. ☑️ Run unit tests: `pytest tests/unit/ --forked --timeout=1`
+3. ☑️ Run integration tests: `pytest tests/integration/ --timeout=5`
+4. ☑️ Run E2E tests: `pytest tests/e2e/ --timeout=10`
+5. ☑️ Fix any timeout violations using the systematic approach above
+6. ☑️ Verify all tests pass within timeout limits

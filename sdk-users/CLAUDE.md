@@ -32,20 +32,26 @@ app = create_gateway(
 )
 ```
 
-### Multi-Channel Nexus Architecture
+### Multi-Channel Architecture
 ```python
-from nexus import Nexus
+from kailash.channels.api_channel import APIChannel
+from kailash.channels.cli_channel import CLIChannel
+from kailash.channels.base import ChannelConfig, ChannelType
 
-app = Nexus(
-    api_port=8000,         # REST API + WebSocket
-    mcp_port=3001,         # Model Context Protocol
-    enable_auth=True,      # Enterprise authentication
-    enable_monitoring=True # Production monitoring
+# Create API channel
+api_config = ChannelConfig(
+    name="workflow_api",
+    channel_type=ChannelType.API,
+    host="localhost",
+    port=8000,
+    enable_sessions=True,
+    enable_auth=True
 )
+api_channel = APIChannel(api_config)
 
-# Register workflows once, available everywhere
-app.register("data-processor", workflow)
-app.start()
+# Register workflows
+api_channel.register_workflow("data-processor", workflow)
+api_channel.start()
 ```
 
 ### Node Selection Priority
@@ -97,12 +103,12 @@ from kailash.middleware.communication.realtime import ConnectionManager
 def test_cyclic_execution():
     executor = CyclicWorkflowExecutor()
     # Test critical methods: _execute_dag_portion, _execute_cycle_groups, _propagate_parameters
-    
+
 # Integration Tests: Real Docker services
 def test_workflow_visualization():
     visualizer = WorkflowVisualizer()  # Optional workflow parameter
     # Test with real workflow instances
-    
+
 # E2E Tests: Full scenarios
 def test_event_handling():
     manager = ConnectionManager()

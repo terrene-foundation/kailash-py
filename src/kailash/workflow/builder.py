@@ -4,11 +4,9 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from kailash.nodes.base import Node
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.graph import Workflow
-
-if TYPE_CHECKING:
-    from kailash.nodes.base import Node
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +75,6 @@ class WorkflowBuilder:
                 # Pattern: add_node(NodeClass)
                 return self._add_node_alternative(args[0], None, **kwargs)
             else:
-                from kailash.nodes.base import Node
-
                 if isinstance(args[0], Node):
                     # Pattern: add_node(node_instance)
                     return self._add_node_instance(args[0], None)
@@ -114,8 +110,6 @@ class WorkflowBuilder:
 
         elif len(args) >= 2:
             # Check if first arg is a Node instance
-            from kailash.nodes.base import Node
-
             if isinstance(args[0], Node):
                 # Pattern 4: Instance - add_node(node_instance, "node_id") or add_node(node_instance, "node_id", config)
                 # Config is ignored for instances
@@ -152,8 +146,6 @@ class WorkflowBuilder:
         """Handle legacy fluent API pattern: add_node('node_id', NodeClass, param=value)"""
         import warnings
 
-        from kailash.nodes.base import Node
-
         # If it's a class, validate it's a Node subclass
         if isinstance(node_class_or_type, type) and not issubclass(
             node_class_or_type, Node
@@ -185,8 +177,6 @@ class WorkflowBuilder:
     ) -> str:
         """Handle alternative pattern: add_node(NodeClass, 'node_id', param=value)"""
         import warnings
-
-        from kailash.nodes.base import Node
 
         # Validate that node_class is actually a Node subclass
         if not isinstance(node_class, type) or not issubclass(node_class, Node):
@@ -269,9 +259,6 @@ class WorkflowBuilder:
             raise WorkflowValidationError(
                 f"Node ID '{node_id}' already exists in workflow"
             )
-
-        # Import Node here to avoid circular imports
-        from kailash.nodes.base import Node
 
         # Handle different input types
         if isinstance(node_type, str):

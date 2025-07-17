@@ -69,7 +69,7 @@ class TestMCPServerBase:
         assert server._mcp is not None
 
         # Test that the tool maintains its original functionality
-        assert test_function() == "test"
+        assert test_function.fn() == "test"
 
     def test_add_resource_functionality(self):
         """Test that add_resource decorator provides actual functionality."""
@@ -88,7 +88,7 @@ class TestMCPServerBase:
         assert server._mcp is not None
 
         # Test that the function maintains its original functionality
-        assert test_function() == "test"
+        assert test_function.fn() == "test"
 
     def test_add_prompt_functionality(self):
         """Test that add_prompt decorator provides actual functionality."""
@@ -107,7 +107,7 @@ class TestMCPServerBase:
         assert server._mcp is not None
 
         # Test that the function maintains its original functionality
-        assert test_function() == "test"
+        assert test_function.fn() == "test"
 
     def test_stop_sets_running_false(self):
         """Test that stop() sets running to False."""
@@ -174,7 +174,7 @@ class TestMCPServer:
         assert tool_info["error_count"] == 0
 
         # Verify function still works
-        assert test_function() == "test"
+        assert test_function.fn() == "test"
 
     def test_tool_decorator_with_cache(self):
         """Test tool decorator with caching enabled."""
@@ -191,7 +191,7 @@ class TestMCPServer:
         assert tool_info["cache_ttl"] == 600
 
         # Verify function still works
-        assert test_function() == "test"
+        assert test_function.fn() == "test"
 
     def test_tool_decorator_with_permission(self):
         """Test tool decorator with permission requirements."""
@@ -217,7 +217,7 @@ class TestMCPServer:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_resource() == "resource data"
+        assert test_resource.fn() == "resource data"
 
     def test_prompt_decorator_basic(self):
         """Test basic prompt decorator functionality."""
@@ -231,7 +231,7 @@ class TestMCPServer:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_prompt() == "prompt text"
+        assert test_prompt.fn() == "prompt text"
 
     def test_get_tool_stats(self):
         """Test get_tool_stats functionality."""

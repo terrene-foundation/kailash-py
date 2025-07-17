@@ -3,7 +3,7 @@
 import pytest
 
 from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow, WorkflowBuilder
 
@@ -62,6 +62,22 @@ class MockParameterNode(Node):
 
 class TestWorkflowParameterInjection:
     """Test automatic parameter injection for workflow-level parameters."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Ensure nodes are registered
+        from kailash.nodes.base import NodeRegistry
+
+        if "PythonCodeNode" not in NodeRegistry._nodes:
+            try:
+                NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+            except Exception:
+                pass
+        if "MockParameterNode" not in NodeRegistry._nodes:
+            try:
+                NodeRegistry.register(MockParameterNode, "MockParameterNode")
+            except Exception:
+                pass
 
     def test_workflow_level_parameters_basic(self):
         """Test basic workflow-level parameter injection."""

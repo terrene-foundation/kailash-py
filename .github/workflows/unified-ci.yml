@@ -428,8 +428,9 @@ jobs:
           # Tests are now properly organized - unit tests have no sleep calls
           # Use marker-based exclusion as per test organization policy
 
-          # Use pytest-xdist for parallel execution (-n auto uses all CPU cores)
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v -n auto"
+          # Use pytest-forked for process isolation to prevent test pollution
+          # This ensures clean node registry and prevents global state issues
+          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --forked"
           echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
 
           # Run all checks in parallel with proper failure detection

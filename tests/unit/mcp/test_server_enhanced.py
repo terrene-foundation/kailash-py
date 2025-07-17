@@ -68,7 +68,9 @@ class TestMCPServer:
         # Should initialize MCP and register tool
         assert server._mcp is not None
         assert "test_tool" in server._tool_registry
-        assert test_tool() == "tool works"
+
+        # The decorator returns a FunctionTool, so we need to call its fn attribute
+        assert test_tool.fn() == "tool works"
 
     def test_resource_decorator_functionality(self):
         """Test that resource decorator works functionally."""
@@ -80,7 +82,9 @@ class TestMCPServer:
 
         # Should initialize MCP
         assert server._mcp is not None
-        assert test_resource() == "resource works"
+
+        # The decorator returns a FunctionResource, so we need to call its fn attribute
+        assert test_resource.fn() == "resource works"
 
     def test_fastmcp_import_path(self):
         """Test that import path handling works correctly."""
@@ -113,7 +117,7 @@ class TestMCPServerIntegration:
             return f"processed: {data}"
 
         # Should work functionally
-        assert integration_tool("test") == "processed: test"
+        assert integration_tool.fn("test") == "processed: test"
         assert "integration_tool" in server._tool_registry
 
     def test_server_provides_expected_interface(self):

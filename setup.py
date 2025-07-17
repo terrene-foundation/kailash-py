@@ -50,6 +50,16 @@ setup(
         "viz": [
             "pygraphviz>=1.9",
         ],
+        "dataflow": [
+            "dataflow>=0.1.0",
+        ],
+        "nexus": [
+            "nexus>=1.0.0",
+        ],
+        "all": [
+            "dataflow>=0.1.0",
+            "nexus>=1.0.0",
+        ],
     },
     # Entry points for CLI
     entry_points={
