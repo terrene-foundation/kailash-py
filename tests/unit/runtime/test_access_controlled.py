@@ -37,22 +37,8 @@ class TestAccessControlledRuntime:
 
     def setup_method(self):
         """Set up test fixtures."""
-        # Clear and restore registry to ensure clean state
-        from kailash.nodes.base import NodeRegistry
-
-        NodeRegistry._nodes.clear()
-
-        # Import all nodes to trigger registration
-        # Force reimport to ensure decorators fire
-        import importlib
-
-        import kailash.nodes
-
-        importlib.reload(kailash.nodes)
-
-        # Ensure nodes are actually registered
+        # Ensure nodes are properly registered
         from tests.node_registry_utils import ensure_nodes_registered
-
         ensure_nodes_registered()
 
     def test_init_with_user_context(self):
@@ -86,33 +72,10 @@ class TestAccessControlledRuntime:
         assert runtime.user_context == user
         assert runtime.base_runtime is custom_runtime
 
-    def test_execute_with_disabled_access_control(self):
+    def test_execute_with_disabled_access_control(self, mock_node_factory):
         """Test execute method when access control is disabled (default)."""
-        # Create a simple test node inline
-        from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
-        
-        @register_node()
-        class SimpleTestNode(Node):
-            def __init__(self, **kwargs):
-                metadata = NodeMetadata(
-                    name="SimpleTestNode",
-                    description="Simple test node"
-                )
-                super().__init__(metadata=metadata, **kwargs)
-            
-            def get_parameters(self):
-                return {
-                    "value": NodeParameter(
-                        name="value",
-                        type=float,
-                        required=True,
-                        description="Test value"
-                    )
-                }
-            
-            def run(self, **kwargs):
-                value = kwargs.get("value", 0)
-                return {"result": value * 2}
+        # Create a test node using the factory
+        TestNode = mock_node_factory("TestNode", execute_return={"result": 5.0})
 
         user = UserContext(
             user_id="test_user",
@@ -125,7 +88,7 @@ class TestAccessControlledRuntime:
 
         # Create a simple workflow
         builder = WorkflowBuilder()
-        builder.add_node("SimpleTestNode", "test_node", {"value": 2.5})
+        builder.add_node("TestNode", "test_node", {"value": 2.5})
         workflow = builder.build()
 
         # Should execute without access control checks (default behavior)
@@ -136,7 +99,7 @@ class TestAccessControlledRuntime:
         assert "test_node" in result
         assert result["test_node"]["result"] == 5.0
 
-    def test_execute_with_enabled_access_control_allowed(self):
+    def test_execute_with_enabled_access_control_allowed(self, mock_node_factory):
         """Test execute method with access control enabled and permission granted."""
         user = UserContext(
             user_id="test_user",
@@ -146,6 +109,9 @@ class TestAccessControlledRuntime:
         )
 
         runtime = AccessControlledRuntime(user_context=user)
+
+        # Create a test node using the factory
+        TestNode = mock_node_factory("TestNode", execute_return={"result": "allowed"})
 
         # Enable access control and grant permissions
         acm = get_access_control_manager()
@@ -169,9 +135,9 @@ class TestAccessControlledRuntime:
             # Create workflow
             builder = WorkflowBuilder()
             builder.add_node(
-                "PythonCodeNode",
+                "TestNode",
                 "test_node",
-                {"code": "result = {'result': 'allowed'}"},
+                {},
             )
             workflow = builder.build()
             workflow.workflow_id = "test_workflow"
@@ -182,7 +148,7 @@ class TestAccessControlledRuntime:
             assert result is not None
             assert run_id is not None
             assert "test_node" in result
-            assert result["test_node"]["result"]["result"] == "allowed"
+            assert result["test_node"]["result"] == "allowed"
 
         finally:
             # Cleanup
@@ -240,7 +206,7 @@ class TestAccessControlledRuntime:
 
         # Create a simple test node inline
         from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
-        
+
         @register_node()
         class SimpleTestNode2(Node):
             def __init__(self, **kwargs):
@@ -249,7 +215,7 @@ class TestAccessControlledRuntime:
                     description="Simple test node 2"
                 )
                 super().__init__(metadata=metadata, **kwargs)
-            
+
             def get_parameters(self):
                 return {
                     "value": NodeParameter(
@@ -259,7 +225,7 @@ class TestAccessControlledRuntime:
                         description="Test value"
                     )
                 }
-            
+
             def run(self, **kwargs):
                 value = kwargs.get("value", 0)
                 return {"result": value * 2}
@@ -486,7 +452,7 @@ class TestAccessControlledRuntime:
         runtime = AccessControlledRuntime(user_context=user, base_runtime="invalid")
         assert runtime.base_runtime == "invalid"
 
-    def test_backward_compatibility(self):
+    def test_backward_compatibility(self, mock_node_factory):
         """Test that access control is disabled by default for backward compatibility."""
         user = UserContext(
             user_id="test_user",
@@ -501,19 +467,22 @@ class TestAccessControlledRuntime:
         acm = get_access_control_manager()
         assert not acm.enabled
 
+        # Create a test node using the factory
+        TestNode = mock_node_factory("TestNode", execute_return={"result": "backward_compatible"})
+
         # Should execute without any access control checks
         builder = WorkflowBuilder()
         builder.add_node(
-            "PythonCodeNode",
+            "TestNode",
             "test_node",
-            {"code": "result = {'result': 'backward_compatible'}"},
+            {},
         )
         workflow = builder.build()
 
         result, run_id = runtime.execute(workflow)
 
         assert result is not None
-        assert result["test_node"]["result"]["result"] == "backward_compatible"
+        assert result["test_node"]["result"] == "backward_compatible"
 
     def test_security_scenarios(self):
         """Test various security scenarios."""
