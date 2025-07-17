@@ -22,6 +22,8 @@ try:
 except ImportError:
     redis = None
 
+from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
+
 from kailash.resources.factory import (
     CacheFactory,
     DatabasePoolFactory,
@@ -35,7 +37,6 @@ from kailash.workflow import (
     ErrorHandler,
     RetryPolicy,
 )
-from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
 
 
 @pytest.mark.integration
@@ -162,7 +163,7 @@ class TestAsyncWorkflowBuilderIntegration:
             )
 
         async def slow_endpoint(request):
-            await asyncio.sleep(2.0)  # Simulate slow service
+            await asyncio.sleep(0.2)  # Simulate slow service
             return web.json_response({"message": "slow response"})
 
         async def unreliable_endpoint(request):

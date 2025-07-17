@@ -13,6 +13,57 @@ This guide covers production-quality testing standards for Kailash SDK applicati
 - Docker installed for integration testing
 - Understanding of pytest framework
 
+## TODO-111 Testing Patterns
+
+**Core SDK Architecture Testing**: Following the completion of TODO-111, the SDK now includes comprehensive testing patterns for critical infrastructure components:
+
+### Critical Methods Testing
+Based on TODO-111 implementation, always test these patterns:
+
+```python
+# CyclicWorkflowExecutor testing
+def test_execute_dag_portion():
+    """Test DAG execution with proper state management."""
+    executor = CyclicWorkflowExecutor()
+    # Test _execute_dag_portion method
+
+def test_execute_cycle_groups():
+    """Test cycle group execution in sequence."""
+    executor = CyclicWorkflowExecutor()
+    # Test _execute_cycle_groups method
+
+def test_propagate_parameters():
+    """Test parameter flow between iterations."""
+    executor = CyclicWorkflowExecutor()
+    # Test _propagate_parameters method
+```
+
+### Constructor Flexibility Testing
+```python
+# WorkflowVisualizer testing
+def test_optional_workflow_constructor():
+    """Test WorkflowVisualizer with optional workflow parameter."""
+    visualizer = WorkflowVisualizer()  # No workflow required
+    assert visualizer.workflow is None
+
+    visualizer.workflow = mock_workflow
+    assert visualizer.workflow is not None
+```
+
+### Event Handling Testing
+```python
+# ConnectionManager testing
+def test_filter_events():
+    """Test event filtering by session, user, type."""
+    manager = ConnectionManager()
+    # Test filter_events method
+
+def test_process_event():
+    """Test async event processing."""
+    manager = ConnectionManager()
+    # Test process_event method
+```
+
 ## Testing Hierarchy
 
 ### 1. Unit Tests - Component Validation

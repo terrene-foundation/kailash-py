@@ -32,17 +32,26 @@ app = create_gateway(
 )
 ```
 
-### Multi-Channel Nexus Architecture
+### Multi-Channel Architecture
 ```python
-from kailash.nexus import create_nexus
+from kailash.channels.api_channel import APIChannel
+from kailash.channels.cli_channel import CLIChannel
+from kailash.channels.base import ChannelConfig, ChannelType
 
-nexus = create_nexus(
-    title="Unified Platform",
-    enable_api=True,     # REST API + WebSocket
-    enable_cli=True,     # Command-line interface
-    enable_mcp=True,     # Model Context Protocol
-    channels_synced=True # Cross-channel session sync
+# Create API channel
+api_config = ChannelConfig(
+    name="workflow_api",
+    channel_type=ChannelType.API,
+    host="localhost",
+    port=8000,
+    enable_sessions=True,
+    enable_auth=True
 )
+api_channel = APIChannel(api_config)
+
+# Register workflows
+api_channel.register_workflow("data-processor", workflow)
+api_channel.start()
 ```
 
 ### Node Selection Priority
@@ -83,6 +92,29 @@ workflow.connect("processor", "result.data", mapping={"analyzer": "input"})
 runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 ```
 
+### Test-Driven Development Patterns (TODO-111)
+```python
+# 3-tier testing strategy from TODO-111
+from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
+from kailash.workflow.visualization import WorkflowVisualizer
+from kailash.middleware.communication.realtime import ConnectionManager
+
+# Unit Tests: Fast, isolated testing
+def test_cyclic_execution():
+    executor = CyclicWorkflowExecutor()
+    # Test critical methods: _execute_dag_portion, _execute_cycle_groups, _propagate_parameters
+
+# Integration Tests: Real Docker services
+def test_workflow_visualization():
+    visualizer = WorkflowVisualizer()  # Optional workflow parameter
+    # Test with real workflow instances
+
+# E2E Tests: Full scenarios
+def test_event_handling():
+    manager = ConnectionManager()
+    # Test filter_events() and process_event() with real connections
+```
+
 ---
 
 ## 🚀 Enterprise Architecture & Multi-Channel Platform
@@ -107,7 +139,7 @@ runtime.execute(workflow, parameters={"reader": {"file_path": "new.csv"}})
 
 **🎯 Auto-Mapping Parameters**: NodeParameter supports `auto_map_primary=True`, `auto_map_from=["alt1"]`, `workflow_alias="name"` for automatic connection discovery.
 
-**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. See [developer/12-testing-production-quality.md](developer/12-testing-production-quality.md).
+**🧪 Production-Certified Testing Framework**: Comprehensive async testing with Docker integration, Ollama LLM workflows, performance validation, and variable passing fully resolved. **TODO-111**: Core SDK architecture now includes 67 comprehensive tests for CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager with 100% pass rate. See [developer/12-testing-production-quality.md](developer/12-testing-production-quality.md).
 
 **🏥 Enterprise MCP Workflows**: Complete healthcare HIPAA, finance SOX, and multi-tenant patterns with 4 production-grade enterprise nodes. See [cheatsheet/040-enterprise-mcp-workflows.md](cheatsheet/040-enterprise-mcp-workflows.md).
 

@@ -109,7 +109,7 @@ class TestCacheNodeIntegration:
         assert result["hit"] is True
 
         # Wait for expiration
-        time.sleep(3)
+        time.sleep(0.1)
 
         # Should be expired
         expired_result = redis_cache_node.execute(

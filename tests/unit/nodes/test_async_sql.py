@@ -419,6 +419,7 @@ class TestAsyncSQLDatabaseNode:
                 fetch_mode=FetchMode.ALL,
                 fetch_size=None,
                 transaction=mock_transaction,
+                parameter_types=None,
             )
             mock_adapter.commit_transaction.assert_called_once_with(mock_transaction)
             mock_adapter.rollback_transaction.assert_not_called()
@@ -568,6 +569,7 @@ class TestAsyncSQLDatabaseNode:
                 params=None,
                 fetch_mode=FetchMode.ALL,
                 fetch_size=None,
+                parameter_types=None,
             )
 
     @pytest.mark.asyncio

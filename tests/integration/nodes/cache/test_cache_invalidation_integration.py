@@ -384,7 +384,7 @@ class TestCacheInvalidationNodeIntegration:
         assert result["invalidated_count"] == 1
 
         # Wait for new TTL to expire
-        time.sleep(3)
+        time.sleep(0.1)
 
         # Verify key expired due to shortened TTL
         expired_result = cache_node.execute(

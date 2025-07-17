@@ -470,7 +470,7 @@ class NodeTestHelper:
                 pass  # Expected
 
 
-class TestReporter:
+class WorkflowTestReporter:
     """Generate test reports for workflows."""
 
     def __init__(self, task_manager: TaskManager):

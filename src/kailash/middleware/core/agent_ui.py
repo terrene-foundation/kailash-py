@@ -944,7 +944,7 @@ class AgentUIMiddleware:
     async def get_available_nodes(self) -> List[Dict[str, Any]]:
         """Get all available node types with their schemas."""
         nodes = []
-        for node_name, node_class in self.node_registry.nodes.items():
+        for node_name, node_class in self.node_registry._nodes.items():
             # Get node schema (would be implemented in schema.py)
             schema = await self._get_node_schema(node_class)
             nodes.append(

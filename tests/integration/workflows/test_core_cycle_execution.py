@@ -16,6 +16,9 @@ from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic import SwitchNode
 from kailash.runtime.local import LocalRuntime
+from kailash.tracking import TaskManager
+from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState
+from kailash.workflow.safety import CycleSafetyManager
 
 
 class TestCoreCycleExecution:
@@ -363,3 +366,184 @@ class TestCoreCycleExecution:
 
         # Verify exact iteration count
         assert results["inc"]["result"]["value"] == 7
+
+    def test_cyclic_workflow_executor_dag_portion(self):
+        """Test TODO-111: CyclicWorkflowExecutor._execute_dag_portion method."""
+        workflow = Workflow("dag_test", "DAG Portion Test")
+
+        # Create simple DAG nodes
+        def node1(input=0):
+            return {"output": input + 10}
+
+        def node2(input=0):
+            return {"output": input * 2}
+
+        n1 = PythonCodeNode.from_function(node1, "n1")
+        n2 = PythonCodeNode.from_function(node2, "n2")
+
+        workflow.add_node("node1", n1)
+        workflow.add_node("node2", n2)
+        workflow.add_connection("node1", "result.output", "node2", "input")
+
+        # Execute with CyclicWorkflowExecutor
+        executor = CyclicWorkflowExecutor()
+        state = WorkflowState(run_id="test_run")
+
+        # Test _execute_dag_portion directly
+        results = executor._execute_dag_portion(
+            workflow=workflow,
+            dag_nodes=["node1", "node2"],
+            state=state,
+            task_manager=None,
+        )
+
+        # Verify DAG execution
+        assert "node1" in results
+        assert "node2" in results
+        assert results["node1"]["result"]["output"] == 10  # 0 + 10
+        assert results["node2"]["result"]["output"] == 20  # 10 * 2
+
+    def test_parameter_propagation_in_cycles(self):
+        """Test TODO-111: _propagate_parameters functionality."""
+        workflow = Workflow("param_test", "Parameter Propagation Test")
+
+        # Node that modifies parameters
+        def param_modifier(a=0, b=0, iteration=0):
+            return {"a": a + 1, "b": b * 2, "sum": a + b, "iteration": iteration + 1}
+
+        modifier = PythonCodeNode.from_function(
+            param_modifier,
+            "modifier",
+            input_schema={
+                "a": NodeParameter(name="a", type=int, required=False, default=0),
+                "b": NodeParameter(name="b", type=int, required=False, default=1),
+                "iteration": NodeParameter(
+                    name="iteration", type=int, required=False, default=0
+                ),
+            },
+        )
+        workflow.add_node("modifier", modifier)
+
+        # Create cycle with parameter propagation
+        workflow.create_cycle("param_cycle").connect(
+            "modifier",
+            "modifier",
+            {"result.a": "a", "result.b": "b", "result.iteration": "iteration"},
+        ).max_iterations(3).build()
+
+        # Execute and test propagation
+        executor = CyclicWorkflowExecutor()
+        results, run_id = executor.execute(
+            workflow, parameters={"modifier": {"a": 1, "b": 1}}
+        )
+
+        # Verify parameter propagation worked
+        # Initial: a=1, b=1
+        # Iter 1: a=2, b=2
+        # Iter 2: a=3, b=4
+        # Iter 3: a=4, b=8
+        assert results["modifier"]["result"]["a"] == 4
+        assert results["modifier"]["result"]["b"] == 8
+        assert results["modifier"]["result"]["iteration"] == 3
+
+    def test_cyclic_executor_with_safety_manager(self):
+        """Test TODO-111: CyclicWorkflowExecutor with safety limits."""
+        # Create safety manager with strict limits
+        safety_manager = CycleSafetyManager(
+            default_max_iterations=5,
+            default_timeout=2.0,
+            default_memory_limit=100,  # MB
+        )
+
+        workflow = Workflow("safety_test", "Safety Test")
+
+        # Runaway node that would run forever
+        def runaway(value=0):
+            return {"value": value + 1, "converged": False}
+
+        node = PythonCodeNode.from_function(runaway, "runaway")
+        workflow.add_node("runaway", node)
+
+        # Create infinite cycle
+        workflow.create_cycle("infinite").connect(
+            "runaway", "runaway", {"result.value": "value"}
+        ).max_iterations(
+            1000
+        ).build()  # Would run 1000 times without safety
+
+        # Execute with safety
+        executor = CyclicWorkflowExecutor(safety_manager=safety_manager)
+        results, run_id = executor.execute(workflow)
+
+        # Should stop at safety limit (5) not workflow limit (1000)
+        assert results["runaway"]["result"]["value"] <= 5
+
+    def test_multiple_cycle_groups_execution(self):
+        """Test TODO-111: _execute_cycle_groups with multiple cycles."""
+        workflow = Workflow("multi_cycle", "Multiple Cycles Test")
+
+        # First cycle nodes
+        def counter1(count=0):
+            return {"count": count + 1, "done": count >= 2}
+
+        # Second cycle nodes
+        def counter2(count=0):
+            return {"count": count + 2, "done": count >= 4}
+
+        c1 = PythonCodeNode.from_function(counter1, "c1")
+        c2 = PythonCodeNode.from_function(counter2, "c2")
+
+        workflow.add_node("counter1", c1)
+        workflow.add_node("counter2", c2)
+
+        # Create two independent cycles
+        workflow.create_cycle("cycle1").connect(
+            "counter1", "counter1", {"result.count": "count"}
+        ).max_iterations(3).build()
+
+        workflow.create_cycle("cycle2").connect(
+            "counter2", "counter2", {"result.count": "count"}
+        ).max_iterations(3).build()
+
+        # Execute with CyclicWorkflowExecutor
+        executor = CyclicWorkflowExecutor()
+        results, run_id = executor.execute(workflow)
+
+        # Both cycles should execute independently
+        assert results["counter1"]["result"]["count"] == 3  # 0+1+1+1
+        assert results["counter2"]["result"]["count"] == 6  # 0+2+2+2
+
+    def test_cycle_with_task_tracking(self):
+        """Test TODO-111: Cycle execution with TaskManager tracking."""
+        workflow = Workflow("tracked_cycle", "Tracked Cycle Test")
+
+        # Simple counter for tracking
+        def tracked_counter(value=0):
+            return {"value": value + 1}
+
+        counter = PythonCodeNode.from_function(tracked_counter, "counter")
+        workflow.add_node("counter", counter)
+
+        workflow.create_cycle("tracked").connect(
+            "counter", "counter", {"result.value": "value"}
+        ).max_iterations(2).build()
+
+        # Execute with task tracking
+        task_manager = TaskManager()
+        executor = CyclicWorkflowExecutor()
+        results, run_id = executor.execute(workflow, task_manager=task_manager)
+
+        # Verify tasks were created
+        tasks = task_manager.get_tasks_for_run(run_id)
+
+        # Should have tasks for cycle group, iterations, and node executions
+        cycle_tasks = [t for t in tasks if "cycle_group" in t.node_id]
+        iteration_tasks = [t for t in tasks if "iteration" in t.node_id]
+        node_tasks = [t for t in tasks if "counter" in t.node_id]
+
+        assert len(cycle_tasks) >= 1  # At least one cycle group
+        assert len(iteration_tasks) >= 2  # Two iterations
+        assert len(node_tasks) >= 2  # Counter executed twice
+
+        # All should be completed
+        assert all(t.status == "completed" for t in tasks)

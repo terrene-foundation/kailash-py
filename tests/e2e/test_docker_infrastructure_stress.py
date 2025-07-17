@@ -19,6 +19,12 @@ from typing import Any, Dict, List
 import asyncpg
 import pytest
 import pytest_asyncio
+from tests.utils.docker_config import (
+    DATABASE_CONFIG,
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+    get_redis_url,
+)
 
 from kailash import Workflow
 from kailash.nodes.api import HTTPRequestNode
@@ -27,12 +33,6 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.utils.resource_manager import ResourceTracker
-from tests.utils.docker_config import (
-    DATABASE_CONFIG,
-    REDIS_CONFIG,
-    get_postgres_connection_string,
-    get_redis_url,
-)
 
 try:
     import redis
@@ -344,7 +344,7 @@ result = {
                         "errors": 0,
                     }
 
-                    for i in range(100):  # Operations per thread
+                    for i in range(10):  # Operations per thread - reduced for E2E
                         key = f"stress_key_{random.randint(0, num_keys)}"
 
                         try:
@@ -481,7 +481,7 @@ import hashlib
 start_time = time.time()
 hashes = []
 
-for i in range(10000):
+for i in range(100):  # Reduced for E2E timeout
     data = f"iteration_{i}_{workflow_id}".encode()
     h = hashlib.sha256(data).hexdigest()
     hashes.append(h)

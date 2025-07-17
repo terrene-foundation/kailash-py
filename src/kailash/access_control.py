@@ -435,6 +435,17 @@ class AccessControlManager:
         self, user: UserContext, workflow_id: str, permission: WorkflowPermission
     ) -> AccessDecision:
         """Check if user has permission on workflow"""
+        # If access control is disabled, allow all access
+        if not self.enabled:
+            return AccessDecision(
+                allowed=True,
+                reason="Access control disabled",
+                applied_rules=[],
+                conditions_met={},
+                masked_fields=[],
+                redirect_node=None,
+            )
+
         cache_key = f"workflow:{workflow_id}:{user.user_id}:{permission.value}"
 
         # Check cache
@@ -462,6 +473,17 @@ class AccessControlManager:
         runtime_context: dict[str, Any] = None,
     ) -> AccessDecision:
         """Check if user has permission on node"""
+        # If access control is disabled, allow all access
+        if not self.enabled:
+            return AccessDecision(
+                allowed=True,
+                reason="Access control disabled",
+                applied_rules=[],
+                conditions_met={},
+                masked_fields=[],
+                redirect_node=None,
+            )
+
         cache_key = f"node:{node_id}:{user.user_id}:{permission.value}"
 
         # For runtime-dependent permissions, don't use cache
@@ -494,65 +516,56 @@ class AccessControlManager:
         return decision
 
     def get_accessible_nodes(
-        self, user: UserContext, workflow_id: str, permission: NodePermission
-    ) -> set[str]:
-        """Get all nodes user can access in a workflow"""
-        accessible = set()
+        self, user: UserContext, nodes: list[str], permission: NodePermission
+    ) -> list[str]:
+        """Get all nodes user can access from a list of nodes"""
+        # If access control is disabled, allow access to all nodes
+        if not self.enabled:
+            return nodes
 
-        # Get all node rules for this workflow
-        node_rules = [
-            r
-            for r in self.rules
-            if r.resource_type == "node" and r.permission == permission
-        ]
-
-        for rule in node_rules:
-            if self._rule_applies_to_user(rule, user):
-                if rule.effect == PermissionEffect.ALLOW:
-                    accessible.add(rule.resource_id)
-                elif rule.effect == PermissionEffect.DENY:
-                    accessible.discard(rule.resource_id)
-
+        accessible = []
+        for node_id in nodes:
+            decision = self.check_node_access(user, node_id, permission)
+            if decision.allowed:
+                accessible.append(node_id)
         return accessible
 
     def get_permission_based_route(
         self,
         user: UserContext,
-        conditional_node_id: str,
-        true_path_nodes: list[str],
-        false_path_nodes: list[str],
-    ) -> list[str]:
-        """Determine which path user should take based on permissions"""
-        # Check if user has access to nodes in true path
-        true_path_accessible = all(
-            self.check_node_access(user, node_id, NodePermission.EXECUTE).allowed
-            for node_id in true_path_nodes
-        )
+        node_id: str,
+        permission: NodePermission,
+        alternatives: dict[str, str] = None,
+    ) -> str | None:
+        """Get alternative route if user doesn't have access to node"""
+        # If access control is disabled, allow access to requested node
+        if not self.enabled:
+            return None
 
-        if true_path_accessible:
-            return true_path_nodes
-        else:
-            # Check false path
-            false_path_accessible = all(
-                self.check_node_access(user, node_id, NodePermission.EXECUTE).allowed
-                for node_id in false_path_nodes
-            )
+        decision = self.check_node_access(user, node_id, permission)
 
-            if false_path_accessible:
-                return false_path_nodes
-            else:
-                # User can't access either path
-                return []
+        if decision.allowed:
+            return None  # No alternative needed
+
+        # If access denied and alternatives provided, return alternative
+        if alternatives and node_id in alternatives:
+            return alternatives[node_id]
+
+        return None
 
     def mask_node_output(
         self, user: UserContext, node_id: str, output: dict[str, Any]
     ) -> dict[str, Any]:
         """Mask sensitive fields in node output"""
-        decision = self.check_node_access(user, node_id, NodePermission.READ_OUTPUT)
+        # If access control is disabled, don't mask anything
+        if not self.enabled:
+            return output
+
+        decision = self.check_node_access(user, node_id, NodePermission.MASK_OUTPUT)
 
         if not decision.allowed:
-            # Completely mask output
-            return {"_masked": True, "reason": "Access denied"}
+            # No masking rules found, return original output
+            return output
 
         if decision.masked_fields:
             # Mask specific fields
@@ -626,7 +639,12 @@ class AccessControlManager:
                 break
 
         allowed = final_effect == PermissionEffect.ALLOW
-        reason = f"Permission {permission.value} {'granted' if allowed else 'denied'} for {resource_type} {resource_id}"
+
+        # Set reason based on rules found
+        if not applicable_rules:
+            reason = f"No matching rules found for {resource_type} {resource_id}"
+        else:
+            reason = f"Permission {permission.value} {'granted' if allowed else 'denied'} for {resource_type} {resource_id}"
 
         return AccessDecision(
             allowed=allowed,

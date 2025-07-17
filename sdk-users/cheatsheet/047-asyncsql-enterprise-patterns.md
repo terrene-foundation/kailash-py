@@ -409,6 +409,117 @@ except Exception as e:
     raise
 ```
 
+## 🔧 PostgreSQL Parameter Type Inference (v0.6.6+)
+
+### Handling JSONB and Complex Type Contexts
+```python
+# PostgreSQL sometimes can't infer parameter types in complex contexts
+# Use parameter_types to provide explicit type hints
+
+node = AsyncSQLDatabaseNode(
+    database_type="postgresql",
+    host="localhost",
+    database="myapp"
+)
+
+# JSONB build_object requires explicit type hints
+await node.async_run(
+    query="""
+        INSERT INTO audit_logs (action, details, created_by)
+        VALUES (
+            :action,
+            jsonb_build_object(
+                'role_id', :role_id,
+                'granted_by', :granted_by,
+                'permissions', :permissions::jsonb
+            ),
+            :created_by
+        )
+    """,
+    params={
+        "action": "role_assigned",
+        "role_id": "admin",
+        "granted_by": "system",
+        "permissions": '["read", "write", "delete"]',
+        "created_by": "system"
+    },
+    parameter_types={
+        "action": "text",
+        "role_id": "text",
+        "granted_by": "text",
+        "permissions": "jsonb",
+        "created_by": "text"
+    }
+)
+
+# COALESCE with NULL values
+await node.async_run(
+    query="""
+        UPDATE users
+        SET preferences = jsonb_set(
+            COALESCE(preferences, '{}'),
+            '{notifications}',
+            :settings::jsonb
+        )
+        WHERE user_id = :user_id
+    """,
+    params={
+        "settings": '{"email": true, "sms": false}',
+        "user_id": "user123"
+    },
+    parameter_types={
+        "settings": "jsonb",
+        "user_id": "text"
+    }
+)
+
+# Configuration-based type hints
+node = AsyncSQLDatabaseNode(
+    database_type="postgresql",
+    host="localhost",
+    database="myapp",
+    parameter_types={
+        "metadata": "jsonb",
+        "role_id": "uuid",
+        "created_at": "timestamptz"
+    }
+)
+```
+
+### Common PostgreSQL Types for parameter_types
+```python
+parameter_types = {
+    # Text types
+    "name": "text",
+    "id": "varchar",
+
+    # Numeric types
+    "count": "integer",
+    "amount": "numeric",
+    "price": "decimal",
+
+    # JSON types
+    "data": "jsonb",
+    "config": "json",
+
+    # Date/time types
+    "created": "timestamp",
+    "updated": "timestamptz",
+    "birth_date": "date",
+
+    # Network types
+    "ip_address": "inet",
+    "mac": "macaddr",
+
+    # UUID
+    "user_id": "uuid",
+
+    # Arrays
+    "tags": "text[]",
+    "numbers": "integer[]"
+}
+```
+
 ## 🎯 Best Practices
 
 ### Performance

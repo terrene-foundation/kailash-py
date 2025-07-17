@@ -91,7 +91,10 @@ class WorkflowRunner:
         Returns:
             Status information
         """
-        return self.task_manager.get_run_status(run_id)
+        summary = self.task_manager.get_run_summary(run_id)
+        if summary:
+            return summary.model_dump()
+        return {}
 
     def get_run_history(
         self, workflow_name: str | None = None, limit: int = 10
@@ -105,6 +108,5 @@ class WorkflowRunner:
         Returns:
             List of run summaries
         """
-        return self.task_manager.get_run_history(
-            workflow_name=workflow_name, limit=limit
-        )
+        runs = self.task_manager.list_runs(workflow_name=workflow_name, limit=limit)
+        return [run.model_dump() for run in runs]

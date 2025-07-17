@@ -1,20 +1,18 @@
-"""Unit tests for CheckpointManager."""
+"""Integration tests for CheckpointManager - redirects to no-mock tests."""
 
-import asyncio
-import gzip
-import json
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+# This file has been deprecated in favor of no-mock integration tests.
+# All mock-based tests have been moved to unit tests.
+# For real integration testing, see test_middleware_no_mocks.py
 
 import pytest
 
-from kailash.middleware.gateway.checkpoint_manager import (
-    CheckpointManager,
-    DiskStorage,
-    MemoryStorage,
+# Import the no-mock tests
+from tests.integration.middleware.test_middleware_no_mocks import (
+    TestCheckpointManagerIntegration,
 )
-from kailash.middleware.gateway.durable_request import Checkpoint, RequestState
+
+# Mark all tests as integration tests
+pytestmark = pytest.mark.integration
 
 
 class TestMemoryStorage:
