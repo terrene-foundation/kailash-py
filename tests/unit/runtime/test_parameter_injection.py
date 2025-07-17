@@ -166,43 +166,16 @@ class TestWorkflowParameterInjection:
 
         assert results["entry"]["required"] == "node_specific_value"
 
-    def test_workflow_builder_input_mappings(self):
+    def test_workflow_builder_input_mappings(self, mock_node_factory):
         """Test WorkflowBuilder's add_workflow_inputs method."""
-        # Create a simple test node
-        from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
-        
-        @register_node()
-        class SimpleParamNode(Node):
-            def __init__(self, **kwargs):
-                metadata = NodeMetadata(
-                    name="SimpleParamNode",
-                    description="Simple parameter test node"
-                )
-                super().__init__(metadata=metadata, **kwargs)
-            
-            def get_parameters(self):
-                return {
-                    "required_param": NodeParameter(
-                        name="required_param",
-                        type=str,
-                        required=True,
-                        description="Required parameter"
-                    ),
-                    "optional_param": NodeParameter(
-                        name="optional_param",
-                        type=str,
-                        required=False,
-                        default="default",
-                        description="Optional parameter"
-                    )
-                }
-            
-            def run(self, **kwargs):
-                return {
-                    "required": kwargs.get("required_param"),
-                    "optional": kwargs.get("optional_param", "default")
-                }
-        
+        # Create a simple test node using the factory
+        SimpleParamNode = mock_node_factory(
+            "SimpleParamNode",
+            execute_return={"required": "test_value", "optional": "optional_value"},
+            required_params=["required_param"],
+            optional_params={"optional_param": "default"}
+        )
+
         builder = WorkflowBuilder()
         builder.add_node(
             "SimpleParamNode",
