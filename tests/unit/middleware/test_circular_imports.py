@@ -8,6 +8,8 @@ resolved the circular import issues.
 import sys
 import traceback
 
+import pytest
+
 
 def test_import_jwt_auth_manager():
     """Test that JWTAuthManager can be imported without circular import errors."""
@@ -246,6 +248,7 @@ def test_node_registry_lazy_loading():
         assert False, f"NodeRegistry import failed: {e}"
 
 
+@pytest.mark.timeout(5)  # Allow more time for subprocess imports
 def test_import_order_independence():
     """Test that import order doesn't cause circular dependencies (TODO-111)."""
     print("\nTesting import order independence...")
