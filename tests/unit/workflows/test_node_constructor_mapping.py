@@ -21,23 +21,8 @@ class TestNodeConstructorMapping:
     def setup_method(self):
         """Set up test fixtures."""
         # Ensure key node classes are available and registered
-        from kailash.nodes.base import NodeRegistry
-
-        # Import nodes to trigger registration
-        assert PythonCodeNode is not None
-        assert HTTPRequestNode is not None
-        assert CSVReaderNode is not None
-        assert DataTransformer is not None
-
-        # Verify they are registered
-        if "PythonCodeNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
-        if "HTTPRequestNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(HTTPRequestNode, "HTTPRequestNode")
-        if "CSVReaderNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
-        if "DataTransformer" not in NodeRegistry._nodes:
-            NodeRegistry.register(DataTransformer, "DataTransformer")
+        from tests.node_registry_utils import ensure_nodes_registered
+        ensure_nodes_registered()
 
     def test_python_code_node_parameter_mapping(self):
         """Test PythonCodeNode works with WorkflowBuilder.from_dict()."""
