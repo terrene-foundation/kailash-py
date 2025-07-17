@@ -428,9 +428,9 @@ jobs:
           # Tests are now properly organized - unit tests have no sleep calls
           # Use marker-based exclusion as per test organization policy
 
-          # Temporarily disabled pytest-forked due to conflict with pytest-timeout
-          # TODO: Fix timeout issues with heavy imports in unit tests
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v"
+          # Re-enable pytest-forked for proper test isolation
+          # Extended timeouts in conftest_timeouts.py handle heavy imports
+          PYTEST_CMD="pytest tests/unit/ --forked -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v"
           echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
 
           # Run all checks in parallel with proper failure detection
