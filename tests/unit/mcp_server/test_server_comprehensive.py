@@ -555,7 +555,11 @@ class TestMCPServerResourceAndPromptDecorators:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_resource.fn() == "resource data"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_resource, "fn"):
+            assert test_resource.fn() == "resource data"
+        else:
+            assert test_resource() == "resource data"
 
     def test_resource_decorator_with_caching(self):
         """Test resource decorator with caching."""
@@ -574,7 +578,11 @@ class TestMCPServerResourceAndPromptDecorators:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_resource.fn() == "resource data"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_resource, "fn"):
+            assert test_resource.fn() == "resource data"
+        else:
+            assert test_resource() == "resource data"
 
     def test_resource_decorator_with_permission(self):
         """Test resource decorator with permission."""
@@ -593,7 +601,11 @@ class TestMCPServerResourceAndPromptDecorators:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_resource.fn() == "resource data"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_resource, "fn"):
+            assert test_resource.fn() == "resource data"
+        else:
+            assert test_resource() == "resource data"
 
     def test_resource_decorator_initializes_mcp(self):
         """Test resource decorator initializes MCP if not already initialized."""
@@ -629,7 +641,11 @@ class TestMCPServerResourceAndPromptDecorators:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_prompt.fn() == "prompt text"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_prompt, "fn"):
+            assert test_prompt.fn() == "prompt text"
+        else:
+            assert test_prompt() == "prompt text"
 
     def test_prompt_decorator_with_caching(self):
         """Test prompt decorator with caching."""
@@ -648,7 +664,11 @@ class TestMCPServerResourceAndPromptDecorators:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_prompt.fn() == "prompt text"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_prompt, "fn"):
+            assert test_prompt.fn() == "prompt text"
+        else:
+            assert test_prompt() == "prompt text"
 
     def test_prompt_decorator_with_permission(self):
         """Test prompt decorator with permission."""
@@ -667,7 +687,11 @@ class TestMCPServerResourceAndPromptDecorators:
         assert server._mcp is not None
 
         # Verify function still works
-        assert test_prompt.fn() == "prompt text"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_prompt, "fn"):
+            assert test_prompt.fn() == "prompt text"
+        else:
+            assert test_prompt() == "prompt text"
 
     def test_prompt_decorator_initializes_mcp(self):
         """Test prompt decorator initializes MCP if not already initialized."""
