@@ -168,20 +168,46 @@ class TestWorkflowParameterInjection:
 
     def test_workflow_builder_input_mappings(self):
         """Test WorkflowBuilder's add_workflow_inputs method."""
+        # Create a simple test node
+        from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
+        
+        @register_node()
+        class SimpleParamNode(Node):
+            def __init__(self, **kwargs):
+                metadata = NodeMetadata(
+                    name="SimpleParamNode",
+                    description="Simple parameter test node"
+                )
+                super().__init__(metadata=metadata, **kwargs)
+            
+            def get_parameters(self):
+                return {
+                    "required_param": NodeParameter(
+                        name="required_param",
+                        type=str,
+                        required=True,
+                        description="Required parameter"
+                    ),
+                    "optional_param": NodeParameter(
+                        name="optional_param",
+                        type=str,
+                        required=False,
+                        default="default",
+                        description="Optional parameter"
+                    )
+                }
+            
+            def run(self, **kwargs):
+                return {
+                    "required": kwargs.get("required_param"),
+                    "optional": kwargs.get("optional_param", "default")
+                }
+        
         builder = WorkflowBuilder()
-        # Use PythonCodeNode with proper function code
         builder.add_node(
-            "PythonCodeNode",
+            "SimpleParamNode",
             "processor",
-            {
-                "code": """
-# Parameters are injected into namespace
-result = {
-    'required': required_param,
-    'optional': optional_param
-}
-"""
-            },
+            {}
         )
         builder.add_workflow_inputs(
             "processor",

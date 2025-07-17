@@ -88,9 +88,31 @@ class TestAccessControlledRuntime:
 
     def test_execute_with_disabled_access_control(self):
         """Test execute method when access control is disabled (default)."""
-        # Use MockNode which is always available in tests
-        # Import to ensure MockNode is registered via @register_node decorator
-        import tests.conftest  # noqa: F401
+        # Create a simple test node inline
+        from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
+        
+        @register_node()
+        class SimpleTestNode(Node):
+            def __init__(self, **kwargs):
+                metadata = NodeMetadata(
+                    name="SimpleTestNode",
+                    description="Simple test node"
+                )
+                super().__init__(metadata=metadata, **kwargs)
+            
+            def get_parameters(self):
+                return {
+                    "value": NodeParameter(
+                        name="value",
+                        type=float,
+                        required=True,
+                        description="Test value"
+                    )
+                }
+            
+            def run(self, **kwargs):
+                value = kwargs.get("value", 0)
+                return {"result": value * 2}
 
         user = UserContext(
             user_id="test_user",
@@ -101,9 +123,9 @@ class TestAccessControlledRuntime:
 
         runtime = AccessControlledRuntime(user_context=user)
 
-        # Create a simple workflow using MockNode
+        # Create a simple workflow
         builder = WorkflowBuilder()
-        builder.add_node("MockNode", "test_node", {"value": 2.5})
+        builder.add_node("SimpleTestNode", "test_node", {"value": 2.5})
         workflow = builder.build()
 
         # Should execute without access control checks (default behavior)
@@ -112,7 +134,7 @@ class TestAccessControlledRuntime:
         assert result is not None
         assert run_id is not None
         assert "test_node" in result
-        assert result["test_node"]["result"] == 5.0  # MockNode doubles the value
+        assert result["test_node"]["result"] == 5.0
 
     def test_execute_with_enabled_access_control_allowed(self):
         """Test execute method with access control enabled and permission granted."""
@@ -216,12 +238,35 @@ class TestAccessControlledRuntime:
 
         runtime = AccessControlledRuntime(user_context=user)
 
-        # Import to ensure MockNode is registered via @register_node decorator
-        import tests.conftest  # noqa: F401
+        # Create a simple test node inline
+        from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
+        
+        @register_node()
+        class SimpleTestNode2(Node):
+            def __init__(self, **kwargs):
+                metadata = NodeMetadata(
+                    name="SimpleTestNode2",
+                    description="Simple test node 2"
+                )
+                super().__init__(metadata=metadata, **kwargs)
+            
+            def get_parameters(self):
+                return {
+                    "value": NodeParameter(
+                        name="value",
+                        type=float,
+                        required=True,
+                        description="Test value"
+                    )
+                }
+            
+            def run(self, **kwargs):
+                value = kwargs.get("value", 0)
+                return {"result": value * 2}
 
         # Create original workflow
         builder = WorkflowBuilder()
-        builder.add_node("MockNode", "test_node", {"value": 4.0})
+        builder.add_node("SimpleTestNode2", "test_node", {"value": 4.0})
         original_workflow = builder.build()
 
         # Create controlled workflow
