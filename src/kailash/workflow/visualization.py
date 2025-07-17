@@ -70,7 +70,7 @@ class WorkflowVisualizer:
         """Get colors for all nodes in workflow."""
         colors = []
         for node_id in self.workflow.graph.nodes():
-            node_instance = target_workflow.nodes.get(node_id)
+            node_instance = self.workflow.nodes.get(node_id)
             if node_instance:
                 node_type = node_instance.node_type
                 colors.append(self._get_node_color(node_type))
@@ -122,12 +122,14 @@ class WorkflowVisualizer:
 
         return edge_labels
 
-    def _calculate_layout(self, workflow: 'Workflow' = None) -> dict[str, tuple[float, float]]:
+    def _calculate_layout(
+        self, workflow: "Workflow" = None
+    ) -> dict[str, tuple[float, float]]:
         """Calculate node positions for visualization."""
         target_workflow = workflow or self.workflow
         if not target_workflow:
             return {}
-            
+
         # Try to use stored positions first
         pos = {}
         for node_id, node_instance in target_workflow.nodes.items():
@@ -154,8 +156,10 @@ class WorkflowVisualizer:
                 pos = nx.spring_layout(target_workflow.graph)
 
         return pos
-    
-    def _get_layout_positions(self, workflow: Workflow) -> dict[str, tuple[float, float]]:
+
+    def _get_layout_positions(
+        self, workflow: Workflow
+    ) -> dict[str, tuple[float, float]]:
         """Get layout positions for workflow nodes."""
         # Temporarily store workflow and calculate layout
         original_workflow = self.workflow
@@ -164,7 +168,7 @@ class WorkflowVisualizer:
             return self._calculate_layout()
         finally:
             self.workflow = original_workflow
-    
+
     def _get_node_colors(self, workflow: Workflow) -> list[str]:
         """Get node colors for workflow."""
         colors = []
@@ -183,17 +187,19 @@ class WorkflowVisualizer:
                     color_key = "ai"
                 else:
                     color_key = "default"
-                colors.append(self.node_colors.get(color_key, self.node_colors["default"]))
+                colors.append(
+                    self.node_colors.get(color_key, self.node_colors["default"])
+                )
             else:
                 colors.append(self.node_colors["default"])
         return colors
 
-    def _create_layers(self, workflow: 'Workflow' = None) -> dict[int, list]:
+    def _create_layers(self, workflow: "Workflow" = None) -> dict[int, list]:
         """Create layers of nodes for hierarchical layout."""
         target_workflow = workflow or self.workflow
         if not target_workflow:
             return {}
-            
+
         layers = {}
         remaining = set(target_workflow.graph.nodes())
         layer = 0
@@ -251,18 +257,22 @@ class WorkflowVisualizer:
         target_workflow = workflow or self.workflow
         if not target_workflow:
             raise ValueError("No workflow provided to draw")
-        
+
         # Use default position if not provided
         if pos is None:
             pos = self._get_layout_positions(target_workflow)
-        
+
         # Use default colors if not provided
         if node_colors is None:
             node_colors = self._get_node_colors(target_workflow)
-        
+
         # Draw nodes
         nx.draw_networkx_nodes(
-            target_workflow.graph, pos, node_color=node_colors, node_size=3000, alpha=0.9
+            target_workflow.graph,
+            pos,
+            node_color=node_colors,
+            node_size=3000,
+            alpha=0.9,
         )
 
         # Draw edges
@@ -284,7 +294,7 @@ class WorkflowVisualizer:
             self.workflow = target_workflow
             labels = self._get_node_labels()
             self.workflow = old_workflow
-            
+
             nx.draw_networkx_labels(
                 target_workflow.graph, pos, labels, font_size=10, font_weight="bold"
             )
@@ -296,7 +306,7 @@ class WorkflowVisualizer:
             self.workflow = target_workflow
             edge_labels = self._get_edge_labels()
             self.workflow = old_workflow
-            
+
             nx.draw_networkx_edge_labels(
                 target_workflow.graph, pos, edge_labels, font_size=8
             )
@@ -325,8 +335,10 @@ class WorkflowVisualizer:
         try:
             # Check if workflow is available
             if not self.workflow:
-                raise ValueError("No workflow to visualize. Set workflow property or create visualizer with workflow.")
-                
+                raise ValueError(
+                    "No workflow to visualize. Set workflow property or create visualizer with workflow."
+                )
+
             plt.figure(figsize=figsize)
 
             # Calculate node positions
@@ -342,7 +354,13 @@ class WorkflowVisualizer:
 
             # Draw the graph components
             if pos:
-                self._draw_graph(workflow=self.workflow, pos=pos, node_colors=node_colors, show_labels=show_labels, show_connections=show_connections)
+                self._draw_graph(
+                    workflow=self.workflow,
+                    pos=pos,
+                    node_colors=node_colors,
+                    show_labels=show_labels,
+                    show_connections=show_connections,
+                )
 
             # Set title
             if title is None:

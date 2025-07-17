@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import CSVReaderNode
+from kailash.nodes.transform import DataTransformer
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import Workflow, WorkflowBuilder
 from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 from kailash.workflow.visualization import WorkflowVisualizer
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.transform import DataTransformer
 
 
 class TestVisualizationIntegration:
@@ -39,12 +39,12 @@ class TestVisualizationIntegration:
         visualizer.visualize(output_path=str(output_path))
         assert output_path.exists()
         assert output_path.stat().st_size > 0  # File has content
-        
+
         # Test TODO-111: Visualizer with optional workflow parameter
         visualizer_no_workflow = WorkflowVisualizer()  # No workflow in constructor
         assert visualizer_no_workflow.workflow is None
         visualizer_no_workflow.workflow = workflow
-        
+
         output_path2 = temp_data_dir / "workflow2.png"
         visualizer_no_workflow.visualize(output_path=str(output_path2))
         assert output_path2.exists()
@@ -71,7 +71,7 @@ class TestVisualizationIntegration:
         # Test that visualizers have expected methods
         assert hasattr(visualizer, "visualize")
         assert hasattr(mermaid, "generate")
-        
+
         # Test TODO-111: New methods exist
         assert hasattr(visualizer, "_draw_graph")
         assert hasattr(visualizer, "_get_layout_positions")
@@ -81,14 +81,15 @@ class TestVisualizationIntegration:
         visualizer.visualize()  # Should not raise
         mermaid_content = mermaid.generate()  # Should not raise
         assert mermaid_content  # Should produce content
-        
+
         # Test TODO-111: _draw_graph with workflow parameter
         builder2 = WorkflowBuilder()
         builder2.add_node("PythonCodeNode", "python_node", {"code": "result = 42"})
         workflow2 = builder2.build("test2")
-        
+
         # Should be able to draw different workflow
         import matplotlib.pyplot as plt
+
         plt.figure()
         visualizer._draw_graph(workflow=workflow2)
         plt.close()  # Clean up
@@ -190,38 +191,45 @@ class TestVisualizationIntegration:
         assert WorkflowBuilder is not None
         assert LocalRuntime is not None
         assert WorkflowRunner is not None
-    
+
     def test_visualizer_with_cyclic_workflow(self, temp_data_dir: Path):
         """Test TODO-111: Visualizing cyclic workflows."""
         # Create workflow with cycle
         builder = WorkflowBuilder()
-        builder.add_node("PythonCodeNode", "node1", {"code": "result = {'value': input.get('value', 0) + 1}"})
-        builder.add_node("PythonCodeNode", "node2", {"code": "result = {'converged': input['value'] > 5}"})
-        
+        builder.add_node(
+            "PythonCodeNode",
+            "node1",
+            {"code": "result = {'value': input.get('value', 0) + 1}"},
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            "node2",
+            {"code": "result = {'converged': input['value'] > 5}"},
+        )
+
         # Regular connection
         builder.add_connection("node1", "result", "node2", "input")
-        
+
         # Build workflow first
         workflow = builder.build("cyclic_test")
-        
+
         # Then create cycle
         workflow.create_cycle("test_cycle").connect(
-            "node2", "node1",
-            {"result.value": "input.value"}
+            "node2", "node1", {"result.value": "input.value"}
         ).max_iterations(3).build()
-        
+
         # Visualize cyclic workflow
         visualizer = WorkflowVisualizer(workflow)
         output_path = temp_data_dir / "cyclic_workflow.png"
         visualizer.visualize(output_path=str(output_path))
-        
+
         assert output_path.exists()
         assert output_path.stat().st_size > 0
-        
+
         # Edge colors should exist
         assert "default" in visualizer.edge_colors
         assert visualizer.edge_colors["default"] == "gray"
-    
+
     def test_node_color_mapping(self, temp_data_dir: Path):
         """Test TODO-111: Node color mapping by type."""
         # Create workflow with different node types
@@ -229,67 +237,62 @@ class TestVisualizationIntegration:
         builder.add_node("CSVReaderNode", "data_node", config={"file_path": "test.csv"})
         builder.add_node("DataTransformer", "transform_node")
         builder.add_node("PythonCodeNode", "python_node", {"code": "result = data"})
-        
+
         # Add AI-like node (name contains 'llm')
         builder.add_node("PythonCodeNode", "llm_processor", {"code": "result = 'ai'"})
-        
+
         # Connect them
         builder.add_connection("data_node", "data", "transform_node", "data")
         builder.add_connection("transform_node", "data", "python_node", "data")
-        
+
         workflow = builder.build("color_test")
-        
+
         visualizer = WorkflowVisualizer(workflow)
-        
+
         # Test _get_node_colors method
         colors = visualizer._get_node_colors(workflow)
-        
+
         # Should have color for each node
         assert len(colors) == 4
-        
+
         # Verify color categories
         assert visualizer.node_colors["data"] in colors  # CSV node
         assert visualizer.node_colors["transform"] in colors  # Transform & Python nodes
-        
+
     def test_custom_colors_and_layout(self, temp_data_dir: Path):
         """Test TODO-111: Custom colors and layouts."""
         builder = WorkflowBuilder()
         builder.add_node("PythonCodeNode", "node1", {"code": "result = 1"})
         builder.add_node("PythonCodeNode", "node2", {"code": "result = 2"})
         builder.add_connection("node1", "result", "node2", "input")
-        
+
         workflow = builder.build("custom_test")
-        
+
         # Test with custom colors
-        custom_node_colors = {
-            "default": "#FF00FF",
-            "transform": "#00FF00"
-        }
-        custom_edge_colors = {
-            "default": "#0000FF"
-        }
-        
+        custom_node_colors = {"default": "#FF00FF", "transform": "#00FF00"}
+        custom_edge_colors = {"default": "#0000FF"}
+
         # Test different layouts
         for layout in ["hierarchical", "circular", "spring"]:
             visualizer = WorkflowVisualizer(
                 workflow,
                 node_colors=custom_node_colors,
                 edge_colors=custom_edge_colors,
-                layout=layout
+                layout=layout,
             )
-            
+
             output_path = temp_data_dir / f"custom_{layout}.png"
             visualizer.visualize(output_path=str(output_path))
-            
+
             assert output_path.exists()
-            
+
     def test_draw_graph_error_handling(self):
         """Test TODO-111: Error handling in _draw_graph."""
         import pytest
-        
+
         # Create visualizer without workflow
         visualizer = WorkflowVisualizer()
-        
+
         # Should raise error when no workflow provided
         with pytest.raises(ValueError, match="No workflow provided to draw"):
             visualizer._draw_graph()

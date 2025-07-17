@@ -26,12 +26,12 @@ def test_execute_dag_portion():
     """Test DAG execution with proper state management."""
     executor = CyclicWorkflowExecutor()
     # Test _execute_dag_portion method
-    
+
 def test_execute_cycle_groups():
     """Test cycle group execution in sequence."""
     executor = CyclicWorkflowExecutor()
     # Test _execute_cycle_groups method
-    
+
 def test_propagate_parameters():
     """Test parameter flow between iterations."""
     executor = CyclicWorkflowExecutor()
@@ -45,7 +45,7 @@ def test_optional_workflow_constructor():
     """Test WorkflowVisualizer with optional workflow parameter."""
     visualizer = WorkflowVisualizer()  # No workflow required
     assert visualizer.workflow is None
-    
+
     visualizer.workflow = mock_workflow
     assert visualizer.workflow is not None
 ```
@@ -57,7 +57,7 @@ def test_filter_events():
     """Test event filtering by session, user, type."""
     manager = ConnectionManager()
     # Test filter_events method
-    
+
 def test_process_event():
     """Test async event processing."""
     manager = ConnectionManager()
