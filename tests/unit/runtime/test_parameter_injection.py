@@ -168,12 +168,13 @@ class TestWorkflowParameterInjection:
 
     def test_workflow_builder_input_mappings(self, mock_node_factory):
         """Test WorkflowBuilder's add_workflow_inputs method."""
+
         # Create a simple test node using the factory with dynamic execution
         def custom_execute(self, **kwargs):
             return {
                 "result": {
                     "required": kwargs.get("required_param", ""),
-                    "optional": kwargs.get("optional_param", "default")
+                    "optional": kwargs.get("optional_param", "default"),
                 }
             }
 
@@ -181,15 +182,11 @@ class TestWorkflowParameterInjection:
             "SimpleParamNode",
             execute_method=custom_execute,
             required_params=["required_param"],
-            optional_params={"optional_param": "default"}
+            optional_params={"optional_param": "default"},
         )
 
         builder = WorkflowBuilder()
-        builder.add_node(
-            "SimpleParamNode",
-            "processor",
-            {}
-        )
+        builder.add_node("SimpleParamNode", "processor", {})
         builder.add_workflow_inputs(
             "processor",
             {"user_input": "required_param", "config_data": "optional_param"},
