@@ -25,7 +25,7 @@ class TestAsyncSQLDatetimeSerialization:
                 host="localhost",
                 database="test_db",
                 user="test_user",
-                password="test_pass"
+                password="test_pass",
             )
 
             # Mock the adapter to simulate PostgreSQL returning datetime
@@ -100,20 +100,20 @@ class TestAsyncSQLDatetimeSerialization:
                 # Create node
                 if db_type == "sqlite":
                     node = AsyncSQLDatabaseNode(
-                database_type="postgresql",
-                host="localhost",
-                database="test_db",
-                user="test_user",
-                password="test_pass"
-            )
+                        database_type="postgresql",
+                        host="localhost",
+                        database="test_db",
+                        user="test_user",
+                        password="test_pass",
+                    )
                 else:
                     node = AsyncSQLDatabaseNode(
-                database_type="postgresql",
-                host="localhost",
-                database="test_db",
-                user="test_user",
-                password="test_pass"
-            )
+                        database_type="postgresql",
+                        host="localhost",
+                        database="test_db",
+                        user="test_user",
+                        password="test_pass",
+                    )
 
                 # Mock the adapter
                 mock_adapter = AsyncMock()
@@ -256,7 +256,7 @@ class TestAsyncSQLDatetimeSerialization:
                 host="localhost",
                 database="test_db",
                 user="test_user",
-                password="test_pass"
+                password="test_pass",
             )
 
             # Mock the adapter

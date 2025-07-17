@@ -35,7 +35,7 @@ class TestAsyncSQLParameterTypes:
             host="localhost",
             database="test_db",
             user="test_user",
-            password="test_pass"
+            password="test_pass",
         )
 
     @pytest.mark.asyncio
@@ -112,7 +112,7 @@ class TestAsyncSQLParameterTypes:
             host="localhost",
             database="test_db",
             user="test_user",
-            password="test_pass"
+            password="test_pass",
         )
 
         # Create a mock adapter that captures the execute call
@@ -150,7 +150,7 @@ class TestAsyncSQLParameterTypes:
             host="localhost",
             database="test_db",
             user="test_user",
-            password="test_pass"
+            password="test_pass",
         )
 
         # Create a mock adapter
