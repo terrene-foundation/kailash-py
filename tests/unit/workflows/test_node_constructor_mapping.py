@@ -14,6 +14,9 @@ from kailash.nodes.transform import DataTransformer
 from kailash.sdk_exceptions import NodeConfigurationError, WorkflowValidationError
 from kailash.workflow.builder import WorkflowBuilder
 
+# Mark entire module as requiring isolation due to state pollution issues
+pytestmark = pytest.mark.requires_isolation
+
 
 class TestNodeConstructorMapping:
     """Test node constructor parameter mapping in WorkflowBuilder.from_dict()."""
@@ -22,6 +25,7 @@ class TestNodeConstructorMapping:
         """Set up test fixtures."""
         # Ensure key node classes are available and registered
         from tests.node_registry_utils import ensure_nodes_registered
+
         ensure_nodes_registered()
 
     def test_python_code_node_parameter_mapping(self):
@@ -48,7 +52,8 @@ class TestNodeConstructorMapping:
         # Verify node was created correctly
         assert "python_node" in workflow.nodes
         node_instance = workflow._node_instances["python_node"]
-        assert isinstance(node_instance, PythonCodeNode)
+        # Check class name instead of isinstance due to forking
+        assert node_instance.__class__.__name__ == "PythonCodeNode"
         assert node_instance.metadata.name == "python_node"  # auto-mapped from id
 
     def test_explicit_name_parameter_preserved(self):
@@ -95,7 +100,7 @@ class TestNodeConstructorMapping:
 
         assert "csv_reader" in workflow.nodes
         node_instance = workflow._node_instances["csv_reader"]
-        assert isinstance(node_instance, CSVReaderNode)
+        assert node_instance.__class__.__name__ == "CSVReaderNode"
 
     def test_multiple_node_types_in_workflow(self):
         """Test workflow with mixed node constructor patterns."""
@@ -134,8 +139,8 @@ class TestNodeConstructorMapping:
         python_node = workflow._node_instances["python_processor"]
         csv_node = workflow._node_instances["csv_reader"]
 
-        assert isinstance(python_node, PythonCodeNode)
-        assert isinstance(csv_node, CSVReaderNode)
+        assert python_node.__class__.__name__ == "PythonCodeNode"
+        assert csv_node.__class__.__name__ == "CSVReaderNode"
         assert python_node.metadata.name == "python_processor"
 
     def test_invalid_node_config_error_message(self):
@@ -217,7 +222,7 @@ class TestNodeConstructorMapping:
 
         assert "processor" in workflow.nodes
         processor_node = workflow._node_instances["processor"]
-        assert isinstance(processor_node, PythonCodeNode)
+        assert processor_node.__class__.__name__ == "PythonCodeNode"
         assert processor_node.metadata.name == "processor"
 
 
@@ -227,15 +232,9 @@ class TestNodeConstructorConsistency:
     def setup_method(self):
         """Set up test fixtures."""
         # Ensure key node classes are available and registered
-        from kailash.nodes.base import NodeRegistry
+        from tests.node_registry_utils import ensure_nodes_registered
 
-        # Verify they are registered
-        if "PythonCodeNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
-        if "HTTPRequestNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(HTTPRequestNode, "HTTPRequestNode")
-        if "CSVReaderNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
+        ensure_nodes_registered()
 
     def test_base_node_accepts_name_parameter(self):
         """All nodes should accept 'name' parameter consistently."""

@@ -13,7 +13,7 @@ When running tests, ALWAYS use these commands with timeout enforcement:
 
 ```bash
 # Unit tests (1 second max)
-pytest tests/unit/ --forked --timeout=1 --timeout-method=thread
+pytest tests/unit/ --timeout=1 --timeout-method=thread
 
 # Integration tests (5 seconds max)
 pytest tests/integration/ --timeout=5 --timeout-method=thread
