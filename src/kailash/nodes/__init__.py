@@ -1,7 +1,11 @@
 """Node system for the Kailash SDK."""
 
-# Import all node modules to ensure registration
-from kailash.nodes import (
+# Import all node modules to ensure registration - fixed circular import
+from kailash.nodes.base import Node, NodeParameter, NodeRegistry, register_node
+from kailash.nodes.base_cycle_aware import CycleAwareNode
+from kailash.nodes.code import PythonCodeNode
+
+from . import (
     ai,
     alerts,
     api,
@@ -19,9 +23,6 @@ from kailash.nodes import (
     transaction,
     transform,
 )
-from kailash.nodes.base import Node, NodeParameter, NodeRegistry, register_node
-from kailash.nodes.base_cycle_aware import CycleAwareNode
-from kailash.nodes.code import PythonCodeNode
 
 # Compatibility alias - AsyncNode is now just Node
 AsyncNode = Node

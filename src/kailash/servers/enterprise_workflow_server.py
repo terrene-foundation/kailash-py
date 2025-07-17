@@ -427,9 +427,8 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
 
     def _register_root_endpoints(self):
         """Override to add enterprise info to root endpoint."""
-        # Don't call super() to avoid duplicate endpoint registration
 
-        # Register the enterprise root endpoint
+        # Register the enterprise root endpoint first (before super() to take precedence)
         @self.app.get("/")
         async def root():
             """Server information with enterprise details."""
@@ -464,3 +463,60 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
             }
 
             return base_info
+
+        # Now call super() to get other endpoints (health, workflows, etc.) but skip root
+        # We'll register them manually to avoid route conflicts
+        @self.app.get("/workflows")
+        async def list_workflows():
+            """List all registered workflows."""
+            return {
+                name: {
+                    "type": reg.type,
+                    "description": reg.description,
+                    "version": reg.version,
+                    "tags": reg.tags,
+                    "endpoints": self._get_workflow_endpoints(name),
+                }
+                for name, reg in self.workflows.items()
+            }
+
+        @self.app.get("/health")
+        async def health_check():
+            """Server health check."""
+            health_status = {
+                "status": "healthy",
+                "server_type": "enterprise_workflow_server",
+                "workflows": {},
+                "mcp_servers": {},
+            }
+
+            # Check workflow health
+            for name, reg in self.workflows.items():
+                if reg.type == "embedded":
+                    health_status["workflows"][name] = "healthy"
+                else:
+                    # TODO: Implement proxy health check
+                    health_status["workflows"][name] = "unknown"
+
+            # Check MCP server health
+            for name, server in self.mcp_servers.items():
+                # TODO: Implement MCP health check
+                health_status["mcp_servers"][name] = "unknown"
+
+            return health_status
+
+        @self.app.websocket("/ws")
+        async def websocket_endpoint(websocket):
+            """WebSocket for real-time updates."""
+            from fastapi import WebSocket
+
+            await websocket.accept()
+            try:
+                while True:
+                    # Basic WebSocket echo - subclasses can override
+                    data = await websocket.receive_text()
+                    await websocket.send_text(f"Echo: {data}")
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+            finally:
+                await websocket.close()

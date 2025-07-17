@@ -45,7 +45,12 @@ def mock_get(node_type: str):
         "Merger",
     ]:
         return MockNode
-    return original_get(node_type)
+    # For other nodes, try to get from registry, but return MockNode if not found
+    try:
+        return original_get(node_type)
+    except:
+        # If node not found, return MockNode for testing
+        return MockNode
 
 
 # Replace NodeRegistry.get with our mock

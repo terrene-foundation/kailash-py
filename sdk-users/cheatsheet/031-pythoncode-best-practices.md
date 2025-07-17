@@ -106,7 +106,7 @@ def validate_data(df: pd.DataFrame) -> dict:
 
 # Create nodes
 cleaner = PythonCodeNode.from_function(func=clean_data, name="cleaner")
-analyzer = PythonCodeNode.from_function(func=analyze_data, name="analyzer")
+analyzer = PythonCodeNode.from_function(func=validate_data, name="analyzer")
 
 ```
 
@@ -126,12 +126,13 @@ from kailash.nodes.base import Node, NodeParameter
 workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
-def validate_data(df: pd.DataFrame) -> dict:
+def train_model(data: list, target_col: str) -> dict:
     """Train with proper imports."""
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
     import pickle
     import base64
+    import pandas as pd
 
     df = pd.DataFrame(data)
     X = df.drop(target_col, axis=1)
@@ -152,7 +153,7 @@ def validate_data(df: pd.DataFrame) -> dict:
         'model_b64': base64.b64encode(model_bytes).decode()
     }
 
-trainer = PythonCodeNode.from_function(func=train_model, name="trainer")
+trainer = PythonCodeNode.from_function(func=validate_data, name="trainer")
 
 ```
 
@@ -203,18 +204,18 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # 1. Write and test function
-def validate_data(df: pd.DataFrame) -> dict:
+def validate_data(data: list) -> dict:
     # Your logic here
     return {'processed': len(data)}
 
 # 2. Test independently
 test_data = [{'id': 1}, {'id': 2}]
-result = my_processor(test_data)
+result = validate_data(test_data)
 assert result['processed'] == 2
 
 # 3. Create node from tested function
 node = PythonCodeNode.from_function(
-    func=my_processor,
+    func=validate_data,
     name="processor"
 )
 
@@ -441,13 +442,13 @@ result = {'count': len(filtered)}
 )
 
 # After (function)
-def validate_data(df: pd.DataFrame) -> dict:
+def process_records(input_data: dict) -> dict:
     data = input_data.get('records', [])
     filtered = [r for r in data if r.get('active')]
     return {'count': len(filtered)}
 
 node = PythonCodeNode.from_function(
-    func=process_records,
+    func=validate_data,
     name="new"
 )
 

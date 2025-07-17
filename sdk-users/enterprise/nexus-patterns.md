@@ -18,53 +18,61 @@ Enterprise Nexus patterns provide production-ready multi-channel orchestration w
 
 ### Production Deployment Pattern
 ```python
-from kailash.nexus import create_production_nexus
+from nexus import Nexus
 from kailash.enterprise.auth import EnterpriseAuthProvider
 from kailash.enterprise.monitoring import PrometheusMonitoring
 
 # Enterprise-grade multi-channel platform
-nexus = create_production_nexus(
-    name="Enterprise Platform",
-
+app = Nexus(
     # Channel configuration
     api_port=8000,
     mcp_port=3000,
-    enable_cli=True,
 
-    # Enterprise authentication
-    auth_provider=EnterpriseAuthProvider(
-        ldap_server="ldap://enterprise.local",
-        sso_endpoint="https://sso.company.com/saml",
-        enable_api_keys=True,
-        enable_mfa=True
-    ),
-
-    # Multi-tenancy
-    multi_tenant=True,
-    tenant_isolation="strict",
-
-    # Enterprise monitoring
-    monitoring=PrometheusMonitoring(
-        metrics_port=9090,
-        enable_traces=True,
-        enable_logs=True
-    ),
-
-    # High availability
-    enable_clustering=True,
-    health_check_interval=30,
-
-    # Compliance
-    compliance_mode="enterprise",  # GDPR + HIPAA + SOX
-    audit_log_retention=2557  # 7 years
+    # Enterprise features enabled
+    enable_auth=True,
+    enable_monitoring=True,
+    rate_limit=1000  # Requests per minute
 )
+
+# Configure enterprise authentication via attributes
+app.auth.provider = EnterpriseAuthProvider(
+    ldap_server="ldap://enterprise.local",
+    sso_endpoint="https://sso.company.com/saml",
+    enable_api_keys=True,
+    enable_mfa=True
+)
+
+# Configure monitoring
+app.monitoring.backend = PrometheusMonitoring(
+    metrics_port=9090,
+    enable_traces=True,
+    enable_logs=True
+)
+
+# Multi-tenancy configuration
+app.auth.multi_tenant = True
+app.auth.tenant_isolation = "strict"
+
+# Compliance configuration
+app.auth.compliance_mode = "enterprise"  # GDPR + HIPAA + SOX
+app.auth.audit_log_retention = 2557  # 7 years
+
+# High availability configuration
+app.api.enable_clustering = True
+app.api.health_check_interval = 30
+
+# Start the platform
+app.start()
 ```
 
 ## 🔐 Enterprise Security Patterns
 
 ### Multi-Factor Authentication Across Channels
 ```python
+from nexus import Nexus
 from kailash.enterprise.auth import MultiFactorAuth
+
+app = Nexus(enable_auth=True)
 
 # MFA configuration for all channels
 mfa_config = MultiFactorAuth(
@@ -74,20 +82,19 @@ mfa_config = MultiFactorAuth(
     session_binding=True  # Bind MFA to session across channels
 )
 
-nexus = create_production_nexus(
-    auth_config={
-        "mfa": mfa_config,
-        "session_duration": 28800,  # 8 hours
-        "cross_channel_sso": True,
-        "require_reauth_for": ["admin", "sensitive_workflows"]
-    }
-)
+# Configure auth attributes
+app.auth.mfa = mfa_config
+app.auth.session_duration = 28800  # 8 hours
+app.auth.cross_channel_sso = True
+app.auth.require_reauth_for = ["admin", "sensitive_workflows"]
 
 # MFA flow across channels:
 # 1. User authenticates via any channel (API/CLI/MCP)
 # 2. MFA challenge presented in appropriate format
 # 3. Session token valid across all channels
 # 4. Sensitive operations require re-authentication
+
+app.start()
 ```
 
 ### Role-Based Access Control (RBAC)

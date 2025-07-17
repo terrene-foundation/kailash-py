@@ -1,18 +1,18 @@
-"""Integration tests for EventStore with async components."""
+"""Integration tests for EventStore - redirects to no-mock tests."""
 
-import asyncio
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+# This file has been deprecated in favor of no-mock integration tests.
+# All mock-based tests have been moved to unit tests.
+# For real integration testing, see test_middleware_no_mocks.py
 
 import pytest
 
-from kailash.middleware.gateway.event_store import (
-    EventStore,
-    EventType,
-    RequestEvent,
-    performance_metrics_projection,
-    request_state_projection,
+# Import the no-mock tests
+from tests.integration.middleware.test_middleware_no_mocks import (
+    TestEventStoreIntegration,
 )
+
+# Mark all tests as integration tests
+pytestmark = pytest.mark.integration
 
 
 class TestRequestEvent:

@@ -3,7 +3,7 @@
 import pytest
 
 from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow, WorkflowBuilder
 
@@ -62,6 +62,22 @@ class MockParameterNode(Node):
 
 class TestWorkflowParameterInjection:
     """Test automatic parameter injection for workflow-level parameters."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Ensure nodes are registered
+        from kailash.nodes.base import NodeRegistry
+
+        if "PythonCodeNode" not in NodeRegistry._nodes:
+            try:
+                NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+            except Exception:
+                pass
+        if "MockParameterNode" not in NodeRegistry._nodes:
+            try:
+                NodeRegistry.register(MockParameterNode, "MockParameterNode")
+            except Exception:
+                pass
 
     def test_workflow_level_parameters_basic(self):
         """Test basic workflow-level parameter injection."""
@@ -150,23 +166,27 @@ class TestWorkflowParameterInjection:
 
         assert results["entry"]["required"] == "node_specific_value"
 
-    def test_workflow_builder_input_mappings(self):
+    def test_workflow_builder_input_mappings(self, mock_node_factory):
         """Test WorkflowBuilder's add_workflow_inputs method."""
-        builder = WorkflowBuilder()
-        # Use PythonCodeNode with proper function code
-        builder.add_node(
-            "PythonCodeNode",
-            "processor",
-            {
-                "code": """
-# Parameters are injected into namespace
-result = {
-    'required': required_param,
-    'optional': optional_param
-}
-"""
-            },
+
+        # Create a simple test node using the factory with dynamic execution
+        def custom_execute(self, **kwargs):
+            return {
+                "result": {
+                    "required": kwargs.get("required_param", ""),
+                    "optional": kwargs.get("optional_param", "default"),
+                }
+            }
+
+        SimpleParamNode = mock_node_factory(
+            "SimpleParamNode",
+            execute_method=custom_execute,
+            required_params=["required_param"],
+            optional_params={"optional_param": "default"},
         )
+
+        builder = WorkflowBuilder()
+        builder.add_node("SimpleParamNode", "processor", {})
         builder.add_workflow_inputs(
             "processor",
             {"user_input": "required_param", "config_data": "optional_param"},

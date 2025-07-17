@@ -30,10 +30,28 @@ results, run_id = secure_runtime.execute(workflow)
 # Configure RBAC
 access_manager = AccessControlManager(strategy="rbac")
 
-# Define role permissions
-access_manager.add_role_permission("analyst", "read", "financial_data")
-access_manager.add_role_permission("analyst", "write", "reports")
-access_manager.add_role_permission("admin", "*", "*")  # Full access
+# Define role permissions using add_rule method
+access_manager.add_rule({
+    "name": "analyst_read_financial",
+    "role": "analyst",
+    "action": "read",
+    "resource": "financial_data",
+    "effect": "allow"
+})
+access_manager.add_rule({
+    "name": "analyst_write_reports",
+    "role": "analyst",
+    "action": "write",
+    "resource": "reports",
+    "effect": "allow"
+})
+access_manager.add_rule({
+    "name": "admin_full_access",
+    "role": "admin",
+    "action": "*",
+    "resource": "*",
+    "effect": "allow"
+})
 
 # Apply to runtime
 secure_runtime = AccessControlledRuntime(
@@ -48,15 +66,19 @@ secure_runtime = AccessControlledRuntime(
 # Configure ABAC with policies
 access_manager = AccessControlManager(strategy="abac")
 
-# Define attribute policies
-access_manager.add_policy({
-    "name": "department_access",
-    "effect": "allow",
-    "conditions": {
+# Define attribute policies using PermissionRule with conditions
+department_rule = PermissionRule(
+    id="department_access",
+    resource_type="workflow",
+    resource_id="sensitive_data",
+    permission=WorkflowPermission.EXECUTE,
+    effect=PermissionEffect.ALLOW,
+    conditions={
         "user.department": "${resource.department}",
-        "user.clearance_level": {">=>": "${resource.sensitivity}"}
+        "user.clearance_level": {">=": "${resource.sensitivity}"}
     }
-})
+)
+access_manager.add_rule(department_rule)
 
 ```
 
@@ -217,13 +239,16 @@ workflow.add_node("filter", FilterNode(),
 
 ### Resource-Level Permissions
 ```python
-# Check permissions per resource
-for record in data:
-    if access_manager.check_permission(
-        user_context=user,
-        action="read",
-        resource=record
-    ):
+# Check permissions per workflow using actual API
+decision = access_manager.check_workflow_access(
+    user=user,
+    workflow_id="process_data",
+    permission=WorkflowPermission.EXECUTE
+)
+
+if decision.allowed:
+    # Process all records if workflow access is granted
+    for record in data:
         process_record(record)
 
 ```

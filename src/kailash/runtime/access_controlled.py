@@ -134,13 +134,15 @@ class AccessControlledRuntime:
         This method has the exact same signature as the standard runtime,
         ensuring complete compatibility.
         """
-        # Check workflow-level access
-        workflow_decision = self.acm.check_workflow_access(
-            self.user_context, workflow.workflow_id, WorkflowPermission.EXECUTE
-        )
+        # Only check access control if it's enabled
+        if self.acm.enabled:
+            # Check workflow-level access
+            workflow_decision = self.acm.check_workflow_access(
+                self.user_context, workflow.workflow_id, WorkflowPermission.EXECUTE
+            )
 
-        if not workflow_decision.allowed:
-            raise PermissionError(f"Access denied: {workflow_decision.reason}")
+            if not workflow_decision.allowed:
+                raise PermissionError(f"Access denied: {workflow_decision.reason}")
 
         # For simplicity, directly execute with the base runtime
         # In a full implementation, we would wrap nodes or intercept execution

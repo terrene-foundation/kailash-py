@@ -788,7 +788,8 @@ class TestRetryableOperation:
         operation = RetryableOperation(strategy)
 
         def failing_function():
-            raise MCPError("Circuit breaker test", retryable=True)
+            # Use retry_after=0.1 to keep delay under 1 second timeout
+            raise MCPError("Circuit breaker test", retryable=True, retry_after=0.1)
 
         # Should fail and record failures
         with pytest.raises(MCPError):

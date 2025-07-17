@@ -1,24 +1,18 @@
-"""Integration tests for API Gateway with .execute() method fix.
+"""Integration tests for API Gateway - redirects to no-mock tests."""
 
-This test verifies that the middleware components correctly use
-the .execute() method instead of the removed .process() method.
-"""
-
-import asyncio
-import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+# This file has been deprecated in favor of no-mock integration tests.
+# All mock-based tests have been moved to unit tests.
+# For real integration testing, see test_middleware_no_mocks.py
 
 import pytest
-from fastapi.testclient import TestClient
 
-from kailash.middleware.communication.api_gateway import (
-    APIGateway,
-    SessionCreateRequest,
-    SessionResponse,
+# Import the no-mock tests
+from tests.integration.middleware.test_middleware_no_mocks import (
+    TestAPIGatewayIntegration,
 )
-from kailash.middleware.core.agent_ui import AgentUIMiddleware
-from kailash.nodes.transform import DataTransformer
+
+# Mark all tests as integration tests
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.integration

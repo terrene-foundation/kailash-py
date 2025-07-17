@@ -1427,11 +1427,35 @@ class NodeRegistry:
             - Factory methods: Dynamic node creation
         """
         if node_name not in cls._nodes:
-            available_nodes = ", ".join(sorted(cls._nodes.keys()))
-            raise NodeConfigurationError(
-                f"Node '{node_name}' not found in registry. "
-                f"Available nodes: {available_nodes}"
-            )
+            available_nodes = sorted(cls._nodes.keys())
+
+            # Provide more helpful error message based on registry state
+            if not available_nodes:
+                # Registry is empty - likely a test isolation or import issue
+                raise NodeConfigurationError(
+                    f"Node '{node_name}' not found in registry. "
+                    f"The node registry is empty. This usually means:\n"
+                    f"  1. Nodes haven't been imported yet (try: import kailash.nodes)\n"
+                    f"  2. Test isolation cleared the registry without re-importing\n"
+                    f"  3. The node module containing '{node_name}' wasn't imported\n"
+                    f"Common nodes: PythonCodeNode, CSVReaderNode, SQLDatabaseNode, HTTPRequestNode"
+                )
+            else:
+                # Registry has nodes but not the requested one
+                nodes_list = ", ".join(available_nodes)
+
+                # Try to suggest similar node names
+                similar = [
+                    n
+                    for n in available_nodes
+                    if node_name.lower() in n.lower() or n.lower() in node_name.lower()
+                ]
+                suggestion = f"\nDid you mean: {', '.join(similar)}?" if similar else ""
+
+                raise NodeConfigurationError(
+                    f"Node '{node_name}' not found in registry. "
+                    f"Available nodes: {nodes_list}{suggestion}"
+                )
         return cls._nodes[node_name]
 
     @classmethod

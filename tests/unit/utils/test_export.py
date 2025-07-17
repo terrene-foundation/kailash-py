@@ -22,6 +22,13 @@ class MockNode(Node):
 class TestWorkflowExporter:
     """Test WorkflowExporter functionality."""
 
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Ensure nodes are registered
+        from tests.node_registry_utils import ensure_nodes_registered
+
+        ensure_nodes_registered()
+
     def test_exporter_initialization(self):
         """Test WorkflowExporter can be initialized."""
         exporter = WorkflowExporter()
