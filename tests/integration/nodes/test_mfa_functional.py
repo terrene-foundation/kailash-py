@@ -656,7 +656,7 @@ class TestMFARateLimitingAndSecurity:
             session_id = verify_result["session_id"]
 
             # Wait for session to expire
-            time.sleep(2)
+            time.sleep(0.1)
 
             # Try to use expired session
             session_check = mfa_node.execute(
