@@ -39,8 +39,16 @@ class TestAccessControlledRuntime:
         """Set up test fixtures."""
         # Ensure PythonCodeNode is registered
         from tests.node_registry_utils import ensure_nodes_registered
-
+        
+        # First ensure nodes are registered
         ensure_nodes_registered()
+        
+        # Double-check that PythonCodeNode is available
+        from kailash.nodes.base import NodeRegistry
+        if "PythonCodeNode" not in NodeRegistry._nodes:
+            # Force import if still not registered
+            from kailash.nodes.code.python import PythonCodeNode
+            NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
 
     def test_init_with_user_context(self):
         """Test initialization with user context."""
