@@ -26,6 +26,7 @@ class TestWorkflowExporter:
         """Set up test fixtures."""
         # Ensure nodes are registered
         from tests.node_registry_utils import ensure_nodes_registered
+
         ensure_nodes_registered()
 
     def test_exporter_initialization(self):

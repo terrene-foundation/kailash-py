@@ -39,6 +39,7 @@ class TestAccessControlledRuntime:
         """Set up test fixtures."""
         # Ensure nodes are properly registered
         from tests.node_registry_utils import ensure_nodes_registered
+
         ensure_nodes_registered()
 
     def test_init_with_user_context(self):
@@ -211,8 +212,7 @@ class TestAccessControlledRuntime:
         class SimpleTestNode2(Node):
             def __init__(self, **kwargs):
                 metadata = NodeMetadata(
-                    name="SimpleTestNode2",
-                    description="Simple test node 2"
+                    name="SimpleTestNode2", description="Simple test node 2"
                 )
                 super().__init__(metadata=metadata, **kwargs)
 
@@ -222,7 +222,7 @@ class TestAccessControlledRuntime:
                         name="value",
                         type=float,
                         required=True,
-                        description="Test value"
+                        description="Test value",
                     )
                 }
 
@@ -468,7 +468,9 @@ class TestAccessControlledRuntime:
         assert not acm.enabled
 
         # Create a test node using the factory
-        TestNode = mock_node_factory("TestNode", execute_return={"result": "backward_compatible"})
+        TestNode = mock_node_factory(
+            "TestNode", execute_return={"result": "backward_compatible"}
+        )
 
         # Should execute without any access control checks
         builder = WorkflowBuilder()
