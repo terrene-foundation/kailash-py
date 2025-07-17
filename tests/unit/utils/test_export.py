@@ -25,11 +25,8 @@ class TestWorkflowExporter:
     def setup_method(self):
         """Set up test fixtures."""
         # Ensure nodes are registered
-        from kailash.nodes.base import NodeRegistry
-        from kailash.nodes.data import CSVReaderNode
-
-        if "CSVReaderNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
+        from tests.node_registry_utils import ensure_nodes_registered
+        ensure_nodes_registered()
 
     def test_exporter_initialization(self):
         """Test WorkflowExporter can be initialized."""
