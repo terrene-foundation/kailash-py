@@ -93,7 +93,7 @@ class TestMCPServer:
 
         # The decorator returns a FunctionTool, so we need to call its fn attribute
         # When FastMCP is not available, the function is returned as-is
-        if hasattr(test_tool, 'fn'):
+        if hasattr(test_tool, "fn"):
             assert test_tool.fn() == "tool works"
         else:
             assert test_tool() == "tool works"
@@ -111,7 +111,7 @@ class TestMCPServer:
 
         # The decorator returns a FunctionResource, so we need to call its fn attribute
         # When FastMCP is not available, the function is returned as-is
-        if hasattr(test_resource, 'fn'):
+        if hasattr(test_resource, "fn"):
             assert test_resource.fn() == "resource works"
         else:
             assert test_resource() == "resource works"
@@ -148,7 +148,7 @@ class TestMCPServerIntegration:
 
         # Should work functionally
         # When FastMCP is not available, the function is returned as-is
-        if hasattr(integration_tool, 'fn'):
+        if hasattr(integration_tool, "fn"):
             assert integration_tool.fn("test") == "processed: test"
         else:
             assert integration_tool("test") == "processed: test"
