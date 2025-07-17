@@ -106,6 +106,9 @@ class TestSagaStepNode:
         """Test execution with retries on failure."""
         attempt_count = 0
 
+        # Use fast retry delay for unit tests
+        saga_step.retry_delay = 0.001
+
         def flaky_action(inputs, saga_ctx):
             nonlocal attempt_count
             attempt_count += 1
@@ -127,6 +130,9 @@ class TestSagaStepNode:
 
     def test_execute_max_retries_exceeded(self, saga_step):
         """Test execution fails after max retries."""
+
+        # Use fast retry delay for unit tests
+        saga_step.retry_delay = 0.001
 
         def always_fail(inputs, saga_ctx):
             raise Exception("Always fails")
@@ -234,6 +240,9 @@ class TestSagaStepNode:
 
     def test_compensation_with_retries(self, saga_step):
         """Test compensation with retries."""
+        # Use fast retry delay for unit tests
+        saga_step.retry_delay = 0.001
+
         # Execute forward first
         saga_step.execute(operation="execute", execution_id="exec_retry_comp")
 
@@ -258,6 +267,9 @@ class TestSagaStepNode:
 
     def test_compensation_max_retries_exceeded(self, saga_step):
         """Test compensation fails after max retries."""
+        # Use fast retry delay for unit tests
+        saga_step.retry_delay = 0.001
+
         # Execute forward first
         saga_step.execute(operation="execute", execution_id="exec_comp_fail")
 

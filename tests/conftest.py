@@ -108,7 +108,7 @@ def start_sdk_dev_infrastructure():
         if is_sdk_dev_running():
             print("✓ SDK development infrastructure is ready")
             return True
-        time.sleep(2)
+        time.sleep(0.1)
         if i % 5 == 0:
             print(f"  Still waiting... ({i}/{max_retries})")
 

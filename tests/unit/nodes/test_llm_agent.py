@@ -188,8 +188,7 @@ class TestLLMAgentNode:
         node = LLMAgentNode()
 
         providers = [
-            ("ollama", "llama3.2"),  # Ollama provider
-            ("mock", "test-model"),
+            ("mock", "test-model"),  # Only mock provider for unit tests
         ]
 
         for provider, model in providers:

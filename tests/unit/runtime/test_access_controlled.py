@@ -82,6 +82,9 @@ class TestAccessControlledRuntime:
 
     def test_execute_with_disabled_access_control(self):
         """Test execute method when access control is disabled (default)."""
+        # Import PythonCodeNode to ensure it's registered
+        from kailash.nodes.code.python import PythonCodeNode
+
         user = UserContext(
             user_id="test_user",
             tenant_id="test_tenant",
