@@ -92,7 +92,11 @@ class TestMCPServer:
         assert "test_tool" in server._tool_registry
 
         # The decorator returns a FunctionTool, so we need to call its fn attribute
-        assert test_tool.fn() == "tool works"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_tool, 'fn'):
+            assert test_tool.fn() == "tool works"
+        else:
+            assert test_tool() == "tool works"
 
     def test_resource_decorator_functionality(self):
         """Test that resource decorator works functionally."""
@@ -106,7 +110,11 @@ class TestMCPServer:
         assert server._mcp is not None
 
         # The decorator returns a FunctionResource, so we need to call its fn attribute
-        assert test_resource.fn() == "resource works"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_resource, 'fn'):
+            assert test_resource.fn() == "resource works"
+        else:
+            assert test_resource() == "resource works"
 
     def test_fastmcp_import_path(self):
         """Test that import path handling works correctly."""
@@ -139,7 +147,11 @@ class TestMCPServerIntegration:
             return f"processed: {data}"
 
         # Should work functionally
-        assert integration_tool.fn("test") == "processed: test"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(integration_tool, 'fn'):
+            assert integration_tool.fn("test") == "processed: test"
+        else:
+            assert integration_tool("test") == "processed: test"
         assert "integration_tool" in server._tool_registry
 
     def test_server_provides_expected_interface(self):

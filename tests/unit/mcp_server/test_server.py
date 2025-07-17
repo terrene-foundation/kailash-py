@@ -69,7 +69,11 @@ class TestMCPServerBase:
         assert server._mcp is not None
 
         # Test that the tool maintains its original functionality
-        assert test_function.fn() == "test"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_function, 'fn'):
+            assert test_function.fn() == "test"
+        else:
+            assert test_function() == "test"
 
     def test_add_resource_functionality(self):
         """Test that add_resource decorator provides actual functionality."""
@@ -88,7 +92,11 @@ class TestMCPServerBase:
         assert server._mcp is not None
 
         # Test that the function maintains its original functionality
-        assert test_function.fn() == "test"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_function, 'fn'):
+            assert test_function.fn() == "test"
+        else:
+            assert test_function() == "test"
 
     def test_add_prompt_functionality(self):
         """Test that add_prompt decorator provides actual functionality."""
@@ -107,7 +115,11 @@ class TestMCPServerBase:
         assert server._mcp is not None
 
         # Test that the function maintains its original functionality
-        assert test_function.fn() == "test"
+        # When FastMCP is not available, the function is returned as-is
+        if hasattr(test_function, 'fn'):
+            assert test_function.fn() == "test"
+        else:
+            assert test_function() == "test"
 
     def test_stop_sets_running_false(self):
         """Test that stop() sets running to False."""
