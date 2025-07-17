@@ -149,6 +149,7 @@ class TestPythonCodeParameterInjection:
 class TestPythonCodeSecurity:
     """Test security model improvements."""
 
+    @pytest.mark.timeout(5)  # Increased timeout due to module imports
     def test_unsafe_code_detection(self):
         """Test that unsafe code patterns are detected during execution."""
         unsafe_patterns = [
