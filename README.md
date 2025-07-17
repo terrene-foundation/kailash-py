@@ -21,16 +21,16 @@
 
 ---
 
-## 🔥 Latest Release: v0.6.3 (July 5, 2025)
+## 🔥 Latest Release: v0.8.1 (January 17, 2025)
 
-**Comprehensive MCP Platform & Documentation Improvements**
+**Complete App Framework & PyPI Integration**
 
-- 🚀 **MCP Testing**: 407 tests with 100% pass rate across 8 MCP components
-- 📚 **Documentation**: Fixed 200+ code examples, all now execute correctly
-- 🏢 **Enterprise**: Complete MCP platform integration with production workflows
-- 🔧 **Platform**: Resolved namespace collision (kailash.mcp → kailash.mcp_server)
+- 🚀 **App Framework**: Complete application framework with DataFlow & Nexus platforms
+- 📦 **PyPI Integration**: All packages now available on PyPI with proper extras support
+- 🏢 **Enterprise**: Zero-config database operations and multi-channel platforms
+- 🔧 **Platform**: Resolved package naming and distribution issues
 
-[Full Changelog](changelogs/releases/v0.6.3-2025-07-05.md) | [Previous Release](changelogs/releases/v0.6.1-2025-01-26.md)
+[Full Changelog](changelogs/releases/v0.8.1-2025-01-17.md) | [Previous Release](changelogs/releases/v0.6.3-2025-07-05.md)
 
 ## ✨ Highlights
 
@@ -110,11 +110,18 @@ kailash_python_sdk/
 # Core SDK only
 pip install kailash
 
-# SDK with User Management
-pip install kailash[user-management]
+# SDK with DataFlow (zero-config database operations)
+pip install kailash[dataflow]
+
+# SDK with Nexus (multi-channel platform)
+pip install kailash[nexus]
 
 # Everything
 pip install kailash[all]
+
+# Or install apps directly
+pip install kailash-dataflow  # Zero-config database framework
+pip install kailash-nexus     # Multi-channel platform (API, CLI, MCP)
 ```
 
 ## 🎯 Who Is This For?
@@ -138,6 +145,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # For users: Install from PyPI
 pip install kailash
+
+# With additional frameworks
+pip install kailash[dataflow,nexus]  # DataFlow + Nexus platforms
 
 # For developers: Clone and sync
 git clone https://github.com/terrene-foundation/kailash-py.git

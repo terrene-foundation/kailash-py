@@ -13,7 +13,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 # Package configuration
 setup(
     name="kailash",
-    version="0.7.0",
+    version="0.8.1",
     author="Terrene Foundation",
     author_email="info@terrene.foundation",
     description="Python SDK for the Kailash container-node architecture",
@@ -51,14 +51,14 @@ setup(
             "pygraphviz>=1.9",
         ],
         "dataflow": [
-            "dataflow>=0.1.0",
+            "kailash-dataflow>=0.1.0",
         ],
         "nexus": [
-            "nexus>=1.0.0",
+            "kailash-nexus>=1.0.0",
         ],
         "all": [
-            "dataflow>=0.1.0",
-            "nexus>=1.0.0",
+            "kailash-dataflow>=0.1.0",
+            "kailash-nexus>=1.0.0",
         ],
     },
     # Entry points for CLI
