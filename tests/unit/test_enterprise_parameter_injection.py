@@ -61,12 +61,8 @@ def test_deferred_sql_node_creation():
 def test_parameter_injection_workflow():
     """Test parameter injection in a workflow context."""
 
-    # Ensure PythonCodeNode is registered within test
-    from kailash.nodes.base import NodeRegistry
-    from kailash.nodes.code import PythonCodeNode
-
-    if "PythonCodeNode" not in NodeRegistry._nodes:
-        NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+    # Import nodes to ensure registration
+    import kailash.nodes  # noqa: F401
 
     try:
         workflow = WorkflowBuilder()
