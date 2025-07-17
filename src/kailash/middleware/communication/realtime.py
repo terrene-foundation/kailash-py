@@ -177,87 +177,108 @@ class ConnectionManager:
             "active_users": len(self.user_connections),
             "total_messages_sent": total_messages,
         }
-    
-    def filter_events(self, events: List[BaseEvent], event_filter: EventFilter = None) -> List[BaseEvent]:
+
+    def filter_events(
+        self, events: List[BaseEvent], event_filter: EventFilter = None
+    ) -> List[BaseEvent]:
         """Filter events based on event filter criteria."""
         if not event_filter:
             return events
-        
+
         filtered = []
         for event in events:
             # Apply session filter
-            if event_filter.session_id and hasattr(event, 'session_id'):
+            if event_filter.session_id and hasattr(event, "session_id"):
                 if event.session_id != event_filter.session_id:
                     continue
-            
+
             # Apply user filter
-            if event_filter.user_id and hasattr(event, 'user_id'):
+            if event_filter.user_id and hasattr(event, "user_id"):
                 if event.user_id != event_filter.user_id:
                     continue
-            
+
             # Apply event type filter
-            if event_filter.event_types and event.event_type not in event_filter.event_types:
+            if (
+                event_filter.event_types
+                and event.event_type not in event_filter.event_types
+            ):
                 continue
-            
+
             filtered.append(event)
-        
+
         return filtered
-    
+
     def set_event_filter(self, connection_id: str, event_filter: EventFilter):
         """Set event filter for a specific connection."""
         if connection_id in self.connections:
             self.connections[connection_id]["event_filter"] = event_filter
-    
+
     def get_event_filter(self, connection_id: str) -> Optional[EventFilter]:
         """Get event filter for a specific connection."""
         if connection_id in self.connections:
             return self.connections[connection_id].get("event_filter")
         return None
-    
+
     # Alias methods for compatibility
-    def event_filter(self, events: List[BaseEvent], filter_criteria: EventFilter = None) -> List[BaseEvent]:
+    def event_filter(
+        self, events: List[BaseEvent], filter_criteria: EventFilter = None
+    ) -> List[BaseEvent]:
         """Alias for filter_events method."""
         return self.filter_events(events, filter_criteria)
-    
+
     async def on_event(self, event: BaseEvent):
         """Handle incoming event - route to appropriate connections."""
         await self.handle_event(event)
-    
+
     async def handle_event(self, event: BaseEvent):
         """Handle and route event to matching connections."""
         await self.process_event(event)
-    
+
     async def process_event(self, event: BaseEvent):
         """Process event and broadcast to matching connections."""
         message = {
             "type": "event",
-            "event_type": event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type),
+            "event_type": (
+                event.event_type.value
+                if hasattr(event.event_type, "value")
+                else str(event.event_type)
+            ),
             "data": event.data,
-            "timestamp": event.timestamp.isoformat() if hasattr(event, 'timestamp') else datetime.now(timezone.utc).isoformat(),
-            "session_id": getattr(event, 'session_id', None),
-            "user_id": getattr(event, 'user_id', None),
+            "timestamp": (
+                event.timestamp.isoformat()
+                if hasattr(event, "timestamp")
+                else datetime.now(timezone.utc).isoformat()
+            ),
+            "session_id": getattr(event, "session_id", None),
+            "user_id": getattr(event, "user_id", None),
         }
-        
+
         # Broadcast to all matching connections
         for connection_id, connection in self.connections.items():
             event_filter = connection.get("event_filter")
-            
+
             # Check if this connection should receive this event
             should_send = True
             if event_filter:
                 # Apply session filter
-                if event_filter.session_id and connection["session_id"] != event_filter.session_id:
+                if (
+                    event_filter.session_id
+                    and connection["session_id"] != event_filter.session_id
+                ):
                     should_send = False
-                
+
                 # Apply user filter
-                if event_filter.user_id and connection["user_id"] != event_filter.user_id:
+                if (
+                    event_filter.user_id
+                    and connection["user_id"] != event_filter.user_id
+                ):
                     should_send = False
-                
+
                 # Apply event type filter
-                if hasattr(event_filter, 'event_types') and event_filter.event_types:
+                if hasattr(event_filter, "event_types") and event_filter.event_types:
                     if event.event_type not in event_filter.event_types:
                         should_send = False
-            
+
             if should_send:
                 await self.send_to_connection(connection_id, message)
 

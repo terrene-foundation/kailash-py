@@ -38,16 +38,9 @@ class TestAccessControlledRuntime:
     def setup_method(self):
         """Set up test fixtures."""
         # Ensure PythonCodeNode is registered
-        from kailash.nodes.base import Node, NodeRegistry
-        from kailash.nodes.code.python import PythonCodeNode
+        from tests.node_registry_utils import ensure_nodes_registered
 
-        # Only register if not already registered
-        if "PythonCodeNode" not in NodeRegistry._nodes:
-            try:
-                NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
-            except Exception as e:
-                # If registration fails, just skip it - the test might still work
-                pass
+        ensure_nodes_registered()
 
     def test_init_with_user_context(self):
         """Test initialization with user context."""
@@ -82,8 +75,8 @@ class TestAccessControlledRuntime:
 
     def test_execute_with_disabled_access_control(self):
         """Test execute method when access control is disabled (default)."""
-        # Import PythonCodeNode to ensure it's registered
-        from kailash.nodes.code.python import PythonCodeNode
+        # Import PythonCodeNode which auto-registers itself
+        import kailash.nodes  # This imports all nodes and registers them
 
         user = UserContext(
             user_id="test_user",

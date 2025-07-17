@@ -18,9 +18,9 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
+from kailash.tracking import TaskManager
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState
 from kailash.workflow.safety import CycleSafetyManager
-from kailash.tracking import TaskManager
 from kailash.workflow.visualization import WorkflowVisualizer
 
 
@@ -575,7 +575,7 @@ class TestCyclePatternsE2E:
         input_file = tmp_path / "dag_input.csv"
         intermediate_file = tmp_path / "dag_processed.csv"
         output_file = tmp_path / "dag_final.csv"
-        
+
         # Create input data
         input_data = """id,name,value,status
 1,Alice,100,pending
@@ -584,16 +584,16 @@ class TestCyclePatternsE2E:
 4,David,400,pending
 5,Eve,500,pending"""
         input_file.write_text(input_data)
-        
+
         workflow = Workflow("dag_e2e", "DAG Portion E2E Test")
-        
+
         # Step 1: CSV Reader (DAG node)
         test_csv = tmp_path / "test_data.csv"
         test_csv.write_text("value\n100\n200\n300\n400\n500\n")
-        
+
         reader = CSVReaderNode(file_path=str(test_csv))
         workflow.add_node("reader", reader)
-        
+
         # Step 2: Data Processor (DAG node)
         class DataProcessorNode(PythonCodeNode):
             def __init__(self):
@@ -618,70 +618,70 @@ result = {
     'total_value': sum(r['value'] for r in processed_data)
 }"""
                 super().__init__("data_processor", code=code)
-        
+
         processor = DataProcessorNode()
         workflow.add_node("processor", processor)
-        
+
         # Step 3: CSV Writer (DAG node)
         output_csv = tmp_path / "output_data.csv"
         writer = CSVWriterNode(file_path=str(output_csv))
         workflow.add_node("writer", writer)
-        
+
         # Connect DAG portion
         workflow.connect("reader", "processor", {"data": "data"})
         workflow.connect("processor", "writer", {"result.data": "data"})
-        
+
         # Execute with CyclicWorkflowExecutor directly
         executor = CyclicWorkflowExecutor()
         state = WorkflowState(run_id="dag_test_run")
-        
+
         # Set initial parameters
         state.parameters = {
             "reader": {"file_path": str(input_file)},
             "processor": {},
-            "writer": {"file_path": str(output_file)}
+            "writer": {"file_path": str(output_file)},
         }
-        
+
         # Execute DAG portion
         start_time = time.time()
         results = executor._execute_dag_portion(
             workflow=workflow,
             dag_nodes=["reader", "processor", "writer"],
             state=state,
-            task_manager=None
+            task_manager=None,
         )
         end_time = time.time()
         execution_time = end_time - start_time
-        
+
         # Verify DAG execution
         assert "reader" in results
         assert "processor" in results
         assert "writer" in results
-        
+
         # Verify data processing
         assert results["processor"]["result"]["count"] == 5
-        assert results["processor"]["result"]["total_value"] == 2250  # Sum of 150, 300, 450, 600, 750
-        
+        assert (
+            results["processor"]["result"]["total_value"] == 2250
+        )  # Sum of 150, 300, 450, 600, 750
+
         # Verify output file was created
         assert output_csv.exists()
         output_content = output_csv.read_text()
         assert "processed" in output_content
-        
+
         # Verify realistic timing
         assert execution_time > 0.01  # Should include processing delay
-        
+
     def test_todo111_parameter_propagation_with_file_io(self, tmp_path):
         """Test TODO-111: _propagate_parameters with real file operations in cycles."""
         # Create initial data file
         data_file = tmp_path / "cycle_data.json"
-        data_file.write_text(json.dumps({
-            "iteration": 0,
-            "values": [10, 20, 30],
-            "accumulated": 0
-        }))
-        
+        data_file.write_text(
+            json.dumps({"iteration": 0, "values": [10, 20, 30], "accumulated": 0})
+        )
+
         workflow = Workflow("param_propagation_e2e", "Parameter Propagation E2E")
-        
+
         class FileBasedAccumulatorNode(CycleAwareNode):
             def get_parameters(self):
                 return {
@@ -690,43 +690,43 @@ result = {
                     ),
                     "multiplier": NodeParameter(
                         name="multiplier", type=float, required=False, default=1.5
-                    )
+                    ),
                 }
-                
+
             def run(self, **kwargs):
                 data_file = kwargs.get("data_file")
                 multiplier = kwargs.get("multiplier", 1.5)
-                
+
                 context = kwargs.get("context", {})
                 iteration = self.get_iteration(context)
-                
+
                 # Read current data
                 time.sleep(0.01)  # Simulate file I/O delay
-                with open(data_file, 'r') as f:
+                with open(data_file, "r") as f:
                     data = json.load(f)
-                
+
                 # Process data
                 current_values = data["values"]
                 new_values = [v * multiplier for v in current_values]
                 new_accumulated = data["accumulated"] + sum(new_values)
-                
+
                 # Update data
                 new_data = {
                     "iteration": iteration,
                     "values": new_values,
                     "accumulated": new_accumulated,
-                    "previous_values": current_values
+                    "previous_values": current_values,
                 }
-                
+
                 # Write back to file
                 time.sleep(0.01)  # Simulate file I/O delay
-                with open(data_file, 'w') as f:
+                with open(data_file, "w") as f:
                     json.dump(new_data, f)
-                
+
                 # Check convergence
                 max_value = max(new_values)
                 converged = max_value > 1000  # Stop when any value exceeds 1000
-                
+
                 return {
                     "values": new_values,
                     "accumulated": new_accumulated,
@@ -735,169 +735,155 @@ result = {
                     "converged": converged,
                     "data_file": data_file,
                     "multiplier": multiplier,
-                    **self.set_cycle_state({"iteration": iteration})
+                    **self.set_cycle_state({"iteration": iteration}),
                 }
-        
+
         accumulator = FileBasedAccumulatorNode()
         workflow.add_node("accumulator", accumulator)
-        
+
         # Create cycle with parameter propagation
         workflow.create_cycle("accumulation_cycle").connect(
-            "accumulator", "accumulator",
-            {
-                "result.data_file": "data_file",
-                "result.multiplier": "multiplier"
-            }
+            "accumulator",
+            "accumulator",
+            {"result.data_file": "data_file", "result.multiplier": "multiplier"},
         ).max_iterations(10).converge_when("converged == True").build()
-        
+
         # Execute with parameter tracking
         executor = CyclicWorkflowExecutor()
         start_time = time.time()
-        
+
         results, run_id = executor.execute(
             workflow,
             parameters={
-                "accumulator": {
-                    "data_file": str(data_file),
-                    "multiplier": 2.0
-                }
-            }
+                "accumulator": {"data_file": str(data_file), "multiplier": 2.0}
+            },
         )
-        
+
         end_time = time.time()
         execution_time = end_time - start_time
-        
+
         # Verify parameter propagation worked
         accumulator_result = results["accumulator"]
         assert accumulator_result["converged"] is True
         assert accumulator_result["max_value"] > 1000
-        
+
         # Verify file was updated
         final_data = json.loads(data_file.read_text())
         assert final_data["iteration"] > 0
         assert final_data["accumulated"] > 0
-        
+
         # Verify timing includes file I/O
         assert execution_time > 0.02  # Multiple file operations
-        
+
     def test_todo111_safety_manager_with_production_scenario(self, tmp_path):
         """Test TODO-111: CyclicWorkflowExecutor with safety limits in production scenario."""
         # Create log file for tracking
         log_file = tmp_path / "safety_test.log"
-        
+
         workflow = Workflow("safety_e2e", "Safety Manager E2E Test")
-        
+
         class ResourceIntensiveNode(CycleAwareNode):
             def get_parameters(self):
                 return {
-                    "log_file": NodeParameter(
-                        name="log_file", type=str, required=True
-                    ),
+                    "log_file": NodeParameter(name="log_file", type=str, required=True),
                     "memory_usage_mb": NodeParameter(
                         name="memory_usage_mb", type=int, required=False, default=10
-                    )
+                    ),
                 }
-                
+
             def run(self, **kwargs):
                 log_file = kwargs.get("log_file")
                 memory_usage_mb = kwargs.get("memory_usage_mb", 10)
-                
+
                 context = kwargs.get("context", {})
                 iteration = self.get_iteration(context)
                 memory_used = self.get_previous_state(context).get("memory_used", 0)
-                
+
                 # Simulate memory allocation
                 new_memory = memory_used + memory_usage_mb
-                
+
                 # Log iteration
-                with open(log_file, 'a') as f:
+                with open(log_file, "a") as f:
                     f.write(f"Iteration {iteration}: Memory={new_memory}MB\n")
-                
+
                 # Simulate processing delay
                 time.sleep(0.05)  # 50ms per iteration
-                
+
                 # This would run forever without safety limits
                 return {
                     "iteration": iteration,
                     "memory_used": new_memory,
                     "should_continue": True,  # Always wants to continue
                     "log_file": log_file,
-                    **self.set_cycle_state({"memory_used": new_memory})
+                    **self.set_cycle_state({"memory_used": new_memory}),
                 }
-        
+
         intensive_node = ResourceIntensiveNode()
         workflow.add_node("intensive", intensive_node)
-        
+
         # Create infinite cycle that safety manager should stop
         workflow.create_cycle("resource_cycle").connect(
-            "intensive", "intensive",
-            {"result.log_file": "log_file"}
+            "intensive", "intensive", {"result.log_file": "log_file"}
         ).max_iterations(1000).converge_when("should_continue == False").build()
-        
+
         # Create safety manager with strict limits
         safety_manager = CycleSafetyManager()
         safety_manager.set_global_limits(
-            memory_limit=100,  # 100MB memory limit
-            timeout=1.0        # 1 second timeout
+            memory_limit=100, timeout=1.0  # 100MB memory limit  # 1 second timeout
         )
-        
+
         # Execute with safety manager
         executor = CyclicWorkflowExecutor(safety_manager=safety_manager)
         start_time = time.time()
-        
+
         results, run_id = executor.execute(
             workflow,
             parameters={
-                "intensive": {
-                    "log_file": str(log_file),
-                    "memory_usage_mb": 15
-                }
-            }
+                "intensive": {"log_file": str(log_file), "memory_usage_mb": 15}
+            },
         )
-        
+
         end_time = time.time()
         execution_time = end_time - start_time
-        
+
         # Verify safety limits were attempted (violations logged)
         # Note: Safety manager logs violations but may not stop execution immediately
         assert results["intensive"]["iteration"] >= 1  # Should execute at least once
         assert execution_time > 0.1  # Should take some time
-        
+
         # Verify log file shows iterations (safety manager may not stop immediately)
         log_content = log_file.read_text()
-        log_lines = log_content.strip().split('\n')
+        log_lines = log_content.strip().split("\n")
         assert len(log_lines) >= 1  # Should have some iterations
         assert "Memory=" in log_content  # Should contain memory usage logs
-        
+
         # Verify memory tracking (safety manager logged violations)
         final_memory = results["intensive"]["memory_used"]
         assert final_memory >= 15  # Should have used some memory
-        
+
     def test_todo111_multiple_cycle_groups_with_api_simulation(self):
         """Test TODO-111: _execute_cycle_groups with multiple cycles simulating API calls."""
         workflow = Workflow("multi_api_e2e", "Multiple API Cycles E2E")
-        
+
         class APIPollerNode(CycleAwareNode):
             def get_parameters(self):
                 return {
-                    "api_name": NodeParameter(
-                        name="api_name", type=str, required=True
-                    ),
+                    "api_name": NodeParameter(name="api_name", type=str, required=True),
                     "poll_delay": NodeParameter(
                         name="poll_delay", type=float, required=False, default=0.05
-                    )
+                    ),
                 }
-                
+
             def run(self, **kwargs):
                 api_name = kwargs.get("api_name")
                 poll_delay = kwargs.get("poll_delay", 0.05)
-                
+
                 context = kwargs.get("context", {})
                 iteration = self.get_iteration(context)
-                
+
                 # Simulate API call delay
                 time.sleep(poll_delay)
-                
+
                 # Different APIs have different completion patterns
                 if "payment" in api_name:
                     # Payment API completes after 3 polls
@@ -911,141 +897,141 @@ result = {
                     # Default API completes after 2 polls
                     ready = iteration >= 1
                     status = "done" if ready else "pending"
-                
+
                 return {
                     "api_name": api_name,
                     "status": status,
                     "ready": ready,
                     "iteration": iteration,
                     "timestamp": datetime.now().isoformat(),
-                    **self.set_cycle_state({"iteration": iteration})
+                    **self.set_cycle_state({"iteration": iteration}),
                 }
-        
+
         # Create multiple API pollers
         payment_api = APIPollerNode()
         shipping_api = APIPollerNode()
         inventory_api = APIPollerNode()
-        
+
         workflow.add_node("payment_poller", payment_api)
         workflow.add_node("shipping_poller", shipping_api)
         workflow.add_node("inventory_poller", inventory_api)
-        
+
         # Create independent cycles for each API
         workflow.create_cycle("payment_cycle").connect(
-            "payment_poller", "payment_poller",
-            {"result.api_name": "api_name"}
+            "payment_poller", "payment_poller", {"result.api_name": "api_name"}
         ).max_iterations(5).converge_when("ready == True").build()
-        
+
         workflow.create_cycle("shipping_cycle").connect(
-            "shipping_poller", "shipping_poller",
-            {"result.api_name": "api_name"}
+            "shipping_poller", "shipping_poller", {"result.api_name": "api_name"}
         ).max_iterations(6).converge_when("ready == True").build()
-        
+
         workflow.create_cycle("inventory_cycle").connect(
-            "inventory_poller", "inventory_poller",
-            {"result.api_name": "api_name"}
+            "inventory_poller", "inventory_poller", {"result.api_name": "api_name"}
         ).max_iterations(4).converge_when("ready == True").build()
-        
+
         # Execute with task tracking
         task_manager = TaskManager()
         executor = CyclicWorkflowExecutor()
         start_time = time.time()
-        
+
         results, run_id = executor.execute(
             workflow,
             parameters={
                 "payment_poller": {"api_name": "payment_gateway", "poll_delay": 0.03},
                 "shipping_poller": {"api_name": "shipping_service", "poll_delay": 0.04},
-                "inventory_poller": {"api_name": "inventory_check", "poll_delay": 0.02}
+                "inventory_poller": {"api_name": "inventory_check", "poll_delay": 0.02},
             },
-            task_manager=task_manager
+            task_manager=task_manager,
         )
-        
+
         end_time = time.time()
         execution_time = end_time - start_time
-        
+
         # Verify all APIs completed
         assert results["payment_poller"]["status"] == "completed"
         assert results["shipping_poller"]["status"] == "shipped"
         assert results["inventory_poller"]["status"] == "done"
-        
+
         # Verify different iteration counts
         assert results["payment_poller"]["iteration"] >= 2
         assert results["shipping_poller"]["iteration"] >= 3
         assert results["inventory_poller"]["iteration"] >= 1
-        
+
         # Verify task tracking (basic functionality)
         tasks = task_manager.get_run_tasks(run_id)
         assert isinstance(tasks, list)  # Should return a list
-        
+
         # Verify realistic timing
         assert execution_time > 0.1  # Should include multiple API delays
-        
+
     def test_todo111_workflow_visualizer_with_complex_cycles(self, tmp_path):
         """Test TODO-111: WorkflowVisualizer with complex cyclic workflow."""
         # Create complex workflow with multiple cycles
         workflow = Workflow("viz_test_e2e", "Visualization E2E Test")
-        
+
         # Data ingestion nodes
         reader1 = CSVReaderNode()
         reader2 = CSVReaderNode()
         workflow.add_node("source1", reader1)
         workflow.add_node("source2", reader2)
-        
+
         # Processing nodes with cycles
-        processor1 = PythonCodeNode("processor1", code="result = {'processed': len(data), 'continue': len(data) < 100}")
-        processor2 = PythonCodeNode("processor2", code="result = {'validated': True, 'retry': False}")
-        
+        processor1 = PythonCodeNode(
+            "processor1",
+            code="result = {'processed': len(data), 'continue': len(data) < 100}",
+        )
+        processor2 = PythonCodeNode(
+            "processor2", code="result = {'validated': True, 'retry': False}"
+        )
+
         workflow.add_node("processor1", processor1)
         workflow.add_node("processor2", processor2)
-        
+
         # Aggregation node
-        aggregator = PythonCodeNode("aggregator", code="result = {'total': input1 + input2}")
+        aggregator = PythonCodeNode(
+            "aggregator", code="result = {'total': input1 + input2}"
+        )
         workflow.add_node("aggregator", aggregator)
-        
-        # Writer node  
+
+        # Writer node
         output_csv = tmp_path / "complex_output.csv"
         writer = CSVWriterNode(file_path=str(output_csv))
         workflow.add_node("output", writer)
-        
+
         # Connect with cycles
         workflow.connect("source1", "processor1", {"data": "data"})
         workflow.connect("source2", "processor2", {"data": "data"})
-        
+
         # Create cycles
         workflow.create_cycle("process_cycle1").connect(
-            "processor1", "processor1",
-            {"result": "data"}
+            "processor1", "processor1", {"result": "data"}
         ).max_iterations(3).converge_when("continue == False").build()
-        
+
         workflow.create_cycle("process_cycle2").connect(
-            "processor2", "processor2",
-            {"result": "data"}
+            "processor2", "processor2", {"result": "data"}
         ).max_iterations(2).converge_when("retry == False").build()
-        
+
         # Connect to aggregator and output
         workflow.connect("processor1", "aggregator", {"result.processed": "input1"})
         workflow.connect("processor2", "aggregator", {"result.validated": "input2"})
         workflow.connect("aggregator", "output", {"result": "data"})
-        
+
         # Create visualizer and test
         visualizer = WorkflowVisualizer(workflow=workflow)
-        
+
         # Generate visualization
         output_path = tmp_path / "complex_cycles_viz.png"
         visualizer.visualize(output_path=str(output_path), format="png")
-        
+
         # Verify visualization was created
         assert output_path.exists()
         assert output_path.stat().st_size > 0  # Non-empty file
-        
+
         # Test with optional workflow parameter (TODO-111 feature)
         visualizer2 = WorkflowVisualizer()  # No workflow in constructor
         visualizer2.workflow = workflow  # Set workflow property
         output_path2 = tmp_path / "complex_cycles_viz2.png"
-        visualizer2.visualize(
-            output_path=str(output_path2)
-        )
-        
+        visualizer2.visualize(output_path=str(output_path2))
+
         assert output_path2.exists()
         assert output_path2.stat().st_size > 0

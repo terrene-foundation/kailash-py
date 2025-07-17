@@ -19,7 +19,7 @@ def test_dag_execution():
     """Test DAG portion execution with state management."""
     executor = CyclicWorkflowExecutor()
     state = WorkflowState(run_id="test_run")
-    
+
     # Test _execute_dag_portion method
     results = executor._execute_dag_portion(
         workflow=mock_workflow,
@@ -27,7 +27,7 @@ def test_dag_execution():
         state=state,
         task_manager=None
     )
-    
+
     assert "node1" in results
     assert "node2" in results
     assert all(node in state.node_outputs for node in ["node1", "node2"])
@@ -36,7 +36,7 @@ def test_cycle_groups_execution():
     """Test cycle group execution in sequence."""
     executor = CyclicWorkflowExecutor()
     state = WorkflowState(run_id="test_run")
-    
+
     # Test _execute_cycle_groups method
     results = executor._execute_cycle_groups(
         workflow=mock_workflow,
@@ -44,24 +44,24 @@ def test_cycle_groups_execution():
         state=state,
         task_manager=None
     )
-    
+
     assert results is not None
     assert len(state.cycle_outputs) >= 2
 
 def test_parameter_propagation():
     """Test parameter flow between iterations."""
     executor = CyclicWorkflowExecutor()
-    
+
     # Test _propagate_parameters method
     current_params = {"input": "data"}
     current_results = {"output": "result", "metadata": None}
-    
+
     new_params = executor._propagate_parameters(
         current_params=current_params,
         current_results=current_results,
         cycle_config=None
     )
-    
+
     assert "input" in new_params
     assert "output" in new_params
     assert "metadata" not in new_params  # None values filtered
@@ -76,7 +76,7 @@ def test_optional_workflow_constructor():
     # Test constructor flexibility
     visualizer = WorkflowVisualizer()  # No workflow required
     assert visualizer.workflow is None
-    
+
     # Test workflow assignment
     visualizer.workflow = mock_workflow
     assert visualizer.workflow is not None
@@ -84,11 +84,11 @@ def test_optional_workflow_constructor():
 def test_enhanced_drawing_methods():
     """Test enhanced _draw_graph method with optional workflow."""
     visualizer = WorkflowVisualizer()
-    
+
     # Test with workflow parameter
     result = visualizer._draw_graph(workflow=mock_workflow)
     assert result is not None
-    
+
     # Test without workflow parameter (should use instance workflow)
     visualizer.workflow = mock_workflow
     result = visualizer._draw_graph()
@@ -102,25 +102,25 @@ from kailash.middleware.communication.realtime import ConnectionManager
 def test_event_filtering():
     """Test event filtering by session, user, type."""
     manager = ConnectionManager()
-    
+
     events = [
         {"session_id": "s1", "user_id": "u1", "type": "message"},
         {"session_id": "s2", "user_id": "u2", "type": "notification"},
         {"session_id": "s1", "user_id": "u1", "type": "alert"}
     ]
-    
+
     # Test session filtering
     filter_config = {"session_id": "s1"}
     filtered = manager.filter_events(events, filter_config)
     assert len(filtered) == 2
     assert all(e["session_id"] == "s1" for e in filtered)
-    
+
     # Test user filtering
     filter_config = {"user_id": "u1"}
     filtered = manager.filter_events(events, filter_config)
     assert len(filtered) == 2
     assert all(e["user_id"] == "u1" for e in filtered)
-    
+
     # Test type filtering
     filter_config = {"type": "message"}
     filtered = manager.filter_events(events, filter_config)
@@ -130,17 +130,17 @@ def test_event_filtering():
 async def test_event_processing():
     """Test async event processing."""
     manager = ConnectionManager()
-    
+
     event = {
         "session_id": "s1",
         "user_id": "u1",
         "type": "message",
         "data": {"content": "Hello"}
     }
-    
+
     # Test event processing
     await manager.process_event(event)
-    
+
     # Verify event was processed (implementation specific)
     assert True  # Add specific assertions based on implementation
 ```
