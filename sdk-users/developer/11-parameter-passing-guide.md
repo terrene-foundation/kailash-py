@@ -12,12 +12,38 @@ Parameter passing is crucial for workflow success. This guide covers all paramet
 - Completed [Workflows](02-workflows.md) - Basic patterns
 - Understanding of Python dictionaries and kwargs
 
-## Basic Parameter Flow
+## Enterprise-Grade Parameter Resolution
 
-### How Parameters Flow Through Workflows
+### 4-Phase Parameter Resolution System
+
+Kailash implements a sophisticated **4-phase parameter resolution system** that provides enterprise-grade validation, type safety, and auto-mapping capabilities:
+
+#### Phase 1: Parameter Declaration & Validation
+- **NodeParameter schema validation**: Every parameter must be declared with type, requirements, and constraints
+- **Type safety enforcement**: Automatic type checking and conversion
+- **Enterprise validation**: Complex validation rules, constraints, and business logic
+
+#### Phase 2: Multi-Source Parameter Collection
+- **Runtime parameters**: From `runtime.execute(workflow, parameters={})`
+- **Node configuration**: Default values from node construction
+- **Connection mapping**: Dynamic data flow between nodes
+- **Auto-mapping resolution**: Automatic parameter discovery and connection
+
+#### Phase 3: Priority Resolution & Merging
+- **Conflict resolution**: Intelligent priority-based parameter merging
+- **Type-safe merging**: Maintains type integrity across all sources
+- **Validation enforcement**: Ensures all required parameters are present
+
+#### Phase 4: Enterprise Features
+- **Auto-mapping capabilities**: `auto_map_primary=True`, `auto_map_from=["alt1"]`
+- **Workflow aliases**: `workflow_alias="name"` for parameter discovery
+- **Tenant isolation**: Multi-tenant parameter scoping
+- **Audit trails**: Complete parameter resolution logging
+
+### Basic Parameter Flow
 
 ```python
-# 1. Initial parameters from runtime.execute()
+# Phase 1: Runtime parameters (highest priority)
 runtime.execute(workflow, parameters={
     "node_id": {
         "param1": "value1",
@@ -25,14 +51,17 @@ runtime.execute(workflow, parameters={
     }
 })
 
-# 2. Node configuration (lowest priority)
+# Phase 2: Connection mapping (dynamic priority)
+workflow.connect("source", "target", mapping={"output": "input"})
+
+# Phase 3: Node configuration (lowest priority)
 node = MyNode(config_param="default")
 
-# 3. Connection inputs (highest priority)
-workflow.connect("source", "target", mapping={"output": "input"})
+# Phase 4: Auto-mapping (intelligent discovery)
+# Automatically discovers and maps compatible parameters
 ```
 
-**Priority Order**: Connection inputs > Initial parameters > Node config
+**Resolution Priority**: Connection inputs > Runtime parameters > Node config > Auto-mapping
 
 ## Node Parameter Declaration
 

@@ -2,6 +2,22 @@
 
 Maximum productivity patterns - **ALWAYS use `.from_function()`** for code > 3 lines.
 
+## 🔒 Dual Execution Model
+
+PythonCodeNode has **two distinct execution models** with different security and usability characteristics:
+
+### 1. **Sandboxed String Execution** (Security-First)
+- **Use Case**: User-provided code, APIs, dynamic generation
+- **Security**: Restricted imports, controlled environment, timeout enforcement
+- **Modules**: Only whitelisted (`math`, `json`, `datetime`, `pandas`, `numpy`, `hashlib`, etc.)
+- **Trade-off**: Safe but limited capabilities
+
+### 2. **Trusted Function Execution** (Developer-Friendly)
+- **Use Case**: Business logic, IDE development, multi-line code
+- **Security**: Full Python environment (developer responsibility)
+- **Modules**: Any module available
+- **Trade-off**: Full capabilities but requires trust
+
 ## 🚀 The Golden Rule
 
 **String code = NO IDE support = Lost productivity**
@@ -12,6 +28,7 @@ Use `.from_function()` to get:
 - ✅ Error detection
 - ✅ Debugging
 - ✅ Testing
+- ✅ Full Python environment access
 
 ## Quick Examples
 
