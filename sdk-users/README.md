@@ -2,10 +2,93 @@
 
 *Everything you need to build solutions with the Kailash SDK*
 
-## 🚨 Start Here: [CLAUDE.md](CLAUDE.md)
-Quick reference with critical rules, common patterns, and navigation guide.
+## 🚀 **New Developer? Start Here!**
 
-## 🎯 **Critical for Claude Code Users**
+### **⚡ 5-Minute Quick Start**
+
+**Step 1: Choose Your Path**
+- **🎯 I want to build workflows** → [Core patterns](#-core-implementation-patterns-claude-md)
+- **🏗️ I want complete apps** → [App platforms](#-app-platforms-dataflow--nexus)
+- **🔧 I want custom solutions** → [Decision matrix](decision-matrix.md)
+
+**Step 2: First Success** (Copy & Run)
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "hello", {"code": "result = 'Hello, Kailash!'"})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(results)  # {'hello': 'Hello, Kailash!'}
+```
+
+**Step 3: Build Something Real**
+- **📊 Data Processing** → [Data pipeline pattern](CLAUDE.md#pattern-1-data-processing-pipeline)
+- **🤖 AI Integration** → [AI workflow pattern](CLAUDE.md#pattern-2-ai-analysis-workflow)
+- **🌐 API Integration** → [API pipeline pattern](CLAUDE.md#pattern-3-api-integration-pipeline)
+
+### **🎓 Learning Path by Experience**
+
+| **Experience Level** | **Start Here** | **Next Steps** | **Advanced** |
+|---------------------|----------------|----------------|--------------|
+| **Complete Beginner** | [Core patterns (CLAUDE.md)](CLAUDE.md) | [Node selection guide](nodes/node-selection-guide.md) | [Custom development](developer/05-custom-development.md) |
+| **Some Programming** | [Decision matrix](decision-matrix.md) | [Connection patterns](cheatsheet/005-connection-patterns.md) | [Enterprise patterns](enterprise/) |
+| **Building Apps** | [App platforms](#-app-platforms-dataflow--nexus) | [Production deployment](developer/04-production.md) | [Multi-channel architecture](enterprise/nexus-patterns.md) |
+| **Enterprise/Production** | [Security patterns](enterprise/security-patterns.md) | [Compliance guide](enterprise/compliance-patterns.md) | [Gateway patterns](enterprise/gateway-patterns.md) |
+
+### **📋 Quick Win Checklist**
+
+- [ ] **✅ Run first workflow** - Execute the 5-minute example above
+- [ ] **🔍 Find right nodes** - Use [node selection guide](nodes/node-selection-guide.md)
+- [ ] **🔗 Connect nodes** - Follow [connection patterns](cheatsheet/005-connection-patterns.md)
+- [ ] **🔧 Handle errors** - Check [common mistakes](validation/common-mistakes.md)
+- [ ] **🧪 Test workflow** - Use [testing guide](developer/12-testing-production-quality.md)
+- [ ] **🚀 Deploy solution** - Follow [production guide](developer/04-production.md)
+
+### **❓ Common First Questions**
+
+**Q: Which nodes do I need?**
+→ Use [node selection guide](nodes/node-selection-guide.md) with decision trees
+
+**Q: How do I connect nodes?**
+→ Always use 4-parameter syntax: `workflow.add_connection("source", "out_port", "target", "in_port")`
+
+**Q: My workflow isn't working**
+→ Check [common mistakes](validation/common-mistakes.md) - covers 90% of issues
+
+**Q: How do I deploy to production?**
+→ Start with [production guide](developer/04-production.md), then [enterprise patterns](enterprise/)
+
+**Q: Can I build complete applications?**
+→ Yes! Use [DataFlow](../apps/kailash-dataflow/) (database) or [Nexus](../apps/kailash-nexus/) (multi-channel) platforms
+
+---
+
+## 🚨 Essential References
+
+### **Start Here: [CLAUDE.md](CLAUDE.md)**
+Complete quick reference with critical rules, common patterns, and navigation guide.
+
+### **🎯 Core Implementation Patterns (CLAUDE.md)**
+- **[CLAUDE.md](CLAUDE.md)** - **ESSENTIAL** API patterns, decision trees, common mistakes
+- **[Decision Matrix](decision-matrix.md)** - Architecture decisions for app building
+- **[Node Selection Guide](nodes/node-selection-guide.md)** - Smart node finder with decision trees
+- **[Connection Patterns](cheatsheet/005-connection-patterns.md)** - Data flow mapping patterns
+
+### **🏗️ App Platforms (DataFlow & Nexus)**
+- **[DataFlow Platform](../apps/kailash-dataflow/)** - Zero-config database with enterprise power
+- **[Nexus Platform](../apps/kailash-nexus/)** - Multi-channel orchestration (API, CLI, MCP)
+- **[App Development Guide](../apps/APP_DEVELOPMENT_GUIDE.md)** - Complete app implementation guide
+
+### **🔧 Development Essentials**
+- **[Cheatsheet](cheatsheet/)** - 38 copy-paste patterns for common tasks
+- **[Common Mistakes](validation/common-mistakes.md)** - Fix errors fast
+- **[Testing Guide](developer/12-testing-production-quality.md)** - Production-quality validation
+- **[Troubleshooting](developer/05-troubleshooting.md)** - Debug issues effectively
+
+### **🎯 Critical for Claude Code Users**
 - **[cheatsheet/000-claude-code-guide.md](cheatsheet/000-claude-code-guide.md)** - **START HERE** Essential success patterns
 - **[cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md)** - MCP (Model Context Protocol) integration
 - **[cheatsheet/038-integration-mastery.md](cheatsheet/038-integration-mastery.md)** - Complete integration guide
@@ -18,7 +101,9 @@ Quick reference with critical rules, common patterns, and navigation guide.
 - **[examples/mcp/](examples/mcp/)** - Ready-to-run MCP examples
 - **[developer/22-mcp-development-guide.md](developer/22-mcp-development-guide.md)** - Build custom MCP servers and clients (✅ 100% validated)
 
-## 📁 Contents
+---
+
+## 📁 Complete Documentation Structure
 
 ### **Enterprise & Production**
 - **[enterprise/](enterprise/)** - Enterprise-grade patterns and architecture

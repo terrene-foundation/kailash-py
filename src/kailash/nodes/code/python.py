@@ -103,6 +103,7 @@ ALLOWED_MODULES = {
     "glob",  # For file pattern matching
     "xml",  # For XML processing
     "uuid",  # For generating unique identifiers (safe, no I/O)
+    "hashlib",  # For cryptographic hashing (safe for common use cases)
 }
 
 

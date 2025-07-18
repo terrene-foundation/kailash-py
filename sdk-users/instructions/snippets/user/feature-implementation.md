@@ -351,6 +351,7 @@ Validate ALL documentation updates.
 - `sdk-users/nodes/` - Node selection and usage patterns
 - `sdk-users/cheatsheet/` - Copy-paste implementation patterns
 - `sdk-users/migration-guides/` - Migration guides for breaking changes
+- `sdk-users/apps/` - Application-specific documentation
 
 For each doc file you've changed, you MUST create temporary tests to verify every code example actually works.
 1. Create a temp test file (e.g., `/tmp/test_docs_feature.py`)
@@ -464,7 +465,7 @@ Check the `CLAUDE.md` in root and other directories:
      - You can trace a complete path from basic patterns to advanced custom development
      - Please maintain the concise, authoritative tone that respects context limits!
 
-2. For this module in `apps/`:
+2. For this module in `src/`:
    - Please trace through the `CLAUDE.md` guidance system
    - Temp test all the instructions to ensure that they are correct
    - For each user persona and their workflows, please run through the e2e using temp tests

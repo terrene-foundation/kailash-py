@@ -4,6 +4,136 @@
 
 ## ⚡ CORE IMPLEMENTATION PATTERNS
 
+### 🚀 Common API Patterns - Quick Reference
+
+#### **Pattern 1: Data Processing Pipeline**
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Most common pattern - data in, process, data out
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "read", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "process", {"code": "result = len(data)"})
+workflow.add_node("CSVWriterNode", "write", {"file_path": "output.csv"})
+
+# Connect with 4-parameter syntax: source, source_port, target, target_port
+workflow.add_connection("read", "data", "process", "data")
+workflow.add_connection("process", "result", "write", "data")
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+#### **Pattern 2: AI Analysis Workflow**
+```python
+# AI-powered analysis with real MCP execution
+workflow = WorkflowBuilder()
+workflow.add_node("JSONReaderNode", "input", {"file_path": "input.json"})
+workflow.add_node("LLMAgentNode", "analyzer", {
+    "model": "gpt-4",
+    "prompt": "Analyze this data: {data}",
+    "use_real_mcp": True  # Real MCP execution (default in v0.6.6+)
+})
+workflow.add_node("JSONWriterNode", "output", {"file_path": "analysis.json"})
+
+workflow.add_connection("input", "data", "analyzer", "data")
+workflow.add_connection("analyzer", "result", "output", "data")
+```
+
+#### **Pattern 3: API Integration Pipeline**
+```python
+# External API integration with error handling
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "api", {
+    "url": "https://api.example.com/data",
+    "method": "GET",
+    "headers": {"Authorization": "Bearer {token}"}
+})
+workflow.add_node("PythonCodeNode", "transform", {
+    "code": "result = {'processed': len(data), 'items': data}"
+})
+workflow.add_node("SQLDatabaseNode", "store", {
+    "connection_string": "postgresql://localhost/db",
+    "table": "processed_data",
+    "operation": "insert"
+})
+
+workflow.add_connection("api", "response", "transform", "data")
+workflow.add_connection("transform", "result", "store", "data")
+```
+
+### 🎯 Node Selection Decision Tree
+
+**Question 1: What type of operation?**
+- **Data Processing** → CSVReaderNode, JSONReaderNode, DataTransformer
+- **AI/ML Operations** → LLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode
+- **API Integration** → HTTPRequestNode, RESTClientNode, GraphQLClientNode
+- **Database Operations** → SQLDatabaseNode, AsyncSQLDatabaseNode, QueryBuilder
+- **Logic & Control** → SwitchNode, MergeNode, ConvergenceCheckerNode
+- **Custom Logic** → PythonCodeNode (use `.from_function()` for >3 lines)
+
+**Question 2: Performance requirements?**
+- **High throughput** → BulkCreateNode, BulkUpdateNode, AsyncSQLDatabaseNode
+- **Real-time** → WebSocketNode, EventStreamNode, MonitoringNode
+- **Batch processing** → PythonCodeNode, DataTransformer, BulkOperationNode
+
+**Question 3: Security requirements?**
+- **Authentication** → OAuth2Node, MultiFactorAuthNode, AccessControlManager
+- **Data protection** → EncryptionNode, GDPRComplianceNode, AuditTrailNode
+- **Threat detection** → ThreatDetectionNode, SecurityMonitoringNode
+
+### 🔧 Common Mistakes and Solutions
+
+#### **Mistake 1: Wrong API Pattern**
+```python
+# ❌ DON'T: Instance-based API (deprecated)
+workflow.add_node("reader", CSVReaderNode(), {"file_path": "data.csv"})
+
+# ✅ DO: String-based API (correct)
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+```
+
+#### **Mistake 2: Incorrect Connection Syntax**
+```python
+# ❌ DON'T: 2-parameter connections
+workflow.connect("source", "target")
+
+# ✅ DO: 4-parameter connections
+workflow.add_connection("source", "data", "target", "input")
+```
+
+#### **Mistake 3: Missing Workflow Build**
+```python
+# ❌ DON'T: Execute without building
+runtime.execute(workflow)
+
+# ✅ DO: Always build before execution
+runtime.execute(workflow.build())
+```
+
+#### **Mistake 4: Wrong PythonCodeNode Usage**
+```python
+# ❌ DON'T: Long string code
+workflow.add_node("PythonCodeNode", "process", {
+    "code": "very_long_multi_line_string..."
+})
+
+# ✅ DO: Use from_function for >3 lines
+def process_data(data):
+    return {"processed": len(data), "items": data}
+
+workflow.add_node("process", PythonCodeNode.from_function(process_data))
+```
+
+### 📚 Quick Links to Cheatsheets
+
+- **🔗 Connection Patterns**: [cheatsheet/005-connection-patterns.md](cheatsheet/005-connection-patterns.md)
+- **🔗 Node Selection**: [nodes/node-selection-guide.md](nodes/node-selection-guide.md)
+- **🔗 Common Workflows**: [cheatsheet/012-common-workflow-patterns.md](cheatsheet/012-common-workflow-patterns.md)
+- **🔗 PythonCodeNode Best Practices**: [cheatsheet/031-pythoncode-best-practices.md](cheatsheet/031-pythoncode-best-practices.md)
+- **🔗 Error Fixes**: [validation/common-mistakes.md](validation/common-mistakes.md)
+
 ### Enterprise Workflow (Complete Pattern)
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -12,7 +142,7 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 workflow.add_node("HTTPRequestNode", "api", {"url": "https://api.example.com/data"})
 workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
-workflow.connect("api", "response", mapping={"analyzer": "input_data"})
+workflow.add_connection("api", "response", "analyzer", "input_data")
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())

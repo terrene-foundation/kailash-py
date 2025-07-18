@@ -12,14 +12,59 @@ This document covers code execution nodes including Python code execution and MC
 
 ## Python Code Execution
 
+### PythonCodeNode Dual Execution Model
+
+PythonCodeNode supports **two distinct execution models** designed for different security and usability needs:
+
+#### 1. **Sandboxed String Execution** (Security-First)
+- **Purpose**: Execute arbitrary Python code strings in a controlled environment
+- **Security**: Restricted imports, controlled environment, timeout enforcement
+- **Use Case**: User-provided code, dynamic code generation, simple operations
+- **Module Restrictions**: Only whitelisted modules (`math`, `json`, `datetime`, `pandas`, `numpy`, `hashlib`, etc.)
+
+```python
+# Sandboxed execution - restricted but safe
+node = PythonCodeNode(
+    node_id="secure_calc",
+    name="Secure Calculator",
+    code="result = sum(data) * 1.1",  # String code
+    timeout=30  # Automatic timeout
+)
+```
+
+#### 2. **Trusted Function Execution** (Developer-Friendly)
+- **Purpose**: Execute pre-defined Python functions with full capabilities
+- **Security**: Full Python environment access, developer-controlled
+- **Use Case**: Complex business logic, IDE development, multi-line code
+- **Module Access**: Full Python environment (developer responsibility)
+
+```python
+# Trusted execution - full capabilities
+def complex_processor(data, threshold=0.5):
+    """Complex business logic with full Python access."""
+    import requests  # Any module available
+    filtered = [x for x in data if x > threshold]
+    return {"processed": filtered, "count": len(filtered)}
+
+node = PythonCodeNode.from_function(complex_processor)
+```
+
+### Security Rationale
+
+**Why Two Models?**
+1. **String code = Untrusted**: Assumes code comes from users, APIs, or dynamic sources
+2. **Function code = Trusted**: Assumes code is written by developers and reviewed
+3. **Graduated Security**: Different security postures for different trust levels
+4. **Developer Experience**: Full IDE support for trusted code, restrictions for untrusted
+
 ### PythonCodeNode
 - **Module**: `kailash.nodes.code.python`
-- **Purpose**: Execute arbitrary Python code
+- **Purpose**: Execute Python code with dual security model
 - **Parameters**:
-  - `code`: Python code to execute
-  - `imports`: Required imports
-  - `timeout`: Execution timeout
-- **Security**: Sandboxed execution environment
+  - `code`: Python code string (sandboxed execution)
+  - `imports`: Required imports (for sandboxed mode)
+  - `timeout`: Execution timeout (both modes)
+- **Security**: Dual model - sandboxed strings vs trusted functions
 - **Example**:
   ```python
 # SDK Setup for example

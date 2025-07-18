@@ -12,6 +12,73 @@ pip install kailash-dataflow
 pip install kailash[dataflow]
 ```
 
+## 🏗️ DataFlow vs Traditional ORMs
+
+DataFlow is not a traditional ORM. It's a **workflow-native database framework** designed for enterprise applications with distributed transactions, multi-tenancy, and caching built-in.
+
+### Architecture Comparison
+
+| Feature | Traditional ORM | DataFlow |
+|---------|----------------|----------|
+| **Model Usage** | Direct instantiation (`User()`) | Workflow-native (`UserCreateNode`) |
+| **Database Operations** | Method calls (`user.save()`) | Workflow nodes (`UserCreateNode`) |
+| **Transaction Handling** | Manual transaction management | Distributed transaction support |
+| **Caching** | External cache integration | Built-in enterprise caching |
+| **Multi-tenancy** | Custom implementation | Automatic tenant isolation |
+| **Performance** | N+1 queries common | Optimized bulk operations |
+| **Scalability** | Vertical scaling focus | Horizontal scaling built-in |
+
+### Why Workflow-Native?
+
+**Traditional ORM Limitations:**
+```python
+# Traditional ORM - doesn't scale well
+user = User(name="John", email="john@example.com")
+user.save()  # Individual database calls
+# Issues: N+1 queries, no caching, no multi-tenancy
+```
+
+**DataFlow Advantages:**
+```python
+# DataFlow - built for enterprise scale
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "John Doe",
+    "email": "john@example.com"
+})
+# Benefits: Automatic caching, bulk operations, tenant isolation
+```
+
+### Enterprise Benefits
+
+1. **Distributed Transactions**: Automatic transaction coordination across services
+2. **Multi-Tenancy**: Built-in tenant isolation and data partitioning
+3. **Performance Caching**: Enterprise-grade caching with invalidation strategies
+4. **Bulk Operations**: Optimized for high-throughput scenarios (10k+ ops/sec)
+5. **Monitoring**: Built-in metrics, deadlock detection, performance monitoring
+6. **Security**: Automatic SQL injection prevention, audit trails
+
+### Model Instantiation Not Supported
+
+DataFlow models are **schemas, not objects**. This is intentional:
+
+```python
+# ❌ This won't work (by design)
+user = User(name="John")  # Models are not instantiable
+
+# ✅ This is the correct pattern
+workflow.add_node("UserCreateNode", "create", {
+    "name": "John",
+    "email": "john@example.com"
+})
+```
+
+**Why?** Model instantiation bypasses:
+- Automatic caching
+- Tenant isolation  
+- Transaction coordination
+- Performance optimization
+- Security validation
+
 ## Quick Start
 
 ```python

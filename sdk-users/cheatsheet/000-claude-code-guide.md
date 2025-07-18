@@ -192,11 +192,11 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # PATTERN 1: Basic A2A Coordination
-workflow.add_node("coordinator", A2ACoordinatorNode())
-workflow.add_node("memory", SharedMemoryPoolNode(
-    memory_size_limit=1000,
-    attention_window=50
-))
+workflow.add_node("A2ACoordinatorNode", "coordinator", {})
+workflow.add_node("SharedMemoryPoolNode", "memory", {
+    "memory_size_limit": 1000,
+    "attention_window": 50
+})
 workflow.connect("memory", "coordinator")
 
 # Execute with agent registration
@@ -343,8 +343,10 @@ workflow.runtime = LocalRuntime()
 workflow = Workflow("etl_pipeline", name="Data ETL Pipeline")
 
 # Extract
-workflow.add_node("extractor", CSVReaderNode(),
-    file_path="/data/input.csv", has_header=True)
+workflow.add_node("CSVReaderNode", "extractor", {
+    "file_path": "/data/input.csv",
+    "has_header": True
+})
 
 # Transform
 workflow.add_node("transformer", PythonCodeNode(
@@ -361,8 +363,10 @@ result = {
 ))
 
 # Load
-workflow.add_node("loader", JSONWriterNode(),
-    file_path="/data/output.json", indent=2)
+workflow.add_node("JSONWriterNode", "loader", {
+    "file_path": "/data/output.json",
+    "indent": 2
+})
 
 # Connect pipeline
 workflow.connect("extractor", "transformer", mapping={"data": "data"})
@@ -391,8 +395,8 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # Route data based on conditions
-workflow.add_node("router", SwitchNode(),
-    conditions=[
+workflow.add_node("SwitchNode", "router", {
+    "conditions": [
         {"output": "high", "expression": "score > 0.8"},
         {"output": "medium", "expression": "score > 0.5"},
         {"output": "low", "expression": "score <= 0.5"}
@@ -423,8 +427,8 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # Multi-agent problem solving
-workflow.add_node("coordinator", A2ACoordinatorNode())
-workflow.add_node("memory", SharedMemoryPoolNode(memory_size_limit=1000))
+workflow.add_node("A2ACoordinatorNode", "coordinator", {})
+workflow.add_node("SharedMemoryPoolNode", "memory", {"memory_size_limit": 1000})
 
 # Task delegation
 runtime = LocalRuntime()

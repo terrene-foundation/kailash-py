@@ -10,10 +10,10 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.nodes.monitoring import HealthCheckNode
 from kailash.nodes.monitoring.health_check import HealthStatus, ServiceType
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration
