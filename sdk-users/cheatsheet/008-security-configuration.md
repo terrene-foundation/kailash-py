@@ -57,14 +57,16 @@ workflow.add_node("auth", MultiFactorAuthNode(),
     session_timeout=3600
 )
 
-# OAuth2 Integration
+# OAuth2 Integration with Runtime Secret Management
 workflow = Workflow("example", name="Example")
 workflow.add_node("oauth", OAuth2Node(),
     provider="azure",
-    client_id="${AZURE_CLIENT_ID}",
-    client_secret="${AZURE_CLIENT_SECRET}",
+    client_id="azure_client_id",  # Secret name, not value
+    client_secret="azure_client_secret",  # Secret name, not value
     scope="read write"
 )
+
+# Secrets are automatically injected at runtime by SecretProvider
 
 # Threat Detection
 workflow = Workflow("example", name="Example")
@@ -94,18 +96,51 @@ workflow.add_node("reader", CSVReaderNode(),
 
 ```
 
-## Environment Security
+## Runtime Secret Management
 ```python
-# Never hardcode secrets
+# ✅ NEW: Runtime secret injection (v0.8.1+)
+from kailash.runtime.local import LocalRuntime
+from kailash.runtime.secret_provider import EnvironmentSecretProvider
+
+# Create runtime with secret provider
+secret_provider = EnvironmentSecretProvider()
+runtime = LocalRuntime(secret_provider=secret_provider)
+
+# Secrets are injected at runtime - NO hardcoding needed!
 workflow.add_node("api", HTTPRequestNode(),
     url="https://api.example.com",
-    headers={"Authorization": f"Bearer ${API_TOKEN}"}
+    headers={"Authorization": "Bearer {secret_will_be_injected}"}
 )
 
-# Use credential management
+# Node declares its secret requirements
+class APINode(Node):
+    @classmethod
+    def get_secret_requirements(cls):
+        return [SecretRequirement("api-token", "auth_token")]
+
+# Multiple secret providers supported
+from kailash.runtime.secret_provider import VaultSecretProvider, AWSSecretProvider
+
+# HashiCorp Vault
+vault_provider = VaultSecretProvider('https://vault.company.com', 'token')
+runtime = LocalRuntime(secret_provider=vault_provider)
+
+# AWS Secrets Manager
+aws_provider = AWSSecretProvider('us-east-1')
+runtime = LocalRuntime(secret_provider=aws_provider)
+
+```
+
+## Legacy Credential Management
+```python
+# ❌ DEPRECATED: Static credential management
 from kailash.security import CredentialManager
 creds = CredentialManager()
 api_key = creds.get_secret("api_key")
+
+# ⚠️ ANTI-PATTERN: Environment variables for secrets
+import os
+api_key = os.getenv("API_KEY")  # Avoid this pattern
 
 ```
 
@@ -151,4 +186,5 @@ workflow.add_node("limiter", RateLimiterNode(),
 ## Next Steps
 - [Access Control](014-access-control-multi-tenancy.md) - RBAC/ABAC
 - [Production Guide](../../developer/04-production.md) - Security best practices
-- [Environment Variables](016-environment-variables.md) - Secret management
+- [Runtime Secret Management](052-runtime-secret-management.md) - Complete secret management guide
+- [Environment Variables](016-environment-variables.md) - Legacy patterns (avoid for secrets)

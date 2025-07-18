@@ -9,17 +9,34 @@ You are implementing a repository migration to the Kailash SDK template structur
 ## 1. CONTEXT LOADING AND ULTRATHINK ACTIVATION
 
 ### Essential Context Loading
-Load these files before starting migration (DO NOT proceed until loaded):
-- `./repos/projects/new_project_template/CLAUDE.md` - Ideal template structure
-- `./repos/projects/kailash_python_sdk/CLAUDE.md` - Core SDK patterns
-- Migration analysis from trace.md execution
-- Current repository's CLAUDE.md (if exists)
+Load these files before starting (DO NOT proceed until loaded):
+- Root `CLAUDE.md` - Core validation rules and critical patterns
+- `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance
+- `todos/000-master.md` - Current project state and priorities
+
+**For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
+- `sdk-users/developer/` - Core implementation guides and patterns
+- `sdk-users/nodes/` - Node selection and usage patterns
+- `sdk-users/cheatsheet/` - Copy-paste implementation patterns
+- `sdk-users/validation/common-mistakes.md` - Error database with solutions
 
 ### Framework Solutions Check (CRITICAL)
-Before migrating any component, check for existing solutions:
-- `new_project_template/apps/` - Template applications
-- `kailash_python_sdk/apps/` - Framework solutions
-- Existing SDK nodes that can replace custom code
+Before migrating any component, check for existing framework solutions:
+- `sdk-users/apps/dataflow/` - Workflow-native database framework
+- `sdk-users/apps/nexus/` - Multi-channel unified platform
+- Other frameworks in `sdk-users/apps/` that may provide relevant components
+
+### Critical Understanding Confirmation
+After loading the essential files, you MUST confirm you understand:
+- **3-tier testing strategy** (`sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`)
+  - **Tier 1 requirements**: Fast (<1s), isolated, can use mocks, no external dependencies, no sleep
+  - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
+  - Real Docker infrastructure requirement - never skip this for integration/E2E tests
+- **Todo management system** The todo management system is two-tiered: Repo level todos are in `todos/` and module level todos are in their respective `src/` sub-directories.
+- **Available frameworks** in `sdk-users/apps/` that can provide ready-made solutions
+- **How to use MCP tools** to search relevant documentation when needed
+
+**Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
 
 ### ULTRATHINK CAP ACTIVATION
 Before beginning migration, analyze deeply:

@@ -22,10 +22,9 @@ Load these files before starting (DO NOT proceed until loaded):
 
 ### Framework-First Approach (MANDATORY)
 Check for existing framework solutions that can accelerate implementation (use MCP tools to search):
-- `apps/kailash-dataflow/` - Workflow-native database framework
-- `apps/kailash-mcp/` - Zero-configuration MCP framework
-- `apps/kailash-nexus/` - Multi-channel unified platform
-- Other frameworks in `apps/` that may provide relevant components
+- `sdk-users/apps/dataflow/` - Workflow-native database framework
+- `sdk-users/apps/nexus/` - Multi-channel unified platform
+- Other frameworks in `sdk-users/apps/` that may provide relevant components
 
 ### Critical Understanding Confirmation
 After loading the essential files, you MUST confirm you understand:
@@ -34,7 +33,7 @@ After loading the essential files, you MUST confirm you understand:
   - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
   - Real Docker infrastructure requirement - never skip this for integration/E2E tests
 - **Todo management system** The todo management system is two-tiered: Repo level todos are in `todos/` and module level todos are in their respective `src/` sub-directories.
-- **Available frameworks** in `apps/` that can provide ready-made solutions
+- **Available frameworks** in `sdk-users/apps/` that can provide ready-made solutions
 - **How to use MCP tools** to search relevant documentation when needed
 
 **Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
