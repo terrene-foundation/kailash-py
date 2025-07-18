@@ -383,8 +383,12 @@ class WorkflowBuilder:
         # Enhanced error messages with helpful suggestions
         if from_node not in self.nodes:
             available_nodes = list(self.nodes.keys())
-            similar_nodes = [n for n in available_nodes if from_node.lower() in n.lower() or n.lower() in from_node.lower()]
-            
+            similar_nodes = [
+                n
+                for n in available_nodes
+                if from_node.lower() in n.lower() or n.lower() in from_node.lower()
+            ]
+
             error_msg = f"Source node '{from_node}' not found in workflow."
             if available_nodes:
                 error_msg += f"\nAvailable nodes: {available_nodes}"
@@ -392,13 +396,17 @@ class WorkflowBuilder:
                 error_msg += f"\nDid you mean: {similar_nodes}?"
             error_msg += f"\n\nTip: Use workflow.add_node() to create nodes before connecting them."
             error_msg += f"\nExample: workflow.add_node('CSVReaderNode', '{from_node}', {{'file_path': 'data.csv'}})"
-            
+
             raise WorkflowValidationError(error_msg)
-            
+
         if to_node not in self.nodes:
             available_nodes = list(self.nodes.keys())
-            similar_nodes = [n for n in available_nodes if to_node.lower() in n.lower() or n.lower() in to_node.lower()]
-            
+            similar_nodes = [
+                n
+                for n in available_nodes
+                if to_node.lower() in n.lower() or n.lower() in to_node.lower()
+            ]
+
             error_msg = f"Target node '{to_node}' not found in workflow."
             if available_nodes:
                 error_msg += f"\nAvailable nodes: {available_nodes}"
@@ -406,7 +414,7 @@ class WorkflowBuilder:
                 error_msg += f"\nDid you mean: {similar_nodes}?"
             error_msg += f"\n\nTip: Use workflow.add_node() to create nodes before connecting them."
             error_msg += f"\nExample: workflow.add_node('PythonCodeNode', '{to_node}', {{'code': 'result = data'}})"
-            
+
             raise WorkflowValidationError(error_msg)
 
         # Self-connection check with helpful message
@@ -419,28 +427,41 @@ class WorkflowBuilder:
 
         # REFINED: Enhanced duplicate connection detection
         for existing_conn in self.connections:
-            if (existing_conn['from_node'] == from_node and 
-                existing_conn['from_output'] == from_output and
-                existing_conn['to_node'] == to_node and 
-                existing_conn['to_input'] == to_input):
+            if (
+                existing_conn["from_node"] == from_node
+                and existing_conn["from_output"] == from_output
+                and existing_conn["to_node"] == to_node
+                and existing_conn["to_input"] == to_input
+            ):
                 raise ConnectionError(
                     f"Duplicate connection detected: {from_node}.{from_output} -> {to_node}.{to_input}\n"
                     f"This connection already exists in the workflow.\n"
                     f"Tip: Remove the duplicate add_connection() call or use different port names.\n"
                     f"Current connections: {len(self.connections)} total"
                 )
-        
+
         # Enhanced port validation with suggestions
-        common_output_ports = ['data', 'result', 'output', 'response', 'content', 'value']
-        common_input_ports = ['data', 'input', 'input_data', 'content', 'value']
-        
+        common_output_ports = [
+            "data",
+            "result",
+            "output",
+            "response",
+            "content",
+            "value",
+        ]
+        common_input_ports = ["data", "input", "input_data", "content", "value"]
+
         # Log port usage patterns for debugging
         if from_output not in common_output_ports:
-            logger.debug(f"Using non-standard output port '{from_output}' on node '{from_node}'")
+            logger.debug(
+                f"Using non-standard output port '{from_output}' on node '{from_node}'"
+            )
             logger.debug(f"Common output ports: {common_output_ports}")
-            
+
         if to_input not in common_input_ports:
-            logger.debug(f"Using non-standard input port '{to_input}' on node '{to_node}'")
+            logger.debug(
+                f"Using non-standard input port '{to_input}' on node '{to_node}'"
+            )
             logger.debug(f"Common input ports: {common_input_ports}")
 
         # Add connection to list
@@ -453,11 +474,11 @@ class WorkflowBuilder:
         self.connections.append(connection)
 
         logger.info(f"Connected '{from_node}.{from_output}' -> '{to_node}.{to_input}'")
-        
+
         # Provide helpful tips for common connection patterns
-        if from_output == to_input == 'data':
+        if from_output == to_input == "data":
             logger.debug(f"Using standard data flow connection pattern")
-        elif from_output in ['result', 'output'] and to_input in ['data', 'input']:
+        elif from_output in ["result", "output"] and to_input in ["data", "input"]:
             logger.debug(f"Using result-to-input connection pattern")
         else:
             logger.debug(f"Using custom port mapping: {from_output} -> {to_input}")

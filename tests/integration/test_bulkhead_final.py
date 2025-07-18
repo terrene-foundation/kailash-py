@@ -1,17 +1,18 @@
 """Final integration tests for bulkhead pattern - clean and working."""
 
 import asyncio
-import pytest
-import tempfile
 import os
 import sqlite3
+import tempfile
+
+import pytest
 
 from src.kailash.core.resilience.bulkhead import (
     BulkheadManager,
+    BulkheadRejectionError,
     PartitionConfig,
     PartitionType,
     get_bulkhead_manager,
-    BulkheadRejectionError,
 )
 from src.kailash.nodes.data.sql import SQLDatabaseNode
 from src.kailash.sdk_exceptions import NodeExecutionError
