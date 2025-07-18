@@ -10,17 +10,20 @@ from kailash.nodes.transform import DataTransformerNode
 workflow = Workflow("etl-001", name="ETL Pipeline")
 
 # Extract-Transform-Load
-workflow.add_node("extract", CSVReaderNode(),
-    file_path="raw_data.csv")
+workflow.add_node("CSVReaderNode", "extract", {
+    "file_path": "raw_data.csv"
+})
 
-workflow.add_node("transform", DataTransformerNode(),
-    operations=[
+workflow.add_node("DataTransformerNode", "transform", {
+    "operations": [
         {"type": "filter", "condition": "status == 'active'"},
         {"type": "map", "expression": "{'id': id, 'name': name.upper()}"}
-    ])
+    ]
+})
 
-workflow.add_node("load", CSVWriterNode(),
-    file_path="processed.csv")
+workflow.add_node("CSVWriterNode", "load", {
+    "file_path": "processed.csv"
+})
 
 # Connect pipeline
 workflow.connect("extract", "transform")
@@ -52,9 +55,9 @@ workflow.runtime = LocalRuntime()
 workflow = Workflow("ai-analysis", name="AI Data Analyst")
 
 # Read data
-workflow = Workflow("example", name="Example")
-workflow.add_node("reader", JSONReaderNode(),
-    file_path="metrics.json")
+workflow.add_node("JSONReaderNode", "reader", {
+    "file_path": "metrics.json"
+})
 
 # Process with Python
 workflow.add_node("prepare", PythonCodeNode.from_function(
@@ -69,11 +72,11 @@ workflow.add_node("prepare", PythonCodeNode.from_function(
 ))
 
 # Analyze with LLM
-workflow = Workflow("example", name="Example")
-workflow.add_node("analyze", LLMAgentNode(),
-    provider="openai",
-    model="gpt-4",
-    prompt="Analyze this data and provide insights: {summary}")
+workflow.add_node("LLMAgentNode", "analyze", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "prompt": "Analyze this data and provide insights: {summary}"
+})
 
 # Connect and execute
 workflow.connect("reader", "prepare")
@@ -131,21 +134,26 @@ workflow.runtime = LocalRuntime()
 workflow = Workflow("router", name="Conditional Router")
 
 # Input and routing
-workflow = Workflow("example", name="Example")
-workflow.add_node("input", JSONReaderNode(), file_path="requests.json")
-workflow = Workflow("example", name="Example")
-workflow.add_node("router", SwitchNode(),
-    conditions=[
+workflow.add_node("JSONReaderNode", "input", {
+    "file_path": "requests.json"
+})
+
+workflow.add_node("SwitchNode", "router", {
+    "conditions": [
         {"output": "urgent", "expression": "priority == 'high'"},
         {"output": "normal", "expression": "priority == 'medium'"},
         {"output": "batch", "expression": "priority == 'low'"}
-    ])
+    ]
+})
 
 # Different handlers
-workflow = Workflow("example", name="Example")
-workflow.add_node("urgent_handler", LLMAgentNode(),
-    provider="openai", model="gpt-4", prompt="Process urgently: {data}")
-workflow.add_node("normal_handler", DataTransformerNode())
+workflow.add_node("LLMAgentNode", "urgent_handler", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "prompt": "Process urgently: {data}"
+})
+
+workflow.add_node("DataTransformerNode", "normal_handler", {})
 
 # Connect routes
 workflow.connect("input", "router")
