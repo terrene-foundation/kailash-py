@@ -1,6 +1,7 @@
 """Test hashlib import in PythonCodeNode for TODO-116."""
 
 import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
 
 
@@ -14,12 +15,12 @@ class TestPythonCodeHashlib:
             code="""
 import hashlib
 result = hashlib.md5(b"test").hexdigest()
-"""
+""",
         )
-        
+
         result = node.execute()
         assert result["result"] == "098f6bcd4621d373cade4e832627b4f6"
-        
+
     def test_hashlib_sha256(self):
         """Test SHA256 hashing works correctly."""
         node = PythonCodeNode(
@@ -28,13 +29,13 @@ result = hashlib.md5(b"test").hexdigest()
 import hashlib
 text = "Hello, World!"
 result = hashlib.sha256(text.encode()).hexdigest()
-"""
+""",
         )
-        
+
         result = node.execute()
         expected = "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
         assert result["result"] == expected
-        
+
     def test_hashlib_with_parameters(self):
         """Test hashlib with input parameters."""
         node = PythonCodeNode(
@@ -42,12 +43,12 @@ result = hashlib.sha256(text.encode()).hexdigest()
             code="""
 import hashlib
 result = hashlib.sha1(text.encode()).hexdigest()
-"""
+""",
         )
-        
+
         result = node.execute(text="test message")
         assert result["result"] == "35ee8386410d41d14b3f779fc95f4695f4851682"
-        
+
     def test_hashlib_multiple_algorithms(self):
         """Test multiple hash algorithms work."""
         node = PythonCodeNode(
@@ -61,14 +62,17 @@ result = {
     "sha1": hashlib.sha1(data).hexdigest(),
     "sha256": hashlib.sha256(data).hexdigest()
 }
-"""
+""",
         )
-        
+
         result = node.execute()
         assert result["result"]["md5"] == "eb733a00c0c9d336e65691a37ab54293"
         assert result["result"]["sha1"] == "f48dd853820860816c75d54d0f584dc863327a7c"
-        assert result["result"]["sha256"] == "916f0027a575074ce72a331777c3478d6513f786a591bd892da1a577bf2335f9"
-        
+        assert (
+            result["result"]["sha256"]
+            == "916f0027a575074ce72a331777c3478d6513f786a591bd892da1a577bf2335f9"
+        )
+
     def test_hashlib_with_uuid_example(self):
         """Test the example from the critique - using uuid instead of hashlib."""
         node = PythonCodeNode(
@@ -88,9 +92,9 @@ result = {
     "uuid_method": attendee_id_uuid,
     "hashlib_method": attendee_id_hash
 }
-"""
+""",
         )
-        
+
         result = node.execute()
         assert "uuid_method" in result["result"]
         assert "hashlib_method" in result["result"]
