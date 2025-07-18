@@ -43,6 +43,7 @@ import networkx as nx
 
 from kailash.nodes import Node
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
+from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowExecutionError,
@@ -84,6 +85,7 @@ class LocalRuntime:
         enable_security: bool = False,
         enable_audit: bool = False,
         resource_limits: Optional[dict[str, Any]] = None,
+        secret_provider: Optional[Any] = None,
     ):
         """Initialize the unified runtime.
 
@@ -97,12 +99,14 @@ class LocalRuntime:
             enable_security: Whether to enable security features.
             enable_audit: Whether to enable audit logging.
             resource_limits: Resource limits (memory_mb, cpu_cores, etc.).
+            secret_provider: Optional secret provider for runtime secret injection.
         """
         self.debug = debug
         self.enable_cycles = enable_cycles
         self.enable_async = enable_async
         self.max_concurrency = max_concurrency
         self.user_context = user_context
+        self.secret_provider = secret_provider
         self.enable_monitoring = enable_monitoring
         self.enable_security = enable_security
         self.enable_audit = enable_audit
@@ -131,6 +135,22 @@ class LocalRuntime:
             "resource_limits": self.resource_limits,
             "user_context": user_context,
         }
+
+    def _extract_secret_requirements(self, workflow: "Workflow") -> list:
+        """Extract secret requirements from workflow nodes.
+
+        Args:
+            workflow: Workflow to analyze
+
+        Returns:
+            List of secret requirements
+        """
+        requirements = []
+        for node_id, node in workflow.nodes.items():
+            if hasattr(node, "get_secret_requirements"):
+                node_requirements = node.get_secret_requirements()
+                requirements.extend(node_requirements)
+        return requirements
 
     def execute(
         self,
@@ -1056,6 +1076,52 @@ class LocalRuntime:
             if warnings and self.debug:
                 for warning in warnings:
                     self.logger.warning(f"Parameter validation: {warning}")
+
+        # Inject secrets into the processed parameters
+        if self.secret_provider:
+            # Get secret requirements from workflow nodes
+            requirements = self._extract_secret_requirements(workflow)
+            if requirements:
+                # Fetch secrets from provider
+                secrets = self.secret_provider.get_secrets(requirements)
+
+                # Inject secrets into workflow-level parameters
+                if secrets:
+                    # If we have workflow-level parameters, add secrets to them
+                    if workflow_level_params:
+                        workflow_level_params.update(secrets)
+
+                        # Re-inject workflow parameters with secrets
+                        injector = WorkflowParameterInjector(workflow, debug=self.debug)
+                        injected_params = injector.transform_workflow_parameters(
+                            workflow_level_params
+                        )
+
+                        # Merge secret-enhanced parameters
+                        for node_id, node_params in injected_params.items():
+                            if node_id not in result:
+                                result[node_id] = {}
+                            for param_name, param_value in node_params.items():
+                                if param_name not in result[node_id]:
+                                    result[node_id][param_name] = param_value
+                    else:
+                        # Create workflow-level parameters from secrets only
+                        injector = WorkflowParameterInjector(workflow, debug=self.debug)
+                        injected_params = injector.transform_workflow_parameters(
+                            secrets
+                        )
+
+                        # Merge secret parameters
+                        for node_id, node_params in injected_params.items():
+                            if node_id not in result:
+                                result[node_id] = {}
+                            for param_name, param_value in node_params.items():
+                                if param_name not in result[node_id]:
+                                    result[node_id][param_name] = param_value
+
+                    # Ensure result is not None if we added secrets
+                    if result is None:
+                        result = {}
 
         return result if result else None
 

@@ -212,11 +212,13 @@ Compare this repository against the ideal Kailash SDK template structure:
    ├── src/                   ← Code organization
    ├── apps/                  ← Multi-app architecture?
    ├── solutions/             ← Cross-app orchestration?
+   ├── sdk-users/             ← SDK documentation?
    ├── deployment/            ← Production ready?
    ├── docs/                  ← Documentation structure
    ├── data/                  ← Data organization
    ├── tests/                 ← Test infrastructure
-   └── scripts/               ← Automation tools
+   ├── scripts/               ← Automation tools
+   └── todos/                 ← Task tracking system?
    ```
 
 2. **Pattern Gaps**
@@ -314,274 +316,209 @@ Identify the top refactoring priorities for SDK migration.
 
 Design a phased migration plan to the template structure:
 
-**FIRST: Create Migration ADR**
-Before any planning, create an Architecture Decision Record:
+**FIRST: Set Up Migration Todo System**
+Create a comprehensive todo tracking system for the migration:
+
 ```
-File: adr/XXX-kailash-sdk-migration.md
+1. **Create Migration Todo Structure**
+   mkdir -p todos/migration/{active,completed,backlog}
+
+2. **Create Master Migration List** (todos/migration/000-migration-master.md):
+   # Migration Master Todo List
+
+   ## Phase 1: Analysis & Planning
+   - [ ] Complete repository analysis
+   - [ ] Create migration ADR
+   - [ ] Identify component priorities
+   - [ ] Set up migration infrastructure
+
+   ## Phase 2: Structure Alignment
+   - [ ] Create apps/ directory structure
+   - [ ] Create manifest.yaml templates
+   - [ ] Set up Docker infrastructure
+
+   ## Phase 3: Component Migration
+   - [ ] Migrate [Component 1]
+   - [ ] Migrate [Component 2]
+   - [ ] Migrate [Component N]
+
+   ## Phase 4: Testing & Validation
+   - [ ] Migrate test suite to 3-tier
+   - [ ] Achieve 80%+ coverage
+   - [ ] Performance validation
+
+   ## Phase 5: Deployment & Cutover
+   - [ ] Update deployment configs
+   - [ ] Parallel run validation
+   - [ ] Final cutover
+
+3. **Create Detailed Todo Templates**:
+   For each component, create: todos/migration/active/XXX-migrate-[component].md
+   ```
+   # Migrate [Component Name]
+
+   ## Acceptance Criteria
+   - [ ] All functionality preserved
+   - [ ] Tests passing (unit/integration/e2e)
+   - [ ] Performance maintained
+   - [ ] Documentation updated
+
+   ## Subtasks
+   - [ ] Analyze current implementation
+   - [ ] Design SDK node structure
+   - [ ] Create app directory
+   - [ ] Implement node(s)
+   - [ ] Migrate tests
+   - [ ] Update imports
+   - [ ] Validate functionality
+
+   ## Risks
+   - [Risk 1]: [Mitigation]
+   - [Risk 2]: [Mitigation]
+
+   ## Dependencies
+   - Requires: [Component X] migrated first
+   - Blocks: [Component Y] migration
+   ```
+
+4. **Plan Todo Management Process**:
+   Define how todos will be managed during implementation:
+   - Components move from backlog → active → completed
+   - Each completed todo gets date prefix when moved
+   - Master list updated after each component
+   - Status dashboard tracks overall progress
+
+**SECOND: Plan Migration ADR**
+Plan to create Architecture Decision Record during implementation:
 - Context: Why migrate? Current limitations?
 - Decision: Migration approach and rationale
 - Consequences: Benefits, risks, impacts
 - Alternatives: Other options considered
-```
+
+### 3.2 Define Migration Phases
+
+Based on analysis, define the migration phases:
 
 1. **Phase 1: Structure Alignment**
-   - Create apps/ directory structure
-   - Move core logic to appropriate apps
-   - Add manifest.yaml to each app
-   - Set up basic Docker infrastructure
+   - Plan apps/ directory structure
+   - Identify which code moves where
+   - Define manifest.yaml requirements
+   - Plan Docker infrastructure needs
 
 2. **Phase 2: SDK Integration**
-   - Convert orchestration to WorkflowBuilder
-   - Implement key workflows as nodes
-   - Replace custom patterns with SDK nodes
-   - Add CLAUDE.md with SDK patterns
+   - Map current code to SDK patterns
+   - Identify WorkflowBuilder opportunities
+   - List custom patterns to replace
+   - Plan CLAUDE.md content
 
 3. **Phase 3: Documentation Migration**
-   - Implement two-level documentation
-   - Move decisions to ADR structure
-   - Update all cross-references
+   - Map current docs to new structure
+   - Plan ADR organization
+   - List cross-references to update
 
 4. **Phase 4: Deployment Modernization**
-   - Implement gateway pattern
-   - Add Docker/Kubernetes configs
-   - Set up service discovery
-   - Create deployment automation
+   - Define gateway requirements
+   - Plan Docker/Kubernetes setup
+   - Design service discovery approach
+   - List deployment automation needs
 
 5. **Phase 5: Testing & Validation**
-   - Achieve 80%+ test coverage
-   - Validate all migrations work
-   - Performance testing
-   - Documentation review
+   - Define coverage targets
+   - Plan validation approach
+   - List performance benchmarks
+   - Define acceptance criteria
 
-For each phase, list:
-- Specific tasks with file paths
-- Dependencies and blockers
+For each phase, document:
+- Specific tasks to complete
+- Dependencies and prerequisites
 - Risk mitigation strategies
-- Validation criteria
+- Success criteria
 
-### 3.2 Detailed Migration Steps
+### 3.3 Component Migration Planning
 
-For the highest priority component/workflow to migrate:
+For each component identified in the priority matrix:
 
-1. **Current State Analysis**
-   - Trace complete code path (all files involved)
-   - List all dependencies
-   - Document current behavior
-   - Identify test cases
+1. **Component Analysis**
+   - Document current file locations
+   - List all dependencies (internal and external)
+   - Map current behavior and test cases
+   - Identify integration points
 
-2. **Target Design**
-   - Design as SDK workflow
-   - Identify required nodes
-   - Plan state management
-   - Design error handling
+2. **Target Architecture Design**
+   - Define target app structure
+   - Map to appropriate SDK nodes
+   - Plan state management approach
+   - Design error handling strategy
 
-3. **Migration Steps**
-   Step 1: Create app structure
+3. **Migration Task List**
+   - List files to move/refactor
+   - Define import updates needed
+   - Plan test migration approach
+   - Identify validation steps
 
-   Step 2: Extract and refactor code
-   - Move files with git mv
-   - Update imports
-   - Refactor to node pattern
-   - Add SDK integration
+4. **Risk Assessment**
+   - Breaking changes to consumers
+   - Performance impact concerns
+   - Data migration requirements
+   - Rollback strategy needed
 
-   Step 3: Create workflow
+## 🎯 Phase 4: Migration Readiness Assessment
 
-   Step 4: Update tests
-   - Migrate existing tests
-   - Add SDK-specific tests
-   - Ensure coverage maintained
+### 4.1 Pre-Migration Validation Plan
 
-   Step 5: Integration
-   - Update entry points
-   - Add to gateway config
-   - Test end-to-end
+Define validation approach for the migration:
 
-4. **Validation Checklist**
-   - [ ] All tests pass
-   - [ ] No functionality lost
-   - [ ] Performance maintained
-   - [ ] Documentation updated
-   - [ ] Manifest.yaml correct
+1. **Testing Strategy**
+   - Map existing tests to 3-tier structure
+   - Identify gaps in test coverage
+   - Plan new tests needed for SDK patterns
+   - Define performance benchmarks
 
-## 🔧 Phase 4: Implementation Patterns
+2. **Acceptance Criteria**
+   - No functionality regression
+   - Performance maintained or improved
+   - All existing integrations work
+   - Zero data loss
 
-### 4.1 Node Conversion Pattern
+3. **Rollback Planning**
+   - Define rollback triggers
+   - Plan data backup strategy
+   - Document rollback procedures
+   - Test rollback approach
 
-Convert this function/class to a Kailash SDK node:
+4. **Communication Plan**
+   - Stakeholder notifications
+   - Team training needs
+   - Documentation requirements
+   - Support procedures
 
-Given: [paste current code]
+### 4.2 Resource Planning
 
-1. **Analyze Current Code**
-   - Input parameters
-   - Processing logic
-   - Output format
-   - External dependencies
+Plan resources needed for migration:
 
-2. **Design Node Structure**
+1. **Team Requirements**
+   - Developer skills needed
+   - Training requirements
+   - Time allocation per phase
+   - External support needs
 
-3. **Integration Pattern**
-   - Show workflow integration
-   - Data path connections
-   - Error handling approach
-   - Testing strategy
+2. **Infrastructure Needs**
+   - Development environments
+   - Testing infrastructure
+   - Staging environment
+   - Production readiness
 
-4. **Migration Commands**
-   ```bash
-   # Move to correct location
-   git mv [old_path] apps/[app_name]/src/nodes/[name]_node.py
+3. **Tool Requirements**
+   - Migration scripts needed
+   - Testing tools required
+   - Monitoring setup
+   - Documentation tools
 
-   # Update imports across codebase
-   # Show specific import changes needed
-   ```
-
-### 4.2 Manifest Creation
-
-Create manifest.yaml for this application component:
-
-1. **Analyze Capabilities**
-   - List all API endpoints
-   - Identify background tasks
-   - Find integration points
-   - Note data sources
-
-2. **Generate Manifest**
-   ```yaml
-   name: [app-name]
-   version: 0.1.0
-   type: hybrid  # api|mcp|hybrid
-   capabilities:
-     api:
-       enabled: true
-       endpoints:
-         - path: /api/v1/[resource]
-           method: [GET|POST|PUT|DELETE]
-           description: "[endpoint purpose]"
-     mcp:
-       enabled: true
-       tools:
-         - name: [tool_name]
-           description: "[tool purpose]"
-     background:
-       workers:
-         - name: [worker_name]
-           schedule: "cron expression or interval"
-
-   dependencies:
-     - kailash>=1.0.0
-     - [other deps]
-
-   environment:
-     required:
-       - ENV_VAR_NAME
-     optional:
-       - OPTIONAL_VAR: default_value
-   ```
-
-3. **Validation**
-   - Check all endpoints covered
-   - Verify dependencies complete
-   - Test environment variables
-   - Validate with gateway
-
-### 4.3 Documentation Migration
-
-Migrate existing documentation to template structure:
-
-1. **Inventory Current Docs**
-   ```
-   find . -name "*.md" -o -name "*.rst" -o -name "*.txt" | grep -E "(doc|wiki|guide)"
-   ```
-
-2. **Categorize Content**
-   - Architecture decisions → /adr/
-   - API documentation → /docs/api/
-   - User guides → /docs/user-guides/
-   - Development guides → /docs/development/
-   - Deployment guides → /deployment/docs/
-
-3. **Create CLAUDE.md**
-   Structure with sections:
-   - Project Overview (2-3 sentences)
-   - Critical Patterns (Must-follow rules)
-   - Quick Start (Under 5 minutes)
-   - Navigation Guide (Where to find what)
-   - Project-Specific Instructions
-   - Common Tasks (with file:line references)
-
-4. **Update Cross-References**
-
-5. **Add SDK References**
-   Link to relevant SDK docs:
-   - Node selection → sdk-users/nodes/node-selection-guide.md
-   - Patterns → sdk-users/cheatsheet/
-   - Workflows → sdk-users/workflows/
-
-## 🧪 Phase 5: Validation Instructions
-
-### 5.1 Migration Validation
-
-
-Validate the migration for [component/workflow name]:
-
-1. **Functional Testing**
-
-2. **Performance Comparison**
-   - Measure latency before/after
-   - Check memory usage
-   - Monitor CPU utilization
-   - Validate throughput
-
-3. **Integration Testing**
-   - Test with gateway
-   - Verify service discovery
-   - Check cross-app communication
-   - Validate error handling
-
-4. **Documentation Check**
-   - All links work
-   - Code examples run
-   - Manifest validates
-   - CLAUDE.md complete
-
-**Report any regressions or issues found.**
-
-### 5.2 Final Checklist
-
-Complete pre-production checklist:
-
-Repository Structure:
-- [ ] All code in apps/ or solutions/
-- [ ] Each app has manifest.yaml
-- [ ] CLAUDE.md at root with project patterns
-- [ ] Two-level documentation structure
-- [ ] SDK-users/ has relevant guides
-
-Code Quality:
-- [ ] All workflows use SDK patterns
-- [ ] Nodes follow naming convention
-- [ ] No custom orchestration code
-- [ ] Error handling standardized
-- [ ] Logging consistent
-
-Testing:
-- [ ] 80%+ test coverage
-- [ ] All tests passing
-- [ ] Performance benchmarks met
-- [ ] Integration tests complete
-
-Documentation:
-- [ ] Architecture decisions recorded
-- [ ] API documentation current
-- [ ] Deployment guide complete
-- [ ] Troubleshooting guide exists
-
-Deployment:
-- [ ] Docker files created
-- [ ] Kubernetes manifests ready
-- [ ] Gateway configuration complete
-- [ ] Environment management setup
-
-**For any unchecked items, provide remediation steps.**
+4. **Budget Considerations**
+   - Development effort
+   - Infrastructure costs
+   - Training expenses
+   - Contingency planning
 
 ## 🚀 HANDOVER TO IMPLEMENTATION
 

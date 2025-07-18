@@ -163,6 +163,21 @@ Run tests in this exact order and show me complete outputs:
 
 **Show me the COMPLETE test output from each command. Do not summarize. Do not proceed if any tests fail.**
 
+### Step 5: Update documentation (if needed)
+If the bug fix affects documented behavior:
+1. **Update relevant documentation files**
+   - Look through the docs in `sdk-users/`, using the `CLAUDE.md` as the entrypoint.
+   - Important directories are `developer/`, `nodes/`, `cheatsheet/`, and `migration-guides`.
+   - Check for any outdated or incorrect information with respect to the bug fix.
+
+2. **Create temp test files** to validate examples: `/tmp/test_bugfix_docs.py`
+
+3. **Run documentation tests** with real infrastructure
+
+4. **Check if similar patterns exist** in `sdk-users/validation/common-mistakes.md` and document the fix pattern for future reference
+
+**Show me the final validation results and any documentation updates you've made.**
+
 ## 6. SIDE EFFECTS AND REGRESSION ANALYSIS
 
 ### Component Impact Analysis
@@ -251,18 +266,3 @@ After completing the bug fix:
    - Temporary files
    - Test databases
    - Debug outputs
-
-### Documentation Updates (if needed)
-If the bug fix affects documented behavior:
-1. **Update relevant documentation files**
-2. **Create temp test files** to validate examples: `/tmp/test_bugfix_docs.py`
-3. **Run documentation tests** with real infrastructure
-4. **Show validation results** for each updated file
-
-### Knowledge Capture
-Add this bug to the knowledge base:
-1. **Check if similar patterns exist** in `sdk-users/validation/common-mistakes.md`
-2. **Document the fix pattern** for future reference
-3. **Add to test suite** if not already covered
-
-**Show me the final validation results and any documentation updates you've made.**

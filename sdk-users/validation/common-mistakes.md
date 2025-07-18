@@ -21,6 +21,64 @@ from kailash.nodes.base import Node, NodeParameter
 
 ## 🚨 **Most Common Mistakes**
 
+### **Mistake #0: Insecure Secret Management (SECURITY CRITICAL)**
+
+```python
+# ❌ WRONG - Hardcoded secrets in workflow parameters
+workflow.add_node("api", HTTPRequestNode(), {
+    "url": "https://api.example.com",
+    "headers": {"Authorization": "Bearer sk-abc123"}  # SECURITY RISK!
+})
+
+# ❌ WRONG - Environment variables for secrets
+import os
+api_key = os.getenv("API_KEY")
+workflow.add_node("api", HTTPRequestNode(), {
+    "headers": {"Authorization": f"Bearer {api_key}"}
+})
+
+# ❌ WRONG - Template substitution for secrets
+workflow.add_node("api", HTTPRequestNode(), {
+    "headers": {"Authorization": "Bearer ${API_TOKEN}"}
+})
+
+# ✅ CORRECT - Runtime secret management (v0.8.1+)
+from kailash.runtime.secret_provider import EnvironmentSecretProvider
+from kailash.runtime.local import LocalRuntime
+
+secret_provider = EnvironmentSecretProvider()
+runtime = LocalRuntime(secret_provider=secret_provider)
+
+# Node declares secret requirements
+class APINode(Node):
+    @classmethod
+    def get_secret_requirements(cls):
+        return [SecretRequirement("api-token", "auth_token")]
+
+# Secrets injected at runtime, not stored in workflow
+workflow.add_node("api", APINode(), {
+    "url": "https://api.example.com"
+    # No secret in parameters - injected automatically!
+})
+```
+
+**Environment Setup for Secrets:**
+```bash
+# ✅ CORRECT - Use KAILASH_SECRET_ prefix
+export KAILASH_SECRET_API_TOKEN="sk-abc123"
+export KAILASH_SECRET_JWT_SIGNING_KEY="secret-key"
+
+# ❌ WRONG - Direct environment variables
+export API_TOKEN="sk-abc123"  # Avoid this pattern
+```
+
+**Why this matters:**
+- Hardcoded secrets are visible in logs and stored in workflow definitions
+- Environment variables expose secrets in process lists and crash dumps
+- Runtime secret management fetches secrets only when needed
+- Supports enterprise providers (Vault, AWS Secrets Manager)
+- Enables secret rotation without code changes
+
 ### **Mistake #1: Cycle Parameter Passing Errors**
 
 ```python
