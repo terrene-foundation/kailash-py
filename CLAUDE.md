@@ -2,6 +2,20 @@
 
 ## ⚡ Quick Start
 
+### Installation
+```bash
+# Core SDK
+pip install kailash
+
+# With app frameworks
+pip install kailash[dataflow,nexus]  # Database + multi-channel
+pip install kailash[all]             # Everything
+
+# Direct app installation
+pip install kailash-dataflow  # Zero-config database
+pip install kailash-nexus     # Multi-channel platform
+```
+
 ### Basic Workflow
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -11,6 +25,46 @@ workflow = WorkflowBuilder()
 workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
+```
+
+### DataFlow Quick Start
+```python
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+db = DataFlow()
+
+@db.model
+class User:
+    name: str
+    age: int
+
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"name": "Alice", "age": 25})
+workflow.add_node("UserListNode", "list", {"filter": {"age": {"$gt": 18}}})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Nexus Quick Start
+```python
+from nexus import Nexus
+from kailash.workflow.builder import WorkflowBuilder
+
+app = Nexus()
+
+# Create workflow
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "process", {
+    "code": "result = {'result': sum(parameters.get('data', []))}"
+})
+
+# Register workflow
+app.register("process_data", workflow)
+
+app.start()  # Available as API, CLI, and MCP
 ```
 
 ### Cyclic Workflows (v0.6.6+) - CycleBuilder API
@@ -108,9 +162,9 @@ The **App Framework** provides complete domain-specific applications built on th
 | **Core SDK** | **App Framework** | **Contributors** |
 |---------------|---------------------|-----------|
 | [sdk-users/](sdk-users/) - Complete workflow guides | [apps/](apps/) - Production-ready applications | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
-| [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) - 110+ nodes | [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config database | [# contrib (removed)/training/](# contrib (removed)/training/) |
-| [sdk-users/cheatsheet/](sdk-users/cheatsheet/) - Copy-paste patterns | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP platform | [tests/](tests/) - 2,400+ tests |
-| [sdk-users/enterprise/](sdk-users/enterprise/) - Advanced features | [apps/kailash-nexus/](apps/kailash-nexus/) - Multi-channel platform | [examples/](examples/) - Feature validation |
+| [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) - 110+ nodes | [sdk-users/apps/dataflow/](sdk-users/apps/dataflow/) - DataFlow guide (PyPI) | [# contrib (removed)/training/](# contrib (removed)/training/) |
+| [sdk-users/cheatsheet/](sdk-users/cheatsheet/) - Copy-paste patterns | [sdk-users/apps/nexus/](sdk-users/apps/nexus/) - Nexus guide (PyPI) | [tests/](tests/) - 2,400+ tests |
+| [sdk-users/enterprise/](sdk-users/enterprise/) - Advanced features | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP platform | [examples/](examples/) - Feature validation |
 
 ## ⚠️ MUST FOLLOW
 1. **🚨 Node Execution**: ALWAYS use `.execute()` - NEVER `.run()`, `.process()`, or `.call()`
@@ -236,9 +290,9 @@ Use centralized `tests/node_registry_utils.py` for consistent node management
 - **Enterprise**: [Enterprise Patterns](sdk-users/enterprise/) - Advanced features
 
 **App Framework Deployment:**
-- **DataFlow**: [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config database operations
+- **DataFlow**: [sdk-users/apps/dataflow/](sdk-users/apps/dataflow/) - Zero-config database operations
+- **Nexus Platform**: [sdk-users/apps/nexus/](sdk-users/apps/nexus/) - Multi-channel (API, CLI, MCP)
 - **MCP Platform**: [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP with auth & compliance
-- **Nexus Platform**: [apps/kailash-nexus/](apps/kailash-nexus/) - Multi-channel (API, CLI, MCP)
 - **AI Registry**: [apps/ai_registry/](apps/ai_registry/) - Advanced RAG with document analysis
 
 **SDK Development:**
