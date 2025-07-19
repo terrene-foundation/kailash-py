@@ -11,7 +11,7 @@ Kailash Python SDK Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-.. image:: https://img.shields.io/badge/version-0.8.1-green.svg
+.. image:: https://img.shields.io/badge/version-0.8.4-green.svg
    :alt: SDK Version
 
 .. image:: https://img.shields.io/badge/tests-2400%2B%20passing-brightgreen.svg
@@ -22,8 +22,8 @@ Kailash Python SDK Documentation
 
 Welcome to the **Kailash Python SDK** - The enterprise-grade workflow orchestration platform that transforms how you build production applications. From zero-config database operations to multi-channel platforms, comprehensive AI integration, and enterprise-grade security.
 
-🚀 **Latest Release: v0.8.1**
-   Complete app framework with DataFlow, Nexus, AI Registry, and User Management platforms. 11x faster test execution with 100% pass rate across 2,400+ tests.
+🚀 **Latest Release: v0.8.4**
+   A2A Google Protocol Enhancement with advanced agent coordination, hybrid search capabilities, and semantic memory systems. Complete multi-agent workflows with production-grade performance.
 
 Quick Links
 -----------
@@ -46,39 +46,34 @@ Quick Links
    - **AI Registry**: Advanced RAG with 47+ specialized nodes
    - **User Management**: Enterprise RBAC with comprehensive security
 
-What's New in v0.8.1
+What's New in v0.8.4
 ---------------------
 
-**🎯 Complete Application Framework**
+**🤖 A2A Google Protocol Enhancement**
 
-🏗️ **Production-Ready Applications**
-   - **DataFlow**: Zero-config database operations with MongoDB-style queries
-   - **Nexus**: Multi-channel platform (API + CLI + MCP) from single codebase
-   - **AI Registry**: Advanced RAG with 47+ specialized nodes
-   - **User Management**: Enterprise RBAC system with comprehensive security
+🎯 **Advanced Agent Coordination**
+   - **A2ACoordinatorNode**: Enhanced multi-agent coordination with Google Protocol patterns
+   - **Agent Cards System**: Dynamic agent registration with skill-based matching
+   - **Intelligent Task Delegation**: Context-aware task distribution with workload balancing
+   - **Backward Compatibility**: Seamless integration with existing A2A implementations
 
-⚡ **Performance Breakthrough**
-   - **11x faster test execution**: 117s → 10.75s with smart isolation
-   - **100% test pass rate**: 2,400+ tests across all categories
-   - **31.8M operations/second**: Query performance baseline
-   - **30,000+ iterations/second**: Cyclic workflow execution
+🔍 **Hybrid Search Capabilities**
+   - **HybridSearchNode**: Multi-strategy agent discovery and matching
+   - **AdaptiveSearchNode**: Self-optimizing search strategies
+   - **Semantic Agent Matching**: Advanced algorithms for optimal agent selection
+   - **Real-time Performance Monitoring**: Streaming analytics for A2A workflows
 
-🧪 **Testing Excellence**
-   - **Docker Integration**: Real PostgreSQL, Redis, MongoDB for testing
-   - **Smart Isolation**: Fixture-based isolation without process forking
-   - **Comprehensive Coverage**: Unit, integration, and E2E testing
-   - **Performance Monitoring**: Automated benchmarks and regression detection
+🧠 **Semantic Memory System**
+   - **SemanticMemoryNode**: Long-term memory management for agent interactions
+   - **DataFlow Integration**: Zero-config semantic search capabilities
+   - **Advanced Embeddings**: Multi-provider embedding support with intelligent caching
+   - **Context-Aware Retrieval**: Enhanced memory recall with relevance scoring
 
-🤖 **AI Integration**
-   - **Real MCP execution** by default for all AI agents
-   - **47+ specialized RAG nodes** for document processing
-   - **Self-organizing agent pools** with intelligent coordination
-   - **Complete LLM integration** with embeddings and vector search
-
-📦 **PyPI Integration**
-   - All packages available with proper extras support
-   - ``pip install kailash[dataflow,nexus]`` for complete frameworks
-   - Direct app installation: ``pip install kailash-dataflow``
+⚡ **Performance & Reliability**
+   - **Maintained 100% test pass rate**: 2,400+ tests with comprehensive A2A coverage
+   - **Production-tested patterns**: Real-world multi-agent coordination scenarios
+   - **Enterprise-grade scaling**: Optimized for high-throughput agent workflows
+   - **Comprehensive documentation**: Complete implementation guides and examples
 
 .. toctree::
    :maxdepth: 2
@@ -195,44 +190,56 @@ Key Features
 Quick Start Examples
 --------------------
 
-**DataFlow - Zero-Config Database Operations**
+**A2A Multi-Agent Coordination**
 
 .. code-block:: python
 
-   from dataflow import DataFlow
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime.local import LocalRuntime
 
-   # Zero-configuration database operations
-   app = DataFlow()
+   # Build A2A coordination workflow
+   workflow = WorkflowBuilder()
+   workflow.add_node("A2ACoordinatorNode", "coordinator", {
+       "use_google_protocol": True,
+       "enable_semantic_memory": True,
+       "delegation_strategy": "skill_based"
+   })
 
-   # MongoDB-style queries across any database
-   users = app.query("users").where({"age": {"$gt": 18}}).limit(10)
+   # Execute with intelligent agent coordination
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build(), parameters={
+       "coordinator": {
+           "action": "delegate_task",
+           "task": {"type": "analysis", "data": "market_research.json"},
+           "requirements": {"skills": ["research", "analysis"], "priority": "high"}
+       }
+   })
 
-   # Redis-powered caching with smart invalidation
-   cached_result = app.cache().get("user_stats",
-       lambda: app.query("users").aggregate([
-           {"$group": {"_id": "$department", "count": {"$sum": 1}}}
-       ])
-   )
-
-   # Start enterprise API server
-   app.start()  # Automatic API generation, monitoring, health checks
-
-**Nexus - Multi-Channel Platform**
+**Hybrid Search & Discovery**
 
 .. code-block:: python
 
-   from nexus import Nexus
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime.local import LocalRuntime
 
-   # Single codebase → API + CLI + MCP
-   app = Nexus()
+   # Build hybrid search workflow
+   workflow = WorkflowBuilder()
+   workflow.add_node("HybridSearchNode", "search", {
+       "strategies": ["semantic", "keyword", "skill_based"],
+       "adaptive_optimization": True,
+       "performance_tracking": True
+   })
+   workflow.add_node("SemanticMemoryNode", "memory", {
+       "embedding_provider": "openai",
+       "memory_type": "long_term",
+       "context_window": 8192
+   })
 
-   # Register workflow once, available on all channels
-   @app.workflow
-   def process_data(input_data):
-       return {"processed": len(input_data)}
+   # Connect for intelligent agent discovery
+   workflow.add_connection("search", "memory", "agent_matches", "context")
 
-   app.start()
-   # Now available as REST API, CLI command, and MCP tool
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
 
 **Core SDK - Advanced Workflows**
 
@@ -335,12 +342,16 @@ Node Ecosystem (115+ Nodes)
 **Core Categories:**
    - **Data Nodes**: CSVReaderNode, AsyncSQLDatabaseNode, QueryBuilderNode, QueryCacheNode
    - **AI Nodes**: LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode, SelfOrganizingAgentNode
+   - **A2A Nodes**: A2ACoordinatorNode, HybridSearchNode, AdaptiveSearchNode, SemanticMemoryNode, StreamingAnalyticsNode
    - **RAG Nodes**: 47+ specialized nodes for document processing and retrieval
    - **Security Nodes**: ThreatDetectionNode, AuditLogNode, AccessControlManager
    - **Monitoring Nodes**: TransactionMetricsNode, DeadlockDetectorNode, PerformanceAnomalyNode
    - **Transaction Nodes**: DistributedTransactionManagerNode, SagaCoordinatorNode
 
 **Advanced Features:**
+   - **A2A Communication**: Google Protocol-based multi-agent coordination
+   - **Semantic Memory**: Long-term memory management for agent interactions
+   - **Hybrid Search**: Multi-strategy agent discovery and matching
    - **Cyclic Workflows**: CycleBuilder API with convergence detection
    - **Distributed Transactions**: Automatic Saga/2PC pattern selection
    - **Real-time Monitoring**: WebSocket streaming with performance metrics

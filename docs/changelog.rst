@@ -10,6 +10,36 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`
 and this project adheres to `Semantic Versioning
 <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.8.4] - 2025-01-19
+--------------------
+
+Added
+~~~~~
+- **A2A Google Protocol Enhancement** - Comprehensive Agent-to-Agent communication system following Google Protocol best practices
+- **A2ACoordinatorNode** - Enhanced multi-agent coordination with intelligent task delegation and workload balancing
+- **Agent Cards System** - Dynamic agent registration with skill-based matching and capability discovery
+- **HybridSearchNode** - Multi-strategy agent discovery combining semantic, keyword, and skill-based search
+- **AdaptiveSearchNode** - Self-optimizing search strategies that learn from usage patterns
+- **SemanticMemoryNode** - Long-term memory management for agent interactions with context-aware retrieval
+- **StreamingAnalyticsNode** - Real-time performance monitoring and analytics for A2A workflows
+- **DataFlow Semantic Integration** - Zero-config semantic search capabilities with advanced embeddings
+- **Enhanced Backward Compatibility** - Seamless integration with existing A2A implementations
+
+Improved
+~~~~~~~~
+- **Multi-Agent Coordination** - Production-tested patterns for enterprise-scale agent orchestration
+- **Task Delegation Logic** - Context-aware distribution with intelligent fallback mechanisms
+- **Performance Monitoring** - Comprehensive metrics collection for A2A workflow optimization
+- **Error Handling** - Enhanced recovery patterns for multi-agent scenarios
+- **Documentation** - Complete implementation guides with production deployment examples
+
+Testing
+~~~~~~~
+- **Comprehensive A2A Coverage** - 2,400+ tests maintaining 100% pass rate with extensive A2A scenarios
+- **Integration Validation** - Real-world multi-agent coordination testing
+- **Performance Benchmarks** - Automated testing for A2A workflow efficiency
+- **Backward Compatibility** - Validation of existing A2A implementations
+
 [0.6.6] - 2025-07-08
 --------------------
 

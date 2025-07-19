@@ -22,17 +22,18 @@
 
 ---
 
-## 🔥 Latest Release: v0.8.1 (January 17, 2025)
+## 🔥 Latest Release: v0.8.4 (January 19, 2025)
 
-**Complete App Framework & PyPI Integration**
+**A2A Google Protocol Enhancement**
 
-- 🚀 **Complete App Framework**: DataFlow, Nexus, AI Registry, and User Management platforms
-- 📦 **PyPI Integration**: All packages available with proper extras support
-- 🏢 **Enterprise Ready**: Zero-config database operations and multi-channel deployment
-- ⚡ **Performance Breakthrough**: 11x faster test execution with 100% pass rate
-- 🧪 **Testing Excellence**: 2,400+ tests with comprehensive Docker integration
+- 🤖 **Advanced Agent Coordination**: A2ACoordinatorNode with Google Protocol best practices
+- 🎯 **Intelligent Task Delegation**: Context-aware task distribution with skill-based matching
+- 🔍 **Hybrid Search Capabilities**: Multi-strategy agent discovery and matching algorithms
+- 🧠 **Semantic Memory System**: Long-term memory management for agent interactions
+- 📊 **Real-time Analytics**: Streaming performance monitoring for A2A workflows
+- ✅ **Backward Compatible**: Seamless integration with existing A2A implementations
 
-[Full Changelog](changelogs/releases/v0.8.1-2025-01-17.md) | [PyPI Packages](https://pypi.org/project/kailash/)
+[Full Changelog](CHANGELOG.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.4/)
 
 ## 🎯 What Makes Kailash Different
 
@@ -51,10 +52,12 @@ Not just a toolkit - complete production-ready applications built on enterprise-
 - **100% test pass rate** across 2,400+ tests
 
 ### 🤖 **AI-First Architecture**
+- **A2A Google Protocol** for enterprise multi-agent coordination
 - **Real MCP execution** by default for all AI agents
 - **47+ specialized RAG nodes** for document processing
-- **Self-organizing agent pools** with intelligent coordination
-- **Complete LLM integration** across all platforms
+- **Semantic memory systems** with context-aware retrieval
+- **Hybrid search algorithms** for intelligent agent discovery
+- **Self-organizing agent pools** with advanced coordination patterns
 
 ## 🏗️ Project Architecture
 
@@ -152,31 +155,32 @@ app.start()
 # - MCP: AI agents can call process_data tool
 ```
 
-### Core SDK: Advanced Workflows
+### A2A Multi-Agent Coordination
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-# Build enterprise workflow
+# Build A2A coordination workflow
 workflow = WorkflowBuilder()
-workflow.add_node("LLMAgentNode", "ai_agent", {
-    "model": "gpt-4",
-    "use_real_mcp": True  # Real MCP execution by default
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "use_google_protocol": True,
+    "enable_semantic_memory": True,
+    "delegation_strategy": "skill_based"
 })
-workflow.add_node("AsyncSQLDatabaseNode", "database", {
-    "connection_string": "postgresql://...",
-    "query": "SELECT * FROM customers WHERE risk_score > $1",
-    "parameter_types": ["DECIMAL"]  # PostgreSQL type inference
+workflow.add_node("HybridSearchNode", "discovery", {
+    "strategies": ["semantic", "keyword", "skill_based"],
+    "adaptive_optimization": True
+})
+workflow.add_node("SemanticMemoryNode", "memory", {
+    "embedding_provider": "openai",
+    "memory_type": "long_term",
+    "context_window": 8192
 })
 
-# Add cyclic optimization
-cycle = workflow.create_cycle("optimization")
-cycle.connect("processor", "evaluator") \
-     .connect("evaluator", "processor") \
-     .max_iterations(50) \
-     .converge_when("quality > 0.95") \
-     .build()
+# Connect for intelligent agent coordination
+workflow.add_connection("coordinator", "discovery", "agent_request", "search_query")
+workflow.add_connection("discovery", "memory", "agent_matches", "context")
 
 # Execute with enterprise monitoring
 runtime = LocalRuntime()
@@ -215,12 +219,16 @@ results, run_id = runtime.execute(workflow.build())
 ### Core Categories
 - **Data Nodes**: CSVReaderNode, AsyncSQLDatabaseNode, QueryBuilderNode, QueryCacheNode
 - **AI Nodes**: LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode, SelfOrganizingAgentNode
+- **A2A Nodes**: A2ACoordinatorNode, HybridSearchNode, AdaptiveSearchNode, SemanticMemoryNode, StreamingAnalyticsNode
 - **RAG Nodes**: 47+ specialized nodes for document processing and retrieval
 - **Security Nodes**: ThreatDetectionNode, AuditLogNode, AccessControlManager
 - **Monitoring Nodes**: TransactionMetricsNode, DeadlockDetectorNode, PerformanceAnomalyNode
 - **Transaction Nodes**: DistributedTransactionManagerNode, SagaCoordinatorNode
 
 ### Advanced Features
+- **A2A Communication**: Google Protocol-based multi-agent coordination
+- **Semantic Memory**: Long-term memory management for agent interactions
+- **Hybrid Search**: Multi-strategy agent discovery and matching
 - **Cyclic Workflows**: CycleBuilder API with convergence detection
 - **Distributed Transactions**: Automatic Saga/2PC pattern selection
 - **Real-time Monitoring**: WebSocket streaming with performance metrics
@@ -397,6 +405,14 @@ All project management through conversational AI:
 See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md).
 
 ## 📈 Project Status
+
+### ✅ v0.8.4 - A2A Google Protocol Enhancement
+- **Advanced Agent Coordination**: A2ACoordinatorNode with Google Protocol patterns
+- **Hybrid Search System**: Multi-strategy agent discovery and matching
+- **Semantic Memory**: Long-term memory management for agent interactions
+- **Real-time Analytics**: Streaming performance monitoring for A2A workflows
+- **Backward Compatible**: Seamless integration with existing implementations
+- **Production Ready**: Enterprise-grade multi-agent coordination patterns
 
 ### ✅ v0.8.1 - Complete App Framework
 - **Complete Application Framework**: DataFlow, Nexus, AI Registry, User Management
