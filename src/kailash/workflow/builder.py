@@ -394,7 +394,7 @@ class WorkflowBuilder:
                 error_msg += f"\nAvailable nodes: {available_nodes}"
             if similar_nodes:
                 error_msg += f"\nDid you mean: {similar_nodes}?"
-            error_msg += f"\n\nTip: Use workflow.add_node() to create nodes before connecting them."
+            error_msg += "\n\nTip: Use workflow.add_node() to create nodes before connecting them."
             error_msg += f"\nExample: workflow.add_node('CSVReaderNode', '{from_node}', {{'file_path': 'data.csv'}})"
 
             raise WorkflowValidationError(error_msg)
@@ -412,7 +412,7 @@ class WorkflowBuilder:
                 error_msg += f"\nAvailable nodes: {available_nodes}"
             if similar_nodes:
                 error_msg += f"\nDid you mean: {similar_nodes}?"
-            error_msg += f"\n\nTip: Use workflow.add_node() to create nodes before connecting them."
+            error_msg += "\n\nTip: Use workflow.add_node() to create nodes before connecting them."
             error_msg += f"\nExample: workflow.add_node('PythonCodeNode', '{to_node}', {{'code': 'result = data'}})"
 
             raise WorkflowValidationError(error_msg)
@@ -477,9 +477,9 @@ class WorkflowBuilder:
 
         # Provide helpful tips for common connection patterns
         if from_output == to_input == "data":
-            logger.debug(f"Using standard data flow connection pattern")
+            logger.debug("Using standard data flow connection pattern")
         elif from_output in ["result", "output"] and to_input in ["data", "input"]:
-            logger.debug(f"Using result-to-input connection pattern")
+            logger.debug("Using result-to-input connection pattern")
         else:
             logger.debug(f"Using custom port mapping: {from_output} -> {to_input}")
         return self

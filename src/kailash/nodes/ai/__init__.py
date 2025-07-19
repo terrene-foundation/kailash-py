@@ -16,6 +16,7 @@ from .ai_providers import (
     get_provider,
 )
 from .embedding_generator import EmbeddingGeneratorNode
+from .hybrid_search import AdaptiveSearchNode, HybridSearchNode
 
 # Import intelligent orchestration nodes
 from .intelligent_agent_orchestrator import (
@@ -45,6 +46,14 @@ from .self_organizing import (
     TeamFormationNode,
 )
 
+# Import A2A enhancement nodes
+from .semantic_memory import (
+    SemanticAgentMatchingNode,
+    SemanticMemorySearchNode,
+    SemanticMemoryStoreNode,
+)
+from .streaming_analytics import A2AMonitoringNode, StreamingAnalyticsNode
+
 __all__ = [
     # Agents
     "ChatAgent",
@@ -57,6 +66,14 @@ __all__ = [
     "A2AAgentNode",
     "SharedMemoryPoolNode",
     "A2ACoordinatorNode",
+    # A2A Enhancement Nodes
+    "SemanticMemoryStoreNode",
+    "SemanticMemorySearchNode",
+    "SemanticAgentMatchingNode",
+    "HybridSearchNode",
+    "AdaptiveSearchNode",
+    "StreamingAnalyticsNode",
+    "A2AMonitoringNode",
     # Self-Organizing Agents
     "AgentPoolManagerNode",
     "ProblemAnalyzerNode",
