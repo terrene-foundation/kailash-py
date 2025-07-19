@@ -972,5 +972,3 @@ class TestPerformanceTargetManagement:
 
         except ImportError:
             pytest.skip("PerformanceBenchmarkNode not available")
-
-
