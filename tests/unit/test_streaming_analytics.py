@@ -2,22 +2,23 @@
 Unit tests for streaming analytics functionality.
 """
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from kailash.nodes.ai.streaming_analytics import (
-    StreamingAnalyticsNode,
     A2AMonitoringNode,
-    MetricsCollector,
-    EventStreamer,
-    PerformanceDashboard,
-    MetricType,
-    AlertSeverity,
-    MetricValue,
-    StreamEvent,
     Alert,
+    AlertSeverity,
+    EventStreamer,
+    MetricsCollector,
+    MetricType,
+    MetricValue,
+    PerformanceDashboard,
+    StreamEvent,
+    StreamingAnalyticsNode,
 )
 
 

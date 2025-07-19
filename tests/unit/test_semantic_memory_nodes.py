@@ -2,19 +2,20 @@
 Unit tests for semantic memory nodes.
 """
 
-import pytest
-import numpy as np
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, Mock, patch
+
+import numpy as np
+import pytest
 
 from kailash.nodes.ai.semantic_memory import (
-    SemanticMemoryStoreNode,
-    SemanticMemorySearchNode,
+    EmbeddingResult,
+    InMemoryVectorStore,
     SemanticAgentMatchingNode,
     SemanticMemoryItem,
-    EmbeddingResult,
+    SemanticMemorySearchNode,
+    SemanticMemoryStoreNode,
     SimpleEmbeddingProvider,
-    InMemoryVectorStore,
 )
 
 

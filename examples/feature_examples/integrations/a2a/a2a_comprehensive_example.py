@@ -14,21 +14,21 @@ This example demonstrates all the enhanced A2A features:
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai import (
-    A2ACoordinatorNode,
     A2AAgentNode,
-    SemanticMemoryStoreNode,
-    SemanticMemorySearchNode,
-    SemanticAgentMatchingNode,
-    HybridSearchNode,
-    AdaptiveSearchNode,
-    StreamingAnalyticsNode,
+    A2ACoordinatorNode,
     A2AMonitoringNode,
+    AdaptiveSearchNode,
+    HybridSearchNode,
+    SemanticAgentMatchingNode,
+    SemanticMemorySearchNode,
+    SemanticMemoryStoreNode,
+    StreamingAnalyticsNode,
 )
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 async def main():

@@ -5,8 +5,9 @@ This example shows how to integrate A2A enhancements into workflows using Workfl
 """
 
 import asyncio
-from kailash.workflow.builder import WorkflowBuilder
+
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 async def main():

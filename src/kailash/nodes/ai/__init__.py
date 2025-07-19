@@ -2,16 +2,6 @@
 
 # Import A2A communication nodes
 from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
-
-# Import A2A enhancement nodes
-from .semantic_memory import (
-    SemanticMemoryStoreNode,
-    SemanticMemorySearchNode,
-    SemanticAgentMatchingNode,
-)
-from .hybrid_search import HybridSearchNode, AdaptiveSearchNode
-from .streaming_analytics import StreamingAnalyticsNode, A2AMonitoringNode
-
 from .agents import ChatAgent, FunctionCallingAgent, PlanningAgent, RetrievalAgent
 
 # Import from unified ai_providers module
@@ -26,6 +16,7 @@ from .ai_providers import (
     get_provider,
 )
 from .embedding_generator import EmbeddingGeneratorNode
+from .hybrid_search import AdaptiveSearchNode, HybridSearchNode
 
 # Import intelligent orchestration nodes
 from .intelligent_agent_orchestrator import (
@@ -54,6 +45,14 @@ from .self_organizing import (
     SolutionEvaluatorNode,
     TeamFormationNode,
 )
+
+# Import A2A enhancement nodes
+from .semantic_memory import (
+    SemanticAgentMatchingNode,
+    SemanticMemorySearchNode,
+    SemanticMemoryStoreNode,
+)
+from .streaming_analytics import A2AMonitoringNode, StreamingAnalyticsNode
 
 __all__ = [
     # Agents
