@@ -239,6 +239,7 @@ class TestAnomalyDetection:
 class TestMachineLearningModels:
     """Test machine learning model integration."""
 
+    @pytest.mark.timeout(5)  # sklearn import can be slow on some systems
     @patch("sklearn.ensemble.IsolationForest")
     def test_isolation_forest_model(self, mock_isolation_forest_class):
         """Test Isolation Forest anomaly detection model."""

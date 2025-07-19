@@ -173,17 +173,14 @@ class TestMCPServerConfiguration:
         try:
             from kailash.mcp_server.server import MCPServer
 
-            # Custom configuration
+            # Custom configuration (updated for new MCPServer signature)
             config = {
-                "description": "Test server",
-                "version": "2.0.0",
-                "port": 9090,
-                "host": "0.0.0.0",
                 "enable_cache": True,
                 "enable_metrics": True,
-                "enable_rate_limiting": True,
                 "cache_ttl": 600,
-                "max_cache_size": 1000,
+                "rate_limit_config": {
+                    "requests_per_minute": 100
+                },  # Updated parameter name
             }
 
             server = MCPServer("custom-server", **config)
@@ -210,9 +207,7 @@ class TestMCPServerConfiguration:
             mock_auth_provider = Mock()
             mock_auth_provider.name = "test_auth"
 
-            server = MCPServer(
-                "auth-server", auth_provider=mock_auth_provider, enable_auth=True
-            )
+            server = MCPServer("auth-server", auth_provider=mock_auth_provider)
 
             # Verify auth configuration
             # # assert server.enable_auth is True  # Node attributes not accessible directly  # Node attributes not accessible directly
@@ -538,7 +533,7 @@ class TestMCPServerAuthenticationAndSecurity:
                 "valid": True,
             }
 
-            server = MCPServer("auth-server", auth_provider=mock_auth, enable_auth=True)
+            server = MCPServer("auth-server", auth_provider=mock_auth)
 
             # Test authenticated request
             with patch.object(server, "_authenticate_request") as mock_auth_request:
@@ -569,7 +564,6 @@ class TestMCPServerAuthenticationAndSecurity:
 
             server = MCPServer(
                 "rate-limited-server",
-                enable_rate_limiting=True,
                 rate_limit_config={"requests_per_minute": 5, "burst_limit": 10},
             )
 
@@ -619,8 +613,8 @@ class TestMCPServerAuthenticationAndSecurity:
 
             server = MCPServer(
                 "permission-server",
-                permission_manager=mock_permissions,
-                enable_auth=True,
+                # Permission management is now handled through auth_provider
+                auth_provider=mock_permissions,
             )
 
             @server.tool(required_permission="admin")
@@ -694,10 +688,7 @@ class TestMCPServerMonitoringAndMetrics:
             server = MCPServer(
                 "performance-server",
                 enable_metrics=True,
-                performance_thresholds={
-                    "max_execution_time": 1.0,
-                    "max_memory_usage": 100 * 1024 * 1024,  # 100MB
-                },
+                enable_monitoring=True,
             )
 
             @server.tool()
@@ -730,7 +721,7 @@ class TestMCPServerMonitoringAndMetrics:
         try:
             from kailash.mcp_server.server import MCPServer
 
-            server = MCPServer("health-server", enable_health_checks=True)
+            server = MCPServer("health-server", enable_monitoring=True)
 
             # Mock health check components
             with patch.object(server, "_check_server_health") as mock_health:
@@ -909,7 +900,7 @@ class TestMCPServerIntegrationAndEdgeCases:
         try:
             from kailash.mcp_server.server import MCPServer
 
-            server = MCPServer("memory-server", enable_cache=True, max_cache_size=100)
+            server = MCPServer("memory-server", enable_cache=True)
 
             # Mock memory manager
             with (

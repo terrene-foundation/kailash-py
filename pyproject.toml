@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "0.8.3"
+version = "0.8.4"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -84,6 +84,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.55b1",
     "seaborn>=0.13.2",
     "sqlparse>=0.5.3",
+    "jsonschema>=4.24.0",
 ]
 
 [project.optional-dependencies]

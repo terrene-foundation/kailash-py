@@ -1,6 +1,7 @@
 """Functional tests for nodes/monitoring/performance_benchmark.py that verify actual performance monitoring."""
 
 import gc
+import random
 import statistics
 import threading
 import time
@@ -971,7 +972,3 @@ class TestPerformanceTargetManagement:
 
         except ImportError:
             pytest.skip("PerformanceBenchmarkNode not available")
-
-
-# Import helper
-import random
