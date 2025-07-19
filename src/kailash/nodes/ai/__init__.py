@@ -4,7 +4,11 @@
 from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 
 # Import A2A enhancement nodes
-from .semantic_memory import SemanticMemoryStoreNode, SemanticMemorySearchNode, SemanticAgentMatchingNode
+from .semantic_memory import (
+    SemanticMemoryStoreNode,
+    SemanticMemorySearchNode,
+    SemanticAgentMatchingNode,
+)
 from .hybrid_search import HybridSearchNode, AdaptiveSearchNode
 from .streaming_analytics import StreamingAnalyticsNode, A2AMonitoringNode
 
@@ -65,7 +69,7 @@ __all__ = [
     "A2ACoordinatorNode",
     # A2A Enhancement Nodes
     "SemanticMemoryStoreNode",
-    "SemanticMemorySearchNode", 
+    "SemanticMemorySearchNode",
     "SemanticAgentMatchingNode",
     "HybridSearchNode",
     "AdaptiveSearchNode",
