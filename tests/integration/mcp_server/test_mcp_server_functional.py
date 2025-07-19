@@ -178,7 +178,9 @@ class TestMCPServerConfiguration:
                 "enable_cache": True,
                 "enable_metrics": True,
                 "cache_ttl": 600,
-                "rate_limit_config": {"requests_per_minute": 100},  # Updated parameter name
+                "rate_limit_config": {
+                    "requests_per_minute": 100
+                },  # Updated parameter name
             }
 
             server = MCPServer("custom-server", **config)
@@ -205,9 +207,7 @@ class TestMCPServerConfiguration:
             mock_auth_provider = Mock()
             mock_auth_provider.name = "test_auth"
 
-            server = MCPServer(
-                "auth-server", auth_provider=mock_auth_provider
-            )
+            server = MCPServer("auth-server", auth_provider=mock_auth_provider)
 
             # Verify auth configuration
             # # assert server.enable_auth is True  # Node attributes not accessible directly  # Node attributes not accessible directly

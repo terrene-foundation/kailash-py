@@ -7,6 +7,7 @@ Follows the testing policy:
 
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Dict
@@ -818,5 +819,3 @@ class TestDockerRuntimeIntegration:
         assert len(node_data["parameters"]) == 2  # input_data and multiplier
 
 
-# Add subprocess import for the tests
-import subprocess

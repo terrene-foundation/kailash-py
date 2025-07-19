@@ -27,8 +27,10 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 # ENHANCED A2A COMPONENTS: Agent Cards and Task Management
 # ============================================================================
 
+
 class CapabilityLevel(Enum):
     """Agent capability proficiency levels."""
+
     NOVICE = "novice"
     INTERMEDIATE = "intermediate"
     ADVANCED = "advanced"
@@ -37,6 +39,7 @@ class CapabilityLevel(Enum):
 
 class CollaborationStyle(Enum):
     """Agent collaboration preferences."""
+
     INDEPENDENT = "independent"  # Prefers solo work
     COOPERATIVE = "cooperative"  # Works well in teams
     LEADER = "leader"  # Takes charge of coordination
@@ -45,6 +48,7 @@ class CollaborationStyle(Enum):
 
 class TaskState(Enum):
     """Task lifecycle states."""
+
     CREATED = "created"
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
@@ -57,6 +61,7 @@ class TaskState(Enum):
 
 class TaskPriority(Enum):
     """Task priority levels."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -65,6 +70,7 @@ class TaskPriority(Enum):
 
 class InsightType(Enum):
     """Types of insights that can be generated."""
+
     DISCOVERY = "discovery"  # New finding
     ANALYSIS = "analysis"  # Deep analysis result
     RECOMMENDATION = "recommendation"  # Actionable recommendation
@@ -77,6 +83,7 @@ class InsightType(Enum):
 @dataclass
 class Capability:
     """Detailed capability description."""
+
     name: str
     domain: str
     level: CapabilityLevel
@@ -84,95 +91,94 @@ class Capability:
     keywords: List[str] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
-    
+
     def matches_requirement(self, requirement: str) -> float:
         """Calculate match score for a requirement (0.0-1.0)."""
         requirement_lower = requirement.lower()
-        
+
         # Direct name match
         if self.name.lower() in requirement_lower:
             return 0.9
-        
+
         # Domain match
         if self.domain.lower() in requirement_lower:
             return 0.7
-        
+
         # Keyword matches
         keyword_matches = sum(
-            1 for keyword in self.keywords 
-            if keyword.lower() in requirement_lower
+            1 for keyword in self.keywords if keyword.lower() in requirement_lower
         )
         if keyword_matches > 0:
             return min(0.6 + (keyword_matches * 0.1), 0.8)
-        
+
         # Description similarity
         desc_words = set(self.description.lower().split())
         req_words = set(requirement_lower.split())
         overlap = len(desc_words & req_words)
         if overlap > 0:
             return min(0.3 + (overlap * 0.05), 0.5)
-        
+
         return 0.0
 
 
 @dataclass
 class PerformanceMetrics:
     """Agent performance tracking."""
+
     total_tasks: int = 0
     successful_tasks: int = 0
     failed_tasks: int = 0
-    
+
     average_response_time_ms: float = 0.0
     average_insight_quality: float = 0.0
     average_confidence_score: float = 0.0
-    
+
     insights_generated: int = 0
     unique_insights: int = 0
     actionable_insights: int = 0
-    
+
     collaboration_score: float = 0.0
     reliability_score: float = 0.0
-    
+
     last_active: Optional[datetime] = None
-    
+
     @property
     def success_rate(self) -> float:
         """Calculate task success rate."""
         if self.total_tasks == 0:
             return 0.0
         return self.successful_tasks / self.total_tasks
-    
+
     @property
     def insight_quality_score(self) -> float:
         """Calculate overall insight quality score."""
         if self.insights_generated == 0:
             return 0.0
-        
+
         uniqueness = self.unique_insights / self.insights_generated
         actionability = self.actionable_insights / self.insights_generated
-        
+
         return (
-            self.average_insight_quality * 0.4 +
-            uniqueness * 0.3 +
-            actionability * 0.3
+            self.average_insight_quality * 0.4 + uniqueness * 0.3 + actionability * 0.3
         )
 
 
 @dataclass
 class ResourceRequirements:
     """Agent resource constraints and requirements."""
+
     min_memory_mb: int = 512
     max_memory_mb: int = 4096
-    
+
     min_tokens: int = 100
     max_tokens: int = 4000
-    
+
     requires_gpu: bool = False
     requires_internet: bool = True
-    
+
     estimated_cost_per_task: float = 0.0
     max_concurrent_tasks: int = 5
-    
+
     supported_models: List[str] = field(default_factory=list)
     required_apis: List[str] = field(default_factory=list)
 
@@ -181,43 +187,43 @@ class ResourceRequirements:
 class A2AAgentCard:
     """
     Enhanced agent card for rich capability description.
-    
+
     Provides comprehensive agent metadata for optimal matching,
     team formation, and performance tracking.
     """
-    
+
     # Identity
     agent_id: str
     agent_name: str
     agent_type: str
     version: str
-    
+
     # Capabilities
     primary_capabilities: List[Capability] = field(default_factory=list)
     secondary_capabilities: List[Capability] = field(default_factory=list)
     emerging_capabilities: List[Capability] = field(default_factory=list)
-    
+
     # Collaboration
     collaboration_style: CollaborationStyle = CollaborationStyle.COOPERATIVE
     preferred_team_size: int = 3
     compatible_agents: List[str] = field(default_factory=list)
     incompatible_agents: List[str] = field(default_factory=list)
-    
+
     # Performance
     performance: PerformanceMetrics = field(default_factory=PerformanceMetrics)
-    
+
     # Resources
     resources: ResourceRequirements = field(default_factory=ResourceRequirements)
-    
+
     # Metadata
     description: str = ""
     tags: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
-    
+
     # Specializations
     specializations: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -259,7 +265,7 @@ class A2AAgentCard:
             "tags": self.tags,
             "description": self.description,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "A2AAgentCard":
         """Create from dictionary."""
@@ -274,7 +280,7 @@ class A2AAgentCard:
             )
             for cap in data.get("primary_capabilities", [])
         ]
-        
+
         secondary_caps = [
             Capability(
                 name=cap["name"],
@@ -284,23 +290,29 @@ class A2AAgentCard:
             )
             for cap in data.get("secondary_capabilities", [])
         ]
-        
+
         # Create performance metrics
         perf_data = data.get("performance", {})
         performance = PerformanceMetrics()
         if perf_data:
-            performance.average_insight_quality = perf_data.get("insight_quality_score", 0.0)
-            performance.average_response_time_ms = perf_data.get("average_response_time_ms", 0.0)
+            performance.average_insight_quality = perf_data.get(
+                "insight_quality_score", 0.0
+            )
+            performance.average_response_time_ms = perf_data.get(
+                "average_response_time_ms", 0.0
+            )
             performance.reliability_score = perf_data.get("reliability_score", 0.0)
-        
+
         # Create resource requirements
         res_data = data.get("resources", {})
         resources = ResourceRequirements()
         if res_data:
             resources.max_tokens = res_data.get("max_tokens", 4000)
             resources.requires_gpu = res_data.get("requires_gpu", False)
-            resources.estimated_cost_per_task = res_data.get("estimated_cost_per_task", 0.0)
-        
+            resources.estimated_cost_per_task = res_data.get(
+                "estimated_cost_per_task", 0.0
+            )
+
         return cls(
             agent_id=data["agent_id"],
             agent_name=data["agent_name"],
@@ -316,106 +328,107 @@ class A2AAgentCard:
             tags=data.get("tags", []),
             description=data.get("description", ""),
         )
-    
+
     def calculate_match_score(self, requirements: List[str]) -> float:
         """
         Calculate how well this agent matches given requirements.
-        
+
         Returns a score between 0.0 and 1.0.
         """
         if not requirements:
             return 0.5  # Neutral score for no requirements
-        
+
         total_score = 0.0
-        
+
         for requirement in requirements:
             # Check primary capabilities (highest weight)
             primary_scores = [
                 cap.matches_requirement(requirement) * 1.0
                 for cap in self.primary_capabilities
             ]
-            
+
             # Check secondary capabilities (medium weight)
             secondary_scores = [
                 cap.matches_requirement(requirement) * 0.7
                 for cap in self.secondary_capabilities
             ]
-            
+
             # Check emerging capabilities (lower weight)
             emerging_scores = [
                 cap.matches_requirement(requirement) * 0.4
                 for cap in self.emerging_capabilities
             ]
-            
+
             # Take the best match for this requirement
             all_scores = primary_scores + secondary_scores + emerging_scores
             best_score = max(all_scores) if all_scores else 0.0
             total_score += best_score
-        
+
         # Average across all requirements
         avg_score = total_score / len(requirements)
-        
+
         # Apply performance modifier
         performance_modifier = (
-            self.performance.success_rate * 0.3 +
-            self.performance.insight_quality_score * 0.7
+            self.performance.success_rate * 0.3
+            + self.performance.insight_quality_score * 0.7
         )
-        
+
         # Weighted final score
         final_score = avg_score * 0.7 + performance_modifier * 0.3
-        
+
         return min(max(final_score, 0.0), 1.0)
-    
+
     def is_compatible_with(self, other_agent_id: str) -> bool:
         """Check if compatible with another agent."""
         if other_agent_id in self.incompatible_agents:
             return False
-        
+
         # Could add more sophisticated compatibility logic here
         return True
-    
+
     def update_performance(self, task_result: Dict[str, Any]) -> None:
         """Update performance metrics based on task result."""
         self.performance.total_tasks += 1
-        
+
         if task_result.get("success", False):
             self.performance.successful_tasks += 1
         else:
             self.performance.failed_tasks += 1
-        
+
         # Update response time
         if "response_time_ms" in task_result:
             # Simple moving average
             alpha = 0.1  # Learning rate
             self.performance.average_response_time_ms = (
-                alpha * task_result["response_time_ms"] +
-                (1 - alpha) * self.performance.average_response_time_ms
+                alpha * task_result["response_time_ms"]
+                + (1 - alpha) * self.performance.average_response_time_ms
             )
-        
+
         # Update insight metrics
         if "insights" in task_result:
             insights = task_result["insights"]
             self.performance.insights_generated += len(insights)
-            
+
             # Track unique insights (simple heuristic)
-            unique_count = len(set(insight.get("key", str(i)) for i, insight in enumerate(insights)))
+            unique_count = len(
+                set(insight.get("key", str(i)) for i, insight in enumerate(insights))
+            )
             self.performance.unique_insights += unique_count
-            
+
             # Track actionable insights
             actionable_count = sum(
-                1 for insight in insights
-                if insight.get("actionable", False)
+                1 for insight in insights if insight.get("actionable", False)
             )
             self.performance.actionable_insights += actionable_count
-        
+
         # Update quality score
         if "quality_score" in task_result:
             alpha = 0.1
             self.performance.average_insight_quality = (
-                alpha * task_result["quality_score"] +
-                (1 - alpha) * self.performance.average_insight_quality
+                alpha * task_result["quality_score"]
+                + (1 - alpha) * self.performance.average_insight_quality
             )
-        
+
         self.performance.last_active = datetime.now()
         self.updated_at = datetime.now()
 
@@ -423,38 +436,41 @@ class A2AAgentCard:
 @dataclass
 class Insight:
     """Individual insight from task execution."""
+
     insight_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     content: str = ""
     insight_type: InsightType = InsightType.ANALYSIS
     confidence: float = 0.0
-    
+
     # Quality metrics
     novelty_score: float = 0.0  # How new/unique is this insight
     actionability_score: float = 0.0  # How actionable is it
     impact_score: float = 0.0  # Potential impact if acted upon
-    
+
     # Metadata
     generated_by: str = ""  # Agent ID
     generated_at: datetime = field(default_factory=datetime.now)
-    
+
     # Related insights
     builds_on: List[str] = field(default_factory=list)  # IDs of insights this builds on
-    contradicts: List[str] = field(default_factory=list)  # IDs of insights this contradicts
-    
+    contradicts: List[str] = field(
+        default_factory=list
+    )  # IDs of insights this contradicts
+
     # Supporting data
     evidence: List[Dict[str, Any]] = field(default_factory=list)
     keywords: List[str] = field(default_factory=list)
-    
+
     @property
     def quality_score(self) -> float:
         """Calculate overall quality score."""
         return (
-            self.confidence * 0.3 +
-            self.novelty_score * 0.3 +
-            self.actionability_score * 0.3 +
-            self.impact_score * 0.1
+            self.confidence * 0.3
+            + self.novelty_score * 0.3
+            + self.actionability_score * 0.3
+            + self.impact_score * 0.1
         )
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -475,18 +491,19 @@ class Insight:
 @dataclass
 class TaskIteration:
     """Record of a single task iteration."""
+
     iteration_number: int
     started_at: datetime
     completed_at: Optional[datetime] = None
-    
+
     # What changed
     adjustments_made: List[str] = field(default_factory=list)
     reason_for_iteration: str = ""
-    
+
     # Results
     insights_generated: List[Insight] = field(default_factory=list)
     quality_improvement: float = 0.0  # Change in quality from previous iteration
-    
+
     # Agent involvement
     agents_involved: List[str] = field(default_factory=list)
     consensus_score: float = 0.0
@@ -496,65 +513,65 @@ class TaskIteration:
 class A2ATask:
     """
     Structured task with full lifecycle management.
-    
+
     Replaces dictionary-based tasks with rich objects that track
     state transitions, insight collection, and quality metrics.
     """
-    
+
     # Identity
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     description: str = ""
-    
+
     # State management
     state: TaskState = TaskState.CREATED
     priority: TaskPriority = TaskPriority.MEDIUM
-    
+
     # Assignment
     assigned_to: List[str] = field(default_factory=list)  # Agent IDs
     delegated_by: Optional[str] = None  # Coordinator ID
-    
+
     # Requirements
     requirements: List[str] = field(default_factory=list)
     constraints: Dict[str, Any] = field(default_factory=dict)
     success_criteria: List[str] = field(default_factory=list)
-    
+
     # Timeline
     created_at: datetime = field(default_factory=datetime.now)
     assigned_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     deadline: Optional[datetime] = None
-    
+
     # Insights - Primary deliverable
     insights: List[Insight] = field(default_factory=list)
-    
+
     # Iterations
     iterations: List[TaskIteration] = field(default_factory=list)
     max_iterations: int = 3
     current_iteration: int = 0
-    
+
     # Quality tracking
     target_quality_score: float = 0.85
     current_quality_score: float = 0.0
-    
+
     # Context and memory
     context: Dict[str, Any] = field(default_factory=dict)
     memory_keys: List[str] = field(default_factory=list)  # Shared memory references
-    
+
     # Results
     final_result: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
-    
+
     # Metadata
     tags: List[str] = field(default_factory=list)
     parent_task_id: Optional[str] = None
     subtask_ids: List[str] = field(default_factory=list)
-    
+
     def transition_to(self, new_state: TaskState) -> bool:
         """
         Transition task to new state with validation.
-        
+
         Returns True if transition is valid, False otherwise.
         """
         valid_transitions = {
@@ -579,10 +596,10 @@ class A2ATask:
             TaskState.FAILED: [TaskState.IN_PROGRESS],  # Can retry
             TaskState.CANCELLED: [],  # Terminal state
         }
-        
+
         if new_state not in valid_transitions.get(self.state, []):
             return False
-        
+
         # Update timestamps
         if new_state == TaskState.ASSIGNED:
             self.assigned_at = datetime.now()
@@ -591,31 +608,31 @@ class A2ATask:
                 self.started_at = datetime.now()
         elif new_state in [TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED]:
             self.completed_at = datetime.now()
-        
+
         self.state = new_state
         return True
-    
+
     def add_insight(self, insight: Insight) -> None:
         """Add an insight to the task."""
         self.insights.append(insight)
         self._update_quality_score()
-    
+
     def start_iteration(self, reason: str, adjustments: List[str]) -> TaskIteration:
         """Start a new iteration of the task."""
         self.current_iteration += 1
-        
+
         iteration = TaskIteration(
             iteration_number=self.current_iteration,
             started_at=datetime.now(),
             reason_for_iteration=reason,
             adjustments_made=adjustments,
         )
-        
+
         self.iterations.append(iteration)
         self.transition_to(TaskState.ITERATING)
-        
+
         return iteration
-    
+
     def complete_iteration(
         self,
         insights: List[Insight],
@@ -625,70 +642,70 @@ class A2ATask:
         """Complete the current iteration."""
         if not self.iterations:
             return
-        
+
         current = self.iterations[-1]
         current.completed_at = datetime.now()
         current.insights_generated = insights
         current.agents_involved = agents_involved
         current.consensus_score = consensus_score
-        
+
         # Calculate quality improvement
         prev_quality = self.current_quality_score
         self.insights.extend(insights)
         self._update_quality_score()
         current.quality_improvement = self.current_quality_score - prev_quality
-        
+
         # Transition back to in_progress
         self.transition_to(TaskState.IN_PROGRESS)
-    
+
     def _update_quality_score(self) -> None:
         """Update overall task quality score based on insights."""
         if not self.insights:
             self.current_quality_score = 0.0
             return
-        
+
         # Average quality of all insights
         avg_quality = sum(i.quality_score for i in self.insights) / len(self.insights)
-        
+
         # Bonus for unique insights
         unique_content = len(set(i.content for i in self.insights))
         uniqueness_bonus = min(unique_content / len(self.insights), 1.0) * 0.1
-        
+
         # Bonus for actionable insights
-        actionable_count = sum(
-            1 for i in self.insights
-            if i.actionability_score > 0.7
-        )
+        actionable_count = sum(1 for i in self.insights if i.actionability_score > 0.7)
         actionability_bonus = (actionable_count / len(self.insights)) * 0.1
-        
+
         self.current_quality_score = min(
-            avg_quality + uniqueness_bonus + actionability_bonus,
-            1.0
+            avg_quality + uniqueness_bonus + actionability_bonus, 1.0
         )
-    
+
     @property
     def is_complete(self) -> bool:
         """Check if task is in a terminal state."""
-        return self.state in [TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED]
-    
+        return self.state in [
+            TaskState.COMPLETED,
+            TaskState.FAILED,
+            TaskState.CANCELLED,
+        ]
+
     @property
     def needs_iteration(self) -> bool:
         """Check if task needs another iteration."""
         return (
-            self.current_quality_score < self.target_quality_score and
-            self.current_iteration < self.max_iterations and
-            self.state == TaskState.AWAITING_REVIEW
+            self.current_quality_score < self.target_quality_score
+            and self.current_iteration < self.max_iterations
+            and self.state == TaskState.AWAITING_REVIEW
         )
-    
+
     @property
     def duration(self) -> Optional[float]:
         """Get task duration in seconds."""
         if not self.started_at:
             return None
-        
+
         end_time = self.completed_at or datetime.now()
         return (end_time - self.started_at).total_seconds()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -701,14 +718,16 @@ class A2ATask:
             "requirements": self.requirements,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "insights": [i.to_dict() for i in self.insights],
             "iterations": len(self.iterations),
             "current_quality_score": self.current_quality_score,
             "target_quality_score": self.target_quality_score,
             "duration": self.duration,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "A2ATask":
         """Create task from dictionary (backward compatibility)."""
@@ -721,7 +740,7 @@ class A2ATask:
                 requirements=data.get("requirements", []),
                 context=data,
             )
-        
+
         # New format
         task = cls(
             task_id=data["task_id"],
@@ -731,7 +750,7 @@ class A2ATask:
             priority=TaskPriority(data.get("priority", "medium")),
             requirements=data.get("requirements", []),
         )
-        
+
         # Restore insights if present
         if "insights" in data:
             for insight_data in data["insights"]:
@@ -741,66 +760,69 @@ class A2ATask:
                     confidence=insight_data.get("confidence", 0.0),
                 )
                 task.insights.append(insight)
-        
+
         return task
 
 
 class TaskValidator:
     """Validates task readiness and quality."""
-    
+
     @staticmethod
     def validate_for_assignment(task: A2ATask) -> Tuple[bool, List[str]]:
         """
         Validate task is ready for assignment.
-        
+
         Returns (is_valid, list_of_issues).
         """
         issues = []
-        
+
         if not task.name:
             issues.append("Task must have a name")
-        
+
         if not task.description:
             issues.append("Task must have a description")
-        
+
         if not task.requirements:
             issues.append("Task must have at least one requirement")
-        
+
         if task.state != TaskState.CREATED:
             issues.append(f"Task must be in CREATED state, not {task.state.value}")
-        
+
         return len(issues) == 0, issues
-    
+
     @staticmethod
     def validate_for_completion(task: A2ATask) -> Tuple[bool, List[str]]:
         """
         Validate task is ready for completion.
-        
+
         Returns (is_valid, list_of_issues).
         """
         issues = []
-        
+
         if not task.insights:
             issues.append("Task must have at least one insight")
-        
+
         if task.current_quality_score < task.target_quality_score:
             issues.append(
                 f"Quality score {task.current_quality_score:.2f} "
                 f"below target {task.target_quality_score:.2f}"
             )
-        
+
         if task.state != TaskState.AWAITING_REVIEW:
-            issues.append(f"Task must be in AWAITING_REVIEW state, not {task.state.value}")
-        
+            issues.append(
+                f"Task must be in AWAITING_REVIEW state, not {task.state.value}"
+            )
+
         # Check success criteria
         # This would need more sophisticated checking in practice
         if task.success_criteria:
             issues.append("Success criteria validation not yet implemented")
-        
+
         return len(issues) == 0, issues
 
 
 # Factory functions for common agent types
+
 
 def create_research_agent_card(agent_id: str, agent_name: str) -> A2AAgentCard:
     """Create a card for a research-focused agent."""
@@ -816,7 +838,11 @@ def create_research_agent_card(agent_id: str, agent_name: str) -> A2AAgentCard:
                 level=CapabilityLevel.EXPERT,
                 description="Expert at finding and synthesizing information from multiple sources",
                 keywords=["search", "retrieval", "synthesis", "analysis"],
-                examples=["literature review", "market research", "competitive analysis"],
+                examples=[
+                    "literature review",
+                    "market research",
+                    "competitive analysis",
+                ],
             ),
             Capability(
                 name="data_analysis",
@@ -1994,7 +2020,7 @@ Focus on actionable intelligence rather than just listing what each agent said."
     ) -> List[Dict[str, Any]]:
         """
         Multi-stage LLM pipeline for high-quality insight extraction.
-        
+
         This enhanced method implements a 6-stage pipeline as per the A2A enhancement plan:
         1. Primary extraction with structured output
         2. Novelty detection against memory pool
@@ -2003,54 +2029,53 @@ Focus on actionable intelligence rather than just listing what each agent said."
         5. Impact scoring and ranking
         6. Meta-insight synthesis
         """
-        
+
         # Stage 1: Primary LLM extraction with structured output
         primary_insights = self._stage1_primary_extraction(
             response, agent_role, original_kwargs
         )
-        
+
         if not primary_insights:
             # Fallback to rule-based extraction
             return self._extract_insights(response, agent_role)
-        
+
         # Stage 2: Novelty detection against memory pool
         memory_pool = original_kwargs.get("memory_pool")
         if memory_pool:
             primary_insights = self._stage2_novelty_detection(
                 primary_insights, agent_id, memory_pool
             )
-        
+
         # Stage 3: Quality enhancement and validation
         enhanced_insights = self._stage3_quality_enhancement(
             primary_insights, agent_role, original_kwargs
         )
-        
+
         # Stage 4: Cross-model validation (optional, based on settings)
         if original_kwargs.get("enable_cross_validation", False):
             enhanced_insights = self._stage4_cross_model_validation(
                 enhanced_insights, original_kwargs
             )
-        
+
         # Stage 5: Impact scoring and ranking
         scored_insights = self._stage5_impact_scoring(
             enhanced_insights, agent_role, original_kwargs
         )
-        
+
         # Stage 6: Meta-insight synthesis (if multiple high-quality insights)
         if len(scored_insights) >= 3:
             meta_insights = self._stage6_meta_insight_synthesis(
                 scored_insights, agent_role, original_kwargs
             )
             scored_insights.extend(meta_insights)
-        
+
         # Sort by quality and return top insights
         scored_insights.sort(
-            key=lambda x: x.get("quality_score", x.get("importance", 0.5)),
-            reverse=True
+            key=lambda x: x.get("quality_score", x.get("importance", 0.5)), reverse=True
         )
-        
+
         return scored_insights[:5]  # Return top 5 insights
-    
+
     def _stage1_primary_extraction(
         self, response: str, agent_role: str, kwargs: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
@@ -2103,17 +2128,19 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
             extraction_result = super().run(**extraction_kwargs)
 
             if extraction_result.get("success"):
-                extracted_content = extraction_result.get("response", {}).get("content", "")
-                
+                extracted_content = extraction_result.get("response", {}).get(
+                    "content", ""
+                )
+
                 # Parse JSON response
                 import json
                 import re
-                
+
                 json_match = re.search(r"\[.*?\]", extracted_content, re.DOTALL)
                 if json_match:
                     try:
                         extracted_insights = json.loads(json_match.group())
-                        
+
                         # Convert to enhanced format
                         insights = []
                         for item in extracted_insights[:5]:
@@ -2122,7 +2149,8 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
                                 "confidence": item.get("confidence", 0.5),
                                 "insight_type": InsightType(
                                     item.get("type", "analysis").upper()
-                                    if item.get("type", "").upper() in [e.value.upper() for e in InsightType]
+                                    if item.get("type", "").upper()
+                                    in [e.value.upper() for e in InsightType]
                                     else "ANALYSIS"
                                 ),
                                 "entities": item.get("entities", []),
@@ -2133,15 +2161,15 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
                                 "stage": "primary_extraction",
                             }
                             insights.append(insight)
-                        
+
                         return insights
                     except (json.JSONDecodeError, ValueError):
                         pass
         except Exception:
             pass
-        
+
         return []
-    
+
     def _stage2_novelty_detection(
         self, insights: List[Dict[str, Any]], agent_id: str, memory_pool: Any
     ) -> List[Dict[str, Any]]:
@@ -2154,39 +2182,43 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
                 attention_filter={
                     "tags": insight.get("keywords", []),
                     "window_size": 50,  # Check last 50 memories
-                }
+                },
             ).get("memories", [])
-            
+
             # Calculate novelty score
             novelty_score = 1.0
             for memory in similar_memories:
                 # Simple similarity check (could be enhanced with embeddings)
                 memory_content = memory.get("content", "").lower()
                 insight_content = insight["content"].lower()
-                
+
                 # Check for significant overlap
-                common_words = set(memory_content.split()) & set(insight_content.split())
+                common_words = set(memory_content.split()) & set(
+                    insight_content.split()
+                )
                 if len(common_words) > len(insight_content.split()) * 0.5:
                     novelty_score *= 0.7  # Reduce novelty if similar exists
-            
+
             insight["novelty_score"] = max(novelty_score, 0.1)
             insight["similar_insights_count"] = len(similar_memories)
-        
+
         return insights
-    
+
     def _stage3_quality_enhancement(
         self, insights: List[Dict[str, Any]], agent_role: str, kwargs: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Stage 3: Quality enhancement and validation."""
         if not insights:
             return insights
-        
+
         # Create a consolidated prompt for quality enhancement
-        insights_text = "\n".join([
-            f"{i+1}. {insight['content']} (Confidence: {insight['confidence']:.2f})"
-            for i, insight in enumerate(insights)
-        ])
-        
+        insights_text = "\n".join(
+            [
+                f"{i+1}. {insight['content']} (Confidence: {insight['confidence']:.2f})"
+                for i, insight in enumerate(insights)
+            ]
+        )
+
         enhancement_prompt = f"""As a quality assurance specialist, enhance these insights:
 
 Agent Role: {agent_role}
@@ -2224,55 +2256,63 @@ Respond with a JSON array matching the input order:
                 ],
                 "max_tokens": 800,
             }
-            
+
             enhancement_result = super().run(**enhancement_kwargs)
-            
+
             if enhancement_result.get("success"):
-                enhanced_content = enhancement_result.get("response", {}).get("content", "")
-                
+                enhanced_content = enhancement_result.get("response", {}).get(
+                    "content", ""
+                )
+
                 import json
                 import re
-                
+
                 json_match = re.search(r"\[.*?\]", enhanced_content, re.DOTALL)
                 if json_match:
                     try:
                         enhancements = json.loads(json_match.group())
-                        
+
                         # Merge enhancements with original insights
-                        for i, enhancement in enumerate(enhancements[:len(insights)]):
+                        for i, enhancement in enumerate(enhancements[: len(insights)]):
                             if enhancement.get("enhanced_content"):
                                 insights[i]["content"] = enhancement["enhanced_content"]
-                            insights[i]["impact_score"] = enhancement.get("quality_score", 0.5)
-                            insights[i]["impact_description"] = enhancement.get("impact", "")
-                            insights[i]["follow_up_actions"] = enhancement.get("follow_up_actions", [])
+                            insights[i]["impact_score"] = enhancement.get(
+                                "quality_score", 0.5
+                            )
+                            insights[i]["impact_description"] = enhancement.get(
+                                "impact", ""
+                            )
+                            insights[i]["follow_up_actions"] = enhancement.get(
+                                "follow_up_actions", []
+                            )
                             insights[i]["stage"] = "quality_enhanced"
                     except (json.JSONDecodeError, ValueError):
                         pass
         except Exception:
             pass
-        
+
         return insights
-    
+
     def _stage4_cross_model_validation(
         self, insights: List[Dict[str, Any]], kwargs: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Stage 4: Cross-model validation for reliability (optional)."""
         # This would validate insights using a different model
         # For now, we'll simulate by adjusting confidence based on consistency
-        
+
         alternate_model = kwargs.get("validation_model", kwargs.get("model"))
         if alternate_model == kwargs.get("model"):
             # Same model, skip validation
             return insights
-        
+
         # In a real implementation, we would re-validate with alternate model
         # For now, apply a validation factor
         for insight in insights:
             insight["cross_validated"] = True
             insight["confidence"] *= 0.95  # Slight confidence adjustment
-        
+
         return insights
-    
+
     def _stage5_impact_scoring(
         self, insights: List[Dict[str, Any]], agent_role: str, kwargs: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
@@ -2283,15 +2323,12 @@ Respond with a JSON array matching the input order:
             novelty = insight.get("novelty_score", 0.5)
             actionability = insight.get("actionability_score", 0.5)
             impact = insight.get("impact_score", 0.5)
-            
+
             # Weighted quality score
             quality_score = (
-                confidence * 0.3 +
-                novelty * 0.3 +
-                actionability * 0.3 +
-                impact * 0.1
+                confidence * 0.3 + novelty * 0.3 + actionability * 0.3 + impact * 0.1
             )
-            
+
             # Convert to final format
             insight_obj = Insight(
                 content=insight["content"],
@@ -2302,9 +2339,13 @@ Respond with a JSON array matching the input order:
                 impact_score=impact,
                 generated_by=kwargs.get("agent_id", ""),
                 keywords=insight.get("keywords", []),
-                evidence=[{"text": insight.get("evidence", "")}] if insight.get("evidence") else [],
+                evidence=(
+                    [{"text": insight.get("evidence", "")}]
+                    if insight.get("evidence")
+                    else []
+                ),
             )
-            
+
             # Add to format expected by memory pool
             formatted_insight = {
                 "content": insight_obj.content,
@@ -2325,27 +2366,29 @@ Respond with a JSON array matching the input order:
                     "quality_score": quality_score,
                 },
             }
-            
+
             # Copy over the insight object for reference
             formatted_insight["insight_object"] = insight_obj
-            
+
             insights[insights.index(insight)] = formatted_insight
-        
+
         return insights
-    
+
     def _stage6_meta_insight_synthesis(
         self, insights: List[Dict[str, Any]], agent_role: str, kwargs: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Stage 6: Meta-insight synthesis from multiple insights."""
         if len(insights) < 3:
             return []
-        
+
         # Create synthesis prompt
-        insights_summary = "\n".join([
-            f"- {insight['content']} (Quality: {insight.get('quality_score', 0.5):.2f})"
-            for insight in insights[:5]
-        ])
-        
+        insights_summary = "\n".join(
+            [
+                f"- {insight['content']} (Quality: {insight.get('quality_score', 0.5):.2f})"
+                for insight in insights[:5]
+            ]
+        )
+
         synthesis_prompt = f"""Analyze these insights collectively to identify meta-patterns:
 
 Agent Role: {agent_role}
@@ -2384,20 +2427,22 @@ Respond with JSON:
                 ],
                 "max_tokens": 500,
             }
-            
+
             synthesis_result = super().run(**synthesis_kwargs)
-            
+
             if synthesis_result.get("success"):
-                synthetic_content = synthesis_result.get("response", {}).get("content", "")
-                
+                synthetic_content = synthesis_result.get("response", {}).get(
+                    "content", ""
+                )
+
                 import json
                 import re
-                
+
                 json_match = re.search(r"\[.*?\]", synthetic_content, re.DOTALL)
                 if json_match:
                     try:
                         meta_insights_data = json.loads(json_match.group())
-                        
+
                         meta_insights = []
                         for meta in meta_insights_data[:2]:  # Max 2 meta-insights
                             meta_insight = Insight(
@@ -2410,16 +2455,18 @@ Respond with JSON:
                                 generated_by=kwargs.get("agent_id", ""),
                                 keywords=["meta-insight", "synthesis", agent_role],
                             )
-                            
+
                             # Track which insights it builds on
                             supporting_indices = meta.get("supporting_insights", [])
                             if supporting_indices:
                                 meta_insight.builds_on = [
-                                    insights[i-1].get("insight_object", Insight()).insight_id
+                                    insights[i - 1]
+                                    .get("insight_object", Insight())
+                                    .insight_id
                                     for i in supporting_indices
                                     if 0 < i <= len(insights)
                                 ]
-                            
+
                             formatted_meta = {
                                 "content": meta_insight.content,
                                 "importance": meta_insight.quality_score,
@@ -2436,15 +2483,15 @@ Respond with JSON:
                                 },
                                 "insight_object": meta_insight,
                             }
-                            
+
                             meta_insights.append(formatted_meta)
-                        
+
                         return meta_insights
                     except (json.JSONDecodeError, ValueError):
                         pass
         except Exception:
             pass
-        
+
         return []
 
 
@@ -2548,7 +2595,7 @@ class A2ACoordinatorNode(CycleAwareNode):
         self.registered_agents = {}
         self.task_queue = deque()
         self.consensus_sessions = {}
-        
+
         # Enhanced features
         self.agent_cards: Dict[str, A2AAgentCard] = {}
         self.active_tasks: Dict[str, A2ATask] = {}
@@ -2846,12 +2893,11 @@ class A2ACoordinatorNode(CycleAwareNode):
             "task_count": 0,
             "success_rate": 1.0,
         }
-        
+
         # Create default agent card if not exists
         if agent_id not in self.agent_cards:
             self.agent_cards[agent_id] = self._create_default_agent_card(
-                agent_id, 
-                agent_info.get("skills", [])
+                agent_id, agent_info.get("skills", [])
             )
 
         return {
@@ -3222,31 +3268,31 @@ class A2ACoordinatorNode(CycleAwareNode):
             return bids[0]["agent"]
 
         return None
-# Enhanced methods to be added to A2ACoordinatorNode
+
+    # Enhanced methods to be added to A2ACoordinatorNode
 
     # =========================================================================
     # ENHANCED METHODS FOR AGENT CARDS AND TASK MANAGEMENT
     # =========================================================================
 
-    def _register_agent_with_card(self, kwargs: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    def _register_agent_with_card(
+        self, kwargs: Dict[str, Any], context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Register an agent with a rich capability card."""
         agent_id = kwargs.get("agent_id")
         card_data = kwargs.get("agent_card")
-        
+
         if not agent_id or not card_data:
-            return {
-                "success": False,
-                "error": "agent_id and agent_card required"
-            }
-        
+            return {"success": False, "error": "agent_id and agent_card required"}
+
         # Create or update agent card
         if isinstance(card_data, dict):
             card = A2AAgentCard.from_dict(card_data)
         else:
             card = card_data
-        
+
         self.agent_cards[agent_id] = card
-        
+
         # Also register with base system for compatibility
         capabilities = [cap.name for cap in card.primary_capabilities]
         self._register_agent(
@@ -3257,16 +3303,16 @@ class A2ACoordinatorNode(CycleAwareNode):
                     "role": card.agent_type,
                 }
             },
-            context
+            context,
         )
-        
+
         return {
             "success": True,
             "agent_id": agent_id,
             "capabilities_registered": len(capabilities),
-            "card_version": card.version
+            "card_version": card.version,
         }
-    
+
     def _create_structured_task(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a structured task with lifecycle management."""
         task_type = kwargs.get("task_type", "research")
@@ -3274,21 +3320,21 @@ class A2ACoordinatorNode(CycleAwareNode):
         description = kwargs.get("description", "")
         requirements = kwargs.get("requirements", [])
         priority = kwargs.get("priority", "medium")
-        
+
         # Create appropriate task type
         if task_type == "research":
             task = create_research_task(
                 name=name,
                 description=description,
                 requirements=requirements,
-                priority=TaskPriority(priority)
+                priority=TaskPriority(priority),
             )
         elif task_type == "implementation":
             task = create_implementation_task(
                 name=name,
                 description=description,
                 requirements=requirements,
-                priority=TaskPriority(priority)
+                priority=TaskPriority(priority),
             )
         elif task_type == "validation":
             parent_id = kwargs.get("parent_task_id")
@@ -3296,7 +3342,7 @@ class A2ACoordinatorNode(CycleAwareNode):
                 name=name,
                 description=description,
                 requirements=requirements,
-                parent_task_id=parent_id
+                parent_task_id=parent_id,
             )
         else:
             # Generic task
@@ -3304,89 +3350,90 @@ class A2ACoordinatorNode(CycleAwareNode):
                 name=name,
                 description=description,
                 requirements=requirements,
-                priority=TaskPriority(priority)
+                priority=TaskPriority(priority),
             )
-        
+
         # Add any additional context
         if "context" in kwargs:
             task.context.update(kwargs["context"])
-        
+
         # Store task
         self.active_tasks[task.task_id] = task
-        
-        return {
-            "success": True,
-            "task_id": task.task_id,
-            "task": task.to_dict()
-        }
-    
+
+        return {"success": True, "task_id": task.task_id, "task": task.to_dict()}
+
     def _enhanced_delegate_task(
         self,
         kwargs: Dict[str, Any],
         context: Dict[str, Any],
         coordination_history: List[Dict],
-        agent_performance_history: Dict[str, Dict]
+        agent_performance_history: Dict[str, Dict],
     ) -> Dict[str, Any]:
         """Enhanced delegation using agent cards for better matching."""
         task_id = kwargs.get("task_id")
         task_dict = kwargs.get("task", {})
-        
+
         # Check if this is a structured task
         if task_id and task_id in self.active_tasks:
             task = self.active_tasks[task_id]
-            
+
             # Validate task is ready
             is_valid, issues = TaskValidator.validate_for_assignment(task)
             if not is_valid:
                 return {
                     "success": False,
-                    "error": f"Task not ready for assignment: {', '.join(issues)}"
+                    "error": f"Task not ready for assignment: {', '.join(issues)}",
                 }
-            
+
             # Find best agents using cards
             best_agents = self._find_best_agents_for_task(task)
-            
+
             if not best_agents:
                 # Fall back to base delegation
-                return self._delegate_task(kwargs, context, coordination_history, agent_performance_history)
-            
+                return self._delegate_task(
+                    kwargs, context, coordination_history, agent_performance_history
+                )
+
             # Assign to best agents
             task.assigned_to = [agent_id for agent_id, _ in best_agents[:3]]
             task.transition_to(TaskState.ASSIGNED)
             task.assigned_at = datetime.now()
-            
+
             # Use first agent for delegation
             return {
                 "success": True,
                 "delegated_to": task.assigned_to[0],
                 "task_id": task.task_id,
                 "match_score": best_agents[0][1],
-                "state": task.state.value
+                "state": task.state.value,
             }
-        
+
         # Not a structured task, but we can still use agent cards for better matching
         if self.agent_cards and task_dict.get("required_skills"):
             # Try to match using agent cards
             required_skills = task_dict.get("required_skills", [])
-            
+
             # Find agents that match the requirements
             matching_agents = []
             for agent_id, agent_info in self.registered_agents.items():
                 if agent_info["status"] == "available" and agent_id in self.agent_cards:
                     card = self.agent_cards[agent_id]
                     # Check if any capability matches the required skills
-                    all_capabilities = list(card.primary_capabilities) + list(card.secondary_capabilities)
+                    all_capabilities = list(card.primary_capabilities) + list(
+                        card.secondary_capabilities
+                    )
                     for cap in all_capabilities:
-                        cap_keywords = getattr(cap, 'keywords', [])
+                        cap_keywords = getattr(cap, "keywords", [])
                         for req in required_skills:
-                            if (req.lower() in cap.name.lower() or 
-                                any(req.lower() in kw.lower() for kw in cap_keywords)):
+                            if req.lower() in cap.name.lower() or any(
+                                req.lower() in kw.lower() for kw in cap_keywords
+                            ):
                                 matching_agents.append(agent_id)
                                 break
                         else:
                             continue
                         break
-            
+
             if matching_agents:
                 # Override available_agents with matched agents, adding card capabilities as skills
                 enhanced_agents = []
@@ -3397,75 +3444,74 @@ class A2ACoordinatorNode(CycleAwareNode):
                         card = self.agent_cards[agent_id]
                         card_skills = [cap.name for cap in card.primary_capabilities]
                         # Merge original skills with card capabilities
-                        agent_copy["skills"] = list(set(agent_copy.get("skills", []) + card_skills))
+                        agent_copy["skills"] = list(
+                            set(agent_copy.get("skills", []) + card_skills)
+                        )
                     enhanced_agents.append(agent_copy)
                 kwargs["available_agents"] = enhanced_agents
-        
+
         # Use base delegation which will use the available_agents if provided
-        return self._delegate_task(kwargs, context, coordination_history, agent_performance_history)
-    
+        return self._delegate_task(
+            kwargs, context, coordination_history, agent_performance_history
+        )
+
     def _find_best_agents_for_task(self, task: A2ATask) -> List[Tuple[str, float]]:
         """Find best agents for a task using agent cards."""
         matches = []
-        
+
         for agent_id, card in self.agent_cards.items():
             # Skip if incompatible
             if task.delegated_by and not card.is_compatible_with(task.delegated_by):
                 continue
-            
+
             # Calculate match score
             score = card.calculate_match_score(task.requirements)
-            
+
             # Apply collaboration style bonus
             if len(task.assigned_to) > 0:
                 if card.collaboration_style == CollaborationStyle.COOPERATIVE:
                     score *= 1.1
                 elif card.collaboration_style == CollaborationStyle.INDEPENDENT:
                     score *= 0.9
-            
+
             # Apply performance history bonus
             if card.performance.total_tasks > 10:
-                score *= (0.8 + 0.2 * card.performance.success_rate)
-            
+                score *= 0.8 + 0.2 * card.performance.success_rate
+
             matches.append((agent_id, score))
-        
+
         # Sort by score descending
         matches.sort(key=lambda x: x[1], reverse=True)
-        
+
         return matches
-    
+
     def _update_task_state(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Update task state and handle transitions."""
         task_id = kwargs.get("task_id")
         new_state = kwargs.get("new_state")
         insights = kwargs.get("insights", [])
         agent_id = kwargs.get("agent_id")
-        
+
         if task_id not in self.active_tasks:
-            return {
-                "success": False,
-                "error": f"Task {task_id} not found"
-            }
-        
+            return {"success": False, "error": f"Task {task_id} not found"}
+
         task = self.active_tasks[task_id]
-        
+
         # Handle state transition
         if new_state:
             success = task.transition_to(TaskState(new_state))
             if not success:
                 return {
                     "success": False,
-                    "error": f"Invalid transition from {task.state.value} to {new_state}"
+                    "error": f"Invalid transition from {task.state.value} to {new_state}",
                 }
-        
+
         # Add insights if provided
         for insight_data in insights:
             if isinstance(insight_data, dict):
                 insight = Insight(
                     content=insight_data.get("content", ""),
-                    insight_type=InsightType(
-                        insight_data.get("type", "analysis")
-                    ),
+                    insight_type=InsightType(insight_data.get("type", "analysis")),
                     confidence=insight_data.get("confidence", 0.0),
                     novelty_score=insight_data.get("novelty_score", 0.0),
                     actionability_score=insight_data.get("actionability_score", 0.0),
@@ -3475,18 +3521,20 @@ class A2ACoordinatorNode(CycleAwareNode):
                 )
             else:
                 insight = insight_data
-            
+
             task.add_insight(insight)
-        
+
         # Update agent performance if we have cards
         if agent_id and agent_id in self.agent_cards:
             card = self.agent_cards[agent_id]
-            card.update_performance({
-                "success": task.state != TaskState.FAILED,
-                "insights": insights,
-                "quality_score": task.current_quality_score,
-            })
-        
+            card.update_performance(
+                {
+                    "success": task.state != TaskState.FAILED,
+                    "insights": insights,
+                    "quality_score": task.current_quality_score,
+                }
+            )
+
         # Check if task needs iteration
         if task.state == TaskState.AWAITING_REVIEW and task.needs_iteration:
             return {
@@ -3497,54 +3545,48 @@ class A2ACoordinatorNode(CycleAwareNode):
                 "target_quality": task.target_quality_score,
                 "iteration": task.current_iteration + 1,
             }
-        
+
         # Move completed tasks to history
         if task.is_complete:
             self.completed_tasks.append(task)
             # Limit history size
             if len(self.completed_tasks) > self.task_history_limit:
-                self.completed_tasks = self.completed_tasks[-self.task_history_limit:]
+                self.completed_tasks = self.completed_tasks[-self.task_history_limit :]
             del self.active_tasks[task_id]
-        
+
         return {
             "success": True,
             "task_state": task.state.value,
             "quality_score": task.current_quality_score,
             "insights_count": len(task.insights),
         }
-    
+
     def _get_task_insights(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Get insights from a task."""
         task_id = kwargs.get("task_id")
         min_quality = kwargs.get("min_quality", 0.0)
         insight_type = kwargs.get("insight_type")
-        
+
         # Check active tasks
         if task_id in self.active_tasks:
             task = self.active_tasks[task_id]
         # Check completed tasks
         else:
-            task = next(
-                (t for t in self.completed_tasks if t.task_id == task_id),
-                None
-            )
-        
+            task = next((t for t in self.completed_tasks if t.task_id == task_id), None)
+
         if not task:
-            return {
-                "success": False,
-                "error": f"Task {task_id} not found"
-            }
-        
+            return {"success": False, "error": f"Task {task_id} not found"}
+
         # Filter insights
         insights = task.insights
-        
+
         if min_quality > 0:
             insights = [i for i in insights if i.quality_score >= min_quality]
-        
+
         if insight_type:
             type_filter = InsightType(insight_type)
             insights = [i for i in insights if i.insight_type == type_filter]
-        
+
         return {
             "success": True,
             "task_id": task_id,
@@ -3553,12 +3595,12 @@ class A2ACoordinatorNode(CycleAwareNode):
             "total_insights": len(task.insights),
             "filtered_insights": len(insights),
         }
-    
+
     def _match_agents_to_task(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Match agents to task requirements without delegation."""
         task_id = kwargs.get("task_id")
         requirements = kwargs.get("requirements", [])
-        
+
         # Get task if ID provided
         if task_id and task_id in self.active_tasks:
             task = self.active_tasks[task_id]
@@ -3566,47 +3608,53 @@ class A2ACoordinatorNode(CycleAwareNode):
         elif not requirements:
             return {
                 "success": False,
-                "error": "Either task_id or requirements must be provided"
+                "error": "Either task_id or requirements must be provided",
             }
-        
+
         # Create temporary task for matching if needed
         if not task_id:
             task = A2ATask(requirements=requirements)
-        
+
         # Find matches
         matches = self._find_best_agents_for_task(task)
-        
+
         # Format results
         agent_matches = []
         for agent_id, score in matches[:10]:  # Top 10 matches
             card = self.agent_cards[agent_id]
-            agent_matches.append({
-                "agent_id": agent_id,
-                "agent_name": card.agent_name,
-                "match_score": score,
-                "primary_capabilities": [
-                    cap.name for cap in card.primary_capabilities
-                ],
-                "performance": {
-                    "success_rate": card.performance.success_rate,
-                    "insight_quality": card.performance.insight_quality_score,
-                },
-                "collaboration_style": card.collaboration_style.value,
-            })
-        
+            agent_matches.append(
+                {
+                    "agent_id": agent_id,
+                    "agent_name": card.agent_name,
+                    "match_score": score,
+                    "primary_capabilities": [
+                        cap.name for cap in card.primary_capabilities
+                    ],
+                    "performance": {
+                        "success_rate": card.performance.success_rate,
+                        "insight_quality": card.performance.insight_quality_score,
+                    },
+                    "collaboration_style": card.collaboration_style.value,
+                }
+            )
+
         return {
             "success": True,
             "requirements": requirements,
             "matched_agents": agent_matches,
             "total_agents": len(self.agent_cards),
         }
-    
-    def _create_default_agent_card(self, agent_id: str, capabilities: List[str]) -> A2AAgentCard:
+
+    def _create_default_agent_card(
+        self, agent_id: str, capabilities: List[str]
+    ) -> A2AAgentCard:
         """Create a basic agent card from capability list."""
         # Guess agent type from capabilities
         if any("research" in cap.lower() for cap in capabilities):
             return create_research_agent_card(agent_id, agent_id)
-        elif any("code" in cap.lower() or "implement" in cap.lower() for cap in capabilities):
+        elif any(
+            "code" in cap.lower() or "implement" in cap.lower() for cap in capabilities
+        ):
             return create_coding_agent_card(agent_id, agent_id)
         elif any("test" in cap.lower() or "qa" in cap.lower() for cap in capabilities):
             return create_qa_agent_card(agent_id, agent_id)
