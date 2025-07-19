@@ -2,26 +2,27 @@
 Unit tests for hybrid search functionality.
 """
 
-import pytest
-import numpy as np
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, Mock, patch
 
-from kailash.nodes.ai.hybrid_search import (
-    HybridSearchNode,
-    AdaptiveSearchNode,
-    TFIDFVectorizer,
-    FuzzyMatcher,
-    ContextualScorer,
-    SearchContext,
-    SearchResult,
-)
+import numpy as np
+import pytest
+
 from kailash.nodes.ai.a2a import (
     A2AAgentCard,
+    Capability,
     CapabilityLevel,
     CollaborationStyle,
-    Capability,
     PerformanceMetrics,
+)
+from kailash.nodes.ai.hybrid_search import (
+    AdaptiveSearchNode,
+    ContextualScorer,
+    FuzzyMatcher,
+    HybridSearchNode,
+    SearchContext,
+    SearchResult,
+    TFIDFVectorizer,
 )
 
 

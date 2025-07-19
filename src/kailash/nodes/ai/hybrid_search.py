@@ -8,20 +8,21 @@ This module provides advanced search capabilities that combine:
 - Performance-weighted ranking
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union, Set
-import numpy as np
 import asyncio
 import json
-import re
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from collections import defaultdict, Counter
 import math
+import re
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import uuid4
 
+import numpy as np
+
 from ..base import Node, NodeParameter, register_node
-from .semantic_memory import SimpleEmbeddingProvider, SemanticMemoryItem
-from .a2a import A2AAgentCard, A2ATask, TaskState, InsightType
+from .a2a import A2AAgentCard, A2ATask, InsightType, TaskState
+from .semantic_memory import SemanticMemoryItem, SimpleEmbeddingProvider
 
 
 @dataclass
