@@ -2,11 +2,12 @@
 
 import asyncio
 import json
-import yaml
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass, asdict
 from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
+import yaml
 
 try:
     from kubernetes import client, config, watch

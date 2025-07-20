@@ -1,10 +1,10 @@
 """Network partition detection for edge coordination."""
 
 import asyncio
-from typing import Dict, List, Optional, Set, Tuple, Any
-from datetime import datetime, timedelta
 import logging
 from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 class PartitionDetector:

@@ -8,22 +8,23 @@ Tests Task 1.6: Migration Tool
 - Fix suggestions generation
 """
 
-import pytest
-import json
 import csv
+import json
 from io import StringIO
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from kailash.cli.validation_audit import (
-    WorkflowValidationAuditor,
-    ValidationAuditReport,
     ReportFormatter,
+    ValidationAuditReport,
+    WorkflowValidationAuditor,
     load_workflow_from_file,
 )
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.workflow.graph import Workflow
 from kailash.runtime.validation.error_categorizer import ErrorCategory
 from kailash.sdk_exceptions import WorkflowExecutionError
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 
 class TestValidationAuditReport:

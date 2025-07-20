@@ -5,14 +5,16 @@ Tests the full integration of connection validation with real nodes
 and workflow execution.
 """
 
-import pytest
 import os
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+
+import pytest
+
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
 from kailash.nodes.logic.operations import SwitchNode
-from kailash.nodes.code.python import PythonCodeNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class TestConnectionValidationIntegration:

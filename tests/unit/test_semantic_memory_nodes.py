@@ -2,7 +2,7 @@
 Unit tests for semantic memory nodes.
 """
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np

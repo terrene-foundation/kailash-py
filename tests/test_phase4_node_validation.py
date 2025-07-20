@@ -7,8 +7,8 @@ def test_phase4_node_instantiation():
     """Test that all Phase 4 nodes can be instantiated properly."""
     from kailash.nodes.edge import (
         ResourceAnalyzerNode,
-        ResourceScalerNode,
         ResourceOptimizerNode,
+        ResourceScalerNode,
     )
 
     # Test instantiation
@@ -38,16 +38,17 @@ def test_phase4_node_instantiation():
 
 def test_phase4_service_classes():
     """Test that Phase 4 service classes work correctly."""
+    from datetime import datetime
+
     from kailash.edge.resource import (
-        ResourceAnalyzer,
-        PredictiveScaler,
+        CloudProvider,
         CostOptimizer,
+        InstanceType,
+        PredictiveScaler,
+        ResourceAnalyzer,
         ResourceMetric,
         ResourceType,
-        CloudProvider,
-        InstanceType,
     )
-    from datetime import datetime
 
     # Test ResourceAnalyzer
     analyzer = ResourceAnalyzer()

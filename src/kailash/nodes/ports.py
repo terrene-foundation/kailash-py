@@ -39,21 +39,21 @@ Example Usage:
 """
 
 import logging
-from typing import (
-    TypeVar,
-    Generic,
-    Type,
-    Any,
-    Optional,
-    Dict,
-    List,
-    Union,
-    get_type_hints,
-    get_origin,
-    get_args,
-)
-from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import (
+    Any,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
 """Edge prediction and warming module."""
 
 from .predictive_warmer import (
-    PredictiveWarmer,
     PredictionStrategy,
+    PredictiveWarmer,
     UsagePattern,
     WarmingDecision,
 )

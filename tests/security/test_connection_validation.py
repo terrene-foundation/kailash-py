@@ -5,12 +5,14 @@ These tests verify that parameters passed through workflow connections
 are properly validated and cannot bypass security checks.
 """
 
+from typing import Any, Dict
+
 import pytest
-from typing import Dict, Any
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.core.registry import get_node_registry
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class SecurityError(Exception):

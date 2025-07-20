@@ -8,22 +8,23 @@ Tests Task 1.5: Performance Monitoring
 - Performance summaries and reports
 """
 
-import pytest
 import time
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
+import pytest
+
+from kailash.runtime.local import LocalRuntime
+from kailash.runtime.validation.error_categorizer import ErrorCategory
 from kailash.runtime.validation.metrics import (
-    ValidationMetricsCollector,
     ValidationEventType,
     ValidationMetric,
+    ValidationMetricsCollector,
     get_metrics_collector,
     reset_global_metrics,
 )
-from kailash.runtime.validation.error_categorizer import ErrorCategory
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 from kailash.sdk_exceptions import WorkflowExecutionError
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class TestValidationMetricsCollector:

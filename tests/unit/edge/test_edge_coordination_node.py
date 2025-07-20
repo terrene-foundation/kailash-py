@@ -1,14 +1,15 @@
 """Unit tests for EdgeCoordinationNode."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, Mock, patch
 
-from kailash.nodes.edge.coordination import EdgeCoordinationNode
-from kailash.edge.coordination.raft import RaftNode, RaftState
-from kailash.edge.coordination.leader_election import EdgeLeaderElection
+import pytest
+
 from kailash.edge.coordination.global_ordering import GlobalOrderingService
+from kailash.edge.coordination.leader_election import EdgeLeaderElection
+from kailash.edge.coordination.raft import RaftNode, RaftState
+from kailash.nodes.edge.coordination import EdgeCoordinationNode
 
 
 @pytest.fixture

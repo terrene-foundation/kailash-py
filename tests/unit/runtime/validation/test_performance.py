@@ -9,23 +9,24 @@ Tests Task 4.3: Performance Optimization
 - Resource cleanup and optimization
 """
 
-import pytest
-import time
 import asyncio
+import time
+from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
-from datetime import datetime, UTC, timedelta
+
+import pytest
 
 from kailash.runtime.validation.performance import (
-    PerformanceMetrics,
-    LRUCache,
-    ValidationCache,
-    LazyValidator,
     BatchValidator,
+    LazyValidator,
+    LRUCache,
+    PerformanceMetrics,
     PerformanceOptimizer,
+    ValidationCache,
     get_performance_optimizer,
     reset_performance_optimizer,
 )
-from kailash.workflow.type_inference import TypeCompatibilityResult, CoercionRule
+from kailash.workflow.type_inference import CoercionRule, TypeCompatibilityResult
 
 
 class TestPerformanceMetrics:

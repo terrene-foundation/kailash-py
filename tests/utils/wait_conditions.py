@@ -5,10 +5,11 @@ condition-based waiting, making tests faster and more reliable.
 """
 
 import asyncio
-import time
 import socket
-from typing import Callable, Any, Optional, Union
+import time
 from datetime import datetime, timedelta
+from typing import Any, Callable, Optional, Union
+
 import aiohttp
 import requests
 

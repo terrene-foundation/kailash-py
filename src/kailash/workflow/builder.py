@@ -2,12 +2,12 @@
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Union, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from kailash.nodes.base import Node
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
-from kailash.workflow.graph import Workflow
 from kailash.workflow.contracts import ConnectionContract, get_contract_registry
+from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 

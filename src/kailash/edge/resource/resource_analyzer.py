@@ -6,11 +6,12 @@ and bottleneck detection for edge computing infrastructure.
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from enum import Enum
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 from scipy import stats
 

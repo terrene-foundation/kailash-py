@@ -31,12 +31,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
+from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )
-from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 
 
 class NodeMetadata(BaseModel):
@@ -1333,7 +1333,7 @@ class TypedNode(Node):
             # Handle generic types - NodeParameter expects plain types
             if hasattr(param_type, "__origin__"):
                 # For generic types like List[str], Dict[str, Any], use the origin type
-                from typing import get_origin, Union
+                from typing import Union, get_origin
 
                 origin = get_origin(param_type)
                 if origin is Union:
@@ -1369,7 +1369,7 @@ class TypedNode(Node):
             # Handle generic types - NodeParameter expects plain types
             if hasattr(param_type, "__origin__"):
                 # For generic types like List[str], Dict[str, Any], use the origin type
-                from typing import get_origin, Union
+                from typing import Union, get_origin
 
                 origin = get_origin(param_type)
                 if origin is Union:

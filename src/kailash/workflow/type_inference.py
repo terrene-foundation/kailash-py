@@ -27,25 +27,25 @@ Example Usage:
         print(f"Type error: {result.error_message}")
 """
 
+import inspect
 import logging
+from dataclasses import dataclass
+from enum import Enum
 from typing import (
     Any,
     Dict,
     List,
     Optional,
+    Set,
+    Tuple,
     Type,
     Union,
-    Tuple,
-    Set,
-    get_origin,
     get_args,
+    get_origin,
     get_type_hints,
 )
-from dataclasses import dataclass
-from enum import Enum
-import inspect
 
-from kailash.nodes.ports import Port, InputPort, OutputPort
+from kailash.nodes.ports import InputPort, OutputPort, Port
 
 logger = logging.getLogger(__name__)
 

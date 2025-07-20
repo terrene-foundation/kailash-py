@@ -5,19 +5,20 @@ Provides configurable alerting rules, notification channels, and alert managemen
 for critical events in the Kailash SDK validation system.
 """
 
-import logging
-import time
 import json
+import logging
 import smtplib
-import requests
-from typing import Dict, List, Optional, Any, Callable, Union
-from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-from abc import ABC, abstractmethod
 import threading
+import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from .metrics import MetricsRegistry, MetricSeries
+import requests
+
+from .metrics import MetricSeries, MetricsRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -226,8 +227,8 @@ class EmailNotificationChannel(NotificationChannel):
     def send_notification(self, alert: Alert, context: Dict[str, Any]) -> bool:
         """Send notification via email."""
         try:
-            from email.mime.text import MimeText
             from email.mime.multipart import MimeMultipart
+            from email.mime.text import MimeText
 
             msg = MimeMultipart()
             msg["From"] = self.from_email

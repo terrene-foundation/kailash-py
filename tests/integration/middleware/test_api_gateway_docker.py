@@ -316,8 +316,8 @@ services:
                 str(compose_file.parent), compose_file_name=compose_file.name
             ) as compose:
                 # Wait for services to be healthy using proper health checks
-                from datetime import datetime
                 import socket
+                from datetime import datetime
 
                 start_time = datetime.now()
                 services_ready = False

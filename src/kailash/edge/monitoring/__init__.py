@@ -1,13 +1,13 @@
 """Edge monitoring module."""
 
 from .edge_monitor import (
-    EdgeMonitor,
-    EdgeMetric,
+    AlertSeverity,
     EdgeAlert,
     EdgeHealth,
-    MetricType,
-    AlertSeverity,
+    EdgeMetric,
+    EdgeMonitor,
     HealthStatus,
+    MetricType,
 )
 
 __all__ = [

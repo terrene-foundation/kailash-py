@@ -9,20 +9,21 @@ Tests Task 3.3: Connection Type Inference
 - Integration with port system
 """
 
-import pytest
-from typing import Dict, List, Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from unittest.mock import Mock
 
-from kailash.workflow.type_inference import (
-    TypeInferenceEngine,
-    TypeCompatibilityResult,
-    ConnectionInferenceResult,
-    CoercionRule,
-    check_connection_compatibility,
-    validate_workflow_connections,
-    get_type_inference_engine,
-)
+import pytest
+
 from kailash.nodes.ports import InputPort, OutputPort
+from kailash.workflow.type_inference import (
+    CoercionRule,
+    ConnectionInferenceResult,
+    TypeCompatibilityResult,
+    TypeInferenceEngine,
+    check_connection_compatibility,
+    get_type_inference_engine,
+    validate_workflow_connections,
+)
 
 
 class TestTypeCompatibilityBasics:

@@ -9,12 +9,13 @@ Tests Task 3.2: Node Migration Framework
 - IDE support features
 """
 
-import pytest
-from typing import Dict, List, Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from unittest.mock import Mock
 
-from kailash.nodes.base import TypedNode, NodeParameter
-from kailash.nodes.ports import InputPort, OutputPort, StringPort, IntPort
+import pytest
+
+from kailash.nodes.base import NodeParameter, TypedNode
+from kailash.nodes.ports import InputPort, IntPort, OutputPort, StringPort
 from kailash.sdk_exceptions import NodeValidationError
 
 

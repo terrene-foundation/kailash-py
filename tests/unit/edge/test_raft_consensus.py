@@ -1,19 +1,20 @@
 """Unit tests for Raft consensus protocol implementation."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from kailash.edge.coordination.raft import (
-    RaftNode,
-    RaftState,
-    LogEntry,
-    PersistentState,
-    RequestVoteRequest,
-    RequestVoteResponse,
     AppendEntriesRequest,
     AppendEntriesResponse,
+    LogEntry,
+    PersistentState,
+    RaftNode,
+    RaftState,
+    RequestVoteRequest,
+    RequestVoteResponse,
 )
 
 

@@ -8,28 +8,29 @@ Tests Task 4.4: Monitoring & Alerting
 - Alert manager coordination
 """
 
-import pytest
 import time
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from kailash.monitoring.alerts import (
+    Alert,
+    AlertManager,
+    AlertRule,
     AlertSeverity,
     AlertStatus,
-    Alert,
-    AlertRule,
-    AlertManager,
-    NotificationChannel,
-    LogNotificationChannel,
     EmailNotificationChannel,
+    LogNotificationChannel,
+    NotificationChannel,
     SlackNotificationChannel,
     WebhookNotificationChannel,
     create_default_alert_rules,
 )
 from kailash.monitoring.metrics import (
     MetricSeries,
-    MetricType,
     MetricsRegistry,
+    MetricType,
     ValidationMetrics,
 )
 

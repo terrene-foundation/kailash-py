@@ -1,14 +1,15 @@
 """Unit tests for predictive edge warming."""
 
-import pytest
 import asyncio
+from collections import defaultdict
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
-from collections import defaultdict
+
+import pytest
 
 from kailash.edge.prediction.predictive_warmer import (
-    PredictiveWarmer,
     PredictionStrategy,
+    PredictiveWarmer,
     UsagePattern,
     WarmingDecision,
 )

@@ -137,8 +137,8 @@ class TestAsyncPythonCodeNodeE2E:
         server_thread.start()
 
         # Wait for gateway to be ready with health check polling
-        from datetime import datetime
         import asyncio
+        from datetime import datetime
 
         start_time = datetime.now()
         gateway_ready = False

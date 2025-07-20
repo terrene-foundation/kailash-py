@@ -1,24 +1,25 @@
 """Integration tests for edge computing functionality."""
 
-import pytest
-import pytest_asyncio
 import asyncio
 from datetime import datetime
 
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.edge.edge_data import EdgeDataNode
-from kailash.nodes.edge.edge_state import EdgeStateMachine
+import pytest
+import pytest_asyncio
+
+from kailash.edge.compliance import ComplianceRouter
 from kailash.edge.discovery import EdgeDiscovery, EdgeSelectionStrategy
 from kailash.edge.location import (
-    EdgeLocation,
+    ComplianceZone,
     EdgeCapabilities,
+    EdgeLocation,
     EdgeMetrics,
     EdgeRegion,
     GeographicCoordinates,
-    ComplianceZone,
 )
-from kailash.edge.compliance import ComplianceRouter
+from kailash.nodes.edge.edge_data import EdgeDataNode
+from kailash.nodes.edge.edge_state import EdgeStateMachine
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest_asyncio.fixture
@@ -98,7 +99,8 @@ class TestEdgeIntegration:
         discovery, locations = edge_infrastructure
 
         # Test EdgeDataNode directly first
-        from unittest.mock import Mock, AsyncMock
+        from unittest.mock import AsyncMock, Mock
+
         from kailash.nodes.edge.edge_data import EdgeDataNode
 
         # Create writer node

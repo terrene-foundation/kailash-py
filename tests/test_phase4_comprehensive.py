@@ -1,10 +1,12 @@
 """Comprehensive tests for Phase 4 edge computing features."""
 
-import pytest
 import asyncio
 from datetime import datetime, timedelta
-from kailash.workflow.builder import WorkflowBuilder
+
+import pytest
+
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class TestPhase4ResourceAnalyzer:
@@ -12,8 +14,8 @@ class TestPhase4ResourceAnalyzer:
 
     def test_resource_analyzer_imports(self):
         """Test that all resource analyzer components can be imported."""
-        from kailash.nodes.edge import ResourceAnalyzerNode
         from kailash.edge.resource import ResourceAnalyzer, ResourceMetric, ResourceType
+        from kailash.nodes.edge import ResourceAnalyzerNode
 
         assert isinstance(ResourceAnalyzerNode, type)
         assert isinstance(ResourceAnalyzer, type)
@@ -75,14 +77,14 @@ class TestPhase4PredictiveScaler:
 
     def test_predictive_scaler_imports(self):
         """Test that all predictive scaler components can be imported."""
-        from kailash.nodes.edge import ResourceScalerNode
         from kailash.edge.resource import (
-            PredictiveScaler,
-            ScalingStrategy,
             PredictionHorizon,
-            ScalingPrediction,
+            PredictiveScaler,
             ScalingDecision,
+            ScalingPrediction,
+            ScalingStrategy,
         )
+        from kailash.nodes.edge import ResourceScalerNode
 
         assert isinstance(ResourceScalerNode, type)
         assert isinstance(PredictiveScaler, type)
@@ -113,7 +115,7 @@ class TestPhase4PredictiveScaler:
 
     def test_scaling_prediction_functionality(self):
         """Test scaling prediction creation and methods."""
-        from kailash.edge.resource import ScalingPrediction, PredictionHorizon
+        from kailash.edge.resource import PredictionHorizon, ScalingPrediction
 
         prediction = ScalingPrediction(
             timestamp=datetime.now(),
@@ -137,7 +139,7 @@ class TestPhase4PredictiveScaler:
 
     def test_scaling_enums(self):
         """Test scaling strategy and horizon enums."""
-        from kailash.edge.resource import ScalingStrategy, PredictionHorizon
+        from kailash.edge.resource import PredictionHorizon, ScalingStrategy
 
         assert ScalingStrategy.HYBRID.value == "hybrid"
         assert ScalingStrategy.REACTIVE.value == "reactive"
@@ -159,15 +161,15 @@ class TestPhase4CostOptimizer:
 
     def test_cost_optimizer_imports(self):
         """Test that all cost optimizer components can be imported."""
-        from kailash.nodes.edge import ResourceOptimizerNode
         from kailash.edge.resource import (
-            CostOptimizer,
             CloudProvider,
-            InstanceType,
-            OptimizationStrategy,
             CostMetric,
             CostOptimization,
+            CostOptimizer,
+            InstanceType,
+            OptimizationStrategy,
         )
+        from kailash.nodes.edge import ResourceOptimizerNode
 
         assert isinstance(ResourceOptimizerNode, type)
         assert isinstance(CostOptimizer, type)
@@ -201,7 +203,7 @@ class TestPhase4CostOptimizer:
 
     def test_cost_metric_functionality(self):
         """Test cost metric creation and methods."""
-        from kailash.edge.resource import CostMetric, CloudProvider, InstanceType
+        from kailash.edge.resource import CloudProvider, CostMetric, InstanceType
 
         cost_metric = CostMetric(
             timestamp=datetime.now(),
@@ -309,8 +311,8 @@ class TestPhase4Integration:
         """Test that all Phase 4 nodes have compatible parameter structures."""
         from kailash.nodes.edge import (
             ResourceAnalyzerNode,
-            ResourceScalerNode,
             ResourceOptimizerNode,
+            ResourceScalerNode,
         )
 
         # Test that all nodes have get_parameters method
@@ -443,8 +445,8 @@ class TestPhase4EdgeNodeRegistration:
         """Test that all Phase 4 nodes are in the edge node registry."""
         from kailash.nodes.edge import (
             ResourceAnalyzerNode,
-            ResourceScalerNode,
             ResourceOptimizerNode,
+            ResourceScalerNode,
         )
 
         # Test that nodes can be instantiated (meaning they're registered)
