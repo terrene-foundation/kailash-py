@@ -572,8 +572,12 @@ class ResourcePoolManager:
                 # Calculate score based on strategy
                 if strategy == "least_loaded":
                     # Average utilization across resource types
-                    utilizations = [r["utilization_percent"] for r in util["resources"].values()]
-                    avg_util = sum(utilizations) / len(utilizations) if utilizations else 0
+                    utilizations = [
+                        r["utilization_percent"] for r in util["resources"].values()
+                    ]
+                    avg_util = (
+                        sum(utilizations) / len(utilizations) if utilizations else 0
+                    )
                     score = 100 - avg_util  # Higher score = less loaded
 
                 elif strategy == "most_capacity":
@@ -585,8 +589,12 @@ class ResourcePoolManager:
 
                 else:  # balanced
                     # Balance between utilization and capacity
-                    utilizations = [r["utilization_percent"] for r in util["resources"].values()]
-                    avg_util = sum(utilizations) / len(utilizations) if utilizations else 0
+                    utilizations = [
+                        r["utilization_percent"] for r in util["resources"].values()
+                    ]
+                    avg_util = (
+                        sum(utilizations) / len(utilizations) if utilizations else 0
+                    )
                     total_capacity = sum(
                         r["capacity"] for r in util["resources"].values()
                     )
