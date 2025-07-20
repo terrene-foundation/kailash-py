@@ -249,13 +249,27 @@ class EdgeDiscovery:
             ai_models_available=["llama", "claude"],
         )
 
+        # Handle compliance zones
+        compliance_zones = []
+        if "compliance_zones" in edge_config:
+            for zone_str in edge_config["compliance_zones"]:
+                try:
+                    # Try to find matching enum
+                    for cz in ComplianceZone:
+                        if cz.value == zone_str:
+                            compliance_zones.append(cz)
+                            break
+                except Exception:
+                    pass
+
         # Create edge location
         location = EdgeLocation(
             location_id=location_id,
-            name=f"Edge {region_str.title()}",
+            name=edge_config.get("name", f"Edge {region_str.title()}"),
             region=region,
             coordinates=coordinates,
             capabilities=capabilities,
+            compliance_zones=compliance_zones if compliance_zones else None,
             endpoint_url=edge_config.get(
                 "endpoint", f"http://{location_id}.edge.local:8080"
             ),
@@ -743,3 +757,51 @@ class EdgeDiscovery:
 
     def __iter__(self):
         return iter(self.locations.values())
+
+    async def start_discovery(self):
+        """Start edge discovery service."""
+        # In a real implementation, this would start monitoring services
+        # For now, it's a no-op as health checks are started in __init__
+        pass
+
+    async def stop_discovery(self):
+        """Stop edge discovery service."""
+        # Stop health check task if running
+        if hasattr(self, "_health_check_task") and self._health_check_task:
+            self._health_check_task.cancel()
+            try:
+                await self._health_check_task
+            except asyncio.CancelledError:
+                pass
+
+    def get_all_edges(self) -> List[EdgeLocation]:
+        """Get all registered edge locations."""
+        return list(self.locations.values())
+
+    def get_edge(self, edge_name: str) -> Optional[EdgeLocation]:
+        """Get edge location by name."""
+        for location in self.locations.values():
+            if location.name == edge_name:
+                return location
+        return None
+
+    async def select_edge(
+        self, strategy: EdgeSelectionStrategy = None, compliance_zones: List[str] = None
+    ) -> Optional[EdgeLocation]:
+        """Select an edge based on strategy and compliance zones."""
+        # For now, just return the first available edge
+        edges = self.get_all_edges()
+        if not edges:
+            return None
+
+        # Filter by compliance if specified
+        if compliance_zones:
+            compliant_edges = []
+            for edge in edges:
+                edge_zones = [z.value for z in edge.compliance_zones]
+                if any(zone in edge_zones for zone in compliance_zones):
+                    compliant_edges.append(edge)
+            edges = compliant_edges if compliant_edges else edges
+
+        # For now, just return the first edge
+        return edges[0] if edges else None

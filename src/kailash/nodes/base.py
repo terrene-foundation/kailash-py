@@ -31,6 +31,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
+from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
@@ -466,15 +467,43 @@ class Node(ABC):
                 # Skip type checking for Any type
                 if param_def.type is Any:
                     continue
+                # Skip validation for template expressions like ${variable_name}
+                if isinstance(value, str) and self._is_template_expression(value):
+                    continue
                 if not isinstance(value, param_def.type):
                     try:
-                        self.config[param_name] = param_def.type(value)
+                        # Special handling for datetime conversion from ISO strings
+                        if param_def.type.__name__ == "datetime" and isinstance(
+                            value, str
+                        ):
+                            from datetime import datetime
+
+                            # Try to parse ISO format string
+                            self.config[param_name] = datetime.fromisoformat(
+                                value.replace("Z", "+00:00")
+                            )
+                        else:
+                            self.config[param_name] = param_def.type(value)
                     except (ValueError, TypeError) as e:
                         raise NodeConfigurationError(
                             f"Configuration parameter '{param_name}' must be of type "
                             f"{param_def.type.__name__}, got {type(value).__name__}. "
                             f"Conversion failed: {e}"
                         ) from e
+
+    def _is_template_expression(self, value: str) -> bool:
+        """Check if a string value is a template expression like ${variable_name}.
+
+        Args:
+            value: String value to check
+
+        Returns:
+            True if the value is a template expression, False otherwise
+        """
+        import re
+
+        # Match template expressions like ${variable_name} or ${node.output}
+        return bool(re.match(r"^\$\{[^}]+\}$", value))
 
     def _get_cached_parameters(self) -> dict[str, NodeParameter]:
         """Get cached parameter definitions.
@@ -1222,6 +1251,550 @@ class Node(ABC):
             raise NodeExecutionError(
                 f"Failed to serialize node '{self.id}': {e}"
             ) from e
+
+
+class TypedNode(Node):
+    """Enhanced node base class with type-safe port system.
+
+    This class extends the base Node with a declarative port system that provides:
+
+    1. Type-safe input/output declarations using descriptors
+    2. Automatic parameter schema generation from ports
+    3. IDE support with full autocomplete and type checking
+    4. Runtime type validation and constraint enforcement
+    5. Backward compatibility with existing Node patterns
+
+    Design Goals:
+    - Better developer experience with IDE support
+    - Compile-time type checking for safer workflows
+    - Declarative port definitions reduce boilerplate
+    - Runtime safety through automatic validation
+    - Seamless migration from existing Node classes
+
+    Usage Pattern:
+        class MyTypedNode(TypedNode):
+            # Input ports with type safety
+            text_input = InputPort[str]("text_input", description="Text to process")
+            count = InputPort[int]("count", default=1, description="Number of iterations")
+
+            # Output ports
+            result = OutputPort[str]("result", description="Processed text")
+            metadata = OutputPort[Dict[str, Any]]("metadata", description="Processing info")
+
+            def run(self, **kwargs) -> Dict[str, Any]:
+                # Type-safe access to inputs
+                text = self.text_input.get()
+                count = self.count.get()
+
+                # Process data
+                processed = text * count
+
+                # Set outputs (with type validation)
+                self.result.set(processed)
+                self.metadata.set({"length": len(processed), "iterations": count})
+
+                # Return traditional dict format
+                return {
+                    self.result.name: processed,
+                    self.metadata.name: {"length": len(processed), "iterations": count}
+                }
+
+    Migration Benefits:
+    - Existing Node.run() signature unchanged
+    - get_parameters() automatically generated from ports
+    - execute() handles port-to-parameter conversion
+    - Full backward compatibility maintained
+
+    Advanced Features:
+    - Port constraints (min/max length, value ranges, patterns)
+    - Complex type support (Union, Optional, List[T], Dict[K,V])
+    - Port metadata for documentation and UI generation
+    - Connection compatibility checking
+    """
+
+    def __init__(self, **kwargs):
+        """Initialize typed node with port system integration.
+
+        Performs the same initialization as Node, plus:
+        1. Scan class for port definitions
+        2. Set up port registry for validation
+        3. Initialize port instances for this node
+
+        Args:
+            **kwargs: Node configuration including port defaults
+        """
+        # Set up port registry BEFORE calling super().__init__()
+        # because base class will call get_parameters() during validation
+        self._port_registry = get_port_registry(self.__class__)
+
+        # Initialize base node
+        super().__init__(**kwargs)
+
+        # Set default values for input ports from config
+        for port_name, port in self._port_registry.input_ports.items():
+            if hasattr(self, port_name):
+                bound_port = getattr(self, port_name)
+                # Set default from config if available
+                if port_name in self.config and hasattr(bound_port, "set"):
+                    try:
+                        bound_port.set(self.config[port_name])
+                    except (TypeError, ValueError):
+                        # If type validation fails, let normal validation handle it
+                        pass
+
+    def get_parameters(self) -> dict[str, NodeParameter]:
+        """Generate parameter schema from port definitions.
+
+        Automatically creates NodeParameter definitions from InputPort declarations,
+        providing seamless integration with existing Node validation systems.
+
+        Returns:
+            Dictionary mapping parameter names to NodeParameter instances
+            generated from port definitions
+        """
+        parameters = {}
+
+        for port_name, port in self._port_registry.input_ports.items():
+            # Convert port metadata to NodeParameter
+            param_type = port.type_hint if port.type_hint else Any
+
+            # Handle generic types - NodeParameter expects plain types
+            if hasattr(param_type, "__origin__"):
+                # For generic types like List[str], Dict[str, Any], use the origin type
+                from typing import Union, get_origin
+
+                origin = get_origin(param_type)
+                if origin is Union:
+                    # For Union types (including Optional), use object as a safe fallback
+                    param_type = object
+                else:
+                    param_type = origin or param_type
+
+            parameters[port_name] = NodeParameter(
+                name=port_name,
+                type=param_type,
+                required=port.metadata.required,
+                default=port.metadata.default,
+                description=port.metadata.description,
+            )
+
+        return parameters
+
+    def get_output_schema(self) -> dict[str, NodeParameter]:
+        """Generate output schema from port definitions.
+
+        Creates output parameter definitions from OutputPort declarations,
+        enabling output validation and documentation generation.
+
+        Returns:
+            Dictionary mapping output names to NodeParameter instances
+        """
+        outputs = {}
+
+        for port_name, port in self._port_registry.output_ports.items():
+            param_type = port.type_hint if port.type_hint else Any
+
+            # Handle generic types - NodeParameter expects plain types
+            if hasattr(param_type, "__origin__"):
+                # For generic types like List[str], Dict[str, Any], use the origin type
+                from typing import Union, get_origin
+
+                origin = get_origin(param_type)
+                if origin is Union:
+                    # For Union types (including Optional), use object as a safe fallback
+                    param_type = object
+                else:
+                    param_type = origin or param_type
+
+            outputs[port_name] = NodeParameter(
+                name=port_name,
+                type=param_type,
+                required=False,  # Output ports are generally not "required"
+                default=None,
+                description=port.metadata.description,
+            )
+
+        return outputs
+
+    def validate_inputs(self, **kwargs) -> dict[str, Any]:
+        """Enhanced input validation using port system.
+
+        Performs validation in two phases:
+        1. Standard Node validation for backward compatibility
+        2. Port-specific validation for enhanced type checking
+
+        This dual approach ensures:
+        - Existing validation logic continues to work
+        - Enhanced type safety from port definitions
+        - Constraint validation (min/max, patterns, etc.)
+        - Better error messages with port context
+
+        Args:
+            **kwargs: Runtime inputs to validate
+
+        Returns:
+            Validated inputs with type conversions applied
+
+        Raises:
+            NodeValidationError: If validation fails with enhanced error context
+        """
+        # First, run standard Node validation
+        validated = super().validate_inputs(**kwargs)
+
+        # Then, perform port-specific validation
+        port_errors = self._port_registry.validate_input_types(validated)
+        if port_errors:
+            error_details = "; ".join(port_errors)
+            raise NodeValidationError(
+                f"Port validation failed for node '{self.id}': {error_details}"
+            )
+
+        # Set validated values in bound ports for type-safe access
+        # This allows port.get() to work during run() execution
+        for port_name, port in self._port_registry.input_ports.items():
+            if port_name in validated:
+                bound_port = getattr(self, port_name, None)
+                if bound_port and hasattr(bound_port, "set"):
+                    try:
+                        bound_port.set(validated[port_name])
+                    except (TypeError, ValueError):
+                        # Port validation should have caught this, but be safe
+                        pass
+                elif hasattr(self, port_name):
+                    # If bound port doesn't have set method, set the value directly
+                    port_instance = getattr(self, port_name)
+                    if hasattr(port_instance, "_value"):
+                        port_instance._value = validated[port_name]
+
+        return validated
+
+    def validate_outputs(self, outputs: dict[str, Any]) -> dict[str, Any]:
+        """Enhanced output validation using port system.
+
+        Validates outputs using both standard Node validation and port definitions:
+        1. Standard JSON serializability checks
+        2. Port type validation with enhanced error messages
+        3. Constraint validation for output values
+
+        Args:
+            outputs: Output dictionary from run() method
+
+        Returns:
+            Validated outputs
+
+        Raises:
+            NodeValidationError: If validation fails
+        """
+        # First, run standard Node validation
+        validated = super().validate_outputs(outputs)
+
+        # Then, perform port-specific validation
+        port_errors = self._port_registry.validate_output_types(validated)
+        if port_errors:
+            error_details = "; ".join(port_errors)
+            raise NodeValidationError(
+                f"Output port validation failed for node '{self.id}': {error_details}"
+            )
+
+        return validated
+
+    def get_port_schema(self) -> dict[str, Any]:
+        """Get complete port schema for documentation and tooling.
+
+        Returns the full port schema including type information,
+        constraints, examples, and metadata. Used by:
+        - Documentation generators
+        - UI form builders
+        - Workflow validation tools
+        - Type inference systems
+
+        Returns:
+            Complete port schema with input and output definitions
+        """
+        return self._port_registry.get_port_schema()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Enhanced serialization including port information.
+
+        Extends base Node serialization with port schema information
+        for complete node documentation and reconstruction.
+
+        Returns:
+            Node dictionary with port schema included
+        """
+        base_dict = super().to_dict()
+        base_dict["port_schema"] = self.get_port_schema()
+        return base_dict
+
+
+class AsyncTypedNode(TypedNode):
+    """Async version of TypedNode with full async support.
+
+    This class combines the type-safe port system from TypedNode with
+    the async execution capabilities of AsyncNode, providing:
+
+    1. Type-safe input/output ports with async execution
+    2. Async-first execution with execute_async() and async_run()
+    3. All port validation and type checking in async context
+    4. Full backward compatibility with TypedNode patterns
+    5. Optimal performance for I/O-bound async operations
+
+    Design Goals:
+    - Async-first execution for modern Kailash workflows
+    - Type safety with full IDE support in async context
+    - Seamless port access during async execution
+    - Compatible with AsyncLocalRuntime and async workflows
+
+    Usage Pattern:
+        class MyAsyncTypedNode(AsyncTypedNode):
+            # Same port declarations as TypedNode
+            text_input = InputPort[str]("text_input", description="Text to process")
+            count = InputPort[int]("count", default=1, description="Number of iterations")
+
+            # Output ports
+            result = OutputPort[str]("result", description="Processed text")
+            metadata = OutputPort[Dict[str, Any]]("metadata", description="Processing info")
+
+            async def async_run(self, **kwargs) -> Dict[str, Any]:
+                # Type-safe async access to inputs
+                text = self.text_input.get()
+                count = self.count.get()
+
+                # Async processing (e.g., API calls, DB queries)
+                processed = await self.process_async(text, count)
+
+                # Set outputs (with type validation)
+                self.result.set(processed)
+                self.metadata.set({"length": len(processed), "iterations": count})
+
+                # Return traditional dict format
+                return {
+                    self.result.name: processed,
+                    self.metadata.name: {"length": len(processed), "iterations": count}
+                }
+
+            async def process_async(self, text: str, count: int) -> str:
+                # Example async processing
+                await asyncio.sleep(0.1)  # Simulate I/O
+                return text * count
+
+    Migration from TypedNode:
+    - Change inheritance from TypedNode to AsyncTypedNode
+    - Change run() method to async def async_run()
+    - Add await to any async operations
+    - Use execute_async() for execution instead of execute()
+    """
+
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Override run() to require async_run() implementation.
+
+        AsyncTypedNode requires async_run() implementation for proper async execution.
+        This method should not be called directly - use execute_async() instead.
+
+        Raises:
+            NotImplementedError: Always, as async typed nodes must use async_run()
+        """
+        raise NotImplementedError(
+            f"AsyncTypedNode '{self.__class__.__name__}' should implement async_run() method, not run()"
+        )
+
+    async def async_run(self, **kwargs) -> dict[str, Any]:
+        """Execute the async node's logic with type-safe port access.
+
+        This is the core method that implements the node's async data processing
+        logic. It receives validated inputs and must return a dictionary of outputs.
+
+        Design requirements:
+        - Must be async and stateless - no side effects between runs
+        - All inputs are provided as keyword arguments
+        - Must return a dictionary (JSON-serializable)
+        - Can use self.port.get() for type-safe input access
+        - Can use self.port.set() for type-safe output setting
+        - Should handle errors gracefully with async context
+        - Can use self.config for configuration values
+        - Should use self.logger for status reporting
+        - Can perform async I/O operations (API calls, DB queries, etc.)
+
+        Example:
+            async def async_run(self, **kwargs):
+                # Type-safe port access
+                text = self.text_input.get()
+                count = self.count.get()
+
+                # Async processing
+                result = await self.process_text_async(text, count)
+
+                # Set outputs and return
+                self.result.set(result)
+                return {"result": result}
+
+        Args:
+            **kwargs: Validated input parameters matching get_parameters()
+
+        Returns:
+            Dictionary of outputs that will be validated and passed
+            to downstream nodes
+
+        Raises:
+            NodeExecutionError: If execution fails (will be caught and
+                              re-raised by execute_async())
+
+        Called by:
+            - execute_async(): Wraps with validation and error handling
+            - AsyncLocalRuntime: During async workflow execution
+            - Async test runners: During async unit testing
+        """
+        raise NotImplementedError(
+            f"AsyncTypedNode '{self.__class__.__name__}' must implement async_run() method"
+        )
+
+    async def execute_async(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute the async node with validation and error handling.
+
+        This is the main entry point for async node execution that orchestrates
+        the complete async execution lifecycle:
+
+        1. Input validation (validate_inputs)
+        2. Async execution (async_run)
+        3. Output validation (validate_outputs)
+        4. Error handling and logging
+        5. Performance metrics
+
+        Async execution flow:
+        1. Logs execution start
+        2. Validates inputs against parameter schema (including port validation)
+        3. Sets validated values in ports for type-safe access
+        4. Calls async_run() with validated inputs
+        5. Validates outputs are JSON-serializable (including port validation)
+        6. Logs execution time
+        7. Returns validated outputs
+
+        Args:
+            **runtime_inputs: Runtime inputs for async node execution
+
+        Returns:
+            Dictionary of validated outputs from async_run()
+
+        Raises:
+            NodeExecutionError: If async execution fails in async_run()
+            NodeValidationError: If input/output validation fails
+        """
+        from datetime import UTC, datetime
+
+        start_time = datetime.now(UTC)
+        try:
+            self.logger.info(f"Executing async node {self.id}")
+
+            # Merge runtime inputs with config (runtime inputs take precedence)
+            merged_inputs = {**self.config, **runtime_inputs}
+
+            # Handle nested config case (same as base Node)
+            if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):
+                nested_config = merged_inputs["config"]
+                for key, value in nested_config.items():
+                    if key not in runtime_inputs:
+                        merged_inputs[key] = value
+
+            # Validate inputs (includes port validation and setting port values)
+            validated_inputs = self.validate_inputs(**merged_inputs)
+            self.logger.debug(
+                f"Validated inputs for async node {self.id}: {validated_inputs}"
+            )
+
+            # Execute async node logic
+            outputs = await self.async_run(**validated_inputs)
+
+            # Validate outputs (includes port validation)
+            validated_outputs = self.validate_outputs(outputs)
+
+            execution_time = (datetime.now(UTC) - start_time).total_seconds()
+            self.logger.info(
+                f"Async node {self.id} executed successfully in {execution_time:.3f}s"
+            )
+            return validated_outputs
+
+        except NodeValidationError:
+            # Re-raise validation errors as-is
+            raise
+        except NodeExecutionError:
+            # Re-raise execution errors as-is
+            raise
+        except Exception as e:
+            # Wrap any other exception in NodeExecutionError
+            self.logger.error(
+                f"Async node {self.id} execution failed: {e}", exc_info=True
+            )
+            raise NodeExecutionError(
+                f"Async node '{self.id}' execution failed: {type(e).__name__}: {e}"
+            ) from e
+
+    def execute(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute the async node synchronously by running async code.
+
+        This method provides backward compatibility by running the async execution
+        in a synchronous context. It handles event loop management automatically.
+
+        For optimal performance in async workflows, use execute_async() directly.
+
+        Args:
+            **runtime_inputs: Runtime inputs for node execution
+
+        Returns:
+            Dictionary of validated outputs
+        """
+        import asyncio
+        import concurrent.futures
+        import sys
+        import threading
+
+        # Handle event loop scenarios (same as AsyncNode)
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+        current_thread = threading.current_thread()
+        is_main_thread = isinstance(current_thread, threading._MainThread)
+
+        try:
+            # Try to get current event loop
+            loop = asyncio.get_running_loop()
+            # Event loop is running - need to run in separate thread
+            return self._execute_in_thread(**runtime_inputs)
+        except RuntimeError:
+            # No event loop running
+            if is_main_thread:
+                # Main thread without loop - safe to use asyncio.run()
+                return asyncio.run(self.execute_async(**runtime_inputs))
+            else:
+                # Non-main thread without loop - create new loop
+                return self._execute_in_new_loop(**runtime_inputs)
+
+    def _execute_in_thread(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute async code in a separate thread with its own event loop."""
+        import asyncio
+        import concurrent.futures
+
+        def run_in_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.execute_async(**runtime_inputs))
+            finally:
+                loop.close()
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            return future.result()
+
+    def _execute_in_new_loop(self, **runtime_inputs) -> dict[str, Any]:
+        """Execute async code in a new event loop."""
+        import asyncio
+
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(self.execute_async(**runtime_inputs))
+        finally:
+            new_loop.close()
 
 
 # Node Registry

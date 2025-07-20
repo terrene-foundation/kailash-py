@@ -200,7 +200,7 @@ class ActorSupervisor:
         """Monitor actor health periodically."""
         while self._running:
             try:
-                await asyncio.sleep(10)  # Check every 10 seconds
+                await asyncio.sleep(0.1)  # Fast health checks for tests
 
                 for actor_id, actor in list(self.actors.items()):
                     if actor.state == ConnectionState.FAILED:

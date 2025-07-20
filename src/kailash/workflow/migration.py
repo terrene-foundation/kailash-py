@@ -205,7 +205,7 @@ class DAGToCycleConverter:
                         pattern_type="retry_cycle",
                         confidence=0.7,
                         description=f"Node '{node_id}' appears to implement retry logic manually",
-                        suggested_convergence="success == True",
+                        suggested_convergence="success",
                         estimated_benefit="improved_reliability",
                         implementation_complexity="low",
                     )
@@ -290,7 +290,7 @@ class DAGToCycleConverter:
                     pattern_type="batch_processing_cycle",
                     confidence=0.6,
                     description=f"'{node_id}' appears to process data in batches",
-                    suggested_convergence="all_batches_processed == True",
+                    suggested_convergence="all_batches_processed",
                     estimated_benefit="memory_efficiency",
                     implementation_complexity="medium",
                 )
@@ -398,7 +398,7 @@ cycle_id = workflow.add_retry_cycle(
     target_node="{main_node}",
     max_retries=3,
     backoff_strategy="exponential",
-    success_condition="success == True"
+    success_condition="success"
 )
 
 print(f"Created retry cycle: {{cycle_id}}")

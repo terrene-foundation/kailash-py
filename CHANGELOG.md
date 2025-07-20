@@ -9,13 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The changelog has been reorganized into individual files for better management. Please see:
 
-- **[changelogs/](changelogs/)** - Main changelog directory
-- **[changelogs/unreleased/](changelogs/unreleased/)** - Unreleased changes
-- **[changelogs/releases/](changelogs/releases/)** - Individual release changelogs
+- **[sdk-users/changelogs/](sdk-users/changelogs/)** - Main changelog directory
+- **[sdk-users/changelogs/unreleased/](sdk-users/changelogs/unreleased/)** - Unreleased changes
+- **[sdk-users/changelogs/releases/](sdk-users/changelogs/releases/)** - Individual release changelogs
 
 ## Recent Releases
 
-### [0.8.4] - 2025-07-19
+### [0.8.5] - 2025-01-20
+
+**Architecture Cleanup & Enterprise Security Release**
+
+This release removes the confusing `src/kailash/nexus` module, adds comprehensive edge computing infrastructure, implements enterprise-grade connection parameter validation, and introduces advanced monitoring capabilities.
+
+#### Added
+- ✅ **Connection Parameter Validation**: Enterprise-grade validation framework with type safety
+- ✅ **Edge Computing Infrastructure**: 50+ new nodes for geo-distributed computing
+- ✅ **AlertManager**: Proactive monitoring with configurable thresholds
+- ✅ **Connection Contracts**: Define and enforce data flow contracts between nodes
+- ✅ **Validation Metrics**: Track connection validation performance and failures
+- ✅ **Edge Node Discovery**: Automatic discovery and coordination of edge resources
+- ✅ **Predictive Scaling**: Resource optimization with predictive algorithms
+- ✅ **Comprehensive Monitoring**: Enhanced monitoring patterns and guides
+
+#### Changed
+- Updated all documentation to use correct Nexus imports (`from nexus import Nexus`)
+- Enhanced LocalRuntime with validation enabled by default
+- Improved error messages with validation suggestions
+- Updated DataFlow integration to use proper imports
+
+#### Removed
+- ⚠️ **BREAKING**: Removed `src/kailash/nexus` module (use `apps/kailash-nexus` instead)
+- Removed `tests/integration/test_nexus_framework.py`
+- Removed outdated nexus import references from documentation
+
+#### Security
+- Enterprise-grade connection parameter validation
+- Real-time security event monitoring
+- Compliance-aware edge routing
+- Enhanced error handling with security considerations
+
+### [0.8.4] - 2025-01-19
 
 **A2A Google Protocol Enhancement Release**
 
@@ -286,61 +319,61 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 
 ### [0.6.2] - 2025-07-03
 
-See [changelogs/releases/v0.6.2-2025-07-03.md](changelogs/releases/v0.6.2-2025-07-03.md) for full details.
+See [sdk-users/changelogs/releases/v0.6.2-2025-07-03.md](sdk-users/changelogs/releases/v0.6.2-2025-07-03.md) for full details.
 
 **Key Features:** LLM integration enhancements with Ollama backend_config support, 100% test coverage across all tiers, comprehensive documentation updates
 
 ### [0.6.1] - 2025-01-26
 
-See [changelogs/releases/v0.6.1-2025-01-26.md](changelogs/releases/v0.6.1-2025-01-26.md) for full details.
+See [sdk-users/changelogs/releases/v0.6.1-2025-01-26.md](sdk-users/changelogs/releases/v0.6.1-2025-01-26.md) for full details.
 
 **Key Features:** Critical middleware bug fixes, standardized test environment, massive CI performance improvements (10min → 40sec)
 
 ### [0.6.0] - 2025-01-24
 
-See [changelogs/releases/v0.6.0-2025-01-24.md](changelogs/releases/v0.6.0-2025-01-24.md) for full details.
+See [sdk-users/changelogs/releases/v0.6.0-2025-01-24.md](sdk-users/changelogs/releases/v0.6.0-2025-01-24.md) for full details.
 
 **Key Features:** User Management System, Enterprise Admin Infrastructure
 
 ### [0.5.0] - 2025-01-19
 
-See [changelogs/releases/v0.5.0-2025-01-19.md](changelogs/releases/v0.5.0-2025-01-19.md) for full details.
+See [sdk-users/changelogs/releases/v0.5.0-2025-01-19.md](sdk-users/changelogs/releases/v0.5.0-2025-01-19.md) for full details.
 
 **Key Features:** Major Architecture Refactoring, Performance Optimization, API Standardization
 
 ### [0.4.2] - 2025-06-18
 
-See [changelogs/releases/v0.4.2-2025-06-18.md](changelogs/releases/v0.4.2-2025-06-18.md) for full details.
+See [sdk-users/changelogs/releases/v0.4.2-2025-06-18.md](sdk-users/changelogs/releases/v0.4.2-2025-06-18.md) for full details.
 
 **Key Features:** Circular Import Resolution, Changelog Organization
 
 ### [0.4.1] - 2025-06-16
 
-See [changelogs/releases/v0.4.1-2025-06-16.md](changelogs/releases/v0.4.1-2025-06-16.md) for full details.
+See [sdk-users/changelogs/releases/v0.4.1-2025-06-16.md](sdk-users/changelogs/releases/v0.4.1-2025-06-16.md) for full details.
 
 **Key Features:** Alert Nodes System, AI Provider Vision Support
 
 ### [0.4.0] - 2025-06-15
 
-See [changelogs/releases/v0.4.0-2025-06-15.md](changelogs/releases/v0.4.0-2025-06-15.md) for full details.
+See [sdk-users/changelogs/releases/v0.4.0-2025-06-15.md](sdk-users/changelogs/releases/v0.4.0-2025-06-15.md) for full details.
 
 **Key Features:** Enterprise Middleware Architecture, Test Excellence Improvements
 
 ### [0.3.2] - 2025-06-11
 
-See [changelogs/releases/v0.3.2-2025-06-11.md](changelogs/releases/v0.3.2-2025-06-11.md) for full details.
+See [sdk-users/changelogs/releases/v0.3.2-2025-06-11.md](sdk-users/changelogs/releases/v0.3.2-2025-06-11.md) for full details.
 
 **Key Features:** PythonCodeNode Output Validation Fix, Manufacturing Workflow Library
 
 ### [0.3.1] - 2025-06-11
 
-See [changelogs/releases/v0.3.1-2025-06-11.md](changelogs/releases/v0.3.1-2025-06-11.md) for full details.
+See [sdk-users/changelogs/releases/v0.3.1-2025-06-11.md](sdk-users/changelogs/releases/v0.3.1-2025-06-11.md) for full details.
 
 **Key Features:** Complete Finance Workflow Library, PythonCodeNode Training Data
 
 ### [0.3.0] - 2025-06-10
 
-See [changelogs/releases/v0.3.0-2025-06-10.md](changelogs/releases/v0.3.0-2025-06-10.md) for full details.
+See [sdk-users/changelogs/releases/v0.3.0-2025-06-10.md](sdk-users/changelogs/releases/v0.3.0-2025-06-10.md) for full details.
 
 **Key Features:** Parameter Lifecycle Architecture, Centralized Data Management
 

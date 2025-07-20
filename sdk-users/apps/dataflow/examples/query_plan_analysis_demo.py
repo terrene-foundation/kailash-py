@@ -30,7 +30,6 @@ from dataflow.optimization.query_plan_analyzer import (
     BottleneckType,
     PlanNodeType,
     QueryPlanAnalyzer,
-    SQLDialect,
 )
 
 

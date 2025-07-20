@@ -65,6 +65,15 @@ MOCK_API_CONFIG = {
     "base_url": os.getenv("MOCK_API_BASE_URL", "http://localhost:8888"),
 }
 
+# Kubernetes configuration - using kind in Docker on port 6443
+KUBERNETES_CONFIG = {
+    "host": os.getenv("KUBERNETES_HOST", "localhost"),
+    "port": int(os.getenv("KUBERNETES_PORT", "6443")),
+    "api_server": os.getenv("KUBERNETES_API_SERVER", "https://localhost:6443"),
+    "namespace": os.getenv("KUBERNETES_NAMESPACE", "default"),
+    "config_path": os.getenv("KUBECONFIG"),  # Path to kubeconfig file if available
+}
+
 
 # Connection string helpers
 def get_postgres_connection_string(database=None):
@@ -106,6 +115,16 @@ def get_mysql_connection_string(database=None):
 def get_mock_api_url():
     """Get Mock API URL for the Docker setup."""
     return MOCK_API_CONFIG["base_url"]
+
+
+def get_kubernetes_config():
+    """Get Kubernetes configuration for the Docker setup."""
+    return KUBERNETES_CONFIG
+
+
+def get_kubernetes_api_server():
+    """Get Kubernetes API server URL for the Docker setup."""
+    return KUBERNETES_CONFIG["api_server"]
 
 
 # Test database names
@@ -170,6 +189,29 @@ def is_ollama_available():
         )
         return response.status_code == 200
     except Exception:
+        return False
+
+
+def is_kubernetes_available():
+    """Check if Kubernetes service is available."""
+    try:
+        import subprocess
+
+        # Check if kubectl is available
+        kubectl_result = subprocess.run(
+            ["kubectl", "version", "--client"], capture_output=True, timeout=5
+        )
+        if kubectl_result.returncode != 0:
+            return False
+
+        # Check if we can connect to the cluster
+        cluster_result = subprocess.run(
+            ["kubectl", "cluster-info", "--request-timeout=3s"],
+            capture_output=True,
+            timeout=5,
+        )
+        return cluster_result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
         return False
 
 

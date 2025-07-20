@@ -192,7 +192,7 @@ async def test_agent_ui_function_node_inputs():
     # Create workflow with function node
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "auth_processor", PythonCodeNode.from_function(authentication_processor)
+        "PythonCodeNode", "auth_processor", {"function": authentication_processor}
     )
 
     workflow_obj = workflow.build()

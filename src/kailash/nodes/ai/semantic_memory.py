@@ -9,7 +9,7 @@ import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
@@ -269,7 +269,7 @@ class SemanticMemoryStoreNode(Node):
 
         # Store items
         ids = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for i, (text, embedding) in enumerate(zip(contents, result.embeddings)):
             item = SemanticMemoryItem(

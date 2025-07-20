@@ -802,10 +802,10 @@ gateway = create_gateway(server_type="enterprise")  # EnterpriseWorkflowServer
 
 **Multi-Channel Platform (Recommended for New Projects):**
 ```python
-from kailash.nexus import create_nexus
+from nexus import Nexus
 
 # Unified API + CLI + MCP platform
-nexus = create_nexus()  # API, CLI, and MCP channels with session sync
+nexus = Nexus()  # API, CLI, and MCP channels with session sync
 ```
 
 ### Related Enterprise Guides

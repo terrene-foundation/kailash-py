@@ -1,0 +1,211 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-management-service-account
+  namespace: kailash-user-management
+  labels:
+    app: user-management
+    component: rbac
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/UserManagementServiceRole
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: user-management-role
+  namespace: kailash-user-management
+  labels:
+    app: user-management
+    component: rbac
+rules:
+# Pod management
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+
+# ConfigMap and Secret access
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+
+# Service management
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+
+# Events
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+# Endpoints for service discovery
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+
+# PVC access for data persistence
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-management-role-binding
+  namespace: kailash-user-management
+  labels:
+    app: user-management
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: user-management-service-account
+  namespace: kailash-user-management
+roleRef:
+  kind: Role
+  name: user-management-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole for cross-namespace operations (if needed)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: user-management-cluster-role
+  labels:
+    app: user-management
+    component: rbac
+rules:
+# Node metrics access for monitoring
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes/metrics"]
+  verbs: ["get", "list"]
+
+# Namespace access for multi-tenant operations
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+
+# Custom Resource Definitions (if using operators)
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: user-management-cluster-role-binding
+  labels:
+    app: user-management
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: user-management-service-account
+  namespace: kailash-user-management
+roleRef:
+  kind: ClusterRole
+  name: user-management-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Service Account for staging
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-management-service-account
+  namespace: kailash-user-management-staging
+  labels:
+    app: user-management
+    component: rbac
+    environment: staging
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: user-management-role
+  namespace: kailash-user-management-staging
+  labels:
+    app: user-management
+    component: rbac
+    environment: staging
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps", "secrets", "services", "events", "endpoints", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-management-role-binding
+  namespace: kailash-user-management-staging
+  labels:
+    app: user-management
+    component: rbac
+    environment: staging
+subjects:
+- kind: ServiceAccount
+  name: user-management-service-account
+  namespace: kailash-user-management-staging
+roleRef:
+  kind: Role
+  name: user-management-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Service Account for development
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-management-service-account
+  namespace: kailash-user-management-dev
+  labels:
+    app: user-management
+    component: rbac
+    environment: development
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: user-management-role
+  namespace: kailash-user-management-dev
+  labels:
+    app: user-management
+    component: rbac
+    environment: development
+rules:
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-management-role-binding
+  namespace: kailash-user-management-dev
+  labels:
+    app: user-management
+    component: rbac
+    environment: development
+subjects:
+- kind: ServiceAccount
+  name: user-management-service-account
+  namespace: kailash-user-management-dev
+roleRef:
+  kind: Role
+  name: user-management-role
+  apiGroup: rbac.authorization.k8s.io

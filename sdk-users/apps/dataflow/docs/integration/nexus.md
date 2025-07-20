@@ -17,7 +17,7 @@ The DataFlow + Nexus integration provides:
 
 ```python
 from dataflow import DataFlow
-from kailash.nexus import create_nexus
+from nexus import Nexus
 
 # Initialize DataFlow
 db = DataFlow()
@@ -38,7 +38,7 @@ class Order:
     status: str = "pending"
 
 # Create Nexus with DataFlow integration
-nexus = create_nexus(
+nexus = Nexus(
     title="E-commerce Platform",
     enable_api=True,
     enable_cli=True,
@@ -77,7 +77,7 @@ GET /api/products?name__contains=phone&price__gte=100
 ### Advanced API Configuration
 
 ```python
-nexus = create_nexus(
+nexus = Nexus(
     title="Advanced E-commerce API",
     dataflow_config={
         "integration": db,
@@ -163,7 +163,7 @@ nexus products aggregate --group-by category --sum price --avg stock
 ### CLI Configuration
 
 ```python
-nexus = create_nexus(
+nexus = Nexus(
     title="E-commerce CLI",
     dataflow_config={
         "integration": db,
@@ -204,7 +204,7 @@ nexus query "products where price > 100 order by -price limit 10"
 Enable AI agents to perform database operations:
 
 ```python
-nexus = create_nexus(
+nexus = Nexus(
     title="AI-Powered E-commerce",
     enable_mcp=True,
     dataflow_config={
@@ -273,7 +273,7 @@ ws.onmessage = (event) => {
 ### Server-Side Configuration
 
 ```python
-nexus = create_nexus(
+nexus = Nexus(
     title="Real-Time E-commerce",
     dataflow_config={
         "integration": db,
@@ -392,7 +392,7 @@ class Product:
     __dataflow__ = {'multi_tenant': True}
 
 # Tenant-aware Nexus
-nexus = create_nexus(
+nexus = Nexus(
     title="Multi-Tenant E-commerce",
     dataflow_config={
         "integration": db,
@@ -415,7 +415,7 @@ nexus = create_nexus(
 ### Caching Integration
 
 ```python
-nexus = create_nexus(
+nexus = Nexus(
     title="High-Performance E-commerce",
     dataflow_config={
         "integration": db,
@@ -452,7 +452,7 @@ nexus = create_nexus(
 ### Integrated Monitoring
 
 ```python
-nexus = create_nexus(
+nexus = Nexus(
     title="Observable E-commerce",
     dataflow_config={
         "integration": db,
@@ -492,7 +492,7 @@ nexus = create_nexus(
 
 ```python
 from dataflow import DataFlow
-from kailash.nexus import create_nexus
+from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
 
 # Initialize DataFlow with models
@@ -542,7 +542,7 @@ class Order:
     }
 
 # Create unified platform
-nexus = create_nexus(
+nexus = Nexus(
     title="Enterprise E-commerce Platform",
 
     # Enable all channels
@@ -635,7 +635,7 @@ def process_vip_order(order_data: dict):
 
 ```python
 # Optimize for high traffic
-nexus = create_nexus(
+nexus = Nexus(
     dataflow_config={
         "integration": db,
         "connection_pooling": {
@@ -657,7 +657,7 @@ nexus = create_nexus(
 
 ```python
 # Secure by default
-nexus = create_nexus(
+nexus = Nexus(
     dataflow_config={
         "integration": db,
         "security": {
@@ -675,7 +675,7 @@ nexus = create_nexus(
 
 ```python
 # Comprehensive observability
-nexus = create_nexus(
+nexus = Nexus(
     dataflow_config={
         "integration": db,
         "monitoring": {

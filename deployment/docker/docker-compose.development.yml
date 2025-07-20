@@ -1,0 +1,196 @@
+# Development Docker Compose for Kailash SDK Template
+# Optimized for development workflow
+
+services:
+  # Main Application (Development)
+  app:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile
+      target: production  # Use production stage
+    container_name: ${PROJECT_NAME:-template}-app-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgresql://app_user:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/${PROJECT_NAME:-template}_dev
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=http://ollama:11434
+      
+      # Application configuration
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - WORKERS=1
+      - TIMEOUT=30
+      
+      # Security (development)
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-not-for-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-not-for-production}
+      - CORS_ORIGINS=*
+      
+      # Monitoring
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+      - HEALTH_CHECK_INTERVAL=10
+      
+      # DataFlow configuration
+      - DATAFLOW_DATABASE_URL=postgresql://app_user:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/${PROJECT_NAME:-template}_dev
+      - DATAFLOW_REDIS_URL=redis://redis:6379
+      - DATAFLOW_CACHE_TTL=60
+      
+      # Nexus configuration
+      - NEXUS_ENABLE_API=true
+      - NEXUS_ENABLE_CLI=true
+      - NEXUS_ENABLE_MCP=true
+      - NEXUS_API_KEY=${NEXUS_API_KEY:-dev-nexus-key}
+    ports:
+      - "8000:8000"
+      - "9090:9090"  # Metrics
+    volumes:
+      - ../../src:/app/src  # Live reload
+      - ../../sdk-users:/app/sdk-users
+      - ../../data:/app/data
+      - app_logs:/app/logs
+      - app_outputs:/app/outputs
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/workflows/get_status/execute"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    command: >
+      python -m uvicorn src.new_project.core.gateway:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --log-level debug
+
+  # PostgreSQL Database (Development)
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: ${PROJECT_NAME:-template}-postgres-dev
+    environment:
+      POSTGRES_DB: ${PROJECT_NAME:-template}_dev
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d ${PROJECT_NAME:-template}_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # Redis Cache (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: ${PROJECT_NAME:-template}-redis-dev
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --appendonly yes
+
+  # Ollama AI Service (Development)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ${PROJECT_NAME:-template}-ollama-dev
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=/root/.ollama/models
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_NUM_PARALLEL=1
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+
+  # Database Admin (Development only)
+  adminer:
+    image: adminer:latest
+    container_name: ${PROJECT_NAME:-template}-adminer
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+  # Redis Admin (Development only)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ${PROJECT_NAME:-template}-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+      - HTTP_USER=${REDIS_ADMIN_USER:-admin}
+      - HTTP_PASSWORD=${REDIS_ADMIN_PASSWORD:-admin}
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_models:
+  app_logs:
+  app_outputs:
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16

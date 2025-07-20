@@ -1,0 +1,8 @@
+Enterprise Deployment Test Report
+=================================
+Test Date: Sun Jul 20 21:52:57 +08 2025
+Test Type: Local Docker Validation
+
+Test Summary:
+- Docker Compose: PASS
+- Services startup: FAIL

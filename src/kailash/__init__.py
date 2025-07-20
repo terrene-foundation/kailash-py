@@ -26,9 +26,6 @@ try:
         RealtimeMiddleware,
     )
 
-    # Import Nexus multi-channel framework (v0.6.7+)
-    from kailash.nexus import NexusGateway, create_nexus
-
     # Import new server classes (v0.6.7+)
     from kailash.servers import (
         DurableWorkflowServer,
@@ -52,7 +49,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.8.4"
+__version__ = "0.8.5"
 
 __all__ = [
     # Core workflow components
@@ -86,8 +83,5 @@ if _MIDDLEWARE_AVAILABLE:
             "create_enterprise_gateway",
             "create_durable_gateway",
             "create_basic_gateway",
-            # Nexus multi-channel framework
-            "NexusGateway",
-            "create_nexus",
         ]
     )

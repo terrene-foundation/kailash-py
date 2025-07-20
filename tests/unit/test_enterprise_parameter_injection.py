@@ -70,8 +70,8 @@ def test_parameter_injection_workflow():
         # Add a deferred SQL node that will receive connection params at runtime
         sql_node = create_deferred_sql(name="dynamic_sql")
         workflow.add_node(
-            sql_node, "database_query"
-        )  # Use node instance pattern with explicit ID
+            "DeferredConfigNode", "database_query", {"node_instance": sql_node}
+        )  # Use preferred pattern
 
         # Add a simple code node to verify the flow
         workflow.add_node(

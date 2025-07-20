@@ -1,0 +1,4 @@
+[0;34m[INFO][0m Starting Security Feature Testing
+========================================
+[0;34m[INFO][0m === Testing PostgreSQL Security ===
+[0;31m[FAIL][0m PostgreSQL does not require password

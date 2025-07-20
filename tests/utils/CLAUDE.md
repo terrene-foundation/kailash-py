@@ -10,6 +10,7 @@ This repository uses the following DEDICATED ports for testing infrastructure:
 - **Ollama**: `11435` (kailash_sdk_test_ollama)
 - **MySQL**: `3307` (kailash_sdk_test_mysql)
 - **MongoDB**: `27017` (kailash_sdk_test_mongodb)
+- **Kubernetes**: `6443` (kailash_sdk_test_kubernetes) 🚀 NEW
 
 ## Docker Compose Configuration
 
@@ -59,6 +60,13 @@ export MONGO_HOST=localhost
 export MONGO_PORT=27017
 export MONGO_USER=kailash
 export MONGO_PASSWORD=kailash123
+
+# Kubernetes (kind)
+export KUBERNETES_HOST=localhost
+export KUBERNETES_PORT=6443
+export KUBERNETES_API_SERVER=https://localhost:6443
+export KUBERNETES_NAMESPACE=default
+export KUBECONFIG=/tmp/kailash-k8s-kubeconfig
 ```
 
 ## Testing Strategy (3-Tier Approach)
@@ -131,6 +139,9 @@ from tests.utils.docker_config import ensure_docker_services
 result = asyncio.run(ensure_docker_services())
 print('All services healthy!' if result else 'Service issues detected!')
 "
+
+# Check Kubernetes cluster
+./tests/utils/test-env kubernetes status
 ```
 
 ## Development Workflow
@@ -138,7 +149,10 @@ print('All services healthy!' if result else 'Service issues detected!')
 ### 1. Start Test Environment
 ```bash
 # Start core services (PostgreSQL + Redis)
-docker-compose -f tests/utils/docker-compose.test.yml up -d postgres redis
+./tests/utils/test-env up
+
+# For Kubernetes tests, also start kind cluster
+./tests/utils/test-env kubernetes setup
 
 # For AI tests, also start Ollama
 docker-compose -f tests/utils/docker-compose.test.yml up -d ollama
@@ -161,11 +175,14 @@ pytest tests/e2e/ -v --tb=short --maxfail=5
 
 ### 3. Cleanup
 ```bash
-# Stop services but keep volumes
-docker-compose -f tests/utils/docker-compose.test.yml down
+# Stop Docker services but keep volumes
+./tests/utils/test-env down
+
+# Stop Kubernetes cluster
+./tests/utils/test-env kubernetes stop
 
 # Full cleanup (removes volumes)
-docker-compose -f tests/utils/docker-compose.test.yml down -v
+./tests/utils/test-env clean
 ```
 
 ## Ollama Configuration
@@ -193,6 +210,7 @@ curl http://localhost:11435/api/tags
 - `kailash_sdk_test_ollama`
 - `kailash_sdk_test_mysql`
 - `kailash_sdk_test_mongodb`
+- `kailash-test-control-plane` (kind cluster)
 
 ### Network Name
 - `kailash_sdk_test_network`

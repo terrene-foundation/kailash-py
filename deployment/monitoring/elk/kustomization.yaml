@@ -1,0 +1,83 @@
+# Kustomization for ELK Stack deployment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: elk-stack
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Namespace for all ELK components
+namespace: logging
+
+# Create namespace
+resources:
+  - namespace.yaml
+  - elasticsearch.yaml
+  - logstash.yaml
+  - filebeat.yaml
+  - index-lifecycle-policy.yaml
+  - grafana-dashboards.yaml
+
+# Common labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: kailash-platform
+  app.kubernetes.io/managed-by: kustomize
+  observability.stack: elk
+
+# Images with specific versions
+images:
+  - name: docker.elastic.co/elasticsearch/elasticsearch
+    newTag: 8.11.3
+  - name: docker.elastic.co/kibana/kibana
+    newTag: 8.11.3
+  - name: docker.elastic.co/logstash/logstash
+    newTag: 8.11.3
+  - name: docker.elastic.co/beats/filebeat
+    newTag: 8.11.3
+
+# Configuration patches
+patchesStrategicMerge:
+  - patches/elasticsearch-storage.yaml
+  - patches/kibana-config.yaml
+  - patches/logstash-resources.yaml
+
+# JSON patches for environment-specific configurations
+patchesJson6902:
+  - target:
+      group: elasticsearch.k8s.elastic.co
+      version: v1
+      kind: Elasticsearch
+      name: kailash-logs
+    patch: |-
+      - op: replace
+        path: /spec/nodeSets/0/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "50Gi"
+      - op: replace
+        path: /spec/nodeSets/1/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "200Gi"
+
+# Configurations
+configMapGenerator:
+  - name: elk-monitoring-config
+    literals:
+      - retention.days=30
+      - index.shards=3
+      - index.replicas=1
+      - log.level=info
+
+# Secrets (use external secret management in production)
+secretGenerator:
+  - name: elk-credentials
+    literals:
+      - elasticsearch.password=changeme-use-vault-in-prod
+      - kibana.encryption.key=changeme-32-character-encryption-key
+    type: Opaque
+
+# Resource transformers
+transformers:
+  - resource-limits.yaml
+
+# Generators for environment-specific configurations
+generators:
+  - environment-config.yaml

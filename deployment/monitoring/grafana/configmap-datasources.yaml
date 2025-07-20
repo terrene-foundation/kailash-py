@@ -1,0 +1,115 @@
+# Grafana Datasources Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: monitoring-stack
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    deleteDatasources:
+      - name: Prometheus
+        orgId: 1
+    datasources:
+      # Prometheus datasource
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        orgId: 1
+        url: http://prometheus:9090
+        isDefault: true
+        jsonData:
+          timeInterval: 15s
+          queryTimeout: 60s
+          httpMethod: POST
+          manageAlerts: true
+          prometheusType: Prometheus
+          prometheusVersion: 2.48.0
+        editable: false
+      
+      # AlertManager datasource
+      - name: AlertManager
+        type: alertmanager
+        access: proxy
+        orgId: 1
+        url: http://alertmanager:9093
+        jsonData:
+          implementation: prometheus
+        editable: false
+      
+      # Loki datasource (if using Loki for logs)
+      - name: Loki
+        type: loki
+        access: proxy
+        orgId: 1
+        url: http://loki:3100
+        jsonData:
+          maxLines: 1000
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: "traceID=(\\w+)"
+              name: TraceID
+              url: "$${__value.raw}"
+        editable: false
+      
+      # Tempo datasource (if using Tempo for traces)
+      - name: Tempo
+        type: tempo
+        access: proxy
+        orgId: 1
+        url: http://tempo-query:16686
+        uid: tempo
+        jsonData:
+          tracesToLogs:
+            datasourceUid: loki
+            mapTagNamesEnabled: true
+            mappedTags:
+              - key: service.name
+                value: service
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+        editable: false
+      
+      # CloudWatch datasource (for AWS)
+      - name: CloudWatch
+        type: cloudwatch
+        access: proxy
+        orgId: 1
+        jsonData:
+          authType: default
+          defaultRegion: us-east-1
+        editable: false
+      
+      # PostgreSQL datasource (for custom queries)
+      - name: PostgreSQL
+        type: postgres
+        access: proxy
+        orgId: 1
+        url: postgres:5432
+        database: kailash
+        user: grafana_reader
+        secureJsonData:
+          password: ${POSTGRES_PASSWORD}
+        jsonData:
+          sslmode: require
+          postgresVersion: 1500
+          timescaledb: false
+        editable: false
+      
+      # Redis datasource
+      - name: Redis
+        type: redis-datasource
+        access: proxy
+        orgId: 1
+        url: redis://redis:6379
+        secureJsonData:
+          password: ${REDIS_PASSWORD}
+        jsonData:
+          poolSize: 10
+          timeout: 10
+        editable: false

@@ -183,7 +183,7 @@ The local todo management system is in `# contrib (removed)/project/todos/`. You
 Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
 
 **Always ensure that your TDD covers all the detailed todo entries**
-
+z
 Do not write new tests without checking that existing ones can be modified to include them. You MUST have all 3 kinds of tests:
 
 **Tier 1 (Unit tests):**
@@ -320,7 +320,7 @@ Verify test coverage:
   - Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before tests
 - Review coverage report carefully to identify untested code paths
 - Add additional tests for any uncovered critical code
-- Follow the same 3-tier testing strategy for new tests
+- Follow the same 3-tier testing strategy for new testsplea
 - **NO MOCKING** in integration/E2E tiers
 - If tests contain capabilities and components are missing
   - Do not simply skip or remove them because we follow TDD and will write tests first before implementation.
@@ -372,6 +372,7 @@ Cross-reference the actual SDK implementation and the corresponding tests in `te
 
 ### Full Test Suite Execution
 Run complete test suite in the correct order. You MUST show me the COMPLETE output - do not summarize anything.
+Please follow our 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`
 
 1. **Tier 1 (all unit tests):**
    `pytest tests/unit/ -v`
@@ -385,7 +386,7 @@ Run complete test suite in the correct order. You MUST show me the COMPLETE outp
 
 Use our ollama to generate data or create LLMAgents freely. Always use the docker implementation in `tests/utils`, and real data, processes, responses.
 
-If you find any existing tests with policy violations, please fix them immediately. Additional tests written MUST follow the policy in `sdk-users/testing/test-organization-policy.md`.
+If you find any existing tests with policy violations, please fix them immediately. Additional tests written MUST follow our test directives.
 
 **Show me the COMPLETE output from each tier. Do not summarize. If any tests fail, STOP and fix before continuing.**
 

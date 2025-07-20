@@ -1,0 +1,110 @@
+# ArgoCD App of Apps Pattern
+# This is the root application that manages all other applications
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kailash-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/your-org/kailash-template
+    targetRevision: main
+    path: deployment/argocd/applications
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  revisionHistoryLimit: 10
+---
+# ArgoCD Project for Kailash applications
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kailash
+  namespace: argocd
+spec:
+  description: Kailash Platform Applications
+  
+  sourceRepos:
+    - https://github.com/your-org/kailash-template
+    - https://github.com/your-org/kailash-config
+    - https://charts.bitnami.com/bitnami
+    - https://prometheus-community.github.io/helm-charts
+    - https://kubernetes.github.io/ingress-nginx
+    - https://charts.jetstack.io
+  
+  destinations:
+    - namespace: 'kailash-*'
+      server: https://kubernetes.default.svc
+    - namespace: 'monitoring'
+      server: https://kubernetes.default.svc
+    - namespace: 'ingress-nginx'
+      server: https://kubernetes.default.svc
+    - namespace: 'cert-manager'
+      server: https://kubernetes.default.svc
+    - namespace: 'vault-system'
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: ''
+      kind: PersistentVolume
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRole
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRoleBinding
+    - group: 'cert-manager.io'
+      kind: ClusterIssuer
+    - group: 'networking.k8s.io'
+      kind: IngressClass
+  
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  roles:
+    - name: admin
+      policies:
+        - p, proj:kailash:admin, applications, *, kailash/*, allow
+        - p, proj:kailash:admin, repositories, *, *, allow
+      groups:
+        - kailash:admins
+    
+    - name: developer
+      policies:
+        - p, proj:kailash:developer, applications, get, kailash/*, allow
+        - p, proj:kailash:developer, applications, sync, kailash/*, allow
+        - p, proj:kailash:developer, applications, action/*, kailash/*, allow
+        - p, proj:kailash:developer, logs, get, kailash/*, allow
+        - p, proj:kailash:developer, exec, create, kailash/*, allow
+      groups:
+        - kailash:developers
+    
+    - name: readonly
+      policies:
+        - p, proj:kailash:readonly, applications, get, kailash/*, allow
+        - p, proj:kailash:readonly, logs, get, kailash/*, allow
+      groups:
+        - kailash:readonly
