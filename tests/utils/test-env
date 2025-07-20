@@ -58,6 +58,27 @@ check_prerequisites() {
     print_success "Prerequisites checked"
 }
 
+# Check Kubernetes prerequisites
+check_kubernetes_prerequisites() {
+    print_info "Checking Kubernetes prerequisites..."
+
+    # Check kubectl
+    if ! command -v kubectl &> /dev/null; then
+        print_error "kubectl is not installed. Please install kubectl first."
+        print_info "Installation guide: https://kubernetes.io/docs/tasks/tools/"
+        exit 1
+    fi
+
+    # Check kind
+    if ! command -v kind &> /dev/null; then
+        print_error "kind is not installed. Please install kind first."
+        print_info "Installation guide: https://kind.sigs.k8s.io/docs/user/quick-start/#installation"
+        exit 1
+    fi
+
+    print_success "Kubernetes prerequisites checked"
+}
+
 # Setup test environment
 setup_environment() {
     print_info "Setting up test environment..."
@@ -83,6 +104,78 @@ setup_environment() {
     fi
 
     print_success "Test environment setup complete"
+}
+
+# Setup Kubernetes test environment
+setup_kubernetes() {
+    check_kubernetes_prerequisites
+    
+    print_info "Setting up Kubernetes test environment..."
+    "$SCRIPT_DIR/setup_kubernetes.sh" setup
+    
+    print_success "Kubernetes test environment setup complete"
+    print_info "Environment variables exported to /tmp/kailash-k8s-env"
+    print_info "Run: source /tmp/kailash-k8s-env"
+}
+
+# Start Kubernetes cluster
+start_kubernetes() {
+    print_info "Starting Kubernetes test cluster..."
+    
+    # Check if cluster already exists
+    if kind get clusters | grep -q "kailash-test"; then
+        print_info "Cluster 'kailash-test' already exists"
+        
+        # Verify cluster is healthy
+        if kubectl cluster-info --context kind-kailash-test &> /dev/null; then
+            print_success "Kubernetes cluster is running and healthy"
+            # Export environment variables
+            source /tmp/kailash-k8s-env 2>/dev/null || true
+            return 0
+        else
+            print_info "Cluster exists but not healthy, recreating..."
+            stop_kubernetes
+        fi
+    fi
+    
+    # Create new cluster
+    setup_kubernetes
+}
+
+# Stop Kubernetes cluster
+stop_kubernetes() {
+    print_info "Stopping Kubernetes test cluster..."
+    
+    if kind get clusters | grep -q "kailash-test"; then
+        kind delete cluster --name kailash-test
+        print_success "Kubernetes cluster stopped"
+    else
+        print_info "No Kubernetes cluster to stop"
+    fi
+    
+    # Clean up environment files
+    rm -f /tmp/kailash-k8s-env
+}
+
+# Show Kubernetes status
+show_kubernetes_status() {
+    print_info "Kubernetes cluster status:"
+    
+    if kind get clusters | grep -q "kailash-test"; then
+        echo "✓ Cluster 'kailash-test' exists"
+        
+        if kubectl cluster-info --context kind-kailash-test &> /dev/null; then
+            echo "✓ Cluster is healthy"
+            kubectl get nodes --context kind-kailash-test
+            echo ""
+            kubectl get pods -A --context kind-kailash-test
+        else
+            echo "✗ Cluster is not responding"
+        fi
+    else
+        echo "✗ No cluster found"
+        print_info "Run './test-env kubernetes setup' to create cluster"
+    fi
 }
 
 # Start services
@@ -136,6 +229,7 @@ show_status() {
     echo "  Ollama: http://localhost:11435"
     echo "  MinIO: http://localhost:9000 (console: http://localhost:9001)"
     echo "  Health Check: http://localhost:8080"
+    echo "  Kubernetes: https://localhost:6443"
 }
 
 # Run tests
@@ -244,26 +338,64 @@ case "${1:-help}" in
     clean|cleanup)
         cleanup
         ;;
+    kubernetes|k8s)
+        case "${2:-help}" in
+            setup)
+                setup_kubernetes
+                ;;
+            start|up)
+                start_kubernetes
+                ;;
+            stop|down)
+                stop_kubernetes
+                ;;
+            status|ps)
+                show_kubernetes_status
+                ;;
+            cleanup|clean)
+                stop_kubernetes
+                ;;
+            help|--help|-h)
+                echo "Kubernetes Test Environment Commands:"
+                echo ""
+                echo "  $0 kubernetes setup  - Create and configure kind cluster"
+                echo "  $0 kubernetes start  - Start existing cluster or create new one"
+                echo "  $0 kubernetes stop   - Stop and delete cluster"
+                echo "  $0 kubernetes status - Show cluster status"
+                echo "  $0 kubernetes clean  - Clean up cluster and files"
+                echo ""
+                echo "Aliases: k8s can be used instead of kubernetes"
+                ;;
+            *)
+                print_error "Unknown kubernetes command: $2"
+                echo "Run '$0 kubernetes help' for usage information"
+                exit 1
+                ;;
+        esac
+        ;;
     help|--help|-h)
         echo "Kailash SDK Test Environment Manager"
         echo ""
         echo "Usage: $0 COMMAND [OPTIONS]"
         echo ""
         echo "Commands:"
-        echo "  setup      - Initial setup (pull images, download models)"
-        echo "  up, start  - Start all test services"
-        echo "  down, stop - Stop all test services"
-        echo "  status, ps - Show service status"
-        echo "  test [tier] - Run tests (tier1/unit, tier2/integration, tier3/e2e, all)"
-        echo "  logs [service] - Show logs (optionally for specific service)"
-        echo "  clean      - Clean up everything (containers, volumes, data)"
+        echo "  setup           - Initial setup (pull images, download models)"
+        echo "  up, start       - Start all test services"
+        echo "  down, stop      - Stop all test services"
+        echo "  status, ps      - Show service status"
+        echo "  test [tier]     - Run tests (tier1/unit, tier2/integration, tier3/e2e, all)"
+        echo "  logs [service]  - Show logs (optionally for specific service)"
+        echo "  clean           - Clean up everything (containers, volumes, data)"
+        echo "  kubernetes, k8s - Kubernetes cluster management (see '$0 kubernetes help')"
         echo ""
         echo "Examples:"
-        echo "  $0 setup       # One-time setup"
-        echo "  $0 up          # Start services"
-        echo "  $0 test tier2  # Run integration tests"
-        echo "  $0 logs ollama # Show Ollama logs"
-        echo "  $0 down        # Stop services"
+        echo "  $0 setup            # One-time setup"
+        echo "  $0 up               # Start services"
+        echo "  $0 test tier2       # Run integration tests"
+        echo "  $0 logs ollama      # Show Ollama logs"
+        echo "  $0 kubernetes setup # Setup Kubernetes cluster"
+        echo "  $0 k8s start        # Start Kubernetes cluster"
+        echo "  $0 down             # Stop services"
         ;;
     *)
         print_error "Unknown command: $1"

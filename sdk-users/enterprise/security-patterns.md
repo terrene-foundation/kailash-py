@@ -649,6 +649,158 @@ cred_workflow.add_connection(
 )
 ```
 
+## 🛡️ Connection Parameter Validation (v0.6.7+)
+
+### Overview
+
+Starting in v0.6.7, the Kailash SDK provides connection parameter validation to prevent security vulnerabilities where parameters passed through workflow connections could bypass validation checks. This is a **CRITICAL** security feature that prevents injection attacks and ensures type safety.
+
+### Security Vulnerability Fixed
+
+Previously, parameters had two paths with different validation:
+- **Direct parameters** (via `runtime.execute()`) - ✅ VALIDATED  
+- **Connection parameters** (via `workflow.add_connection()`) - ❌ NOT VALIDATED
+
+This created attack vectors for SQL injection, command injection, and other parameter-based exploits.
+
+### Implementation
+
+```python
+from kailash.runtime.local import LocalRuntime
+
+# Production: Always use strict mode
+runtime = LocalRuntime(connection_validation="strict")
+
+# Migration period: Use warn mode to identify issues
+runtime_migration = LocalRuntime(connection_validation="warn")
+
+# Legacy compatibility only (NOT RECOMMENDED)
+runtime_legacy = LocalRuntime(connection_validation="off")
+```
+
+### Enterprise Security Workflow
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+from kailash.nodes.data import SQLDatabaseNode
+
+# Create secure workflow
+workflow = WorkflowBuilder()
+
+# User input node (potentially untrusted data)
+workflow.add_node("UserInputNode", "user_input", {})
+
+# Database operation with parameter validation
+workflow.add_node(SQLDatabaseNode, "db_operation", {
+    "connection_string": "postgresql://secure_db",
+    "operation": "query"
+})
+
+# Connection will now validate parameters
+workflow.add_connection(
+    "user_input", "query_params",
+    "db_operation", "parameters"
+)
+
+# Strict validation prevents SQL injection
+runtime = LocalRuntime(connection_validation="strict")
+
+try:
+    # Malicious input will be caught by validation
+    results, _ = runtime.execute(workflow.build(), {
+        "user_input": {
+            "query_params": {
+                "user_id": "1; DROP TABLE users;--"  # SQL injection attempt
+            }
+        }
+    })
+except WorkflowExecutionError as e:
+    # Connection validation will reject invalid parameters
+    logger.error(f"Security: Blocked malicious input: {e}")
+```
+
+### Integration with Access Control
+
+```python
+# Combine with RBAC for defense in depth
+workflow = WorkflowBuilder()
+
+# Add access control
+workflow.add_node("AccessControlNode", "rbac_check", {
+    "required_permissions": ["data:read", "user:view"]
+})
+
+# Add input validation
+workflow.add_node("InputValidationNode", "validate", {
+    "schema": {
+        "type": "object",
+        "properties": {
+            "user_id": {"type": "integer", "minimum": 1},
+            "fields": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["user_id"]
+    }
+})
+
+# Database query with validated parameters
+workflow.add_node("AsyncSQLDatabaseNode", "secure_query", {
+    "operation": "query",
+    "query": "SELECT {fields} FROM users WHERE id = $1"
+})
+
+# Secure connection chain
+workflow.add_connection("rbac_check", "authorized", "validate", "proceed")
+workflow.add_connection("validate", "validated_data", "secure_query", "parameters")
+
+# Production configuration
+runtime = LocalRuntime(
+    connection_validation="strict",  # Enforce parameter validation
+    access_control_enabled=True,     # Enable RBAC
+    audit_logging=True              # Log all operations
+)
+```
+
+### Migration Guide
+
+1. **Audit existing workflows** - Run with `warn` mode
+   ```python
+   runtime = LocalRuntime(connection_validation="warn")
+   # Check logs for validation warnings
+   ```
+
+2. **Fix validation issues** - Update node parameters
+   ```python
+   # Ensure all nodes declare their parameters correctly
+   def get_parameters(self):
+       return {
+           "user_id": NodeParameter(name="user_id", type=int, required=True),
+           "action": NodeParameter(name="action", type=str, enum=["read", "write"])
+       }
+   ```
+
+3. **Enable strict mode** - Deploy to production
+   ```python
+   runtime = LocalRuntime(connection_validation="strict")
+   ```
+
+### Security Best Practices
+
+1. **Always use strict mode in production**
+2. **Validate at multiple layers** - Connection validation + input validation + RBAC
+3. **Monitor validation failures** - Could indicate attack attempts
+4. **Regular security audits** - Review workflow connections
+5. **Type enforcement** - Use proper NodeParameter types
+
+### Related Security Features
+
+- **Input Validation Nodes** - Schema-based validation
+- **SQL Parameter Binding** - Automatic SQL injection prevention  
+- **Command Sanitization** - Safe shell command execution
+- **Access Control Integration** - Combined with RBAC/ABAC
+
+For complete documentation, see [Connection Parameter Validation Guide](../security/connection-parameter-validation.md).
+
 ## 🏢 Enterprise Integration Security
 
 ### SSO Integration

@@ -15,14 +15,15 @@ from kailash.middleware.gateway.checkpoint_manager import (
 )
 from kailash.middleware.gateway.durable_request import Checkpoint, RequestState
 from kailash.middleware.gateway.storage_backends import RedisStorage
+from tests.config_unified import REDIS_CONFIG
 
 
 @pytest.fixture
 def redis_storage():
-    """Create Redis storage backend (assumes Redis running on localhost:6379)."""
+    """Create Redis storage backend using unified config."""
     return RedisStorage(
-        host="localhost",
-        port=6379,
+        host=REDIS_CONFIG["host"],
+        port=REDIS_CONFIG["port"],
         db=0,
         password=None,
     )
@@ -45,7 +46,6 @@ def checkpoint():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(True, reason="Requires Redis service to be running")
 class TestCheckpointManagerRedisIntegration:
     """Test CheckpointManager with real Redis backend."""
 
@@ -233,10 +233,6 @@ class TestCheckpointManagerRedisIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    not hasattr(__import__("socket"), "create_connection") or True,
-    reason="Docker services not available in test environment",
-)
 class TestCheckpointManagerDockerCompose:
     """Test CheckpointManager with Docker services (requires manual setup)."""
 
@@ -247,10 +243,10 @@ class TestCheckpointManagerDockerCompose:
         memory_storage = MemoryStorage()
         disk_storage = DiskStorage("/tmp/test_checkpoints")
 
-        # Redis storage (requires Redis to be running)
+        # Redis storage using unified config
         redis_storage = RedisStorage(
-            host="localhost",
-            port=6379,
+            host=REDIS_CONFIG["host"],
+            port=REDIS_CONFIG["port"],
             db=0,
             password=None,
         )

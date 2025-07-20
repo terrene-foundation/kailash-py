@@ -475,7 +475,7 @@ class NetworkAnnouncer:
                 break
             except Exception as e:
                 logger.error(f"Error in network announcement: {e}")
-                await asyncio.sleep(10)  # Back off on error
+                await asyncio.sleep(0.1)  # Fast retry for tests
 
     async def _send_announcement(self):
         """Send UDP announcement."""

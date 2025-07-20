@@ -925,7 +925,7 @@ class TestCacheInvalidation:
                 backend="memory",
                 key="timed_key",
                 value="timed_value",
-                ttl=2,
+                ttl=1,  # Shorter TTL for faster testing
             )
 
             # Should exist immediately
@@ -934,8 +934,8 @@ class TestCacheInvalidation:
                 is True
             )
 
-            # Wait for expiration
-            time.sleep(2.1)
+            # Wait for expiration with small buffer
+            time.sleep(1.05)
 
             # Should be expired
             assert (

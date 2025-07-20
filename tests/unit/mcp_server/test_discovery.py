@@ -1143,10 +1143,7 @@ class TestNetworkDiscovery:
 
             with patch("asyncio.wait_for") as mock_wait_for:
                 # Create a proper async mock for the coroutine
-                async def mock_async_call(*args, **kwargs):
-                    raise ConnectionRefusedError("Connection refused")
-
-                mock_wait_for.side_effect = mock_async_call
+                mock_wait_for.side_effect = ConnectionRefusedError("Connection refused")
 
                 discovered = await self.discovery.scan_network("192.168.1.0/30")
 
@@ -1348,9 +1345,16 @@ class TestNetworkDiscovery:
         with patch("asyncio.get_running_loop") as mock_loop:
             with patch("asyncio.run") as mock_run:
                 with patch.object(
-                    self.discovery, "_handle_discovery_message", new_callable=AsyncMock
+                    self.discovery, "_handle_discovery_message", new=AsyncMock()
                 ) as mock_handle:
                     mock_loop.side_effect = RuntimeError("No event loop")
+                    # Mock run to consume coroutine and avoid warnings
+                    def mock_run_side_effect(coro):
+                        # Close the coroutine to avoid "never awaited" warning
+                        if hasattr(coro, 'close'):
+                            coro.close()
+                        return None
+                    mock_run.side_effect = mock_run_side_effect
 
                     self.discovery.datagram_received(data, addr)
 

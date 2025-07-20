@@ -161,6 +161,111 @@ class TestDeferredConfigNode:
         assert deferred_node._is_initialized is False
         assert deferred_node.metadata.name == "test_oauth"
 
+    def test_cache_node_validation_redis_host(self):
+        """Test Redis/Cache node validation with redis_host parameter."""
+        deferred_node = DeferredConfigNode(MockCacheNode, redis_host="localhost", redis_port=6379)
+
+        assert deferred_node._has_required_config() is True
+
+    def test_cache_node_validation_host_port(self):
+        """Test Redis/Cache node validation with host/port parameters."""
+        deferred_node = DeferredConfigNode(MockCacheNode, host="localhost", port=6379)
+
+        assert deferred_node._has_required_config() is True
+
+    def test_cache_node_validation_missing(self):
+        """Test Redis/Cache node validation with missing parameters."""
+        deferred_node = DeferredConfigNode(MockCacheNode)
+
+        assert deferred_node._has_required_config() is False
+
+    def test_llm_node_validation_model(self):
+        """Test LLM/Agent node validation with model parameter."""
+        deferred_node = DeferredConfigNode(MockLLMNode, model="gpt-4")
+
+        assert deferred_node._has_required_config() is True
+
+    def test_llm_node_validation_provider(self):
+        """Test LLM/Agent node validation with provider parameter."""
+        deferred_node = DeferredConfigNode(MockLLMNode, provider="openai")
+
+        assert deferred_node._has_required_config() is True
+
+    def test_llm_node_validation_missing(self):
+        """Test LLM/Agent node validation with missing parameters."""
+        deferred_node = DeferredConfigNode(MockLLMNode)
+
+        assert deferred_node._has_required_config() is False
+
+    def test_node_with_get_parameter_definitions(self):
+        """Test validation for nodes that use get_parameter_definitions method."""
+
+        class NodeWithParamDefs(Node):
+            @classmethod
+            def get_parameter_definitions(cls):
+                return {
+                    "required_param": Mock(required=True),
+                    "optional_param": Mock(required=False),
+                    "default_none_param": Mock(default=None, required=False),
+                }
+
+            def run(self, **kwargs):
+                return {"ok": True}
+
+        deferred_node = DeferredConfigNode(NodeWithParamDefs, optional_param="value")
+
+        # Missing required_param and default_none_param
+        assert deferred_node._has_required_config() is False
+
+        # Add required parameters
+        deferred_node.set_runtime_config(required_param="value", default_none_param="value")
+        assert deferred_node._has_required_config() is True
+
+    def test_node_validation_exception_handling(self):
+        """Test handling of exceptions during parameter definition access."""
+
+        class BrokenParamDefNode(Node):
+            @classmethod
+            def get_parameter_definitions(cls):
+                raise RuntimeError("Cannot get parameters")
+
+            def run(self, **kwargs):
+                return {"ok": True}
+
+        # Should handle exception gracefully and continue validation
+        deferred_node = DeferredConfigNode(BrokenParamDefNode)
+        # Since it can't get param defs and it's not a known node type, should pass
+        assert deferred_node._has_required_config() is True
+
+    def test_get_default_parameters_unknown_node(self):
+        """Test default parameters for unknown node types."""
+
+        class UnknownNode(Node):
+            def run(self, **kwargs):
+                return {"ok": True}
+
+        deferred_node = DeferredConfigNode(UnknownNode)
+        params = deferred_node._get_default_parameters()
+
+        assert params == {}
+
+    def test_concurrent_runtime_config_updates(self):
+        """Test concurrent updates to runtime configuration."""
+        deferred_node = DeferredConfigNode(
+            MockOAuth2Node, token_url="https://initial.com"
+        )
+
+        # Simulate concurrent config updates
+        deferred_node.set_runtime_config(client_id="abc123")
+        deferred_node.set_runtime_config(client_secret="secret1")
+        deferred_node.set_runtime_config(client_id="xyz789")  # Override
+
+        effective = deferred_node.get_effective_config()
+
+        assert effective["token_url"] == "https://initial.com"
+        assert effective["client_id"] == "xyz789"  # Last update wins
+        assert effective["client_secret"] == "secret1"
+
     def test_deferred_node_default_name(self):
         """Test DeferredConfigNode with default name generation."""
         deferred_node = DeferredConfigNode(MockOAuth2Node)
@@ -522,6 +627,56 @@ class TestDeferredConfigNode:
         assert result == {"sync": "result"}
 
 
+class MockCacheNode(Node):
+    """Mock cache/Redis node for testing."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.redis_host = kwargs.get("redis_host", kwargs.get("host"))
+        self.redis_port = kwargs.get("redis_port", kwargs.get("port"))
+
+    def get_parameters(self):
+        return {
+            "redis_host": NodeParameter(
+                name="redis_host", type=str, required=True, description="Redis host"
+            ),
+            "redis_port": NodeParameter(
+                name="redis_port", type=int, required=True, description="Redis port"
+            ),
+            "key": NodeParameter(
+                name="key", type=str, required=True, description="Cache key"
+            ),
+        }
+
+    def run(self, **kwargs):
+        return {"cached": True, "key": kwargs.get("key")}
+
+
+class MockLLMNode(Node):
+    """Mock LLM/Agent node for testing."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.model = kwargs.get("model")
+        self.provider = kwargs.get("provider")
+
+    def get_parameters(self):
+        return {
+            "model": NodeParameter(
+                name="model", type=str, required=False, description="Model name"
+            ),
+            "provider": NodeParameter(
+                name="provider", type=str, required=False, description="Provider name"
+            ),
+            "prompt": NodeParameter(
+                name="prompt", type=str, required=True, description="Prompt text"
+            ),
+        }
+
+    def run(self, **kwargs):
+        return {"response": f"Generated from {self.model or self.provider}"}
+
+
 class TestWorkflowParameterInjector:
     """Test WorkflowParameterInjector functionality."""
 
@@ -533,6 +688,8 @@ class TestWorkflowParameterInjector:
             "oauth_node": MockOAuth2Node(name="oauth_node"),
             "sql_node": MockSQLNode(name="sql_node"),
             "http_node": MockHTTPNode(name="http_node"),
+            "cache_node": MockCacheNode(name="cache_node"),
+            "llm_node": MockLLMNode(name="llm_node"),
         }
         self.mock_workflow.connections = []
         self.mock_workflow.metadata = {}
@@ -676,20 +833,24 @@ class TestWorkflowParameterInjector:
 
         entry_nodes = self.injector._get_entry_nodes()
 
-        # oauth_node and http_node should be entry nodes
-        assert len(entry_nodes) == 2
+        # All nodes except sql_node should be entry nodes (sql_node has incoming connection)
+        assert len(entry_nodes) == 4
         assert "oauth_node" in entry_nodes
         assert "http_node" in entry_nodes
+        assert "cache_node" in entry_nodes
+        assert "llm_node" in entry_nodes
         assert "sql_node" not in entry_nodes
 
     def test_get_all_nodes(self):
         """Test getting all nodes in workflow."""
         all_nodes = self.injector._get_all_nodes()
 
-        assert len(all_nodes) == 3
+        assert len(all_nodes) == 5
         assert "oauth_node" in all_nodes
         assert "sql_node" in all_nodes
         assert "http_node" in all_nodes
+        assert "cache_node" in all_nodes
+        assert "llm_node" in all_nodes
         assert isinstance(all_nodes["oauth_node"], MockOAuth2Node)
 
     def test_should_inject_parameter_direct_match(self):
@@ -947,6 +1108,194 @@ class TestWorkflowParameterInjector:
             ValueError, match="Node 'oauth_node' is not a deferred configuration node"
         ):
             self.injector.configure_deferred_node("oauth_node", param="value")
+
+    def test_get_nested_parameter_non_dict_intermediate(self):
+        """Test nested parameter access when intermediate value is not a dict."""
+        parameters = {"config": "not_a_dict", "other": {"nested": "value"}}
+
+        # Should return None when path cannot be traversed
+        value = self.injector._get_nested_parameter(parameters, "config.redis.host")
+        assert value is None
+
+        # Should work for valid paths
+        value = self.injector._get_nested_parameter(parameters, "other.nested")
+        assert value == "value"
+
+    def test_is_compatible_type_with_none_type(self):
+        """Test type compatibility when parameter type is None."""
+        mock_param = Mock()
+        mock_param.type = None
+
+        assert self.injector._is_compatible_type("any_value", mock_param) is True
+        assert self.injector._is_compatible_type(123, mock_param) is True
+        assert self.injector._is_compatible_type(None, mock_param) is True
+
+    def test_is_compatible_type_exception_handling(self):
+        """Test type compatibility when type checking raises exception."""
+        mock_param = Mock()
+        # Create a type that raises exception when used with isinstance
+        mock_param.type = Mock(side_effect=TypeError("Cannot check type"))
+
+        # Should return True when exception occurs
+        assert self.injector._is_compatible_type("any_value", mock_param) is True
+
+    def test_get_mapped_parameter_auto_map_from_string(self):
+        """Test parameter mapping with auto_map_from as string (not list)."""
+        mock_param = Mock()
+        mock_param.auto_map_from = "single_alias"  # String instead of list
+
+        node_param_defs = {"target_param": mock_param}
+
+        mapped = self.injector._get_mapped_parameter_name(
+            "single_alias", "value", node_param_defs, None
+        )
+
+        assert mapped == "target_param"
+
+    def test_get_mapped_parameter_exception_in_param_def(self):
+        """Test parameter mapping when accessing param def raises exception."""
+        # Create a param def that raises exception when accessed
+        class BrokenParamDef:
+            @property
+            def workflow_alias(self):
+                raise RuntimeError("Cannot access alias")
+
+        node_param_defs = {
+            "broken_param": BrokenParamDef(),
+            "good_param": NodeParameter(name="good_param", type=str),
+        }
+
+        # Should skip broken param and continue
+        mapped = self.injector._get_mapped_parameter_name(
+            "good_param", "value", node_param_defs, None
+        )
+
+        assert mapped == "good_param"
+
+    def test_node_accepts_kwargs_with_wrapper(self):
+        """Test kwargs detection for nodes with wrapper attribute."""
+        # Create mock wrapper that has accepts_var_keyword method
+        mock_wrapper = Mock()
+        mock_wrapper.accepts_var_keyword.return_value = True
+
+        node = Mock()
+        node.__class__.__name__ = "PythonCodeNode"
+        node.wrapper = mock_wrapper
+        node.code = None
+        node.function = None
+
+        accepts = self.injector._node_accepts_kwargs(node)
+
+        assert accepts is True
+        mock_wrapper.accepts_var_keyword.assert_called_once()
+
+    def test_node_accepts_kwargs_invalid_function_signature(self):
+        """Test kwargs detection when function signature inspection fails."""
+
+        def broken_function():
+            pass
+
+        # Mock inspect.signature to raise exception
+        with patch("inspect.signature", side_effect=ValueError("Cannot inspect")):
+            node = Mock()
+            node.__class__.__name__ = "PythonCodeNode"
+            node.function = broken_function
+            node.wrapper = None
+            node.code = None
+
+            accepts = self.injector._node_accepts_kwargs(node)
+
+            assert accepts is False
+
+    def test_validate_parameters_with_primary_auto_map(self):
+        """Test parameter validation with auto_map_primary."""
+        # Create node with auto_map_primary parameter
+        class NodeWithAutoMapPrimary(Node):
+            def get_parameters(self):
+                param1 = NodeParameter(
+                    name="internal_url", type=str, required=True
+                )
+                param1.workflow_alias = "endpoint"
+
+                param2 = NodeParameter(
+                    name="auth_token", type=str, required=True
+                )
+                param2.auto_map_from = ["token", "api_key", "auth_key"]
+
+                param3 = NodeParameter(
+                    name="primary_data", type=Any, required=True
+                )
+                param3.auto_map_primary = True
+
+                return {
+                    "internal_url": param1,
+                    "auth_token": param2,
+                    "primary_data": param3,
+                }
+
+            def run(self, **kwargs):
+                return {"processed": True}
+
+        self.mock_workflow._node_instances["alias_node"] = NodeWithAutoMapPrimary(name="alias_node")
+        
+        workflow_params = {
+            "endpoint": "https://api.example.com",  # Maps to internal_url via alias
+            "token": "secret_token",  # Maps to auth_token via auto_map_from
+            "some_data": {"key": "value"},  # Should map to primary_data
+        }
+
+        warnings = self.injector.validate_parameters(workflow_params)
+
+        # All parameters should be used due to mapping
+        assert warnings == []
+
+    def test_configure_deferred_node_no_node_instances(self):
+        """Test configuring deferred node when _node_instances doesn't exist."""
+        # Remove _node_instances attribute
+        delattr(self.mock_workflow, "_node_instances")
+
+        with pytest.raises(ValueError, match="Node 'test_node' not found in workflow"):
+            self.injector.configure_deferred_node("test_node", param="value")
+
+    def test_get_all_nodes_no_node_instances(self):
+        """Test getting all nodes when _node_instances doesn't exist."""
+        # Create workflow without _node_instances
+        workflow = Mock()
+        workflow.nodes = {"node1": Mock(), "node2": Mock()}
+        delattr(workflow, "_node_instances")
+
+        injector = WorkflowParameterInjector(workflow)
+        all_nodes = injector._get_all_nodes()
+
+        assert all_nodes == {}
+
+    def test_transform_parameters_with_complex_nested_paths(self):
+        """Test transforming parameters with complex nested workflow input mappings."""
+        self.mock_workflow.metadata = {
+            "_workflow_inputs": {
+                "cache_node": {
+                    "config.redis.host": "redis_host", 
+                    "config.redis.port": "redis_port"
+                },
+                "llm_node": {
+                    "ai.model_name": "model", 
+                    "ai.settings.temperature": "temperature"
+                },
+            }
+        }
+
+        workflow_params = {
+            "config": {"redis": {"host": "redis-server", "port": 6380}},
+            "ai": {"model_name": "gpt-4", "settings": {"temperature": 0.7}},
+        }
+
+        result = self.injector.transform_workflow_parameters(workflow_params)
+
+        # Should map nested parameters correctly
+        assert result["cache_node"]["redis_host"] == "redis-server"
+        assert result["cache_node"]["redis_port"] == 6380
+        assert result["llm_node"]["model"] == "gpt-4"
+        assert result["llm_node"]["temperature"] == 0.7
 
 
 class TestConvenienceFunctions:

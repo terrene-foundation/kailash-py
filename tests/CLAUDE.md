@@ -135,6 +135,7 @@ For E2E tests, always:
 
 ## 🚨 Node Execution Policy
 
+### Synchronous Nodes
 **ALWAYS use `.execute()` to run nodes:**
 ```python
 # ✅ CORRECT
@@ -145,6 +146,48 @@ result = node.run(params)
 result = node.process(params)
 result = node.call(params)
 ```
+
+### AsyncNodes (CRITICAL)
+**In async tests, use `.execute_async()`:**
+```python
+# ✅ CORRECT - Async context
+@pytest.mark.asyncio
+async def test_async_node():
+    node = MyAsyncNode()
+    result = await node.execute_async(params)
+
+# ❌ WRONG - Don't use execute() in async context
+@pytest.mark.asyncio
+async def test_async_node():
+    node = MyAsyncNode()
+    result = await node.execute(params)  # execute() is not awaitable!
+
+# ❌ WRONG - Don't call run() directly
+@pytest.mark.asyncio
+async def test_async_node():
+    node = MyAsyncNode()
+    result = await node.run(params)  # run() doesn't exist on AsyncNode!
+```
+
+**NodeParameter Type Requirements:**
+```python
+# ✅ CORRECT - Always include type
+"param": NodeParameter(
+    name="param",
+    type=str,  # REQUIRED!
+    required=True,
+    description="A parameter"
+)
+
+# ❌ WRONG - Missing type
+"param": NodeParameter(
+    name="param",
+    required=True,
+    description="A parameter"
+)  # Will fail validation!
+```
+
+See [AsyncNode Implementation Guide](../sdk-users/developer/async-node-guide.md) for full details.
 
 ## 📝 Quick Reference
 

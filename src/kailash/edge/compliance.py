@@ -785,6 +785,36 @@ class ComplianceRouter:
         """Get recent compliance decisions from audit log."""
         return self.audit_log[-limit:]
 
+    def is_compliant_location(
+        self,
+        location: "EdgeLocation",
+        data_class: DataClassification,
+        required_zones: List[str]
+    ) -> bool:
+        """Check if a location is compliant for given data class and zones.
+        
+        Args:
+            location: Edge location to check
+            data_class: Classification of the data
+            required_zones: Required compliance zones
+            
+        Returns:
+            True if location is compliant
+        """
+        # Avoid circular import
+        from kailash.edge.location import EdgeRegion
+        
+        # Check if location has all required compliance zones
+        location_zones = [z.value for z in location.compliance_zones]
+        
+        # For GDPR compliance, PII/EU_PERSONAL data must be in EU regions or GDPR-compliant zones
+        if "gdpr" in required_zones and data_class in [DataClassification.PII, DataClassification.EU_PERSONAL]:
+            # Check if location has GDPR compliance zone
+            return "gdpr" in location_zones
+            
+        # For other cases, check if location has the required zones
+        return all(zone in location_zones for zone in required_zones)
+
     def get_compliance_summary(self) -> Dict[str, Any]:
         """Get summary of compliance decisions and performance."""
         if not self.audit_log:
