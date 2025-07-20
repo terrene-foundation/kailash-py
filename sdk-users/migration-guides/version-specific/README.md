@@ -16,10 +16,6 @@
   - AgentUIMiddleware shared workflow execution fix
   - execute_workflow() deprecated in favor of execute()
 
-- **[v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md)**
-  - SQLDatabaseNode parameter type flexibility
-  - Backward compatible enhancements
-
 - **[v0.6.0-to-v0.6.1-migration.md](v0.6.0-to-v0.6.1-migration.md)**
   - Parameter flow architecture improvements
   - Runtime validation separation
@@ -50,7 +46,6 @@
 | v0.6.0 | v0.6.1 | [v0.6.0-to-v0.6.1-migration.md](v0.6.0-to-v0.6.1-migration.md) | MEDIUM |
 | v0.6.x | v0.6.5+ | [v0.6.5-shared-workflow-fix.md](v0.6.5-shared-workflow-fix.md) | LOW |
 | v0.6.5+ | v0.6.6+ | [v0.6.6-infrastructure-enhancements.md](v0.6.6-infrastructure-enhancements.md) | LOW |
-| v2.0.x | v2.1 | [v2.1-sql-parameter-flexibility.md](v2.1-sql-parameter-flexibility.md) | LOW |
 
 ---
 

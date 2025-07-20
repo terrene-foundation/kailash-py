@@ -51,11 +51,9 @@ def create_basic_routing_workflow():
     workflow.add_node("standard_processor", standard_processor)
 
     # Connect routing logic
-    workflow.connect("reader", "value_router", mapping={"data": "data"})
-    workflow.connect("value_router", "premium_processor",
-                    output_key="true_output", mapping={"data": "data"})
-    workflow.connect("value_router", "standard_processor",
-                    output_key="false_output", mapping={"data": "data"})
+    workflow.add_connection("reader", "data", "value_router", "data")
+    workflow.add_connection("value_router", "true_output", "premium_processor", "data")
+    workflow.add_connection("value_router", "false_output", "standard_processor", "data")
 
     return workflow
 
@@ -232,17 +230,13 @@ result = {
     workflow.add_node("manual_queue", manual_queue)
 
     # Connect with fallback logic
-    workflow.connect("payment_input", "primary_processor")
-    workflow.connect("primary_processor", "primary_check")
-    workflow.connect("primary_check", "payment_success",
-                    output_key="true_output")
-    workflow.connect("primary_check", "secondary_processor",
-                    output_key="false_output")
-    workflow.connect("secondary_processor", "secondary_check")
-    workflow.connect("secondary_check", "payment_success",
-                    output_key="true_output")
-    workflow.connect("secondary_check", "manual_queue",
-                    output_key="false_output")
+    workflow.add_connection("payment_input", "data", "primary_processor", "payment_data")
+    workflow.add_connection("primary_processor", "response", "primary_check", "data")
+    workflow.add_connection("primary_check", "true_output", "payment_success", "data")
+    workflow.add_connection("primary_check", "false_output", "secondary_processor", "payment_data")
+    workflow.add_connection("secondary_processor", "response", "secondary_check", "data")
+    workflow.add_connection("secondary_check", "true_output", "payment_success", "data")
+    workflow.add_connection("secondary_check", "false_output", "manual_queue", "data")
 
     return workflow
 
@@ -270,16 +264,13 @@ workflow.runtime = LocalRuntime()
 journey_router = SwitchNode(
     condition="customer_segment == 'vip' and visit_count > 5"
 )
+workflow.add_node("journey_router", journey_router)
 
 # VIP experience
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(journey_router, "personalized_homepage",
-                output_key="true_output")
+workflow.add_connection("journey_router", "true_output", "personalized_homepage", "data")
 
 # Standard experience
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(journey_router, "default_homepage",
-                output_key="false_output")
+workflow.add_connection("journey_router", "false_output", "default_homepage", "data")
 
 ```
 
@@ -303,16 +294,13 @@ workflow.runtime = LocalRuntime()
 quality_gate = SwitchNode(
     condition="data_quality_score >= 0.85"
 )
+workflow.add_node("quality_gate", quality_gate)
 
 # Good data continues
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(quality_gate, "ml_processing",
-                output_key="true_output")
+workflow.add_connection("quality_gate", "true_output", "ml_processing", "data")
 
 # Poor data goes to cleaning
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(quality_gate, "data_cleaning",
-                output_key="false_output")
+workflow.add_connection("quality_gate", "false_output", "data_cleaning", "data")
 
 ```
 
@@ -336,16 +324,13 @@ workflow.runtime = LocalRuntime()
 approval_router = SwitchNode(
     condition="expense_amount > 10000"
 )
+workflow.add_node("approval_router", approval_router)
 
 # High amounts need VP approval
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(approval_router, "vp_approval_queue",
-                output_key="true_output")
+workflow.add_connection("approval_router", "true_output", "vp_approval_queue", "data")
 
 # Standard amounts need manager approval
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(approval_router, "manager_approval_queue",
-                output_key="false_output")
+workflow.add_connection("approval_router", "false_output", "manager_approval_queue", "data")
 
 ```
 
@@ -369,13 +354,10 @@ workflow.runtime = LocalRuntime()
 ab_test_router = SwitchNode(
     condition="hash(user_id) % 100 < 20"  # 20% to variant B
 )
+workflow.add_node("ab_test_router", ab_test_router)
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(ab_test_router, "variant_b_experience",
-                output_key="true_output")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(ab_test_router, "variant_a_experience",
-                output_key="false_output")
+workflow.add_connection("ab_test_router", "true_output", "variant_b_experience", "data")
+workflow.add_connection("ab_test_router", "false_output", "variant_a_experience", "data")
 
 ```
 
@@ -408,14 +390,11 @@ workflow = Workflow("example", name="Example")
 workflow.runtime = LocalRuntime()
 
 # GOOD: Both outputs connected
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(router, "path_a", output_key="true_output")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(router, "path_b", output_key="false_output")
+workflow.add_connection("router", "true_output", "path_a", "data")
+workflow.add_connection("router", "false_output", "path_b", "data")
 
 # BAD: Missing false path - data gets lost!
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(router, "path_a", output_key="true_output")
+workflow.add_connection("router", "true_output", "path_a", "data")
 # No false_output connection
 
 ```

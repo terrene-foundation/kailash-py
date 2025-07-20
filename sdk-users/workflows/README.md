@@ -41,7 +41,6 @@ A comprehensive, token-efficient library of production-ready workflows consolida
 ### 🔧 Advanced Patterns (Feature-Specific)
 | File | Focus | Status |
 |------|-------|--------|
-| [cyclic-workflows-complete.md](advanced/cyclic-workflows-complete.md) | Complete cycle mastery | ✅ Complete |
 | [pythoncode-mastery.md](../cheatsheet/031-pythoncode-best-practices.md) | PythonCodeNode expertise | ✅ Complete |
 | [ai-agent-coordination.md](../patterns/06-ai-agent-patterns.md) | Multi-agent systems | ✅ Complete |
 | [enterprise-integration.md](../enterprise/README.md) | Production deployment | ✅ Complete |

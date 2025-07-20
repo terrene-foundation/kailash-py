@@ -6,11 +6,6 @@
 
 ### System Architecture Changes
 
-- **[api-to-middleware-migration.md](api-to-middleware-migration.md)**
-  - **Impact**: Move from legacy API to unified middleware
-  - **Benefits**: Real-time communication, session management, AI chat
-  - **Complexity**: HIGH - Major architectural change
-
 - **[auth-consolidation-migration.md](auth-consolidation-migration.md)**
   - **Impact**: Consolidate JWT authentication components
   - **Benefits**: Resolve circular imports, support multiple algorithms
@@ -51,7 +46,6 @@ components = {
 1. **Start with**: [auth-consolidation-migration.md](auth-consolidation-migration.md) (fixes imports)
 2. **Performance**: [async-sql-to-workflowconnectionpool.md](async-sql-to-workflowconnectionpool.md) (database optimization)
 3. **Modern patterns**: [sync-to-async-workflow-builder.md](sync-to-async-workflow-builder.md) (workflow improvements)
-4. **Full integration**: [api-to-middleware-migration.md](api-to-middleware-migration.md) (complete modernization)
 
 ## Impact Assessment
 
@@ -60,7 +54,6 @@ components = {
 | **Auth Consolidation** | LOW | None | Security+ | LOW |
 | **Database Pool** | MEDIUM | 10x+ | Monitoring+ | MEDIUM |
 | **Async Workflows** | HIGH | 2-5x | Patterns+ | MEDIUM |
-| **API to Middleware** | HIGH | Varies | Integration+ | HIGH |
 
 ---
 
