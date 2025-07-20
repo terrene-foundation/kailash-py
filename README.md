@@ -31,9 +31,9 @@
 - 🌐 **Edge Computing**: 50+ new nodes for geo-distributed infrastructure
 - 📊 **Advanced Monitoring**: AlertManager with proactive threshold monitoring
 - 🚀 **Performance**: <1ms validation overhead with intelligent caching
-- ✅ **Breaking Changes**: See [migration guide](changelogs/releases/v0.8.5-2025-07-20.md)
+- ✅ **Breaking Changes**: See [migration guide](sdk-users/changelogs/releases/v0.8.5-2025-07-20.md)
 
-[Full Changelog](changelogs/releases/v0.8.5-2025-07-20.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.5/)
+[Full Changelog](sdk-users/changelogs/releases/v0.8.5-2025-07-20.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.5/)
 
 ## 🎯 What Makes Kailash Different
 
